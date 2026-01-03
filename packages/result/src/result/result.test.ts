@@ -225,6 +225,35 @@ describe("Result", () => {
     });
   });
 
+  describe("bindAsync", () => {
+    it("binds new values to Ok results", async () => {
+      const res = await flow(
+        Result.ok({ a: 1 }),
+        Result.bindAsync("b", async (obj) => Result.ok(obj.a + 1)),
+        Result.bindAsync("c", async (obj) => Result.ok(obj.b + 1))
+      )
+      expect(res).toEqual(Result.ok({ a: 1, b: 2, c: 3 }));
+    });
+
+    it("short-circuits on Err results", async () => {
+      const res = await flow(
+        Result.ok({ a: 1 }),
+        Result.bindAsync("b", async () => Result.err("error in b")),
+        Result.bindAsync("c", async (obj) => Result.ok(obj.b + 1))
+      )
+      expect(res).toEqual(Result.err("error in b"));
+    });
+
+    it("propagates Err results", async () => {
+      const res = await flow(
+        Result.err("initial error"),
+        Result.bindAsync("b", async () => Result.ok(2)),
+        Result.bindAsync("c", async () => Result.ok(3))
+      )
+      expect(res).toEqual(Result.err("initial error"));
+    });
+  });
+
   describe("async functions", () => {
     it("andThenAsync works correctly", async () => {
       const res = await flow(

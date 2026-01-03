@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: microblog
+      POSTGRES_PASSWORD: microblog
+      POSTGRES_DB: microblog
+    ports:
+      - "5432:5432"
+    volumes:
+      - microblog-db-data:/var/lib/postgresql/data
+
+volumes:
+  microblog-db-data:

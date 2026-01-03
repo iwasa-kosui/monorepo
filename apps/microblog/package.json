@@ -1,0 +1,42 @@
+{
+  "type": "module",
+  "engines": {
+    "node": "24.12.0"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "1.51.4",
+    "@fedify/fedify": "1.10.0",
+    "@fedify/hono": "1.10.0",
+    "@fedify/postgres": "1.10.0",
+    "@hono/node-server": "1.19.6",
+    "@hono/standard-validator": "0.2.1",
+    "@iwasa-kosui/result": "workspace:*",
+    "@logtape/logtape": "0.8.2",
+    "@standard-schema/spec": "1.1.0",
+    "dotenv": "17.2.3",
+    "drizzle-orm": "0.45.1",
+    "hono": "4.11.1",
+    "pg": "8.16.3",
+    "postgres": "3.4.7",
+    "stringify-entities": "4.0.4",
+    "x-forwarded-fetch": "0.2.0",
+    "zod": "4.2.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "24.10.4",
+    "@types/pg": "8.16.0",
+    "drizzle-kit": "0.31.8",
+    "tsx": "4.21.0"
+  },
+  "scripts": {
+    "dev": "dotenvx run -- tsx watch ./src/index.ts",
+    "prod": "dotenvx run -- node --import tsx ./src/index.ts",
+    "prebuild": "pnpm --filter result run build",
+    "drizzle:push": "dotenvx run -- drizzle-kit push",
+    "drizzle:generate": "dotenvx run -- drizzle-kit generate",
+    "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
+    "compose:up": "dotenvx run -- docker compose up -d",
+    "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans"
+  }
+}
