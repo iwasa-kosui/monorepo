@@ -14,6 +14,7 @@ import {
   type ActorsResolverByFollowerId,
   type ActorsResolverByFollowingId,
 } from "../domain/actor/actor.ts";
+import { resolveLocalActorWith, resolveUserByUsernameWith } from "./helper/resolve.ts";
 
 const Input = Schema.create(
   z.object({
@@ -48,24 +49,14 @@ const create = ({
   actorsResolverByFollowerId,
   actorsResolverByFollowingId,
 }: Deps): FindUserUseCase => {
+  const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+  const resolveUserByUsername = resolveUserByUsernameWith(userResolverByUsername);
+
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind("user", async ({ username }) =>
-        userResolverByUsername.resolve(username)
-      ),
-      RA.bind("user", ({ user, username }) =>
-        user ? RA.ok(user) : RA.err(UserNotFoundError.create({ username }))
-      ),
-      RA.bind("actor", async ({ user }) => {
-        return actorResolverByUserId.resolve(user.id);
-      }),
-      RA.bind("actor", ({ actor, username }) => {
-        if (!actor) {
-          return RA.err(UserNotFoundError.create({ username }));
-        }
-        return RA.ok(actor);
-      }),
+      RA.bind("user", ({ username }) => resolveUserByUsername(username)),
+      RA.bind("actor", ({ user }) => resolveLocalActor(user.id)),
       RA.bind("following", async ({ actor }) => {
         return actorsResolverByFollowerId.resolve(actor.id);
       }),

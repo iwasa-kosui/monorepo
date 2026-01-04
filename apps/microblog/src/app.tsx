@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { stringifyEntities } from "stringify-entities";
+import { parseEntities } from "parse-entities";
 import {
   deleteCookie,
   getCookie,
@@ -37,6 +39,9 @@ import { SessionId } from "./domain/session/sessionId.ts";
 import { CreatePostUseCase } from "./useCase/createPost.ts";
 import { PgPostCreatedStore } from "./adaptor/pg/post/postCreatedStore.ts";
 import { PgPostsResolverByActorId } from "./adaptor/pg/post/postsResolverByActorId.ts";
+import { PostId } from "./domain/post/postId.ts";
+import { GetPostUseCase } from "./useCase/getPost.ts";
+import { PgPostResolver } from "./adaptor/pg/post/postResolver.ts";
 
 const app = new Hono();
 const fed = Federation.getInstance();
@@ -83,21 +88,25 @@ app.get("/", async (c) => {
               </form>
             </section>
             <section>
-              <h2>Timeline</h2>
-              {posts.length > 0 ? (
-                <ul>
-                  {posts.map((post) => (
-                    <li key={post.postId}>
-                      <p>{post.content}</p>
-                      <small>
-                        Posted at: {new Date(post.createdAt).toLocaleString()}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No posts to show.</p>
-              )}
+              {posts.map((post) => (
+                <article
+                  key={post.postId}
+                  style={{
+                    marginBottom: "1em",
+                    paddingBottom: "1em",
+                  }}
+                >
+                  <p>{parseEntities(post.content)}</p>
+                  <footer>
+                    <a
+                      href={`/users/${user.username}/posts/${post.postId}`}
+                      class="secondary"
+                    >
+                      {new Date(post.createdAt).toLocaleString()}
+                    </a>
+                  </footer>
+                </article>
+              ))}
             </section>
           </Layout>
         );
@@ -121,7 +130,11 @@ app.post(
   sValidator(
     "form",
     z.object({
-      content: z.string().min(1).max(280),
+      content: z
+        .string()
+        .min(1)
+        .max(280)
+        .transform((s) => stringifyEntities(s, { escapeOnly: true })),
     })
   ),
   async (c) => {
@@ -148,18 +161,11 @@ app.post(
       useCase.run({
         sessionId: SessionId.orThrow(sessionId),
         content,
-        context: fed.createContext(c.req.raw, undefined),
+        ctx: fed.createContext(c.req.raw, undefined),
       }),
       RA.match({
-        ok: ({ post }) => {
-          return c.html(
-            <Layout>
-              <section>
-                <h1>Post Created</h1>
-                <p>Your post has been created with ID: {String(post.postId)}</p>
-              </section>
-            </Layout>
-          );
+        ok: ({ user, post }) => {
+          return c.redirect(`/users/${user.username}/posts/${post.postId}`);
         },
         err: (err) => {
           return c.html(
@@ -360,6 +366,62 @@ app.get("/sign-up", async (c) => {
     </Layout>
   );
 });
+app.get(
+  "/users/:username/posts/:postId",
+  sValidator(
+    "param",
+    z.object({
+      username: Username.zodType,
+      postId: PostId.zodType,
+    })
+  ),
+  async (c) => {
+    const { username, postId } = c.req.valid("param");
+    const useCase = GetPostUseCase.create({
+      postResolver: PgPostResolver.getInstance(),
+    });
+
+    return RA.flow(
+      useCase.run({ postId }),
+      RA.match({
+        ok: (post) => {
+          return c.html(
+            <Layout>
+              <section>
+                <h2>
+                  <a href={`/users/${username}`} class="secondary">
+                    {String(username)}
+                  </a>
+                </h2>
+                <article>
+                  <p>{parseEntities(post.content)}</p>
+                  <footer>
+                    <a
+                      href={`/users/${username}/posts/${post.postId}`}
+                      class="secondary"
+                    >
+                      {new Date(post.createdAt).toLocaleString()}
+                    </a>
+                  </footer>
+                </article>
+              </section>
+            </Layout>
+          );
+        },
+        err: (err) => {
+          return c.html(
+            <Layout>
+              <section>
+                <h1>Error</h1>
+                <p>{String(JSON.stringify(err))}</p>
+              </section>
+            </Layout>
+          );
+        },
+      })
+    );
+  }
+);
 app.post(
   "/sign-up",
   sValidator(

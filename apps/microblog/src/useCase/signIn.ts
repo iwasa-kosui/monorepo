@@ -8,6 +8,7 @@ import { Session, type SessionStartedStore } from "../domain/session/session.ts"
 import { Instant } from "../domain/instant/instant.ts";
 import { RA } from "@iwasa-kosui/result";
 import type { SessionId } from "../domain/session/sessionId.ts";
+import { resolveUserByUsernameWith } from "./helper/resolve.ts";
 
 type Input = Readonly<{
   username: Username
@@ -53,19 +54,18 @@ const create = ({
   sessionStartedStore,
 }: Deps): SignInUseCase => {
   const now = Instant.now();
+  const resolveUser = (username: Username): RA<User, UsernameOrPasswordInvalid> =>
+    RA.flow(
+      resolveUserByUsernameWith(userResolverByUsername)(username),
+      RA.mapErr(() => UsernameOrPasswordInvalid.create(username))
+    );
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
       RA.bind('user', ({ username }) =>
-        userResolverByUsername.resolve(username)
+        resolveUser(username)
       ),
-      RA.bind('user', ({ user, username }) => {
-        if (!user) {
-          return RA.err(UsernameOrPasswordInvalid.create(username));
-        }
-        return RA.ok(user);
-      }),
       RA.bind('userPassword', ({ user }) =>
         userPasswordResolver.resolve(user.id)
       ),

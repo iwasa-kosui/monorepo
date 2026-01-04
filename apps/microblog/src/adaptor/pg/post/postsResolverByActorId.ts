@@ -1,5 +1,5 @@
 import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Post, type PostResolver, type PostsResolverByActorId } from "../../../domain/post/post.ts";
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
@@ -21,6 +21,8 @@ const getInstance = singleton((): PostsResolverByActorId => {
         eq(postsTable.postId, remotePostsTable.postId)
       )
       .where(eq(postsTable.actorId, actorId))
+      .limit(10)
+      .orderBy(desc(postsTable.createdAt))
       .execute();
     return RA.ok(rows.map(row => {
       if (row.local_posts) {

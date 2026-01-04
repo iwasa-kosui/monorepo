@@ -69,3 +69,18 @@ export const Post = {
 export type PostCreatedStore = Agg.Store<PostCreated>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
+export type PostNotFoundError = Readonly<{
+  type: 'PostNotFoundError';
+  message: string;
+  detail: {
+    postId: PostId;
+  }
+}>;
+
+export const PostNotFoundError = {
+  create: (postId: PostId): PostNotFoundError => ({
+    type: 'PostNotFoundError',
+    message: `The post with ID "${postId}" was not found.`,
+    detail: { postId },
+  }),
+} as const;

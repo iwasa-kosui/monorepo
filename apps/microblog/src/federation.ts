@@ -8,6 +8,7 @@ import {
   importJwk,
   Note,
   Person,
+  PUBLIC_COLLECTION,
   Undo,
   type Recipient,
 } from "@fedify/fedify";
@@ -39,6 +40,10 @@ import { PgUnfollowedStore } from "./adaptor/pg/follow/unfollowedStore.ts";
 import { GetUserProfileUseCase } from "./useCase/getUserProfile.ts";
 import { PgActorResolverByFollowerId } from "./adaptor/pg/actor/followsResolverByFollowerId.ts";
 import { PgActorResolverByFollowingId } from "./adaptor/pg/actor/followsResolverByFollowingId.ts";
+import { GetPostUseCase } from './useCase/getPost.ts';
+import { PgPostResolver } from './adaptor/pg/post/postResolver.ts';
+import { PostId } from './domain/post/postId.ts';
+import { Temporal } from "@js-temporal/polyfill";
 
 const create = () => {
   const env = Env.getInstance();
@@ -52,13 +57,6 @@ const create = () => {
     actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
     actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
   });
-  federation.setObjectDispatcher(
-    Note,
-    "/users/{identifier}/posts/{id}",
-    (ctx, values) => {
-      return null;
-    },
-  );
   federation.setInboxListeners("/users/{identifier}/inbox", "/inbox")
     .on(Follow, async (ctx, activity) => {
       if (!activity.objectId) {
@@ -116,6 +114,42 @@ const create = () => {
         },
       })
     })
+
+  federation.setObjectDispatcher(
+    Note,
+    "/users/{identifier}/posts/{id}",
+    (ctx, values) => {
+      const useCase = GetPostUseCase.create({
+        postResolver: PgPostResolver.getInstance(),
+      })
+      return RA.flow(
+        RA.ok({
+          postId: PostId.orThrow(values.id),
+        }),
+        RA.andThen(async (input) => useCase.run(input)),
+        RA.match({
+          ok: (post) => {
+            return new Note({
+              id: ctx.getObjectUri(Note, values),
+              attribution: ctx.getActorUri(values.identifier),
+              to: PUBLIC_COLLECTION,
+              cc: ctx.getFollowersUri(values.identifier),
+              content: post.content,
+              mediaType: "text/html",
+              published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
+              url: ctx.getObjectUri(Note, values),
+            });
+          },
+          err: (err) => {
+            getLogger().warn(
+              `Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${err}`
+            );
+            return null;
+          },
+        })
+      );
+    },
+  )
 
   federation
     .setFollowersDispatcher(

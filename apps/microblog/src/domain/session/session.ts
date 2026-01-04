@@ -37,6 +37,9 @@ const startSession = (now: Instant) => (payload: Omit<Session, 'sessionId'>): Se
 export const Session = {
   ...schema,
   startSession,
+  verify: (session: Session, now: Instant): boolean => {
+    return session.expires > now;
+  },
 } as const;
 
 export type SessionExpiredError = Readonly<{

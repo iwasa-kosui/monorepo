@@ -15,3 +15,19 @@ export type ActorResolverByUserId = Agg.Resolver<UserId, LocalActor | undefined>
 
 export type ActorsResolverByFollowerId = Agg.Resolver<ActorId, Actor[]>
 export type ActorsResolverByFollowingId = Agg.Resolver<ActorId, Actor[]>
+
+export type ActorNotFoundError = Readonly<{
+  type: 'ActorNotFoundError';
+  message: string;
+  detail: {
+    uri: string;
+  }
+}>;
+
+export const ActorNotFoundError = {
+  create: (uri: string): ActorNotFoundError => ({
+    type: 'ActorNotFoundError',
+    message: `The actor with URI "${uri}" was not found.`,
+    detail: { uri },
+  }),
+} as const;

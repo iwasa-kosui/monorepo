@@ -2,24 +2,34 @@ import z from "zod";
 import { Schema } from "../helper/schema.ts";
 import { SessionId } from "../domain/session/sessionId.ts";
 import { Post, type PostCreatedStore } from "../domain/post/post.ts";
-import { SessionExpiredError, type SessionResolver } from "../domain/session/session.ts";
-import { UserNotFoundError, type UserResolver } from "../domain/user/user.ts";
+import {
+  SessionExpiredError,
+  type SessionResolver,
+} from "../domain/session/session.ts";
+import {
+  User,
+  UserNotFoundError,
+  type UserResolver,
+} from "../domain/user/user.ts";
 import type { UseCase } from "./useCase.ts";
 import { Instant } from "../domain/instant/instant.ts";
 import { RA } from "@iwasa-kosui/result";
-import { type Context } from "@fedify/fedify";
-import type { ActorResolverByUserId } from "../domain/actor/actor.ts";
-
+import { Create, Note, type RequestContext } from "@fedify/fedify";
+import type { Actor, ActorResolverByUserId } from "../domain/actor/actor.ts";
+import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;
   content: string;
-  context: Context<unknown>;
-}>
+  ctx: RequestContext<unknown>;
+}>;
 
-const Ok = Schema.create(z.object({
-  post: Post.zodType,
-}))
+const Ok = Schema.create(
+  z.object({
+    post: Post.zodType,
+    user: User.zodType,
+  })
+);
 type Ok = z.infer<typeof Ok.zodType>;
 
 type Err = SessionExpiredError | UserNotFoundError;
@@ -27,10 +37,10 @@ type Err = SessionExpiredError | UserNotFoundError;
 export type CreatePostUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
-  sessionResolver: SessionResolver
-  postCreatedStore: PostCreatedStore
-  userResolver: UserResolver
-  actorResolverByUserId: ActorResolverByUserId
+  sessionResolver: SessionResolver;
+  postCreatedStore: PostCreatedStore;
+  userResolver: UserResolver;
+  actorResolverByUserId: ActorResolverByUserId;
 }>;
 
 const create = ({
@@ -40,44 +50,47 @@ const create = ({
   actorResolverByUserId,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
+  const resolveSession = resolveSessionWith(sessionResolver, now);
+  const resolveUser = resolveUserWith(userResolver);
+  const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind('session', async ({ sessionId }) =>
-        sessionResolver.resolve(sessionId)
-      ),
-      RA.bind('session', ({ session, sessionId }) =>
-        session ? RA.ok(session) : RA.err(SessionExpiredError.create(sessionId))
-      ),
-      RA.bind('user', async ({ session }) =>
-        userResolver.resolve(session.userId)
-      ),
-      RA.bind('user', ({ user, session }) =>
-        user ? RA.ok(user) : RA.err(UserNotFoundError.create({ userId: session.userId }))
-      ),
-      RA.bind('actor', async ({ user }) =>
-        actorResolverByUserId.resolve(user.id)
-      ),
-      RA.bind('actor', ({ actor, user }) =>
-        actor ? RA.ok(actor) : RA.err(UserNotFoundError.create({ userId: user.id }))
-      ),
-      RA.bind('content', ({ content }) => RA.ok(content)),
-      RA.bind('postEvent', ({ actor, content }) => {
+      RA.bind("session", ({ sessionId }) => resolveSession(sessionId)),
+      RA.bind("user", ({ session }) => resolveUser(session.userId)),
+      RA.bind("actor", ({ user }) => resolveLocalActor(user.id)),
+      RA.bind("postEvent", ({ actor, content }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
         });
-
         return RA.ok(postEvent);
       }),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
-      RA.bind('post', ({ postEvent }) => RA.ok(postEvent.aggregateState)),
+      RA.bind("post", ({ postEvent }) => RA.ok(postEvent.aggregateState)),
+      RA.andThrough(async ({ post, user, ctx }) => {
+        const noteArgs = { identifier: user.username, id: post.postId };
+        const note = await ctx.getObject(Note, noteArgs);
+        await ctx.sendActivity(
+          { identifier: user.username },
+          "followers",
+          new Create({
+            id: new URL("#activity", note?.id ?? undefined),
+            object: note,
+            actors: note?.attributionIds,
+            tos: note?.toIds,
+            ccs: note?.ccIds,
+          }),
+        );
+        return RA.ok(undefined);
+      }),
+      RA.map(({ post, user }) => ({ post, user })),
     );
 
   return { run };
-}
+};
 
 export const CreatePostUseCase = {
   create,

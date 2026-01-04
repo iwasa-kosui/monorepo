@@ -52,3 +52,20 @@ export const Follow = {
   toAggregateId,
   fromAggregateId,
 } as const;
+
+export type AlreadyUnfollowedError = Readonly<{
+  type: 'AlreadyUnfollowedError';
+  message: string;
+  detail: {
+    followerId: ActorId;
+    followingId: ActorId;
+  }
+}>;
+
+export const AlreadyUnfollowedError = {
+  create: ({ followerId, followingId }: { followerId: ActorId; followingId: ActorId }): AlreadyUnfollowedError => ({
+    type: 'AlreadyUnfollowedError',
+    message: `The actor with ID "${followerId}" has already unfollowed the actor with ID "${followingId}".`,
+    detail: { followerId, followingId },
+  }),
+} as const;
