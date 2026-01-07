@@ -15,7 +15,6 @@
     "build": "rm -rf ./dist && tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@iwasa-kosui/pipe": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20",
