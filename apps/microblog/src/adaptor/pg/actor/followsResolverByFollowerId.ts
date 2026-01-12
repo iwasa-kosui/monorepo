@@ -30,6 +30,8 @@ const getInstance = singleton(() => ({
           uri: row.actors.uri,
           inboxUrl: row.actors.inboxUrl,
           type: 'remote',
+          url: row.remote_actors.url ?? undefined,
+          username: row.remote_actors.username ?? undefined,
         };
         return actor;
       }

@@ -17,9 +17,8 @@ import {
   AlreadyUnfollowedError,
   Follow,
   type FollowAggregateId,
-  type FollowedStore,
   type FollowResolver,
-  type UnfollowedStore,
+  type UndoFollowingProcessedStore,
 } from "../domain/follow/follow.ts";
 import { UserNotFoundError } from "../domain/user/user.ts";
 import { Instant } from "../domain/instant/instant.ts";
@@ -40,7 +39,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   userResolverByUsername: UserResolverByUsername;
   remoteActorCreatedStore: RemoteActorCreatedStore;
-  unfollowedStore: UnfollowedStore;
+  unfollowedStore: UndoFollowingProcessedStore;
   followResolver: FollowResolver;
 }>;
 
@@ -68,16 +67,16 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind("followingActor", ({ username }) =>
+      RA.andBind("followingActor", ({ username }) =>
         RA.flow(
           resolveUserByUsername(username),
           RA.andThen((user) => resolveLocalActor(user.id))
         )
       ),
-      RA.bind("followerActor", ({ follower }) =>
+      RA.andBind("followerActor", ({ follower }) =>
         resolveActorByUri(follower.uri)
       ),
-      RA.bind("existingFollow", ({ followerActor, followingActor }) =>
+      RA.andBind("existingFollow", ({ followerActor, followingActor }) =>
         followResolver.resolve({
           followerId: followerActor.id,
           followingId: followingActor.id,
@@ -90,7 +89,7 @@ const create = ({
             followingId: followingActor.id,
           }));
         }
-        const unfollowed = Follow.unfollow(
+        const unfollowed = Follow.undoFollow(
           {
             followerId: followerActor.id,
             followingId: followingActor.id,

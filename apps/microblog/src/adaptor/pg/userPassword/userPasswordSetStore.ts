@@ -1,5 +1,5 @@
 import { RA } from "@iwasa-kosui/result";
-import type { Followed, FollowedStore } from "../../../domain/follow/follow.ts";
+import type { FollowAccepted, FollowAcceptedStore } from "../../../domain/follow/follow.ts";
 import { DB } from "../db.ts";
 import { domainEventsTable, followsTable, userPasswordsTable } from "../schema.ts";
 import { singleton } from "../../../helper/singleton.ts";

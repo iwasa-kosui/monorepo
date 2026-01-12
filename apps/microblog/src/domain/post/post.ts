@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { PostId } from "./postId.ts";
 import { ActorId } from "../actor/actorId.ts";
 import { Instant } from "../instant/instant.ts";
@@ -7,6 +7,7 @@ import type { Agg } from "../aggregate/index.ts";
 import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
 import type { Context } from "@fedify/fedify";
 import { UserId } from "../user/userId.ts";
+import type { Username } from "../user/username.ts";
 
 const localPostZodType = z.object({
   type: z.literal('local'),
@@ -43,6 +44,7 @@ export type PostEvent<TAggregateState extends Agg.InferState<PostAggregate> | un
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
 export type PostCreated = PostEvent<Post, 'post.created', Post>;
+export type RemotePostCreated = PostEvent<RemotePost, 'post.remotePostCreated', RemotePost>;
 
 const createPost = (now: Instant) => (payload: Omit<LocalPost, "type" | 'createdAt' | 'postId'>): PostCreated => {
   const postId = PostId.generate();
@@ -61,14 +63,33 @@ const createPost = (now: Instant) => (payload: Omit<LocalPost, "type" | 'created
   );
 }
 
+const createRemotePost = (now: Instant) => (payload: Omit<RemotePost, "type" | 'createdAt' | 'postId'>): RemotePostCreated => {
+  const postId = PostId.generate();
+  const post: RemotePost = {
+    ...payload,
+    postId,
+    type: 'remote',
+    createdAt: now,
+  };
+  return PostEvent.create(
+    postId,
+    post,
+    'post.remotePostCreated',
+    post,
+    Instant.now(),
+  )
+}
+
 export const Post = {
   ...schema,
   createPost,
+  createRemotePost,
 } as const;
 
-export type PostCreatedStore = Agg.Store<PostCreated>;
+export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
+export type PostsResolverByActorIds = Agg.Resolver<ActorId[], (Post & { username: Username })[]>;
 export type PostNotFoundError = Readonly<{
   type: 'PostNotFoundError';
   message: string;

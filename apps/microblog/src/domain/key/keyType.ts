@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Schema, type InferSchema } from "../../helper/schema.ts";
 
 const values = {

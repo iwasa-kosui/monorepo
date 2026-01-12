@@ -1,0 +1,22 @@
+- name: Enable HTTPS for microblog app server
+  hosts: myhosts
+  tasks:
+    - name: Install required packages
+      ansible.builtin.shell: |
+        sudo dnf install python3 python-devel augeas-devel gcc -y
+    - name: Remove old certbot
+      ansible.builtin.shell: |
+        sudo dnf remove certbot -y
+    - name: Set up a Python virtual environment for certbot
+      ansible.builtin.shell: |
+        sudo python3 -m venv /opt/certbot/
+        sudo /opt/certbot/bin/pip install --upgrade pip
+    - name: Install certbot and certbot-nginx
+      ansible.builtin.shell: |
+        sudo /opt/certbot/bin/pip install certbot certbot-nginx
+    - name: Prepare the Certbot command
+      ansible.builtin.shell: |
+        sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
+    - name: Obtain and install SSL certificate
+      ansible.builtin.shell: |
+        sudo certbot --nginx -d blog.kosui.me --non-interactive -m cert@r.kosui.me --agree-tos -n

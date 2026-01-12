@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { ActorId } from "./actorId.ts";
 import { UserId } from "../user/userId.ts";
 import { ActorEvent } from "./aggregate.ts";
@@ -10,6 +10,8 @@ const zodType = z.object({
   uri: z.string(),
   inboxUrl: z.string(),
   type: z.literal('remote'),
+  username: z.string().optional(),
+  url: z.string().optional(),
 }).describe('RemoteActor');
 
 
@@ -17,11 +19,19 @@ export type RemoteActor = z.output<typeof zodType>;
 export type RemoteActorCreated = ActorEvent<RemoteActor, 'actor.created', {}>;
 export type RemoteActorCreatedStore = Agg.Store<RemoteActorCreated>;
 
-const createRemoteActor = (uri: string, inboxUrl: string): RemoteActorCreated => {
+type CreateProps = Readonly<{
+  uri: string;
+  inboxUrl: string;
+  url?: string
+  username?: string
+}>;
+const createRemoteActor = ({ uri, inboxUrl, url, username }: CreateProps): RemoteActorCreated => {
   const remoteActor = {
     id: ActorId.generate(),
     uri,
     inboxUrl,
+    url,
+    username,
     type: 'remote' as const,
   }
   return ActorEvent.create(
@@ -33,7 +43,17 @@ const createRemoteActor = (uri: string, inboxUrl: string): RemoteActorCreated =>
   )
 }
 
+const getHandle = (remoteActor: RemoteActor): string | undefined => {
+  const { username, url } = remoteActor;
+  if (!username || !url) {
+    return undefined;
+  }
+  const parsedUrl = new URL(url);
+  return `${username}@${parsedUrl.host}`;
+}
+
 export const RemoteActor = {
   zodType,
   createRemoteActor,
+  getHandle,
 } as const;

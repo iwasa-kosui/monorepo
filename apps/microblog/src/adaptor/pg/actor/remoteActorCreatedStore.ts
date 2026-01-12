@@ -14,6 +14,8 @@ const store = async (event: RemoteActorCreated): RA<void, never> => {
     });
     await tx.insert(remoteActorsTable).values({
       actorId: event.aggregateId,
+      url: event.aggregateState.url,
+      username: event.aggregateState.username,
     });
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,

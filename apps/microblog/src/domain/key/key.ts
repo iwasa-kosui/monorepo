@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Schema, type InferSchema } from "../../helper/schema.ts";
 import { UserId } from "../user/userId.ts";
 import { KeyType } from "./keyType.ts";

@@ -1,0 +1,11 @@
+[Unit]
+Description = microblog
+
+[Service]
+ExecStart = /usr/local/bin/microblog
+ExecStop  = /usr/bin/pkill -e node
+Restart   = always
+Type      = simple
+
+[Install]
+WantedBy = multi-user.target

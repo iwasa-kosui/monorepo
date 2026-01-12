@@ -1,7 +1,7 @@
-import { configure, getConsoleSink } from "@logtape/logtape";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-await configure({
+configureSync({
   contextLocalStorage: new AsyncLocalStorage(),
   sinks: {
     console: getConsoleSink(),

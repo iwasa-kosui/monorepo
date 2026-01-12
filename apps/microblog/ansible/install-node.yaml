@@ -1,0 +1,15 @@
+- name: Provision microblog app server
+  hosts: myhosts
+  tasks:
+    - name: Install nvm
+      ansible.builtin.shell: |
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+    - name: List nvm versions
+      ansible.builtin.shell: |
+        . $HOME/.nvm/nvm.sh
+        nvm ls-remote
+    - name: Install Node.js v20
+      ansible.builtin.shell: |
+        . $HOME/.nvm/nvm.sh
+        nvm install v24
+        nvm use v24

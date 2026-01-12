@@ -1,17 +1,15 @@
 import {
   Accept,
+  Create,
   createFederation,
-  Endpoints,
-  exportJwk,
   Follow,
-  generateCryptoKeyPair,
-  importJwk,
+  isActor,
   Note,
-  Person,
   PUBLIC_COLLECTION,
   Undo,
   type Recipient,
 } from "@fedify/fedify";
+import { Follow as AppFollow } from "./domain/follow/follow.ts";
 import { getLogger } from "@logtape/logtape";
 import { PostgresKvStore, PostgresMessageQueue } from "@fedify/postgres";
 import postgres from "postgres";
@@ -20,62 +18,62 @@ import { singleton } from "./helper/singleton.ts";
 import { RA } from "@iwasa-kosui/result";
 import { Username } from "./domain/user/username.ts";
 import { PgUserResolverByUsername } from "./adaptor/pg/user/userResolverByUsername.ts";
-import { DB } from "./adaptor/pg/db.ts";
-import { keysTable } from "./adaptor/pg/schema.ts";
-import { eq } from "drizzle-orm";
-import { Key, KeyId, KeyType } from "./domain/key/index.ts";
-import { PgKeysResolverByUserId } from "./adaptor/pg/key/keysResolverByUserId.ts";
-import { FedifyKeyGenerator } from "./adaptor/fedify/keyGenerator.ts";
-import { Instant } from "./domain/instant/instant.ts";
-import type { UserId } from "./domain/user/userId.ts";
-import { PgKeyGeneratedStore } from "./adaptor/pg/key/keyGeneratedStore.ts";
 import { AcceptFollowRequestUseCase } from "./useCase/acceptFollowRequest.ts";
-import { PgFollowedStore } from "./adaptor/pg/follow/followedStore.ts";
+import { PgFollowedStore } from "./adaptor/pg/follow/followAcceptedStore.ts";
 import { PgActorResolverByUri } from "./adaptor/pg/actor/actorResolverByUri.ts";
 import { PgActorResolverByUserId } from "./adaptor/pg/actor/actorResolverByUserId.ts";
 import { PgRemoteActorCreatedStore } from "./adaptor/pg/actor/remoteActorCreatedStore.ts";
 import { PgFollowResolver } from "./adaptor/pg/follow/followResolver.ts";
 import { AcceptUnfollowUseCase } from "./useCase/acceptUnfollow.ts";
-import { PgUnfollowedStore } from "./adaptor/pg/follow/unfollowedStore.ts";
+import { PgUnfollowedStore } from "./adaptor/pg/follow/undoFollowingProcessedStore.ts";
 import { GetUserProfileUseCase } from "./useCase/getUserProfile.ts";
-import { PgActorResolverByFollowerId } from "./adaptor/pg/actor/followsResolverByFollowerId.ts";
-import { PgActorResolverByFollowingId } from "./adaptor/pg/actor/followsResolverByFollowingId.ts";
-import { GetPostUseCase } from './useCase/getPost.ts';
-import { PgPostResolver } from './adaptor/pg/post/postResolver.ts';
-import { PostId } from './domain/post/postId.ts';
+import { GetPostUseCase } from "./useCase/getPost.ts";
+import { PgPostResolver } from "./adaptor/pg/post/postResolver.ts";
+import { PostId } from "./domain/post/postId.ts";
 import { Temporal } from "@js-temporal/polyfill";
+import { PgConfig } from "./adaptor/pg/pgConfig.ts";
+import { ActorDispatcher } from "./adaptor/fedify/actorDispatcher.ts";
+import { KeyPairsDispatcher } from "./adaptor/fedify/keyPairsDispatcher.ts";
+import { OutboxDispatcher } from "./adaptor/fedify/outboxDispatcher.ts";
+import { FollowersDispatcher } from "./adaptor/fedify/followersDispatcher.ts";
+import { RemoteActor } from "./domain/actor/remoteActor.ts";
+import type { Actor } from "./domain/actor/actor.ts";
+import { Instant } from "./domain/instant/instant.ts";
+import { PgFollowRequestedStore } from "./adaptor/pg/follow/followRequestedStore.ts";
+import { Post } from "./domain/post/post.ts";
+import { PgPostCreatedStore } from "./adaptor/pg/post/postCreatedStore.ts";
 
 const create = () => {
   const env = Env.getInstance();
   const federation = createFederation({
-    kv: new PostgresKvStore(postgres(env.DATABASE_URL)),
-    queue: new PostgresMessageQueue(postgres(env.DATABASE_URL)),
+    kv: new PostgresKvStore(postgres(env.DATABASE_URL, PgConfig.getInstance())),
+    queue: new PostgresMessageQueue(
+      postgres(env.DATABASE_URL, PgConfig.getInstance())
+    ),
+    origin: env.ORIGIN,
   });
-  const useCase = GetUserProfileUseCase.create({
-    userResolverByUsername: PgUserResolverByUsername.getInstance(),
-    actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-    actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
-    actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
-  });
-  federation.setInboxListeners("/users/{identifier}/inbox", "/inbox")
+  federation
+    .setInboxListeners("/users/{identifier}/inbox", "/inbox")
     .on(Follow, async (ctx, activity) => {
       if (!activity.objectId) {
-        return
+        return;
       }
       const object = ctx.parseUri(activity.objectId);
       if (!object) {
-        return
+        return;
       }
-      if (object.type !== 'actor') {
-        return
+      if (object.type !== "actor") {
+        return;
       }
       const follower = await activity.getActor();
       if (!follower || !follower.id || !follower.inboxId) {
-        return
+        return;
       }
       const followerIdentity = {
         uri: follower.id.href,
         inboxUrl: follower.inboxId.href,
+        url: follower.url?.href?.toString() ?? undefined,
+        username: follower.preferredUsername?.toString() ?? undefined,
       } as const;
       await AcceptFollowRequestUseCase.create({
         followedStore: PgFollowedStore.getInstance(),
@@ -87,12 +85,16 @@ const create = () => {
       }).run({
         username: Username.parseOrThrow(object.identifier),
         follower: followerIdentity,
-      })
-      await ctx.sendActivity(object, follower, new Accept({
-        actor: activity.objectId,
-        to: activity.actorId,
-        object: activity,
-      }))
+      });
+      await ctx.sendActivity(
+        object,
+        follower,
+        new Accept({
+          actor: activity.objectId,
+          to: activity.actorId,
+          object: activity,
+        })
+      );
     })
     .on(Undo, async (ctx, undo) => {
       const object = await undo.getObject();
@@ -112,7 +114,65 @@ const create = () => {
         follower: {
           uri: undo.actorId.href,
         },
-      })
+      });
+    })
+    .on(Create, async (ctx, activity) => {
+      const object = await activity.getObject();
+      if (!(object instanceof Note)) {
+        return;
+      }
+      const actor = await activity.getActor();
+      if (!actor || !actor.id || !actor.inboxId) {
+        return;
+      }
+      if (!object.id) {
+        return;
+      }
+      const objectIdentity = {
+        uri: object.id.href,
+      } as const;
+      const actorIdentity = {
+        uri: actor.id.href,
+        inboxUrl: actor.inboxId.href,
+        url: actor.url?.href?.toString() ?? undefined,
+        username: actor.preferredUsername?.toString() ?? undefined,
+      } as const;
+
+      return RA.flow(
+        RA.ok(actorIdentity.uri),
+        RA.andThen(PgActorResolverByUri.getInstance().resolve),
+        RA.andBind('actor', (actor): RA<Actor, unknown> => {
+          if (!actor) {
+            return RA.flow(
+              RA.ok(actorIdentity),
+              RA.map(RemoteActor.createRemoteActor),
+              RA.andThrough(PgRemoteActorCreatedStore.getInstance().store),
+              RA.map((event) => event.aggregateState),
+            )
+          }
+          return RA.ok(actor);
+        }),
+        RA.andThen(({ actor }) => {
+          const createPost = Post.createRemotePost(Instant.now())({
+            content: String(object.content),
+            uri: objectIdentity.uri,
+            actorId: actor.id,
+          });
+          return PgPostCreatedStore.getInstance().store(createPost);
+        }),
+        RA.match({
+          ok: () => {
+            getLogger().info(
+              `Processed Create activity: ${objectIdentity.uri} by ${actorIdentity.uri}`
+            );
+          },
+          err: (err) => {
+            getLogger().warn(
+              `Failed to process Create activity: ${objectIdentity.uri} by ${actorIdentity.uri} - ${err}`
+            );
+          },
+        })
+      )
     })
 
   federation.setObjectDispatcher(
@@ -121,7 +181,7 @@ const create = () => {
     (ctx, values) => {
       const useCase = GetPostUseCase.create({
         postResolver: PgPostResolver.getInstance(),
-      })
+      });
       return RA.flow(
         RA.ok({
           postId: PostId.orThrow(values.id),
@@ -148,175 +208,49 @@ const create = () => {
           },
         })
       );
-    },
-  )
+    }
+  );
+
+  const followersDispatcher = FollowersDispatcher.getInstance();
+  const outboxDispatcher = OutboxDispatcher.getInstance();
+  const actorDispatcher = ActorDispatcher.getInstance();
+  const keyPairsDispatcher = KeyPairsDispatcher.getInstance();
 
   federation
     .setFollowersDispatcher(
       "/users/{identifier}/followers",
-      async (ctx, identifier) => {
-        const useCase = GetUserProfileUseCase.create({
-          userResolverByUsername: PgUserResolverByUsername.getInstance(),
-          actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-          actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
-          actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
-        })
-
-        return RA.flow(
-          RA.ok(Username.orThrow(identifier)),
-          RA.andThen(async (username) => useCase.run({ username })),
-          RA.match({
-            ok: ({ followers }) => {
-              getLogger().info(
-                `Resolved followers for federation: ${identifier} - ${followers.length} followers`
-              );
-              return {
-                items: followers.map((actor): Recipient => ({
-                  id: new URL(actor.uri),
-                  inboxId: new URL(actor.inboxUrl),
-                })),
-              };
-            },
-            err: (err) => {
-              getLogger().warn(
-                `Failed to resolve followers for federation: ${identifier} - ${err}`
-              );
-              return {
-                items: [],
-              };
-            },
-          })
-        );
-      }).setCounter((ctx, identifier) => {
-        const useCase = GetUserProfileUseCase.create({
-          userResolverByUsername: PgUserResolverByUsername.getInstance(),
-          actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-          actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
-          actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
-        })
-
-        return RA.flow(
-          RA.ok(Username.orThrow(identifier)),
-          RA.andThen(async (username) => useCase.run({ username })),
-          RA.match({
-            ok: ({ followers }) => {
-              getLogger().info(
-                `Resolved followers for federation: ${identifier} - ${followers.length} followers`
-              );
-              return followers.length
-            },
-            err: (err) => {
-              getLogger().warn(
-                `Failed to resolve followers for federation: ${identifier} - ${err}`
-              );
-              return 0
-            },
-          })
-        );
-      })
-  federation
-    .setActorDispatcher("/users/{identifier}", async (ctx, identifier) => {
-      return RA.flow(
-        RA.ok(identifier),
-        RA.andThen(Username.parse),
-        RA.andThen(async (username) => useCase.run({ username })),
-        RA.match({
-          ok: async ({ user }) => {
-            const keys = await ctx.getActorKeyPairs(user.username);
-            return new Person({
-              id: ctx.getActorUri(user.username),
-              preferredUsername: user.username,
-              inbox: ctx.getInboxUri(identifier),
-              endpoints: new Endpoints({
-                sharedInbox: ctx.getInboxUri(),
-              }),
-              url: ctx.getActorUri(identifier),
-              publicKey: keys.at(0)?.cryptographicKey,
-              assertionMethods: keys.map((k) => k.multikey),
-              followers: ctx.getFollowersUri(identifier),
-            });
-          },
-          err: (err) => {
-            getLogger().warn(
-              `Failed to resolve user for federation: ${identifier} - ${err}`
-            );
-            return null;
-          },
-        })
-      );
-    })
-    .setKeyPairsDispatcher(async (ctx, identifier) => {
-      const keyGenerator = FedifyKeyGenerator.getInstance()
-      const keyGeneratedStore = PgKeyGeneratedStore.getInstance()
-      const keysResolverByUserId = PgKeysResolverByUserId.getInstance()
-
-      const generateIfMissing = async (existingKeys: ReadonlyArray<Key>, type: KeyType, userId: UserId): RA<CryptoKeyPair, never> => {
-        const found = existingKeys.find((key) => key.type === type);
-        if (found) {
-          return RA.ok({
-            privateKey: await importJwk(
-              JSON.parse(found.privateKey),
-              "private"
-            ),
-            publicKey: await importJwk(
-              JSON.parse(found.publicKey),
-              "public"
-            ),
-          });
-        }
-
-        return RA.flow(
-          keyGenerator.generate({
-            type,
-            userId,
-            now: Instant.now()
-          }),
-          RA.andThrough(keyGeneratedStore.store),
-          RA.map(async x => ({
-            privateKey: await importJwk(
-              JSON.parse(x.aggregateState.privateKey),
-              "private"
-            ),
-            publicKey: await importJwk(
-              JSON.parse(x.aggregateState.publicKey),
-              "public"
-            ),
-          }))
-        )
-      }
+      followersDispatcher.dispatch
+    )
+    .setCounter((ctx, identifier) => {
+      const useCase = GetUserProfileUseCase.getInstance();
 
       return RA.flow(
-        RA.ok(identifier),
-        RA.andThen(Username.parse),
+        RA.ok(Username.orThrow(identifier)),
         RA.andThen(async (username) => useCase.run({ username })),
-        RA.andThen(({ user }) =>
-          RA.flow(
-            RA.ok(user.id),
-            RA.andThen(keysResolverByUserId.resolve),
-            RA.andThen((keys) =>
-              RA.all(KeyType.values.map((type) =>
-                generateIfMissing(keys, type, user.id)
-              ))
-            ),
-            RA.map((keyPairs): CryptoKeyPair[] => keyPairs),
-          )
-        ),
         RA.match({
-          ok: (keyPairs) => {
+          ok: ({ followers }) => {
             getLogger().info(
-              `Resolved keys for federation: ${identifier} - ${keyPairs.length} keys`
+              `Resolved followers for federation: ${identifier} - ${followers.length} followers`
             );
-            return keyPairs;
+            return followers.length;
           },
           err: (err) => {
             getLogger().warn(
-              `Failed to resolve user for federation keys: ${identifier} - ${err}`
+              `Failed to resolve followers for federation: ${identifier} - ${err}`
             );
-            return [];
+            return 0;
           },
         })
       );
     });
+
+  federation.setOutboxDispatcher(
+    "/users/{identifier}/outbox",
+    outboxDispatcher.dispatch
+  );
+  federation
+    .setActorDispatcher("/users/{identifier}", actorDispatcher.dispatch)
+    .setKeyPairsDispatcher(keyPairsDispatcher.dispatch);
 
   return federation;
 };

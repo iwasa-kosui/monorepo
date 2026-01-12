@@ -1,9 +1,23 @@
-import z from "zod";
+import z from "zod/v4";
 import { singleton } from "./helper/singleton.ts";
 
-const schema = z.object({
+const baseSchema = z.object({
   DATABASE_URL: z.string().min(1),
+});
+
+const devSchema = baseSchema.extend({
+  ORIGIN: z.undefined().optional(),
+  APP_ENV: z.literal('development'),
+  DATABASE_CERT: z.undefined().optional(),
 }).readonly();
+
+const prodSchema = baseSchema.extend({
+  ORIGIN: z.string().min(1),
+  APP_ENV: z.literal('production'),
+  DATABASE_CERT: z.string().min(1),
+}).readonly();
+
+const schema = z.union([devSchema, prodSchema]);
 
 export type Env = z.infer<typeof schema>;
 

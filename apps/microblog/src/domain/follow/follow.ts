@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { ActorId } from "../actor/actorId.ts";
 import type { Agg } from "../aggregate/index.ts";
 import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
@@ -31,24 +31,31 @@ type FollowEvent<TAggregateState extends Agg.InferState<FollowAggregate> | undef
 > = DomainEvent<FollowAggregate, TAggregateState, TEventName, TEventPayload>;
 const FollowEvent = AggregateEvent.createFactory<FollowAggregate>('follow');
 
-export type Followed = FollowEvent<Follow, 'follow.followed', Follow>
-export type Unfollowed = FollowEvent<undefined, 'follow.unfollowed', Follow>
+export type FollowAccepted = FollowEvent<Follow, 'follow.followAccepted', Follow>
+export type UndoFollowingProcessed = FollowEvent<undefined, 'follow.undoFollowingProcessed', Follow>
+export type FollowRequested = FollowEvent<Follow, 'follow.followRequested', Follow>
 
-const follow = (payload: Follow, now: Instant): Followed => {
-  return FollowEvent.create(toAggregateId(payload), payload, 'follow.followed', payload, now);
+const acceptFollow = (payload: Follow, now: Instant): FollowAccepted => {
+  return FollowEvent.create(toAggregateId(payload), payload, 'follow.followAccepted', payload, now);
 }
 
-const unfollow = (payload: Follow, now: Instant): Unfollowed => {
-  return FollowEvent.create(toAggregateId(payload), undefined, 'follow.unfollowed', payload, now);
+const undoFollow = (payload: Follow, now: Instant): UndoFollowingProcessed => {
+  return FollowEvent.create(toAggregateId(payload), undefined, 'follow.undoFollowingProcessed', payload, now);
 }
 
-export type FollowedStore = Agg.Store<Followed>;
-export type UnfollowedStore = Agg.Store<Unfollowed>;
+const requestFollow = (payload: Follow, now: Instant): FollowRequested => {
+  return FollowEvent.create(toAggregateId(payload), payload, 'follow.followRequested', payload, now);
+}
+
+export type FollowAcceptedStore = Agg.Store<FollowAccepted>;
+export type UndoFollowingProcessedStore = Agg.Store<UndoFollowingProcessed>;
+export type FollowRequestedStore = Agg.Store<FollowRequested>;
 export type FollowResolver = Agg.Resolver<FollowAggregateId, Follow | undefined>
 export const Follow = {
   ...schema,
-  follow,
-  unfollow,
+  acceptFollow,
+  undoFollow,
+  requestFollow,
   toAggregateId,
   fromAggregateId,
 } as const;

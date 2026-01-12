@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Schema } from "../helper/schema.ts";
 import type { UseCase } from "./useCase.ts";
 import { Username } from "../domain/user/username.ts";
@@ -14,7 +14,17 @@ import {
   type ActorsResolverByFollowerId,
   type ActorsResolverByFollowingId,
 } from "../domain/actor/actor.ts";
-import { resolveLocalActorWith, resolveUserByUsernameWith } from "./helper/resolve.ts";
+import {
+  resolveLocalActorWith,
+  resolveUserByUsernameWith,
+} from "./helper/resolve.ts";
+import type { Post, PostsResolverByActorId } from "../domain/post/post.ts";
+import { singleton } from "../helper/singleton.ts";
+import { PgUserResolverByUsername } from "../adaptor/pg/user/userResolverByUsername.ts";
+import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
+import { PgActorResolverByFollowingId } from "../adaptor/pg/actor/followsResolverByFollowingId.ts";
+import { PgActorResolverByFollowerId } from "../adaptor/pg/actor/followsResolverByFollowerId.ts";
+import { PgPostsResolverByActorId } from "../adaptor/pg/post/postsResolverByActorId.ts";
 
 const Input = Schema.create(
   z.object({
@@ -23,14 +33,12 @@ const Input = Schema.create(
 );
 type Input = z.infer<typeof Input.zodType>;
 
-const Ok = Schema.create(
-  z.object({
-    user: User.zodType,
-    following: z.array(Actor.zodType),
-    followers: z.array(Actor.zodType),
-  })
-);
-type Ok = z.infer<typeof Ok.zodType>;
+type Ok = Readonly<{
+  user: User;
+  following: ReadonlyArray<Actor>;
+  followers: ReadonlyArray<Actor>;
+  posts: ReadonlyArray<Post>;
+}>;
 
 type Err = UserNotFoundError;
 
@@ -41,6 +49,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   actorsResolverByFollowerId: ActorsResolverByFollowerId;
   actorsResolverByFollowingId: ActorsResolverByFollowingId;
+  postsResolverByActorId: PostsResolverByActorId;
 }>;
 
 const create = ({
@@ -48,21 +57,27 @@ const create = ({
   actorResolverByUserId,
   actorsResolverByFollowerId,
   actorsResolverByFollowingId,
+  postsResolverByActorId,
 }: Deps): FindUserUseCase => {
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
-  const resolveUserByUsername = resolveUserByUsernameWith(userResolverByUsername);
+  const resolveUserByUsername = resolveUserByUsernameWith(
+    userResolverByUsername
+  );
 
-  const run = async (input: Input) =>
+  const run = (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind("user", ({ username }) => resolveUserByUsername(username)),
-      RA.bind("actor", ({ user }) => resolveLocalActor(user.id)),
-      RA.bind("following", async ({ actor }) => {
-        return actorsResolverByFollowerId.resolve(actor.id);
-      }),
-      RA.bind("followers", async ({ actor }) => {
-        return actorsResolverByFollowingId.resolve(actor.id);
-      }),
+      RA.andBind("user", ({ username }) => resolveUserByUsername(username)),
+      RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind("following", ({ actor }) =>
+        actorsResolverByFollowerId.resolve(actor.id)
+      ),
+      RA.andBind("followers", ({ actor }) =>
+        actorsResolverByFollowingId.resolve(actor.id)
+      ),
+      RA.andBind("posts", ({ actor }) =>
+        postsResolverByActorId.resolve(actor.id)
+      )
     );
 
   return {
@@ -72,4 +87,13 @@ const create = ({
 
 export const GetUserProfileUseCase = {
   create,
+  getInstance: singleton(() =>
+    create({
+      userResolverByUsername: PgUserResolverByUsername.getInstance(),
+      actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+      actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
+      actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
+      postsResolverByActorId: PgPostsResolverByActorId.getInstance(),
+    })
+  )
 } as const;

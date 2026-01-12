@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { Username } from "../../../domain/user/username.ts";
 import type { Actor, ActorResolverByUri } from "../../../domain/actor/actor.ts";
 import { ActorId } from "../../../domain/actor/actorId.ts";
+import type { RemoteActor } from "../../../domain/actor/remoteActor.ts";
 
 const getInstance = singleton((): ActorResolverByUri => {
   const resolve = async (uri: string): RA<Actor | undefined, never> => {
@@ -32,12 +33,13 @@ const getInstance = singleton((): ActorResolverByUri => {
       );
     }
     if (row.remote_actors) {
-      const actor: Actor = {
+      const actor: RemoteActor = {
         id: ActorId.orThrow(row.actors.actorId),
         uri: row.actors.uri,
         inboxUrl: row.actors.inboxUrl,
         type: 'remote',
-        // remote actor specific fields can be added here
+        url: row.remote_actors.url ?? undefined,
+        username: row.remote_actors.username ?? undefined,
       };
       return RA.ok(actor);
     }

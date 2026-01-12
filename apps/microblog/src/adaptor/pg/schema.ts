@@ -46,7 +46,9 @@ export const localActorsTable = pgTable("local_actors", {
 
 export const remoteActorsTable = pgTable("remote_actors", {
   actorId: uuid().primaryKey().references(() => actorsTable.actorId),
-})
+  url: text(),
+  username: text(),
+});
 
 export const followsTable = pgTable("follows", {
   followerId: uuid()

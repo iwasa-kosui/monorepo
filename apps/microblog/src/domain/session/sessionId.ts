@@ -3,7 +3,7 @@ import { Schema } from "../../helper/schema.ts";
 
 export const SessionIdSym = Symbol('SessionId');
 const zodType = z.uuid().brand(SessionIdSym).describe('SessionId');
-export type SessionId = z.output<typeof zodType>;
+export type SessionId = z.core.output<typeof zodType>;
 
 const schema = Schema.create<SessionId, string>(zodType);
 

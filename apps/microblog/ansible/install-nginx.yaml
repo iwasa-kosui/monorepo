@@ -1,0 +1,15 @@
+- name: Provision microblog app server
+  hosts: myhosts
+  tasks:
+    - name: Update dnf
+      ansible.builtin.shell: |
+        sudo dnf update -y
+    - name: Install nginx
+      ansible.builtin.shell: |
+        sudo dnf install nginx -y
+    - name: Start nginx
+      ansible.builtin.shell: |
+        sudo systemctl start nginx
+    - name: Enable nginx on boot
+      ansible.builtin.shell: |
+        sudo systemctl enable nginx
