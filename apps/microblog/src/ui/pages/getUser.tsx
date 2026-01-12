@@ -5,6 +5,7 @@ import { RemoteActor } from "../../domain/actor/remoteActor.ts";
 import type { Post } from "../../domain/post/post.ts";
 import type { User } from "../../domain/user/user.ts";
 import { Layout } from "../../layout.tsx";
+import { PostView } from "../components/PostView.tsx";
 
 type Props = Readonly<{
   user: User;
@@ -77,27 +78,7 @@ export const GetUserPage = ({
     </section>
     <section>
       {posts.map((post) => (
-        <article
-          key={post.postId}
-          style={{
-            marginBottom: "1em",
-            paddingBottom: "1em",
-          }}
-        >
-          <div
-            dangerouslySetInnerHTML={{
-              __html: sanitize(post.content),
-            }}
-          />
-          <footer>
-            <a
-              href={`/users/${user.username}/posts/${post.postId}`}
-              class="secondary"
-            >
-              {new Date(post.createdAt).toLocaleString()}
-            </a>
-          </footer>
-        </article>
+        <PostView post={{ ...post, username: user.username }} />
       ))}
     </section>
   </Layout>
