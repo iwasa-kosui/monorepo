@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Schema } from "../helper/schema.ts";
 import { SessionId } from "../domain/session/sessionId.ts";
 import { Post, type PostCreatedStore } from "../domain/post/post.ts";
@@ -57,10 +57,11 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind("session", ({ sessionId }) => resolveSession(sessionId)),
-      RA.bind("user", ({ session }) => resolveUser(session.userId)),
-      RA.bind("actor", ({ user }) => resolveLocalActor(user.id)),
-      RA.bind("postEvent", ({ actor, content }) => {
+      RA.andBind("session", ({ sessionId }) => resolveSession(sessionId)),
+      RA.andBind("user", ({ session }) => resolveUser(session.userId)),
+      RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind("postEvent", ({ actor, content }) => {
+
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
@@ -69,7 +70,7 @@ const create = ({
         return RA.ok(postEvent);
       }),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
-      RA.bind("post", ({ postEvent }) => RA.ok(postEvent.aggregateState)),
+      RA.bind("post", ({ postEvent }) => postEvent.aggregateState),
       RA.andThrough(async ({ post, user, ctx }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);

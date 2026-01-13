@@ -63,10 +63,10 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind('user', ({ username }) =>
+      RA.andBind('user', ({ username }) =>
         resolveUser(username)
       ),
-      RA.bind('userPassword', ({ user }) =>
+      RA.andBind('userPassword', ({ user }) =>
         userPasswordResolver.resolve(user.id)
       ),
       RA.andThen(({ user, userPassword }) => {
@@ -83,15 +83,15 @@ const create = ({
         return RA.ok({ user });
       }),
       RA.bind('sessionStarted', ({ user }) =>
-        RA.ok(Session.startSession(now)({
+        Session.startSession(now)({
           userId: user.id,
           expires: Instant.addDuration(now, 1000 * 60 * 60 * 24 * 7), // 7 days
-        }))
+        })
       ),
       RA.andThrough(({ sessionStarted }) =>
         sessionStartedStore.store(sessionStarted)
       ),
-      RA.bind('sessionId', ({ sessionStarted }) => RA.ok(sessionStarted.aggregateState.sessionId)),
+      RA.bind('sessionId', ({ sessionStarted }) => sessionStarted.aggregateState.sessionId),
     );
 
   return { run };

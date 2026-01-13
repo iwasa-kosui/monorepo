@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Schema } from "../../helper/schema.ts";
 
 export const InstantSym = Symbol('Instant');
@@ -18,4 +18,5 @@ export const Instant = {
   ...schema,
   now,
   addDuration,
+  toDate: (instant: Instant): Date => new Date(instant),
 } as const;

@@ -30,6 +30,9 @@ const getInstance = singleton(() => ({
           uri: row.actors.uri,
           inboxUrl: row.actors.inboxUrl,
           type: 'remote',
+          url: row.remote_actors.url ?? undefined,
+          username: row.remote_actors.username ?? undefined,
+          logoUri: row.actors.logoUri ?? undefined,
         };
         return actor;
       }
@@ -40,6 +43,7 @@ const getInstance = singleton(() => ({
           inboxUrl: row.actors.inboxUrl,
           type: 'local',
           userId: UserId.orThrow(row.local_actors.userId),
+          logoUri: row.actors.logoUri ?? undefined,
         };
         return actor;
       }

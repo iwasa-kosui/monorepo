@@ -11,3 +11,5 @@ serve(
   (info) =>
     console.log("Server started at http://" + info.address + ":" + info.port)
 );
+
+export default app;

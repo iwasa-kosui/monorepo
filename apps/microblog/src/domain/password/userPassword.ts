@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { UserId } from "../user/userId.ts";
 import { HashedPassword } from "./password.ts";
 import type { Agg } from "../aggregate/index.ts";

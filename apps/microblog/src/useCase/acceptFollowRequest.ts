@@ -4,13 +4,15 @@ import type { Actor, ActorResolverByUri, ActorResolverByUserId } from "../domain
 import { RemoteActor, type RemoteActorCreatedStore } from "../domain/actor/remoteActor.ts";
 import type { Username } from "../domain/user/username.ts";
 import type { UseCase } from "./useCase.ts";
-import { Follow, type FollowedStore, type FollowResolver } from "../domain/follow/follow.ts";
+import { Follow, type FollowAcceptedStore, type FollowResolver } from "../domain/follow/follow.ts";
 import { UserNotFoundError } from '../domain/user/user.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
+import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 
 type Input = Readonly<{
   username: Username
-  follower: Pick<Actor, 'uri' | 'inboxUrl'>
+  follower: Pick<RemoteActor, 'uri' | 'inboxUrl' | 'url' | 'username'>
 }>;
 
 type Ok = Follow
@@ -27,7 +29,8 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId
   userResolverByUsername: UserResolverByUsername
   remoteActorCreatedStore: RemoteActorCreatedStore;
-  followedStore: FollowedStore
+  logoUriUpdatedStore: LogoUriUpdatedStore
+  followedStore: FollowAcceptedStore
   followResolver: FollowResolver
 }>;
 
@@ -37,12 +40,13 @@ const create = ({
   actorResolverByUri,
   userResolverByUsername,
   remoteActorCreatedStore,
+  logoUriUpdatedStore,
   actorResolverByUserId
 }: Deps): CreateUserUseCase => {
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind('followingActor', ({ username }) =>
+      RA.andBind('followingActor', ({ username }) =>
         RA.flow(
           userResolverByUsername.resolve(username),
           RA.andThen((user): RA<Actor | undefined, UserNotFoundError> => {
@@ -59,40 +63,31 @@ const create = ({
           })
         ),
       ),
-      RA.bind('existingFollowerActor', ({ follower }) =>
-        actorResolverByUri.resolve(follower.uri)
-      ),
-      RA.andThen(({ username, followingActor, existingFollowerActor, follower }) => {
+      RA.andBind('followerActor', ({ follower }) => upsertRemoteActor({
+        now: Instant.now(),
+        remoteActorCreatedStore,
+        logoUriUpdatedStore,
+      })(follower)),
+      RA.andThen(({ username, followingActor, followerActor, follower }) => {
         if (!followingActor) {
           return RA.err(UserNotFoundError.create({ username }));
         }
-        if (!existingFollowerActor) {
-          const remoteActorCreated = RemoteActor.createRemoteActor(follower.uri, follower.inboxUrl);
-          return RA.flow(
-            RA.ok(remoteActorCreated.aggregateState),
-            RA.andThrough(() => remoteActorCreatedStore.store(remoteActorCreated)),
-            RA.andThen((remoteActor) => RA.ok({
-              followerActor: remoteActor,
-              followingActor,
-            })),
-          );
-        }
         return RA.ok({
-          followerActor: existingFollowerActor,
+          followerActor,
           followingActor,
         });
       }),
-      RA.bind('existingFollow', ({ followerActor, followingActor }) => {
-        return followResolver.resolve({
+      RA.andBind('existingFollow', ({ followerActor, followingActor }) =>
+        followResolver.resolve({
           followerId: followerActor.id,
           followingId: followingActor.id,
-        });
-      }),
+        })
+      ),
       RA.andThen(({ followerActor, followingActor, existingFollow }) => {
         if (existingFollow) {
           return RA.ok(existingFollow);
         }
-        const followCreated = Follow.follow({
+        const followCreated = Follow.acceptFollow({
           followerId: followerActor.id,
           followingId: followingActor.id,
         }, Instant.now());

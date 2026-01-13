@@ -2,9 +2,9 @@ import { RA } from "@iwasa-kosui/result";
 import { DB } from "../db.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { domainEventsTable, localPostsTable, postsTable, remotePostsTable } from "../schema.ts";
-import type { PostCreated, PostCreatedStore } from "../../../domain/post/post.ts";
+import type { PostCreated, PostCreatedStore, RemotePostCreated } from "../../../domain/post/post.ts";
 
-const store = async (event: PostCreated): RA<void, never> => {
+const store = async (event: PostCreated | RemotePostCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     const post = event.aggregateState;
     if (post.type === 'local') {

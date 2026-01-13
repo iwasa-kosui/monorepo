@@ -23,7 +23,7 @@ const create = ({ postResolver }: Deps): GetPostUseCase => {
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.bind("post", ({ postId }) => resolvePost(postId)),
+      RA.andBind("post", ({ postId }) => resolvePost(postId)),
       RA.map(({ post }) => post)
     );
 

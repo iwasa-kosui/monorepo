@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { UserId } from "../user/userId.ts";
 import { Instant } from "../instant/instant.ts";
 import { SessionId } from "./sessionId.ts";

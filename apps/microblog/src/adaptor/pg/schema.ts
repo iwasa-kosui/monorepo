@@ -33,6 +33,7 @@ export const domainEventsTable = pgTable("domain_events", {
 export const actorsTable = pgTable("actors", {
   actorId: uuid().primaryKey(),
   uri: text().notNull().unique(),
+  logoUri: text(),
   inboxUrl: text().notNull().unique(),
   type: varchar({ length: 32 }).notNull(),
 });
@@ -46,7 +47,9 @@ export const localActorsTable = pgTable("local_actors", {
 
 export const remoteActorsTable = pgTable("remote_actors", {
   actorId: uuid().primaryKey().references(() => actorsTable.actorId),
-})
+  url: text(),
+  username: text(),
+});
 
 export const followsTable = pgTable("follows", {
   followerId: uuid()

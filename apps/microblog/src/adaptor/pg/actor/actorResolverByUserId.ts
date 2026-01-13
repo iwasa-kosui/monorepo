@@ -34,6 +34,7 @@ const getInstance = singleton((): ActorResolverByUserId => {
         inboxUrl: row.actors.inboxUrl,
         type: 'local',
         userId: UserId.orThrow(row.local_actors.userId),
+        logoUri: row.actors.logoUri ?? undefined,
       };
       return RA.ok(actor);
     }

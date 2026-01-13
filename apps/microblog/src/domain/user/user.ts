@@ -1,7 +1,7 @@
-import z from "zod";
+import z from "zod/v4";
 import { UserId } from "./userId.ts";
 import { Username } from "./username.ts";
-import { ResultAsync } from "@iwasa-kosui/result";
+import { Result, ResultAsync } from "@iwasa-kosui/result";
 import { Schema, type InferSchema } from "../../helper/schema.ts";
 import { createUser } from "./createUser.ts";
 import { Agg } from "../aggregate/index.ts";
@@ -13,9 +13,36 @@ const schema = Schema.create(z.object({
 
 export type User = InferSchema<typeof schema>;
 
+const checkIfUsernameAcceptable = (username: Username): Result<void, UnacceptableUsernameError> => {
+  if (username !== 'kosui') {
+    return Result.err(
+      UnacceptableUsernameError.create(username, 'Only "kosui" is acceptable as username for now.')
+    );
+  }
+  return Result.ok(undefined);
+}
+
 export const User = {
   ...schema,
   createUser,
+  checkIfUsernameAcceptable,
+} as const;
+
+export type UnacceptableUsernameError = Readonly<{
+  type: 'UnacceptableUsernameError';
+  message: string;
+  detail: {
+    username: Username;
+    reason: string;
+  }
+}>;
+
+export const UnacceptableUsernameError = {
+  create: (username: Username, reason: string): UnacceptableUsernameError => ({
+    type: 'UnacceptableUsernameError',
+    message: `The username "${username}" is unacceptable. Reason: ${reason}`,
+    detail: { username, reason },
+  }),
 } as const;
 
 export type UsernameAlreadyTakenError = Readonly<{
@@ -56,4 +83,3 @@ export const UserNotFoundError = {
 
 export type UserResolver = Agg.Resolver<UserId, User | undefined>
 export type UserResolverByUsername = Agg.Resolver<Username, User | undefined>
-

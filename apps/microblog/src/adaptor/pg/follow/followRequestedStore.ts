@@ -1,10 +1,10 @@
 import { RA } from "@iwasa-kosui/result";
-import type { Followed, FollowedStore } from "../../../domain/follow/follow.ts";
+import type { FollowRequested, FollowRequestedStore } from "../../../domain/follow/follow.ts";
 import { DB } from "../db.ts";
 import { domainEventsTable, followsTable } from "../schema.ts";
 import { singleton } from "../../../helper/singleton.ts";
 
-const store = async (event: Followed): RA<void, never> => {
+const store = async (event: FollowRequested): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     await tx.insert(followsTable).values({
       followerId: event.aggregateState.followerId,
@@ -23,10 +23,10 @@ const store = async (event: Followed): RA<void, never> => {
   return RA.ok(undefined);
 }
 
-const getInstance = singleton((): FollowedStore => ({
+const getInstance = singleton((): FollowRequestedStore => ({
   store,
 }));
 
-export const PgFollowedStore = {
+export const PgFollowRequestedStore = {
   getInstance,
 } as const;
