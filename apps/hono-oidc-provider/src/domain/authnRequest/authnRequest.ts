@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import { ClientId } from "../client/clientId.js";
 import { Parser } from "../../helper/parser.js";
 import { StandardScope } from "../scope/scope.js";
