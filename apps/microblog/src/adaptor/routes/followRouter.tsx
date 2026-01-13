@@ -1,7 +1,7 @@
 import { Layout } from "../../layout.tsx";
 import { sValidator } from "@hono/standard-validator";
 import { Hono } from "hono";
-import { Create, Follow, isActor, Note } from "@fedify/fedify";
+import { Follow } from "@fedify/fedify";
 import { Federation } from "../../federation.ts";
 import z from "zod/v4";
 import { getCookie } from "hono/cookie";
@@ -11,15 +11,14 @@ import { Follow as AppFollow } from "../../domain/follow/follow.ts";
 import { RA } from "@iwasa-kosui/result";
 import { PgUserResolver } from "../pg/user/userResolver.ts";
 import { PgFollowRequestedStore } from "../pg/follow/followRequestedStore.ts";
-import { PgActorResolverByUri } from "../pg/actor/actorResolverByUri.ts";
 import type { Actor } from "../../domain/actor/actor.ts";
-import { RemoteActor } from "../../domain/actor/remoteActor.ts";
 import { PgRemoteActorCreatedStore } from "../pg/actor/remoteActorCreatedStore.ts";
 import { Instant } from "../../domain/instant/instant.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
 import { upsertRemoteActor } from "../../useCase/helper/upsertRemoteActor.ts";
 import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
 import { ActorIdentity } from "../fedify/actorIdentity.ts";
+import { FedifyRemoteActorLookup } from "../fedify/remoteActorLookup.ts";
 
 const app = new Hono();
 
@@ -67,18 +66,6 @@ app.post(
     if (typeof handle !== "string") {
       return c.text("Invalid actor handle or URL", 400);
     }
-    const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
-    const documentLoader = await ctx.getDocumentLoader({ identifier: "kosui" });
-    const followingActor = await ctx.lookupObject(handle.trim(), { documentLoader });
-    if (!isActor(followingActor)) {
-      return c.text(`Invalid actor handle or URL: ${JSON.stringify(followingActor)}`, 400);
-    }
-    if (!followingActor.id) {
-      return c.text("Could not resolve actor ID", 400);
-    }
-    if (!followingActor.inboxId) {
-      return c.text("Could not resolve actor inbox", 400);
-    }
     return RA.flow(
       RA.ok(getCookie(c, "sessionId")),
       RA.andThen(SessionId.parse),
@@ -92,9 +79,16 @@ app.post(
       RA.andBind("user", (user) =>
         user ? RA.ok(user) : RA.err("User not found")
       ),
+      RA.andBind("followingActor", ({ user }) =>
+        FedifyRemoteActorLookup.getInstance().lookup({
+          request: c.req.raw,
+          handle,
+          identifier: user.username,
+        })
+      ),
       RA.andBind(
         "follower",
-        (user): RA<Actor, unknown> =>
+        ({ user }): RA<Actor, unknown> =>
           RA.flow(
             RA.ok(user.id),
             RA.andThen(PgActorResolverByUserId.getInstance().resolve),
@@ -108,7 +102,7 @@ app.post(
       ),
       RA.andBind(
         "following",
-        (): RA<Actor, unknown> =>
+        ({ followingActor }): RA<Actor, unknown> =>
           RA.flow(
             ActorIdentity.fromFedifyActor(followingActor),
             RA.andThen(
@@ -121,7 +115,7 @@ app.post(
             )
           )
       ),
-      RA.andThrough(async ({ user, follower, following }) => {
+      RA.andThrough(async ({ follower, following }) => {
         const followRequested = AppFollow.requestFollow(
           {
             followerId: follower.id,
@@ -131,7 +125,7 @@ app.post(
         );
         return PgFollowRequestedStore.getInstance().store(followRequested);
       }),
-      RA.map(async ({ user }) => {
+      RA.map(async ({ user, followingActor }) => {
         const ctx = Federation.getInstance().createContext(
           c.req.raw,
           undefined
