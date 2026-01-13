@@ -7,6 +7,7 @@ import { SignInRouter } from "./adaptor/routes/signInRouter.tsx";
 import { PostsRouter } from "./adaptor/routes/postsRouter.tsx";
 import { FollowRouter } from "./adaptor/routes/followRouter.tsx";
 import { HomeRouter } from "./adaptor/routes/homeRouter.tsx";
+import { LikeRouter } from "./adaptor/routes/likeRouter.tsx";
 import { serveStatic } from "@hono/node-server/serve-static";
 
 const app = new Hono();
@@ -26,4 +27,5 @@ app.route("/posts", PostsRouter);
 app.route("/sign-up", SignUpRouter);
 app.route("/sign-in", SignInRouter);
 app.route("/follow", FollowRouter);
+app.route("/like", LikeRouter);
 export default app;

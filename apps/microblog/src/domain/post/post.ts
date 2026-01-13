@@ -31,7 +31,7 @@ export const LocalPost = Schema.create(localPostZodType);
 export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
-export type PostWithAuthor = Post & { username: Username, logoUri: string | undefined };
+export type PostWithAuthor = Post & { username: Username, logoUri: string | undefined, liked: boolean };
 
 const zodType = z.union([localPostZodType, remotePostZodType]);
 const schema = Schema.create(zodType);
@@ -90,7 +90,7 @@ export const Post = {
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
-export type PostsResolverByActorIds = Agg.Resolver<{ actorIds: ActorId[], createdAt: Instant | undefined }, (PostWithAuthor)[]>;
+export type PostsResolverByActorIds = Agg.Resolver<{ actorIds: ActorId[], currentActorId: ActorId | undefined, createdAt: Instant | undefined }, (PostWithAuthor)[]>;
 export type PostNotFoundError = Readonly<{
   type: 'PostNotFoundError';
   message: string;

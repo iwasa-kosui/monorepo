@@ -22,7 +22,7 @@ import {
   resolveLocalActorWith,
 } from "./helper/resolve.ts";
 import { upsertRemoteActor } from "./helper/upsertRemoteActor.ts";
-import { ActorIdentity } from "../adaptor/fedify/actorIdentity.ts";
+import { ActorIdentity, ParseActorIdentityError } from "../adaptor/fedify/actorIdentity.ts";
 import { Instant } from "../domain/instant/instant.ts";
 import { Follow, type RequestContext } from "@fedify/fedify";
 import type {
@@ -39,7 +39,7 @@ type Input = Readonly<{
 
 type Ok = void;
 
-type Err = SessionExpiredError | UserNotFoundError | RemoteActorLookupError;
+type Err = SessionExpiredError | UserNotFoundError | RemoteActorLookupError | ParseActorIdentityError
 
 export type SendFollowRequestUseCase = UseCase<Input, Ok, Err>;
 
@@ -114,7 +114,7 @@ const create = ({
         );
         return RA.ok(undefined);
       }),
-      RA.map(() => undefined)
+      RA.map(() => undefined),
     );
 
   return { run };

@@ -4,14 +4,15 @@ import { Post, type PostResolver, type PostsResolverByActorId } from "../../../d
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
-import { actorsTable, localActorsTable, localPostsTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
+import { actorsTable, likesTable, localActorsTable, localPostsTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
 import { RA } from "@iwasa-kosui/result";
 import type { ActorId } from "../../../domain/actor/actorId.ts";
 import { Username } from '../../../domain/user/username.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { randomUUID } from 'crypto';
 
 const getInstance = singleton((): PostsResolverByActorIds => {
-  const resolve = async ({ actorIds, createdAt }: { actorIds: ActorId[], createdAt: Instant | undefined }) => {
+  const resolve = async ({ actorIds, currentActorId, createdAt }: { actorIds: ActorId[], currentActorId: ActorId | undefined, createdAt: Instant | undefined }) => {
     const rows = await DB.getInstance().select()
       .from(postsTable)
       .leftJoin(
@@ -38,6 +39,13 @@ const getInstance = singleton((): PostsResolverByActorIds => {
         usersTable,
         eq(localActorsTable.userId, usersTable.userId)
       )
+      .leftJoin(
+        likesTable,
+        and(
+          eq(likesTable.objectUri, remotePostsTable.uri),
+          eq(likesTable.actorId, currentActorId ?? randomUUID())
+        )
+      )
       .where(createdAt ? and(
         inArray(postsTable.actorId, actorIds),
         lt(postsTable.createdAt, Instant.toDate(createdAt)),
@@ -59,6 +67,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           ...post,
           username: Username.orThrow(row.users!.username),
           logoUri: row.actors!.logoUri ?? undefined,
+          liked: false,
         };
       }
       if (row.remote_posts) {
@@ -74,6 +83,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           ...post,
           username: Username.orThrow(row.remote_actors!.username!),
           logoUri: row.actors!.logoUri ?? undefined,
+          liked: row.likes !== null,
         }
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);
