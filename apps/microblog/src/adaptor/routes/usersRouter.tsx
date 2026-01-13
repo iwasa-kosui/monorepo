@@ -11,6 +11,19 @@ import { PostId } from "../../domain/post/postId.ts";
 import { GetPostUseCase } from "../../useCase/getPost.ts";
 import { PgPostResolver } from "../pg/post/postResolver.ts";
 import { sanitize } from "./helper/sanitize.ts";
+import { getCookie } from "hono/cookie";
+import { SessionId } from "../../domain/session/sessionId.ts";
+import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
+import { PgUserResolver } from "../pg/user/userResolver.ts";
+import {
+  resolveLocalActorWith,
+  resolveSessionWith,
+  resolveUserWith,
+} from "../../useCase/helper/resolve.ts";
+import { Instant } from "../../domain/instant/instant.ts";
+import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
+import { Actor } from "../../domain/actor/actor.ts";
+import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
 
 const app = new Hono();
 
@@ -33,16 +46,20 @@ app.get(
       RA.ok(username),
       RA.andThen((username) => useCase.run({ username })),
       RA.match({
-        ok: ({ user, followers, following, posts }) => {
+        ok: ({ user, actor, followers, following, posts }) => {
           const url = new URL(c.req.url);
           const handle = `@${user.username}@${url.host}`;
           return c.html(
             <GetUserPage
               user={user}
+              actor={actor}
               handle={handle}
               followers={followers}
               following={following}
-              posts={posts}
+              posts={posts.map((post) => ({
+                ...post,
+                content: sanitize(post.content),
+              }))}
             />
           );
         },
@@ -56,6 +73,68 @@ app.get(
               </section>
             </Layout>,
             404
+          );
+        },
+      })
+    );
+  }
+);
+
+app.post(
+  "/:username",
+  sValidator(
+    "form",
+    z.object({
+      logoUri: z.string().optional(),
+    })
+  ),
+  async (c) => {
+    const form = await c.req.valid("form");
+    const logoUri = form.logoUri ? form.logoUri.trim() : "";
+    if (!logoUri) {
+      return c.text("logoUri is required", 400);
+    }
+
+    const now = Instant.now();
+    const maybeSessionId = getCookie(c, "sessionId");
+    const resolveSession = resolveSessionWith(
+      PgSessionResolver.getInstance(),
+      now
+    );
+    const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+    return RA.flow(
+      RA.ok(maybeSessionId),
+      RA.andThen(SessionId.parse),
+      RA.andBind("session", resolveSession),
+      RA.andBind("user", ({ session }) => resolveUser(session.userId)),
+      RA.andBind("actor", ({ user }) =>
+        resolveLocalActorWith(PgActorResolverByUserId.getInstance())(user.id)
+      ),
+      RA.andThen(({ actor }) => {
+        if (actor.logoUri !== logoUri) {
+          return RA.flow(
+            RA.ok(Actor.updateLogoUri(now)(actor, logoUri)),
+            RA.andThen(PgLogoUriUpdatedStore.getInstance().store)
+          );
+        }
+        return RA.ok(undefined);
+      }),
+      RA.match({
+        ok: () => {
+          return c.redirect(`/users/${c.req.param("username")}`);
+        },
+        err: (err) => {
+          getLogger().error("Failed to update logoUri", {
+            error: String(err),
+          });
+          return c.html(
+            <Layout>
+              <section>
+                <h1>Error</h1>
+                <p>{String(JSON.stringify(err))}</p>
+              </section>
+            </Layout>,
+            500
           );
         },
       })

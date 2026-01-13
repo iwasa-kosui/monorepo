@@ -1,5 +1,5 @@
 import { LocalPost, RemotePost, type PostsResolverByActorIds } from '../../../domain/post/post.ts';
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { Post, type PostResolver, type PostsResolverByActorId } from "../../../domain/post/post.ts";
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
@@ -8,9 +8,10 @@ import { actorsTable, localActorsTable, localPostsTable, postsTable, remoteActor
 import { RA } from "@iwasa-kosui/result";
 import type { ActorId } from "../../../domain/actor/actorId.ts";
 import { Username } from '../../../domain/user/username.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 
 const getInstance = singleton((): PostsResolverByActorIds => {
-  const resolve = async (actorIds: ActorId[]) => {
+  const resolve = async ({ actorIds, createdAt }: { actorIds: ActorId[], createdAt: Instant | undefined }) => {
     const rows = await DB.getInstance().select()
       .from(postsTable)
       .leftJoin(
@@ -37,7 +38,10 @@ const getInstance = singleton((): PostsResolverByActorIds => {
         usersTable,
         eq(localActorsTable.userId, usersTable.userId)
       )
-      .where(inArray(postsTable.actorId, actorIds))
+      .where(createdAt ? and(
+        inArray(postsTable.actorId, actorIds),
+        lt(postsTable.createdAt, Instant.toDate(createdAt)),
+      ) : inArray(postsTable.actorId, actorIds))
       .limit(10)
       .orderBy(desc(postsTable.createdAt))
       .execute();
@@ -54,6 +58,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
         return {
           ...post,
           username: Username.orThrow(row.users!.username),
+          logoUri: row.actors!.logoUri ?? undefined,
         };
       }
       if (row.remote_posts) {
@@ -67,7 +72,8 @@ const getInstance = singleton((): PostsResolverByActorIds => {
         });
         return {
           ...post,
-          username: Username.orThrow(row.remote_actors!.username!)
+          username: Username.orThrow(row.remote_actors!.username!),
+          logoUri: row.actors!.logoUri ?? undefined,
         }
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

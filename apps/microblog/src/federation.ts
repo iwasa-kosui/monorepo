@@ -2,6 +2,7 @@ import {
   Create,
   createFederation,
   Follow,
+  Like,
   Note,
   Undo,
 } from "@fedify/fedify";

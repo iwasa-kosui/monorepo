@@ -2,7 +2,6 @@ import z from "zod/v4";
 import { ActorId } from "./actorId.ts";
 import { UserId } from "../user/userId.ts";
 import { createLocalActor } from "./createLocalActor.ts";
-import type { Username } from "../user/username.ts";
 
 const zodType = z.object({
   id: ActorId.zodType,
@@ -10,6 +9,7 @@ const zodType = z.object({
   uri: z.string(),
   inboxUrl: z.string(),
   type: z.literal('local'),
+  logoUri: z.string().optional(),
 }).describe('LocalActor');
 
 export type LocalActor = z.output<typeof zodType>;

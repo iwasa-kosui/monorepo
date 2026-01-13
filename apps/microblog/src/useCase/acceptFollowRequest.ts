@@ -7,6 +7,8 @@ import type { UseCase } from "./useCase.ts";
 import { Follow, type FollowAcceptedStore, type FollowResolver } from "../domain/follow/follow.ts";
 import { UserNotFoundError } from '../domain/user/user.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
+import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 
 type Input = Readonly<{
   username: Username
@@ -27,6 +29,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId
   userResolverByUsername: UserResolverByUsername
   remoteActorCreatedStore: RemoteActorCreatedStore;
+  logoUriUpdatedStore: LogoUriUpdatedStore
   followedStore: FollowAcceptedStore
   followResolver: FollowResolver
 }>;
@@ -37,6 +40,7 @@ const create = ({
   actorResolverByUri,
   userResolverByUsername,
   remoteActorCreatedStore,
+  logoUriUpdatedStore,
   actorResolverByUserId
 }: Deps): CreateUserUseCase => {
   const run = async (input: Input) =>
@@ -59,26 +63,17 @@ const create = ({
           })
         ),
       ),
-      RA.andBind('existingFollowerActor', ({ follower }) =>
-        actorResolverByUri.resolve(follower.uri)
-      ),
-      RA.andThen(({ username, followingActor, existingFollowerActor, follower }) => {
+      RA.andBind('followerActor', ({ follower }) => upsertRemoteActor({
+        now: Instant.now(),
+        remoteActorCreatedStore,
+        logoUriUpdatedStore,
+      })(follower)),
+      RA.andThen(({ username, followingActor, followerActor, follower }) => {
         if (!followingActor) {
           return RA.err(UserNotFoundError.create({ username }));
         }
-        if (!existingFollowerActor) {
-          const remoteActorCreated = RemoteActor.createRemoteActor(follower);
-          return RA.flow(
-            RA.ok(remoteActorCreated.aggregateState),
-            RA.andThrough(() => remoteActorCreatedStore.store(remoteActorCreated)),
-            RA.andThen((remoteActor) => RA.ok({
-              followerActor: remoteActor,
-              followingActor,
-            })),
-          );
-        }
         return RA.ok({
-          followerActor: existingFollowerActor,
+          followerActor,
           followingActor,
         });
       }),

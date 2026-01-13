@@ -10,6 +10,7 @@ const store = async (event: LocalActorCreated): RA<void, never> => {
       uri: event.aggregateState.uri,
       inboxUrl: event.aggregateState.inboxUrl,
       type: event.aggregateState.type,
+      logoUri: event.aggregateState.logoUri,
     });
     await tx.insert(localActorsTable).values({
       actorId: event.aggregateId,

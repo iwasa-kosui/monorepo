@@ -1,17 +1,19 @@
 import { Hono } from "hono";
 import { federation } from "@fedify/hono";
 import { Federation } from "./federation.ts";
-import { ResultAsync as RA } from "@iwasa-kosui/result";
 import { UsersRouter } from "./adaptor/routes/usersRouter.tsx";
 import { SignUpRouter } from "./adaptor/routes/signUpRouter.tsx";
 import { SignInRouter } from "./adaptor/routes/signInRouter.tsx";
 import { PostsRouter } from "./adaptor/routes/postsRouter.tsx";
 import { FollowRouter } from "./adaptor/routes/followRouter.tsx";
 import { HomeRouter } from "./adaptor/routes/homeRouter.tsx";
+import { serveStatic } from "@hono/node-server/serve-static";
 
 const app = new Hono();
 const fed = Federation.getInstance();
 app.use(federation(fed, () => undefined));
+app.use("/static/*", serveStatic({ root: "./" }));
+app.use("/favicon.ico", serveStatic({ path: "./favicon.ico" }));
 app.get("/authorize_interaction", (c) => {
   const url = new URL(String(c.req.url));
   url.pathname = "/follow";

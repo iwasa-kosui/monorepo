@@ -1,6 +1,5 @@
 import z from "zod/v4";
 import { ActorId } from "./actorId.ts";
-import { UserId } from "../user/userId.ts";
 import { ActorEvent } from "./aggregate.ts";
 import type { Agg } from "../aggregate/index.ts";
 import { Instant } from "../instant/instant.ts";
@@ -12,6 +11,7 @@ const zodType = z.object({
   type: z.literal('remote'),
   username: z.string().optional(),
   url: z.string().optional(),
+  logoUri: z.string().optional(),
 }).describe('RemoteActor');
 
 
@@ -24,8 +24,9 @@ type CreateProps = Readonly<{
   inboxUrl: string;
   url?: string
   username?: string
+  logoUri?: string
 }>;
-const createRemoteActor = ({ uri, inboxUrl, url, username }: CreateProps): RemoteActorCreated => {
+const createRemoteActor = ({ uri, inboxUrl, url, username, logoUri }: CreateProps): RemoteActorCreated => {
   const remoteActor = {
     id: ActorId.generate(),
     uri,
@@ -33,6 +34,7 @@ const createRemoteActor = ({ uri, inboxUrl, url, username }: CreateProps): Remot
     url,
     username,
     type: 'remote' as const,
+    logoUri,
   }
   return ActorEvent.create(
     remoteActor.id,

@@ -23,6 +23,9 @@ import type { Actor } from "../../../domain/actor/actor.ts";
 import { Post } from "../../../domain/post/post.ts";
 import { Instant } from "../../../domain/instant/instant.ts";
 import { PgPostCreatedStore } from "../../pg/post/postCreatedStore.ts";
+import { upsertRemoteActor } from "../../../useCase/helper/upsertRemoteActor.ts";
+import { PgLogoUriUpdatedStore } from "../../pg/actor/logoUriUpdatedStore.ts";
+import { ActorIdentity } from "../actorIdentity.ts";
 
 export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
   const object = await activity.getObject();
@@ -30,7 +33,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     return;
   }
   const actor = await activity.getActor();
-  if (!actor || !actor.id || !actor.inboxId) {
+  if (!actor) {
     return;
   }
   if (!object.id) {
@@ -39,28 +42,16 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
   const objectIdentity = {
     uri: object.id.href,
   } as const;
-  const actorIdentity = {
-    uri: actor.id.href,
-    inboxUrl: actor.inboxId.href,
-    url: actor.url?.href?.toString() ?? undefined,
-    username: actor.preferredUsername?.toString() ?? undefined,
-  } as const;
 
   return RA.flow(
-    RA.ok(actorIdentity.uri),
-    RA.andThen(PgActorResolverByUri.getInstance().resolve),
-    RA.andBind("actor", (actor): RA<Actor, unknown> => {
-      if (!actor) {
-        return RA.flow(
-          RA.ok(actorIdentity),
-          RA.map(RemoteActor.createRemoteActor),
-          RA.andThrough(PgRemoteActorCreatedStore.getInstance().store),
-          RA.map((event) => event.aggregateState)
-        );
-      }
-      return RA.ok(actor);
-    }),
-    RA.andThen(({ actor }) => {
+    RA.ok(actor),
+    RA.andBind('actorIdentity', ActorIdentity.fromFedifyActor),
+    RA.andBind('actor', ({ actorIdentity }) => upsertRemoteActor({
+      now: Instant.now(),
+      remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
+      logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+    })(actorIdentity)),
+    RA.andThrough(({ actor }) => {
       const createPost = Post.createRemotePost(Instant.now())({
         content: String(object.content),
         uri: objectIdentity.uri,
@@ -69,14 +60,14 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
       return PgPostCreatedStore.getInstance().store(createPost);
     }),
     RA.match({
-      ok: () => {
+      ok: ({ actorIdentity }) => {
         getLogger().info(
           `Processed Create activity: ${objectIdentity.uri} by ${actorIdentity.uri}`
         );
       },
       err: (err) => {
         getLogger().warn(
-          `Failed to process Create activity: ${objectIdentity.uri} by ${actorIdentity.uri} - ${err}`
+          `Failed to process Create activity: ${objectIdentity.uri} - ${err}`
         );
       },
     })

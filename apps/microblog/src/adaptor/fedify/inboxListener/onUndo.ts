@@ -1,10 +1,7 @@
-import { Accept, Follow, Undo, type InboxContext } from "@fedify/fedify";
-import { AcceptFollowRequestUseCase } from "../../../useCase/acceptFollowRequest.ts";
-import { PgFollowedStore } from "../../pg/follow/followAcceptedStore.ts";
+import { Follow, Undo, type InboxContext } from "@fedify/fedify";
 import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
 import { PgActorResolverByUri } from "../../pg/actor/actorResolverByUri.ts";
 import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts";
-import { PgRemoteActorCreatedStore } from "../../pg/actor/remoteActorCreatedStore.ts";
 import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
 import { Username } from "../../../domain/user/username.ts";
 import { AcceptUnfollowUseCase } from "../../../useCase/acceptUnfollow.ts";
@@ -25,7 +22,6 @@ export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
     followResolver: PgFollowResolver.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     userResolverByUsername: PgUserResolverByUsername.getInstance(),
   });
 

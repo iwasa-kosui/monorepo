@@ -18,4 +18,5 @@ export const Instant = {
   ...schema,
   now,
   addDuration,
+  toDate: (instant: Instant): Date => new Date(instant),
 } as const;

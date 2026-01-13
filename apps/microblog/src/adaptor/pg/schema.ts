@@ -33,6 +33,7 @@ export const domainEventsTable = pgTable("domain_events", {
 export const actorsTable = pgTable("actors", {
   actorId: uuid().primaryKey(),
   uri: text().notNull().unique(),
+  logoUri: text(),
   inboxUrl: text().notNull().unique(),
   type: varchar({ length: 32 }).notNull(),
 });

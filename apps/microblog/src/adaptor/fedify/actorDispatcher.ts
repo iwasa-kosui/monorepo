@@ -13,7 +13,7 @@ const getInstance = () => {
       RA.andThen(Username.parse),
       RA.andThen(async (username) => useCase.run({ username })),
       RA.match({
-        ok: async ({ user }) => {
+        ok: async ({ user, actor }) => {
           const keys = await ctx.getActorKeyPairs(user.username);
           return new Person({
             id: ctx.getActorUri(user.username),
@@ -23,10 +23,10 @@ const getInstance = () => {
             endpoints: new Endpoints({
               sharedInbox: ctx.getInboxUri(),
             }),
-            icon: new Image({
-              url: new URL("https://icon.kosui.me/"),
+            icon: actor.logoUri ? new Image({
+              url: new URL(actor.logoUri),
               mediaType: "image/png",
-            }),
+            }) : undefined,
             url: ctx.getActorUri(identifier),
             publicKey: keys.at(0)?.cryptographicKey,
             assertionMethods: keys.map((k) => k.multikey),

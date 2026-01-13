@@ -17,6 +17,9 @@ import { RemoteActor } from "../../domain/actor/remoteActor.ts";
 import { PgRemoteActorCreatedStore } from "../pg/actor/remoteActorCreatedStore.ts";
 import { Instant } from "../../domain/instant/instant.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
+import { upsertRemoteActor } from "../../useCase/helper/upsertRemoteActor.ts";
+import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
+import { ActorIdentity } from "../fedify/actorIdentity.ts";
 
 const app = new Hono();
 
@@ -74,12 +77,6 @@ app.post(
     if (!followingActor.inboxId) {
       return c.text("Could not resolve actor inbox", 400);
     }
-    const followingIdentity = {
-      uri: followingActor.id.href,
-      inboxUrl: followingActor.inboxId.href,
-      url: followingActor.url?.href?.toString() ?? undefined,
-      username: followingActor.preferredUsername?.toString() ?? undefined,
-    } as const;
     return RA.flow(
       RA.ok(getCookie(c, "sessionId")),
       RA.andThen(SessionId.parse),
@@ -111,18 +108,15 @@ app.post(
         "following",
         (): RA<Actor, unknown> =>
           RA.flow(
-            RA.ok(followingIdentity.uri),
-            RA.andThen(PgActorResolverByUri.getInstance().resolve),
-            RA.andThen((actor) => {
-              if (!actor) {
-                return RA.flow(
-                  RA.ok(RemoteActor.createRemoteActor(followingIdentity)),
-                  RA.andThrough(PgRemoteActorCreatedStore.getInstance().store),
-                  RA.map((event) => event.aggregateState)
-                );
-              }
-              return RA.ok(actor);
-            })
+            ActorIdentity.fromFedifyActor(followingActor),
+            RA.andThen(
+              upsertRemoteActor({
+                now: Instant.now(),
+                remoteActorCreatedStore:
+                  PgRemoteActorCreatedStore.getInstance(),
+                logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+              })
+            )
           )
       ),
       RA.andThrough(async ({ user, follower, following }) => {

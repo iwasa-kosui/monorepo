@@ -15,6 +15,13 @@
       "when": 1767572452226,
       "tag": "0001_special_martin_li",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768207246649,
+      "tag": "0002_square_post",
+      "breakpoints": true
     }
   ]
 }

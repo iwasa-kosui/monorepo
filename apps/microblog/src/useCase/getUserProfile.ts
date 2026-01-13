@@ -18,13 +18,13 @@ import {
   resolveLocalActorWith,
   resolveUserByUsernameWith,
 } from "./helper/resolve.ts";
-import type { Post, PostsResolverByActorId } from "../domain/post/post.ts";
+import type { PostsResolverByActorIds, PostWithAuthor } from "../domain/post/post.ts";
 import { singleton } from "../helper/singleton.ts";
 import { PgUserResolverByUsername } from "../adaptor/pg/user/userResolverByUsername.ts";
 import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
 import { PgActorResolverByFollowingId } from "../adaptor/pg/actor/followsResolverByFollowingId.ts";
 import { PgActorResolverByFollowerId } from "../adaptor/pg/actor/followsResolverByFollowerId.ts";
-import { PgPostsResolverByActorId } from "../adaptor/pg/post/postsResolverByActorId.ts";
+import { PgPostsResolverByActorIds } from "../adaptor/pg/post/postsResolverByActorIds.ts";
 
 const Input = Schema.create(
   z.object({
@@ -35,21 +35,22 @@ type Input = z.infer<typeof Input.zodType>;
 
 type Ok = Readonly<{
   user: User;
+  actor: Actor;
   following: ReadonlyArray<Actor>;
   followers: ReadonlyArray<Actor>;
-  posts: ReadonlyArray<Post>;
+  posts: ReadonlyArray<PostWithAuthor>;
 }>;
 
 type Err = UserNotFoundError;
 
-export type FindUserUseCase = UseCase<Input, Ok, Err>;
+export type GetUserProfileUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
   actorsResolverByFollowerId: ActorsResolverByFollowerId;
   actorsResolverByFollowingId: ActorsResolverByFollowingId;
-  postsResolverByActorId: PostsResolverByActorId;
+  postsResolverByActorIds: PostsResolverByActorIds;
 }>;
 
 const create = ({
@@ -57,8 +58,8 @@ const create = ({
   actorResolverByUserId,
   actorsResolverByFollowerId,
   actorsResolverByFollowingId,
-  postsResolverByActorId,
-}: Deps): FindUserUseCase => {
+  postsResolverByActorIds,
+}: Deps): GetUserProfileUseCase => {
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
   const resolveUserByUsername = resolveUserByUsernameWith(
     userResolverByUsername
@@ -76,7 +77,7 @@ const create = ({
         actorsResolverByFollowingId.resolve(actor.id)
       ),
       RA.andBind("posts", ({ actor }) =>
-        postsResolverByActorId.resolve(actor.id)
+        postsResolverByActorIds.resolve({ actorIds: [actor.id], createdAt: undefined })
       )
     );
 
@@ -93,7 +94,7 @@ export const GetUserProfileUseCase = {
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
       actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
-      postsResolverByActorId: PgPostsResolverByActorId.getInstance(),
+      postsResolverByActorIds: PgPostsResolverByActorIds.getInstance(),
     })
   )
 } as const;

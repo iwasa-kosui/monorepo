@@ -7,46 +7,76 @@ import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts
 import { PgRemoteActorCreatedStore } from "../../pg/actor/remoteActorCreatedStore.ts";
 import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
 import { Username } from "../../../domain/user/username.ts";
+import { PgLogoUriUpdatedStore } from "../../pg/actor/logoUriUpdatedStore.ts";
+import { RA } from "@iwasa-kosui/result";
+import { ActorIdentity } from "../actorIdentity.ts";
+import { getLogger } from "@logtape/logtape";
 
 export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => {
   if (!activity.objectId) {
-    return;
-  }
-  const object = ctx.parseUri(activity.objectId);
-  if (!object) {
-    return;
-  }
-  if (object.type !== "actor") {
     return;
   }
   const follower = await activity.getActor();
   if (!follower || !follower.id || !follower.inboxId) {
     return;
   }
-  const followerIdentity = {
-    uri: follower.id.href,
-    inboxUrl: follower.inboxId.href,
-    url: follower.url?.href?.toString() ?? undefined,
-    username: follower.preferredUsername?.toString() ?? undefined,
-  } as const;
-  await AcceptFollowRequestUseCase.create({
+  const useCase = AcceptFollowRequestUseCase.create({
     followedStore: PgFollowedStore.getInstance(),
     followResolver: PgFollowResolver.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     userResolverByUsername: PgUserResolverByUsername.getInstance(),
-  }).run({
-    username: Username.parseOrThrow(object.identifier),
-    follower: followerIdentity,
-  });
-  await ctx.sendActivity(
-    object,
-    follower,
-    new Accept({
-      actor: activity.objectId,
-      to: activity.actorId,
-      object: activity,
+    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+  })
+  return RA.flow(
+    RA.ok({}),
+    RA.andBind('object', () => {
+      const object = ctx.parseUri(activity.objectId)
+      if (!object) {
+        return RA.err(new Error('Invalid object URI'));
+      }
+      if (object.type !== "actor") {
+        return RA.err(new Error('Object is not an actor'));
+      }
+      return RA.ok(object);
+    }),
+    RA.andBind('follower', async () => {
+      const follower = await activity.getActor();
+      if (!follower || !follower.id || !follower.inboxId) {
+        return RA.err(new Error('Invalid follower actor'));
+      }
+      return RA.ok(follower);
+    }),
+    RA.andBind('followerIdentity', ({ follower }) => ActorIdentity.fromFedifyActor(follower)),
+    RA.andBind('username', ({ object }) => Username.parse(object.identifier)),
+    RA.andThrough(async ({ username, followerIdentity, object }) => {
+      await useCase.run({
+        username,
+        follower: followerIdentity,
+      });
+      await ctx.sendActivity(
+        object,
+        follower,
+        new Accept({
+          actor: activity.objectId,
+          to: activity.actorId,
+          object: activity,
+        })
+      );
+      return RA.ok(undefined)
+    }),
+    RA.match({
+      ok: () => {
+        getLogger().info(
+          `Processed Follow activity from ${activity.actorId?.href} for ${activity.objectId?.href}`
+        );
+      },
+      err: (err) => {
+        getLogger().warn(
+          `Failed to process Follow activity from ${activity.actorId?.href} for ${activity.objectId?.href} - ${err}`
+        );
+      },
     })
-  );
+  )
 }

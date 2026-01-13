@@ -1,23 +1,16 @@
 import { RA } from "@iwasa-kosui/result";
 import type { RemoteActorCreated, RemoteActorCreatedStore } from "../../../domain/actor/remoteActor.ts";
 import { DB } from "../db.ts";
-import { actorsTable, domainEventsTable, remoteActorsTable } from "../schema.ts";
+import { actorsTable, domainEventsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
 import { singleton } from "../../../helper/singleton.ts";
+import type { LogoUriUpdated, LogoUriUpdatedStore } from "../../../domain/actor/updateLogoUri.ts";
+import { eq } from "drizzle-orm";
 
-const store = async (event: RemoteActorCreated): RA<void, never> => {
+const store = async (event: LogoUriUpdated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    await tx.insert(actorsTable).values({
-      actorId: event.aggregateId,
-      uri: event.aggregateState.uri,
-      inboxUrl: event.aggregateState.inboxUrl,
-      type: event.aggregateState.type,
+    await tx.update(actorsTable).set({
       logoUri: event.aggregateState.logoUri,
-    });
-    await tx.insert(remoteActorsTable).values({
-      actorId: event.aggregateId,
-      url: event.aggregateState.url,
-      username: event.aggregateState.username,
-    });
+    }).where(eq(actorsTable.actorId, event.aggregateId));
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
       aggregateId: event.aggregateId,
@@ -31,10 +24,10 @@ const store = async (event: RemoteActorCreated): RA<void, never> => {
   return RA.ok(undefined);
 }
 
-const getInstance = singleton((): RemoteActorCreatedStore => ({
+const getInstance = singleton((): LogoUriUpdatedStore => ({
   store,
 }));
 
-export const PgRemoteActorCreatedStore = {
+export const PgLogoUriUpdatedStore = {
   getInstance,
 } as const;

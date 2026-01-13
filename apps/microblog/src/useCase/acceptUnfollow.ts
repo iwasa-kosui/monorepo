@@ -23,6 +23,7 @@ import {
 import { UserNotFoundError } from "../domain/user/user.ts";
 import { Instant } from "../domain/instant/instant.ts";
 import { resolveLocalActorWith } from "./helper/resolve.ts";
+import type { LogoUriUpdatedStore } from "../domain/actor/updateLogoUri.ts";
 
 type Input = Readonly<{
   username: Username;
@@ -38,7 +39,6 @@ type Deps = Readonly<{
   actorResolverByUri: ActorResolverByUri;
   actorResolverByUserId: ActorResolverByUserId;
   userResolverByUsername: UserResolverByUsername;
-  remoteActorCreatedStore: RemoteActorCreatedStore;
   unfollowedStore: UndoFollowingProcessedStore;
   followResolver: FollowResolver;
 }>;
@@ -48,7 +48,6 @@ const create = ({
   followResolver,
   actorResolverByUri,
   userResolverByUsername,
-  remoteActorCreatedStore,
   actorResolverByUserId,
 }: Deps): CreateUserUseCase => {
   const now = Instant.now();
