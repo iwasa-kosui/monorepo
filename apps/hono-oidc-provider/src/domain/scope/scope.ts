@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { Parser } from "../../helper/parser.js";
 
 const openid = 'openid';
