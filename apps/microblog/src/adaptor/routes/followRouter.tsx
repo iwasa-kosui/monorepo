@@ -1,7 +1,7 @@
 import { Layout } from "../../layout.tsx";
 import { sValidator } from "@hono/standard-validator";
 import { Hono } from "hono";
-import { Create, Follow, isActor, lookupObject, Note } from "@fedify/fedify";
+import { Create, Follow, isActor, Note } from "@fedify/fedify";
 import { Federation } from "../../federation.ts";
 import z from "zod/v4";
 import { getCookie } from "hono/cookie";
@@ -62,14 +62,16 @@ app.post(
     })
   ),
   async (c) => {
-    const form = await c.req.valid("form");
+    const form = c.req.valid("form");
     const handle = form.handle;
     if (typeof handle !== "string") {
       return c.text("Invalid actor handle or URL", 400);
     }
-    const followingActor = await lookupObject(handle.trim());
+    const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+    const documentLoader = await ctx.getDocumentLoader({ identifier: "kosui" });
+    const followingActor = await ctx.lookupObject(handle.trim(), { documentLoader });
     if (!isActor(followingActor)) {
-      return c.text("Invalid actor handle or URL", 400);
+      return c.text(`Invalid actor handle or URL: ${JSON.stringify(followingActor)}`, 400);
     }
     if (!followingActor.id) {
       return c.text("Could not resolve actor ID", 400);
