@@ -62,11 +62,11 @@ app.post(
       return c.text("Invalid actor handle or URL", 400);
     }
 
-    const sessionIdResult = RA.flow(
+    const sessionIdResult = await RA.flow(
       RA.ok(getCookie(c, "sessionId")),
       RA.andThen(SessionId.parse)
     );
-    if (RA.isErr(sessionIdResult)) {
+    if (!sessionIdResult.ok) {
       return c.text("Invalid session", 400);
     }
 
@@ -83,7 +83,7 @@ app.post(
     });
 
     const result = await useCase.run({
-      sessionId: sessionIdResult.value,
+      sessionId: sessionIdResult.val,
       handle,
       request: c.req.raw,
       ctx,

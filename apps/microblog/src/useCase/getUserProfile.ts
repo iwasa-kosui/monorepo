@@ -77,7 +77,7 @@ const create = ({
         actorsResolverByFollowingId.resolve(actor.id)
       ),
       RA.andBind("posts", ({ actor }) =>
-        postsResolverByActorIds.resolve({ actorIds: [actor.id], createdAt: undefined })
+        postsResolverByActorIds.resolve({ actorIds: [actor.id], currentActorId: undefined, createdAt: undefined })
       )
     );
 

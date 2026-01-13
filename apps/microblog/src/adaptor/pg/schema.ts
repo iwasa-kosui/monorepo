@@ -96,3 +96,12 @@ export const localPostsTable = pgTable("local_posts", {
   postId: uuid().primaryKey().references(() => postsTable.postId),
   userId: uuid().notNull().references(() => usersTable.userId),
 });
+
+export const likesTable = pgTable("likes", {
+  likeId: uuid().primaryKey(),
+  actorId: uuid().notNull().references(() => actorsTable.actorId),
+  objectUri: text().notNull(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('actor_object_unique').on(table.actorId, table.objectUri),
+]);

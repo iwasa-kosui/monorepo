@@ -37,8 +37,8 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   postsResolverByActorIds: PostsResolverByActorIds;
-  actorsResolverByFollowerId: ActorsResolverByFollowerId
-  actorsResolverByFollowingId: ActorsResolverByFollowingId
+  actorsResolverByFollowerId: ActorsResolverByFollowerId;
+  actorsResolverByFollowingId: ActorsResolverByFollowingId;
 }>;
 
 const create = ({
@@ -64,12 +64,11 @@ const create = ({
       RA.andBind("followers", ({ actor }) => actorsResolverByFollowingId.resolve(actor.id)),
       RA.andBind("posts", async ({ actor, following }) => {
         const actorIds = [actor.id, ...following.map((a) => a.id)];
-        return RA.flow(
-          RA.ok(actorIds),
-          RA.andThen((actorIds) =>
-            postsResolverByActorIds.resolve({ actorIds, createdAt: input.createdAt })
-          ),
-        );
+        return postsResolverByActorIds.resolve({
+          actorIds,
+          currentActorId: actor.id,
+          createdAt: input.createdAt,
+        });
       }),
     );
 
