@@ -7,9 +7,9 @@ import { Modal } from "../components/Modal.tsx";
 import { PostView } from "../components/PostView.tsx";
 import { render } from "hono/jsx/dom";
 import { hc } from "hono/client";
-import type { getHomeApiRouter } from "../../adaptor/routes/homeRouter.tsx";
+import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 
-const client = hc<typeof getHomeApiRouter>("/");
+const client = hc<APIRouterType>("/api");
 
 type Props = Readonly<{
   user: User;
@@ -18,6 +18,8 @@ type Props = Readonly<{
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
   fetchData: (createdAt: string | undefined) => Promise<void>;
+  onLike: (objectUri: string) => Promise<void>;
+  likingPostUri: string | null;
 }>;
 
 export const HomePage = ({
@@ -27,6 +29,8 @@ export const HomePage = ({
   followers,
   following,
   fetchData,
+  onLike,
+  likingPostUri,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -282,7 +286,11 @@ export const HomePage = ({
       </div>
       <section class="space-y-4">
         {posts.map((post) => (
-          <PostView post={post} />
+          <PostView
+            post={post}
+            onLike={onLike}
+            isLiking={post.type === "remote" && "uri" in post && likingPostUri === post.uri}
+          />
         ))}
       </section>
       <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
@@ -322,6 +330,7 @@ export const HomePage = ({
 
 const App = () => {
   const [init, setInit] = useState(false);
+  const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -334,7 +343,7 @@ const App = () => {
     | null
   >(null);
   const fetchData = async (createdAt: string | undefined) => {
-    const res = await client.api.v1.home.$get({
+    const res = await client.v1.home.$get({
       query: { createdAt },
     });
     const latest = await res.json();
@@ -347,6 +356,36 @@ const App = () => {
       setData(latest);
     }
   };
+
+  const handleLike = async (objectUri: string) => {
+    setLikingPostUri(objectUri);
+    try {
+      const res = await client.v1.like.$post({
+        json: { objectUri },
+      });
+      const result = await res.json();
+      if ("success" in result && result.success) {
+        // Update the post's liked status in the local state
+        if (data && !("error" in data)) {
+          setData({
+            ...data,
+            posts: data.posts.map((post) =>
+              post.type === "remote" && "uri" in post && post.uri === objectUri
+                ? { ...post, liked: true }
+                : post
+            ),
+          });
+        }
+      } else if ("error" in result) {
+        console.error("Failed to like:", result.error);
+      }
+    } catch (error) {
+      console.error("Failed to like:", error);
+    } finally {
+      setLikingPostUri(null);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -367,6 +406,8 @@ const App = () => {
       followers={data.followers}
       following={data.following}
       fetchData={fetchData}
+      onLike={handleLike}
+      likingPostUri={likingPostUri}
     />
   );
 };

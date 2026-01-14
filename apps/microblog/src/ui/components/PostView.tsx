@@ -2,10 +2,18 @@ import type { PostWithAuthor } from "../../domain/post/post.ts";
 
 type Props = Readonly<{
   post: PostWithAuthor;
+  onLike?: (objectUri: string) => void;
+  isLiking?: boolean;
 }>;
 
-export const PostView = ({ post }: Props) => {
+export const PostView = ({ post, onLike, isLiking }: Props) => {
   const isRemotePost = post.type === "remote" && "uri" in post;
+
+  const handleLikeClick = () => {
+    if (isRemotePost && onLike && !post.liked && !isLiking) {
+      onLike(post.uri);
+    }
+  };
 
   return (
     <article class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
@@ -40,35 +48,37 @@ export const PostView = ({ post }: Props) => {
           />
           {isRemotePost && (
             <div class="mt-3 flex items-center gap-4">
-              <form method="post" action="/like" class="inline">
-                <input type="hidden" name="objectUri" value={post.uri} />
-                <button
-                  type="submit"
-                  class={`flex items-center gap-1 transition-colors ${
-                    post.liked
-                      ? "text-red-500 dark:text-red-400"
-                      : "text-gray-500 hover:text-pink-500 dark:text-gray-400 dark:hover:text-pink-400"
-                  }`}
-                  title={post.liked ? "Already liked" : "Like this post"}
-                  disabled={post.liked}
+              <button
+                type="button"
+                onClick={handleLikeClick}
+                class={`flex items-center gap-1 transition-colors ${
+                  post.liked
+                    ? "text-red-500 dark:text-red-400"
+                    : isLiking
+                    ? "text-pink-300 dark:text-pink-600 cursor-wait"
+                    : "text-gray-500 hover:text-pink-500 dark:text-gray-400 dark:hover:text-pink-400"
+                }`}
+                title={post.liked ? "Already liked" : isLiking ? "Liking..." : "Like this post"}
+                disabled={post.liked || isLiking}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  fill={post.liked ? "currentColor" : "none"}
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-5 w-5"
-                    fill={post.liked ? "currentColor" : "none"}
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                  </svg>
-                  <span class="text-sm">{post.liked ? "Liked" : "Like"}</span>
-                </button>
-              </form>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  />
+                </svg>
+                <span class="text-sm">
+                  {post.liked ? "Liked" : isLiking ? "Liking..." : "Like"}
+                </span>
+              </button>
             </div>
           )}
         </div>
