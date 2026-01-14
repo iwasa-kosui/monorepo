@@ -157,31 +157,63 @@ app.get(
       postResolver: PgPostResolver.getInstance(),
     });
 
+    // Helper function to extract plain text from HTML for OGP description
+    const extractDescription = (html: string, maxLength: number = 150): string => {
+      const text = html
+        .replace(/<[^>]*>/g, "") // Remove HTML tags
+        .replace(/&nbsp;/g, " ") // Replace &nbsp;
+        .replace(/&amp;/g, "&") // Replace &amp;
+        .replace(/&lt;/g, "<") // Replace &lt;
+        .replace(/&gt;/g, ">") // Replace &gt;
+        .replace(/&quot;/g, '"') // Replace &quot;
+        .replace(/\s+/g, " ") // Normalize whitespace
+        .trim();
+      return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+    };
+
     return RA.flow(
       useCase.run({ postId }),
       RA.match({
         ok: (post) => {
+          const url = new URL(c.req.url);
+          const postUrl = `${url.origin}/users/${username}/posts/${post.postId}`;
+          const description = extractDescription(post.content);
+          const sanitizedContent = sanitize(post.content);
+
           return c.html(
-            <Layout>
+            <Layout
+              ogp={{
+                title: `@${username}の投稿`,
+                description,
+                url: postUrl,
+                type: "article",
+                author: String(username),
+                publishedTime: new Date(post.createdAt).toISOString(),
+              }}
+            >
               <section>
                 <h2>
-                  <a href={`/users/${username}`} class="secondary">
-                    {String(username)}
+                  <a
+                    href={`/users/${username}`}
+                    class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    @{String(username)}
                   </a>
                 </h2>
-                <article>
+                <article class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-4">
                   <div
+                    class="text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400"
                     dangerouslySetInnerHTML={{
-                      __html: sanitize(post.content),
+                      __html: sanitizedContent,
                     }}
                   />
-                  <footer>
-                    <a
-                      href={`/users/${username}/posts/${post.postId}`}
-                      class="secondary"
+                  <footer class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <time
+                      dateTime={new Date(post.createdAt).toISOString()}
+                      class="text-sm text-gray-500 dark:text-gray-400"
                     >
                       {new Date(post.createdAt).toLocaleString()}
-                    </a>
+                    </time>
                   </footer>
                 </article>
               </section>
