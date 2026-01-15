@@ -1,12 +1,16 @@
-import { getLogger } from "@logtape/logtape";
 import type { Delete, InboxContext } from "@fedify/fedify";
-import { DB } from "../../pg/db.ts";
-import { postsTable, remotePostsTable } from "../../pg/schema.ts";
+import { getLogger } from "@logtape/logtape";
 import { eq } from "drizzle-orm";
+import { Instant } from "../../../domain/instant/instant.ts";
+import { Post } from "../../../domain/post/post.ts";
+import { PostId } from "../../../domain/post/postId.ts";
+import { DB } from "../../pg/db.ts";
+import { PgPostDeletedStore } from "../../pg/post/postDeletedStore.ts";
+import { remotePostsTable } from "../../pg/schema.ts";
 
 export const onDelete = async (
   ctx: InboxContext<unknown>,
-  del: Delete
+  del: Delete,
 ): Promise<void> => {
   const logger = getLogger();
 
@@ -19,7 +23,7 @@ export const onDelete = async (
   const objectUri = objectId.href;
   logger.info(`Received Delete activity for: ${objectUri}`);
 
-  // Find and soft delete the remote post
+  // Find the remote post
   const db = DB.getInstance();
   const [remotePost] = await db
     .select({ postId: remotePostsTable.postId })
@@ -32,10 +36,11 @@ export const onDelete = async (
     return;
   }
 
-  await db
-    .update(postsTable)
-    .set({ deletedAt: new Date() })
-    .where(eq(postsTable.postId, remotePost.postId));
+  // Delete the post via event store
+  const postId = PostId.parse(remotePost.postId);
+  const deleteEvent = Post.deletePost(Instant.now())(postId);
+  const postDeletedStore = PgPostDeletedStore.getInstance();
+  await postDeletedStore.store(deleteEvent);
 
-  logger.info(`Soft deleted remote post: ${remotePost.postId}`);
+  logger.info(`Deleted remote post: ${remotePost.postId}`);
 };
