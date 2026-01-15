@@ -85,6 +85,7 @@ export const postsTable = pgTable("posts", {
   content: text().notNull(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
   type: varchar({ length: 32 }).notNull(),
+  deletedAt: timestamp({ mode: 'date' }),
 });
 
 export const remotePostsTable = pgTable("remote_posts", {

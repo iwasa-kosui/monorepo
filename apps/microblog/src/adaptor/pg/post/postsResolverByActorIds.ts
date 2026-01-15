@@ -1,5 +1,5 @@
 import { LocalPost, RemotePost, type PostsResolverByActorIds } from '../../../domain/post/post.ts';
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { Post, type PostResolver, type PostsResolverByActorId } from "../../../domain/post/post.ts";
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
@@ -46,10 +46,11 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           eq(likesTable.actorId, currentActorId ?? randomUUID())
         )
       )
-      .where(createdAt ? and(
+      .where(and(
         inArray(postsTable.actorId, actorIds),
-        lt(postsTable.createdAt, Instant.toDate(createdAt)),
-      ) : inArray(postsTable.actorId, actorIds))
+        isNull(postsTable.deletedAt),
+        createdAt ? lt(postsTable.createdAt, Instant.toDate(createdAt)) : undefined,
+      ))
       .limit(10)
       .orderBy(desc(postsTable.createdAt))
       .execute();

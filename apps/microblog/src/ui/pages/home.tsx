@@ -4,6 +4,7 @@ import type { PostWithAuthor } from "../../domain/post/post.ts";
 import type { User } from "../../domain/user/user.ts";
 import { ActorLink } from "../components/ActorLink.tsx";
 import { Modal } from "../components/Modal.tsx";
+import { PostForm } from "../components/PostForm.tsx";
 import { PostView } from "../components/PostView.tsx";
 import { render } from "hono/jsx/dom";
 import { hc } from "hono/client";
@@ -20,6 +21,8 @@ type Props = Readonly<{
   fetchData: (createdAt: string | undefined) => Promise<void>;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
+  onDelete: (postId: string) => Promise<void>;
+  deletingPostId: string | null;
 }>;
 
 export const HomePage = ({
@@ -31,6 +34,8 @@ export const HomePage = ({
   fetchData,
   onLike,
   likingPostUri,
+  onDelete,
+  deletingPostId,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -180,47 +185,7 @@ export const HomePage = ({
           </div>
         </section>
 
-        <form
-          id="post"
-          method="post"
-          action="/posts"
-          class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4"
-        >
-          <textarea
-            name="content"
-            rows={4}
-            placeholder="What's on your mind?"
-            required
-            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-          <input type="hidden" name="imageUrls" id="post-image-urls" />
-          <div
-            class="mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5"
-            id="post-preview"
-          />
-          <div id="post-image-preview" class="mt-2 flex flex-wrap gap-2" />
-          <div class="mt-3 flex justify-between items-center">
-            <label class="cursor-pointer flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span class="text-sm">Add Image</span>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                multiple
-                class="hidden"
-                id="post-image-input"
-              />
-            </label>
-            <button
-              type="submit"
-              class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-            >
-              Post
-            </button>
-          </div>
-        </form>
+        <PostForm id="post" />
       </section>
       <a
         class="rounded-full p-4 bg-gray-600 hover:bg-gray-500 text-white block fixed bottom-8 right-8 shadow-lg transition-colors"
@@ -241,53 +206,8 @@ export const HomePage = ({
           />
         </svg>
       </a>
-      <Modal
-        id="post-modal"
-        showCloseButton={false}
-        actions={
-          <a href="#" class="text-blue-500 hover:underline">
-            <button
-              onClick={() => {
-                const form = document.getElementById(
-                  "post-modal-form"
-                ) as HTMLFormElement | null;
-                form?.submit();
-              }}
-              class="mt-4 px-4 py-2 text-white rounded-lg bg-blue-700 hover:bg-blue-600 transition-colors"
-            >
-              Post
-            </button>
-          </a>
-        }
-      >
-        <form method="post" action="/posts" id="post-modal-form">
-          <textarea
-            name="content"
-            rows={4}
-            placeholder="What's on your mind?"
-            required
-            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-          <input type="hidden" name="imageUrls" id="post-modal-image-urls" />
-          <div
-            class="mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5"
-            id="post-modal-preview"
-          />
-          <div id="post-modal-image-preview" class="mt-2 flex flex-wrap gap-2" />
-          <label class="mt-3 cursor-pointer flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span class="text-sm">Add Image</span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              multiple
-              class="hidden"
-              id="post-modal-image-input"
-            />
-          </label>
-        </form>
+      <Modal id="post-modal" showCloseButton={false}>
+        <PostForm formId="post-modal-form" />
       </Modal>
       <div class="hidden target:block" id="update-bio">
         <form method="post" class="mb-4" action={`/users/${user.username}`}>
@@ -320,107 +240,13 @@ export const HomePage = ({
             post={post}
             onLike={onLike}
             isLiking={post.type === "remote" && "uri" in post && likingPostUri === post.uri}
+            onDelete={onDelete}
+            isDeleting={deletingPostId === post.postId}
+            currentUserId={user.id}
           />
         ))}
       </section>
       <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-        document.addEventListener('DOMContentLoaded', () => {
-          const textarea = document.querySelector('#post-modal textarea');
-          const preview = document.getElementById('post-modal-preview');
-          textarea.oninput = (e) => {
-            console.log(e.target.value);
-            const rawHtml = marked.parse(e.target.value, { async: false });
-            preview.innerHTML = rawHtml;
-          };
-        });
-      `,
-        }}
-      />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-        document.addEventListener('DOMContentLoaded', () => {
-          const textarea = document.querySelector('#post textarea');
-          const preview = document.getElementById('post-preview');
-          textarea.oninput = (e) => {
-            console.log(e.target.value);
-            const rawHtml = marked.parse(e.target.value, { async: false });
-            preview.innerHTML = rawHtml;
-          };
-        });
-      `,
-        }}
-      />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-        document.addEventListener('DOMContentLoaded', () => {
-          // Image upload handler for main post form
-          const setupImageUpload = (inputId, previewId, urlsId) => {
-            const input = document.getElementById(inputId);
-            const preview = document.getElementById(previewId);
-            const urlsInput = document.getElementById(urlsId);
-            let uploadedUrls = [];
-
-            const updateUrlsInput = () => {
-              urlsInput.value = uploadedUrls.join(',');
-            };
-
-            const renderPreviews = () => {
-              preview.innerHTML = uploadedUrls.map((url, index) =>
-                '<div class="relative group">' +
-                  '<img src="' + url + '" alt="Preview" class="w-20 h-20 object-cover rounded-lg" />' +
-                  '<button type="button" data-index="' + index + '" class="remove-image absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>' +
-                '</div>'
-              ).join('');
-
-              preview.querySelectorAll('.remove-image').forEach(btn => {
-                btn.onclick = (e) => {
-                  const idx = parseInt(e.target.dataset.index, 10);
-                  uploadedUrls.splice(idx, 1);
-                  updateUrlsInput();
-                  renderPreviews();
-                };
-              });
-            };
-
-            if (input) {
-              input.onchange = async (e) => {
-                const files = e.target.files;
-                for (const file of files) {
-                  const formData = new FormData();
-                  formData.append('file', file);
-                  try {
-                    const res = await fetch('/api/v1/upload', {
-                      method: 'POST',
-                      body: formData,
-                    });
-                    const result = await res.json();
-                    if (result.url) {
-                      uploadedUrls.push(result.url);
-                      updateUrlsInput();
-                      renderPreviews();
-                    } else if (result.error) {
-                      alert('Upload failed: ' + result.error);
-                    }
-                  } catch (err) {
-                    alert('Upload failed: ' + err.message);
-                  }
-                }
-                input.value = '';
-              };
-            }
-          };
-
-          setupImageUpload('post-image-input', 'post-image-preview', 'post-image-urls');
-          setupImageUpload('post-modal-image-input', 'post-modal-image-preview', 'post-modal-image-urls');
-        });
-      `,
-        }}
-      />
     </>
   );
 };
@@ -428,6 +254,7 @@ export const HomePage = ({
 const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -483,6 +310,33 @@ const App = () => {
     }
   };
 
+  const handleDelete = async (postId: string) => {
+    setDeletingPostId(postId);
+    try {
+      const res = await client.v1.posts[":postId"].$delete({
+        param: { postId },
+      });
+      const result = await res.json();
+      if ("success" in result && result.success) {
+        // Remove the post from the local state
+        if (data && !("error" in data)) {
+          setData({
+            ...data,
+            posts: data.posts.filter((post) => post.postId !== postId),
+          });
+        }
+      } else if ("error" in result) {
+        console.error("Failed to delete:", result.error);
+        alert(`Failed to delete: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      alert("Failed to delete the post. Please try again.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -505,6 +359,8 @@ const App = () => {
       fetchData={fetchData}
       onLike={handleLike}
       likingPostUri={likingPostUri}
+      onDelete={handleDelete}
+      deletingPostId={deletingPostId}
     />
   );
 };

@@ -7,6 +7,7 @@ import { SessionId } from "../../domain/session/sessionId.ts";
 import { Instant } from "../../domain/instant/instant.ts";
 import { GetTimelineUseCase } from "../../useCase/getTimeline.ts";
 import { SendLikeUseCase } from "../../useCase/sendLike.ts";
+import { DeletePostUseCase } from "../../useCase/deletePost.ts";
 import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
 import { PgUserResolver } from "../pg/user/userResolver.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
@@ -15,11 +16,15 @@ import { PgActorResolverByFollowerId } from "../pg/actor/followsResolverByFollow
 import { PgActorResolverByFollowingId } from "../pg/actor/followsResolverByFollowingId.ts";
 import { PgLikeCreatedStore } from "../pg/like/likeCreatedStore.ts";
 import { PgLikeResolver } from "../pg/like/likeResolver.ts";
+import { PgPostDeletedStore } from "../pg/post/postDeletedStore.ts";
+import { PgPostResolver } from "../pg/post/postResolver.ts";
 import { Federation } from "../../federation.ts";
 import { sanitize } from "./helper/sanitize.ts";
 import { ImageId } from "../../domain/image/imageId.ts";
+import { PostId } from "../../domain/post/postId.ts";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { InferUseCaseError } from "../../useCase/useCase.ts";
 
 const app = new Hono()
   .get(
@@ -142,7 +147,10 @@ const app = new Hono()
 
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      return c.json({ error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" }, 400);
+      return c.json(
+        { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
+        400
+      );
     }
 
     const maxSize = 5 * 1024 * 1024; // 5MB
@@ -168,6 +176,55 @@ const app = new Hono()
       url,
       filename,
     });
+  })
+  .delete("/v1/posts/:postId", async (c) => {
+    const postIdParam = c.req.param("postId");
+    const postIdResult = PostId.parse(postIdParam);
+    if (!postIdResult.ok) {
+      return c.json({ error: "Invalid post ID" }, 400);
+    }
+
+    const sessionId = getCookie(c, "sessionId");
+    if (!sessionId) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const sessionIdResult = SessionId.parse(sessionId);
+    if (!sessionIdResult.ok) {
+      return c.json({ error: "Invalid session" }, 401);
+    }
+
+    const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+    const useCase = DeletePostUseCase.create({
+      sessionResolver: PgSessionResolver.getInstance(),
+      userResolver: PgUserResolver.getInstance(),
+      actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+      postDeletedStore: PgPostDeletedStore.getInstance(),
+      postResolver: PgPostResolver.getInstance(),
+    });
+
+    const result = await useCase.run({
+      sessionId: sessionIdResult.val,
+      postId: postIdResult.val,
+      ctx,
+    });
+
+    return RA.match({
+      ok: () => c.json({ success: true }),
+      err: (err: InferUseCaseError<DeletePostUseCase>) => {
+        if (err.type === "UnauthorizedError") {
+          return c.json({ error: err.message }, 403);
+        }
+        if (err.type === "PostNotFoundError") {
+          return c.json({ error: err.message }, 404);
+        }
+        return c.json(
+          { error: `Failed to delete: ${JSON.stringify(err)}` },
+          400
+        );
+      },
+    })(result);
   });
 
 export type APIRouterType = typeof app;
