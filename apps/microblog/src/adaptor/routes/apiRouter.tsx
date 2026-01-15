@@ -24,6 +24,7 @@ import { ImageId } from "../../domain/image/imageId.ts";
 import { PostId } from "../../domain/post/postId.ts";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { InferUseCaseError } from "../../useCase/useCase.ts";
 
 const app = new Hono()
   .get(
@@ -146,7 +147,10 @@ const app = new Hono()
 
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      return c.json({ error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" }, 400);
+      return c.json(
+        { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
+        400
+      );
     }
 
     const maxSize = 5 * 1024 * 1024; // 5MB
@@ -173,55 +177,55 @@ const app = new Hono()
       filename,
     });
   })
-  .delete(
-    "/v1/posts/:postId",
-    async (c) => {
-      const postIdParam = c.req.param("postId");
-      const postIdResult = PostId.parse(postIdParam);
-      if (!postIdResult.ok) {
-        return c.json({ error: "Invalid post ID" }, 400);
-      }
-
-      const sessionId = getCookie(c, "sessionId");
-      if (!sessionId) {
-        return c.json({ error: "Unauthorized" }, 401);
-      }
-
-      const sessionIdResult = SessionId.parse(sessionId);
-      if (!sessionIdResult.ok) {
-        return c.json({ error: "Invalid session" }, 401);
-      }
-
-      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
-
-      const useCase = DeletePostUseCase.create({
-        sessionResolver: PgSessionResolver.getInstance(),
-        userResolver: PgUserResolver.getInstance(),
-        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-        postDeletedStore: PgPostDeletedStore.getInstance(),
-        postResolver: PgPostResolver.getInstance(),
-      });
-
-      const result = await useCase.run({
-        sessionId: sessionIdResult.val,
-        postId: postIdResult.val,
-        ctx,
-      });
-
-      return RA.match({
-        ok: () => c.json({ success: true }),
-        err: (err) => {
-          if (err.type === "UnauthorizedError") {
-            return c.json({ error: err.message }, 403);
-          }
-          if (err.type === "PostNotFoundError") {
-            return c.json({ error: err.message }, 404);
-          }
-          return c.json({ error: `Failed to delete: ${JSON.stringify(err)}` }, 400);
-        },
-      })(result);
+  .delete("/v1/posts/:postId", async (c) => {
+    const postIdParam = c.req.param("postId");
+    const postIdResult = PostId.parse(postIdParam);
+    if (!postIdResult.ok) {
+      return c.json({ error: "Invalid post ID" }, 400);
     }
-  );
+
+    const sessionId = getCookie(c, "sessionId");
+    if (!sessionId) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const sessionIdResult = SessionId.parse(sessionId);
+    if (!sessionIdResult.ok) {
+      return c.json({ error: "Invalid session" }, 401);
+    }
+
+    const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+    const useCase = DeletePostUseCase.create({
+      sessionResolver: PgSessionResolver.getInstance(),
+      userResolver: PgUserResolver.getInstance(),
+      actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+      postDeletedStore: PgPostDeletedStore.getInstance(),
+      postResolver: PgPostResolver.getInstance(),
+    });
+
+    const result = await useCase.run({
+      sessionId: sessionIdResult.val,
+      postId: postIdResult.val,
+      ctx,
+    });
+
+    return RA.match({
+      ok: () => c.json({ success: true }),
+      err: (err: InferUseCaseError<DeletePostUseCase>) => {
+        if (err.type === "UnauthorizedError") {
+          return c.json({ error: err.message }, 403);
+        }
+        if (err.type === "PostNotFoundError") {
+          return c.json({ error: err.message }, 404);
+        }
+        return c.json(
+          { error: `Failed to delete: ${JSON.stringify(err)}` },
+          400
+        );
+      },
+    })(result);
+  });
 
 export type APIRouterType = typeof app;
 export { app as APIRouter };

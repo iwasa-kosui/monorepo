@@ -156,10 +156,14 @@ app.get(
     const { username, postId } = c.req.valid("param");
     const useCase = GetPostUseCase.create({
       postResolver: PgPostResolver.getInstance(),
+      postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
     });
 
     // Helper function to extract plain text from HTML for OGP description
-    const extractDescription = (html: string, maxLength: number = 150): string => {
+    const extractDescription = (
+      html: string,
+      maxLength: number = 150
+    ): string => {
       const text = html
         .replace(/<[^>]*>/g, "") // Remove HTML tags
         .replace(/&nbsp;/g, " ") // Replace &nbsp;
@@ -174,10 +178,9 @@ app.get(
 
     return RA.flow(
       RA.ok({ postId }),
-      RA.andBind("post", ({ postId }) => useCase.run({ postId })),
-      RA.andBind("images", ({ postId }) => PgPostImagesResolverByPostId.getInstance().resolve(postId)),
+      RA.andThen(({ postId }) => useCase.run({ postId })),
       RA.match({
-        ok: ({ post, images }) => {
+        ok: ({ post, postImages }) => {
           const url = new URL(c.req.url);
           const postUrl = `${url.origin}/users/${username}/posts/${post.postId}`;
           const description = extractDescription(post.content);
@@ -192,7 +195,7 @@ app.get(
                 type: "article",
                 author: String(username),
                 publishedTime: new Date(post.createdAt).toISOString(),
-                image: images.length > 0 ? images[0].url : undefined,
+                image: postImages.length > 0 ? postImages[0].url : undefined,
               }}
             >
               <section>
@@ -212,7 +215,15 @@ app.get(
                     }}
                   />
                   {images.length > 0 && (
-                    <div class={`mt-4 grid gap-2 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'}`}>
+                    <div
+                      class={`mt-4 grid gap-2 ${
+                        images.length === 1
+                          ? "grid-cols-1"
+                          : images.length === 2
+                          ? "grid-cols-2"
+                          : "grid-cols-2 md:grid-cols-3"
+                      }`}
+                    >
                       {images.map((image, index) => (
                         <a
                           key={index}
