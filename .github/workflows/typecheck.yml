@@ -1,0 +1,49 @@
+name: Type Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.12.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check packages/result
+        run: pnpm exec tsc --noEmit
+        working-directory: packages/result
+
+      - name: Type check packages/pipe
+        run: pnpm exec tsc --noEmit
+        working-directory: packages/pipe
+
+      - name: Type check apps/microblog
+        run: pnpm exec tsc --noEmit
+        working-directory: apps/microblog
+
+      - name: Type check apps/hono-oidc-provider
+        run: pnpm exec tsc --noEmit
+        working-directory: apps/hono-oidc-provider
+
+      - name: Type check apps/mojisand
+        run: pnpm exec tsc --noEmit
+        working-directory: apps/mojisand
