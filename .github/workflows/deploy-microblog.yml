@@ -1,0 +1,81 @@
+name: Deploy Microblog
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/microblog/**'
+      - 'packages/**'
+      - '.github/workflows/deploy-microblog.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/microblog
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.12.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build
+        run: pnpm build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MICROBLOG_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.MICROBLOG_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create directories on server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /opt/microblog"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /etc/systemd/system/microblog.service.d"
+
+      - name: Create env.conf
+        run: |
+          cat > env.conf <<'EOF'
+          [Service]
+          Environment="DATABASE_URL=postgresql://microblog:${{ secrets.MICROBLOG_DB_PASSWORD }}@${{ secrets.MICROBLOG_DB_HOST }}/microblog"
+          Environment="ORIGIN=https://blog.kosui.me"
+          Environment="APP_ENV=production"
+          Environment="DATABASE_CERT=/home/ec2-user/ap-northeast-1-bundle.pem"
+          EOF
+          sed -i 's/^          //' env.conf
+
+      - name: Deploy files
+        run: |
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" microblog.service ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" microblog.sh ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/usr/local/bin/microblog
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" dist/ ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/opt/microblog
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" nginx.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/nginx/nginx.conf
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" env.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service.d/env.conf
+
+      - name: Restart services
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo chmod +x /usr/local/bin/microblog"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo systemctl daemon-reload"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo systemctl enable microblog"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo systemctl restart microblog"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo systemctl restart nginx"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
