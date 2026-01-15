@@ -36,7 +36,7 @@ const fromStandardSchema = <Output, Input>(
   const parseOrThrow = (input: Input): Output =>
     Result.flow(
       parse(input),
-      Result.match({
+      Result.match<Output, ParseError, Output, never>({
         ok: (value) => value,
         err: (error) => {
           throw new Error(`ParseError: ${error.message}`);
