@@ -14,7 +14,7 @@ import {
 import type { UseCase } from "./useCase.ts";
 import { Instant } from "../domain/instant/instant.ts";
 import { RA } from "@iwasa-kosui/result";
-import { Create, Note, type RequestContext } from "@fedify/fedify";
+import { Create, Link, Note, type RequestContext } from "@fedify/fedify";
 import type { Actor, ActorResolverByUserId } from "../domain/actor/actor.ts";
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
 import type { PostImageCreatedStore, PostImage } from "../domain/image/image.ts";
@@ -89,7 +89,7 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ post, user, ctx }) => {
+      RA.andThrough(async ({ post, user, ctx, imageUrls }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);
         await ctx.sendActivity(
@@ -101,6 +101,8 @@ const create = ({
             actors: note?.attributionIds,
             tos: note?.toIds,
             ccs: note?.ccIds,
+            attachments:
+              imageUrls.map((url) => new Link({ href: new URL(url) }))
           }),
         );
         return RA.ok(undefined);
