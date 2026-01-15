@@ -51,7 +51,14 @@ jobs:
 
       - name: Create env.conf
         run: |
-          echo "${{ secrets.MICROBLOG_ENV_CONF }}" > env.conf
+          cat > env.conf <<'EOF'
+          [Service]
+          Environment="DATABASE_URL=postgresql://microblog:${{ secrets.MICROBLOG_DB_PASSWORD }}@${{ secrets.MICROBLOG_DB_HOST }}/microblog"
+          Environment="ORIGIN=https://blog.kosui.me"
+          Environment="APP_ENV=production"
+          Environment="DATABASE_CERT=/home/ec2-user/ap-northeast-1-bundle.pem"
+          EOF
+          sed -i 's/^          //' env.conf
 
       - name: Deploy files
         run: |
