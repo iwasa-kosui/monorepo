@@ -12,6 +12,7 @@ import { PgPostCreatedStore } from "../pg/post/postCreatedStore.ts";
 import { PgUserResolver } from "../pg/user/userResolver.ts";
 import { marked } from "marked";
 import { Federation } from "../../federation.ts";
+import { PgPostImageCreatedStore } from "../pg/image/postImageCreatedStore.ts";
 
 const app = new Hono();
 app.post(
@@ -23,6 +24,7 @@ app.post(
         .string()
         .min(1)
         .transform((s) => marked.parse(s, { async: false })),
+      imageUrls: z.optional(z.string().transform((s) => s ? s.split(",").filter(Boolean) : [])),
     })
   ),
   async (c) => {
@@ -31,6 +33,7 @@ app.post(
       postCreatedStore: PgPostCreatedStore.getInstance(),
       userResolver: PgUserResolver.getInstance(),
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+      postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
     });
     const sessionId = getCookie(c, "sessionId");
     if (!sessionId) {
@@ -45,10 +48,12 @@ app.post(
     }
     const form = await c.req.valid("form");
     const content = form.content;
+    const imageUrls = form.imageUrls ?? [];
     return RA.flow(
       useCase.run({
         sessionId: SessionId.orThrow(sessionId),
         content,
+        imageUrls,
         ctx: Federation.getInstance().createContext(c.req.raw, undefined),
       }),
       RA.match({

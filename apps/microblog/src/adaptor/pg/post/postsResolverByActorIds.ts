@@ -4,7 +4,7 @@ import { Post, type PostResolver, type PostsResolverByActorId } from "../../../d
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
-import { actorsTable, likesTable, localActorsTable, localPostsTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
+import { actorsTable, likesTable, localActorsTable, localPostsTable, postImagesTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
 import { RA } from "@iwasa-kosui/result";
 import type { ActorId } from "../../../domain/actor/actorId.ts";
 import { Username } from '../../../domain/user/username.ts';
@@ -53,7 +53,26 @@ const getInstance = singleton((): PostsResolverByActorIds => {
       .limit(10)
       .orderBy(desc(postsTable.createdAt))
       .execute();
+
+    // Fetch images for all posts
+    const postIds = rows.map(row => row.posts.postId);
+    const imageRows = postIds.length > 0
+      ? await DB.getInstance().select()
+          .from(postImagesTable)
+          .where(inArray(postImagesTable.postId, postIds))
+          .execute()
+      : [];
+
+    // Group images by postId
+    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    for (const imageRow of imageRows) {
+      const existing = imagesByPostId.get(imageRow.postId) ?? [];
+      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      imagesByPostId.set(imageRow.postId, existing);
+    }
+
     return RA.ok(rows.map(row => {
+      const images = imagesByPostId.get(row.posts.postId) ?? [];
       if (row.local_posts) {
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
@@ -68,6 +87,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           username: Username.orThrow(row.users!.username),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: false,
+          images,
         };
       }
       if (row.remote_posts) {
@@ -84,6 +104,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           username: Username.orThrow(row.remote_actors!.username!),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: row.likes !== null,
+          images,
         }
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

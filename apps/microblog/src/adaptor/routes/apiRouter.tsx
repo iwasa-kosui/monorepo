@@ -17,6 +17,9 @@ import { PgLikeCreatedStore } from "../pg/like/likeCreatedStore.ts";
 import { PgLikeResolver } from "../pg/like/likeResolver.ts";
 import { Federation } from "../../federation.ts";
 import { sanitize } from "./helper/sanitize.ts";
+import { ImageId } from "../../domain/image/imageId.ts";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
 const app = new Hono()
   .get(
@@ -118,7 +121,54 @@ const app = new Hono()
           c.json({ error: `Failed to like: ${JSON.stringify(err)}` }, 400),
       })(result);
     }
-  );
+  )
+  .post("/v1/upload", async (c) => {
+    const sessionId = getCookie(c, "sessionId");
+    if (!sessionId) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const sessionIdResult = SessionId.parse(sessionId);
+    if (!sessionIdResult.ok) {
+      return c.json({ error: "Invalid session" }, 401);
+    }
+
+    const body = await c.req.parseBody();
+    const file = body["file"];
+
+    if (!file || !(file instanceof File)) {
+      return c.json({ error: "No file provided" }, 400);
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" }, 400);
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      return c.json({ error: "File too large. Max size: 5MB" }, 400);
+    }
+
+    const imageId = ImageId.generate();
+    const ext = file.name.split(".").pop() || "jpg";
+    const filename = `${imageId}.${ext}`;
+    const uploadDir = path.join(process.cwd(), "static", "uploads");
+
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const filePath = path.join(uploadDir, filename);
+    const arrayBuffer = await file.arrayBuffer();
+    await fs.writeFile(filePath, Buffer.from(arrayBuffer));
+
+    const url = `/static/uploads/${filename}`;
+
+    return c.json({
+      imageId,
+      url,
+      filename,
+    });
+  });
 
 export type APIRouterType = typeof app;
 export { app as APIRouter };

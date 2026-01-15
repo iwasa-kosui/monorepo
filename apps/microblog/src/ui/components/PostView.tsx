@@ -64,6 +64,26 @@ export const PostView = ({ post, onLike, isLiking }: Props) => {
             class="mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline  [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4"
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
+          {post.images && post.images.length > 0 && (
+            <div class={`mt-3 grid gap-2 ${post.images.length === 1 ? 'grid-cols-1' : post.images.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'}`}>
+              {post.images.map((image, index) => (
+                <a
+                  key={index}
+                  href={image.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block overflow-hidden rounded-lg"
+                >
+                  <img
+                    src={image.url}
+                    alt={image.altText || "Post image"}
+                    class="w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
           {isRemotePost && (
             <div class="mt-3 flex items-center gap-4">
               <button
