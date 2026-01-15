@@ -214,17 +214,17 @@ app.get(
                       __html: sanitizedContent,
                     }}
                   />
-                  {images.length > 0 && (
+                  {postImages.length > 0 && (
                     <div
                       class={`mt-4 grid gap-2 ${
-                        images.length === 1
+                        postImages.length === 1
                           ? "grid-cols-1"
-                          : images.length === 2
+                          : postImages.length === 2
                           ? "grid-cols-2"
                           : "grid-cols-2 md:grid-cols-3"
                       }`}
                     >
-                      {images.map((image, index) => (
+                      {postImages.map((image, index) => (
                         <a
                           key={index}
                           href={image.url}
