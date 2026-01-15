@@ -47,6 +47,7 @@ export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
 export type PostCreated = PostEvent<Post, 'post.created', Post>;
 export type RemotePostCreated = PostEvent<RemotePost, 'post.remotePostCreated', RemotePost>;
+export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
 const createPost = (now: Instant) => (payload: Omit<LocalPost, "type" | 'createdAt' | 'postId'>): PostCreated => {
   const postId = PostId.generate();
@@ -82,13 +83,25 @@ const createRemotePost = (now: Instant) => (payload: Omit<RemotePost, "type" | '
   )
 }
 
+const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
+  return PostEvent.create(
+    postId,
+    undefined,
+    'post.deleted',
+    { postId, deletedAt: now },
+    now,
+  );
+}
+
 export const Post = {
   ...schema,
   createPost,
   createRemotePost,
+  deletePost,
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
+export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<{ actorIds: ActorId[], currentActorId: ActorId | undefined, createdAt: Instant | undefined }, (PostWithAuthor)[]>;

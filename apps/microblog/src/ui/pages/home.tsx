@@ -21,6 +21,8 @@ type Props = Readonly<{
   fetchData: (createdAt: string | undefined) => Promise<void>;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
+  onDelete: (postId: string) => Promise<void>;
+  deletingPostId: string | null;
 }>;
 
 export const HomePage = ({
@@ -32,6 +34,8 @@ export const HomePage = ({
   fetchData,
   onLike,
   likingPostUri,
+  onDelete,
+  deletingPostId,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -236,6 +240,9 @@ export const HomePage = ({
             post={post}
             onLike={onLike}
             isLiking={post.type === "remote" && "uri" in post && likingPostUri === post.uri}
+            onDelete={onDelete}
+            isDeleting={deletingPostId === post.postId}
+            currentUserId={user.id}
           />
         ))}
       </section>
@@ -247,6 +254,7 @@ export const HomePage = ({
 const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -302,6 +310,33 @@ const App = () => {
     }
   };
 
+  const handleDelete = async (postId: string) => {
+    setDeletingPostId(postId);
+    try {
+      const res = await client.v1.posts[":postId"].$delete({
+        param: { postId },
+      });
+      const result = await res.json();
+      if ("success" in result && result.success) {
+        // Remove the post from the local state
+        if (data && !("error" in data)) {
+          setData({
+            ...data,
+            posts: data.posts.filter((post) => post.postId !== postId),
+          });
+        }
+      } else if ("error" in result) {
+        console.error("Failed to delete:", result.error);
+        alert(`Failed to delete: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      alert("Failed to delete the post. Please try again.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -324,6 +359,8 @@ const App = () => {
       fetchData={fetchData}
       onLike={handleLike}
       likingPostUri={likingPostUri}
+      onDelete={handleDelete}
+      deletingPostId={deletingPostId}
     />
   );
 };
