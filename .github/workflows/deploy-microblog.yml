@@ -68,6 +68,15 @@ jobs:
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" nginx.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/nginx/nginx.conf
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" env.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service.d/env.conf
 
+      - name: Deploy migration files
+        run: |
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" drizzle/ ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/opt/microblog/drizzle/
+          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" drizzle.config.ts ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/opt/microblog/
+
+      - name: Run database migration
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd /opt/microblog && DATABASE_URL='postgresql://microblog:${{ secrets.MICROBLOG_DB_PASSWORD }}@${{ secrets.MICROBLOG_DB_HOST }}/microblog' npx drizzle-kit migrate"
+
       - name: Restart services
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo chmod +x /usr/local/bin/microblog"
