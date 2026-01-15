@@ -31,7 +31,8 @@ export const LocalPost = Schema.create(localPostZodType);
 export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
-export type PostWithAuthor = Post & { username: Username, logoUri: string | undefined, liked: boolean };
+export type PostImage = { url: string; altText: string | null };
+export type PostWithAuthor = Post & { username: Username, logoUri: string | undefined, liked: boolean, images: PostImage[] };
 
 const zodType = z.union([localPostZodType, remotePostZodType]);
 const schema = Schema.create(zodType);

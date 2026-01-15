@@ -17,10 +17,13 @@ import { RA } from "@iwasa-kosui/result";
 import { Create, Note, type RequestContext } from "@fedify/fedify";
 import type { Actor, ActorResolverByUserId } from "../domain/actor/actor.ts";
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
+import type { PostImageCreatedStore, PostImage } from "../domain/image/image.ts";
+import { ImageId } from "../domain/image/imageId.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;
   content: string;
+  imageUrls: string[];
   ctx: RequestContext<unknown>;
 }>;
 
@@ -41,6 +44,7 @@ type Deps = Readonly<{
   postCreatedStore: PostCreatedStore;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
+  postImageCreatedStore: PostImageCreatedStore;
 }>;
 
 const create = ({
@@ -48,6 +52,7 @@ const create = ({
   postCreatedStore,
   userResolver,
   actorResolverByUserId,
+  postImageCreatedStore,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -71,6 +76,19 @@ const create = ({
       }),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
       RA.bind("post", ({ postEvent }) => postEvent.aggregateState),
+      RA.andThrough(async ({ post, imageUrls }) => {
+        if (imageUrls.length > 0) {
+          const images: PostImage[] = imageUrls.map((url) => ({
+            imageId: ImageId.generate(),
+            postId: post.postId,
+            url,
+            altText: null,
+            createdAt: now,
+          }));
+          await postImageCreatedStore.store(images);
+        }
+        return RA.ok(undefined);
+      }),
       RA.andThrough(async ({ post, user, ctx }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);

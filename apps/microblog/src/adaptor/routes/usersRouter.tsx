@@ -24,6 +24,7 @@ import { Instant } from "../../domain/instant/instant.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
 import { Actor } from "../../domain/actor/actor.ts";
 import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
+import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
 
 const app = new Hono();
 
@@ -172,9 +173,11 @@ app.get(
     };
 
     return RA.flow(
-      useCase.run({ postId }),
+      RA.ok({ postId }),
+      RA.andBind("post", ({ postId }) => useCase.run({ postId })),
+      RA.andBind("images", ({ postId }) => PgPostImagesResolverByPostId.getInstance().resolve(postId)),
       RA.match({
-        ok: (post) => {
+        ok: ({ post, images }) => {
           const url = new URL(c.req.url);
           const postUrl = `${url.origin}/users/${username}/posts/${post.postId}`;
           const description = extractDescription(post.content);
@@ -189,6 +192,7 @@ app.get(
                 type: "article",
                 author: String(username),
                 publishedTime: new Date(post.createdAt).toISOString(),
+                image: images.length > 0 ? images[0].url : undefined,
               }}
             >
               <section>
@@ -207,6 +211,26 @@ app.get(
                       __html: sanitizedContent,
                     }}
                   />
+                  {images.length > 0 && (
+                    <div class={`mt-4 grid gap-2 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3'}`}>
+                      {images.map((image, index) => (
+                        <a
+                          key={index}
+                          href={image.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="block overflow-hidden rounded-lg"
+                        >
+                          <img
+                            src={image.url}
+                            alt={image.altText || "Post image"}
+                            class="w-full h-auto max-h-96 object-cover hover:opacity-90 transition-opacity"
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <footer class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <time
                       dateTime={new Date(post.createdAt).toISOString()}

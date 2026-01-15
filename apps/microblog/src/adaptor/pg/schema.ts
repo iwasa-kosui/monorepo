@@ -105,3 +105,11 @@ export const likesTable = pgTable("likes", {
 }, (table) => [
   unique('actor_object_unique').on(table.actorId, table.objectUri),
 ]);
+
+export const postImagesTable = pgTable("post_images", {
+  imageId: uuid().primaryKey(),
+  postId: uuid().notNull().references(() => postsTable.postId),
+  url: text().notNull(),
+  altText: text(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+});
