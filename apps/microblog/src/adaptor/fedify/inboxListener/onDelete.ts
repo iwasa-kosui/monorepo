@@ -37,7 +37,7 @@ export const onDelete = async (
   }
 
   // Delete the post via event store
-  const postId = PostId.parse(remotePost.postId);
+  const postId = PostId.parseOrThrow(remotePost.postId);
   const deleteEvent = Post.deletePost(Instant.now())(postId);
   const postDeletedStore = PgPostDeletedStore.getInstance();
   await postDeletedStore.store(deleteEvent);
