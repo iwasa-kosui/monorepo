@@ -68,6 +68,10 @@ jobs:
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" nginx.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/nginx/nginx.conf
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" env.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service.d/env.conf
 
+      - name: Run database migration
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo/apps/microblog && git fetch --all && git switch origin/main --detach && pnpm run drizzle:push"
+
       - name: Restart services
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo chmod +x /usr/local/bin/microblog"
