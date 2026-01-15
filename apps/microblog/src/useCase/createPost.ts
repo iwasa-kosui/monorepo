@@ -19,6 +19,7 @@ import type { Actor, ActorResolverByUserId } from "../domain/actor/actor.ts";
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
 import type { PostImageCreatedStore, PostImage } from "../domain/image/image.ts";
 import { ImageId } from "../domain/image/imageId.ts";
+import { Env } from "../env.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;
@@ -102,7 +103,7 @@ const create = ({
             tos: note?.toIds,
             ccs: note?.ccIds,
             attachments:
-              imageUrls.map((url) => new Link({ href: new URL(url) }))
+              imageUrls.map((url) => new Link({ href: new URL(`${Env.getInstance().ORIGIN}${url}`) }))
           }),
         );
         return RA.ok(undefined);
