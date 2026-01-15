@@ -1,4 +1,4 @@
-import { Link, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
+import { Document, Link, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
 import { GetPostUseCase } from "../../useCase/getPost.ts";
 import { PgPostResolver } from "../pg/post/postResolver.ts";
 import { RA } from "@iwasa-kosui/result";
@@ -30,7 +30,17 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
           published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
           url: ctx.getObjectUri(Note, values),
           attachments:
-            postImages.map((image) => new Link({ href: new URL(`${Env.getInstance().ORIGIN}${image.url}`) }))
+            postImages.map((image) =>
+              new Document({
+                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                mediaType: image.url.endsWith(".png")
+                  ? "image/png"
+                  : image.url.endsWith(".jpg") || image.url.endsWith(".jpeg")
+                    ? "image/jpeg"
+                    : image.url.endsWith(".gif")
+                      ? "image/gif"
+                      : "application/octet-stream",
+              }))
         });
       },
       err: (err) => {

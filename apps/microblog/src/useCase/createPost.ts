@@ -115,8 +115,6 @@ const create = ({
             actors: note?.attributionIds,
             tos: note?.toIds,
             ccs: note?.ccIds,
-            // attachments:
-            //   imageUrls.map((url) => new Link({ href: new URL(`${Env.getInstance().ORIGIN}${url}`) }))
             attachments: images.map(
               (image) =>
                 new Document({
