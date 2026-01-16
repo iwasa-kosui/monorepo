@@ -1,10 +1,8 @@
-import { Layout } from "../../layout.tsx";
-import { GetRemoteUserPage } from "../../ui/pages/getRemoteUser.tsx";
+import { Layout, LayoutClient } from "../../layout.tsx";
 import { sValidator } from "@hono/standard-validator";
 import { Hono } from "hono";
 import z from "zod/v4";
 import { getLogger } from "@logtape/logtape";
-import { GetRemoteUserProfileUseCase } from "../../useCase/getRemoteUserProfile.ts";
 import { RA } from "@iwasa-kosui/result";
 import { getCookie } from "hono/cookie";
 import { SessionId } from "../../domain/session/sessionId.ts";
@@ -58,39 +56,40 @@ app.get(
     const logger = getLogger("microblog:get-remote-user");
     logger.info("Get remote user attempt", { actorId });
 
-    const sessionIdCookie = getCookie(c, "sessionId");
-    const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
-    const currentUserActorId = currentUserResult.ok
-      ? currentUserResult.val.actor.id
-      : undefined;
+    // Validate that the actorId exists and is a remote actor
+    const actorResult = await PgActorResolverById.getInstance().resolve(actorId);
+    if (!actorResult.ok || !actorResult.val) {
+      return c.html(
+        <Layout>
+          <section>
+            <h1>Remote User Profile</h1>
+            <p>Remote user not found</p>
+          </section>
+        </Layout>,
+        404
+      );
+    }
 
-    const useCase = GetRemoteUserProfileUseCase.getInstance();
+    if (actorResult.val.type !== 'remote') {
+      return c.html(
+        <Layout>
+          <section>
+            <h1>Remote User Profile</h1>
+            <p>This is not a remote user</p>
+          </section>
+        </Layout>,
+        400
+      );
+    }
 
-    return RA.flow(
-      useCase.run({ actorId, currentUserActorId }),
-      RA.match({
-        ok: ({ remoteActor, isFollowing }) => {
-          return c.html(
-            <GetRemoteUserPage
-              remoteActor={remoteActor}
-              isFollowing={isFollowing}
-              isLoggedIn={currentUserActorId !== undefined}
-            />
-          );
-        },
-        err: (err) => {
-          logger.error("Get remote user failed", { error: String(err) });
-          return c.html(
-            <Layout>
-              <section>
-                <h1>Remote User Profile</h1>
-                <p>Error retrieving user: {err.message}</p>
-              </section>
-            </Layout>,
-            404
-          );
-        },
-      })
+    // Return client-side rendered page
+    return c.html(
+      <LayoutClient
+        client="/static/remoteUser.js"
+        server="/src/ui/pages/remoteUser.tsx"
+      >
+        <div id="root" />
+      </LayoutClient>
     );
   }
 );
