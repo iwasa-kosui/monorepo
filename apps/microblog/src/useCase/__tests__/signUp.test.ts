@@ -1,6 +1,5 @@
 import { test as fcTest } from '@fast-check/vitest';
-import fc from 'fast-check';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -184,7 +183,7 @@ describe('SignUpUseCase', () => {
         ctx,
       });
 
-      expect(deps[storeName as keyof typeof deps].store).toHaveBeenCalledTimes(1);
+      expect((deps[storeName as keyof typeof deps] as { store: unknown }).store).toHaveBeenCalledTimes(1);
     });
 
     it('登録失敗時はストアが呼ばれない', async () => {
