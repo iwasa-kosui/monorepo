@@ -105,6 +105,7 @@ export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<{ actorIds: ActorId[], currentActorId: ActorId | undefined, createdAt: Instant | undefined }, (PostWithAuthor)[]>;
+export type PostsResolverByActorIdWithPagination = Agg.Resolver<{ actorId: ActorId, currentActorId: ActorId | undefined, createdAt: Instant | undefined }, (PostWithAuthor)[]>;
 export type PostNotFoundError = Readonly<{
   type: 'PostNotFoundError';
   message: string;

@@ -10,9 +10,12 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         rollupOptions: {
-          input: "./src/ui/pages/home.tsx",
+          input: {
+            home: "./src/ui/pages/home.tsx",
+            remoteUser: "./src/ui/pages/remoteUser.tsx",
+          },
           output: {
-            entryFileNames: "static/home.js",
+            entryFileNames: "static/[name].js",
           },
         },
       },

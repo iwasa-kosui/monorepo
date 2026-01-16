@@ -6,6 +6,7 @@ import { z } from "zod/v4";
 import { SessionId } from "../../domain/session/sessionId.ts";
 import { Instant } from "../../domain/instant/instant.ts";
 import { GetTimelineUseCase } from "../../useCase/getTimeline.ts";
+import { GetRemoteActorPostsUseCase } from "../../useCase/getRemoteActorPosts.ts";
 import { SendLikeUseCase } from "../../useCase/sendLike.ts";
 import { DeletePostUseCase } from "../../useCase/deletePost.ts";
 import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
@@ -22,6 +23,8 @@ import { Federation } from "../../federation.ts";
 import { sanitize } from "./helper/sanitize.ts";
 import { ImageId } from "../../domain/image/imageId.ts";
 import { PostId } from "../../domain/post/postId.ts";
+import { ActorId } from "../../domain/actor/actorId.ts";
+import { resolveSessionWith, resolveUserWith, resolveLocalActorWith } from "../../useCase/helper/resolve.ts";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { InferUseCaseError } from "../../useCase/useCase.ts";
@@ -225,7 +228,79 @@ const app = new Hono()
         );
       },
     })(result);
-  });
+  })
+  .get(
+    "/v1/remote-users/:actorId/posts",
+    sValidator(
+      "param",
+      z.object({
+        actorId: ActorId.zodType,
+      })
+    ),
+    sValidator(
+      "query",
+      z.object({
+        createdAt: z.optional(z.coerce.number().pipe(Instant.zodType)),
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(",") },
+            400
+          );
+        }
+      }
+    ),
+    async (c) => {
+      const { actorId } = c.req.valid("param");
+      const { createdAt } = c.req.valid("query");
+
+      // Get current user's actor ID if logged in
+      const sessionIdCookie = getCookie(c, "sessionId");
+      let currentUserActorId: ActorId | undefined;
+
+      if (sessionIdCookie) {
+        const now = Instant.now();
+        const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
+        const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+        const resolveLocalActor = resolveLocalActorWith(PgActorResolverByUserId.getInstance());
+
+        const currentUserResult = await RA.flow(
+          RA.ok(sessionIdCookie),
+          RA.andThen(SessionId.parse),
+          RA.andBind("session", resolveSession),
+          RA.andBind("user", ({ session }) => resolveUser(session.userId)),
+          RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
+          RA.map(({ actor }) => actor.id)
+        );
+
+        if (currentUserResult.ok) {
+          currentUserActorId = currentUserResult.val;
+        }
+      }
+
+      const useCase = GetRemoteActorPostsUseCase.getInstance();
+
+      return RA.flow(
+        useCase.run({ actorId, currentUserActorId, createdAt }),
+        RA.match({
+          ok: ({ remoteActor, isFollowing, posts }) => {
+            return c.json({
+              remoteActor,
+              isFollowing,
+              posts: posts.map((post) => ({
+                ...post,
+                content: sanitize(post.content),
+              })),
+            });
+          },
+          err: (err) => {
+            return c.json({ error: err.message }, 400);
+          },
+        })
+      );
+    }
+  );
 
 export type APIRouterType = typeof app;
 export { app as APIRouter };
