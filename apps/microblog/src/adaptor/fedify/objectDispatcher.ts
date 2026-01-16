@@ -7,6 +7,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { getLogger } from "@logtape/logtape";
 import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
 import { Env } from "../../env.ts";
+import { getMimeTypeFromUrl } from "../../domain/image/mimeType.ts";
 
 const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
   const useCase = GetPostUseCase.create({
@@ -33,13 +34,7 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
             postImages.map((image) =>
               new Document({
                 url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                mediaType: image.url.endsWith(".png")
-                  ? "image/png"
-                  : image.url.endsWith(".jpg") || image.url.endsWith(".jpeg")
-                    ? "image/jpeg"
-                    : image.url.endsWith(".gif")
-                      ? "image/gif"
-                      : "application/octet-stream",
+                mediaType: getMimeTypeFromUrl(image.url),
               }))
         });
       },
