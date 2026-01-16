@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 import { singleton } from '../../helper/singleton.ts';
 import { PgConfig } from './pgConfig.ts';
@@ -13,7 +13,7 @@ const create = () => {
   });
   const db = drizzle({ client: pool });
   return db;
-}
+};
 
 const getInstance = singleton(create);
 

@@ -1,28 +1,24 @@
-import { Follow, Undo } from "@fedify/fedify";
-import { sValidator } from "@hono/standard-validator";
-import { RA } from "@iwasa-kosui/result";
-import { getLogger } from "@logtape/logtape";
-import { Hono } from "hono";
-import { getCookie } from "hono/cookie";
-import z from "zod/v4";
+import { Follow, Undo } from '@fedify/fedify';
+import { sValidator } from '@hono/standard-validator';
+import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
+import { Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
+import z from 'zod/v4';
 
-import { ActorId } from "../../domain/actor/actorId.ts";
-import { Follow as AppFollow } from "../../domain/follow/follow.ts";
-import { Instant } from "../../domain/instant/instant.ts";
-import { SessionId } from "../../domain/session/sessionId.ts";
-import { Federation } from "../../federation.ts";
-import { Layout, LayoutClient } from "../../layout.tsx";
-import {
-  resolveLocalActorWith,
-  resolveSessionWith,
-  resolveUserWith,
-} from "../../useCase/helper/resolve.ts";
-import { UnfollowUseCase } from "../../useCase/unfollow.ts";
-import { PgActorResolverById } from "../pg/actor/actorResolverById.ts";
-import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
-import { PgFollowRequestedStore } from "../pg/follow/followRequestedStore.ts";
-import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
-import { PgUserResolver } from "../pg/user/userResolver.ts";
+import { ActorId } from '../../domain/actor/actorId.ts';
+import { Follow as AppFollow } from '../../domain/follow/follow.ts';
+import { Instant } from '../../domain/instant/instant.ts';
+import { SessionId } from '../../domain/session/sessionId.ts';
+import { Federation } from '../../federation.ts';
+import { Layout, LayoutClient } from '../../layout.tsx';
+import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
+import { UnfollowUseCase } from '../../useCase/unfollow.ts';
+import { PgActorResolverById } from '../pg/actor/actorResolverById.ts';
+import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
+import { PgFollowRequestedStore } from '../pg/follow/followRequestedStore.ts';
+import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgUserResolver } from '../pg/user/userResolver.ts';
 
 const app = new Hono();
 
@@ -36,33 +32,33 @@ const getCurrentUserActorId = async (sessionIdCookie: string | undefined) => {
   return RA.flow(
     RA.ok(sessionIdCookie),
     RA.andThen(SessionId.parse),
-    RA.andBind("session", resolveSession),
-    RA.andBind("user", ({ session }) => resolveUser(session.userId)),
-    RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
-    RA.map(({ user, actor }) => ({ user, actor }))
+    RA.andBind('session', resolveSession),
+    RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+    RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+    RA.map(({ user, actor }) => ({ user, actor })),
   );
 };
 
 // GET /remote-users/:actorId - Display remote user profile
 app.get(
-  "/:actorId",
+  '/:actorId',
   sValidator(
-    "param",
+    'param',
     z.object({
       actorId: ActorId.zodType,
-    })
+    }),
   ),
   async (c) => {
-    const { actorId } = c.req.valid("param");
-    const logger = getLogger("microblog:get-remote-user");
-    logger.info("Get remote user attempt", { actorId });
+    const { actorId } = c.req.valid('param');
+    const logger = getLogger('microblog:get-remote-user');
+    logger.info('Get remote user attempt', { actorId });
 
     // Require authentication to view remote user profiles
-    const sessionIdCookie = getCookie(c, "sessionId");
+    const sessionIdCookie = getCookie(c, 'sessionId');
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
 
     if (!currentUserResult.ok) {
-      return c.redirect("/sign-in");
+      return c.redirect('/sign-in');
     }
 
     // Validate that the actorId exists and is a remote actor
@@ -75,7 +71,7 @@ app.get(
             <p>Remote user not found</p>
           </section>
         </Layout>,
-        404
+        404,
       );
     }
 
@@ -87,40 +83,40 @@ app.get(
             <p>This is not a remote user</p>
           </section>
         </Layout>,
-        400
+        400,
       );
     }
 
     // Return client-side rendered page
     return c.html(
       <LayoutClient
-        client="/static/remoteUser.js"
-        server="/src/ui/pages/remoteUser.tsx"
+        client='/static/remoteUser.js'
+        server='/src/ui/pages/remoteUser.tsx'
       >
-        <div id="root" />
-      </LayoutClient>
+        <div id='root' />
+      </LayoutClient>,
     );
-  }
+  },
 );
 
 // POST /remote-users/:actorId/follow - Follow remote user
 app.post(
-  "/:actorId/follow",
+  '/:actorId/follow',
   sValidator(
-    "param",
+    'param',
     z.object({
       actorId: ActorId.zodType,
-    })
+    }),
   ),
   async (c) => {
-    const { actorId: followingActorId } = c.req.valid("param");
-    const logger = getLogger("microblog:follow-remote-user");
+    const { actorId: followingActorId } = c.req.valid('param');
+    const logger = getLogger('microblog:follow-remote-user');
 
-    const sessionIdCookie = getCookie(c, "sessionId");
+    const sessionIdCookie = getCookie(c, 'sessionId');
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
 
     if (!currentUserResult.ok) {
-      return c.redirect("/sign-in");
+      return c.redirect('/sign-in');
     }
 
     const { user, actor: followerActor } = currentUserResult.val;
@@ -135,7 +131,7 @@ app.post(
             <p>Remote user not found</p>
           </section>
         </Layout>,
-        404
+        404,
       );
     }
 
@@ -148,7 +144,7 @@ app.post(
             <p>Cannot follow local users from this page</p>
           </section>
         </Layout>,
-        400
+        400,
       );
     }
 
@@ -158,12 +154,12 @@ app.post(
         followerId: followerActor.id,
         followingId: followingActor.id,
       },
-      Instant.now()
+      Instant.now(),
     );
 
     const storeResult = await PgFollowRequestedStore.getInstance().store(followRequested);
     if (!storeResult.ok) {
-      logger.error("Failed to store follow request", { error: String(storeResult.err) });
+      logger.error('Failed to store follow request', { error: String(storeResult.err) });
       return c.html(
         <Layout>
           <section>
@@ -171,7 +167,7 @@ app.post(
             <p>Failed to follow user</p>
           </section>
         </Layout>,
-        500
+        500,
       );
     }
 
@@ -188,36 +184,36 @@ app.post(
         actor: ctx.getActorUri(user.username),
         object: new URL(followingActor.uri),
         to: new URL(followingActor.uri),
-      })
+      }),
     );
 
-    logger.info("Follow request sent", {
+    logger.info('Follow request sent', {
       follower: followerActor.id,
       following: followingActor.id,
     });
 
     return c.redirect(`/remote-users/${followingActorId}`);
-  }
+  },
 );
 
 // POST /remote-users/:actorId/unfollow - Unfollow remote user
 app.post(
-  "/:actorId/unfollow",
+  '/:actorId/unfollow',
   sValidator(
-    "param",
+    'param',
     z.object({
       actorId: ActorId.zodType,
-    })
+    }),
   ),
   async (c) => {
-    const { actorId: followingActorId } = c.req.valid("param");
-    const logger = getLogger("microblog:unfollow-remote-user");
+    const { actorId: followingActorId } = c.req.valid('param');
+    const logger = getLogger('microblog:unfollow-remote-user');
 
-    const sessionIdCookie = getCookie(c, "sessionId");
+    const sessionIdCookie = getCookie(c, 'sessionId');
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
 
     if (!currentUserResult.ok) {
-      return c.redirect("/sign-in");
+      return c.redirect('/sign-in');
     }
 
     const { user, actor: followerActor } = currentUserResult.val;
@@ -232,7 +228,7 @@ app.post(
             <p>Remote user not found</p>
           </section>
         </Layout>,
-        404
+        404,
       );
     }
 
@@ -245,7 +241,7 @@ app.post(
             <p>Cannot unfollow local users from this page</p>
           </section>
         </Layout>,
-        400
+        400,
       );
     }
 
@@ -257,7 +253,7 @@ app.post(
     });
 
     if (!unfollowResult.ok) {
-      logger.error("Failed to unfollow", { error: String(unfollowResult.err) });
+      logger.error('Failed to unfollow', { error: String(unfollowResult.err) });
       return c.html(
         <Layout>
           <section>
@@ -265,7 +261,7 @@ app.post(
             <p>Failed to unfollow user: {unfollowResult.err.message}</p>
           </section>
         </Layout>,
-        400
+        400,
       );
     }
 
@@ -288,16 +284,16 @@ app.post(
           object: new URL(followingActor.uri),
         }),
         to: new URL(followingActor.uri),
-      })
+      }),
     );
 
-    logger.info("Unfollow request sent", {
+    logger.info('Unfollow request sent', {
       follower: followerActor.id,
       following: followingActor.id,
     });
 
     return c.redirect(`/remote-users/${followingActorId}`);
-  }
+  },
 );
 
 export const RemoteUsersRouter = app;

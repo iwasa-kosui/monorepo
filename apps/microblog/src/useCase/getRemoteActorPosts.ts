@@ -1,24 +1,24 @@
-import { Result } from "@iwasa-kosui/result";
-import z from "zod/v4";
+import { Result } from '@iwasa-kosui/result';
+import z from 'zod/v4';
 
-import { type ActorResolverById,PgActorResolverById } from "../adaptor/pg/actor/actorResolverById.ts";
-import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
-import { PgPostsResolverByActorIdWithPagination } from "../adaptor/pg/post/postsResolverByActorIdWithPagination.ts";
-import { ActorId } from "../domain/actor/actorId.ts";
-import type { RemoteActor } from "../domain/actor/remoteActor.ts";
-import type { FollowResolver } from "../domain/follow/follow.ts";
-import { Instant } from "../domain/instant/instant.ts";
-import type { PostsResolverByActorIdWithPagination,PostWithAuthor } from "../domain/post/post.ts";
-import { Schema } from "../helper/schema.ts";
-import { singleton } from "../helper/singleton.ts";
-import type { UseCase } from "./useCase.ts";
+import { type ActorResolverById, PgActorResolverById } from '../adaptor/pg/actor/actorResolverById.ts';
+import { PgFollowResolver } from '../adaptor/pg/follow/followResolver.ts';
+import { PgPostsResolverByActorIdWithPagination } from '../adaptor/pg/post/postsResolverByActorIdWithPagination.ts';
+import { ActorId } from '../domain/actor/actorId.ts';
+import type { RemoteActor } from '../domain/actor/remoteActor.ts';
+import type { FollowResolver } from '../domain/follow/follow.ts';
+import { Instant } from '../domain/instant/instant.ts';
+import type { PostsResolverByActorIdWithPagination, PostWithAuthor } from '../domain/post/post.ts';
+import { Schema } from '../helper/schema.ts';
+import { singleton } from '../helper/singleton.ts';
+import type { UseCase } from './useCase.ts';
 
 const Input = Schema.create(
   z.object({
     actorId: ActorId.zodType,
     currentUserActorId: z.optional(ActorId.zodType),
     createdAt: z.optional(Instant.zodType),
-  })
+  }),
 );
 type Input = z.infer<typeof Input.zodType>;
 

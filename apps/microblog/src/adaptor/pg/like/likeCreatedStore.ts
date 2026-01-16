@@ -1,12 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type {
-  LikeCreated,
-  LikeCreatedStore,
-} from "../../../domain/like/like.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, likesTable } from "../schema.ts";
+import type { LikeCreated, LikeCreatedStore } from '../../../domain/like/like.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, likesTable } from '../schema.ts';
 
 const store = async (event: LikeCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {

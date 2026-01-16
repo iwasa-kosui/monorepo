@@ -1,9 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type { SessionStarted, SessionStartedStore } from "../../../domain/session/session.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, sessionsTable } from "../schema.ts";
+import type { SessionStarted, SessionStartedStore } from '../../../domain/session/session.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, sessionsTable } from '../schema.ts';
 
 const store = async (event: SessionStarted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -24,7 +24,7 @@ const store = async (event: SessionStarted): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 const getInstance = singleton((): SessionStartedStore => ({
   store,
 }));

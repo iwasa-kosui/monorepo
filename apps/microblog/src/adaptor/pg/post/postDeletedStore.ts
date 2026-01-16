@@ -1,19 +1,10 @@
-import { RA } from "@iwasa-kosui/result";
-import { eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
 
-import type {
-  PostDeleted,
-  PostDeletedStore,
-} from "../../../domain/post/post.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import {
-  domainEventsTable,
-  localPostsTable,
-  postImagesTable,
-  postsTable,
-  remotePostsTable,
-} from "../schema.ts";
+import type { PostDeleted, PostDeletedStore } from '../../../domain/post/post.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, localPostsTable, postImagesTable, postsTable, remotePostsTable } from '../schema.ts';
 
 const store = async (event: PostDeleted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {

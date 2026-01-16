@@ -1,9 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type { PostCreated, PostCreatedStore, RemotePostCreated } from "../../../domain/post/post.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, localPostsTable, postsTable, remotePostsTable } from "../schema.ts";
+import type { PostCreated, PostCreatedStore, RemotePostCreated } from '../../../domain/post/post.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 const store = async (event: PostCreated | RemotePostCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -45,7 +45,7 @@ const store = async (event: PostCreated | RemotePostCreated): RA<void, never> =>
     });
   });
   return RA.ok(undefined);
-}
+};
 const getInstance = singleton((): PostCreatedStore => ({
   store,
 }));

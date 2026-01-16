@@ -4,17 +4,17 @@
  */
 export const getMimeTypeFromUrl = (url: string): string => {
   const lowerUrl = url.toLowerCase();
-  if (lowerUrl.endsWith(".png")) {
-    return "image/png";
+  if (lowerUrl.endsWith('.png')) {
+    return 'image/png';
   }
-  if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")) {
-    return "image/jpeg";
+  if (lowerUrl.endsWith('.jpg') || lowerUrl.endsWith('.jpeg')) {
+    return 'image/jpeg';
   }
-  if (lowerUrl.endsWith(".gif")) {
-    return "image/gif";
+  if (lowerUrl.endsWith('.gif')) {
+    return 'image/gif';
   }
-  if (lowerUrl.endsWith(".webp")) {
-    return "image/webp";
+  if (lowerUrl.endsWith('.webp')) {
+    return 'image/webp';
   }
-  return "application/octet-stream";
+  return 'application/octet-stream';
 };

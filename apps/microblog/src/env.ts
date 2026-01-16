@@ -1,6 +1,6 @@
-import z from "zod/v4";
+import z from 'zod/v4';
 
-import { singleton } from "./helper/singleton.ts";
+import { singleton } from './helper/singleton.ts';
 
 const baseSchema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -28,7 +28,7 @@ const create = (): Env => {
     throw new Error(`Invalid environment variables:\n${parsed.error.message}`);
   }
   return parsed.data;
-}
+};
 
 const getInstance = singleton(create);
 

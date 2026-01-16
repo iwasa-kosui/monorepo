@@ -1,13 +1,13 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type { UserPasswordSet, UserPasswordSetStore } from "../../../domain/password/userPassword.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, userPasswordsTable } from "../schema.ts";
+import type { UserPasswordSet, UserPasswordSetStore } from '../../../domain/password/userPassword.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, userPasswordsTable } from '../schema.ts';
 
 const store = async (event: UserPasswordSet): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    const { hashedPassword, userId } = event.aggregateState
+    const { hashedPassword, userId } = event.aggregateState;
     await tx.insert(userPasswordsTable).values({
       userId: userId,
       algorithm: hashedPassword.algorithm,
@@ -29,7 +29,7 @@ const store = async (event: UserPasswordSet): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = singleton((): UserPasswordSetStore => ({
   store,

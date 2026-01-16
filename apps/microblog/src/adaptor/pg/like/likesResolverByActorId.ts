@@ -1,10 +1,10 @@
-import { RA } from "@iwasa-kosui/result";
-import { eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
 
-import type { ActorId } from "../../../domain/actor/actorId.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { likesTable } from "../schema.ts";
+import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { likesTable } from '../schema.ts';
 
 export type LikesResolverByActorId = {
   resolve: (actorId: ActorId) => RA<ReadonlySet<string>, never>;

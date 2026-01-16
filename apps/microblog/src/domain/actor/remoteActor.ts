@@ -1,9 +1,9 @@
-import z from "zod/v4";
+import z from 'zod/v4';
 
-import type { Agg } from "../aggregate/index.ts";
-import { Instant } from "../instant/instant.ts";
-import { ActorId } from "./actorId.ts";
-import { ActorEvent } from "./aggregate.ts";
+import type { Agg } from '../aggregate/index.ts';
+import { Instant } from '../instant/instant.ts';
+import { ActorId } from './actorId.ts';
+import { ActorEvent } from './aggregate.ts';
 
 const zodType = z.object({
   id: ActorId.zodType,
@@ -15,7 +15,6 @@ const zodType = z.object({
   logoUri: z.string().optional(),
 }).describe('RemoteActor');
 
-
 export type RemoteActor = z.output<typeof zodType>;
 export type RemoteActorCreated = ActorEvent<RemoteActor, 'actor.created', {}>;
 export type RemoteActorCreatedStore = Agg.Store<RemoteActorCreated>;
@@ -23,9 +22,9 @@ export type RemoteActorCreatedStore = Agg.Store<RemoteActorCreated>;
 type CreateProps = Readonly<{
   uri: string;
   inboxUrl: string;
-  url?: string
-  username?: string
-  logoUri?: string
+  url?: string;
+  username?: string;
+  logoUri?: string;
 }>;
 const createRemoteActor = ({ uri, inboxUrl, url, username, logoUri }: CreateProps): RemoteActorCreated => {
   const remoteActor = {
@@ -36,15 +35,15 @@ const createRemoteActor = ({ uri, inboxUrl, url, username, logoUri }: CreateProp
     username,
     type: 'remote' as const,
     logoUri,
-  }
+  };
   return ActorEvent.create(
     remoteActor.id,
     remoteActor,
     'actor.created',
     {},
-    Instant.now()
-  )
-}
+    Instant.now(),
+  );
+};
 
 const getHandle = (remoteActor: RemoteActor): string | undefined => {
   const { username, url } = remoteActor;
@@ -53,7 +52,7 @@ const getHandle = (remoteActor: RemoteActor): string | undefined => {
   }
   const parsedUrl = new URL(url);
   return `${username}@${parsedUrl.host}`;
-}
+};
 
 export const RemoteActor = {
   zodType,

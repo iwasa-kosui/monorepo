@@ -1,5 +1,5 @@
-import { Result } from "@iwasa-kosui/result";
-import type { $ZodType } from "zod/v4/core";
+import { Result } from '@iwasa-kosui/result';
+import type { $ZodType } from 'zod/v4/core';
 
 type ParseError = Readonly<{
   kind: 'ParseError';
@@ -24,10 +24,10 @@ export type Schema<Output, Input> = Readonly<{
 export type InferSchema<SC> = SC extends Schema<infer Output, infer _Input> ? Output : never;
 
 const create = <Output, Input>(
-  zodType: $ZodType<Output, Input>
+  zodType: $ZodType<Output, Input>,
 ): Schema<Output, Input> => {
   const parse = (input: unknown): Result<Output, ParseError> => {
-    const result = zodType["~standard"].validate(input);
+    const result = zodType['~standard'].validate(input);
     if (result instanceof Promise) {
       throw new TypeError('Schema validation must be synchronous');
     }
@@ -36,7 +36,7 @@ const create = <Output, Input>(
       return Result.err(ParseError.create(messages));
     }
     return Result.ok(result.value);
-  }
+  };
 
   const parseOrThrow = (input: unknown): Output =>
     Result.flow(
@@ -46,14 +46,12 @@ const create = <Output, Input>(
         err: (error: ParseError) => {
           throw new Error(`ParseError: ${error.message}`);
         },
-      })
-    )
+      }),
+    );
 
-  const of = (input: Input): Result<Output, ParseError> =>
-    parse(input);
+  const of = (input: Input): Result<Output, ParseError> => parse(input);
 
-  const orThrow = (input: Input): Output =>
-    parseOrThrow(input);
+  const orThrow = (input: Input): Output => parseOrThrow(input);
 
   return {
     of,
@@ -62,7 +60,7 @@ const create = <Output, Input>(
     parse,
     zodType,
   };
-}
+};
 
 export const Schema = {
   create,

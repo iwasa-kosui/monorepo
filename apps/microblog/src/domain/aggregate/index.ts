@@ -1,1 +1,1 @@
-export * as Agg from './aggregate.ts'
+export * as Agg from './aggregate.ts';

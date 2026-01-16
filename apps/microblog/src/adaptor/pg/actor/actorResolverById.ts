@@ -1,14 +1,14 @@
-import { RA } from "@iwasa-kosui/result";
-import { eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
 
-import type { Actor } from "../../../domain/actor/actor.ts";
-import { ActorId } from "../../../domain/actor/actorId.ts";
-import type { RemoteActor } from "../../../domain/actor/remoteActor.ts";
-import type { Agg } from "../../../domain/aggregate/index.ts";
-import { UserId } from "../../../domain/user/userId.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { actorsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
+import type { Actor } from '../../../domain/actor/actor.ts';
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
+import type { Agg } from '../../../domain/aggregate/index.ts';
+import { UserId } from '../../../domain/user/userId.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { actorsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
 
 export type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
@@ -20,11 +20,11 @@ const getInstance = singleton((): ActorResolverById => {
       .from(actorsTable)
       .leftJoin(
         remoteActorsTable,
-        eq(actorsTable.actorId, remoteActorsTable.actorId)
+        eq(actorsTable.actorId, remoteActorsTable.actorId),
       )
       .leftJoin(
         localActorsTable,
-        eq(actorsTable.actorId, localActorsTable.actorId)
+        eq(actorsTable.actorId, localActorsTable.actorId),
       )
       .where(eq(actorsTable.actorId, actorId));
     if (!row) {
@@ -32,7 +32,7 @@ const getInstance = singleton((): ActorResolverById => {
     }
     if (rest.length > 0) {
       throw new Error(
-        `Multiple actors found with the same actorId: ${actorId}`
+        `Multiple actors found with the same actorId: ${actorId}`,
       );
     }
     if (row.remote_actors) {

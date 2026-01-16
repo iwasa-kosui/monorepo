@@ -1,9 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type { RemoteActorCreated, RemoteActorCreatedStore } from "../../../domain/actor/remoteActor.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { actorsTable, domainEventsTable, remoteActorsTable } from "../schema.ts";
+import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { actorsTable, domainEventsTable, remoteActorsTable } from '../schema.ts';
 
 const store = async (event: RemoteActorCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -30,7 +30,7 @@ const store = async (event: RemoteActorCreated): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = singleton((): RemoteActorCreatedStore => ({
   store,

@@ -1,8 +1,8 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import type { UserCreated, UserCreatedStore } from "../../../domain/user/createUser.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, usersTable } from "../schema.ts";
+import type { UserCreated, UserCreatedStore } from '../../../domain/user/createUser.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, usersTable } from '../schema.ts';
 
 const store = async (event: UserCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -21,7 +21,7 @@ const store = async (event: UserCreated): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = (): UserCreatedStore => ({
   store,

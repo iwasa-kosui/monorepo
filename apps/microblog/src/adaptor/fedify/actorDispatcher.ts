@@ -1,12 +1,12 @@
-import { Endpoints, Image, Person, type RequestContext } from "@fedify/fedify";
-import { RA } from "@iwasa-kosui/result";
-import { getLogger } from "@logtape/logtape";
+import { Endpoints, Image, Person, type RequestContext } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 
-import { Username } from "../../domain/user/username.ts";
-import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
+import { Username } from '../../domain/user/username.ts';
+import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 
 const getInstance = () => {
-  const useCase = GetUserProfileUseCase.getInstance()
+  const useCase = GetUserProfileUseCase.getInstance();
 
   const dispatch = (ctx: RequestContext<unknown>, identifier: string) =>
     RA.flow(
@@ -24,10 +24,12 @@ const getInstance = () => {
             endpoints: new Endpoints({
               sharedInbox: ctx.getInboxUri(),
             }),
-            icon: actor.logoUri ? new Image({
-              url: new URL(actor.logoUri),
-              mediaType: "image/png",
-            }) : undefined,
+            icon: actor.logoUri
+              ? new Image({
+                url: new URL(actor.logoUri),
+                mediaType: 'image/png',
+              })
+              : undefined,
             url: ctx.getActorUri(identifier),
             publicKey: keys.at(0)?.cryptographicKey,
             assertionMethods: keys.map((k) => k.multikey),
@@ -36,17 +38,17 @@ const getInstance = () => {
         },
         err: (err) => {
           getLogger().warn(
-            `Failed to resolve user for federation: ${identifier} - ${err}`
+            `Failed to resolve user for federation: ${identifier} - ${err}`,
           );
           return null;
         },
-      })
-    )
+      }),
+    );
 
   return {
     dispatch,
-  }
-}
+  };
+};
 
 export const ActorDispatcher = {
   getInstance,

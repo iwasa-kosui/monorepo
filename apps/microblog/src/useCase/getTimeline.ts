@@ -1,20 +1,18 @@
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
 
-import { Instant } from "../domain/instant/instant.ts";
-import {
-  SessionExpiredError,
-  type SessionResolver,
-} from "../domain/session/session.ts";
-import type { SessionId } from "../domain/session/sessionId.ts";
-import {
-  type User,
-  UserNotFoundError,
-  type UserResolver,
-} from "../domain/user/user.ts";
-import type { Actor, ActorResolverByUserId, ActorsResolverByFollowerId, ActorsResolverByFollowingId } from "./../domain/actor/actor.ts";
-import type { PostsResolverByActorIds, PostWithAuthor } from "./../domain/post/post.ts";
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
-import type { UseCase } from "./useCase.ts";
+import type {
+  Actor,
+  ActorResolverByUserId,
+  ActorsResolverByFollowerId,
+  ActorsResolverByFollowingId,
+} from './../domain/actor/actor.ts';
+import { Instant } from '../domain/instant/instant.ts';
+import type { PostsResolverByActorIds, PostWithAuthor } from './../domain/post/post.ts';
+import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
+import type { SessionId } from '../domain/session/sessionId.ts';
+import { type User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
+import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
@@ -58,12 +56,12 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind("session", ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind("user", ({ session }) => resolveUser(session.userId)),
-      RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind("following", ({ actor }) => actorsResolverByFollowerId.resolve(actor.id)),
-      RA.andBind("followers", ({ actor }) => actorsResolverByFollowingId.resolve(actor.id)),
-      RA.andBind("posts", async ({ actor, following }) => {
+      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
+      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind('following', ({ actor }) => actorsResolverByFollowerId.resolve(actor.id)),
+      RA.andBind('followers', ({ actor }) => actorsResolverByFollowingId.resolve(actor.id)),
+      RA.andBind('posts', async ({ actor, following }) => {
         const actorIds = [actor.id, ...following.map((a) => a.id)];
         return postsResolverByActorIds.resolve({
           actorIds,

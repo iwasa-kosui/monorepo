@@ -1,32 +1,32 @@
-import { sValidator } from "@hono/standard-validator";
-import { RA } from "@iwasa-kosui/result";
-import { Hono } from "hono";
-import { getCookie } from "hono/cookie";
-import { marked } from "marked";
-import z from "zod/v4";
+import { sValidator } from '@hono/standard-validator';
+import { RA } from '@iwasa-kosui/result';
+import { Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
+import { marked } from 'marked';
+import z from 'zod/v4';
 
-import { SessionId } from "../../domain/session/sessionId.ts";
-import { Federation } from "../../federation.ts";
-import { Layout } from "../../layout.tsx";
-import { CreatePostUseCase } from "../../useCase/createPost.ts";
-import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
-import { PgPostImageCreatedStore } from "../pg/image/postImageCreatedStore.ts";
-import { PgPostCreatedStore } from "../pg/post/postCreatedStore.ts";
-import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
-import { PgUserResolver } from "../pg/user/userResolver.ts";
+import { SessionId } from '../../domain/session/sessionId.ts';
+import { Federation } from '../../federation.ts';
+import { Layout } from '../../layout.tsx';
+import { CreatePostUseCase } from '../../useCase/createPost.ts';
+import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
+import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
+import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
+import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgUserResolver } from '../pg/user/userResolver.ts';
 
 const app = new Hono();
 app.post(
-  "/",
+  '/',
   sValidator(
-    "form",
+    'form',
     z.object({
       content: z
         .string()
         .min(1)
         .transform((s) => marked.parse(s, { async: false })),
-      imageUrls: z.optional(z.string().transform((s) => s ? s.split(",").filter(Boolean) : [])),
-    })
+      imageUrls: z.optional(z.string().transform((s) => s ? s.split(',').filter(Boolean) : [])),
+    }),
   ),
   async (c) => {
     const useCase = CreatePostUseCase.create({
@@ -36,7 +36,7 @@ app.post(
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
     });
-    const sessionId = getCookie(c, "sessionId");
+    const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {
       return c.html(
         <Layout>
@@ -44,10 +44,10 @@ app.post(
             <h1>Error</h1>
             <p>Please sign in to create a post.</p>
           </section>
-        </Layout>
+        </Layout>,
       );
     }
-    const form = await c.req.valid("form");
+    const form = await c.req.valid('form');
     const content = form.content;
     const imageUrls = form.imageUrls ?? [];
     return RA.flow(
@@ -59,7 +59,7 @@ app.post(
       }),
       RA.match({
         ok: () => {
-          return c.redirect("/");
+          return c.redirect('/');
         },
         err: (err) => {
           return c.html(
@@ -68,12 +68,12 @@ app.post(
                 <h1>Error</h1>
                 <p>{String(JSON.stringify(err))}</p>
               </section>
-            </Layout>
+            </Layout>,
           );
         },
-      })
+      }),
     );
-  }
+  },
 );
 
 export const PostsRouter = app;

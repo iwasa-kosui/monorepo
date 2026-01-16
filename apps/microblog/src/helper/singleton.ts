@@ -1,4 +1,4 @@
-export const singleton = <T>(factory: () => T): (() => T) => {
+export const singleton = <T>(factory: () => T): () => T => {
   let instance: T | null = null;
   return () => {
     if (instance === null) {
@@ -6,4 +6,4 @@ export const singleton = <T>(factory: () => T): (() => T) => {
     }
     return instance;
   };
-}
+};

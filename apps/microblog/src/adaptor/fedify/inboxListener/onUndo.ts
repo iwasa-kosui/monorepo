@@ -1,14 +1,14 @@
-import { Follow, type InboxContext,Undo } from "@fedify/fedify";
-import { RA } from "@iwasa-kosui/result";
-import { getLogger } from "@logtape/logtape";
+import { Follow, type InboxContext, Undo } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 
-import { Username } from "../../../domain/user/username.ts";
-import { AcceptUnfollowUseCase } from "../../../useCase/acceptUnfollow.ts";
-import { PgActorResolverByUri } from "../../pg/actor/actorResolverByUri.ts";
-import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts";
-import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
-import { PgUnfollowedStore } from "../../pg/follow/undoFollowingProcessedStore.ts";
-import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
+import { Username } from '../../../domain/user/username.ts';
+import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
+import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
+import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
+import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
+import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
+import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 
 export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
   const object = await undo.getObject();
@@ -16,7 +16,7 @@ export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
   const actorId = undo.actorId;
   if (actorId == null || object.objectId == null) return;
   const parsed = ctx.parseUri(object.objectId);
-  if (parsed == null || parsed.type !== "actor") return;
+  if (parsed == null || parsed.type !== 'actor') return;
 
   const useCase = AcceptUnfollowUseCase.create({
     unfollowedStore: PgUnfollowedStore.getInstance(),
@@ -40,14 +40,14 @@ export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
     RA.match({
       ok: () => {
         getLogger().info(
-          `Processed Undo Follow from ${actorId.href} for ${object.objectId?.href}`
+          `Processed Undo Follow from ${actorId.href} for ${object.objectId?.href}`,
         );
       },
       err: (err) => {
         getLogger().warn(
-          `Failed to process Undo Follow from ${actorId.href} for ${object.objectId?.href} - ${err}`
+          `Failed to process Undo Follow from ${actorId.href} for ${object.objectId?.href} - ${err}`,
         );
       },
-    })
+    }),
   );
 };

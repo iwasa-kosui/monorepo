@@ -1,12 +1,12 @@
-import { RA } from "@iwasa-kosui/result";
-import { desc, eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { desc, eq } from 'drizzle-orm';
 
-import type { ActorId } from "../../../domain/actor/actorId.ts";
-import { Post, type PostsResolverByActorId } from "../../../domain/post/post.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { localPostsTable, postsTable, remotePostsTable } from "../schema.ts";
+import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { Post, type PostsResolverByActorId } from '../../../domain/post/post.ts';
 import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 const getInstance = singleton((): PostsResolverByActorId => {
   const resolve = async (actorId: ActorId) => {
@@ -14,11 +14,11 @@ const getInstance = singleton((): PostsResolverByActorId => {
       .from(postsTable)
       .leftJoin(
         localPostsTable,
-        eq(postsTable.postId, localPostsTable.postId)
+        eq(postsTable.postId, localPostsTable.postId),
       )
       .leftJoin(
         remotePostsTable,
-        eq(postsTable.postId, remotePostsTable.postId)
+        eq(postsTable.postId, remotePostsTable.postId),
       )
       .where(eq(postsTable.actorId, actorId))
       .limit(10)
@@ -48,10 +48,10 @@ const getInstance = singleton((): PostsResolverByActorId => {
         return post;
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);
-    }))
-  }
+    }));
+  };
   return { resolve };
-})
+});
 
 export const PgPostsResolverByActorId = {
   getInstance,

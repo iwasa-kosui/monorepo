@@ -1,13 +1,13 @@
-import { RA } from "@iwasa-kosui/result";
-import { eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
 
-import type { Actor, ActorResolverByUserId } from "../../../domain/actor/actor.ts";
-import { ActorId } from "../../../domain/actor/actorId.ts";
-import type { LocalActor } from "../../../domain/actor/localActor.ts";
-import { UserId } from "../../../domain/user/userId.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { actorsTable, localActorsTable } from "../schema.ts";
+import type { Actor, ActorResolverByUserId } from '../../../domain/actor/actor.ts';
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import type { LocalActor } from '../../../domain/actor/localActor.ts';
+import { UserId } from '../../../domain/user/userId.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { actorsTable, localActorsTable } from '../schema.ts';
 
 const getInstance = singleton((): ActorResolverByUserId => {
   const resolve = async (userId: UserId): RA<LocalActor | undefined, never> => {
@@ -17,7 +17,7 @@ const getInstance = singleton((): ActorResolverByUserId => {
       .from(actorsTable)
       .leftJoin(
         localActorsTable,
-        eq(actorsTable.actorId, localActorsTable.actorId)
+        eq(actorsTable.actorId, localActorsTable.actorId),
       )
       .where(eq(localActorsTable.userId, userId));
     if (!row) {
@@ -25,7 +25,7 @@ const getInstance = singleton((): ActorResolverByUserId => {
     }
     if (rest.length > 0) {
       throw new Error(
-        `Multiple actors found with the same userId: ${userId}`
+        `Multiple actors found with the same userId: ${userId}`,
       );
     }
     if (row.local_actors) {

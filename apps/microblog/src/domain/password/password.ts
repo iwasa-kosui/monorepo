@@ -1,7 +1,7 @@
 import { argon2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { z } from "zod/v4";
+import { z } from 'zod/v4';
 
-import { Schema } from "../../helper/schema.ts";
+import { Schema } from '../../helper/schema.ts';
 
 export const PasswordSym = Symbol('Password');
 const zodType = z.string().min(16).max(255).brand(PasswordSym).describe('Password');
@@ -39,7 +39,8 @@ const hashPassword = (password: Password) => {
       tagLength: CONFIG.tagLength,
       memory: CONFIG.memory,
       passes: CONFIG.passes,
-    });
+    },
+  );
   return {
     algorithm: CONFIG.algorithm,
     parallelism: CONFIG.parallelism,
@@ -49,7 +50,7 @@ const hashPassword = (password: Password) => {
     nonceHex: nonce.toString('hex'),
     tagHex: tag.toString('hex'),
   };
-}
+};
 
 const verifyPassword = (stored: HashedPassword, password: Password) => {
   const nonce = Buffer.from(stored.nonceHex, 'hex');
@@ -63,8 +64,7 @@ const verifyPassword = (stored: HashedPassword, password: Password) => {
     passes: stored.passes,
   });
   return timingSafeEqual(expected, actual);
-}
-
+};
 
 export const Password = {
   ...schema,

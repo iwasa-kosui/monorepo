@@ -1,6 +1,6 @@
-import { z } from "zod/v4";
+import { z } from 'zod/v4';
 
-import { Schema } from "../../helper/schema.ts";
+import { Schema } from '../../helper/schema.ts';
 
 export const UsernameSym = Symbol('Username');
 const zodType = z.string().min(1).max(255).brand(UsernameSym).describe('Username');

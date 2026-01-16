@@ -1,7 +1,7 @@
-import type { PostImage, PostImageCreatedStore } from "../../../domain/image/image.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { postImagesTable } from "../schema.ts";
+import type { PostImage, PostImageCreatedStore } from '../../../domain/image/image.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { postImagesTable } from '../schema.ts';
 
 const store = async (images: PostImage[]): Promise<void> => {
   if (images.length === 0) return;
@@ -13,7 +13,7 @@ const store = async (images: PostImage[]): Promise<void> => {
       url: image.url,
       altText: image.altText,
       createdAt: new Date(image.createdAt),
-    }))
+    })),
   );
 };
 

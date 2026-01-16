@@ -1,11 +1,11 @@
-import { Result } from "@iwasa-kosui/result";
-import z from "zod/v4";
+import { Result } from '@iwasa-kosui/result';
+import z from 'zod/v4';
 
-import { type InferSchema,Schema } from "../../helper/schema.ts";
-import { Agg } from "../aggregate/index.ts";
-import { createUser } from "./createUser.ts";
-import { UserId } from "./userId.ts";
-import { Username } from "./username.ts";
+import { type InferSchema, Schema } from '../../helper/schema.ts';
+import { Agg } from '../aggregate/index.ts';
+import { createUser } from './createUser.ts';
+import { UserId } from './userId.ts';
+import { Username } from './username.ts';
 
 const schema = Schema.create(z.object({
   id: UserId.zodType,
@@ -17,11 +17,11 @@ export type User = InferSchema<typeof schema>;
 const checkIfUsernameAcceptable = (username: Username): Result<void, UnacceptableUsernameError> => {
   if (username !== 'kosui') {
     return Result.err(
-      UnacceptableUsernameError.create(username, 'Only "kosui" is acceptable as username for now.')
+      UnacceptableUsernameError.create(username, 'Only "kosui" is acceptable as username for now.'),
     );
   }
   return Result.ok(undefined);
-}
+};
 
 export const User = {
   ...schema,
@@ -35,7 +35,7 @@ export type UnacceptableUsernameError = Readonly<{
   detail: {
     username: Username;
     reason: string;
-  }
+  };
 }>;
 
 export const UnacceptableUsernameError = {
@@ -51,7 +51,7 @@ export type UsernameAlreadyTakenError = Readonly<{
   message: string;
   detail: {
     username: Username;
-  }
+  };
 }>;
 
 export const UsernameAlreadyTakenError = {
@@ -69,7 +69,7 @@ export type UserNotFoundError = Readonly<{
     username: Username;
   } | {
     userId: UserId;
-  }
+  };
 }>;
 
 export const UserNotFoundError = {
@@ -82,5 +82,5 @@ export const UserNotFoundError = {
   }),
 } as const;
 
-export type UserResolver = Agg.Resolver<UserId, User | undefined>
-export type UserResolverByUsername = Agg.Resolver<Username, User | undefined>
+export type UserResolver = Agg.Resolver<UserId, User | undefined>;
+export type UserResolverByUsername = Agg.Resolver<Username, User | undefined>;
