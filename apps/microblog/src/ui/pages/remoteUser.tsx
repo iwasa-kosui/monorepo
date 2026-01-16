@@ -157,6 +157,7 @@ const App = () => {
         remoteActor: RemoteActor;
         posts: readonly PostWithAuthor[];
         isFollowing: boolean;
+        isLoggedIn: boolean;
       }
     | null
   >(null);
@@ -231,15 +232,12 @@ const App = () => {
     return <div class="text-red-500">Error: {data.error}</div>;
   }
 
-  // Check if user is logged in based on whether the session cookie exists
-  const isLoggedIn = document.cookie.includes("sessionId");
-
   return (
     <RemoteUserPage
       remoteActor={data.remoteActor}
       posts={data.posts}
       isFollowing={data.isFollowing}
-      isLoggedIn={isLoggedIn}
+      isLoggedIn={data.isLoggedIn}
       fetchData={fetchData}
       onLike={handleLike}
       likingPostUri={likingPostUri}

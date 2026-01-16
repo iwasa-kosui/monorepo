@@ -293,6 +293,7 @@ const app = new Hono()
             return c.json({
               remoteActor,
               isFollowing,
+              isLoggedIn: true,
               posts: posts.map((post) => ({
                 ...post,
                 content: sanitize(post.content),
