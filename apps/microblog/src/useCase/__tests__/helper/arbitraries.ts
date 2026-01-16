@@ -2,7 +2,10 @@ import fc from 'fast-check';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { LocalActor } from '../../../domain/actor/localActor.ts';
+import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
+import type { Instant } from '../../../domain/instant/instant.ts';
 import type { HashedPassword, Password } from '../../../domain/password/password.ts';
+import type { LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { Session } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
@@ -82,3 +85,39 @@ export const arbValidSession = (userId?: UserId): fc.Arbitrary<Session> => {
 };
 
 export const arbImageUrls = (): fc.Arbitrary<string[]> => fc.array(arbImageUrl(), { minLength: 0, maxLength: 4 });
+
+export const arbRemoteActor = (): fc.Arbitrary<RemoteActor> =>
+  fc.record({
+    id: arbActorId(),
+    uri: fc.webUrl().map((url) => `${url}/users/remote`),
+    inboxUrl: fc.webUrl().map((url) => `${url}/inbox`),
+    type: fc.constant('remote' as const),
+    username: fc.option(
+      fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'), { minLength: 1, maxLength: 20 }),
+      {
+        nil: undefined,
+      },
+    ),
+    url: fc.option(fc.webUrl(), { nil: undefined }),
+    logoUri: fc.option(fc.webUrl(), { nil: undefined }),
+  }) as fc.Arbitrary<RemoteActor>;
+
+export const arbLocalPost = (actorId?: ActorId, userId?: UserId): fc.Arbitrary<LocalPost> =>
+  fc.record({
+    type: fc.constant('local' as const),
+    postId: arbPostId(),
+    actorId: actorId ? fc.constant(actorId) : arbActorId(),
+    content: arbContent(),
+    createdAt: fc.integer({ min: 0, max: Date.now() }).map((n) => n as Instant),
+    userId: userId ? fc.constant(userId) : arbUserId(),
+  }) as fc.Arbitrary<LocalPost>;
+
+export const arbRemotePost = (actorId?: ActorId): fc.Arbitrary<RemotePost> =>
+  fc.record({
+    type: fc.constant('remote' as const),
+    postId: arbPostId(),
+    actorId: actorId ? fc.constant(actorId) : arbActorId(),
+    content: arbContent(),
+    createdAt: fc.integer({ min: 0, max: Date.now() }).map((n) => n as Instant),
+    uri: fc.webUrl().map((url) => `${url}/posts/${crypto.randomUUID()}`),
+  }) as fc.Arbitrary<RemotePost>;

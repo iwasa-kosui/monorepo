@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
+import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
@@ -49,6 +50,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+    actorResolverByUri: PgActorResolverByUri.getInstance(),
   });
 
   return RA.flow(

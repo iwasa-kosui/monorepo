@@ -42,6 +42,7 @@ const create = ({
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUserId,
+  actorResolverByUri,
 }: Deps): CreateUserUseCase => {
   const run = async (input: Input) =>
     RA.flow(
@@ -67,6 +68,7 @@ const create = ({
           now: Instant.now(),
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          actorResolverByUri,
         })(follower)),
       RA.andThen(({ username, followingActor, followerActor }) => {
         if (!followingActor) {

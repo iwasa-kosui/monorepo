@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { Actor } from '../domain/actor/actor.ts';
+import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
@@ -44,6 +44,7 @@ type Deps = Readonly<{
   postImageCreatedStore: PostImageCreatedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  actorResolverByUri: ActorResolverByUri;
 }>;
 
 const create = ({
@@ -51,6 +52,7 @@ const create = ({
   postImageCreatedStore,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  actorResolverByUri,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -62,6 +64,7 @@ const create = ({
           now,
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          actorResolverByUri,
         })(actorIdentity)),
       RA.andBind('post', ({ actor, content, uri }) => {
         const createPost = Post.createRemotePost(now)({
