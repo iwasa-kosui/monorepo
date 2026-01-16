@@ -14,13 +14,30 @@ import {
 import type { UseCase } from "./useCase.ts";
 import { Instant } from "../domain/instant/instant.ts";
 import { RA } from "@iwasa-kosui/result";
-import { Create, Note, type RequestContext } from "@fedify/fedify";
+import {
+  Create,
+  Document,
+  Link,
+  Note,
+  type RequestContext,
+} from "@fedify/fedify";
 import type { Actor, ActorResolverByUserId } from "../domain/actor/actor.ts";
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
+import {
+  resolveLocalActorWith,
+  resolveSessionWith,
+  resolveUserWith,
+} from "./helper/resolve.ts";
+import type {
+  PostImageCreatedStore,
+  PostImage,
+} from "../domain/image/image.ts";
+import { ImageId } from "../domain/image/imageId.ts";
+import { Env } from "../env.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;
   content: string;
+  imageUrls: string[];
   ctx: RequestContext<unknown>;
 }>;
 
@@ -41,6 +58,7 @@ type Deps = Readonly<{
   postCreatedStore: PostCreatedStore;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
+  postImageCreatedStore: PostImageCreatedStore;
 }>;
 
 const create = ({
@@ -48,6 +66,7 @@ const create = ({
   postCreatedStore,
   userResolver,
   actorResolverByUserId,
+  postImageCreatedStore,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -61,7 +80,6 @@ const create = ({
       RA.andBind("user", ({ session }) => resolveUser(session.userId)),
       RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
       RA.andBind("postEvent", ({ actor, content }) => {
-
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
@@ -71,7 +89,21 @@ const create = ({
       }),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
       RA.bind("post", ({ postEvent }) => postEvent.aggregateState),
-      RA.andThrough(async ({ post, user, ctx }) => {
+      RA.andBind("images", async ({ post, imageUrls }) => {
+        if (imageUrls.length > 0) {
+          const images: PostImage[] = imageUrls.map((url) => ({
+            imageId: ImageId.generate(),
+            postId: post.postId,
+            url,
+            altText: null,
+            createdAt: now,
+          }));
+          await postImageCreatedStore.store(images);
+          return RA.ok(images);
+        }
+        return RA.ok([]);
+      }),
+      RA.andThrough(async ({ post, user, ctx, imageUrls, images }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);
         await ctx.sendActivity(
@@ -83,11 +115,24 @@ const create = ({
             actors: note?.attributionIds,
             tos: note?.toIds,
             ccs: note?.ccIds,
-          }),
+            attachments: images.map(
+              (image) =>
+                new Document({
+                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                  mediaType: image.url.endsWith(".png")
+                    ? "image/png"
+                    : image.url.endsWith(".jpg") || image.url.endsWith(".jpeg")
+                      ? "image/jpeg"
+                      : image.url.endsWith(".gif")
+                        ? "image/gif"
+                        : "application/octet-stream",
+                })
+            ),
+          })
         );
         return RA.ok(undefined);
       }),
-      RA.map(({ post, user }) => ({ post, user })),
+      RA.map(({ post, user }) => ({ post, user }))
     );
 
   return { run };

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Result } from "./index.js";
-import { flow } from "@iwasa-kosui/pipe/src/flow.js";
-import { pipe } from "@iwasa-kosui/pipe/src/pipe.js";
+import { Result, flow, pipe } from "./index.js";
 
 describe("Result", () => {
   describe("ok", () => {

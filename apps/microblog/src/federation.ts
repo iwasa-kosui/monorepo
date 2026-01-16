@@ -1,6 +1,7 @@
 import {
   Create,
   createFederation,
+  Delete,
   Follow,
   Like,
   Note,
@@ -37,6 +38,7 @@ const create = () => {
     .on(Follow, inboxListener.onFollow)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
+    .on(Delete, inboxListener.onDelete)
 
   federation.setObjectDispatcher(
     Note,

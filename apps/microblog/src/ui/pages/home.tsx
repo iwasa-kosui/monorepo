@@ -4,12 +4,13 @@ import type { PostWithAuthor } from "../../domain/post/post.ts";
 import type { User } from "../../domain/user/user.ts";
 import { ActorLink } from "../components/ActorLink.tsx";
 import { Modal } from "../components/Modal.tsx";
+import { PostForm } from "../components/PostForm.tsx";
 import { PostView } from "../components/PostView.tsx";
 import { render } from "hono/jsx/dom";
 import { hc } from "hono/client";
-import type { getHomeApiRouter } from "../../adaptor/routes/homeRouter.tsx";
+import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 
-const client = hc<typeof getHomeApiRouter>("/");
+const client = hc<APIRouterType>("/api");
 
 type Props = Readonly<{
   user: User;
@@ -18,6 +19,10 @@ type Props = Readonly<{
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
   fetchData: (createdAt: string | undefined) => Promise<void>;
+  onLike: (objectUri: string) => Promise<void>;
+  likingPostUri: string | null;
+  onDelete: (postId: string) => Promise<void>;
+  deletingPostId: string | null;
 }>;
 
 export const HomePage = ({
@@ -27,6 +32,10 @@ export const HomePage = ({
   followers,
   following,
   fetchData,
+  onLike,
+  likingPostUri,
+  onDelete,
+  deletingPostId,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -176,32 +185,7 @@ export const HomePage = ({
           </div>
         </section>
 
-        <form
-          id="post"
-          method="post"
-          action="/posts"
-          class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4"
-        >
-          <textarea
-            name="content"
-            rows={4}
-            placeholder="What's on your mind?"
-            required
-            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-          <div
-            class="mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5"
-            id="post-preview"
-          />
-          <div class="mt-3 flex justify-end">
-            <button
-              type="submit"
-              class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-            >
-              Post
-            </button>
-          </div>
-        </form>
+        <PostForm id="post" />
       </section>
       <a
         class="rounded-full p-4 bg-gray-600 hover:bg-gray-500 text-white block fixed bottom-8 right-8 shadow-lg transition-colors"
@@ -222,38 +206,8 @@ export const HomePage = ({
           />
         </svg>
       </a>
-      <Modal
-        id="post-modal"
-        showCloseButton={false}
-        actions={
-          <a href="#" class="text-blue-500 hover:underline">
-            <button
-              onClick={() => {
-                const form = document.getElementById(
-                  "post-modal-form"
-                ) as HTMLFormElement | null;
-                form?.submit();
-              }}
-              class="mt-4 px-4 py-2 text-white rounded-lg bg-blue-700 hover:bg-blue-600 transition-colors"
-            >
-              Post
-            </button>
-          </a>
-        }
-      >
-        <form method="post" action="/posts" id="post-modal-form">
-          <textarea
-            name="content"
-            rows={4}
-            placeholder="What's on your mind?"
-            required
-            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-          <div
-            class="mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5"
-            id="post-modal-preview"
-          />
-        </form>
+      <Modal id="post-modal" showCloseButton={false}>
+        <PostForm formId="post-modal-form" />
       </Modal>
       <div class="hidden target:block" id="update-bio">
         <form method="post" class="mb-4" action={`/users/${user.username}`}>
@@ -282,46 +236,25 @@ export const HomePage = ({
       </div>
       <section class="space-y-4">
         {posts.map((post) => (
-          <PostView post={post} />
+          <PostView
+            post={post}
+            onLike={onLike}
+            isLiking={post.type === "remote" && "uri" in post && likingPostUri === post.uri}
+            onDelete={onDelete}
+            isDeleting={deletingPostId === post.postId}
+            currentUserId={user.id}
+          />
         ))}
       </section>
       <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-        document.addEventListener('DOMContentLoaded', () => {
-          const textarea = document.querySelector('#post-modal textarea');
-          const preview = document.getElementById('post-modal-preview');
-          textarea.oninput = (e) => {
-            console.log(e.target.value);
-            const rawHtml = marked.parse(e.target.value, { async: false });
-            preview.innerHTML = rawHtml;
-          };
-        });
-      `,
-        }}
-      />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-        document.addEventListener('DOMContentLoaded', () => {
-          const textarea = document.querySelector('#post textarea');
-          const preview = document.getElementById('post-preview');
-          textarea.oninput = (e) => {
-            console.log(e.target.value);
-            const rawHtml = marked.parse(e.target.value, { async: false });
-            preview.innerHTML = rawHtml;
-          };
-        });
-      `,
-        }}
-      />
     </>
   );
 };
 
 const App = () => {
   const [init, setInit] = useState(false);
+  const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -334,7 +267,7 @@ const App = () => {
     | null
   >(null);
   const fetchData = async (createdAt: string | undefined) => {
-    const res = await client.api.v1.home.$get({
+    const res = await client.v1.home.$get({
       query: { createdAt },
     });
     const latest = await res.json();
@@ -347,6 +280,63 @@ const App = () => {
       setData(latest);
     }
   };
+
+  const handleLike = async (objectUri: string) => {
+    setLikingPostUri(objectUri);
+    try {
+      const res = await client.v1.like.$post({
+        json: { objectUri },
+      });
+      const result = await res.json();
+      if ("success" in result && result.success) {
+        // Update the post's liked status in the local state
+        if (data && !("error" in data)) {
+          setData({
+            ...data,
+            posts: data.posts.map((post) =>
+              post.type === "remote" && "uri" in post && post.uri === objectUri
+                ? { ...post, liked: true }
+                : post
+            ),
+          });
+        }
+      } else if ("error" in result) {
+        console.error("Failed to like:", result.error);
+      }
+    } catch (error) {
+      console.error("Failed to like:", error);
+    } finally {
+      setLikingPostUri(null);
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    setDeletingPostId(postId);
+    try {
+      const res = await client.v1.posts[":postId"].$delete({
+        param: { postId },
+      });
+      const result = await res.json();
+      if ("success" in result && result.success) {
+        // Remove the post from the local state
+        if (data && !("error" in data)) {
+          setData({
+            ...data,
+            posts: data.posts.filter((post) => post.postId !== postId),
+          });
+        }
+      } else if ("error" in result) {
+        console.error("Failed to delete:", result.error);
+        alert(`Failed to delete: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      alert("Failed to delete the post. Please try again.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -367,6 +357,10 @@ const App = () => {
       followers={data.followers}
       following={data.following}
       fetchData={fetchData}
+      onLike={handleLike}
+      likingPostUri={likingPostUri}
+      onDelete={handleDelete}
+      deletingPostId={deletingPostId}
     />
   );
 };

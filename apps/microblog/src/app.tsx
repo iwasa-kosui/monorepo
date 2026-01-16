@@ -8,6 +8,8 @@ import { PostsRouter } from "./adaptor/routes/postsRouter.tsx";
 import { FollowRouter } from "./adaptor/routes/followRouter.tsx";
 import { HomeRouter } from "./adaptor/routes/homeRouter.tsx";
 import { RemoteUsersRouter } from "./adaptor/routes/remoteUsersRouter.tsx";
+import { LikeRouter } from "./adaptor/routes/likeRouter.tsx";
+import { APIRouter } from "./adaptor/routes/apiRouter.tsx";
 import { serveStatic } from "@hono/node-server/serve-static";
 
 const app = new Hono();
@@ -22,10 +24,12 @@ app.get("/authorize_interaction", (c) => {
 });
 app.get("/health", (c) => c.text("OK"));
 app.route("/", HomeRouter);
+app.route("/api", APIRouter);
 app.route("/users", UsersRouter);
 app.route("/remote-users", RemoteUsersRouter);
 app.route("/posts", PostsRouter);
 app.route("/sign-up", SignUpRouter);
 app.route("/sign-in", SignInRouter);
 app.route("/follow", FollowRouter);
+app.route("/like", LikeRouter);
 export default app;

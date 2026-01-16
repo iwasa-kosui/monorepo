@@ -24,6 +24,7 @@ import { Instant } from "../../domain/instant/instant.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
 import { Actor } from "../../domain/actor/actor.ts";
 import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
+import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
 
 const app = new Hono();
 
@@ -155,33 +156,99 @@ app.get(
     const { username, postId } = c.req.valid("param");
     const useCase = GetPostUseCase.create({
       postResolver: PgPostResolver.getInstance(),
+      postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
     });
 
+    // Helper function to extract plain text from HTML for OGP description
+    const extractDescription = (
+      html: string,
+      maxLength: number = 150
+    ): string => {
+      const text = html
+        .replace(/<[^>]*>/g, "") // Remove HTML tags
+        .replace(/&nbsp;/g, " ") // Replace &nbsp;
+        .replace(/&amp;/g, "&") // Replace &amp;
+        .replace(/&lt;/g, "<") // Replace &lt;
+        .replace(/&gt;/g, ">") // Replace &gt;
+        .replace(/&quot;/g, '"') // Replace &quot;
+        .replace(/\s+/g, " ") // Normalize whitespace
+        .trim();
+      return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+    };
+
     return RA.flow(
-      useCase.run({ postId }),
+      RA.ok({ postId }),
+      RA.andThen(({ postId }) => useCase.run({ postId })),
       RA.match({
-        ok: (post) => {
+        ok: ({ post, postImages }) => {
+          const url = new URL(c.req.url);
+          const postUrl = `${url.origin}/users/${username}/posts/${post.postId}`;
+          const description = extractDescription(post.content);
+          const sanitizedContent = sanitize(post.content);
+
           return c.html(
-            <Layout>
+            <Layout
+              ogp={{
+                title: `@${username}の投稿`,
+                description,
+                url: postUrl,
+                type: "article",
+                author: String(username),
+                publishedTime: new Date(post.createdAt).toISOString(),
+                image: postImages.length > 0 ? postImages[0].url : undefined,
+              }}
+            >
               <section>
                 <h2>
-                  <a href={`/users/${username}`} class="secondary">
-                    {String(username)}
+                  <a
+                    href={`/users/${username}`}
+                    class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    @{String(username)}
                   </a>
                 </h2>
-                <article>
+                <article class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-4">
                   <div
+                    class="text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400"
                     dangerouslySetInnerHTML={{
-                      __html: sanitize(post.content),
+                      __html: sanitizedContent,
                     }}
                   />
-                  <footer>
-                    <a
-                      href={`/users/${username}/posts/${post.postId}`}
-                      class="secondary"
+                  {postImages.length > 0 && (
+                    <div
+                      class={`mt-4 grid gap-2 ${
+                        postImages.length === 1
+                          ? "grid-cols-1"
+                          : postImages.length === 2
+                          ? "grid-cols-2"
+                          : "grid-cols-2 md:grid-cols-3"
+                      }`}
+                    >
+                      {postImages.map((image, index) => (
+                        <a
+                          key={index}
+                          href={image.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="block overflow-hidden rounded-lg"
+                        >
+                          <img
+                            src={image.url}
+                            alt={image.altText || "Post image"}
+                            class="w-full h-auto max-h-96 object-cover hover:opacity-90 transition-opacity"
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <footer class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <time
+                      dateTime={new Date(post.createdAt).toISOString()}
+                      class="text-sm text-gray-500 dark:text-gray-400"
                     >
                       {new Date(post.createdAt).toLocaleString()}
-                    </a>
+                    </time>
                   </footer>
                 </article>
               </section>

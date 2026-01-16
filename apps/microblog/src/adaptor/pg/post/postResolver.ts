@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { LocalPost, Post, RemotePost, type PostResolver } from "../../../domain/post/post.ts";
 import type { PostId } from "../../../domain/post/postId.ts";
 import { singleton } from "../../../helper/singleton.ts";
@@ -18,7 +18,7 @@ const getInstance = singleton((): PostResolver => {
         remotePostsTable,
         eq(postsTable.postId, remotePostsTable.postId)
       )
-      .where(eq(postsTable.postId, postId))
+      .where(and(eq(postsTable.postId, postId), isNull(postsTable.deletedAt)))
       .execute();
 
     if (!row) {
