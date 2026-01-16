@@ -3,10 +3,10 @@ import { desc, eq } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Post, type PostsResolverByActorId } from '../../../domain/post/post.ts';
-import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
+import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
 
 const getInstance = singleton((): PostsResolverByActorId => {
   const resolve = async (actorId: ActorId) => {

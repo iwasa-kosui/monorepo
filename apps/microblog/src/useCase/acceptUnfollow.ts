@@ -15,8 +15,8 @@ import {
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { UserNotFoundError } from '../domain/user/user.ts';
-import type { UserResolverByUsername } from './../domain/user/user.ts';
 import type { Username } from '../domain/user/username.ts';
+import type { UserResolverByUsername } from './../domain/user/user.ts';
 import { resolveUserByUsernameWith } from './helper/resolve.ts';
 import { resolveLocalActorWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';

@@ -16,7 +16,7 @@ const zodType = z.object({
 }).describe('RemoteActor');
 
 export type RemoteActor = z.output<typeof zodType>;
-export type RemoteActorCreated = ActorEvent<RemoteActor, 'actor.created', {}>;
+export type RemoteActorCreated = ActorEvent<RemoteActor, 'actor.created', Record<never, never>>;
 export type RemoteActorCreatedStore = Agg.Store<RemoteActorCreated>;
 
 type CreateProps = Readonly<{

@@ -6,7 +6,6 @@ import { LocalActor } from '../domain/actor/localActor.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { Password } from '../domain/password/password.ts';
 import { UserPassword } from '../domain/password/userPassword.ts';
-import type { UserPasswordSetStore } from './../domain/password/userPassword.ts';
 import type { UserCreatedStore } from '../domain/user/createUser.ts';
 import {
   UnacceptableUsernameError,
@@ -15,6 +14,7 @@ import {
   type UserResolverByUsername,
 } from '../domain/user/user.ts';
 import type { Username } from '../domain/user/username.ts';
+import type { UserPasswordSetStore } from './../domain/password/userPassword.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{

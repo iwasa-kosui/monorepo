@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { RA } from '@iwasa-kosui/result';
 
 import type { AnyDomainEvent } from './event.ts';

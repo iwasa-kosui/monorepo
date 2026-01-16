@@ -79,7 +79,7 @@ const create = ({
         }
         return RA.ok(post.val);
       }),
-      RA.andThen(async ({ post, actor, user, ctx, postId }) => {
+      RA.andThen(async ({ post, user, ctx, postId }) => {
         // Check if the user owns this post
         if (post.type !== 'local' || post.userId !== user.id) {
           return RA.err(UnauthorizedError.create());

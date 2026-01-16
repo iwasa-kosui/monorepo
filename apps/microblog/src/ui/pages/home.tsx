@@ -4,6 +4,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { Actor } from '../../domain/actor/actor.ts';
+import type { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { User } from '../../domain/user/user.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
@@ -19,7 +20,7 @@ type Props = Readonly<{
   actor: Actor;
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
-  fetchData: (createdAt: string | undefined) => Promise<void>;
+  fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
@@ -40,9 +41,12 @@ export const HomePage = ({
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
-  const debounce = (func: Function, wait: number) => {
+  const debounce = <T extends unknown[]>(
+    func: (...args: T) => void,
+    wait: number,
+  ) => {
     let timeoutId: NodeJS.Timeout | undefined;
-    return (...args: unknown[]) => {
+    return (...args: T) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         func(...args);
@@ -240,7 +244,9 @@ export const HomePage = ({
           <PostView
             post={post}
             onLike={onLike}
-            isLiking={post.type === 'remote' && 'uri' in post && likingPostUri === post.uri}
+            isLiking={post.type === 'remote'
+              && 'uri' in post
+              && likingPostUri === post.uri}
             onDelete={onDelete}
             isDeleting={deletingPostId === post.postId}
             currentUserId={user.id}
@@ -267,9 +273,9 @@ const App = () => {
     }
     | null
   >(null);
-  const fetchData = async (createdAt: string | undefined) => {
+  const fetchData = async (createdAt: Instant | undefined) => {
     const res = await client.v1.home.$get({
-      query: { createdAt },
+      query: { createdAt: createdAt ? String(createdAt) : undefined },
     });
     const latest = await res.json();
     if (latest && !('error' in latest) && data && !('error' in data)) {

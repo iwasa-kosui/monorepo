@@ -85,7 +85,7 @@ const create = ({
         }
         return RA.ok([]);
       }),
-      RA.andThrough(async ({ post, user, ctx, imageUrls, images }) => {
+      RA.andThrough(async ({ post, user, ctx, images }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);
         await ctx.sendActivity(

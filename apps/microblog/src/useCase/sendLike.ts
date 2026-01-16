@@ -74,10 +74,6 @@ const create = ({
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Check if already liked
       RA.andThrough(async ({ actor, objectUri }) => {
-        const existingLike = await likeResolver.resolve({
-          actorId: actor.id,
-          objectUri,
-        });
         return RA.flow(
           likeResolver.resolve({
             actorId: actor.id,

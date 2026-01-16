@@ -1,16 +1,16 @@
 import { RA } from '@iwasa-kosui/result';
 
+import { Instant } from '../domain/instant/instant.ts';
+import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
+import type { SessionId } from '../domain/session/sessionId.ts';
+import { type User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import type {
   Actor,
   ActorResolverByUserId,
   ActorsResolverByFollowerId,
   ActorsResolverByFollowingId,
 } from './../domain/actor/actor.ts';
-import { Instant } from '../domain/instant/instant.ts';
 import type { PostsResolverByActorIds, PostWithAuthor } from './../domain/post/post.ts';
-import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
-import { type User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 

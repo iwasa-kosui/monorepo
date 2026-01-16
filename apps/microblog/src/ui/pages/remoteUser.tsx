@@ -5,7 +5,9 @@ import { render } from 'hono/jsx/dom';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor.ts';
+import type { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { debounce } from '../../helper/debounce.ts';
 import { PostView } from '../components/PostView.tsx';
 
 const client = hc<APIRouterType>('/api');
@@ -15,7 +17,7 @@ type Props = Readonly<{
   posts: ReadonlyArray<PostWithAuthor>;
   isFollowing: boolean;
   isLoggedIn: boolean;
-  fetchData: (createdAt: string | undefined) => Promise<void>;
+  fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
 }>;
@@ -31,16 +33,6 @@ export const RemoteUserPage = ({
 }: Props) => {
   const handle = RemoteActorDomain.getHandle(remoteActor) ?? remoteActor.uri;
   const displayName = remoteActor.username ?? handle;
-
-  const debounce = (func: Function, wait: number) => {
-    let timeoutId: NodeJS.Timeout | undefined;
-    return (...args: unknown[]) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        func(...args);
-      }, wait);
-    };
-  };
 
   const debouncedFetchData = debounce(fetchData, 300);
 
@@ -105,7 +97,10 @@ export const RemoteUserPage = ({
               ? (
                 isFollowing
                   ? (
-                    <form method='post' action={`/remote-users/${remoteActor.id}/unfollow`}>
+                    <form
+                      method='post'
+                      action={`/remote-users/${remoteActor.id}/unfollow`}
+                    >
                       <button
                         type='submit'
                         class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
@@ -115,7 +110,10 @@ export const RemoteUserPage = ({
                     </form>
                   )
                   : (
-                    <form method='post' action={`/remote-users/${remoteActor.id}/follow`}>
+                    <form
+                      method='post'
+                      action={`/remote-users/${remoteActor.id}/follow`}
+                    >
                       <button
                         type='submit'
                         class='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors'
@@ -127,7 +125,10 @@ export const RemoteUserPage = ({
               )
               : (
                 <p class='text-gray-500 dark:text-gray-400 text-sm'>
-                  <a href='/sign-in' class='text-blue-500 hover:underline'>Sign in</a> to follow this user
+                  <a href='/sign-in' class='text-blue-500 hover:underline'>
+                    Sign in
+                  </a>{' '}
+                  to follow this user
                 </p>
               )}
           </div>
@@ -135,14 +136,18 @@ export const RemoteUserPage = ({
       </section>
 
       <section class='space-y-4'>
-        <h2 class='text-xl font-bold text-gray-900 dark:text-white mb-4'>Posts</h2>
+        <h2 class='text-xl font-bold text-gray-900 dark:text-white mb-4'>
+          Posts
+        </h2>
         {posts.length === 0 ? <p class='text-gray-500 dark:text-gray-400'>No posts yet.</p> : (
           posts.map((post) => (
             <PostView
               key={post.postId}
               post={post}
               onLike={onLike}
-              isLiking={post.type === 'remote' && 'uri' in post && likingPostUri === post.uri}
+              isLiking={post.type === 'remote'
+                && 'uri' in post
+                && likingPostUri === post.uri}
             />
           ))
         )}
@@ -172,13 +177,13 @@ const App = () => {
     return pathParts[actorIdIndex];
   };
 
-  const fetchData = async (createdAt: string | undefined) => {
+  const fetchData = async (createdAt: Instant | undefined) => {
     const actorId = getActorIdFromUrl();
     if (!actorId) return;
 
     const res = await client.v1['remote-users'][':actorId'].posts.$get({
       param: { actorId },
-      query: { createdAt },
+      query: { createdAt: createdAt ? String(createdAt) : undefined },
     });
     const latest = await res.json();
 

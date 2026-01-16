@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ResultAsync } from '@iwasa-kosui/result';
 
 export type UseCase<Input, Ok, Err> = Readonly<{

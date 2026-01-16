@@ -6,8 +6,8 @@ import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Follow, type FollowAcceptedStore, type FollowResolver } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { UserNotFoundError } from '../domain/user/user.ts';
-import type { UserResolverByUsername } from './../domain/user/user.ts';
 import type { Username } from '../domain/user/username.ts';
+import type { UserResolverByUsername } from './../domain/user/user.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -38,7 +38,6 @@ type Deps = Readonly<{
 const create = ({
   followedStore,
   followResolver,
-  actorResolverByUri,
   userResolverByUsername,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
@@ -69,7 +68,7 @@ const create = ({
           remoteActorCreatedStore,
           logoUriUpdatedStore,
         })(follower)),
-      RA.andThen(({ username, followingActor, followerActor, follower }) => {
+      RA.andThen(({ username, followingActor, followerActor }) => {
         if (!followingActor) {
           return RA.err(UserNotFoundError.create({ username }));
         }
