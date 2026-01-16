@@ -22,8 +22,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.12.0'
-          cache: 'pnpm'
+          node-version: "24.12.0"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -59,3 +59,7 @@ jobs:
       - name: Type check apps/mojisand
         run: pnpm exec tsc --noEmit
         working-directory: apps/mojisand
+
+      - name: Test microblog
+        run: pnpm run test
+        working-directory: apps/microblog
