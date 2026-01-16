@@ -5,6 +5,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { Username } from '../../domain/user/username.ts';
 import { GetRemoteActorPostsUseCase } from '../getRemoteActorPosts.ts';
 import { arbActorId, arbRemoteActor } from './helper/arbitraries.ts';
 import {
@@ -76,7 +77,7 @@ describe('GetRemoteActorPostsUseCase', () => {
           content: 'Remote post content',
           createdAt: Date.now() as PostWithAuthor['createdAt'],
           uri: 'https://remote.example.com/posts/1',
-          username: 'remote',
+          username: 'remote' as Username,
           logoUri: undefined,
           liked: false,
           images: [],

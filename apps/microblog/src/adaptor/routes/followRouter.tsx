@@ -9,6 +9,7 @@ import { Federation } from '../../federation.ts';
 import { Layout } from '../../layout.tsx';
 import { SendFollowRequestUseCase } from '../../useCase/sendFollowRequest.ts';
 import { FedifyRemoteActorLookup } from '../fedify/remoteActorLookup.ts';
+import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../pg/actor/remoteActorCreatedStore.ts';
@@ -97,6 +98,7 @@ app.post(
       followRequestedStore: PgFollowRequestedStore.getInstance(),
       remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
       logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+      actorResolverByUri: PgActorResolverByUri.getInstance(),
     });
 
     const result = await useCase.run({

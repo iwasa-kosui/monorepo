@@ -2,7 +2,7 @@ import { test as fcTest } from '@fast-check/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { Like } from '../../domain/like/like.ts';
+import type { AlreadyLikedError, Like } from '../../domain/like/like.ts';
 import type { LikeId } from '../../domain/like/likeId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -305,8 +305,9 @@ describe('SendLikeUseCase', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.err.type).toBe('AlreadyLikedError');
-        expect(result.err.detail.actorId).toBe(actor.id);
-        expect(result.err.detail.objectUri).toBe(objectUri);
+        const err = result.err as AlreadyLikedError;
+        expect(err.detail.actorId).toBe(actor.id);
+        expect(err.detail.objectUri).toBe(objectUri);
       }
     });
   });
