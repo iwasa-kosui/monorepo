@@ -10,15 +10,13 @@ import type { User } from '../../../domain/user/user.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { Username } from '../../../domain/user/username.ts';
 
-export const arbUserId = (): fc.Arbitrary<UserId> =>
-  fc.uuid().map((uuid) => uuid as UserId);
+export const arbUserId = (): fc.Arbitrary<UserId> => fc.uuid().map((uuid) => uuid as UserId);
 
 export const arbUsername = (): fc.Arbitrary<Username> =>
   fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_'), { minLength: 1, maxLength: 255 })
     .map((s) => s as Username);
 
-export const arbAcceptableUsername = (): fc.Arbitrary<Username> =>
-  fc.constant('kosui' as Username);
+export const arbAcceptableUsername = (): fc.Arbitrary<Username> => fc.constant('kosui' as Username);
 
 export const arbPassword = (): fc.Arbitrary<Password> =>
   fc.string({ minLength: 16, maxLength: 255 }).map((s) => s as Password);
@@ -29,8 +27,7 @@ export const arbUser = (): fc.Arbitrary<User> =>
     username: arbUsername(),
   }) as fc.Arbitrary<User>;
 
-export const arbSessionId = (): fc.Arbitrary<SessionId> =>
-  fc.uuid().map((uuid) => uuid as SessionId);
+export const arbSessionId = (): fc.Arbitrary<SessionId> => fc.uuid().map((uuid) => uuid as SessionId);
 
 export const arbInstant = (): fc.Arbitrary<number> =>
   fc.integer({ min: 0, max: Date.now() + 1000 * 60 * 60 * 24 * 365 * 10 });
@@ -57,17 +54,13 @@ export const arbHashedPassword = (): fc.Arbitrary<HashedPassword> =>
     tagHex: fc.hexaString({ minLength: 128, maxLength: 128 }),
   });
 
-export const arbContent = (): fc.Arbitrary<string> =>
-  fc.string({ minLength: 1, maxLength: 500 });
+export const arbContent = (): fc.Arbitrary<string> => fc.string({ minLength: 1, maxLength: 500 });
 
-export const arbImageUrl = (): fc.Arbitrary<string> =>
-  fc.webUrl().map((url) => `${url}/image.png`);
+export const arbImageUrl = (): fc.Arbitrary<string> => fc.webUrl().map((url) => `${url}/image.png`);
 
-export const arbActorId = (): fc.Arbitrary<ActorId> =>
-  fc.uuid().map((uuid) => uuid as ActorId);
+export const arbActorId = (): fc.Arbitrary<ActorId> => fc.uuid().map((uuid) => uuid as ActorId);
 
-export const arbPostId = (): fc.Arbitrary<PostId> =>
-  fc.uuid().map((uuid) => uuid as PostId);
+export const arbPostId = (): fc.Arbitrary<PostId> => fc.uuid().map((uuid) => uuid as PostId);
 
 export const arbLocalActor = (userId?: UserId): fc.Arbitrary<LocalActor> =>
   fc.record({
@@ -88,5 +81,4 @@ export const arbValidSession = (userId?: UserId): fc.Arbitrary<Session> => {
   }) as fc.Arbitrary<Session>;
 };
 
-export const arbImageUrls = (): fc.Arbitrary<string[]> =>
-  fc.array(arbImageUrl(), { minLength: 0, maxLength: 4 });
+export const arbImageUrls = (): fc.Arbitrary<string[]> => fc.array(arbImageUrl(), { minLength: 0, maxLength: 4 });

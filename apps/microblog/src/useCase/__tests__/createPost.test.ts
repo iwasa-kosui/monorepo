@@ -1,5 +1,4 @@
 import { test as fcTest } from '@fast-check/vitest';
-import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
@@ -7,15 +6,7 @@ import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { CreatePostUseCase } from '../createPost.ts';
-import {
-  arbContent,
-  arbImageUrls,
-  arbLocalActor,
-  arbSessionId,
-  arbUser,
-  arbUserId,
-  arbValidSession,
-} from './helper/arbitraries.ts';
+import { arbContent, arbImageUrls, arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
   createMockPostCreatedStore,
@@ -300,9 +291,11 @@ describe('CreatePostUseCase', () => {
   });
 
   describe('副作用の検証', () => {
-    it.each([
-      { storeName: 'postCreatedStore', description: '投稿作成イベントが保存される' },
-    ])('$description', async ({ storeName }) => {
+    it.each(
+      [
+        { storeName: 'postCreatedStore', description: '投稿作成イベントが保存される' },
+      ] as const,
+    )('$description', async ({ storeName }) => {
       const deps = createDeps();
       const user: User = {
         id: crypto.randomUUID() as User['id'],
@@ -333,7 +326,7 @@ describe('CreatePostUseCase', () => {
         ctx,
       });
 
-      expect(deps[storeName as keyof typeof deps].store).toHaveBeenCalledTimes(1);
+      expect(deps[storeName].store).toHaveBeenCalledTimes(1);
     });
 
     it('作成失敗時はストアが呼ばれない', async () => {

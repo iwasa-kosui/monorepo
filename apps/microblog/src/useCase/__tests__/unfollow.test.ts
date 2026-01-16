@@ -7,7 +7,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Follow } from '../../domain/follow/follow.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { UnfollowUseCase } from '../unfollow.ts';
-import { arbActorId, arbLocalActor, arbUserId } from './helper/arbitraries.ts';
+import { arbActorId, arbUserId } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
   createMockFollowResolver,

@@ -8,6 +8,9 @@ import { LocalActor } from './localActor.ts';
 import { RemoteActor } from './remoteActor.ts';
 import { updateLogoUri } from './updateLogoUri.ts';
 
+export type { LocalActor } from './localActor.ts';
+export type { RemoteActor } from './remoteActor.ts';
+
 export type Actor = LocalActor | RemoteActor;
 export const Actor = {
   zodType: z.union([LocalActor.zodType, RemoteActor.zodType]).describe('Actor'),
