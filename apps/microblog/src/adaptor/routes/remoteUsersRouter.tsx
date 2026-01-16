@@ -56,6 +56,14 @@ app.get(
     const logger = getLogger("microblog:get-remote-user");
     logger.info("Get remote user attempt", { actorId });
 
+    // Require authentication to view remote user profiles
+    const sessionIdCookie = getCookie(c, "sessionId");
+    const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
+
+    if (!currentUserResult.ok) {
+      return c.redirect("/sign-in");
+    }
+
     // Validate that the actorId exists and is a remote actor
     const actorResult = await PgActorResolverById.getInstance().resolve(actorId);
     if (!actorResult.ok || !actorResult.val) {

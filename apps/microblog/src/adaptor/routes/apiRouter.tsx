@@ -263,30 +263,27 @@ const app = new Hono()
       const { actorId } = c.req.valid("param");
       const { createdAt } = c.req.valid("query");
 
-      // Get current user's actor ID if logged in
+      // Require authentication to view remote user posts
       const sessionIdCookie = getCookie(c, "sessionId");
-      let currentUserActorId: ActorId | undefined;
+      const now = Instant.now();
+      const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
+      const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+      const resolveLocalActor = resolveLocalActorWith(PgActorResolverByUserId.getInstance());
 
-      if (sessionIdCookie) {
-        const now = Instant.now();
-        const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
-        const resolveUser = resolveUserWith(PgUserResolver.getInstance());
-        const resolveLocalActor = resolveLocalActorWith(PgActorResolverByUserId.getInstance());
+      const currentUserResult = await RA.flow(
+        RA.ok(sessionIdCookie),
+        RA.andThen(SessionId.parse),
+        RA.andBind("session", resolveSession),
+        RA.andBind("user", ({ session }) => resolveUser(session.userId)),
+        RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
+        RA.map(({ actor }) => actor.id)
+      );
 
-        const currentUserResult = await RA.flow(
-          RA.ok(sessionIdCookie),
-          RA.andThen(SessionId.parse),
-          RA.andBind("session", resolveSession),
-          RA.andBind("user", ({ session }) => resolveUser(session.userId)),
-          RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
-          RA.map(({ actor }) => actor.id)
-        );
-
-        if (currentUserResult.ok) {
-          currentUserActorId = currentUserResult.val;
-        }
+      if (!currentUserResult.ok) {
+        return c.json({ error: "Unauthorized" }, 401);
       }
 
+      const currentUserActorId = currentUserResult.val;
       const useCase = GetRemoteActorPostsUseCase.getInstance();
 
       return RA.flow(
