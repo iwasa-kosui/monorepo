@@ -235,7 +235,15 @@ const app = new Hono()
       "param",
       z.object({
         actorId: ActorId.zodType,
-      })
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(",") },
+            400
+          );
+        }
+      }
     ),
     sValidator(
       "query",
