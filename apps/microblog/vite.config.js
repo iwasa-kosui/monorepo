@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => {
           },
           output: {
             entryFileNames: "static/[name].js",
+            chunkFileNames: "static/[name]-[hash].js",
+            assetFileNames: "static/[name]-[hash][extname]",
           },
         },
       },
