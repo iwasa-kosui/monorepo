@@ -1,7 +1,9 @@
 import {
   Accept,
   Create,
+  Document,
   Follow,
+  Image,
   Note,
   Undo,
   type InboxContext,
@@ -26,6 +28,9 @@ import { PgPostCreatedStore } from "../../pg/post/postCreatedStore.ts";
 import { upsertRemoteActor } from "../../../useCase/helper/upsertRemoteActor.ts";
 import { PgLogoUriUpdatedStore } from "../../pg/actor/logoUriUpdatedStore.ts";
 import { ActorIdentity } from "../actorIdentity.ts";
+import { PgPostImageCreatedStore } from "../../pg/image/postImageCreatedStore.ts";
+import { ImageId } from "../../../domain/image/imageId.ts";
+import type { PostImage } from "../../../domain/image/image.ts";
 
 export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
   const object = await activity.getObject();
@@ -51,13 +56,35 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
       remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
       logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     })(actorIdentity)),
-    RA.andThrough(({ actor }) => {
+    RA.andBind('createdPost', ({ actor }) => {
       const createPost = Post.createRemotePost(Instant.now())({
         content: String(object.content),
         uri: objectIdentity.uri,
         actorId: actor.id,
       });
-      return PgPostCreatedStore.getInstance().store(createPost);
+      return PgPostCreatedStore.getInstance().store(createPost).then(() => RA.ok(createPost));
+    }),
+    RA.andThrough(async ({ createdPost }) => {
+      const now = Instant.now();
+      const images: PostImage[] = [];
+      for await (const attachment of object.getAttachments()) {
+        if (attachment instanceof Document || attachment instanceof Image) {
+          const url = attachment.url;
+          if (url instanceof URL) {
+            images.push({
+              imageId: ImageId.generate(),
+              postId: createdPost.aggregateState.postId,
+              url: url.href,
+              altText: attachment.name?.toString() ?? null,
+              createdAt: now,
+            });
+          }
+        }
+      }
+      if (images.length > 0) {
+        await PgPostImageCreatedStore.getInstance().store(images);
+      }
+      return RA.ok(undefined);
     }),
     RA.match({
       ok: ({ actorIdentity }) => {
