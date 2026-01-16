@@ -40,7 +40,7 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
     <article class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
       <div class="flex items-start gap-3">
         <a
-          href={isLocalPost ? `/users/${post.username}` : undefined}
+          href={isLocalPost ? `/users/${post.username}` : isRemotePost ? `/remote-users/${post.actorId}` : undefined}
           class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0"
         >
           {post.logoUri ? (
@@ -56,7 +56,7 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <a
-              href={isLocalPost ? `/users/${post.username}` : undefined}
+              href={isLocalPost ? `/users/${post.username}` : isRemotePost ? `/remote-users/${post.actorId}` : undefined}
               class="font-semibold text-gray-900 dark:text-white hover:underline"
             >
               @{post.username}
