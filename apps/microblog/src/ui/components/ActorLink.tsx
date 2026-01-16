@@ -12,7 +12,7 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
     <a
       href={Actor.match({
         onLocal: (x) => x.uri,
-        onRemote: (x) => x.url ?? x.uri,
+        onRemote: (x) => `/remote-users/${x.id}`,
       })(actor)}
       class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
     >
