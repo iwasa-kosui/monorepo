@@ -1,5 +1,6 @@
-import z from "zod/v4";
-import { Schema } from "../../helper/schema.ts";
+import z from 'zod/v4';
+
+import { Schema } from '../../helper/schema.ts';
 
 export const ActorIdSym = Symbol('ActorId');
 const ActorIdZodType = z.uuid().brand(ActorIdSym).describe('ActorId');
@@ -12,4 +13,4 @@ export const ActorId = {
     const uuid = crypto.randomUUID();
     return ActorIdSchema.orThrow(uuid);
   },
-}
+};

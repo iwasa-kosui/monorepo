@@ -1,19 +1,20 @@
-import type { Context } from "@fedify/fedify";
-import { Password } from "../domain/password/password.ts";
-import type { Username } from "../domain/user/username.ts";
-import type { User, UserResolverByUsername } from "../domain/user/user.ts";
-import type { UseCase } from "./useCase.ts";
-import type { UserPasswordResolver, UserPasswordSetStore } from "../domain/password/userPassword.ts";
-import { Session, type SessionStartedStore } from "../domain/session/session.ts";
-import { Instant } from "../domain/instant/instant.ts";
-import { RA } from "@iwasa-kosui/result";
-import type { SessionId } from "../domain/session/sessionId.ts";
-import { resolveUserByUsernameWith } from "./helper/resolve.ts";
+import type { Context } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+
+import { Instant } from '../domain/instant/instant.ts';
+import { Password } from '../domain/password/password.ts';
+import type { UserPasswordResolver } from '../domain/password/userPassword.ts';
+import { Session, type SessionStartedStore } from '../domain/session/session.ts';
+import type { SessionId } from '../domain/session/sessionId.ts';
+import type { User, UserResolverByUsername } from '../domain/user/user.ts';
+import type { Username } from '../domain/user/username.ts';
+import { resolveUserByUsernameWith } from './helper/resolve.ts';
+import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
-  username: Username
-  password: Password
-  ctx: Context<unknown>
+  username: Username;
+  password: Password;
+  ctx: Context<unknown>;
 }>;
 
 type Ok = Readonly<{
@@ -25,7 +26,7 @@ type UsernameOrPasswordInvalid = Readonly<{
   message: string;
   detail: {
     username: Username;
-  }
+  };
 }>;
 
 const UsernameOrPasswordInvalid = {
@@ -44,7 +45,7 @@ type SignInUseCase = UseCase<
 
 type Deps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
-  userPasswordResolver: UserPasswordResolver
+  userPasswordResolver: UserPasswordResolver;
   sessionStartedStore: SessionStartedStore;
 }>;
 
@@ -57,18 +58,14 @@ const create = ({
   const resolveUser = (username: Username): RA<User, UsernameOrPasswordInvalid> =>
     RA.flow(
       resolveUserByUsernameWith(userResolverByUsername)(username),
-      RA.mapErr(() => UsernameOrPasswordInvalid.create(username))
+      RA.mapErr(() => UsernameOrPasswordInvalid.create(username)),
     );
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('user', ({ username }) =>
-        resolveUser(username)
-      ),
-      RA.andBind('userPassword', ({ user }) =>
-        userPasswordResolver.resolve(user.id)
-      ),
+      RA.andBind('user', ({ username }) => resolveUser(username)),
+      RA.andBind('userPassword', ({ user }) => userPasswordResolver.resolve(user.id)),
       RA.andThen(({ user, userPassword }) => {
         if (!userPassword) {
           return RA.err(UsernameOrPasswordInvalid.create(user.username));
@@ -86,11 +83,8 @@ const create = ({
         Session.startSession(now)({
           userId: user.id,
           expires: Instant.addDuration(now, 1000 * 60 * 60 * 24 * 7), // 7 days
-        })
-      ),
-      RA.andThrough(({ sessionStarted }) =>
-        sessionStartedStore.store(sessionStarted)
-      ),
+        })),
+      RA.andThrough(({ sessionStarted }) => sessionStartedStore.store(sessionStarted)),
       RA.bind('sessionId', ({ sessionStarted }) => sessionStarted.aggregateState.sessionId),
     );
 

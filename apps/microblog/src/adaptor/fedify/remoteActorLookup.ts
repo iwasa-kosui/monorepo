@@ -1,12 +1,13 @@
-import type { Actor } from "@fedify/fedify";
-import { isActor } from "@fedify/fedify";
-import { RA } from "@iwasa-kosui/result";
-import { singleton } from "../../helper/singleton.ts";
-import { Federation } from "../../federation.ts";
-import type { Username } from "../../domain/user/username.ts";
+import type { Actor } from '@fedify/fedify';
+import { isActor } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+
+import type { Username } from '../../domain/user/username.ts';
+import { Federation } from '../../federation.ts';
+import { singleton } from '../../helper/singleton.ts';
 
 export type RemoteActorLookupError = Readonly<{
-  type: "RemoteActorLookupError";
+  type: 'RemoteActorLookupError';
   message: string;
   detail: {
     handle: string;
@@ -19,9 +20,9 @@ export const RemoteActorLookupError = {
   create: (
     handle: string,
     reason: string,
-    rawResult?: unknown
+    rawResult?: unknown,
   ): RemoteActorLookupError => ({
-    type: "RemoteActorLookupError",
+    type: 'RemoteActorLookupError',
     message: `Failed to lookup remote actor "${handle}": ${reason}`,
     detail: { handle, reason, rawResult },
   }),
@@ -36,7 +37,7 @@ export type RemoteActorLookup = {
 };
 
 const getInstance = singleton((): RemoteActorLookup => {
-  const lookup: RemoteActorLookup["lookup"] = async ({
+  const lookup: RemoteActorLookup['lookup'] = async ({
     request,
     handle,
     identifier,
@@ -49,21 +50,21 @@ const getInstance = singleton((): RemoteActorLookup => {
       return RA.err(
         RemoteActorLookupError.create(
           handle,
-          "Invalid actor handle or URL",
-          result
-        )
+          'Invalid actor handle or URL',
+          result,
+        ),
       );
     }
 
     if (!result.id) {
       return RA.err(
-        RemoteActorLookupError.create(handle, "Could not resolve actor ID")
+        RemoteActorLookupError.create(handle, 'Could not resolve actor ID'),
       );
     }
 
     if (!result.inboxId) {
       return RA.err(
-        RemoteActorLookupError.create(handle, "Could not resolve actor inbox")
+        RemoteActorLookupError.create(handle, 'Could not resolve actor inbox'),
       );
     }
 

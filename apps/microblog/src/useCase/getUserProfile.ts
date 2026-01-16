@@ -1,35 +1,29 @@
-import z from "zod/v4";
-import { Schema } from "../helper/schema.ts";
-import type { UseCase } from "./useCase.ts";
-import { Username } from "../domain/user/username.ts";
-import {
-  User,
-  UserNotFoundError,
-  type UserResolverByUsername,
-} from "../domain/user/user.ts";
-import { RA } from "@iwasa-kosui/result";
+import { RA } from '@iwasa-kosui/result';
+import z from 'zod/v4';
+
+import { PgActorResolverByUserId } from '../adaptor/pg/actor/actorResolverByUserId.ts';
+import { PgActorResolverByFollowerId } from '../adaptor/pg/actor/followsResolverByFollowerId.ts';
+import { PgActorResolverByFollowingId } from '../adaptor/pg/actor/followsResolverByFollowingId.ts';
+import { PgPostsResolverByActorIds } from '../adaptor/pg/post/postsResolverByActorIds.ts';
+import { PgUserResolverByUsername } from '../adaptor/pg/user/userResolverByUsername.ts';
 import {
   Actor,
   type ActorResolverByUserId,
   type ActorsResolverByFollowerId,
   type ActorsResolverByFollowingId,
-} from "../domain/actor/actor.ts";
-import {
-  resolveLocalActorWith,
-  resolveUserByUsernameWith,
-} from "./helper/resolve.ts";
-import type { PostsResolverByActorIds, PostWithAuthor } from "../domain/post/post.ts";
-import { singleton } from "../helper/singleton.ts";
-import { PgUserResolverByUsername } from "../adaptor/pg/user/userResolverByUsername.ts";
-import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
-import { PgActorResolverByFollowingId } from "../adaptor/pg/actor/followsResolverByFollowingId.ts";
-import { PgActorResolverByFollowerId } from "../adaptor/pg/actor/followsResolverByFollowerId.ts";
-import { PgPostsResolverByActorIds } from "../adaptor/pg/post/postsResolverByActorIds.ts";
+} from '../domain/actor/actor.ts';
+import type { PostsResolverByActorIds, PostWithAuthor } from '../domain/post/post.ts';
+import { User, UserNotFoundError, type UserResolverByUsername } from '../domain/user/user.ts';
+import { Username } from '../domain/user/username.ts';
+import { Schema } from '../helper/schema.ts';
+import { singleton } from '../helper/singleton.ts';
+import { resolveLocalActorWith, resolveUserByUsernameWith } from './helper/resolve.ts';
+import type { UseCase } from './useCase.ts';
 
 const Input = Schema.create(
   z.object({
     username: Username.zodType,
-  })
+  }),
 );
 type Input = z.infer<typeof Input.zodType>;
 
@@ -62,23 +56,18 @@ const create = ({
 }: Deps): GetUserProfileUseCase => {
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
   const resolveUserByUsername = resolveUserByUsernameWith(
-    userResolverByUsername
+    userResolverByUsername,
   );
 
   const run = (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind("user", ({ username }) => resolveUserByUsername(username)),
-      RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind("following", ({ actor }) =>
-        actorsResolverByFollowerId.resolve(actor.id)
-      ),
-      RA.andBind("followers", ({ actor }) =>
-        actorsResolverByFollowingId.resolve(actor.id)
-      ),
-      RA.andBind("posts", ({ actor }) =>
-        postsResolverByActorIds.resolve({ actorIds: [actor.id], currentActorId: undefined, createdAt: undefined })
-      )
+      RA.andBind('user', ({ username }) => resolveUserByUsername(username)),
+      RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind('following', ({ actor }) => actorsResolverByFollowerId.resolve(actor.id)),
+      RA.andBind('followers', ({ actor }) => actorsResolverByFollowingId.resolve(actor.id)),
+      RA.andBind('posts', ({ actor }) =>
+        postsResolverByActorIds.resolve({ actorIds: [actor.id], currentActorId: undefined, createdAt: undefined })),
     );
 
   return {
@@ -96,5 +85,5 @@ export const GetUserProfileUseCase = {
       actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
       postsResolverByActorIds: PgPostsResolverByActorIds.getInstance(),
     })
-  )
+  ),
 } as const;

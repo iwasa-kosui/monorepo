@@ -1,8 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
-import type { FollowRequested, FollowRequestedStore } from "../../../domain/follow/follow.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, followsTable } from "../schema.ts";
-import { singleton } from "../../../helper/singleton.ts";
+import { RA } from '@iwasa-kosui/result';
+
+import type { FollowRequested, FollowRequestedStore } from '../../../domain/follow/follow.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { domainEventsTable, followsTable } from '../schema.ts';
 
 const store = async (event: FollowRequested): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -21,7 +22,7 @@ const store = async (event: FollowRequested): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = singleton((): FollowRequestedStore => ({
   store,

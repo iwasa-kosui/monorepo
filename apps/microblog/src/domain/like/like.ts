@@ -1,10 +1,11 @@
-import z from "zod/v4";
-import { Schema } from "../../helper/schema.ts";
-import { ActorId } from "../actor/actorId.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import type { Agg } from "../aggregate/index.ts";
-import type { Instant } from "../instant/instant.ts";
-import { LikeId } from "./likeId.ts";
+import z from 'zod/v4';
+
+import { Schema } from '../../helper/schema.ts';
+import { ActorId } from '../actor/actorId.ts';
+import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
+import type { Agg } from '../aggregate/index.ts';
+import type { Instant } from '../instant/instant.ts';
+import { LikeId } from './likeId.ts';
 
 const zodType = z
   .object({
@@ -12,7 +13,7 @@ const zodType = z
     actorId: ActorId.zodType,
     objectUri: z.string(),
   })
-  .describe("Like");
+  .describe('Like');
 const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
   zodType,
 );
@@ -20,7 +21,7 @@ export type Like = z.output<typeof zodType>;
 export type LikeAggregateId = Readonly<{
   likeId: LikeId;
 }>;
-export type LikeAggregate = Agg.Aggregate<LikeAggregateId, "like", Like>;
+export type LikeAggregate = Agg.Aggregate<LikeAggregateId, 'like', Like>;
 const toAggregateId = (like: Like): LikeAggregateId => ({
   likeId: like.likeId,
 });
@@ -30,15 +31,15 @@ type LikeEvent<
   TEventName extends string,
   TEventPayload extends Record<string, unknown>,
 > = DomainEvent<LikeAggregate, TAggregateState, TEventName, TEventPayload>;
-const LikeEvent = AggregateEvent.createFactory<LikeAggregate>("like");
+const LikeEvent = AggregateEvent.createFactory<LikeAggregate>('like');
 
-export type LikeCreated = LikeEvent<Like, "like.likeCreated", Like>;
+export type LikeCreated = LikeEvent<Like, 'like.likeCreated', Like>;
 
 const createLike = (payload: Like, now: Instant): LikeCreated => {
   return LikeEvent.create(
     toAggregateId(payload),
     payload,
-    "like.likeCreated",
+    'like.likeCreated',
     payload,
     now,
   );
@@ -56,7 +57,7 @@ export const Like = {
 } as const;
 
 export type AlreadyLikedError = Readonly<{
-  type: "AlreadyLikedError";
+  type: 'AlreadyLikedError';
   message: string;
   detail: {
     actorId: ActorId;
@@ -69,7 +70,7 @@ export const AlreadyLikedError = {
     actorId,
     objectUri,
   }: { actorId: ActorId; objectUri: string }): AlreadyLikedError => ({
-    type: "AlreadyLikedError",
+    type: 'AlreadyLikedError',
     message: `The actor with ID "${actorId}" has already liked the object "${objectUri}".`,
     detail: { actorId, objectUri },
   }),

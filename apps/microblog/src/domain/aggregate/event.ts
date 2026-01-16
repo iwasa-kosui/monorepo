@@ -1,7 +1,7 @@
-import type { Agg } from "./index.ts";
-import type { Instant } from "../instant/instant.ts";
+import type { Instant } from '../instant/instant.ts';
+import type { Agg } from './index.ts';
 
-const EventIdSym = Symbol("EventId");
+const EventIdSym = Symbol('EventId');
 export type EventId = string & { [EventIdSym]: true };
 export const EventId = {
   generate: (): EventId => {
@@ -17,7 +17,7 @@ export type DomainEvent<
   TAggregate extends Agg.AnyAggregate,
   TAggregateState extends Agg.InferState<TAggregate> | undefined,
   TEventName extends AnyEventName,
-  TEventPayload extends AnyEventPayload
+  TEventPayload extends AnyEventPayload,
 > = Readonly<{
   aggregateId: Agg.InferId<TAggregate>;
   aggregateName: Agg.InferName<TAggregate>;
@@ -35,7 +35,10 @@ export type AnyDomainEvent = DomainEvent<
   AnyEventPayload
 >;
 
-export type AggregateEvent<TAggregate extends Agg.AnyAggregate, TAggregateState extends Agg.InferState<TAggregate> | undefined> = DomainEvent<
+export type AggregateEvent<
+  TAggregate extends Agg.AnyAggregate,
+  TAggregateState extends Agg.InferState<TAggregate> | undefined,
+> = DomainEvent<
   TAggregate,
   TAggregateState,
   AnyEventName,
@@ -68,14 +71,13 @@ const createAggregateEventFactory = <
     eventName,
     eventPayload,
     occurredAt,
-  })
+  });
 
   return {
     create: createDomainEventFactory,
   } as const;
-}
+};
 
 export const AggregateEvent = {
   createFactory: createAggregateEventFactory,
 } as const;
-

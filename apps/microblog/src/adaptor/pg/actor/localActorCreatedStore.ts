@@ -1,7 +1,8 @@
-import { RA } from "@iwasa-kosui/result";
-import type { LocalActorCreated, LocalActorCreatedStore } from "../../../domain/actor/createLocalActor.ts";
-import { DB } from "../db.ts";
-import { actorsTable, domainEventsTable, localActorsTable } from "../schema.ts";
+import { RA } from '@iwasa-kosui/result';
+
+import type { LocalActorCreated, LocalActorCreatedStore } from '../../../domain/actor/createLocalActor.ts';
+import { DB } from '../db.ts';
+import { actorsTable, domainEventsTable, localActorsTable } from '../schema.ts';
 
 const store = async (event: LocalActorCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -27,7 +28,7 @@ const store = async (event: LocalActorCreated): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = (): LocalActorCreatedStore => ({
   store,

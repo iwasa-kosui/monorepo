@@ -1,12 +1,13 @@
-import type { Delete, InboxContext } from "@fedify/fedify";
-import { getLogger } from "@logtape/logtape";
-import { eq } from "drizzle-orm";
-import { Instant } from "../../../domain/instant/instant.ts";
-import { Post } from "../../../domain/post/post.ts";
-import { PostId } from "../../../domain/post/postId.ts";
-import { DB } from "../../pg/db.ts";
-import { PgPostDeletedStore } from "../../pg/post/postDeletedStore.ts";
-import { remotePostsTable } from "../../pg/schema.ts";
+import type { Delete, InboxContext } from '@fedify/fedify';
+import { getLogger } from '@logtape/logtape';
+import { eq } from 'drizzle-orm';
+
+import { Instant } from '../../../domain/instant/instant.ts';
+import { Post } from '../../../domain/post/post.ts';
+import { PostId } from '../../../domain/post/postId.ts';
+import { DB } from '../../pg/db.ts';
+import { PgPostDeletedStore } from '../../pg/post/postDeletedStore.ts';
+import { remotePostsTable } from '../../pg/schema.ts';
 
 export const onDelete = async (
   ctx: InboxContext<unknown>,
@@ -16,7 +17,7 @@ export const onDelete = async (
 
   const objectId = del.objectId;
   if (!objectId) {
-    logger.warn("Delete activity has no object ID");
+    logger.warn('Delete activity has no object ID');
     return;
   }
 

@@ -1,7 +1,8 @@
-import z from "zod/v4";
-import { ActorId } from "./actorId.ts";
-import { UserId } from "../user/userId.ts";
-import { createLocalActor } from "./createLocalActor.ts";
+import z from 'zod/v4';
+
+import { UserId } from '../user/userId.ts';
+import { ActorId } from './actorId.ts';
+import { createLocalActor } from './createLocalActor.ts';
 
 const zodType = z.object({
   id: ActorId.zodType,
@@ -17,7 +18,7 @@ export type LocalActor = z.output<typeof zodType>;
 const getHandle = (localActor: LocalActor): string => {
   const parsedUrl = new URL(localActor.uri);
   return `${parsedUrl.href.replace('/users/', '')}@${parsedUrl.host}`;
-}
+};
 
 export const LocalActor = {
   zodType,

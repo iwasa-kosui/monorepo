@@ -1,11 +1,11 @@
-import { integer, json, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import { integer, json, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
 
-export const usersTable = pgTable("users", {
+export const usersTable = pgTable('users', {
   userId: uuid().primaryKey(),
   username: varchar({ length: 255 }).notNull().unique(),
 });
 
-export const keysTable = pgTable("keys", {
+export const keysTable = pgTable('keys', {
   keyId: uuid().primaryKey(),
   userId: uuid()
     .notNull()
@@ -20,7 +20,7 @@ export const keysTable = pgTable("keys", {
   unique('user_key_type_unique').on(table.userId, table.type),
 ]);
 
-export const domainEventsTable = pgTable("domain_events", {
+export const domainEventsTable = pgTable('domain_events', {
   eventId: uuid().primaryKey(),
   aggregateId: json().notNull(),
   aggregateName: varchar({ length: 128 }).notNull(),
@@ -30,7 +30,7 @@ export const domainEventsTable = pgTable("domain_events", {
   occurredAt: timestamp({ mode: 'date' }).notNull(),
 });
 
-export const actorsTable = pgTable("actors", {
+export const actorsTable = pgTable('actors', {
   actorId: uuid().primaryKey(),
   uri: text().notNull().unique(),
   logoUri: text(),
@@ -38,20 +38,20 @@ export const actorsTable = pgTable("actors", {
   type: varchar({ length: 32 }).notNull(),
 });
 
-export const localActorsTable = pgTable("local_actors", {
+export const localActorsTable = pgTable('local_actors', {
   actorId: uuid().primaryKey().references(() => actorsTable.actorId),
   userId: uuid().notNull().references(() => usersTable.userId),
 }, (t) => [
   unique('local_actor_user_unique').on(t.userId),
 ]);
 
-export const remoteActorsTable = pgTable("remote_actors", {
+export const remoteActorsTable = pgTable('remote_actors', {
   actorId: uuid().primaryKey().references(() => actorsTable.actorId),
   url: text(),
   username: text(),
 });
 
-export const followsTable = pgTable("follows", {
+export const followsTable = pgTable('follows', {
   followerId: uuid()
     .notNull()
     .references(() => actorsTable.actorId),
@@ -62,7 +62,7 @@ export const followsTable = pgTable("follows", {
   unique('follower_following_unique').on(table.followerId, table.followingId),
 ]);
 
-export const userPasswordsTable = pgTable("user_passwords", {
+export const userPasswordsTable = pgTable('user_passwords', {
   userId: uuid().primaryKey().references(() => usersTable.userId),
   algorithm: varchar({ length: 32 }).notNull(),
   parallelism: integer().notNull(),
@@ -73,13 +73,13 @@ export const userPasswordsTable = pgTable("user_passwords", {
   tagHex: text().notNull(),
 });
 
-export const sessionsTable = pgTable("sessions", {
+export const sessionsTable = pgTable('sessions', {
   sessionId: uuid().primaryKey(),
   userId: uuid().notNull().references(() => usersTable.userId),
   expires: timestamp({ mode: 'date' }).notNull(),
 });
 
-export const postsTable = pgTable("posts", {
+export const postsTable = pgTable('posts', {
   postId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
   content: text().notNull(),
@@ -88,17 +88,17 @@ export const postsTable = pgTable("posts", {
   deletedAt: timestamp({ mode: 'date' }),
 });
 
-export const remotePostsTable = pgTable("remote_posts", {
+export const remotePostsTable = pgTable('remote_posts', {
   postId: uuid().primaryKey().references(() => postsTable.postId),
   uri: text().notNull().unique(),
 });
 
-export const localPostsTable = pgTable("local_posts", {
+export const localPostsTable = pgTable('local_posts', {
   postId: uuid().primaryKey().references(() => postsTable.postId),
   userId: uuid().notNull().references(() => usersTable.userId),
 });
 
-export const likesTable = pgTable("likes", {
+export const likesTable = pgTable('likes', {
   likeId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
   objectUri: text().notNull(),
@@ -107,7 +107,7 @@ export const likesTable = pgTable("likes", {
   unique('actor_object_unique').on(table.actorId, table.objectUri),
 ]);
 
-export const postImagesTable = pgTable("post_images", {
+export const postImagesTable = pgTable('post_images', {
   imageId: uuid().primaryKey(),
   postId: uuid().notNull().references(() => postsTable.postId),
   url: text().notNull(),

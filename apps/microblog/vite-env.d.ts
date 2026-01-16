@@ -2,9 +2,9 @@ interface ViteTypeOptions {
 }
 
 interface ImportMetaEnv {
-  PROD: boolean
+  PROD: boolean;
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv
+  readonly env: ImportMetaEnv;
 }

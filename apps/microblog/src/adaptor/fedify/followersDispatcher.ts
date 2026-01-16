@@ -1,8 +1,9 @@
-import { RA } from "@iwasa-kosui/result";
-import { type Context, type Recipient } from "@fedify/fedify";
-import { Username } from "../../domain/user/username.ts";
-import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
-import { getLogger } from "@logtape/logtape";
+import { type Context, type Recipient } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
+
+import { Username } from '../../domain/user/username.ts';
+import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();
@@ -14,37 +15,36 @@ const getInstance = () => {
       RA.match({
         ok: ({ followers }) => {
           getLogger().info(
-            `Resolved followers for federation: ${identifier} - ${followers.length} followers`
+            `Resolved followers for federation: ${identifier} - ${followers.length} followers`,
           );
           return {
             items: followers.map(
               (actor): Recipient => ({
                 id: new URL(actor.uri),
                 inboxId: new URL(actor.inboxUrl),
-              })
+              }),
             ),
           };
         },
         err: (err) => {
           getLogger().warn(
-            `Failed to resolve followers for federation: ${identifier} - ${err}`
+            `Failed to resolve followers for federation: ${identifier} - ${err}`,
           );
           return {
             items: [],
           };
         },
-      })
-    )
+      }),
+    );
   return {
     dispatch,
-  }
+  };
 };
 
 export const FollowersDispatcherCounter = {
   getInstance: () => {
-
-  }
-}
+  },
+};
 
 export const FollowersDispatcher = {
   getInstance,

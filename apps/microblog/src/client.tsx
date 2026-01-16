@@ -1,8 +1,5 @@
-import { hc } from "hono/client";
-import { useState } from "hono/jsx";
-import { render } from "hono/jsx/dom";
-
-const client = hc("/");
+import { useState } from 'hono/jsx';
+import { render } from 'hono/jsx/dom';
 
 function App() {
   return (
@@ -19,7 +16,7 @@ function App() {
 function Counter() {
   const [count, setCount] = useState(0);
   return (
-    <button type="button" onClick={() => setCount(count + 1)}>
+    <button type='button' onClick={() => setCount(count + 1)}>
       You clicked me {count} times
     </button>
   );
@@ -29,12 +26,12 @@ const ClockButton = () => {
   const [response, setResponse] = useState<string | null>(null);
 
   const handleClick = async () => {
-    setResponse("aaa");
+    setResponse('aaa');
   };
 
   return (
     <div>
-      <button type="button" onClick={handleClick}>
+      <button type='button' onClick={handleClick}>
         Get Server Time
       </button>
       {response && <pre>{response}</pre>}
@@ -42,5 +39,5 @@ const ClockButton = () => {
   );
 };
 
-const root = document.getElementById("root")!;
+const root = document.getElementById('root')!;
 render(<App />, root);

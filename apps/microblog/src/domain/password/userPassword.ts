@@ -1,9 +1,10 @@
-import z from "zod/v4";
-import { UserId } from "../user/userId.ts";
-import { HashedPassword } from "./password.ts";
-import type { Agg } from "../aggregate/index.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import type { Instant } from "../instant/instant.ts";
+import z from 'zod/v4';
+
+import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
+import type { Agg } from '../aggregate/index.ts';
+import type { Instant } from '../instant/instant.ts';
+import { UserId } from '../user/userId.ts';
+import { HashedPassword } from './password.ts';
 
 const zodType = z.object({
   userId: UserId.zodType,
@@ -13,9 +14,10 @@ const zodType = z.object({
 export type UserPassword = z.output<typeof zodType>;
 
 export type UserPasswordAggregate = Agg.Aggregate<UserId, 'userPassword', UserPassword>;
-export type UserPasswordEvent<TAggregateState extends Agg.InferState<UserPasswordAggregate> | undefined,
+export type UserPasswordEvent<
+  TAggregateState extends Agg.InferState<UserPasswordAggregate> | undefined,
   TEventName extends string,
-  TEventPayload extends Record<string, unknown>
+  TEventPayload extends Record<string, unknown>,
 > = DomainEvent<UserPasswordAggregate, TAggregateState, TEventName, TEventPayload>;
 
 export const UserPasswordEvent = AggregateEvent.createFactory<UserPasswordAggregate>('userPassword');

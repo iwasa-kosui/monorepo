@@ -1,50 +1,67 @@
-import { LocalPost, RemotePost, type PostsResolverByActorIdWithPagination } from '../../../domain/post/post.ts';
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
-import { Post } from "../../../domain/post/post.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { actorsTable, likesTable, localActorsTable, localPostsTable, postImagesTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
-import type { ActorId } from "../../../domain/actor/actorId.ts";
-import { Username } from '../../../domain/user/username.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
+import { RA } from '@iwasa-kosui/result';
 import { randomUUID } from 'crypto';
-import { inArray } from "drizzle-orm";
+import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
+
+import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
+import { LocalPost, type PostsResolverByActorIdWithPagination, RemotePost } from '../../../domain/post/post.ts';
+import { Post } from '../../../domain/post/post.ts';
+import { Username } from '../../../domain/user/username.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import {
+  actorsTable,
+  likesTable,
+  localActorsTable,
+  localPostsTable,
+  postImagesTable,
+  postsTable,
+  remoteActorsTable,
+  remotePostsTable,
+  usersTable,
+} from '../schema.ts';
 
 const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
-  const resolve = async ({ actorId, currentActorId, createdAt }: { actorId: ActorId, currentActorId: ActorId | undefined, createdAt: Instant | undefined }) => {
+  const resolve = async (
+    { actorId, currentActorId, createdAt }: {
+      actorId: ActorId;
+      currentActorId: ActorId | undefined;
+      createdAt: Instant | undefined;
+    },
+  ) => {
     const rows = await DB.getInstance().select()
       .from(postsTable)
       .leftJoin(
         localPostsTable,
-        eq(postsTable.postId, localPostsTable.postId)
+        eq(postsTable.postId, localPostsTable.postId),
       )
       .leftJoin(
         remotePostsTable,
-        eq(postsTable.postId, remotePostsTable.postId)
+        eq(postsTable.postId, remotePostsTable.postId),
       )
       .leftJoin(
         actorsTable,
-        eq(postsTable.actorId, actorsTable.actorId)
+        eq(postsTable.actorId, actorsTable.actorId),
       )
       .leftJoin(
         localActorsTable,
-        eq(actorsTable.actorId, localActorsTable.actorId)
+        eq(actorsTable.actorId, localActorsTable.actorId),
       )
       .leftJoin(
         remoteActorsTable,
-        eq(actorsTable.actorId, remoteActorsTable.actorId)
+        eq(actorsTable.actorId, remoteActorsTable.actorId),
       )
       .leftJoin(
         usersTable,
-        eq(localActorsTable.userId, usersTable.userId)
+        eq(localActorsTable.userId, usersTable.userId),
       )
       .leftJoin(
         likesTable,
         and(
           eq(likesTable.objectUri, remotePostsTable.uri),
-          eq(likesTable.actorId, currentActorId ?? randomUUID())
-        )
+          eq(likesTable.actorId, currentActorId ?? randomUUID()),
+        ),
       )
       .where(and(
         eq(postsTable.actorId, actorId),
@@ -59,9 +76,9 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
     const postIds = rows.map(row => row.posts.postId);
     const imageRows = postIds.length > 0
       ? await DB.getInstance().select()
-          .from(postImagesTable)
-          .where(inArray(postImagesTable.postId, postIds))
-          .execute()
+        .from(postImagesTable)
+        .where(inArray(postImagesTable.postId, postIds))
+        .execute()
       : [];
 
     // Group images by postId
@@ -106,13 +123,13 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           logoUri: row.actors!.logoUri ?? undefined,
           liked: row.likes !== null,
           images,
-        }
+        };
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);
-    }))
-  }
+    }));
+  };
   return { resolve };
-})
+});
 
 export const PgPostsResolverByActorIdWithPagination = {
   getInstance,

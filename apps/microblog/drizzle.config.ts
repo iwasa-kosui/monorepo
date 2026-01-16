@@ -8,5 +8,6 @@ export default defineConfig({
   dialect: 'postgresql',
   dbCredentials: {
     url: Env.getInstance().DATABASE_URL,
-  }, tablesFilter: ['!fedify_kv_v2', '!fedify_message_v2']
+  },
+  tablesFilter: ['!fedify_kv_v2', '!fedify_message_v2'],
 });

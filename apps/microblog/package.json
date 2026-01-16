@@ -25,15 +25,21 @@
     "zod": "4.2.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "1.9.4",
+    "@eslint/js": "9.39.2",
     "@hono/vite-build": "1.9.0",
     "@hono/vite-dev-server": "0.24.0",
     "@types/node": "24.10.4",
     "@types/pg": "8.16.0",
     "@types/sanitize-html": "2.16.0",
+    "dprint": "0.51.1",
     "drizzle-kit": "0.31.8",
     "esbuild": "0.27.2",
+    "eslint": "^9.36.0",
+    "eslint-plugin-simple-import-sort": "12.1.1",
+    "eslint-plugin-unused-imports": "4.3.0",
     "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.53.0",
     "vite": "7.3.1"
   },
   "scripts": {
@@ -45,6 +51,10 @@
     "drizzle:generate": "dotenvx run -- drizzle-kit generate",
     "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
     "compose:up": "dotenvx run -- docker compose up -d",
-    "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans"
+    "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "dprint fmt",
+    "format:check": "dprint check"
   }
 }

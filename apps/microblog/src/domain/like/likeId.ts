@@ -1,8 +1,9 @@
-import { z } from "zod/v4";
-import { Schema } from "../../helper/schema.ts";
+import { z } from 'zod/v4';
 
-export const LikeIdSym = Symbol("LikeId");
-const zodType = z.uuid().brand(LikeIdSym).describe("LikeId");
+import { Schema } from '../../helper/schema.ts';
+
+export const LikeIdSym = Symbol('LikeId');
+const zodType = z.uuid().brand(LikeIdSym).describe('LikeId');
 export type LikeId = z.output<typeof zodType>;
 
 const schema = Schema.create<LikeId, string>(zodType);

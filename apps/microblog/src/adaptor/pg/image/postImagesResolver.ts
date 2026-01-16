@@ -1,11 +1,16 @@
-import { eq, inArray } from "drizzle-orm";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { postImagesTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
-import type { PostId } from "../../../domain/post/postId.ts";
-import { PostImage, type PostImagesResolverByPostId, type PostImagesResolverByPostIds } from "../../../domain/image/image.ts";
-import { ImageId } from "../../../domain/image/imageId.ts";
+import { RA } from '@iwasa-kosui/result';
+import { eq, inArray } from 'drizzle-orm';
+
+import {
+  PostImage,
+  type PostImagesResolverByPostId,
+  type PostImagesResolverByPostIds,
+} from '../../../domain/image/image.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { postImagesTable } from '../schema.ts';
 
 const getInstanceByPostId = singleton((): PostImagesResolverByPostId => {
   const resolve = async (postId: PostId) => {
@@ -24,7 +29,7 @@ const getInstanceByPostId = singleton((): PostImagesResolverByPostId => {
           altText: row.altText,
           createdAt: row.createdAt.getTime(),
         })
-      )
+      ),
     );
   };
   return { resolve };

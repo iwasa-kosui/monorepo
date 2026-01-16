@@ -1,27 +1,16 @@
-import { Like, Note, type RequestContext, isActor } from "@fedify/fedify";
-import { RA } from "@iwasa-kosui/result";
-import type { ActorResolverByUserId } from "../domain/actor/actor.ts";
-import { Instant } from "../domain/instant/instant.ts";
-import {
-  AlreadyLikedError,
-  Like as AppLike,
-  type LikeCreatedStore,
-  type LikeResolver,
-} from "../domain/like/like.ts";
-import { LikeId } from "../domain/like/likeId.ts";
-import type {
-  SessionExpiredError,
-  SessionResolver,
-} from "../domain/session/session.ts";
-import type { SessionId } from "../domain/session/sessionId.ts";
-import type { UserNotFoundError, UserResolver } from "../domain/user/user.ts";
-import { Federation } from "../federation.ts";
-import {
-  resolveLocalActorWith,
-  resolveSessionWith,
-  resolveUserWith,
-} from "./helper/resolve.ts";
-import type { UseCase } from "./useCase.ts";
+import { isActor, Like, Note, type RequestContext } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+
+import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import { Instant } from '../domain/instant/instant.ts';
+import { AlreadyLikedError, Like as AppLike, type LikeCreatedStore, type LikeResolver } from '../domain/like/like.ts';
+import { LikeId } from '../domain/like/likeId.ts';
+import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
+import type { SessionId } from '../domain/session/sessionId.ts';
+import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { Federation } from '../federation.ts';
+import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
@@ -33,7 +22,7 @@ type Input = Readonly<{
 type Ok = void;
 
 export type RemoteNoteLookupError = Readonly<{
-  type: "RemoteNoteLookupError";
+  type: 'RemoteNoteLookupError';
   message: string;
   detail: {
     objectUri: string;
@@ -43,7 +32,7 @@ export type RemoteNoteLookupError = Readonly<{
 
 export const RemoteNoteLookupError = {
   create: (objectUri: string, reason: string): RemoteNoteLookupError => ({
-    type: "RemoteNoteLookupError",
+    type: 'RemoteNoteLookupError',
     message: `Failed to lookup remote note "${objectUri}": ${reason}`,
     detail: { objectUri, reason },
   }),
@@ -80,15 +69,11 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind("session", ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind("user", ({ session }) => resolveUser(session.userId)),
-      RA.andBind("actor", ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
+      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Check if already liked
       RA.andThrough(async ({ actor, objectUri }) => {
-        const existingLike = await likeResolver.resolve({
-          actorId: actor.id,
-          objectUri,
-        });
         return RA.flow(
           likeResolver.resolve({
             actorId: actor.id,
@@ -102,10 +87,10 @@ const create = ({
             }
             return RA.ok(undefined);
           }),
-        )
+        );
       }),
       // Lookup the remote note
-      RA.andBind("note", async ({ user, request, objectUri }) => {
+      RA.andBind('note', async ({ user, request, objectUri }) => {
         const ctx = Federation.getInstance().createContext(request, undefined);
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
@@ -116,7 +101,7 @@ const create = ({
 
         if (!(result instanceof Note)) {
           return RA.err(
-            RemoteNoteLookupError.create(objectUri, "Not a valid Note object"),
+            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
           );
         }
 
@@ -124,7 +109,7 @@ const create = ({
           return RA.err(
             RemoteNoteLookupError.create(
               objectUri,
-              "Could not resolve Note ID",
+              'Could not resolve Note ID',
             ),
           );
         }
@@ -132,31 +117,32 @@ const create = ({
         return RA.ok(result);
       }),
       // Get the note's author
-      RA.andBind("noteAuthor", async ({ note, objectUri }) => {
+      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
         const author = await note.getAttribution();
         if (!author || !isActor(author)) {
           return RA.err(
             RemoteNoteLookupError.create(
               objectUri,
-              "Could not resolve Note author",
+              'Could not resolve Note author',
             ),
           );
         }
         if (!author.id || !author.inboxId) {
           return RA.err(
-            RemoteNoteLookupError.create(objectUri, "Note author has no inbox"),
+            RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
           );
         }
         return RA.ok(author);
       }),
-      RA.bind('likeCreated', ({ actor, objectUri }) => AppLike.createLike(
-        {
-          likeId: LikeId.generate(),
-          actorId: actor.id,
-          objectUri,
-        },
-        now,
-      )),
+      RA.bind('likeCreated', ({ actor, objectUri }) =>
+        AppLike.createLike(
+          {
+            likeId: LikeId.generate(),
+            actorId: actor.id,
+            objectUri,
+          },
+          now,
+        )),
       RA.andThrough(async ({ likeCreated }) => likeCreatedStore.store(likeCreated)),
       // Send the Like activity
       RA.andThrough(async ({ user, note, noteAuthor, ctx, likeCreated }) => {

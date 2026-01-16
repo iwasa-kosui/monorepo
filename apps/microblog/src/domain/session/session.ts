@@ -1,10 +1,11 @@
-import z from "zod/v4";
-import { UserId } from "../user/userId.ts";
-import { Instant } from "../instant/instant.ts";
-import { SessionId } from "./sessionId.ts";
-import type { Agg } from "../aggregate/index.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import { Schema } from "../../helper/schema.ts";
+import z from 'zod/v4';
+
+import { Schema } from '../../helper/schema.ts';
+import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
+import type { Agg } from '../aggregate/index.ts';
+import { Instant } from '../instant/instant.ts';
+import { UserId } from '../user/userId.ts';
+import { SessionId } from './sessionId.ts';
 
 const zodType = z.object({
   sessionId: SessionId.zodType,
@@ -15,9 +16,10 @@ const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
 
 export type Session = z.output<typeof zodType>;
 export type SessionAggregate = Agg.Aggregate<SessionId, 'session', Session>;
-export type SessionEvent<TAggregateState extends Agg.InferState<SessionAggregate> | undefined,
+export type SessionEvent<
+  TAggregateState extends Agg.InferState<SessionAggregate> | undefined,
   TEventName extends string,
-  TEventPayload extends Record<string, unknown>
+  TEventPayload extends Record<string, unknown>,
 > = DomainEvent<SessionAggregate, TAggregateState, TEventName, TEventPayload>;
 
 export const SessionEvent = AggregateEvent.createFactory<SessionAggregate>('session');
@@ -47,7 +49,7 @@ export type SessionExpiredError = Readonly<{
   message: string;
   detail: {
     sessionId: SessionId;
-  }
+  };
 }>;
 
 export const SessionExpiredError = {

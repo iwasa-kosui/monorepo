@@ -1,10 +1,10 @@
-import { RA } from "@iwasa-kosui/result";
-import type { RemoteActorCreated, RemoteActorCreatedStore } from "../../../domain/actor/remoteActor.ts";
-import { DB } from "../db.ts";
-import { actorsTable, domainEventsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import type { LogoUriUpdated, LogoUriUpdatedStore } from "../../../domain/actor/updateLogoUri.ts";
-import { eq } from "drizzle-orm";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
+
+import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { actorsTable, domainEventsTable } from '../schema.ts';
 
 const store = async (event: LogoUriUpdated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
@@ -22,7 +22,7 @@ const store = async (event: LogoUriUpdated): RA<void, never> => {
     });
   });
   return RA.ok(undefined);
-}
+};
 
 const getInstance = singleton((): LogoUriUpdatedStore => ({
   store,

@@ -1,11 +1,12 @@
-import { eq } from "drizzle-orm";
-import { singleton } from "../../../helper/singleton.ts";
-import { DB } from "../db.ts";
-import { actorsTable, followsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
-import { ActorId } from "../../../domain/actor/actorId.ts";
-import { RA } from "@iwasa-kosui/result";
-import { UserId } from "../../../domain/user/userId.ts";
-import type { Actor } from "../../../domain/actor/actor.ts";
+import { RA } from '@iwasa-kosui/result';
+import { eq } from 'drizzle-orm';
+
+import type { Actor } from '../../../domain/actor/actor.ts';
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import { UserId } from '../../../domain/user/userId.ts';
+import { singleton } from '../../../helper/singleton.ts';
+import { DB } from '../db.ts';
+import { actorsTable, followsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
 
 const getInstance = singleton(() => ({
   resolve: async (followerId: ActorId): RA<Actor[], never> => {
@@ -13,15 +14,15 @@ const getInstance = singleton(() => ({
       .leftJoin(followsTable, eq(actorsTable.actorId, followsTable.followingId))
       .leftJoin(
         remoteActorsTable,
-        eq(actorsTable.actorId, remoteActorsTable.actorId)
+        eq(actorsTable.actorId, remoteActorsTable.actorId),
       )
       .leftJoin(
         localActorsTable,
-        eq(actorsTable.actorId, localActorsTable.actorId)
+        eq(actorsTable.actorId, localActorsTable.actorId),
       )
       .where(
         eq(followsTable.followerId, followerId),
-      ).execute()
+      ).execute();
 
     return RA.ok(rows.map(row => {
       if (row.remote_actors) {
@@ -47,10 +48,12 @@ const getInstance = singleton(() => ({
         };
         return actor;
       }
-      throw new Error(`Actor type could not be determined for actorId: ${row.actors.actorId}, type: ${row.actors.type}`);
-    }))
-  }
-}))
+      throw new Error(
+        `Actor type could not be determined for actorId: ${row.actors.actorId}, type: ${row.actors.type}`,
+      );
+    }));
+  },
+}));
 
 export const PgActorResolverByFollowerId = {
   getInstance,

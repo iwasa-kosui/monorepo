@@ -1,5 +1,6 @@
-import { z } from "zod/v4";
-import { Schema } from "../../helper/schema.ts";
+import { z } from 'zod/v4';
+
+import { Schema } from '../../helper/schema.ts';
 
 export const ImageIdSym = Symbol('ImageId');
 const zodType = z.uuid().brand(ImageIdSym).describe('ImageId');

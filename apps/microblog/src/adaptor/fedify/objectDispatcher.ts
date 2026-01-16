@@ -1,13 +1,14 @@
-import { Document, Link, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
-import { GetPostUseCase } from "../../useCase/getPost.ts";
-import { PgPostResolver } from "../pg/post/postResolver.ts";
-import { RA } from "@iwasa-kosui/result";
-import { PostId } from "../../domain/post/postId.ts";
-import { Temporal } from "@js-temporal/polyfill";
-import { getLogger } from "@logtape/logtape";
-import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
-import { Env } from "../../env.ts";
-import { getMimeTypeFromUrl } from "../../domain/image/mimeType.ts";
+import { Document, Note, PUBLIC_COLLECTION, type RequestContext } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
+import { Temporal } from '@js-temporal/polyfill';
+import { getLogger } from '@logtape/logtape';
+
+import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
+import { PostId } from '../../domain/post/postId.ts';
+import { Env } from '../../env.ts';
+import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts';
+import { PgPostResolver } from '../pg/post/postResolver.ts';
 
 const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
   const useCase = GetPostUseCase.create({
@@ -27,26 +28,26 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
           to: PUBLIC_COLLECTION,
           cc: ctx.getFollowersUri(values.identifier),
           content: post.content,
-          mediaType: "text/html",
+          mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
           url: ctx.getObjectUri(Note, values),
-          attachments:
-            postImages.map((image) =>
-              new Document({
-                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                mediaType: getMimeTypeFromUrl(image.url),
-              }))
+          attachments: postImages.map((image) =>
+            new Document({
+              url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+              mediaType: getMimeTypeFromUrl(image.url),
+            })
+          ),
         });
       },
       err: (err) => {
         getLogger().warn(
-          `Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${err}`
+          `Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${err}`,
         );
         return null;
       },
-    })
+    }),
   );
-}
+};
 
 export const ObjectDispatcher = {
   ofNote,

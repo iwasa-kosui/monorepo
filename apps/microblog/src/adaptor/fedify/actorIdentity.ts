@@ -1,12 +1,12 @@
-import type { Actor } from "@fedify/fedify";
-import { RA } from "@iwasa-kosui/result";
+import type { Actor } from '@fedify/fedify';
+import { RA } from '@iwasa-kosui/result';
 
 export type ActorIdentity = Readonly<{
   uri: string;
   inboxUrl: string;
   url: string | undefined;
   username: string | undefined;
-}>
+}>;
 
 export type ParseActorIdentityError = Readonly<{
   type: 'ParseActorIdentityError';
@@ -28,7 +28,7 @@ export const ActorIdentity = {
     if (!actor.inboxId) {
       return RA.err(ParseActorIdentityError.create('Actor inboxId is missing'));
     }
-    const icon = await actor.getIcon()
+    const icon = await actor.getIcon();
     return RA.ok({
       uri: actor.id.href,
       inboxUrl: actor.inboxId.href,
@@ -36,5 +36,5 @@ export const ActorIdentity = {
       username: actor.preferredUsername?.toString() ?? undefined,
       logoUri: icon?.url?.href ?? undefined,
     });
-  }
+  },
 } as const;

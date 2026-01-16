@@ -1,10 +1,11 @@
-import z from "zod/v4";
-import { Schema, type InferSchema } from "../../helper/schema.ts";
-import { UserId } from "../user/userId.ts";
-import { KeyType } from "./keyType.ts";
-import { KeyId } from "./keyId.ts";
-import { generate } from "./generate.ts";
-import type { Agg } from "../aggregate/index.ts";
+import z from 'zod/v4';
+
+import { type InferSchema, Schema } from '../../helper/schema.ts';
+import type { Agg } from '../aggregate/index.ts';
+import { UserId } from '../user/userId.ts';
+import { generate } from './generate.ts';
+import { KeyId } from './keyId.ts';
+import { KeyType } from './keyType.ts';
 
 const schema = Schema.create(z.object({
   id: KeyId.zodType,

@@ -1,22 +1,23 @@
-import { RA } from "@iwasa-kosui/result";
-import type { ActorResolverByUserId } from "../domain/actor/actor.ts";
-import type { ActorId } from "../domain/actor/actorId.ts";
-import type { UseCase } from "./useCase.ts";
+import { RA } from '@iwasa-kosui/result';
+
+import { PgActorResolverByUserId } from '../adaptor/pg/actor/actorResolverByUserId.ts';
+import { PgFollowResolver } from '../adaptor/pg/follow/followResolver.ts';
+import { PgUnfollowedStore } from '../adaptor/pg/follow/undoFollowingProcessedStore.ts';
+import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
 import {
   AlreadyUnfollowedError,
   Follow,
   type FollowAggregateId,
   type FollowResolver,
   type UndoFollowingProcessedStore,
-} from "../domain/follow/follow.ts";
-import { Instant } from "../domain/instant/instant.ts";
-import { resolveLocalActorWith } from "./helper/resolve.ts";
-import type { UserId } from "../domain/user/userId.ts";
-import { singleton } from "../helper/singleton.ts";
-import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
-import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
-import { PgUnfollowedStore } from "../adaptor/pg/follow/undoFollowingProcessedStore.ts";
-import { UserNotFoundError } from "../domain/user/user.ts";
+} from '../domain/follow/follow.ts';
+import { Instant } from '../domain/instant/instant.ts';
+import { UserNotFoundError } from '../domain/user/user.ts';
+import type { UserId } from '../domain/user/userId.ts';
+import { singleton } from '../helper/singleton.ts';
+import { resolveLocalActorWith } from './helper/resolve.ts';
+import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   followerUserId: UserId;
@@ -44,15 +45,12 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind("followerActor", ({ followerUserId }) =>
-        resolveLocalActor(followerUserId)
-      ),
-      RA.andBind("existingFollow", ({ followerActor, followingActorId }) =>
+      RA.andBind('followerActor', ({ followerUserId }) => resolveLocalActor(followerUserId)),
+      RA.andBind('existingFollow', ({ followerActor, followingActorId }) =>
         followResolver.resolve({
           followerId: followerActor.id,
           followingId: followingActorId,
-        })
-      ),
+        })),
       RA.andThen(({ followerActor, followingActorId, existingFollow }) => {
         if (!existingFollow) {
           return RA.err(AlreadyUnfollowedError.create({
@@ -69,9 +67,9 @@ const create = ({
         );
         return RA.flow(
           RA.ok(unfollowed.aggregateId),
-          RA.andThrough(() => unfollowedStore.store(unfollowed))
+          RA.andThrough(() => unfollowedStore.store(unfollowed)),
         );
-      })
+      }),
     );
 
   return { run };
