@@ -2,9 +2,9 @@ import { sValidator } from '@hono/standard-validator';
 import { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
-import { marked } from 'marked';
 import z from 'zod/v4';
 
+import { PostContent } from '../../domain/post/postContent.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Federation } from '../../federation.ts';
 import { Layout } from '../../layout.tsx';
@@ -24,7 +24,7 @@ app.post(
       content: z
         .string()
         .min(1)
-        .transform((s) => marked.parse(s, { async: false })),
+        .transform((s) => PostContent.fromMarkdown(s)),
       imageUrls: z.optional(z.string().transform((s) => s ? s.split(',').filter(Boolean) : [])),
     }),
   ),

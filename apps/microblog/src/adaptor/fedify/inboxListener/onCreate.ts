@@ -2,16 +2,33 @@ import { Create, Document, Image, type InboxContext, Note } from '@fedify/fedify
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import type { PostImage } from '../../../domain/image/image.ts';
-import { ImageId } from '../../../domain/image/imageId.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
-import { Post } from '../../../domain/post/post.ts';
-import { upsertRemoteActor } from '../../../useCase/helper/upsertRemoteActor.ts';
+import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
+
+type Attachment = Readonly<{
+  url: string;
+  altText: string | null;
+}>;
+
+const extractAttachments = async (note: Note): Promise<Attachment[]> => {
+  const attachments: Attachment[] = [];
+  for await (const attachment of note.getAttachments()) {
+    if (attachment instanceof Document || attachment instanceof Image) {
+      const url = attachment.url;
+      if (url instanceof URL) {
+        attachments.push({
+          url: url.href,
+          altText: attachment.name?.toString() ?? null,
+        });
+      }
+    }
+  }
+  return attachments;
+};
 
 export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
   const object = await activity.getObject();
@@ -25,58 +42,36 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
   if (!object.id) {
     return;
   }
-  const objectIdentity = {
-    uri: object.id.href,
-  } as const;
+  const objectUri = object.id.href;
+
+  const useCase = AddRemotePostUseCase.create({
+    postCreatedStore: PgPostCreatedStore.getInstance(),
+    postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
+    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
+    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+  });
 
   return RA.flow(
     RA.ok(actor),
     RA.andBind('actorIdentity', ActorIdentity.fromFedifyActor),
-    RA.andBind('actor', ({ actorIdentity }) =>
-      upsertRemoteActor({
-        now: Instant.now(),
-        remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-        logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-      })(actorIdentity)),
-    RA.andBind('createdPost', ({ actor }) => {
-      const createPost = Post.createRemotePost(Instant.now())({
+    RA.andBind('attachments', async () => RA.ok(await extractAttachments(object))),
+    RA.andThen(({ actorIdentity, attachments }) =>
+      useCase.run({
         content: String(object.content),
-        uri: objectIdentity.uri,
-        actorId: actor.id,
-      });
-      return PgPostCreatedStore.getInstance().store(createPost).then(() => RA.ok(createPost));
-    }),
-    RA.andThrough(async ({ createdPost }) => {
-      const now = Instant.now();
-      const images: PostImage[] = [];
-      for await (const attachment of object.getAttachments()) {
-        if (attachment instanceof Document || attachment instanceof Image) {
-          const url = attachment.url;
-          if (url instanceof URL) {
-            images.push({
-              imageId: ImageId.generate(),
-              postId: createdPost.aggregateState.postId,
-              url: url.href,
-              altText: attachment.name?.toString() ?? null,
-              createdAt: now,
-            });
-          }
-        }
-      }
-      if (images.length > 0) {
-        await PgPostImageCreatedStore.getInstance().store(images);
-      }
-      return RA.ok(undefined);
-    }),
+        uri: objectUri,
+        actorIdentity,
+        attachments,
+      })
+    ),
     RA.match({
-      ok: ({ actorIdentity }) => {
+      ok: ({ actor: createdActor }) => {
         getLogger().info(
-          `Processed Create activity: ${objectIdentity.uri} by ${actorIdentity.uri}`,
+          `Processed Create activity: ${objectUri} by ${createdActor.uri}`,
         );
       },
       err: (err) => {
         getLogger().warn(
-          `Failed to process Create activity: ${objectIdentity.uri} - ${err}`,
+          `Failed to process Create activity: ${objectUri} - ${err}`,
         );
       },
     }),
