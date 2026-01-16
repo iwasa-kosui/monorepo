@@ -1,6 +1,7 @@
-import { z } from "zod/v4";
-import { Schema } from "../../helper/schema.ts";
 import { argon2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { z } from "zod/v4";
+
+import { Schema } from "../../helper/schema.ts";
 
 export const PasswordSym = Symbol('Password');
 const zodType = z.string().min(16).max(255).brand(PasswordSym).describe('Password');

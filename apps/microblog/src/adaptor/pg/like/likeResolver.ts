@@ -1,5 +1,6 @@
 import { RA } from "@iwasa-kosui/result";
 import { and, eq } from "drizzle-orm";
+
 import type { ActorId } from "../../../domain/actor/actorId.ts";
 import { Like } from "../../../domain/like/like.ts";
 import { LikeId } from "../../../domain/like/likeId.ts";

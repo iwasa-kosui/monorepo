@@ -1,9 +1,10 @@
 import z from "zod/v4";
-import { ImageId } from "./imageId.ts";
-import { PostId } from "../post/postId.ts";
-import { Instant } from "../instant/instant.ts";
+
 import { Schema } from "../../helper/schema.ts";
 import type { Agg } from "../aggregate/index.ts";
+import { Instant } from "../instant/instant.ts";
+import { PostId } from "../post/postId.ts";
+import { ImageId } from "./imageId.ts";
 
 const postImageZodType = z.object({
   imageId: ImageId.zodType,

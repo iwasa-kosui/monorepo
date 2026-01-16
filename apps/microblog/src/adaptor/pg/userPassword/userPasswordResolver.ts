@@ -1,11 +1,12 @@
+import { RA } from "@iwasa-kosui/result";
 import { eq } from "drizzle-orm";
+
+import { HashedPassword } from "../../../domain/password/password.ts";
 import type { UserPasswordResolver } from "../../../domain/password/userPassword.ts";
 import { UserId } from "../../../domain/user/userId.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { userPasswordsTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
-import { HashedPassword } from "../../../domain/password/password.ts";
 
 const getInstance = singleton((): UserPasswordResolver => {
   const resolve = async (userId: UserId) => {

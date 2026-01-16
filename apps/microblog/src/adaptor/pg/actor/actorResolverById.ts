@@ -1,13 +1,14 @@
 import { RA } from "@iwasa-kosui/result";
-import { UserId } from "../../../domain/user/userId.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { actorsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
-import { DB } from "../db.ts";
 import { eq } from "drizzle-orm";
+
 import type { Actor } from "../../../domain/actor/actor.ts";
 import { ActorId } from "../../../domain/actor/actorId.ts";
 import type { RemoteActor } from "../../../domain/actor/remoteActor.ts";
 import type { Agg } from "../../../domain/aggregate/index.ts";
+import { UserId } from "../../../domain/user/userId.ts";
+import { singleton } from "../../../helper/singleton.ts";
+import { DB } from "../db.ts";
+import { actorsTable, localActorsTable, remoteActorsTable } from "../schema.ts";
 
 export type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 

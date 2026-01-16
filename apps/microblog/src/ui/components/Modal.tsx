@@ -1,4 +1,4 @@
-import type { Child, JSX, PropsWithChildren, ReactNode } from "hono/jsx";
+import type { Child, PropsWithChildren } from "hono/jsx";
 
 type Props = PropsWithChildren<{
   id: string;

@@ -1,5 +1,5 @@
-import type { Agg } from "./index.ts";
 import type { Instant } from "../instant/instant.ts";
+import type { Agg } from "./index.ts";
 
 const EventIdSym = Symbol("EventId");
 export type EventId = string & { [EventIdSym]: true };

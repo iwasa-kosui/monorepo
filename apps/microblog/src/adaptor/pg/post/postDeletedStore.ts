@@ -1,5 +1,6 @@
 import { RA } from "@iwasa-kosui/result";
 import { eq } from "drizzle-orm";
+
 import type {
   PostDeleted,
   PostDeletedStore,

@@ -1,19 +1,20 @@
-import type { Actor, ActorResolverByUserId, ActorsResolverByFollowerId, ActorsResolverByFollowingId } from "./../domain/actor/actor.ts";
-import type { Post, PostsResolverByActorId, PostsResolverByActorIds, PostWithAuthor } from "./../domain/post/post.ts";
 import { RA } from "@iwasa-kosui/result";
+
+import { Instant } from "../domain/instant/instant.ts";
 import {
   SessionExpiredError,
   type SessionResolver,
 } from "../domain/session/session.ts";
 import type { SessionId } from "../domain/session/sessionId.ts";
 import {
-  UserNotFoundError,
   type User,
+  UserNotFoundError,
   type UserResolver,
 } from "../domain/user/user.ts";
-import type { UseCase } from "./useCase.ts";
+import type { Actor, ActorResolverByUserId, ActorsResolverByFollowerId, ActorsResolverByFollowingId } from "./../domain/actor/actor.ts";
+import type { PostsResolverByActorIds, PostWithAuthor } from "./../domain/post/post.ts";
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from "./helper/resolve.ts";
-import { Instant } from "../domain/instant/instant.ts";
+import type { UseCase } from "./useCase.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;

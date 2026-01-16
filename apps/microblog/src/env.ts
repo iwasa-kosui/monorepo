@@ -1,4 +1,5 @@
 import z from "zod/v4";
+
 import { singleton } from "./helper/singleton.ts";
 
 const baseSchema = z.object({

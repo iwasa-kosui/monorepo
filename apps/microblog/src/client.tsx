@@ -1,8 +1,5 @@
-import { hc } from "hono/client";
 import { useState } from "hono/jsx";
 import { render } from "hono/jsx/dom";
-
-const client = hc("/");
 
 function App() {
   return (

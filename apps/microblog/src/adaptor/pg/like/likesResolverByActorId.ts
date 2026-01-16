@@ -1,7 +1,7 @@
 import { RA } from "@iwasa-kosui/result";
 import { eq } from "drizzle-orm";
+
 import type { ActorId } from "../../../domain/actor/actorId.ts";
-import type { Like, LikeResolver } from "../../../domain/like/like.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { likesTable } from "../schema.ts";

@@ -1,11 +1,12 @@
+import { hc } from "hono/client";
 import { useEffect, useState } from "hono/jsx";
+import { render } from "hono/jsx/dom";
+
+import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 import type { RemoteActor } from "../../domain/actor/remoteActor.ts";
 import { RemoteActor as RemoteActorDomain } from "../../domain/actor/remoteActor.ts";
 import type { PostWithAuthor } from "../../domain/post/post.ts";
 import { PostView } from "../components/PostView.tsx";
-import { render } from "hono/jsx/dom";
-import { hc } from "hono/client";
-import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 
 const client = hc<APIRouterType>("/api");
 

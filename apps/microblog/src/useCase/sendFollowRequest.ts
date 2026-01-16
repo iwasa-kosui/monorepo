@@ -1,34 +1,35 @@
+import { Follow, type RequestContext } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
+
+import { ActorIdentity, ParseActorIdentityError } from "../adaptor/fedify/actorIdentity.ts";
+import type {
+  RemoteActorLookup,
+  RemoteActorLookupError,
+} from "../adaptor/fedify/remoteActorLookup.ts";
 import type { ActorResolverByUserId } from "../domain/actor/actor.ts";
-import type { SessionId } from "../domain/session/sessionId.ts";
-import type { UseCase } from "./useCase.ts";
+import type { RemoteActorCreatedStore } from "../domain/actor/remoteActor.ts";
+import type { LogoUriUpdatedStore } from "../domain/actor/updateLogoUri.ts";
+import {
+  Follow as AppFollow,
+  type FollowRequestedStore,
+} from "../domain/follow/follow.ts";
+import { Instant } from "../domain/instant/instant.ts";
 import {
   SessionExpiredError,
   type SessionResolver,
 } from "../domain/session/session.ts";
+import type { SessionId } from "../domain/session/sessionId.ts";
 import {
   UserNotFoundError,
   type UserResolver,
 } from "../domain/user/user.ts";
 import {
-  Follow as AppFollow,
-  type FollowRequestedStore,
-} from "../domain/follow/follow.ts";
-import type { RemoteActorCreatedStore } from "../domain/actor/remoteActor.ts";
-import type { LogoUriUpdatedStore } from "../domain/actor/updateLogoUri.ts";
-import {
+  resolveLocalActorWith,
   resolveSessionWith,
   resolveUserWith,
-  resolveLocalActorWith,
 } from "./helper/resolve.ts";
 import { upsertRemoteActor } from "./helper/upsertRemoteActor.ts";
-import { ActorIdentity, ParseActorIdentityError } from "../adaptor/fedify/actorIdentity.ts";
-import { Instant } from "../domain/instant/instant.ts";
-import { Follow, type RequestContext } from "@fedify/fedify";
-import type {
-  RemoteActorLookup,
-  RemoteActorLookupError,
-} from "../adaptor/fedify/remoteActorLookup.ts";
+import type { UseCase } from "./useCase.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;

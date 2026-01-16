@@ -1,9 +1,10 @@
 import z from "zod/v4";
-import { ActorId } from "../actor/actorId.ts";
-import type { Agg } from "../aggregate/index.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import type { Instant } from "../instant/instant.ts";
+
 import { Schema } from "../../helper/schema.ts";
+import { ActorId } from "../actor/actorId.ts";
+import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
+import type { Agg } from "../aggregate/index.ts";
+import type { Instant } from "../instant/instant.ts";
 
 const zodType = z.object({
   followerId: ActorId.zodType,

@@ -1,30 +1,31 @@
-import z from "zod/v4";
-import { Schema } from "../helper/schema.ts";
-import type { UseCase } from "./useCase.ts";
-import { Username } from "../domain/user/username.ts";
-import {
-  User,
-  UserNotFoundError,
-  type UserResolverByUsername,
-} from "../domain/user/user.ts";
 import { RA } from "@iwasa-kosui/result";
+import z from "zod/v4";
+
+import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
+import { PgActorResolverByFollowerId } from "../adaptor/pg/actor/followsResolverByFollowerId.ts";
+import { PgActorResolverByFollowingId } from "../adaptor/pg/actor/followsResolverByFollowingId.ts";
+import { PgPostsResolverByActorIds } from "../adaptor/pg/post/postsResolverByActorIds.ts";
+import { PgUserResolverByUsername } from "../adaptor/pg/user/userResolverByUsername.ts";
 import {
   Actor,
   type ActorResolverByUserId,
   type ActorsResolverByFollowerId,
   type ActorsResolverByFollowingId,
 } from "../domain/actor/actor.ts";
+import type { PostsResolverByActorIds, PostWithAuthor } from "../domain/post/post.ts";
+import {
+  User,
+  UserNotFoundError,
+  type UserResolverByUsername,
+} from "../domain/user/user.ts";
+import { Username } from "../domain/user/username.ts";
+import { Schema } from "../helper/schema.ts";
+import { singleton } from "../helper/singleton.ts";
 import {
   resolveLocalActorWith,
   resolveUserByUsernameWith,
 } from "./helper/resolve.ts";
-import type { PostsResolverByActorIds, PostWithAuthor } from "../domain/post/post.ts";
-import { singleton } from "../helper/singleton.ts";
-import { PgUserResolverByUsername } from "../adaptor/pg/user/userResolverByUsername.ts";
-import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
-import { PgActorResolverByFollowingId } from "../adaptor/pg/actor/followsResolverByFollowingId.ts";
-import { PgActorResolverByFollowerId } from "../adaptor/pg/actor/followsResolverByFollowerId.ts";
-import { PgPostsResolverByActorIds } from "../adaptor/pg/post/postsResolverByActorIds.ts";
+import type { UseCase } from "./useCase.ts";
 
 const Input = Schema.create(
   z.object({

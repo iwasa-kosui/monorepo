@@ -1,10 +1,11 @@
+import { Result } from "@iwasa-kosui/result";
 import z from "zod/v4";
+
+import { type InferSchema,Schema } from "../../helper/schema.ts";
+import { Agg } from "../aggregate/index.ts";
+import { createUser } from "./createUser.ts";
 import { UserId } from "./userId.ts";
 import { Username } from "./username.ts";
-import { Result, ResultAsync } from "@iwasa-kosui/result";
-import { Schema, type InferSchema } from "../../helper/schema.ts";
-import { createUser } from "./createUser.ts";
-import { Agg } from "../aggregate/index.ts";
 
 const schema = Schema.create(z.object({
   id: UserId.zodType,

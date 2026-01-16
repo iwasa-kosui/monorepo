@@ -1,13 +1,14 @@
+import { Result } from "@iwasa-kosui/result";
 import z from "zod/v4";
-import { Schema } from "../helper/schema.ts";
-import type { UseCase } from "./useCase.ts";
-import { RA, Result } from "@iwasa-kosui/result";
+
+import { type ActorResolverById,PgActorResolverById } from "../adaptor/pg/actor/actorResolverById.ts";
+import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
 import { ActorId } from "../domain/actor/actorId.ts";
 import type { RemoteActor } from "../domain/actor/remoteActor.ts";
 import type { FollowResolver } from "../domain/follow/follow.ts";
+import { Schema } from "../helper/schema.ts";
 import { singleton } from "../helper/singleton.ts";
-import { PgActorResolverById, type ActorResolverById } from "../adaptor/pg/actor/actorResolverById.ts";
-import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
+import type { UseCase } from "./useCase.ts";
 
 const Input = Schema.create(
   z.object({

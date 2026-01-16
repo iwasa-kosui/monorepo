@@ -1,8 +1,9 @@
 import { RA } from "@iwasa-kosui/result";
-import { PostNotFoundError, type Post, type PostResolver } from "../domain/post/post.ts";
+
+import type { PostImage, PostImagesResolverByPostId } from "../domain/image/image.ts";
+import { type Post, PostNotFoundError, type PostResolver } from "../domain/post/post.ts";
 import type { PostId } from "../domain/post/postId.ts";
 import type { UseCase } from "./useCase.ts";
-import type { PostImage, PostImagesResolverByPostId } from "../domain/image/image.ts";
 
 type Input = Readonly<{
   postId: PostId;

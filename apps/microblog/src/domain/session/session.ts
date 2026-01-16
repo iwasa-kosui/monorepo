@@ -1,10 +1,11 @@
 import z from "zod/v4";
-import { UserId } from "../user/userId.ts";
-import { Instant } from "../instant/instant.ts";
-import { SessionId } from "./sessionId.ts";
-import type { Agg } from "../aggregate/index.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
+
 import { Schema } from "../../helper/schema.ts";
+import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
+import type { Agg } from "../aggregate/index.ts";
+import { Instant } from "../instant/instant.ts";
+import { UserId } from "../user/userId.ts";
+import { SessionId } from "./sessionId.ts";
 
 const zodType = z.object({
   sessionId: SessionId.zodType,

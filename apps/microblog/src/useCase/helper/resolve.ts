@@ -1,12 +1,13 @@
 import { RA } from "@iwasa-kosui/result";
+
+import type { ActorResolverByUserId } from "../../domain/actor/actor.ts";
+import type { LocalActor } from "../../domain/actor/localActor.ts";
+import type { Instant } from "../../domain/instant/instant.ts";
 import { Session, SessionExpiredError, type SessionResolver } from "../../domain/session/session.ts";
 import type { SessionId } from "../../domain/session/sessionId.ts";
+import { type User, UserNotFoundError, type UserResolver, type UserResolverByUsername } from "../../domain/user/user.ts";
 import type { UserId } from "../../domain/user/userId.ts";
-import { UserNotFoundError, type User, type UserResolver, type UserResolverByUsername } from "../../domain/user/user.ts";
-import type { LocalActor } from "../../domain/actor/localActor.ts";
-import type { ActorResolverByUserId } from "../../domain/actor/actor.ts";
 import type { Username } from "../../domain/user/username.ts";
-import type { Instant } from "../../domain/instant/instant.ts";
 
 export const resolveSessionWith = (sessionResolver: SessionResolver, now: Instant) => (
   sessionId: SessionId

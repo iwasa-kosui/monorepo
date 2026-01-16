@@ -1,10 +1,11 @@
 import type { Context } from "@fedify/fedify";
+
+import type { Agg } from "../aggregate/index.ts";
+import type { Instant } from "../instant/instant.ts";
 import type { User } from "../user/user.ts";
+import { ActorId } from "./actorId.ts";
 import { ActorEvent } from "./aggregate.ts";
 import type { LocalActor } from "./localActor.ts";
-import type { Instant } from "../instant/instant.ts";
-import { ActorId } from "./actorId.ts";
-import type { Agg } from "../aggregate/index.ts";
 
 export type LocalActorCreated = ActorEvent<LocalActor, 'actor.created', User>;
 export type LocalActorCreatedStore = Agg.Store<LocalActorCreated>;

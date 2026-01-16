@@ -1,9 +1,10 @@
 import z from "zod/v4";
+
+import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
+import type { Agg } from "../aggregate/index.ts";
+import type { Instant } from "../instant/instant.ts";
 import { UserId } from "../user/userId.ts";
 import { HashedPassword } from "./password.ts";
-import type { Agg } from "../aggregate/index.ts";
-import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import type { Instant } from "../instant/instant.ts";
 
 const zodType = z.object({
   userId: UserId.zodType,

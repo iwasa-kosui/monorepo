@@ -1,16 +1,17 @@
 import { Accept, type Follow, type InboxContext } from "@fedify/fedify";
+import { RA } from "@iwasa-kosui/result";
+import { getLogger } from "@logtape/logtape";
+
+import { Username } from "../../../domain/user/username.ts";
 import { AcceptFollowRequestUseCase } from "../../../useCase/acceptFollowRequest.ts";
-import { PgFollowedStore } from "../../pg/follow/followAcceptedStore.ts";
-import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
 import { PgActorResolverByUri } from "../../pg/actor/actorResolverByUri.ts";
 import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts";
-import { PgRemoteActorCreatedStore } from "../../pg/actor/remoteActorCreatedStore.ts";
-import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
-import { Username } from "../../../domain/user/username.ts";
 import { PgLogoUriUpdatedStore } from "../../pg/actor/logoUriUpdatedStore.ts";
-import { RA } from "@iwasa-kosui/result";
+import { PgRemoteActorCreatedStore } from "../../pg/actor/remoteActorCreatedStore.ts";
+import { PgFollowedStore } from "../../pg/follow/followAcceptedStore.ts";
+import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
+import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
 import { ActorIdentity } from "../actorIdentity.ts";
-import { getLogger } from "@logtape/logtape";
 
 export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => {
   if (!activity.objectId) {

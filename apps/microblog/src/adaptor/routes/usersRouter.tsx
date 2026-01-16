@@ -1,30 +1,31 @@
+import { sValidator } from "@hono/standard-validator";
+import { RA } from "@iwasa-kosui/result";
+import { getLogger } from "@logtape/logtape";
+import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
+import z from "zod/v4";
+
+import { Actor } from "../../domain/actor/actor.ts";
+import { Instant } from "../../domain/instant/instant.ts";
+import { PostId } from "../../domain/post/postId.ts";
+import { SessionId } from "../../domain/session/sessionId.ts";
+import { Username } from "../../domain/user/username.ts";
 import { Layout } from "../../layout.tsx";
 import { GetUserPage } from "../../ui/pages/getUser.tsx";
-import { sValidator } from "@hono/standard-validator";
-import { Hono } from "hono";
-import z from "zod/v4";
-import { Username } from "../../domain/user/username.ts";
-import { getLogger } from "@logtape/logtape";
-import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
-import { RA } from "@iwasa-kosui/result";
-import { PostId } from "../../domain/post/postId.ts";
 import { GetPostUseCase } from "../../useCase/getPost.ts";
-import { PgPostResolver } from "../pg/post/postResolver.ts";
-import { sanitize } from "./helper/sanitize.ts";
-import { getCookie } from "hono/cookie";
-import { SessionId } from "../../domain/session/sessionId.ts";
-import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
-import { PgUserResolver } from "../pg/user/userResolver.ts";
+import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
 import {
   resolveLocalActorWith,
   resolveSessionWith,
   resolveUserWith,
 } from "../../useCase/helper/resolve.ts";
-import { Instant } from "../../domain/instant/instant.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
-import { Actor } from "../../domain/actor/actor.ts";
 import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
 import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
+import { PgPostResolver } from "../pg/post/postResolver.ts";
+import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
+import { PgUserResolver } from "../pg/user/userResolver.ts";
+import { sanitize } from "./helper/sanitize.ts";
 
 const app = new Hono();
 

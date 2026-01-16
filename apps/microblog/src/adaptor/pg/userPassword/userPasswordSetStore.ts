@@ -1,9 +1,9 @@
 import { RA } from "@iwasa-kosui/result";
-import type { FollowAccepted, FollowAcceptedStore } from "../../../domain/follow/follow.ts";
-import { DB } from "../db.ts";
-import { domainEventsTable, followsTable, userPasswordsTable } from "../schema.ts";
-import { singleton } from "../../../helper/singleton.ts";
+
 import type { UserPasswordSet, UserPasswordSetStore } from "../../../domain/password/userPassword.ts";
+import { singleton } from "../../../helper/singleton.ts";
+import { DB } from "../db.ts";
+import { domainEventsTable, userPasswordsTable } from "../schema.ts";
 
 const store = async (event: UserPasswordSet): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {

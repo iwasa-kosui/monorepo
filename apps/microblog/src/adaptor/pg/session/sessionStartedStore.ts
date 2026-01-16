@@ -1,7 +1,8 @@
 import { RA } from "@iwasa-kosui/result";
+
 import type { SessionStarted, SessionStartedStore } from "../../../domain/session/session.ts";
-import { DB } from "../db.ts";
 import { singleton } from "../../../helper/singleton.ts";
+import { DB } from "../db.ts";
 import { domainEventsTable, sessionsTable } from "../schema.ts";
 
 const store = async (event: SessionStarted): RA<void, never> => {

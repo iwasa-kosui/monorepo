@@ -1,4 +1,5 @@
 import { RA } from "@iwasa-kosui/result";
+
 import type { LocalActorCreated, LocalActorCreatedStore } from "../../../domain/actor/createLocalActor.ts";
 import { DB } from "../db.ts";
 import { actorsTable, domainEventsTable, localActorsTable } from "../schema.ts";

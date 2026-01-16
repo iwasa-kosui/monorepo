@@ -1,11 +1,12 @@
+import type { RA } from "@iwasa-kosui/result";
+
+import type { Agg } from "../aggregate/index.ts";
 import type { Instant } from "../instant/instant.ts";
 import type { UserId } from "../user/userId.ts";
-import type { Key } from "./key.ts";
 import { KeyEvent } from "./aggregate.ts";
+import type { Key } from "./key.ts";
 import { KeyId } from "./keyId.ts";
 import type { KeyType } from "./keyType.ts";
-import type { Agg } from "../aggregate/index.ts";
-import type { RA } from "@iwasa-kosui/result";
 
 type Payload = Readonly<{
   type: KeyType;

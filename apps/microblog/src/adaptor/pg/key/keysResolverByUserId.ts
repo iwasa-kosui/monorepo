@@ -1,10 +1,11 @@
 import { RA } from "@iwasa-kosui/result";
+import { eq } from "drizzle-orm";
+
 import { Key, type KeysResolverByUserId } from "../../../domain/key/key.ts";
 import type { UserId } from "../../../domain/user/userId.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { keysTable } from "../schema.ts";
-import { eq } from "drizzle-orm";
 
 const getInstance = singleton((): KeysResolverByUserId => {
   const resolve = async (userId: UserId): RA<Key[], never> => {

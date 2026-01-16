@@ -1,10 +1,11 @@
 import z from "zod/v4";
+
 import type { Agg } from "../aggregate/index.ts";
 import type { UserId } from "../user/userId.ts";
+import type { Username } from "../user/username.ts";
 import type { ActorId } from "./actorId.ts";
 import { LocalActor } from "./localActor.ts";
 import { RemoteActor } from "./remoteActor.ts";
-import type { Username } from "../user/username.ts";
 import { updateLogoUri } from "./updateLogoUri.ts";
 
 export type Actor = LocalActor | RemoteActor

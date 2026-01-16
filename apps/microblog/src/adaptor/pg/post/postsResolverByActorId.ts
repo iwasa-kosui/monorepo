@@ -1,12 +1,12 @@
-import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
+import { RA } from "@iwasa-kosui/result";
 import { desc, eq } from "drizzle-orm";
-import { Post, type PostResolver, type PostsResolverByActorId } from "../../../domain/post/post.ts";
-import type { PostId } from "../../../domain/post/postId.ts";
+
+import type { ActorId } from "../../../domain/actor/actorId.ts";
+import { Post, type PostsResolverByActorId } from "../../../domain/post/post.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { localPostsTable, postsTable, remotePostsTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
-import type { ActorId } from "../../../domain/actor/actorId.ts";
+import { LocalPost, RemotePost } from './../../../domain/post/post.ts';
 
 const getInstance = singleton((): PostsResolverByActorId => {
   const resolve = async (actorId: ActorId) => {

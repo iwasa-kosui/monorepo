@@ -1,15 +1,16 @@
-import { LocalPost, RemotePost, type PostsResolverByActorIdWithPagination } from '../../../domain/post/post.ts';
+import { RA } from "@iwasa-kosui/result";
+import { randomUUID } from 'crypto';
 import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
+
+import type { ActorId } from "../../../domain/actor/actorId.ts";
+import { Instant } from '../../../domain/instant/instant.ts';
+import { LocalPost, type PostsResolverByActorIdWithPagination,RemotePost } from '../../../domain/post/post.ts';
 import { Post } from "../../../domain/post/post.ts";
+import { Username } from '../../../domain/user/username.ts';
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { actorsTable, likesTable, localActorsTable, localPostsTable, postImagesTable, postsTable, remoteActorsTable, remotePostsTable, usersTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
-import type { ActorId } from "../../../domain/actor/actorId.ts";
-import { Username } from '../../../domain/user/username.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
-import { randomUUID } from 'crypto';
-import { inArray } from "drizzle-orm";
 
 const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
   const resolve = async ({ actorId, currentActorId, createdAt }: { actorId: ActorId, currentActorId: ActorId | undefined, createdAt: Instant | undefined }) => {

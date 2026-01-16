@@ -1,13 +1,14 @@
-import { Document, Link, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
-import { GetPostUseCase } from "../../useCase/getPost.ts";
-import { PgPostResolver } from "../pg/post/postResolver.ts";
+import { Document, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
-import { PostId } from "../../domain/post/postId.ts";
 import { Temporal } from "@js-temporal/polyfill";
 import { getLogger } from "@logtape/logtape";
-import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
-import { Env } from "../../env.ts";
+
 import { getMimeTypeFromUrl } from "../../domain/image/mimeType.ts";
+import { PostId } from "../../domain/post/postId.ts";
+import { Env } from "../../env.ts";
+import { GetPostUseCase } from "../../useCase/getPost.ts";
+import { PgPostImagesResolverByPostId } from "../pg/image/postImagesResolver.ts";
+import { PgPostResolver } from "../pg/post/postResolver.ts";
 
 const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
   const useCase = GetPostUseCase.create({

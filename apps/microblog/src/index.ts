@@ -1,6 +1,8 @@
 import { serve } from "@hono/node-server";
 import { behindProxy } from "x-forwarded-fetch";
+
 import app from "./app.tsx";
+
 import "./logging.ts";
 
 serve(

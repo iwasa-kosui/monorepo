@@ -1,16 +1,17 @@
+import { Result } from "@iwasa-kosui/result";
 import z from "zod/v4";
-import { Schema } from "../helper/schema.ts";
-import type { UseCase } from "./useCase.ts";
-import { RA, Result } from "@iwasa-kosui/result";
+
+import { type ActorResolverById,PgActorResolverById } from "../adaptor/pg/actor/actorResolverById.ts";
+import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
+import { PgPostsResolverByActorIdWithPagination } from "../adaptor/pg/post/postsResolverByActorIdWithPagination.ts";
 import { ActorId } from "../domain/actor/actorId.ts";
 import type { RemoteActor } from "../domain/actor/remoteActor.ts";
 import type { FollowResolver } from "../domain/follow/follow.ts";
-import type { PostWithAuthor, PostsResolverByActorIdWithPagination } from "../domain/post/post.ts";
-import { singleton } from "../helper/singleton.ts";
-import { PgActorResolverById, type ActorResolverById } from "../adaptor/pg/actor/actorResolverById.ts";
-import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
-import { PgPostsResolverByActorIdWithPagination } from "../adaptor/pg/post/postsResolverByActorIdWithPagination.ts";
 import { Instant } from "../domain/instant/instant.ts";
+import type { PostsResolverByActorIdWithPagination,PostWithAuthor } from "../domain/post/post.ts";
+import { Schema } from "../helper/schema.ts";
+import { singleton } from "../helper/singleton.ts";
+import type { UseCase } from "./useCase.ts";
 
 const Input = Schema.create(
   z.object({

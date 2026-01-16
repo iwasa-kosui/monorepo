@@ -1,9 +1,10 @@
 import { Create, Note, PUBLIC_COLLECTION, type RequestContext } from "@fedify/fedify";
-import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
 import { RA } from "@iwasa-kosui/result";
-import { Username } from "../../domain/user/username.ts";
-import { getLogger } from "@logtape/logtape";
 import { Temporal } from "@js-temporal/polyfill";
+import { getLogger } from "@logtape/logtape";
+
+import { Username } from "../../domain/user/username.ts";
+import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
 
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();

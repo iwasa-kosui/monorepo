@@ -1,22 +1,23 @@
 import { sValidator } from "@hono/standard-validator";
-import { Hono } from "hono";
-import { Layout } from "../../layout.tsx";
-import { Username } from "../../domain/user/username.ts";
-import { Password } from "../../domain/password/password.ts";
-import z from "zod/v4";
+import { RA } from "@iwasa-kosui/result";
 import { getLogger } from "@logtape/logtape";
-import { SignUpUseCase } from "../../useCase/signUp.ts";
-import { PgUserResolverByUsername } from "../pg/user/userResolverByUsername.ts";
-import { PgUserCreatedStore } from "../pg/user/userCreatedStore.ts";
-import { PgLocalActorCreatedStore } from "../pg/actor/localActorCreatedStore.ts";
-import { PgUserPasswordSetStore } from "../pg/userPassword/userPasswordSetStore.ts";
+import { Hono } from "hono";
+import z from "zod/v4";
+
+import { Password } from "../../domain/password/password.ts";
 import type {
   UnacceptableUsernameError,
   User,
   UsernameAlreadyTakenError,
 } from "../../domain/user/user.ts";
+import { Username } from "../../domain/user/username.ts";
 import { Federation } from "../../federation.ts";
-import { RA } from "@iwasa-kosui/result";
+import { Layout } from "../../layout.tsx";
+import { SignUpUseCase } from "../../useCase/signUp.ts";
+import { PgLocalActorCreatedStore } from "../pg/actor/localActorCreatedStore.ts";
+import { PgUserCreatedStore } from "../pg/user/userCreatedStore.ts";
+import { PgUserResolverByUsername } from "../pg/user/userResolverByUsername.ts";
+import { PgUserPasswordSetStore } from "../pg/userPassword/userPasswordSetStore.ts";
 
 const app = new Hono();
 

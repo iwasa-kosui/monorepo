@@ -1,8 +1,9 @@
 import { RA } from "@iwasa-kosui/result";
+
+import type { Agg } from "../../../domain/aggregate/index.ts";
 import type { KeyGenerated } from "../../../domain/key/generate.ts";
 import { DB } from "../db.ts";
 import { domainEventsTable, keysTable } from "../schema.ts";
-import type { Agg } from "../../../domain/aggregate/index.ts";
 
 const store = async (event: KeyGenerated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {

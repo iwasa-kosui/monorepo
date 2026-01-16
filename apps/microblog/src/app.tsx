@@ -1,16 +1,17 @@
-import { Hono } from "hono";
 import { federation } from "@fedify/hono";
-import { Federation } from "./federation.ts";
-import { UsersRouter } from "./adaptor/routes/usersRouter.tsx";
-import { SignUpRouter } from "./adaptor/routes/signUpRouter.tsx";
-import { SignInRouter } from "./adaptor/routes/signInRouter.tsx";
-import { PostsRouter } from "./adaptor/routes/postsRouter.tsx";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { Hono } from "hono";
+
+import { APIRouter } from "./adaptor/routes/apiRouter.tsx";
 import { FollowRouter } from "./adaptor/routes/followRouter.tsx";
 import { HomeRouter } from "./adaptor/routes/homeRouter.tsx";
-import { RemoteUsersRouter } from "./adaptor/routes/remoteUsersRouter.tsx";
 import { LikeRouter } from "./adaptor/routes/likeRouter.tsx";
-import { APIRouter } from "./adaptor/routes/apiRouter.tsx";
-import { serveStatic } from "@hono/node-server/serve-static";
+import { PostsRouter } from "./adaptor/routes/postsRouter.tsx";
+import { RemoteUsersRouter } from "./adaptor/routes/remoteUsersRouter.tsx";
+import { SignInRouter } from "./adaptor/routes/signInRouter.tsx";
+import { SignUpRouter } from "./adaptor/routes/signUpRouter.tsx";
+import { UsersRouter } from "./adaptor/routes/usersRouter.tsx";
+import { Federation } from "./federation.ts";
 
 const app = new Hono();
 const fed = Federation.getInstance();

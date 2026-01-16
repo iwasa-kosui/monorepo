@@ -1,4 +1,5 @@
 import { RA } from "@iwasa-kosui/result";
+
 import type {
   LikeCreated,
   LikeCreatedStore,

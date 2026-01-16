@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+
 import { Env } from "../../env.ts";
 import { singleton } from "../../helper/singleton.ts";
 

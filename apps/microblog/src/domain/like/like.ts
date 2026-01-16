@@ -1,4 +1,5 @@
 import z from "zod/v4";
+
 import { Schema } from "../../helper/schema.ts";
 import { ActorId } from "../actor/actorId.ts";
 import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";

@@ -1,11 +1,12 @@
 import { RA } from "@iwasa-kosui/result"
+import { eq } from "drizzle-orm"
+
 import type { User, UserResolver } from "../../../domain/user/user.ts"
 import { UserId } from "../../../domain/user/userId.ts"
-import { singleton } from "../../../helper/singleton.ts"
-import { usersTable } from "../schema.ts"
-import { DB } from "../db.ts"
-import { eq } from "drizzle-orm"
 import { Username } from "../../../domain/user/username.ts"
+import { singleton } from "../../../helper/singleton.ts"
+import { DB } from "../db.ts"
+import { usersTable } from "../schema.ts"
 
 const getInstance = singleton((): UserResolver => {
   const resolve = async (userId: UserId): RA<User | undefined, never> => {

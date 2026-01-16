@@ -1,6 +1,7 @@
 import type { Delete, InboxContext } from "@fedify/fedify";
 import { getLogger } from "@logtape/logtape";
 import { eq } from "drizzle-orm";
+
 import { Instant } from "../../../domain/instant/instant.ts";
 import { Post } from "../../../domain/post/post.ts";
 import { PostId } from "../../../domain/post/postId.ts";

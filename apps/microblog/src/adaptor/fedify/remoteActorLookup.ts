@@ -1,9 +1,10 @@
 import type { Actor } from "@fedify/fedify";
 import { isActor } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
-import { singleton } from "../../helper/singleton.ts";
-import { Federation } from "../../federation.ts";
+
 import type { Username } from "../../domain/user/username.ts";
+import { Federation } from "../../federation.ts";
+import { singleton } from "../../helper/singleton.ts";
 
 export type RemoteActorLookupError = Readonly<{
   type: "RemoteActorLookupError";

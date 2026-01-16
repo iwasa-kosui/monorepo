@@ -1,13 +1,14 @@
-import { Follow, Undo, type InboxContext } from "@fedify/fedify";
-import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
-import { PgActorResolverByUri } from "../../pg/actor/actorResolverByUri.ts";
-import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts";
-import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
-import { Username } from "../../../domain/user/username.ts";
-import { AcceptUnfollowUseCase } from "../../../useCase/acceptUnfollow.ts";
-import { PgUnfollowedStore } from "../../pg/follow/undoFollowingProcessedStore.ts";
+import { Follow, type InboxContext,Undo } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
 import { getLogger } from "@logtape/logtape";
+
+import { Username } from "../../../domain/user/username.ts";
+import { AcceptUnfollowUseCase } from "../../../useCase/acceptUnfollow.ts";
+import { PgActorResolverByUri } from "../../pg/actor/actorResolverByUri.ts";
+import { PgActorResolverByUserId } from "../../pg/actor/actorResolverByUserId.ts";
+import { PgFollowResolver } from "../../pg/follow/followResolver.ts";
+import { PgUnfollowedStore } from "../../pg/follow/undoFollowingProcessedStore.ts";
+import { PgUserResolverByUsername } from "../../pg/user/userResolverByUsername.ts";
 
 export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
   const object = await undo.getObject();

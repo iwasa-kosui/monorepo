@@ -1,10 +1,11 @@
+import { exportJwk, generateCryptoKeyPair } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
+
+import type { Instant } from "../../domain/instant/instant.ts";
 import type { KeyGenerated, KeyGenerator } from "../../domain/key/generate.ts";
 import { Key } from "../../domain/key/key.ts";
-import { exportJwk, generateCryptoKeyPair } from "@fedify/fedify";
-import type { UserId } from "../../domain/user/userId.ts";
 import type { KeyType } from "../../domain/key/keyType.ts";
-import type { Instant } from "../../domain/instant/instant.ts";
+import type { UserId } from "../../domain/user/userId.ts";
 import { singleton } from "../../helper/singleton.ts";
 
 type Props = Readonly<{

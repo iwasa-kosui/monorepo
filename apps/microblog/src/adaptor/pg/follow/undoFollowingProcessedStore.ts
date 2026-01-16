@@ -1,9 +1,10 @@
 import { RA } from "@iwasa-kosui/result";
+import { and, eq } from "drizzle-orm";
+
 import type { UndoFollowingProcessed, UndoFollowingProcessedStore } from "../../../domain/follow/follow.ts";
+import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { domainEventsTable, followsTable } from "../schema.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { and, eq } from "drizzle-orm";
 
 const store = async (event: UndoFollowingProcessed): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {

@@ -1,9 +1,10 @@
+import { RA } from "@iwasa-kosui/result";
 import { and, eq } from "drizzle-orm";
+
 import { Follow, type FollowAggregateId } from "../../../domain/follow/follow.ts";
 import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { followsTable } from "../schema.ts";
-import { RA } from "@iwasa-kosui/result";
 
 const getInstance = singleton(() => ({
   resolve: async (agg: FollowAggregateId) => {

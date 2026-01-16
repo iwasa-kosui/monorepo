@@ -1,19 +1,20 @@
-import { Layout } from "../../layout.tsx";
 import { sValidator } from "@hono/standard-validator";
-import { Hono } from "hono";
-import { Federation } from "../../federation.ts";
-import z from "zod/v4";
-import { getCookie } from "hono/cookie";
-import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
-import { SessionId } from "../../domain/session/sessionId.ts";
 import { RA } from "@iwasa-kosui/result";
-import { PgUserResolver } from "../pg/user/userResolver.ts";
-import { PgFollowRequestedStore } from "../pg/follow/followRequestedStore.ts";
-import { PgRemoteActorCreatedStore } from "../pg/actor/remoteActorCreatedStore.ts";
+import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
+import z from "zod/v4";
+
+import { SessionId } from "../../domain/session/sessionId.ts";
+import { Federation } from "../../federation.ts";
+import { Layout } from "../../layout.tsx";
+import { SendFollowRequestUseCase } from "../../useCase/sendFollowRequest.ts";
+import { FedifyRemoteActorLookup } from "../fedify/remoteActorLookup.ts";
 import { PgActorResolverByUserId } from "../pg/actor/actorResolverByUserId.ts";
 import { PgLogoUriUpdatedStore } from "../pg/actor/logoUriUpdatedStore.ts";
-import { FedifyRemoteActorLookup } from "../fedify/remoteActorLookup.ts";
-import { SendFollowRequestUseCase } from "../../useCase/sendFollowRequest.ts";
+import { PgRemoteActorCreatedStore } from "../pg/actor/remoteActorCreatedStore.ts";
+import { PgFollowRequestedStore } from "../pg/follow/followRequestedStore.ts";
+import { PgSessionResolver } from "../pg/session/sessionResolver.ts";
+import { PgUserResolver } from "../pg/user/userResolver.ts";
 
 const app = new Hono();
 

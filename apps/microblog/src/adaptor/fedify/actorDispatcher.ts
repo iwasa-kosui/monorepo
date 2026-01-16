@@ -1,8 +1,9 @@
 import { Endpoints, Image, Person, type RequestContext } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
+import { getLogger } from "@logtape/logtape";
+
 import { Username } from "../../domain/user/username.ts";
 import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
-import { getLogger } from "@logtape/logtape";
 
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance()

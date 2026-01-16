@@ -1,8 +1,9 @@
 import z from "zod/v4";
-import { ActorId } from "./actorId.ts";
-import { ActorEvent } from "./aggregate.ts";
+
 import type { Agg } from "../aggregate/index.ts";
 import { Instant } from "../instant/instant.ts";
+import { ActorId } from "./actorId.ts";
+import { ActorEvent } from "./aggregate.ts";
 
 const zodType = z.object({
   id: ActorId.zodType,

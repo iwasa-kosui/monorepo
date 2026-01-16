@@ -1,8 +1,10 @@
-import 'dotenv/config';
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+
 import { singleton } from '../../helper/singleton.ts';
 import { PgConfig } from './pgConfig.ts';
+
+import 'dotenv/config';
 
 const create = () => {
   const pool = new Pool({

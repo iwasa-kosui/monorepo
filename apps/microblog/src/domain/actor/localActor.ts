@@ -1,6 +1,7 @@
 import z from "zod/v4";
-import { ActorId } from "./actorId.ts";
+
 import { UserId } from "../user/userId.ts";
+import { ActorId } from "./actorId.ts";
 import { createLocalActor } from "./createLocalActor.ts";
 
 const zodType = z.object({

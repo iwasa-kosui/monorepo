@@ -1,8 +1,9 @@
 import { RA } from "@iwasa-kosui/result"
+
 import { PgActorResolverByUri } from "../../adaptor/pg/actor/actorResolverByUri.ts";
+import { Actor } from "../../domain/actor/actor.ts";
 import { RemoteActor, type RemoteActorCreatedStore } from "../../domain/actor/remoteActor.ts";
 import type { LogoUriUpdatedStore } from "../../domain/actor/updateLogoUri.ts";
-import { Actor } from "../../domain/actor/actor.ts";
 import type { Instant } from "../../domain/instant/instant.ts";
 
 type Identity = Readonly<{

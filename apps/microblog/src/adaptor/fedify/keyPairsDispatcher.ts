@@ -1,15 +1,16 @@
+import { type Context,importJwk } from "@fedify/fedify";
 import { RA } from "@iwasa-kosui/result";
+import { getLogger } from "@logtape/logtape";
+
+import { Instant } from "../../domain/instant/instant.ts";
+import type { Key } from "../../domain/key/key.ts";
+import { KeyType } from "../../domain/key/keyType.ts";
 import type { UserId } from "../../domain/user/userId.ts";
+import { Username } from "../../domain/user/username.ts";
+import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
 import { PgKeyGeneratedStore } from "../pg/key/keyGeneratedStore.ts";
 import { PgKeysResolverByUserId } from "../pg/key/keysResolverByUserId.ts";
 import { FedifyKeyGenerator } from "./keyGenerator.ts";
-import { importJwk, type Context } from "@fedify/fedify";
-import type { Key } from "../../domain/key/key.ts";
-import { KeyType } from "../../domain/key/keyType.ts";
-import { Instant } from "../../domain/instant/instant.ts";
-import { Username } from "../../domain/user/username.ts";
-import { GetUserProfileUseCase } from "../../useCase/getUserProfile.ts";
-import { getLogger } from "@logtape/logtape";
 
 const getInstance = () => {
   const keyGenerator = FedifyKeyGenerator.getInstance();

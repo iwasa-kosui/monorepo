@@ -1,4 +1,8 @@
+import { hc } from "hono/client";
 import { useEffect, useState } from "hono/jsx";
+import { render } from "hono/jsx/dom";
+
+import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 import type { Actor } from "../../domain/actor/actor.ts";
 import type { PostWithAuthor } from "../../domain/post/post.ts";
 import type { User } from "../../domain/user/user.ts";
@@ -6,9 +10,6 @@ import { ActorLink } from "../components/ActorLink.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { PostForm } from "../components/PostForm.tsx";
 import { PostView } from "../components/PostView.tsx";
-import { render } from "hono/jsx/dom";
-import { hc } from "hono/client";
-import type { APIRouterType } from "../../adaptor/routes/apiRouter.tsx";
 
 const client = hc<APIRouterType>("/api");
 

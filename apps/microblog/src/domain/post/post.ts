@@ -1,13 +1,13 @@
 import z from "zod/v4";
-import { PostId } from "./postId.ts";
-import { ActorId } from "../actor/actorId.ts";
-import { Instant } from "../instant/instant.ts";
+
 import { Schema } from "../../helper/schema.ts";
-import type { Agg } from "../aggregate/index.ts";
+import { ActorId } from "../actor/actorId.ts";
 import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
-import type { Context } from "@fedify/fedify";
+import type { Agg } from "../aggregate/index.ts";
+import { Instant } from "../instant/instant.ts";
 import { UserId } from "../user/userId.ts";
 import type { Username } from "../user/username.ts";
+import { PostId } from "./postId.ts";
 
 const localPostZodType = z.object({
   type: z.literal('local'),

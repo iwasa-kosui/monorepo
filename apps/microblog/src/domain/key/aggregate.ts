@@ -1,6 +1,6 @@
 import type { Aggregate } from "../aggregate/aggregate.ts"
-import type { Agg } from "../aggregate/index.ts";
 import { AggregateEvent, type DomainEvent } from "../aggregate/event.ts";
+import type { Agg } from "../aggregate/index.ts";
 import type { Key } from "./key.ts";
 import type { KeyId } from "./keyId.ts"
 

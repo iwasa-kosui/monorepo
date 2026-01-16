@@ -1,4 +1,5 @@
 import type { RA } from "@iwasa-kosui/result";
+
 import type { AnyDomainEvent } from "./event.ts";
 
 type AnyId = string | number | symbol | Readonly<Record<string, string | number | symbol>>;

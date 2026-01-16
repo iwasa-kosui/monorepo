@@ -1,4 +1,5 @@
 import { RA } from "@iwasa-kosui/result";
+
 import type { Actor } from "../domain/actor/actor.ts";
 import type { SessionId } from "../domain/session/sessionId.ts";
 import type { UseCase } from "./useCase.ts";

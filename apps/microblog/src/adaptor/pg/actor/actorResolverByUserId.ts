@@ -1,12 +1,13 @@
 import { RA } from "@iwasa-kosui/result";
-import { UserId } from "../../../domain/user/userId.ts";
-import { singleton } from "../../../helper/singleton.ts";
-import { actorsTable, localActorsTable, remoteActorsTable, usersTable } from "../schema.ts";
-import { DB } from "../db.ts";
 import { eq } from "drizzle-orm";
-import type { Actor, ActorResolverByUri, ActorResolverByUserId } from "../../../domain/actor/actor.ts";
+
+import type { Actor, ActorResolverByUserId } from "../../../domain/actor/actor.ts";
 import { ActorId } from "../../../domain/actor/actorId.ts";
 import type { LocalActor } from "../../../domain/actor/localActor.ts";
+import { UserId } from "../../../domain/user/userId.ts";
+import { singleton } from "../../../helper/singleton.ts";
+import { DB } from "../db.ts";
+import { actorsTable, localActorsTable } from "../schema.ts";
 
 const getInstance = singleton((): ActorResolverByUserId => {
   const resolve = async (userId: UserId): RA<LocalActor | undefined, never> => {

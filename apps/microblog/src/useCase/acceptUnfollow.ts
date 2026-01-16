@@ -1,18 +1,11 @@
-import { resolveUserByUsernameWith } from "./helper/resolve.ts";
-import type { UserResolverByUsername } from "./../domain/user/user.ts";
 import { RA } from "@iwasa-kosui/result";
+
 import {
-  ActorNotFoundError,
   type Actor,
+  ActorNotFoundError,
   type ActorResolverByUri,
   type ActorResolverByUserId,
 } from "../domain/actor/actor.ts";
-import {
-  RemoteActor,
-  type RemoteActorCreatedStore,
-} from "../domain/actor/remoteActor.ts";
-import type { Username } from "../domain/user/username.ts";
-import type { UseCase } from "./useCase.ts";
 import {
   AlreadyUnfollowedError,
   Follow,
@@ -20,10 +13,13 @@ import {
   type FollowResolver,
   type UndoFollowingProcessedStore,
 } from "../domain/follow/follow.ts";
-import { UserNotFoundError } from "../domain/user/user.ts";
 import { Instant } from "../domain/instant/instant.ts";
+import { UserNotFoundError } from "../domain/user/user.ts";
+import type { Username } from "../domain/user/username.ts";
+import type { UserResolverByUsername } from "./../domain/user/user.ts";
+import { resolveUserByUsernameWith } from "./helper/resolve.ts";
 import { resolveLocalActorWith } from "./helper/resolve.ts";
-import type { LogoUriUpdatedStore } from "../domain/actor/updateLogoUri.ts";
+import type { UseCase } from "./useCase.ts";
 
 type Input = Readonly<{
   username: Username;

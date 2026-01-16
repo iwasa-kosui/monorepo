@@ -3,25 +3,25 @@ import {
   createFederation,
   Delete,
   Follow,
-  Like,
   Note,
   Undo,
 } from "@fedify/fedify";
-import { getLogger } from "@logtape/logtape";
 import { PostgresKvStore, PostgresMessageQueue } from "@fedify/postgres";
-import postgres from "postgres";
-import { Env } from "./env.ts";
-import { singleton } from "./helper/singleton.ts";
 import { RA } from "@iwasa-kosui/result";
-import { Username } from "./domain/user/username.ts";
-import { GetUserProfileUseCase } from "./useCase/getUserProfile.ts";
-import { PgConfig } from "./adaptor/pg/pgConfig.ts";
+import { getLogger } from "@logtape/logtape";
+import postgres from "postgres";
+
 import { ActorDispatcher } from "./adaptor/fedify/actorDispatcher.ts";
-import { KeyPairsDispatcher } from "./adaptor/fedify/keyPairsDispatcher.ts";
-import { OutboxDispatcher } from "./adaptor/fedify/outboxDispatcher.ts";
 import { FollowersDispatcher } from "./adaptor/fedify/followersDispatcher.ts";
 import { InboxListener } from "./adaptor/fedify/inboxListener/inboxListener.ts";
+import { KeyPairsDispatcher } from "./adaptor/fedify/keyPairsDispatcher.ts";
 import { ObjectDispatcher } from "./adaptor/fedify/objectDispatcher.ts";
+import { OutboxDispatcher } from "./adaptor/fedify/outboxDispatcher.ts";
+import { PgConfig } from "./adaptor/pg/pgConfig.ts";
+import { Username } from "./domain/user/username.ts";
+import { Env } from "./env.ts";
+import { singleton } from "./helper/singleton.ts";
+import { GetUserProfileUseCase } from "./useCase/getUserProfile.ts";
 
 const create = () => {
   const env = Env.getInstance();

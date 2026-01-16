@@ -1,8 +1,9 @@
 import { RA } from "@iwasa-kosui/result";
+
 import type { FollowAccepted, FollowAcceptedStore } from "../../../domain/follow/follow.ts";
+import { singleton } from "../../../helper/singleton.ts";
 import { DB } from "../db.ts";
 import { domainEventsTable, followsTable } from "../schema.ts";
-import { singleton } from "../../../helper/singleton.ts";
 
 const store = async (event: FollowAccepted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
