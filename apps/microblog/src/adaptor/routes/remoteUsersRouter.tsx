@@ -60,8 +60,8 @@ app.get(
 
     const sessionIdCookie = getCookie(c, "sessionId");
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
-    const currentUserActorId = RA.isOk(currentUserResult)
-      ? currentUserResult.value.actor.id
+    const currentUserActorId = currentUserResult.ok
+      ? currentUserResult.val.actor.id
       : undefined;
 
     const useCase = GetRemoteUserProfileUseCase.getInstance();
@@ -111,15 +111,15 @@ app.post(
     const sessionIdCookie = getCookie(c, "sessionId");
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
 
-    if (RA.isErr(currentUserResult)) {
+    if (!currentUserResult.ok) {
       return c.redirect("/sign-in");
     }
 
-    const { user, actor: followerActor } = currentUserResult.value;
+    const { user, actor: followerActor } = currentUserResult.val;
 
     // Get the remote actor to follow
     const remoteActorResult = await PgActorResolverById.getInstance().resolve(followingActorId);
-    if (RA.isErr(remoteActorResult) || !remoteActorResult.value) {
+    if (!remoteActorResult.ok || !remoteActorResult.val) {
       return c.html(
         <Layout>
           <section>
@@ -131,7 +131,7 @@ app.post(
       );
     }
 
-    const followingActor = remoteActorResult.value;
+    const followingActor = remoteActorResult.val;
     if (followingActor.type !== 'remote') {
       return c.html(
         <Layout>
@@ -154,8 +154,8 @@ app.post(
     );
 
     const storeResult = await PgFollowRequestedStore.getInstance().store(followRequested);
-    if (RA.isErr(storeResult)) {
-      logger.error("Failed to store follow request", { error: String(storeResult.error) });
+    if (!storeResult.ok) {
+      logger.error("Failed to store follow request", { error: String(storeResult.err) });
       return c.html(
         <Layout>
           <section>
@@ -208,15 +208,15 @@ app.post(
     const sessionIdCookie = getCookie(c, "sessionId");
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
 
-    if (RA.isErr(currentUserResult)) {
+    if (!currentUserResult.ok) {
       return c.redirect("/sign-in");
     }
 
-    const { user, actor: followerActor } = currentUserResult.value;
+    const { user, actor: followerActor } = currentUserResult.val;
 
     // Get the remote actor to unfollow
     const remoteActorResult = await PgActorResolverById.getInstance().resolve(followingActorId);
-    if (RA.isErr(remoteActorResult) || !remoteActorResult.value) {
+    if (!remoteActorResult.ok || !remoteActorResult.val) {
       return c.html(
         <Layout>
           <section>
@@ -228,7 +228,7 @@ app.post(
       );
     }
 
-    const followingActor = remoteActorResult.value;
+    const followingActor = remoteActorResult.val;
     if (followingActor.type !== 'remote') {
       return c.html(
         <Layout>
@@ -248,13 +248,13 @@ app.post(
       followingActorId: followingActor.id,
     });
 
-    if (RA.isErr(unfollowResult)) {
-      logger.error("Failed to unfollow", { error: String(unfollowResult.error) });
+    if (!unfollowResult.ok) {
+      logger.error("Failed to unfollow", { error: String(unfollowResult.err) });
       return c.html(
         <Layout>
           <section>
             <h1>Error</h1>
-            <p>Failed to unfollow user: {unfollowResult.error.message}</p>
+            <p>Failed to unfollow user: {unfollowResult.err.message}</p>
           </section>
         </Layout>,
         400

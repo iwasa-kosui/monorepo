@@ -16,6 +16,7 @@ import { singleton } from "../helper/singleton.ts";
 import { PgActorResolverByUserId } from "../adaptor/pg/actor/actorResolverByUserId.ts";
 import { PgFollowResolver } from "../adaptor/pg/follow/followResolver.ts";
 import { PgUnfollowedStore } from "../adaptor/pg/follow/undoFollowingProcessedStore.ts";
+import { UserNotFoundError } from "../domain/user/user.ts";
 
 type Input = Readonly<{
   followerUserId: UserId;
@@ -23,9 +24,7 @@ type Input = Readonly<{
 }>;
 
 type Ok = FollowAggregateId;
-type Err =
-  | { type: 'ActorNotFoundError'; message: string }
-  | AlreadyUnfollowedError;
+type Err = UserNotFoundError | AlreadyUnfollowedError;
 
 export type UnfollowUseCase = UseCase<Input, Ok, Err>;
 

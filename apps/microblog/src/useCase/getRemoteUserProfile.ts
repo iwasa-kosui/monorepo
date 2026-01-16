@@ -1,7 +1,7 @@
 import z from "zod/v4";
 import { Schema } from "../helper/schema.ts";
 import type { UseCase } from "./useCase.ts";
-import { RA } from "@iwasa-kosui/result";
+import { RA, Result } from "@iwasa-kosui/result";
 import { ActorId } from "../domain/actor/actorId.ts";
 import type { RemoteActor } from "../domain/actor/remoteActor.ts";
 import type { FollowResolver } from "../domain/follow/follow.ts";
@@ -63,31 +63,37 @@ const create = ({
   actorResolverById,
   followResolver,
 }: Deps): GetRemoteUserProfileUseCase => {
-  const run = (input: Input) =>
-    RA.flow(
-      RA.ok(input),
-      RA.andBind("actor", ({ actorId }) => actorResolverById.resolve(actorId)),
-      RA.andBind("remoteActor", ({ actor, actorId }) => {
-        if (!actor) {
-          return RA.err(RemoteActorNotFoundError.create(actorId));
-        }
-        if (actor.type !== 'remote') {
-          return RA.err(NotRemoteActorError.create(actorId));
-        }
-        return RA.ok(actor);
-      }),
-      RA.andBind("isFollowing", async ({ remoteActor, currentUserActorId }) => {
-        if (!currentUserActorId) {
-          return RA.ok(false);
-        }
-        const followResult = await followResolver.resolve({
-          followerId: currentUserActorId,
-          followingId: remoteActor.id,
-        });
-        return RA.map(followResult, (follow) => follow !== undefined);
-      }),
-      RA.map(({ remoteActor, isFollowing }) => ({ remoteActor, isFollowing }))
-    );
+  const run = async (input: Input): Promise<Result<Ok, Err>> => {
+    const { actorId, currentUserActorId } = input;
+
+    const actorResult = await actorResolverById.resolve(actorId);
+    if (!actorResult.ok) {
+      return actorResult;
+    }
+
+    const actor = actorResult.val;
+    if (!actor) {
+      return Result.err(RemoteActorNotFoundError.create(actorId));
+    }
+    if (actor.type !== 'remote') {
+      return Result.err(NotRemoteActorError.create(actorId));
+    }
+
+    const remoteActor: RemoteActor = actor;
+
+    let isFollowing = false;
+    if (currentUserActorId) {
+      const followResult = await followResolver.resolve({
+        followerId: currentUserActorId,
+        followingId: remoteActor.id,
+      });
+      if (followResult.ok) {
+        isFollowing = followResult.val !== undefined;
+      }
+    }
+
+    return Result.ok({ remoteActor, isFollowing });
+  };
 
   return {
     run,
