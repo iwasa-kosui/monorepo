@@ -33,6 +33,7 @@ import type {
 } from "../domain/image/image.ts";
 import { ImageId } from "../domain/image/imageId.ts";
 import { Env } from "../env.ts";
+import { getMimeTypeFromUrl } from "../domain/image/mimeType.ts";
 
 type Input = Readonly<{
   sessionId: SessionId;
@@ -119,13 +120,7 @@ const create = ({
               (image) =>
                 new Document({
                   url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                  mediaType: image.url.endsWith(".png")
-                    ? "image/png"
-                    : image.url.endsWith(".jpg") || image.url.endsWith(".jpeg")
-                      ? "image/jpeg"
-                      : image.url.endsWith(".gif")
-                        ? "image/gif"
-                        : "application/octet-stream",
+                  mediaType: getMimeTypeFromUrl(image.url),
                 })
             ),
           })
