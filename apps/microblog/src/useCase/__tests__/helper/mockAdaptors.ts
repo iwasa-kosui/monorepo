@@ -4,24 +4,49 @@ import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
 
-import type { ActorResolverByUserId, LocalActor } from '../../../domain/actor/actor.ts';
+import type {
+  Actor,
+  ActorResolverByUri,
+  ActorResolverByUserId,
+  ActorsResolverByFollowerId,
+  ActorsResolverByFollowingId,
+  LocalActor,
+} from '../../../domain/actor/actor.ts';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { LocalActorCreatedStore } from '../../../domain/actor/createLocalActor.ts';
+import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
+import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
 import type {
   Follow,
+  FollowAccepted,
+  FollowAcceptedStore,
   FollowAggregateId,
+  FollowRequested,
+  FollowRequestedStore,
   FollowResolver,
   UndoFollowingProcessed,
   UndoFollowingProcessedStore,
 } from '../../../domain/follow/follow.ts';
-import type { PostImage, PostImageCreatedStore } from '../../../domain/image/image.ts';
+import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
+import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
 import type { HashedPassword } from '../../../domain/password/password.ts';
 import type {
   UserPassword,
   UserPasswordResolver,
   UserPasswordSetStore,
 } from '../../../domain/password/userPassword.ts';
-import type { PostCreated, PostCreatedStore } from '../../../domain/post/post.ts';
+import type {
+  Post,
+  PostCreated,
+  PostCreatedStore,
+  PostDeleted,
+  PostDeletedStore,
+  PostResolver,
+  PostsResolverByActorIds,
+  PostsResolverByActorIdWithPagination,
+  PostWithAuthor,
+} from '../../../domain/post/post.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
 import type { Session, SessionResolver, SessionStartedStore } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
 import type { UserCreatedStore } from '../../../domain/user/createUser.ts';
@@ -184,5 +209,137 @@ export const createMockUnfollowedStore = (): UndoFollowingProcessedStore & InMem
     store: vi.fn(inMemoryStore.store) as unknown as
       & UndoFollowingProcessedStore['store']
       & InMemoryStore<UndoFollowingProcessed>['store'],
+  };
+};
+
+export const createMockPostResolver = (
+  posts: Map<PostId, Post> = new Map(),
+): PostResolver & { setPost: (post: Post) => void } => ({
+  resolve: vi.fn((postId: PostId) => RAImpl.ok(posts.get(postId))),
+  setPost: (post: Post) => posts.set(post.postId, post),
+});
+
+export const createMockPostDeletedStore = (): PostDeletedStore & InMemoryStore<PostDeleted> => {
+  const inMemoryStore = createInMemoryStore<PostDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as PostDeletedStore['store'] & InMemoryStore<PostDeleted>['store'],
+  };
+};
+
+export const createMockPostImagesResolver = (
+  images: Map<PostId, PostImage[]> = new Map(),
+): PostImagesResolverByPostId & { setImages: (postId: PostId, imgs: PostImage[]) => void } => ({
+  resolve: vi.fn((postId: PostId) => RAImpl.ok(images.get(postId) ?? [])),
+  setImages: (postId: PostId, imgs: PostImage[]) => images.set(postId, imgs),
+});
+
+export const createMockActorResolverByUri = (
+  actors: Map<string, Actor> = new Map(),
+): ActorResolverByUri & { setActor: (actor: Actor) => void } => ({
+  resolve: vi.fn((uri: string) => RAImpl.ok(actors.get(uri))),
+  setActor: (actor: Actor) => actors.set(actor.uri, actor),
+});
+
+export const createMockActorResolverById = (
+  actors: Map<ActorId, Actor> = new Map(),
+): { resolve: (id: ActorId) => RA<Actor | undefined, never>; setActor: (actor: Actor) => void } => ({
+  resolve: vi.fn((id: ActorId) => RAImpl.ok(actors.get(id))),
+  setActor: (actor: Actor) => actors.set(actor.id, actor),
+});
+
+export const createMockActorsResolverByFollowerId = (
+  actors: Map<ActorId, Actor[]> = new Map(),
+): ActorsResolverByFollowerId & { setActors: (followerId: ActorId, following: Actor[]) => void } => ({
+  resolve: vi.fn((followerId: ActorId) => RAImpl.ok(actors.get(followerId) ?? [])),
+  setActors: (followerId: ActorId, following: Actor[]) => actors.set(followerId, following),
+});
+
+export const createMockActorsResolverByFollowingId = (
+  actors: Map<ActorId, Actor[]> = new Map(),
+): ActorsResolverByFollowingId & { setActors: (followingId: ActorId, followers: Actor[]) => void } => ({
+  resolve: vi.fn((followingId: ActorId) => RAImpl.ok(actors.get(followingId) ?? [])),
+  setActors: (followingId: ActorId, followers: Actor[]) => actors.set(followingId, followers),
+});
+
+export const createMockPostsResolverByActorIds = (
+  posts: PostWithAuthor[] = [],
+): PostsResolverByActorIds & { setPosts: (p: PostWithAuthor[]) => void } => ({
+  resolve: vi.fn(() => RAImpl.ok(posts)),
+  setPosts: (p: PostWithAuthor[]) => {
+    posts.length = 0;
+    posts.push(...p);
+  },
+});
+
+export const createMockPostsResolverByActorIdWithPagination = (
+  posts: PostWithAuthor[] = [],
+): PostsResolverByActorIdWithPagination & { setPosts: (p: PostWithAuthor[]) => void } => ({
+  resolve: vi.fn(() => RAImpl.ok(posts)),
+  setPosts: (p: PostWithAuthor[]) => {
+    posts.length = 0;
+    posts.push(...p);
+  },
+});
+
+export const createMockRemoteActorCreatedStore = (): RemoteActorCreatedStore & InMemoryStore<RemoteActorCreated> => {
+  const inMemoryStore = createInMemoryStore<RemoteActorCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & RemoteActorCreatedStore['store']
+      & InMemoryStore<RemoteActorCreated>['store'],
+  };
+};
+
+export const createMockLogoUriUpdatedStore = (): LogoUriUpdatedStore & InMemoryStore<LogoUriUpdated> => {
+  const inMemoryStore = createInMemoryStore<LogoUriUpdated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & LogoUriUpdatedStore['store']
+      & InMemoryStore<LogoUriUpdated>['store'],
+  };
+};
+
+export const createMockFollowAcceptedStore = (): FollowAcceptedStore & InMemoryStore<FollowAccepted> => {
+  const inMemoryStore = createInMemoryStore<FollowAccepted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & FollowAcceptedStore['store']
+      & InMemoryStore<FollowAccepted>['store'],
+  };
+};
+
+export const createMockFollowRequestedStore = (): FollowRequestedStore & InMemoryStore<FollowRequested> => {
+  const inMemoryStore = createInMemoryStore<FollowRequested>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & FollowRequestedStore['store']
+      & InMemoryStore<FollowRequested>['store'],
+  };
+};
+
+export const createMockLikeCreatedStore = (): LikeCreatedStore & InMemoryStore<LikeCreated> => {
+  const inMemoryStore = createInMemoryStore<LikeCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & LikeCreatedStore['store']
+      & InMemoryStore<LikeCreated>['store'],
+  };
+};
+
+export const createMockLikeResolver = (
+  likes: Map<string, Like> = new Map(),
+): LikeResolver & { setLike: (like: Like) => void } => {
+  const key = (actorId: ActorId, objectUri: string) => `${actorId}:${objectUri}`;
+  return {
+    resolve: vi.fn(({ actorId, objectUri }: { actorId: ActorId; objectUri: string }) =>
+      RAImpl.ok(likes.get(key(actorId, objectUri)))
+    ),
+    setLike: (like: Like) => likes.set(key(like.actorId, like.objectUri), like),
   };
 };

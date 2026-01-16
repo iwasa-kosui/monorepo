@@ -1,7 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
-import { PgActorResolverByUri } from '../../adaptor/pg/actor/actorResolverByUri.ts';
-import { Actor } from '../../domain/actor/actor.ts';
+import { Actor, type ActorResolverByUri } from '../../domain/actor/actor.ts';
 import { RemoteActor, type RemoteActorCreatedStore } from '../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../../domain/actor/updateLogoUri.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
@@ -18,36 +17,44 @@ type Dependencies = Readonly<{
   now: Instant;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  actorResolverByUri: ActorResolverByUri;
 }>;
 
-export const upsertRemoteActor =
-  ({ now, remoteActorCreatedStore, logoUriUpdatedStore }: Dependencies) => (identity: Identity): RA<Actor, never> =>
+export const upsertRemoteActor = (
+  { now, remoteActorCreatedStore, logoUriUpdatedStore, actorResolverByUri }: Dependencies,
+) => {
+  const createRemoteActor = (identity: Identity): RA<Actor, never> =>
+    RA.flow(
+      RA.ok(RemoteActor.createRemoteActor(identity)),
+      RA.andThrough(remoteActorCreatedStore.store),
+      RA.map((event) => event.aggregateState),
+    );
+
+  const updateLogoUri = (actor: Actor, logoUri: string): RA<Actor, never> =>
+    RA.flow(
+      RA.ok(Actor.updateLogoUri(now)(actor, logoUri)),
+      RA.andThrough(logoUriUpdatedStore.store),
+      RA.map(() => ({
+        ...actor,
+        logoUri,
+      })),
+    );
+
+  const logoUriChanged = (actor: Actor, identity: Identity): boolean =>
+    Boolean(identity.logoUri && actor.logoUri !== identity.logoUri);
+
+  return (identity: Identity): RA<Actor, never> =>
     RA.flow(
       RA.ok({ identity }),
-      RA.andBind('existing', ({ identity: { uri } }) => PgActorResolverByUri.getInstance().resolve(uri)),
+      RA.andBind('existing', ({ identity: { uri } }) => actorResolverByUri.resolve(uri)),
       RA.andThen(({ existing, identity }) => {
         if (!existing) {
-          return RA.flow(
-            RA.ok(RemoteActor.createRemoteActor(identity)),
-            RA.andThrough(remoteActorCreatedStore.store),
-            RA.map((event) => event.aggregateState),
-          );
+          return createRemoteActor(identity);
         }
-        return RA.flow(
-          RA.ok(existing),
-          RA.andThen((actor) => {
-            if (identity.logoUri && actor.logoUri !== identity.logoUri) {
-              return RA.flow(
-                RA.ok(Actor.updateLogoUri(now)(actor, identity.logoUri)),
-                RA.andThrough(logoUriUpdatedStore.store),
-                RA.map(() => ({
-                  ...actor,
-                  logoUri: identity.logoUri!,
-                })),
-              );
-            }
-            return RA.ok(actor);
-          }),
-        );
+        if (logoUriChanged(existing, identity)) {
+          return updateLogoUri(existing, identity.logoUri!);
+        }
+        return RA.ok(existing);
       }),
     );
+};

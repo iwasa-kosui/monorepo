@@ -3,7 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import { ActorIdentity, ParseActorIdentityError } from '../adaptor/fedify/actorIdentity.ts';
 import type { RemoteActorLookup, RemoteActorLookupError } from '../adaptor/fedify/remoteActorLookup.ts';
-import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorResolverByUri, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Follow as AppFollow, type FollowRequestedStore } from '../domain/follow/follow.ts';
@@ -36,6 +36,7 @@ type Deps = Readonly<{
   followRequestedStore: FollowRequestedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  actorResolverByUri: ActorResolverByUri;
 }>;
 
 const create = ({
@@ -46,6 +47,7 @@ const create = ({
   followRequestedStore,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  actorResolverByUri,
 }: Deps): SendFollowRequestUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -72,6 +74,7 @@ const create = ({
               now,
               remoteActorCreatedStore,
               logoUriUpdatedStore,
+              actorResolverByUri,
             }),
           ),
         )),
