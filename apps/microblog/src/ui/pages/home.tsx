@@ -25,6 +25,7 @@ type Props = Readonly<{
   likingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
+  unreadNotificationCount: number;
 }>;
 
 export const HomePage = ({
@@ -38,6 +39,7 @@ export const HomePage = ({
   likingPostUri,
   onDelete,
   deletingPostId,
+  unreadNotificationCount,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -75,27 +77,53 @@ export const HomePage = ({
           <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
             Hi, {String(user.username)}
           </h1>
-          <button>
+          <div class='flex items-center gap-2'>
             <a
-              href='#update-bio'
-              class='text-blue-600 hover:text-blue-800 font-semibold'
+              href='/notifications'
+              class='relative text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
             >
               <svg
                 xmlns='http://www.w3.org/2000/svg'
-                class='h-6 w-6 inline-block mr-1'
+                class='h-6 w-6'
                 fill='none'
                 viewBox='0 0 24 24'
                 stroke='currentColor'
               >
                 <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z'
+                  stroke-linecap='round'
+                  stroke-linejoin='round'
+                  stroke-width='2'
+                  d='M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'
                 />
               </svg>
+              {unreadNotificationCount > 0 && (
+                <span class='absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center'>
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
+              )}
             </a>
-          </button>
+            <button>
+              <a
+                href='#update-bio'
+                class='text-blue-600 hover:text-blue-800 font-semibold'
+              >
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  class='h-6 w-6 inline-block mr-1'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z'
+                  />
+                </svg>
+              </a>
+            </button>
+          </div>
         </header>
         <section class='mb-8'>
           <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6'>
@@ -262,6 +290,7 @@ const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -273,6 +302,19 @@ const App = () => {
     }
     | null
   >(null);
+
+  const fetchNotificationCount = async () => {
+    try {
+      const res = await client.v1.notifications.count.$get();
+      const result = await res.json();
+      if ('count' in result && typeof result.count === 'number') {
+        setUnreadNotificationCount(result.count);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error);
+    }
+  };
+
   const fetchData = async (createdAt: Instant | undefined) => {
     const res = await client.v1.home.$get({
       query: { createdAt: createdAt ? String(createdAt) : undefined },
@@ -348,6 +390,7 @@ const App = () => {
     if (!init) {
       setInit(true);
       fetchData(undefined);
+      fetchNotificationCount();
     }
   }, [init]);
   if (data === null) {
@@ -368,6 +411,7 @@ const App = () => {
       likingPostUri={likingPostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
+      unreadNotificationCount={unreadNotificationCount}
     />
   );
 };

@@ -84,3 +84,6 @@ export type NotificationWithDetails = LikeNotificationWithDetails;
 
 // ユーザーIDで通知一覧を取得するリゾルバ
 export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;
+
+// 未読通知数を取得するリゾルバ
+export type UnreadNotificationCountResolverByUserId = Agg.Resolver<UserId, number>;
