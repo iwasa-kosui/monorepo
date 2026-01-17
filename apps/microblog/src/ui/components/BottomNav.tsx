@@ -1,7 +1,7 @@
 import type { FC } from 'hono/jsx';
 
 export const BottomNav: FC = () => (
-  <nav class='fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom'>
+  <nav class='md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom'>
     <div class='max-w-2xl mx-auto px-4'>
       <div class='flex justify-around items-center h-14'>
         <a
