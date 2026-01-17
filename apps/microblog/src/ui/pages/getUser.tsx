@@ -24,15 +24,15 @@ export const GetUserPage = ({
 }: Props) => (
   <Layout>
     <section class='mb-8'>
-      <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6'>
+      <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
         <div class='flex items-center gap-4 mb-4'>
-          <div class='w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0'>
+          <div class='w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
             {actor.logoUri
               ? (
                 <img
                   src={actor.logoUri}
                   alt='User Logo'
-                  class='w-16 h-16 rounded-full object-cover'
+                  class='w-16 h-16 rounded-2xl object-cover'
                 />
               )
               : (
@@ -47,7 +47,7 @@ export const GetUserPage = ({
           </div>
         </div>
 
-        <div class='flex flex-wrap items-center gap-4 border-t border-gray-200 dark:border-gray-700 pt-4'>
+        <div class='flex flex-wrap items-center gap-4'>
           <div class='flex gap-6 text-sm'>
             <div>
               <span class='font-semibold text-gray-900 dark:text-white'>
@@ -74,7 +74,7 @@ export const GetUserPage = ({
           </div>
           <a
             href='#remote-follow'
-            class='ml-auto px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors'
+            class='ml-auto px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-2xl transition-colors'
           >
             Remote Follow
           </a>
@@ -83,8 +83,13 @@ export const GetUserPage = ({
 
       <div>
         <div class='hidden target:block' id='followers'>
-          <div class='w-full h-full bg-black/80 fixed top-0 left-0'>
-            <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 m-8 max-w-md mx-auto'>
+          <a
+            href='#'
+            class='w-full h-full bg-black/50 backdrop-blur-sm fixed inset-0 z-50 cursor-default'
+            aria-label='Close modal'
+          />
+          <div class='fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none'>
+            <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 w-full max-w-md pointer-events-auto'>
               <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
                 Followers
               </h2>
@@ -99,18 +104,25 @@ export const GetUserPage = ({
                     No followers yet
                   </p>
                 )}
-              <a href='#' class='text-blue-500 hover:underline'>
-                <button class='mt-4 px-4 py-2 text-white rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors'>
-                  Close
-                </button>
-              </a>
+              <div class='flex mt-3 justify-end'>
+                <a href='#'>
+                  <button class='px-4 py-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'>
+                    Close
+                  </button>
+                </a>
+              </div>
             </div>
           </div>
         </div>
 
         <div class='hidden target:block' id='following'>
-          <div class='w-full h-full bg-black/80 fixed top-0 left-0'>
-            <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 m-8 max-w-md mx-auto'>
+          <a
+            href='#'
+            class='w-full h-full bg-black/50 backdrop-blur-sm fixed inset-0 z-50 cursor-default'
+            aria-label='Close modal'
+          />
+          <div class='fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none'>
+            <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 w-full max-w-md pointer-events-auto'>
               <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
                 Following
               </h2>
@@ -125,32 +137,28 @@ export const GetUserPage = ({
                     Not following anyone yet
                   </p>
                 )}
-              <a href='#' class='text-blue-500 hover:underline'>
-                <button class='mt-4 px-4 py-2 text-white rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors'>
-                  Close
-                </button>
-              </a>
+              <div class='flex mt-3 justify-end'>
+                <a href='#'>
+                  <button class='px-4 py-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'>
+                    Close
+                  </button>
+                </a>
+              </div>
             </div>
           </div>
         </div>
 
         <div class='hidden target:block' id='remote-follow'>
-          <div class='w-full h-full bg-black/80 fixed top-0 left-0'>
-            <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 m-8 max-w-md mx-auto'>
-              <div class='flex items-center justify-between mb-4'>
-                <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
-                  Remote Follow
-                </h2>
-                <a
-                  href='#'
-                  class='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
-                  aria-label='Close'
-                >
-                  <svg class='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-                  </svg>
-                </a>
-              </div>
+          <a
+            href='#'
+            class='w-full h-full bg-black/50 backdrop-blur-sm fixed inset-0 z-50 cursor-default'
+            aria-label='Close modal'
+          />
+          <div class='fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none'>
+            <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 w-full max-w-md pointer-events-auto'>
+              <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-4'>
+                Remote Follow
+              </h2>
 
               <form method='post' action={`/users/${user.username}/remote-follow`} class='space-y-3'>
                 <input
@@ -158,11 +166,11 @@ export const GetUserPage = ({
                   name='handle'
                   placeholder='@you@your-server.example'
                   required
-                  class='w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                  class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400'
                 />
                 <button
                   type='submit'
-                  class='w-full px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors'
+                  class='w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-2xl transition-colors'
                 >
                   Proceed to your server
                 </button>
@@ -178,16 +186,24 @@ export const GetUserPage = ({
                 <p class='text-xs text-gray-500 dark:text-gray-400 mb-2'>
                   Copy handle to search manually on your server:
                 </p>
-                <div class='flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg'>
+                <div class='flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl'>
                   <code class='flex-1 text-sm text-gray-700 dark:text-gray-300 break-all'>{handle}</code>
                   <button
                     type='button'
                     onclick={`navigator.clipboard.writeText('${handle}'); this.textContent = 'Copied!'; setTimeout(() => this.textContent = 'Copy', 1500)`}
-                    class='px-3 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex-shrink-0'
+                    class='px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex-shrink-0'
                   >
                     Copy
                   </button>
                 </div>
+              </div>
+
+              <div class='flex mt-4 justify-end'>
+                <a href='#'>
+                  <button class='px-4 py-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'>
+                    Close
+                  </button>
+                </a>
               </div>
             </div>
           </div>
@@ -202,7 +218,7 @@ export const GetUserPage = ({
           posts.map((post) => <PostView post={post} />)
         )
         : (
-          <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center'>
+          <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6 text-center'>
             <p class='text-gray-500 dark:text-gray-400'>No posts yet</p>
           </div>
         )}

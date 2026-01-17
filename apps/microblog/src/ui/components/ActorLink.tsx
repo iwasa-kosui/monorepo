@@ -16,7 +16,7 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
       })(actor)}
       class='flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
     >
-      <div class='w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0'>
+      <div class='w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
         {actor.logoUri
           ? (
             <img

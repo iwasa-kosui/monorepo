@@ -13,19 +13,28 @@ export const Modal = ({
   showCloseButton = true,
 }: PropsWithChildren<Props>) => (
   <div class='hidden target:block' id={id}>
-    <div class='w-full h-full bg-black/80 fixed top-0 left-0'>
-      <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 m-8 max-w-md mx-auto'>
+    {/* Backdrop - clicking closes the modal */}
+    <a
+      href='#'
+      class='w-full h-full bg-black/50 backdrop-blur-sm fixed inset-0 z-50 cursor-default'
+      aria-label='Close modal'
+    />
+    {/* Modal content - positioned on top of backdrop */}
+    <div class='fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none'>
+      <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 w-full max-w-md relative pointer-events-auto'>
         {children}
-        <div class='flex mt-4 gap-2 justify-end'>
-          <a href='#' class='text-blue-500 hover:underline'>
+        {(showCloseButton || actions) && (
+          <div class='flex mt-3 gap-2 justify-end'>
             {showCloseButton && (
-              <button class='mt-4 px-4 py-2 text-white rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors'>
-                Close
-              </button>
+              <a href='#'>
+                <button class='px-4 py-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'>
+                  Close
+                </button>
+              </a>
             )}
-          </a>
-          {actions}
-        </div>
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   </div>

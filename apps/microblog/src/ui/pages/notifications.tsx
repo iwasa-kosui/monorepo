@@ -68,8 +68,8 @@ async function checkSubscription() {
     if (subscription) {
       if (button) button.style.display = 'none';
       if (status) {
-        status.textContent = 'Push notifications enabled';
-        status.className = 'text-sm text-green-600 dark:text-green-400';
+        status.innerHTML = '<svg class="inline w-4 h-4 mr-1 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Push notifications enabled';
+        status.className = 'text-sm text-gray-500 dark:text-gray-400';
       }
     }
   } catch (error) {
@@ -105,8 +105,8 @@ async function subscribeToPush() {
 
     if (button) button.style.display = 'none';
     if (status) {
-      status.textContent = 'Push notifications enabled';
-      status.className = 'text-sm text-green-600 dark:text-green-400';
+      status.innerHTML = '<svg class="inline w-4 h-4 mr-1 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Push notifications enabled';
+      status.className = 'text-sm text-gray-500 dark:text-gray-400';
     }
   } catch (error) {
     console.error('Failed to subscribe:', error);
@@ -139,19 +139,11 @@ if (document.readyState === 'loading') {
 export const NotificationsPage = ({ user: _user, notifications }: Props) => (
   <Layout>
     <section class='mb-8'>
-      <div class='flex items-center justify-between mb-6'>
-        <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
-          Notifications
-        </h1>
-        <a
-          href='/'
-          class='text-sm text-blue-600 dark:text-blue-400 hover:underline'
-        >
-          Back to Home
-        </a>
-      </div>
+      <h1 class='text-2xl font-bold text-gray-900 dark:text-white mb-6'>
+        Notifications
+      </h1>
 
-      <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6'>
+      <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 mb-6'>
         <div class='flex items-center justify-between'>
           <div>
             <h2 class='text-sm font-medium text-gray-900 dark:text-white'>
@@ -164,13 +156,13 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
           <button
             id='push-subscribe-btn'
             type='button'
-            class='px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50'
+            class='px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-2xl transition-colors disabled:opacity-50'
           >
             Enable Push Notifications
           </button>
         </div>
 
-        <div id='ios-install-guide' class='hidden mt-4 pt-4 border-t border-gray-200 dark:border-gray-700'>
+        <div id='ios-install-guide' class='hidden mt-4 pt-4'>
           <div class='flex items-start gap-3'>
             <div class='flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
               <svg
@@ -257,8 +249,8 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
             ))
           )
           : (
-            <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center'>
-              <div class='w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center'>
+            <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-8 text-center'>
+              <div class='w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center'>
                 <svg
                   class='w-8 h-8 text-gray-400 dark:text-gray-500'
                   fill='none'
