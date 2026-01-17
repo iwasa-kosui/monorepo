@@ -20,7 +20,7 @@ const fed = Federation.getInstance();
 app.use(federation(fed, () => undefined));
 app.use('/static/*', serveStatic({ root: './' }));
 app.use('/favicon.ico', serveStatic({ path: './favicon.ico' }));
-app.use('/sw.js', serveStatic({ path: './public/sw.js' }));
+app.use('/sw.js', serveStatic({ path: './sw.js' }));
 app.get('/authorize_interaction', (c) => {
   const url = new URL(String(c.req.url));
   url.pathname = '/follow';
