@@ -25,7 +25,6 @@ type Props = Readonly<{
   likingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
-  unreadNotificationCount: number;
 }>;
 
 export const HomePage = ({
@@ -39,7 +38,6 @@ export const HomePage = ({
   likingPostUri,
   onDelete,
   deletingPostId,
-  unreadNotificationCount,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -73,74 +71,39 @@ export const HomePage = ({
   return (
     <>
       <section class='mb-8'>
-        <header class='flex items-center justify-between mb-4'>
+        <header class='mb-4'>
           <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
             Hi, {String(user.username)}
           </h1>
-          <div class='flex items-center gap-2'>
-            <a
-              href='/notifications'
-              class='relative text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
-            >
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                class='h-6 w-6'
-                fill='none'
-                viewBox='0 0 24 24'
-                stroke='currentColor'
-              >
-                <path
-                  stroke-linecap='round'
-                  stroke-linejoin='round'
-                  stroke-width='2'
-                  d='M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'
-                />
-              </svg>
-              {unreadNotificationCount > 0 && (
-                <span class='absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center'>
-                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
-                </span>
-              )}
-            </a>
-            <button>
-              <a
-                href='#update-bio'
-                class='text-blue-600 hover:text-blue-800 font-semibold'
-              >
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  class='h-6 w-6 inline-block mr-1'
-                  fill='none'
-                  viewBox='0 0 24 24'
-                  stroke='currentColor'
-                >
-                  <path
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                    strokeWidth={2}
-                    d='M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z'
-                  />
-                </svg>
-              </a>
-            </button>
-          </div>
         </header>
         <section class='mb-8'>
-          <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6'>
+          <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
             <div class='flex items-center gap-4 mb-4'>
-              <div class='w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0'>
-                {actor.logoUri
-                  ? (
-                    <img
-                      src={actor.logoUri}
-                      alt='User Logo'
-                      class='w-16 h-16 rounded-full object-cover'
+              <a href='#update-bio' class='relative group flex-shrink-0'>
+                <div class='w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold'>
+                  {actor.logoUri
+                    ? (
+                      <img
+                        src={actor.logoUri}
+                        alt='User Logo'
+                        class='w-16 h-16 rounded-full object-cover'
+                      />
+                    )
+                    : (
+                      String(user.username).charAt(0).toUpperCase()
+                    )}
+                </div>
+                <div class='absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
+                  <svg class='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'
                     />
-                  )
-                  : (
-                    String(user.username).charAt(0).toUpperCase()
-                  )}
-              </div>
+                  </svg>
+                </div>
+              </a>
               <div>
                 <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
                   {String(user.username)}
@@ -149,7 +112,7 @@ export const HomePage = ({
               </div>
             </div>
 
-            <div class='flex gap-6 text-sm border-t border-gray-200 dark:border-gray-700 pt-4'>
+            <div class='flex gap-6 text-sm'>
               <div>
                 <span class='font-semibold text-gray-900 dark:text-white'>
                   {followers.length}
@@ -220,53 +183,38 @@ export const HomePage = ({
 
         <PostForm id='post' />
       </section>
-      <a
-        class='rounded-full p-4 bg-gray-600 hover:bg-gray-500 text-white block fixed bottom-8 right-8 shadow-lg transition-colors'
-        href='#post-modal'
-      >
-        <svg
-          xmlns='http://www.w3.org/2000/svg'
-          class='h-12 w-12'
-          fill='none'
-          viewBox='0 0 24 24'
-          stroke='currentColor'
-        >
-          <path
-            stroke-linecap='round'
-            stroke-linejoin='round'
-            stroke-width='2'
-            d='M12 4v16m8-8H4'
-          />
-        </svg>
-      </a>
       <Modal id='post-modal' showCloseButton={false}>
         <PostForm formId='post-modal-form' />
       </Modal>
-      <div class='hidden target:block' id='update-bio'>
-        <form method='post' class='mb-4' action={`/users/${user.username}`}>
-          <label
-            for='logoUri'
-            class='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'
-          >
-            Profile Image URL
-          </label>
-          <div class='flex gap-2'>
-            <input
-              type='url'
-              name='logoUri'
-              id='logoUri'
-              placeholder='https://example.com/image.png'
-              class='w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-            />
+      <Modal id='update-bio' showCloseButton={false}>
+        <form method='post' action={`/users/${user.username}`}>
+          <p class='text-gray-600 dark:text-gray-400 text-sm mb-3'>
+            Enter a URL for your profile image
+          </p>
+          <input
+            type='url'
+            name='logoUri'
+            placeholder='https://example.com/image.png'
+            class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3'
+          />
+          <div class='flex gap-2 justify-end'>
+            <a href='#'>
+              <button
+                type='button'
+                class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
+              >
+                Cancel
+              </button>
+            </a>
             <button
               type='submit'
-              class='px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800'
+              class='px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-2xl transition-colors'
             >
               Update
             </button>
           </div>
         </form>
-      </div>
+      </Modal>
       <section class='space-y-4'>
         {posts.map((post) => (
           <PostView
@@ -290,7 +238,6 @@ const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -302,18 +249,6 @@ const App = () => {
     }
     | null
   >(null);
-
-  const fetchNotificationCount = async () => {
-    try {
-      const res = await client.v1.notifications.count.$get();
-      const result = await res.json();
-      if ('count' in result && typeof result.count === 'number') {
-        setUnreadNotificationCount(result.count);
-      }
-    } catch (error) {
-      console.error('Failed to fetch notification count:', error);
-    }
-  };
 
   const fetchData = async (createdAt: Instant | undefined) => {
     const res = await client.v1.home.$get({
@@ -390,7 +325,6 @@ const App = () => {
     if (!init) {
       setInit(true);
       fetchData(undefined);
-      fetchNotificationCount();
     }
   }, [init]);
   if (data === null) {
@@ -411,7 +345,6 @@ const App = () => {
       likingPostUri={likingPostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
-      unreadNotificationCount={unreadNotificationCount}
     />
   );
 };

@@ -26,7 +26,7 @@ export const GetUserPage = ({
     <section class='mb-8'>
       <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6'>
         <div class='flex items-center gap-4 mb-4'>
-          <div class='w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0'>
+          <div class='w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
             {actor.logoUri
               ? (
                 <img

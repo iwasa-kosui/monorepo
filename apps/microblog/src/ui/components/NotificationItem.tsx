@@ -31,9 +31,9 @@ const LikeNotificationItem = ({
   const postUrl = `/posts/${likedPost.postId}`;
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow'>
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-md transition-shadow'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900 flex items-center justify-center'>
           <svg
             class='w-4 h-4 text-pink-500 dark:text-pink-400'
             fill='currentColor'
@@ -53,7 +53,7 @@ const LikeNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity'
             >
-              <div class='w-6 h-6 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
                 {likerActor.logoUri
                   ? (
                     <img
@@ -75,7 +75,7 @@ const LikeNotificationItem = ({
 
           <a
             href={postUrl}
-            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
           >
             <div
               class='text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400'
@@ -111,9 +111,9 @@ const FollowNotificationItem = ({
   })(followerActor);
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow'>
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-md transition-shadow'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
           <svg
             class='w-4 h-4 text-blue-500 dark:text-blue-400'
             fill='currentColor'
@@ -129,7 +129,7 @@ const FollowNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity'
             >
-              <div class='w-6 h-6 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
                 {followerActor.logoUri
                   ? (
                     <img
