@@ -7,6 +7,7 @@ import { SessionId } from '../../domain/session/sessionId.ts';
 import { Layout } from '../../layout.tsx';
 import { NotificationsPage } from '../../ui/pages/notifications.tsx';
 import { GetNotificationsUseCase } from '../../useCase/getNotifications.ts';
+import { PgNotificationsReadStore } from '../pg/notification/notificationsReadStore.ts';
 import { PgNotificationsResolverByUserId } from '../pg/notification/notificationsResolverByUserId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
@@ -26,6 +27,7 @@ app.get('/', async (c) => {
     sessionResolver: PgSessionResolver.getInstance(),
     userResolver: PgUserResolver.getInstance(),
     notificationsResolver: PgNotificationsResolverByUserId.getInstance(),
+    notificationsReadStore: PgNotificationsReadStore.getInstance(),
   });
 
   return RA.flow(

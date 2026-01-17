@@ -65,9 +65,42 @@ const createLikeNotification = (payload: LikeNotification, now: Instant): LikeNo
 
 export type LikeNotificationCreatedStore = Agg.Store<LikeNotificationCreated>;
 
+// 通知既読イベント
+export type NotificationsReadPayload = Readonly<{
+  notificationIds: ReadonlyArray<NotificationId>;
+  userId: UserId;
+}>;
+
+export type NotificationsRead = NotificationEvent<
+  undefined,
+  'notification.notificationsRead',
+  NotificationsReadPayload
+>;
+
+const markAsRead = (
+  notificationIds: ReadonlyArray<NotificationId>,
+  userId: UserId,
+  now: Instant,
+): NotificationsRead => {
+  // 集約IDは最初のnotificationIdを使用（バッチ処理のため）
+  const aggregateId: NotificationAggregateId = {
+    notificationId: notificationIds[0] ?? NotificationId.generate(),
+  };
+  return NotificationEvent.create(
+    aggregateId,
+    undefined,
+    'notification.notificationsRead',
+    { notificationIds, userId },
+    now,
+  );
+};
+
+export type NotificationsReadStore = Agg.Store<NotificationsRead>;
+
 export const Notification = {
   ...schema,
   createLikeNotification,
+  markAsRead,
   toAggregateId,
 } as const;
 
