@@ -1,15 +1,19 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
 
-import type { ReceivedLikeDeleted, ReceivedLikeDeletedStore } from '../../../domain/receivedLike/receivedLike.ts';
+import type { LikeV2Created, LikeV2CreatedStore } from '../../../domain/like/likeV2.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { domainEventsTable, receivedLikesTable } from '../schema.ts';
+import { domainEventsTable, likesV2Table } from '../schema.ts';
 
-const store = async (event: ReceivedLikeDeleted): RA<void, never> => {
+const store = async (event: LikeV2Created): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    await tx.delete(receivedLikesTable)
-      .where(eq(receivedLikesTable.receivedLikeId, event.aggregateId.receivedLikeId));
+    await tx.insert(likesV2Table).values({
+      likeId: event.aggregateState.likeId,
+      actorId: event.aggregateState.actorId,
+      objectUri: event.aggregateState.objectUri,
+      likeActivityUri: event.aggregateState.likeActivityUri,
+      createdAt: new Date(event.occurredAt),
+    });
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
       aggregateId: event.aggregateId,
@@ -24,11 +28,11 @@ const store = async (event: ReceivedLikeDeleted): RA<void, never> => {
 };
 
 const getInstance = singleton(
-  (): ReceivedLikeDeletedStore => ({
+  (): LikeV2CreatedStore => ({
     store,
   }),
 );
 
-export const PgReceivedLikeDeletedStore = {
+export const PgLikeV2CreatedStore = {
   getInstance,
 } as const;

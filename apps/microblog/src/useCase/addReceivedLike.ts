@@ -4,17 +4,21 @@ import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Notification, type NotificationCreatedStore, NotificationType } from '../domain/notification/notification.ts';
+import { LikeId } from '../domain/like/likeId.ts';
+import {
+  AlreadyLikedV2Error,
+  LikeV2,
+  type LikeV2CreatedStore,
+  type LikeV2ResolverByActivityUri,
+} from '../domain/like/likeV2.ts';
+import {
+  type LikeNotification,
+  type LikeNotificationCreatedStore,
+  Notification,
+} from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
 import type { LocalPost, Post, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
-import {
-  AlreadyReceivedLikeError,
-  ReceivedLike,
-  type ReceivedLikeCreatedStore,
-  type ReceivedLikeResolverByActivityUri,
-} from '../domain/receivedLike/receivedLike.ts';
-import { ReceivedLikeId } from '../domain/receivedLike/receivedLikeId.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -30,14 +34,15 @@ type Input = Readonly<{
   likeActivityUri: string;
   likedPostId: PostId;
   likerIdentity: ActorIdentity;
+  objectUri: string;
 }>;
 
 type Ok = Readonly<{
-  receivedLike: ReceivedLike;
+  like: LikeV2;
   actor: Actor;
 }>;
 
-type Err = AlreadyReceivedLikeError | PostNotLocalError;
+type Err = AlreadyLikedV2Error | PostNotLocalError;
 
 export type PostNotLocalError = Readonly<{
   type: 'PostNotLocalError';
@@ -58,9 +63,9 @@ export const PostNotLocalError = {
 export type AddReceivedLikeUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
-  receivedLikeCreatedStore: ReceivedLikeCreatedStore;
-  receivedLikeResolverByActivityUri: ReceivedLikeResolverByActivityUri;
-  notificationCreatedStore: NotificationCreatedStore;
+  likeV2CreatedStore: LikeV2CreatedStore;
+  likeV2ResolverByActivityUri: LikeV2ResolverByActivityUri;
+  likeNotificationCreatedStore: LikeNotificationCreatedStore;
   postResolver: PostResolver;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
@@ -70,9 +75,9 @@ type Deps = Readonly<{
 const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
 
 const create = ({
-  receivedLikeCreatedStore,
-  receivedLikeResolverByActivityUri,
-  notificationCreatedStore,
+  likeV2CreatedStore,
+  likeV2ResolverByActivityUri,
+  likeNotificationCreatedStore,
   postResolver,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
@@ -85,11 +90,14 @@ const create = ({
       RA.ok(input),
       RA.andBind(
         'existingLike',
-        ({ likeActivityUri }) => receivedLikeResolverByActivityUri.resolve({ likeActivityUri }),
+        ({ likeActivityUri }) => likeV2ResolverByActivityUri.resolve({ likeActivityUri }),
       ),
       RA.andThen(({ existingLike, ...rest }) => {
         if (existingLike) {
-          return RA.err(AlreadyReceivedLikeError.create({ likeActivityUri: rest.likeActivityUri }));
+          return RA.err(AlreadyLikedV2Error.create({
+            actorId: existingLike.actorId,
+            objectUri: existingLike.objectUri,
+          }));
         }
         return RA.ok(rest);
       }),
@@ -107,31 +115,31 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(likerIdentity)),
-      RA.andBind('receivedLike', ({ actor, likedPostId, likeActivityUri }) => {
-        const receivedLikeId = ReceivedLikeId.generate();
-        const receivedLike: ReceivedLike = {
-          receivedLikeId,
-          likerActorId: actor.id,
-          likedPostId,
+      RA.andBind('like', ({ actor, objectUri, likeActivityUri }) => {
+        const likeId = LikeId.generate();
+        const like: LikeV2 = {
+          likeId,
+          actorId: actor.id,
+          objectUri,
           likeActivityUri,
         };
-        const event = ReceivedLike.createReceivedLike(receivedLike, now);
-        return receivedLikeCreatedStore.store(event).then(() => RA.ok(receivedLike));
+        const event = LikeV2.createLikeV2(like, now);
+        return likeV2CreatedStore.store(event).then(() => RA.ok(like));
       }),
       RA.andThrough(({ post, actor }) => {
         const notificationId = NotificationId.generate();
-        const notification: Notification = {
+        const notification: LikeNotification = {
+          type: 'like',
           notificationId,
           recipientUserId: post.userId,
-          type: NotificationType.like,
-          relatedActorId: actor.id,
-          relatedPostId: post.postId,
           isRead: false,
+          likerActorId: actor.id,
+          likedPostId: post.postId,
         };
-        const event = Notification.createNotification(notification, now);
-        return notificationCreatedStore.store(event);
+        const event = Notification.createLikeNotification(notification, now);
+        return likeNotificationCreatedStore.store(event);
       }),
-      RA.map(({ receivedLike, actor }) => ({ receivedLike, actor })),
+      RA.map(({ like, actor }) => ({ like, actor })),
     );
   };
 

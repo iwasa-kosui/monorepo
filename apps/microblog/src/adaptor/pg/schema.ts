@@ -107,6 +107,16 @@ export const likesTable = pgTable('likes', {
   unique('actor_object_unique').on(table.actorId, table.objectUri),
 ]);
 
+export const likesV2Table = pgTable('likes_v2', {
+  likeId: uuid().primaryKey(),
+  actorId: uuid().notNull().references(() => actorsTable.actorId),
+  objectUri: text().notNull(),
+  likeActivityUri: text().unique(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('likes_v2_actor_object_unique').on(table.actorId, table.objectUri),
+]);
+
 export const postImagesTable = pgTable('post_images', {
   imageId: uuid().primaryKey(),
   postId: uuid().notNull().references(() => postsTable.postId),
@@ -115,22 +125,16 @@ export const postImagesTable = pgTable('post_images', {
   createdAt: timestamp({ mode: 'date' }).notNull(),
 });
 
-export const receivedLikesTable = pgTable('received_likes', {
-  receivedLikeId: uuid().primaryKey(),
-  likerActorId: uuid().notNull().references(() => actorsTable.actorId),
-  likedPostId: uuid().notNull().references(() => postsTable.postId),
-  likeActivityUri: text().notNull().unique(),
-  createdAt: timestamp({ mode: 'date' }).notNull(),
-}, (table) => [
-  unique('liker_post_unique').on(table.likerActorId, table.likedPostId),
-]);
-
 export const notificationsTable = pgTable('notifications', {
   notificationId: uuid().primaryKey(),
   recipientUserId: uuid().notNull().references(() => usersTable.userId),
   type: varchar({ length: 32 }).notNull(),
-  relatedActorId: uuid().references(() => actorsTable.actorId),
-  relatedPostId: uuid().references(() => postsTable.postId),
   isRead: integer().notNull().default(0),
   createdAt: timestamp({ mode: 'date' }).notNull(),
+});
+
+export const notificationLikesTable = pgTable('notification_likes', {
+  notificationId: uuid().primaryKey().references(() => notificationsTable.notificationId),
+  likerActorId: uuid().notNull().references(() => actorsTable.actorId),
+  likedPostId: uuid().notNull().references(() => postsTable.postId),
 });

@@ -9,8 +9,8 @@ import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
-import { PgReceivedLikeDeletedStore } from '../../pg/receivedLike/receivedLikeDeletedStore.ts';
-import { PgReceivedLikeResolverByActivityUri } from '../../pg/receivedLike/receivedLikeResolverByActivityUri.ts';
+import { PgLikeV2DeletedStore } from '../../pg/likeV2/likeV2DeletedStore.ts';
+import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 
 const handleUndoFollow = async (ctx: InboxContext<unknown>, undo: Undo, follow: Follow) => {
@@ -61,8 +61,8 @@ const handleUndoLike = async (like: Like) => {
   const likeActivityUri = like.id.href;
 
   const useCase = RemoveReceivedLikeUseCase.create({
-    receivedLikeDeletedStore: PgReceivedLikeDeletedStore.getInstance(),
-    receivedLikeResolverByActivityUri: PgReceivedLikeResolverByActivityUri.getInstance(),
+    likeV2DeletedStore: PgLikeV2DeletedStore.getInstance(),
+    likeV2ResolverByActivityUri: PgLikeV2ResolverByActivityUri.getInstance(),
   });
 
   return RA.flow(

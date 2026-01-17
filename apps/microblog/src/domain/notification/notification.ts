@@ -9,27 +9,27 @@ import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
 import { NotificationId } from './notificationId.ts';
 
-const NotificationTypeSym = Symbol('NotificationType');
-const notificationTypeZodType = z.enum(['like']).brand(NotificationTypeSym).describe('NotificationType');
-export type NotificationType = z.output<typeof notificationTypeZodType>;
-export const NotificationType = {
-  like: 'like' as NotificationType,
-} as const;
-
-const zodType = z
+const likeNotificationZodType = z
   .object({
+    type: z.literal('like'),
     notificationId: NotificationId.zodType,
     recipientUserId: UserId.zodType,
-    type: notificationTypeZodType,
-    relatedActorId: z.nullable(ActorId.zodType),
-    relatedPostId: z.nullable(PostId.zodType),
     isRead: z.boolean(),
+    likerActorId: ActorId.zodType,
+    likedPostId: PostId.zodType,
   })
-  .describe('Notification');
-const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
-  zodType,
-);
-export type Notification = z.output<typeof zodType>;
+  .describe('LikeNotification');
+
+export type LikeNotification = z.output<typeof likeNotificationZodType>;
+export const LikeNotification = Schema.create(likeNotificationZodType);
+
+const notificationZodType = z.discriminatedUnion('type', [
+  likeNotificationZodType,
+]);
+
+export type Notification = z.output<typeof notificationZodType>;
+const schema = Schema.create<Notification, z.input<typeof notificationZodType>>(notificationZodType);
+
 export type NotificationAggregateId = Readonly<{
   notificationId: NotificationId;
 }>;
@@ -45,22 +45,26 @@ type NotificationEvent<
 > = DomainEvent<NotificationAggregate, TAggregateState, TEventName, TEventPayload>;
 const NotificationEvent = AggregateEvent.createFactory<NotificationAggregate>('notification');
 
-export type NotificationCreated = NotificationEvent<Notification, 'notification.notificationCreated', Notification>;
+export type LikeNotificationCreated = NotificationEvent<
+  LikeNotification,
+  'notification.likeNotificationCreated',
+  LikeNotification
+>;
 
-const createNotification = (payload: Notification, now: Instant): NotificationCreated => {
+const createLikeNotification = (payload: LikeNotification, now: Instant): LikeNotificationCreated => {
   return NotificationEvent.create(
     toAggregateId(payload),
     payload,
-    'notification.notificationCreated',
+    'notification.likeNotificationCreated',
     payload,
     now,
   );
 };
 
-export type NotificationCreatedStore = Agg.Store<NotificationCreated>;
+export type LikeNotificationCreatedStore = Agg.Store<LikeNotificationCreated>;
 
 export const Notification = {
   ...schema,
-  createNotification,
+  createLikeNotification,
   toAggregateId,
 } as const;

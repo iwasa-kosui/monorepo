@@ -3,14 +3,15 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
+import { Env } from '../../../env.ts';
 import { AddReceivedLikeUseCase } from '../../../useCase/addReceivedLike.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgNotificationCreatedStore } from '../../pg/notification/notificationCreatedStore.ts';
+import { PgLikeV2CreatedStore } from '../../pg/likeV2/likeV2CreatedStore.ts';
+import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
+import { PgLikeNotificationCreatedStore } from '../../pg/notification/notificationCreatedStore.ts';
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgReceivedLikeCreatedStore } from '../../pg/receivedLike/receivedLikeCreatedStore.ts';
-import { PgReceivedLikeResolverByActivityUri } from '../../pg/receivedLike/receivedLikeResolverByActivityUri.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 
 export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
@@ -46,10 +47,13 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   }
   const likedPostId = postIdResult.val;
 
+  const env = Env.getInstance();
+  const objectUri = `${env.ORIGIN}/users/${parsed.values.identifier}/posts/${likedPostId}`;
+
   const useCase = AddReceivedLikeUseCase.create({
-    receivedLikeCreatedStore: PgReceivedLikeCreatedStore.getInstance(),
-    receivedLikeResolverByActivityUri: PgReceivedLikeResolverByActivityUri.getInstance(),
-    notificationCreatedStore: PgNotificationCreatedStore.getInstance(),
+    likeV2CreatedStore: PgLikeV2CreatedStore.getInstance(),
+    likeV2ResolverByActivityUri: PgLikeV2ResolverByActivityUri.getInstance(),
+    likeNotificationCreatedStore: PgLikeNotificationCreatedStore.getInstance(),
     postResolver: PgPostResolver.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
@@ -64,6 +68,7 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
         likeActivityUri,
         likedPostId,
         likerIdentity,
+        objectUri,
       })
     ),
     RA.match({
