@@ -56,15 +56,15 @@ export const RemoteUserPage = ({
   return (
     <>
       <section class='mb-8'>
-        <div class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6'>
+        <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
           <div class='flex items-center gap-4 mb-4'>
-            <div class='w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
+            <div class='w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
               {remoteActor.logoUri
                 ? (
                   <img
                     src={remoteActor.logoUri}
                     alt='User Logo'
-                    class='w-16 h-16 rounded-full object-cover'
+                    class='w-16 h-16 rounded-2xl object-cover'
                   />
                 )
                 : (
@@ -85,14 +85,14 @@ export const RemoteUserPage = ({
                 href={remoteActor.url}
                 target='_blank'
                 rel='noopener noreferrer'
-                class='text-blue-500 hover:text-blue-600 hover:underline text-sm'
+                class='text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm'
               >
-                View original profile
+                View original profile →
               </a>
             </div>
           )}
 
-          <div class='border-t border-gray-200 dark:border-gray-700 pt-4'>
+          <div class='flex gap-2'>
             {isLoggedIn
               ? (
                 isFollowing
@@ -103,7 +103,7 @@ export const RemoteUserPage = ({
                     >
                       <button
                         type='submit'
-                        class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
+                        class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
                       >
                         Unfollow
                       </button>
@@ -116,7 +116,7 @@ export const RemoteUserPage = ({
                     >
                       <button
                         type='submit'
-                        class='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors'
+                        class='px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-2xl transition-colors'
                       >
                         Follow
                       </button>
@@ -125,7 +125,7 @@ export const RemoteUserPage = ({
               )
               : (
                 <p class='text-gray-500 dark:text-gray-400 text-sm'>
-                  <a href='/sign-in' class='text-blue-500 hover:underline'>
+                  <a href='/sign-in' class='text-gray-700 dark:text-gray-300 hover:underline'>
                     Sign in
                   </a>{' '}
                   to follow this user
