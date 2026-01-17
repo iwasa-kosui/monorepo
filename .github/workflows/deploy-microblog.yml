@@ -30,7 +30,6 @@ jobs:
 
       - name: Create directories on server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /opt/microblog"
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /etc/systemd/system/microblog.service.d"
 
       - name: Create env.conf
@@ -57,10 +56,6 @@ jobs:
       - name: Build on server
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo && git fetch --all && git checkout origin/main -- . && pnpm install && cd apps/microblog && pnpm build"
-
-      - name: Deploy built files
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo rsync -av ~/monorepo/apps/microblog/dist/ /opt/microblog/"
 
       - name: Run database migration
         run: |
