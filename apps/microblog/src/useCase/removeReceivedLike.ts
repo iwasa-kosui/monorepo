@@ -7,7 +7,25 @@ import {
   LikeV2NotFoundError,
   type LikeV2ResolverByActivityUri,
 } from '../domain/like/likeV2.ts';
+import {
+  type LikeNotificationDeletedStore,
+  type LikeNotificationResolverByActorIdAndPostId,
+  Notification,
+} from '../domain/notification/notification.ts';
+import { PostId } from '../domain/post/postId.ts';
 import type { UseCase } from './useCase.ts';
+
+const extractPostIdFromObjectUri = (objectUri: string): PostId | undefined => {
+  const match = objectUri.match(/\/posts\/([a-f0-9-]+)$/);
+  if (!match) {
+    return undefined;
+  }
+  const result = PostId.parse(match[1]);
+  if (!result.ok) {
+    return undefined;
+  }
+  return result.val;
+};
 
 type Input = Readonly<{
   likeActivityUri: string;
@@ -24,11 +42,15 @@ export type RemoveReceivedLikeUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   likeV2DeletedStore: LikeV2DeletedStore;
   likeV2ResolverByActivityUri: LikeV2ResolverByActivityUri;
+  likeNotificationResolverByActorIdAndPostId: LikeNotificationResolverByActorIdAndPostId;
+  likeNotificationDeletedStore: LikeNotificationDeletedStore;
 }>;
 
 const create = ({
   likeV2DeletedStore,
   likeV2ResolverByActivityUri,
+  likeNotificationResolverByActorIdAndPostId,
+  likeNotificationDeletedStore,
 }: Deps): RemoveReceivedLikeUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -48,6 +70,25 @@ const create = ({
       RA.andThrough(({ like }) => {
         const event = LikeV2.deleteLikeV2(like, now);
         return likeV2DeletedStore.store(event);
+      }),
+      RA.andThrough(({ like }) => {
+        const likedPostId = extractPostIdFromObjectUri(like.objectUri);
+        if (!likedPostId) {
+          return RA.ok(undefined);
+        }
+        return RA.flow(
+          likeNotificationResolverByActorIdAndPostId.resolve({
+            likerActorId: like.actorId,
+            likedPostId,
+          }),
+          RA.andThen((notification) => {
+            if (!notification) {
+              return RA.ok(undefined);
+            }
+            const event = Notification.deleteLikeNotification(notification, now);
+            return likeNotificationDeletedStore.store(event);
+          }),
+        );
       }),
       RA.map(({ like }) => ({ like })),
     );
