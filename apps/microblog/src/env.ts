@@ -4,6 +4,9 @@ import { singleton } from './helper/singleton.ts';
 
 const baseSchema = z.object({
   DATABASE_URL: z.string().min(1),
+  VAPID_PUBLIC_KEY: z.string().min(1),
+  VAPID_PRIVATE_KEY: z.string().min(1),
+  VAPID_SUBJECT: z.string().startsWith('mailto:'),
 });
 
 const devSchema = baseSchema.extend({

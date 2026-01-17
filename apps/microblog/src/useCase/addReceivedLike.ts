@@ -1,5 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
@@ -19,6 +20,7 @@ import {
 import { NotificationId } from '../domain/notification/notificationId.ts';
 import type { LocalPost, Post, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -70,6 +72,8 @@ type Deps = Readonly<{
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
+  pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
+  webPushSender: WebPushSender;
 }>;
 
 const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
@@ -82,6 +86,8 @@ const create = ({
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUri,
+  pushSubscriptionsResolver,
+  webPushSender,
 }: Deps): AddReceivedLikeUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -138,6 +144,23 @@ const create = ({
         };
         const event = Notification.createLikeNotification(notification, now);
         return likeNotificationCreatedStore.store(event);
+      }),
+      RA.andThrough(({ post, actor }) => {
+        const likerName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
+        const payload: PushPayload = {
+          title: 'New Like',
+          body: `${likerName} liked your post`,
+          url: '/notifications',
+        };
+        return RA.flow(
+          pushSubscriptionsResolver.resolve(post.userId),
+          RA.andThen(async (subscriptions) => {
+            for (const subscription of subscriptions) {
+              await webPushSender.send(subscription, payload);
+            }
+            return RA.ok(undefined);
+          }),
+        );
       }),
       RA.map(({ like, actor }) => ({ like, actor })),
     );
