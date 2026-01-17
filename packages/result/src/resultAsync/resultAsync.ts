@@ -159,4 +159,18 @@ export const andThrough =
       return next;
     };
 
+export const isOk = async <T, E>(
+  res: Result<T, E> | Promise<Result<T, E>>
+): Promise<boolean> => {
+  const awaited = await res;
+  return awaited.ok;
+};
+
+export const isErr = async <T, E>(
+  res: Result<T, E> | Promise<Result<T, E>>
+): Promise<boolean> => {
+  const awaited = await res;
+  return !awaited.ok;
+};
+
 export { flow, pipe };
