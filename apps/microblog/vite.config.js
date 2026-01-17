@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       build({
         entry: 'src/index.ts',
+        external: ['sharp'],
       }),
       devServer({
         entry: 'src/app.tsx',
