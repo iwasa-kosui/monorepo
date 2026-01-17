@@ -26,4 +26,7 @@ ALTER TABLE "likes_v2" ADD CONSTRAINT "likes_v2_actorId_actors_actorId_fk" FOREI
 ALTER TABLE "notification_likes" ADD CONSTRAINT "notification_likes_notificationId_notifications_notificationId_fk" FOREIGN KEY ("notificationId") REFERENCES "public"."notifications"("notificationId") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notification_likes" ADD CONSTRAINT "notification_likes_likerActorId_actors_actorId_fk" FOREIGN KEY ("likerActorId") REFERENCES "public"."actors"("actorId") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notification_likes" ADD CONSTRAINT "notification_likes_likedPostId_posts_postId_fk" FOREIGN KEY ("likedPostId") REFERENCES "public"."posts"("postId") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_recipientUserId_users_userId_fk" FOREIGN KEY ("recipientUserId") REFERENCES "public"."users"("userId") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_recipientUserId_users_userId_fk" FOREIGN KEY ("recipientUserId") REFERENCES "public"."users"("userId") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+INSERT INTO "likes_v2" ("likeId", "actorId", "objectUri", "likeActivityUri", "createdAt")
+SELECT "likeId", "actorId", "objectUri", NULL, "createdAt"
+FROM "likes";
