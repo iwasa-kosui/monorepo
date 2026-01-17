@@ -12,6 +12,8 @@ import { PgLikeV2CreatedStore } from '../../pg/likeV2/likeV2CreatedStore.ts';
 import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
 import { PgLikeNotificationCreatedStore } from '../../pg/notification/notificationCreatedStore.ts';
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
+import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { WebPushSender } from '../../webPush/webPushSender.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 
 export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
@@ -58,6 +60,8 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
+    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
+    webPushSender: WebPushSender.getInstance(),
   });
 
   return RA.flow(

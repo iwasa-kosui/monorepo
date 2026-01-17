@@ -11,6 +11,10 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
+      VAPID_PRIVATE_KEY: "dummy-private-key-for-ci"
+      VAPID_SUBJECT: "mailto:ci@example.com"
 
     steps:
       - name: Checkout repository

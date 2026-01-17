@@ -57,6 +57,9 @@ jobs:
           Environment="ORIGIN=https://blog.kosui.me"
           Environment="APP_ENV=production"
           Environment="DATABASE_CERT=/home/ec2-user/ap-northeast-1-bundle.pem"
+          Environment="VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}"
+          Environment="VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}"
+          Environment="VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}"
           EOF
           sed -i 's/^          //' env.conf
 

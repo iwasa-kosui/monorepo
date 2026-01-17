@@ -8,6 +8,7 @@ import { HomeRouter } from './adaptor/routes/homeRouter.tsx';
 import { LikeRouter } from './adaptor/routes/likeRouter.tsx';
 import { NotificationRouter } from './adaptor/routes/notificationRouter.tsx';
 import { PostsRouter } from './adaptor/routes/postsRouter.tsx';
+import { PushSubscriptionRouter } from './adaptor/routes/pushSubscriptionRouter.tsx';
 import { RemoteUsersRouter } from './adaptor/routes/remoteUsersRouter.tsx';
 import { SignInRouter } from './adaptor/routes/signInRouter.tsx';
 import { SignUpRouter } from './adaptor/routes/signUpRouter.tsx';
@@ -19,6 +20,7 @@ const fed = Federation.getInstance();
 app.use(federation(fed, () => undefined));
 app.use('/static/*', serveStatic({ root: './' }));
 app.use('/favicon.ico', serveStatic({ path: './favicon.ico' }));
+app.use('/sw.js', serveStatic({ path: './public/sw.js' }));
 app.get('/authorize_interaction', (c) => {
   const url = new URL(String(c.req.url));
   url.pathname = '/follow';
@@ -27,6 +29,7 @@ app.get('/authorize_interaction', (c) => {
 app.get('/health', (c) => c.text('OK'));
 app.route('/', HomeRouter);
 app.route('/api', APIRouter);
+app.route('/api', PushSubscriptionRouter);
 app.route('/users', UsersRouter);
 app.route('/remote-users', RemoteUsersRouter);
 app.route('/posts', PostsRouter);
