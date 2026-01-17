@@ -62,7 +62,7 @@ export const Layout: FC<LayoutProps> = (props) => {
 
         <script src='https://cdn.tailwindcss.com' />
       </head>
-      <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:pl-64'>
+      <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-24'>
         <Sidebar />
         <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
         <BottomNav />

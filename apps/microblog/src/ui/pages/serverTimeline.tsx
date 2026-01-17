@@ -14,9 +14,6 @@ export const ServerTimelinePage: FC<Props> = ({ posts }) => (
       <h1 class='text-2xl font-bold text-gray-900 dark:text-white mb-2'>
         blog.kosui.me
       </h1>
-      <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
-        最新の投稿
-      </h2>
       {posts.length > 0
         ? (
           posts.map((post) => <PostView key={post.postId} post={post} />)
