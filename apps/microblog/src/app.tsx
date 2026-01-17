@@ -1,6 +1,8 @@
 import { federation } from '@fedify/hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 import { AboutRouter } from './adaptor/routes/aboutRouter.tsx';
 import { APIRouter } from './adaptor/routes/apiRouter.tsx';
@@ -25,6 +27,39 @@ app.use('/sw.js', serveStatic({ path: './sw.js' }));
 app.use('/manifest.json', serveStatic({ path: './manifest.json' }));
 app.use('/icon-192.png', serveStatic({ path: './icon-192.png' }));
 app.use('/icon-512.png', serveStatic({ path: './icon-512.png' }));
+
+// Serve uploaded files from UPLOAD_DIR (outside of dist directory)
+app.get('/uploads/:filename', async (c) => {
+  const filename = c.req.param('filename');
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  const filePath = path.join(uploadDir, filename);
+
+  // Prevent directory traversal
+  if (!filePath.startsWith(uploadDir)) {
+    return c.notFound();
+  }
+
+  try {
+    const file = await fs.readFile(filePath);
+    const ext = path.extname(filename).toLowerCase();
+    const contentType = ext === '.webp'
+      ? 'image/webp'
+      : ext === '.png'
+      ? 'image/png'
+      : ext === '.jpg' || ext === '.jpeg'
+      ? 'image/jpeg'
+      : ext === '.gif'
+      ? 'image/gif'
+      : 'application/octet-stream';
+    return c.body(file, 200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+  } catch {
+    return c.notFound();
+  }
+});
+
 app.get('/authorize_interaction', (c) => {
   const url = new URL(String(c.req.url));
   url.pathname = '/follow';
