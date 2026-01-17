@@ -1,13 +1,13 @@
 import type { FC } from 'hono/jsx';
 
 export const Sidebar: FC = () => (
-  <aside class='hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col p-4'>
-    <nav class='flex-1 space-y-2'>
+  <aside class='hidden md:flex fixed left-0 top-0 h-full flex-col p-4'>
+    <nav class='flex-1 items-center content-center space-y-2'>
       <a
         href='/'
-        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
       >
-        <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+        <svg class='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
             stroke-linecap='round'
             stroke-linejoin='round'
@@ -18,9 +18,9 @@ export const Sidebar: FC = () => (
       </a>
       <a
         href='/notifications'
-        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
       >
-        <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+        <svg class='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
             stroke-linecap='round'
             stroke-linejoin='round'
