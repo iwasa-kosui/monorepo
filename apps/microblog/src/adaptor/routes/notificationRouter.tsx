@@ -38,7 +38,9 @@ app.get('/', async (c) => {
       ok: ({ result: { user, notifications } }) => {
         const notificationsWithSanitizedContent = notifications.map((n) => ({
           notification: n,
-          sanitizedContent: sanitize(n.likedPost.content),
+          sanitizedContent: n.notification.type === 'like'
+            ? sanitize((n as { likedPost: { content: string } }).likedPost.content)
+            : '',
         }));
 
         return c.html(

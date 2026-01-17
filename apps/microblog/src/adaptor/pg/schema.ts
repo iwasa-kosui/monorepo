@@ -139,6 +139,11 @@ export const notificationLikesTable = pgTable('notification_likes', {
   likedPostId: uuid().notNull().references(() => postsTable.postId),
 });
 
+export const notificationFollowsTable = pgTable('notification_follows', {
+  notificationId: uuid().primaryKey().references(() => notificationsTable.notificationId),
+  followerActorId: uuid().notNull().references(() => actorsTable.actorId),
+});
+
 export const pushSubscriptionsTable = pgTable('push_subscriptions', {
   subscriptionId: uuid().primaryKey(),
   userId: uuid().notNull().references(() => usersTable.userId),

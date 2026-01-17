@@ -10,10 +10,13 @@ import {
   createMockActorResolverByUri,
   createMockActorResolverByUserId,
   createMockFollowAcceptedStore,
+  createMockFollowNotificationCreatedStore,
   createMockFollowResolver,
   createMockLogoUriUpdatedStore,
+  createMockPushSubscriptionsResolverByUserId,
   createMockRemoteActorCreatedStore,
   createMockUserResolverByUsername,
+  createMockWebPushSender,
 } from './helper/mockAdaptors.ts';
 
 describe('AcceptFollowRequestUseCase', () => {
@@ -25,6 +28,9 @@ describe('AcceptFollowRequestUseCase', () => {
     const logoUriUpdatedStore = createMockLogoUriUpdatedStore();
     const followedStore = createMockFollowAcceptedStore();
     const followResolver = createMockFollowResolver();
+    const followNotificationCreatedStore = createMockFollowNotificationCreatedStore();
+    const pushSubscriptionsResolver = createMockPushSubscriptionsResolverByUserId();
+    const webPushSender = createMockWebPushSender();
     return {
       actorResolverByUri,
       actorResolverByUserId,
@@ -33,6 +39,9 @@ describe('AcceptFollowRequestUseCase', () => {
       logoUriUpdatedStore,
       followedStore,
       followResolver,
+      followNotificationCreatedStore,
+      pushSubscriptionsResolver,
+      webPushSender,
     };
   };
 

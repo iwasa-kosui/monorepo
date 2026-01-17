@@ -10,7 +10,10 @@ import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
+import { PgFollowNotificationCreatedStore } from '../../pg/notification/followNotificationCreatedStore.ts';
+import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
+import { WebPushSender } from '../../webPush/webPushSender.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 
 export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => {
@@ -29,6 +32,9 @@ export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => 
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     userResolverByUsername: PgUserResolverByUsername.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+    followNotificationCreatedStore: PgFollowNotificationCreatedStore.getInstance(),
+    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
+    webPushSender: WebPushSender.getInstance(),
   });
   return RA.flow(
     RA.ok({}),
