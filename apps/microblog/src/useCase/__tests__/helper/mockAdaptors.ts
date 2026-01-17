@@ -178,6 +178,9 @@ export const createMockFedifyContext = (): Context<unknown> => {
     getInboxUri: vi.fn((username: string) => new URL(`https://example.com/users/${username}/inbox`)),
     getActorKeyPairs: vi.fn().mockResolvedValue([]),
     getObject: vi.fn().mockResolvedValue(mockNote),
+    getObjectUri: vi.fn((_type: unknown, args: { identifier: string; id: string }) =>
+      new URL(`https://example.com/users/${args.identifier}/posts/${args.id}`)
+    ),
     sendActivity: vi.fn().mockResolvedValue(undefined),
     data: {},
   } as unknown as Context<unknown>;
