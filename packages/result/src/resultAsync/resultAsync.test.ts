@@ -67,5 +67,20 @@ describe("ResultAsync", () => {
       const errResult = await safeFetchUser(-1);
       expect(errResult).toEqual({ ok: false, err: "Invalid ID" });
     });
+
+    it("accepts onError and fn together", async () => {
+      const fetchUser = async (id: number): Promise<{ id: number; name: string }> => {
+        if (id < 0) throw new Error("Invalid ID");
+        return { id, name: "User" };
+      };
+
+      const safeFetchUser = ResultAsync.try((e) => (e as Error).message, fetchUser);
+
+      const okResult = await safeFetchUser(1);
+      expect(okResult).toEqual({ ok: true, val: { id: 1, name: "User" } });
+
+      const errResult = await safeFetchUser(-1);
+      expect(errResult).toEqual({ ok: false, err: "Invalid ID" });
+    });
   });
 });

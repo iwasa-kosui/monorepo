@@ -173,17 +173,34 @@ export const isErr = async <T, E>(
   return !awaited.ok;
 };
 
-export const tryFn =
-  <E>(onError: (error: unknown) => E) =>
-  <T, Args extends unknown[]>(fn: (...args: Args) => Promise<T>) =>
-  async (...args: Args): Promise<Result<T, E>> => {
-    try {
-      const val = await fn(...args);
-      return ok(val);
-    } catch (e) {
-      return err(onError(e));
-    }
-  };
+export function tryFn<E>(
+  onError: (error: unknown) => E
+): <T, Args extends unknown[]>(
+  fn: (...args: Args) => Promise<T>
+) => (...args: Args) => Promise<Result<T, E>>;
+
+export function tryFn<E, T, Args extends unknown[]>(
+  onError: (error: unknown) => E,
+  fn: (...args: Args) => Promise<T>
+): (...args: Args) => Promise<Result<T, E>>;
+
+export function tryFn<E, T, Args extends unknown[]>(
+  onError: (error: unknown) => E,
+  fn?: (...args: Args) => Promise<T>
+) {
+  const wrap =
+    <T2, Args2 extends unknown[]>(f: (...args: Args2) => Promise<T2>) =>
+    async (...args: Args2): Promise<Result<T2, E>> => {
+      try {
+        const val = await f(...args);
+        return ok(val);
+      } catch (e) {
+        return err(onError(e));
+      }
+    };
+
+  return fn !== undefined ? wrap(fn) : wrap;
+}
 
 export { tryFn as try };
 
