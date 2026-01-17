@@ -1,0 +1,151 @@
+import { RA } from '@iwasa-kosui/result';
+
+import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
+import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
+import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import { Instant } from '../domain/instant/instant.ts';
+import { LikeId } from '../domain/like/likeId.ts';
+import {
+  AlreadyLikedV2Error,
+  LikeV2,
+  type LikeV2CreatedStore,
+  type LikeV2ResolverByActivityUri,
+} from '../domain/like/likeV2.ts';
+import {
+  type LikeNotification,
+  type LikeNotificationCreatedStore,
+  Notification,
+} from '../domain/notification/notification.ts';
+import { NotificationId } from '../domain/notification/notificationId.ts';
+import type { LocalPost, Post, PostResolver } from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
+import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
+import type { UseCase } from './useCase.ts';
+
+type ActorIdentity = Readonly<{
+  uri: string;
+  inboxUrl: string;
+  url?: string;
+  username?: string;
+  logoUri?: string;
+}>;
+
+type Input = Readonly<{
+  likeActivityUri: string;
+  likedPostId: PostId;
+  likerIdentity: ActorIdentity;
+  objectUri: string;
+}>;
+
+type Ok = Readonly<{
+  like: LikeV2;
+  actor: Actor;
+}>;
+
+type Err = AlreadyLikedV2Error | PostNotLocalError;
+
+export type PostNotLocalError = Readonly<{
+  type: 'PostNotLocalError';
+  message: string;
+  detail: {
+    postId: PostId;
+  };
+}>;
+
+export const PostNotLocalError = {
+  create: (postId: PostId): PostNotLocalError => ({
+    type: 'PostNotLocalError',
+    message: `The post with ID "${postId}" is not a local post.`,
+    detail: { postId },
+  }),
+} as const;
+
+export type AddReceivedLikeUseCase = UseCase<Input, Ok, Err>;
+
+type Deps = Readonly<{
+  likeV2CreatedStore: LikeV2CreatedStore;
+  likeV2ResolverByActivityUri: LikeV2ResolverByActivityUri;
+  likeNotificationCreatedStore: LikeNotificationCreatedStore;
+  postResolver: PostResolver;
+  remoteActorCreatedStore: RemoteActorCreatedStore;
+  logoUriUpdatedStore: LogoUriUpdatedStore;
+  actorResolverByUri: ActorResolverByUri;
+}>;
+
+const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
+
+const create = ({
+  likeV2CreatedStore,
+  likeV2ResolverByActivityUri,
+  likeNotificationCreatedStore,
+  postResolver,
+  remoteActorCreatedStore,
+  logoUriUpdatedStore,
+  actorResolverByUri,
+}: Deps): AddReceivedLikeUseCase => {
+  const run = async (input: Input) => {
+    const now = Instant.now();
+
+    return RA.flow(
+      RA.ok(input),
+      RA.andBind(
+        'existingLike',
+        ({ likeActivityUri }) => likeV2ResolverByActivityUri.resolve({ likeActivityUri }),
+      ),
+      RA.andThen(({ existingLike, ...rest }) => {
+        if (existingLike) {
+          return RA.err(AlreadyLikedV2Error.create({
+            actorId: existingLike.actorId,
+            objectUri: existingLike.objectUri,
+          }));
+        }
+        return RA.ok(rest);
+      }),
+      RA.andBind('post', ({ likedPostId }) => postResolver.resolve(likedPostId)),
+      RA.andThen(({ post, ...rest }) => {
+        if (!post || !isLocalPost(post)) {
+          return RA.err(PostNotLocalError.create(rest.likedPostId));
+        }
+        return RA.ok({ ...rest, post });
+      }),
+      RA.andBind('actor', ({ likerIdentity }) =>
+        upsertRemoteActor({
+          now,
+          remoteActorCreatedStore,
+          logoUriUpdatedStore,
+          actorResolverByUri,
+        })(likerIdentity)),
+      RA.andBind('like', ({ actor, objectUri, likeActivityUri }) => {
+        const likeId = LikeId.generate();
+        const like: LikeV2 = {
+          likeId,
+          actorId: actor.id,
+          objectUri,
+          likeActivityUri,
+        };
+        const event = LikeV2.createLikeV2(like, now);
+        return likeV2CreatedStore.store(event).then(() => RA.ok(like));
+      }),
+      RA.andThrough(({ post, actor }) => {
+        const notificationId = NotificationId.generate();
+        const notification: LikeNotification = {
+          type: 'like',
+          notificationId,
+          recipientUserId: post.userId,
+          isRead: false,
+          likerActorId: actor.id,
+          likedPostId: post.postId,
+        };
+        const event = Notification.createLikeNotification(notification, now);
+        return likeNotificationCreatedStore.store(event);
+      }),
+      RA.map(({ like, actor }) => ({ like, actor })),
+    );
+  };
+
+  return { run };
+};
+
+export const AddReceivedLikeUseCase = {
+  create,
+} as const;
