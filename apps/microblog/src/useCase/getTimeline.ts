@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
+import type { TimelineItemsResolverByActorIds, TimelineItemWithPost } from '../domain/timeline/timelineItem.ts';
 import { type User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import type {
   Actor,
@@ -10,7 +11,6 @@ import type {
   ActorsResolverByFollowerId,
   ActorsResolverByFollowingId,
 } from './../domain/actor/actor.ts';
-import type { PostsResolverByActorIds, PostWithAuthor } from './../domain/post/post.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -21,7 +21,7 @@ type Input = Readonly<{
 
 type Ok = Readonly<{
   user: User;
-  posts: ReadonlyArray<PostWithAuthor>;
+  timelineItems: ReadonlyArray<TimelineItemWithPost>;
   actor: Actor;
   following: ReadonlyArray<Actor>;
   followers: ReadonlyArray<Actor>;
@@ -35,7 +35,7 @@ type Deps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
-  postsResolverByActorIds: PostsResolverByActorIds;
+  timelineItemsResolverByActorIds: TimelineItemsResolverByActorIds;
   actorsResolverByFollowerId: ActorsResolverByFollowerId;
   actorsResolverByFollowingId: ActorsResolverByFollowingId;
 }>;
@@ -44,7 +44,7 @@ const create = ({
   sessionResolver,
   userResolver,
   actorResolverByUserId,
-  postsResolverByActorIds,
+  timelineItemsResolverByActorIds,
   actorsResolverByFollowerId,
   actorsResolverByFollowingId,
 }: Deps): GetTimelineUseCase => {
@@ -61,9 +61,9 @@ const create = ({
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       RA.andBind('following', ({ actor }) => actorsResolverByFollowerId.resolve(actor.id)),
       RA.andBind('followers', ({ actor }) => actorsResolverByFollowingId.resolve(actor.id)),
-      RA.andBind('posts', async ({ actor, following }) => {
+      RA.andBind('timelineItems', async ({ actor, following }) => {
         const actorIds = [actor.id, ...following.map((a) => a.id)];
-        return postsResolverByActorIds.resolve({
+        return timelineItemsResolverByActorIds.resolve({
           actorIds,
           currentActorId: actor.id,
           createdAt: input.createdAt,

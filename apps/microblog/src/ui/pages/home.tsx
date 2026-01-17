@@ -5,7 +5,7 @@ import { render } from 'hono/jsx/dom';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { Actor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import type { User } from '../../domain/user/user.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -16,26 +16,30 @@ const client = hc<APIRouterType>('/api');
 
 type Props = Readonly<{
   user: User;
-  posts: ReadonlyArray<PostWithAuthor>;
+  timelineItems: ReadonlyArray<TimelineItemWithPost>;
   actor: Actor;
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
+  onRepost: (objectUri: string) => Promise<void>;
+  repostingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
 }>;
 
 export const HomePage = ({
   user,
-  posts,
+  timelineItems,
   actor,
   followers,
   following,
   fetchData,
   onLike,
   likingPostUri,
+  onRepost,
+  repostingPostUri,
   onDelete,
   deletingPostId,
 }: Props) => {
@@ -60,14 +64,14 @@ export const HomePage = ({
       const scrollTop = document.body.scrollTop;
       const clientHeight = document.body.clientHeight;
       if (scrollTop + clientHeight >= scrollHeight - 10) {
-        const oldest = posts.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
+        const oldest = timelineItems.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
         debouncedFetchData(oldest.createdAt);
       }
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [posts]);
+  }, [timelineItems]);
   return (
     <>
       <section class='mb-8'>
@@ -137,7 +141,7 @@ export const HomePage = ({
               </div>
               <div>
                 <span class='font-semibold text-gray-900 dark:text-white'>
-                  {posts.length}
+                  {timelineItems.length}
                 </span>
                 <span class='text-gray-500 dark:text-gray-400 ml-1'>Posts</span>
               </div>
@@ -216,15 +220,21 @@ export const HomePage = ({
         </form>
       </Modal>
       <section class='space-y-4'>
-        {posts.map((post) => (
+        {timelineItems.map((item) => (
           <PostView
-            post={post}
+            key={item.timelineItemId}
+            post={item.post}
+            repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
             onLike={onLike}
-            isLiking={post.type === 'remote'
-              && 'uri' in post
-              && likingPostUri === post.uri}
+            isLiking={item.post.type === 'remote'
+              && 'uri' in item.post
+              && likingPostUri === item.post.uri}
+            onRepost={onRepost}
+            isReposting={item.post.type === 'remote'
+              && 'uri' in item.post
+              && repostingPostUri === item.post.uri}
             onDelete={onDelete}
-            isDeleting={deletingPostId === post.postId}
+            isDeleting={deletingPostId === item.post.postId}
             currentUserId={user.id}
           />
         ))}
@@ -237,13 +247,14 @@ export const HomePage = ({
 const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
       user: User;
       actor: Actor;
-      posts: readonly PostWithAuthor[];
+      timelineItems: readonly TimelineItemWithPost[];
       followers: readonly Actor[];
       following: readonly Actor[];
     }
@@ -258,7 +269,7 @@ const App = () => {
     if (latest && !('error' in latest) && data && !('error' in data)) {
       setData({
         ...latest,
-        posts: [...data.posts, ...latest.posts],
+        timelineItems: [...data.timelineItems, ...latest.timelineItems],
       });
     } else {
       setData(latest);
@@ -277,10 +288,10 @@ const App = () => {
         if (data && !('error' in data)) {
           setData({
             ...data,
-            posts: data.posts.map((post) =>
-              post.type === 'remote' && 'uri' in post && post.uri === objectUri
-                ? { ...post, liked: true }
-                : post
+            timelineItems: data.timelineItems.map((item) =>
+              item.post.type === 'remote' && 'uri' in item.post && item.post.uri === objectUri
+                ? { ...item, post: { ...item.post, liked: true } }
+                : item
             ),
           });
         }
@@ -294,6 +305,28 @@ const App = () => {
     }
   };
 
+  const handleRepost = async (objectUri: string) => {
+    setRepostingPostUri(objectUri);
+    try {
+      const res = await client.v1.repost.$post({
+        json: { objectUri },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Refresh the timeline to show the repost
+        fetchData(undefined);
+      } else if ('error' in result) {
+        console.error('Failed to repost:', result.error);
+        alert(`Failed to repost: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to repost:', error);
+      alert('Failed to repost. Please try again.');
+    } finally {
+      setRepostingPostUri(null);
+    }
+  };
+
   const handleDelete = async (postId: string) => {
     setDeletingPostId(postId);
     try {
@@ -302,11 +335,11 @@ const App = () => {
       });
       const result = await res.json();
       if ('success' in result && result.success) {
-        // Remove the post from the local state
+        // Remove the timeline item from the local state
         if (data && !('error' in data)) {
           setData({
             ...data,
-            posts: data.posts.filter((post) => post.postId !== postId),
+            timelineItems: data.timelineItems.filter((item) => item.post.postId !== postId),
           });
         }
       } else if ('error' in result) {
@@ -337,12 +370,14 @@ const App = () => {
     <HomePage
       user={data.user}
       actor={data.actor}
-      posts={data.posts}
+      timelineItems={data.timelineItems}
       followers={data.followers}
       following={data.following}
       fetchData={fetchData}
       onLike={handleLike}
       likingPostUri={likingPostUri}
+      onRepost={handleRepost}
+      repostingPostUri={repostingPostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
     />

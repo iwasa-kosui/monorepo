@@ -7,6 +7,8 @@ import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts'
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostCreatedStore, type RemotePostCreated } from '../domain/post/post.ts';
+import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
+import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -45,6 +47,7 @@ type Deps = Readonly<{
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
+  timelineItemCreatedStore: TimelineItemCreatedStore;
 }>;
 
 const create = ({
@@ -53,6 +56,7 @@ const create = ({
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUri,
+  timelineItemCreatedStore,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -73,6 +77,17 @@ const create = ({
           actorId: actor.id,
         });
         return postCreatedStore.store(createPost).then(() => RA.ok(createPost));
+      }),
+      RA.andThrough(({ post, actor }) => {
+        const timelineItemEvent = TimelineItem.createTimelineItem({
+          timelineItemId: TimelineItemId.generate(),
+          type: 'post',
+          actorId: actor.id,
+          postId: post.aggregateState.postId,
+          repostId: null,
+          createdAt: now,
+        }, now);
+        return timelineItemCreatedStore.store(timelineItemEvent);
       }),
       RA.andThrough(async ({ post, attachments }) => {
         if (attachments.length === 0) {

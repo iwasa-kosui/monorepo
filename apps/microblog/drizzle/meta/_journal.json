@@ -43,6 +43,13 @@
       "when": 1768661745931,
       "tag": "0005_serious_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768688607979,
+      "tag": "0006_eager_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

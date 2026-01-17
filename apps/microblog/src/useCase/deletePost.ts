@@ -8,6 +8,7 @@ import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } fro
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
+import { TimelineItem, type TimelineItemDeletedStore, type TimelineItemResolverByPostId } from '../domain/timeline/timelineItem.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
@@ -48,6 +49,8 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   postResolver: PostResolver;
+  timelineItemDeletedStore: TimelineItemDeletedStore;
+  timelineItemResolverByPostId: TimelineItemResolverByPostId;
 }>;
 
 const create = ({
@@ -56,6 +59,8 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   postResolver,
+  timelineItemDeletedStore,
+  timelineItemResolverByPostId,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -87,6 +92,13 @@ const create = ({
         // Create delete event
         const deleteEvent = Post.deletePost(now)(postId);
         await postDeletedStore.store(deleteEvent);
+
+        // Delete timeline item
+        const timelineItem = await timelineItemResolverByPostId.resolve({ postId });
+        if (timelineItem.ok && timelineItem.val) {
+          const timelineItemDeletedEvent = TimelineItem.deleteTimelineItem(timelineItem.val.timelineItemId, now);
+          await timelineItemDeletedStore.store(timelineItemDeletedEvent);
+        }
 
         // Build Note URI for the Delete activity using Fedify context
         const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: postId });

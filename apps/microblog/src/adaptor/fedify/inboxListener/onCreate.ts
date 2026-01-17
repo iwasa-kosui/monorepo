@@ -8,6 +8,7 @@ import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
+import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 
 type Attachment = Readonly<{
@@ -51,6 +52,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
+    timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
   });
 
   return RA.flow(

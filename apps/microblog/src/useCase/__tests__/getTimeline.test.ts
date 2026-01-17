@@ -5,6 +5,8 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
+import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
+import type { TimelineItemId } from '../../domain/timeline/timelineItemId.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { GetTimelineUseCase } from '../getTimeline.ts';
@@ -13,8 +15,8 @@ import {
   createMockActorResolverByUserId,
   createMockActorsResolverByFollowerId,
   createMockActorsResolverByFollowingId,
-  createMockPostsResolverByActorIds,
   createMockSessionResolver,
+  createMockTimelineItemsResolverByActorIds,
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
@@ -23,14 +25,14 @@ describe('GetTimelineUseCase', () => {
     const sessionResolver = createMockSessionResolver();
     const userResolver = createMockUserResolver();
     const actorResolverByUserId = createMockActorResolverByUserId();
-    const postsResolverByActorIds = createMockPostsResolverByActorIds();
+    const timelineItemsResolverByActorIds = createMockTimelineItemsResolverByActorIds();
     const actorsResolverByFollowerId = createMockActorsResolverByFollowerId();
     const actorsResolverByFollowingId = createMockActorsResolverByFollowingId();
     return {
       sessionResolver,
       userResolver,
       actorResolverByUserId,
-      postsResolverByActorIds,
+      timelineItemsResolverByActorIds,
       actorsResolverByFollowerId,
       actorsResolverByFollowingId,
     };
@@ -88,7 +90,7 @@ describe('GetTimelineUseCase', () => {
       if (result.ok) {
         expect(result.val.user.id).toBe(user.id);
         expect(result.val.actor.id).toBe(actor.id);
-        expect(result.val.posts).toEqual([]);
+        expect(result.val.timelineItems).toEqual([]);
         expect(result.val.following).toEqual([]);
         expect(result.val.followers).toEqual([]);
       }
@@ -115,21 +117,27 @@ describe('GetTimelineUseCase', () => {
       };
       setupValidUserSession(deps, user, session, actor);
 
-      const posts: PostWithAuthor[] = [
+      const post: PostWithAuthor = {
+        type: 'local',
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Hello, timeline!',
+        createdAt: Date.now() as PostWithAuthor['createdAt'],
+        userId: user.id,
+        username: user.username,
+        logoUri: undefined,
+        liked: false,
+        images: [],
+      };
+      const timelineItems: TimelineItemWithPost[] = [
         {
-          type: 'local',
-          postId: crypto.randomUUID() as PostId,
-          actorId: actor.id,
-          content: 'Hello, timeline!',
-          createdAt: Date.now() as PostWithAuthor['createdAt'],
-          userId: user.id,
-          username: user.username,
-          logoUri: undefined,
-          liked: false,
-          images: [],
+          type: 'post',
+          timelineItemId: crypto.randomUUID() as TimelineItemId,
+          post,
+          createdAt: post.createdAt,
         },
       ];
-      deps.postsResolverByActorIds.setPosts(posts);
+      deps.timelineItemsResolverByActorIds.setItems(timelineItems);
 
       const useCase = GetTimelineUseCase.create(deps);
 
@@ -140,8 +148,8 @@ describe('GetTimelineUseCase', () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.val.posts).toHaveLength(1);
-        expect(result.val.posts[0].content).toBe('Hello, timeline!');
+        expect(result.val.timelineItems).toHaveLength(1);
+        expect(result.val.timelineItems[0].post.content).toBe('Hello, timeline!');
       }
     });
 
@@ -338,7 +346,7 @@ describe('GetTimelineUseCase', () => {
       expect(deps.actorResolverByUserId.resolve).toHaveBeenCalledWith(user.id);
       expect(deps.actorsResolverByFollowerId.resolve).toHaveBeenCalledWith(actor.id);
       expect(deps.actorsResolverByFollowingId.resolve).toHaveBeenCalledWith(actor.id);
-      expect(deps.postsResolverByActorIds.resolve).toHaveBeenCalled();
+      expect(deps.timelineItemsResolverByActorIds.resolve).toHaveBeenCalled();
     });
   });
 });

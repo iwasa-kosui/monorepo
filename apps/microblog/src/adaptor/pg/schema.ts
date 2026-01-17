@@ -152,3 +152,24 @@ export const pushSubscriptionsTable = pgTable('push_subscriptions', {
   authKey: text().notNull(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 });
+
+export const repostsTable = pgTable('reposts', {
+  repostId: uuid().primaryKey(),
+  actorId: uuid().notNull().references(() => actorsTable.actorId),
+  objectUri: text().notNull(),
+  originalPostId: uuid().references(() => postsTable.postId),
+  announceActivityUri: text().unique(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('repost_actor_object_unique').on(table.actorId, table.objectUri),
+]);
+
+export const timelineItemsTable = pgTable('timeline_items', {
+  timelineItemId: uuid().primaryKey(),
+  type: varchar({ length: 16 }).notNull(),
+  actorId: uuid().notNull().references(() => actorsTable.actorId),
+  postId: uuid().notNull().references(() => postsTable.postId),
+  repostId: uuid().references(() => repostsTable.repostId),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+  deletedAt: timestamp({ mode: 'date' }),
+});

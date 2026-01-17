@@ -13,6 +13,7 @@ import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 
 const app = new Hono();
@@ -35,6 +36,7 @@ app.post(
       userResolver: PgUserResolver.getInstance(),
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
+      timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
     });
     const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {

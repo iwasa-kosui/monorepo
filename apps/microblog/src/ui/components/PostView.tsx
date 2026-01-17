@@ -5,14 +5,20 @@ import type { UserId } from '../../domain/user/userId.ts';
 
 type Props = Readonly<{
   post: PostWithAuthor;
+  repostedBy?: {
+    username: string;
+    logoUri?: string;
+  };
   onLike?: (objectUri: string) => void;
   isLiking?: boolean;
+  onRepost?: (objectUri: string) => void;
+  isReposting?: boolean;
   onDelete?: (postId: string) => void;
   isDeleting?: boolean;
   currentUserId?: UserId;
 }>;
 
-export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, currentUserId }: Props) => {
+export const PostView = ({ post, repostedBy, onLike, isLiking, onRepost, isReposting, onDelete, isDeleting, currentUserId }: Props) => {
   const isRemotePost = post.type === 'remote' && 'uri' in post;
   const isLocalPost = post.type === 'local';
   const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
@@ -54,6 +60,12 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
       if (confirm('Are you sure you want to delete this post?')) {
         onDelete(post.postId);
       }
+    }
+  };
+
+  const handleRepostClick = () => {
+    if (isRemotePost && onRepost && !isReposting) {
+      onRepost(post.uri);
     }
   };
 
@@ -107,6 +119,28 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
       onTouchEnd={canLike ? handleTouchEnd : undefined}
       onClick={canLike ? handleClick : undefined}
     >
+      {/* Repost header */}
+      {repostedBy && (
+        <div class='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            class='h-4 w-4'
+            fill='none'
+            viewBox='0 0 24 24'
+            stroke='currentColor'
+            stroke-width='2'
+          >
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+            />
+          </svg>
+          <span>
+            {repostedBy.username} がリポスト
+          </span>
+        </div>
+      )}
       {/* Heart animation overlay */}
       {showHeartAnimation && (
         <div class='absolute inset-0 flex items-center justify-center pointer-events-none z-10'>
@@ -193,6 +227,34 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
             </div>
           )}
           <div class='mt-3 flex items-center justify-end gap-4'>
+            {isRemotePost && (
+              <button
+                type='button'
+                onClick={handleRepostClick}
+                class={`flex items-center gap-1 transition-colors ${
+                  isReposting
+                    ? 'text-green-300 dark:text-green-600 cursor-wait'
+                    : 'text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400'
+                }`}
+                title={isReposting ? 'Reposting...' : 'Repost'}
+                disabled={isReposting}
+              >
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  class='h-5 w-5'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                  stroke-width='2'
+                >
+                  <path
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                    d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+                  />
+                </svg>
+              </button>
+            )}
             {isRemotePost && (
               <button
                 type='button'
