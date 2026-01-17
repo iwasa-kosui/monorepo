@@ -1,6 +1,10 @@
 import type { FC } from 'hono/jsx';
 
-export const Sidebar: FC = () => (
+type Props = {
+  isLoggedIn?: boolean;
+};
+
+export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
   <aside class='hidden md:flex fixed left-0 top-0 h-full flex-col p-4'>
     <nav class='flex-1 items-center content-center space-y-2'>
       <a
@@ -17,7 +21,7 @@ export const Sidebar: FC = () => (
         </svg>
       </a>
       <a
-        href='#post-modal'
+        href={isLoggedIn ? '#post-modal' : '/sign-in'}
         class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
       >
         <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>

@@ -137,7 +137,7 @@ if (document.readyState === 'loading') {
 `;
 
 export const NotificationsPage = ({ user: _user, notifications }: Props) => (
-  <Layout>
+  <Layout isLoggedIn={true}>
     <section class='mb-8'>
       <h1 class='text-2xl font-bold text-gray-900 dark:text-white mb-6'>
         Notifications

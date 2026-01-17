@@ -12,6 +12,7 @@ type Props = Readonly<{
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
   posts: ReadonlyArray<PostWithAuthor>;
+  isLoggedIn?: boolean;
 }>;
 
 export const GetUserPage = ({
@@ -21,8 +22,9 @@ export const GetUserPage = ({
   followers,
   following,
   posts,
+  isLoggedIn = false,
 }: Props) => (
-  <Layout>
+  <Layout isLoggedIn={isLoggedIn}>
     <div class='flex items-center justify-between mb-6'>
       <a href='/' class='text-2xl font-bold text-gray-900 dark:text-white hover:opacity-80 transition-opacity'>
         blog.kosui.me

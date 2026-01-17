@@ -17,11 +17,12 @@ type OGPMetadata = {
 
 type LayoutProps = {
   ogp?: OGPMetadata;
+  isLoggedIn?: boolean;
   children?: unknown;
 };
 
 export const Layout: FC<LayoutProps> = (props) => {
-  const { ogp } = props;
+  const { ogp, isLoggedIn = false } = props;
   const title = ogp?.title ? `${ogp.title} | blog.kosui.me` : 'blog.kosui.me';
   const description = ogp?.description || 'A microblog by kosui';
 
@@ -95,10 +96,10 @@ export const Layout: FC<LayoutProps> = (props) => {
         />
       </head>
       <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-24'>
-        <Sidebar />
+        <Sidebar isLoggedIn={isLoggedIn} />
         <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
-        <BottomNav />
-        <PostModal />
+        <BottomNav isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <PostModal />}
       </body>
     </html>
   );
@@ -107,25 +108,28 @@ export const Layout: FC<LayoutProps> = (props) => {
 export const LayoutClient: FC<{
   client: string;
   server: string;
+  isLoggedIn?: boolean;
   children: unknown;
-}> = (props) => (
-  <html lang='en'>
-    <head>
-      <meta charset='utf-8' />
-      <meta name='viewport' content='width=device-width, initial-scale=1' />
-      <meta name='color-scheme' content='light dark' />
-      <link rel='icon' href='/favicon.ico' />
-      <link rel='manifest' href='/manifest.json' />
-      <meta name='apple-mobile-web-app-capable' content='yes' />
-      <meta name='apple-mobile-web-app-status-bar-style' content='default' />
-      <meta name='apple-mobile-web-app-title' content='Microblog' />
-      <link rel='apple-touch-icon' href='/icon-192.png' />
-      <meta name='theme-color' content='#1a1918' />
-      <title>blog.kosui.me</title>
-      <script src='https://cdn.tailwindcss.com' />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
+}> = (props) => {
+  const { isLoggedIn = true } = props;
+  return (
+    <html lang='en'>
+      <head>
+        <meta charset='utf-8' />
+        <meta name='viewport' content='width=device-width, initial-scale=1' />
+        <meta name='color-scheme' content='light dark' />
+        <link rel='icon' href='/favicon.ico' />
+        <link rel='manifest' href='/manifest.json' />
+        <meta name='apple-mobile-web-app-capable' content='yes' />
+        <meta name='apple-mobile-web-app-status-bar-style' content='default' />
+        <meta name='apple-mobile-web-app-title' content='Microblog' />
+        <link rel='apple-touch-icon' href='/icon-192.png' />
+        <meta name='theme-color' content='#1a1918' />
+        <title>blog.kosui.me</title>
+        <script src='https://cdn.tailwindcss.com' />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
             tailwind.config = {
               theme: {
                 extend: {
@@ -152,15 +156,18 @@ export const LayoutClient: FC<{
               },
             }
           `,
-        }}
-      />
-      {import.meta.env.PROD ? <script type='module' src={props.client} /> : <script type='module' src={props.server} />}
-    </head>
-    <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-16'>
-      <Sidebar />
-      <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
-      <BottomNav />
-      <PostModal />
-    </body>
-  </html>
-);
+          }}
+        />
+        {import.meta.env.PROD
+          ? <script type='module' src={props.client} />
+          : <script type='module' src={props.server} />}
+      </head>
+      <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-16'>
+        <Sidebar isLoggedIn={isLoggedIn} />
+        <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
+        <BottomNav isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <PostModal />}
+      </body>
+    </html>
+  );
+};
