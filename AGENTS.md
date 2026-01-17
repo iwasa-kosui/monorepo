@@ -49,7 +49,7 @@ pnpm test
 #### 実装例
 
 ```typescript
-import { Result, ok, err } from 'neverthrow';
+import { Result, ok, err, pipe, andThen } from '@iwasa-kosui/result';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 
@@ -99,7 +99,7 @@ export const PostId = {
 
 ```typescript
 import { z } from 'zod';
-import { Result, ok, err } from 'neverthrow';
+import { Result, ok, err, pipe, map } from '@iwasa-kosui/result';
 
 // Branded Typeを使用したEmail
 const EmailSym = Symbol('Email');
@@ -117,11 +117,15 @@ export const Email = {
 } as const;
 
 // 使用例: Emailは常に有効な形式が保証される
-const emailResult = Email.create('user@example.com')
-    .map(email => sendNotification(email));
+const emailResult = pipe(
+    Email.create('user@example.com'),
+    map(email => sendNotification(email))
+);
 ```
 
 ```typescript
+import { Result, ok, err, pipe, andThen } from '@iwasa-kosui/result';
+
 // Branded Typeを使用したPostTitle
 const PostTitleSym = Symbol('PostTitle');
 const PostTitleSchema = z.string().min(1).max(200).brand(PostTitleSym).describe('PostTitle');
@@ -130,12 +134,12 @@ export type PostTitle = z.infer<typeof PostTitleSchema>;
 // コンパニオンオブジェクト
 export const PostTitle = {
     schema: PostTitleSchema,
-    
+
     create: (value: unknown): Result<PostTitle, ValidationError> => {
-        return Result.fromThrowable(
-            () => PostTitleSchema.parse(value),
-            (e) => new ValidationError('Invalid post title', e)
-        )();
+        const result = PostTitleSchema.safeParse(value);
+        return result.success
+            ? ok(result.data)
+            : err(new ValidationError('Invalid post title', result.error));
     },
 
     concat: (title: PostTitle, suffix: string): Result<PostTitle, ValidationError> => {
@@ -149,9 +153,9 @@ export const PostTitle = {
 } as const;
 ```
 
-### 3. Railway Oriented Programming (ROP) with neverthrow
+### 3. Railway Oriented Programming (ROP) with @iwasa-kosui/result
 
-このプロジェクトでは、エラーハンドリングに`neverthrow`ライブラリを使用したRailway Oriented Programmingパターンを採用しています。
+このプロジェクトでは、エラーハンドリングに`@iwasa-kosui/result`ライブラリを使用したRailway Oriented Programmingパターンを採用しています。
 
 #### 基本原則
 
@@ -163,7 +167,8 @@ export const PostTitle = {
 #### 実装例
 
 ```typescript
-import { Result, ResultAsync, ok, err, okAsync } from 'neverthrow';
+import { Result, ok, err, pipe } from '@iwasa-kosui/result';
+import * as ResultAsync from '@iwasa-kosui/result/resultAsync';
 
 type Dependencies = Readonly<{
     postByTitleResolver: PostByTitleResolver;
@@ -173,7 +178,7 @@ type Dependencies = Readonly<{
 type UseCase = Readonly<{
     run: (
         props: Omit<Post, 'postId'>
-    ) => ResultAsync<Post, PostAlreadyExists>;
+    ) => ResultAsync.ResultAsync<Post, PostAlreadyExists>;
 }>;
 
 const createUseCase = (
@@ -181,7 +186,7 @@ const createUseCase = (
 ): UseCase => {
     const resolveByTitle = (
         props: Omit<Post, 'postId'>
-    ): ResultAsync<Post | undefined, never> =>
+    ): ResultAsync.ResultAsync<Post | undefined, never> =>
         postByTitleResolver.resolveByTitle(props.title);
 
     const errIfPostExists = (
@@ -193,15 +198,17 @@ const createUseCase = (
 
     const run = (
         props: Omit<Post, 'postId'>
-    ): ResultAsync<Post, PostAlreadyExists> =>
-        okAsync(props)
-            .andThen(resolveByTitle)
-            .andThen(errIfPostExists)
-            .map((): PostCreated => Post.create(props))
-            .andThrough((event: PostCreated): ResultAsync<void, never> =>
+    ): ResultAsync.ResultAsync<Post, PostAlreadyExists> =>
+        pipe(
+            ResultAsync.ok(props),
+            ResultAsync.andThen(resolveByTitle),
+            ResultAsync.andThen(errIfPostExists),
+            ResultAsync.map((): PostCreated => Post.create(props)),
+            ResultAsync.andThrough((event: PostCreated): ResultAsync.ResultAsync<void, never> =>
                 postCreatedStore.store(event)
-            )
-            .map((event: PostCreated): Post => Post.fromEvent(event));
+            ),
+            ResultAsync.map((event: PostCreated): Post => Post.fromEvent(event))
+        );
 
     return { run } as const;
 };
@@ -333,7 +340,8 @@ export const Post = {
 #### 実装例
 
 ```typescript
-import { Result, ResultAsync, ok, err } from 'neverthrow';
+import { Result, ok, err, pipe } from '@iwasa-kosui/result';
+import * as ResultAsync from '@iwasa-kosui/result/resultAsync';
 
 // ドメイン層：同期的な処理のみ
 declare const Post: Readonly<{
@@ -342,11 +350,11 @@ declare const Post: Readonly<{
 
 // アダプタ層：非同期処理のインターフェース
 type PostPublishedStore = Readonly<{
-    store: (event: PostPublished) => ResultAsync<void, StoreError>;
+    store: (event: PostPublished) => ResultAsync.ResultAsync<void, StoreError>;
 }>;
 
 type PostByTitleResolver = Readonly<{
-    resolve: (title: PostTitle) => ResultAsync<Post | undefined, ResolverError>;
+    resolve: (title: PostTitle) => ResultAsync.ResultAsync<Post | undefined, ResolverError>;
 }>;
 
 type Dependencies = Readonly<{
@@ -364,15 +372,19 @@ const createUseCase = (
             ? err(PostAlreadyExists.new(existingPost.title))
             : ok(undefined);
 
-    const run = (props: { title: string }): ResultAsync<Post, PostAlreadyExists | ValidationError | StoreError> =>
-        okAsync(props)
-            .andThen(({title}) => postByTitleResolver.resolve(title))
-            .andThen(errIfPostExists)
-            .map(() => Post.create({ title: props.title }))
-            .andThrough((event: PostPublished): ResultAsync<void, StoreError> =>
+    const run = (
+        props: { title: string }
+    ): ResultAsync.ResultAsync<Post, PostAlreadyExists | ValidationError | StoreError> =>
+        pipe(
+            ResultAsync.ok(props),
+            ResultAsync.andThen(({title}) => postByTitleResolver.resolve(title)),
+            ResultAsync.andThen(errIfPostExists),
+            ResultAsync.map(() => Post.create({ title: props.title })),
+            ResultAsync.andThrough((event: PostPublished): ResultAsync.ResultAsync<void, StoreError> =>
                 postPublishedStore.store(event)
-            )
-            .map((event: PostPublished): Post => Post.fromEvent(event));
+            ),
+            ResultAsync.map((event: PostPublished): Post => Post.fromEvent(event))
+        );
 
     return { run } as const;
 };
