@@ -23,6 +23,7 @@ import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollow
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgPostsResolverByActorIds } from '../pg/post/postsResolverByActorIds.ts';
@@ -85,6 +86,29 @@ const app = new Hono()
       );
     },
   )
+  .get('/v1/notifications/count', async (c) => {
+    const sessionId = getCookie(c, 'sessionId');
+    if (!sessionId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const now = Instant.now();
+    const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
+    const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+
+    const result = await RA.flow(
+      RA.ok(sessionId),
+      RA.andThen(SessionId.parse),
+      RA.andBind('session', resolveSession),
+      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andThen(({ user }) => PgUnreadNotificationCountResolverByUserId.getInstance().resolve(user.id)),
+    );
+
+    return RA.match({
+      ok: (count) => c.json({ count }),
+      err: () => c.json({ error: 'Failed to get notification count' }, 400),
+    })(result);
+  })
   .post(
     '/v1/like',
     sValidator(
