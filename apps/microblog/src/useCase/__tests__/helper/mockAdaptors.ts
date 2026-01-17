@@ -4,6 +4,7 @@ import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
 
+import type { WebPushSender } from '../../../adaptor/webPush/webPushSender.ts';
 import type {
   Actor,
   ActorResolverByUri,
@@ -29,6 +30,10 @@ import type {
 } from '../../../domain/follow/follow.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
 import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
+import type {
+  FollowNotificationCreated,
+  FollowNotificationCreatedStore,
+} from '../../../domain/notification/notification.ts';
 import type { HashedPassword } from '../../../domain/password/password.ts';
 import type {
   UserPassword,
@@ -47,6 +52,7 @@ import type {
   PostWithAuthor,
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
 import type { Session, SessionResolver, SessionStartedStore } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
 import type { UserCreatedStore } from '../../../domain/user/createUser.ts';
@@ -343,3 +349,24 @@ export const createMockLikeResolver = (
     setLike: (like: Like) => likes.set(key(like.actorId, like.objectUri), like),
   };
 };
+
+export const createMockFollowNotificationCreatedStore = ():
+  & FollowNotificationCreatedStore
+  & InMemoryStore<FollowNotificationCreated> =>
+{
+  const inMemoryStore = createInMemoryStore<FollowNotificationCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & FollowNotificationCreatedStore['store']
+      & InMemoryStore<FollowNotificationCreated>['store'],
+  };
+};
+
+export const createMockPushSubscriptionsResolverByUserId = (): PushSubscriptionsResolverByUserId => ({
+  resolve: vi.fn(() => RAImpl.ok([])),
+});
+
+export const createMockWebPushSender = (): WebPushSender => ({
+  send: vi.fn(() => RAImpl.ok(undefined)),
+});

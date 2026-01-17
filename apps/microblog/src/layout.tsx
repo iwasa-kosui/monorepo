@@ -1,5 +1,7 @@
 import type { FC } from 'hono/jsx';
 
+import { BottomNav } from './ui/components/BottomNav.tsx';
+
 type OGPMetadata = {
   title?: string;
   description?: string;
@@ -59,8 +61,9 @@ export const Layout: FC<LayoutProps> = (props) => {
 
         <script src='https://cdn.tailwindcss.com' />
       </head>
-      <body class='bg-gray-50 dark:bg-gray-900 min-h-screen'>
+      <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16'>
         <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
+        <BottomNav />
       </body>
     </html>
   );
@@ -87,8 +90,9 @@ export const LayoutClient: FC<{
       <script src='https://cdn.tailwindcss.com' />
       {import.meta.env.PROD ? <script type='module' src={props.client} /> : <script type='module' src={props.server} />}
     </head>
-    <body class='bg-gray-50 dark:bg-gray-900 min-h-screen'>
+    <body class='bg-gray-50 dark:bg-gray-900 min-h-screen pb-16'>
       <main class='max-w-2xl mx-auto px-4 py-8 relative'>{props.children}</main>
+      <BottomNav />
     </body>
   </html>
 );

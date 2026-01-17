@@ -6,7 +6,10 @@ import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
 import type { Instant } from '../../../domain/instant/instant.ts';
 import {
+  type FollowNotification,
+  type FollowNotificationWithDetails,
   type LikeNotification,
+  type LikeNotificationWithDetails,
   type NotificationsResolverByUserId,
   type NotificationWithDetails,
 } from '../../../domain/notification/notification.ts';
@@ -20,6 +23,7 @@ import {
   actorsTable,
   localActorsTable,
   localPostsTable,
+  notificationFollowsTable,
   notificationLikesTable,
   notificationsTable,
   postsTable,
@@ -105,7 +109,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
     const db = DB.getInstance();
 
     // Like通知を取得（アクターとポスト情報も含む）
-    const rows = await db
+    const likeRows = await db
       .select({
         notifications: notificationsTable,
         notificationLikes: notificationLikesTable,
@@ -134,7 +138,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .limit(50)
       .execute();
 
-    const notifications: NotificationWithDetails[] = rows.map((row) => {
+    const likeNotifications: LikeNotificationWithDetails[] = likeRows.map((row) => {
       const likeNotification: LikeNotification = {
         type: 'like',
         notificationId: NotificationId.orThrow(row.notifications.notificationId),
@@ -163,6 +167,55 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         createdAt: row.notifications.createdAt.getTime() as Instant,
       };
     });
+
+    // Follow通知を取得（アクター情報も含む）
+    const followRows = await db
+      .select({
+        notifications: notificationsTable,
+        notificationFollows: notificationFollowsTable,
+        followerActors: actorsTable,
+        followerRemoteActors: remoteActorsTable,
+        followerLocalActors: localActorsTable,
+      })
+      .from(notificationsTable)
+      .innerJoin(
+        notificationFollowsTable,
+        eq(notificationsTable.notificationId, notificationFollowsTable.notificationId),
+      )
+      .innerJoin(actorsTable, eq(notificationFollowsTable.followerActorId, actorsTable.actorId))
+      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .where(eq(notificationsTable.recipientUserId, userId))
+      .orderBy(desc(notificationsTable.createdAt))
+      .limit(50)
+      .execute();
+
+    const followNotifications: FollowNotificationWithDetails[] = followRows.map((row) => {
+      const followNotification: FollowNotification = {
+        type: 'follow',
+        notificationId: NotificationId.orThrow(row.notifications.notificationId),
+        recipientUserId: row.notifications.recipientUserId as UserId,
+        isRead: row.notifications.isRead === 1,
+        followerActorId: ActorId.orThrow(row.notificationFollows.followerActorId),
+      };
+
+      const followerActor = reconstructActor({
+        actors: row.followerActors,
+        remote_actors: row.followerRemoteActors,
+        local_actors: row.followerLocalActors,
+      });
+
+      return {
+        notification: followNotification,
+        followerActor,
+        createdAt: row.notifications.createdAt.getTime() as Instant,
+      };
+    });
+
+    // 両方の通知をマージして日時でソート
+    const notifications: NotificationWithDetails[] = [...likeNotifications, ...followNotifications].sort(
+      (a, b) => b.createdAt - a.createdAt,
+    ).slice(0, 50);
 
     return RA.ok(notifications);
   };

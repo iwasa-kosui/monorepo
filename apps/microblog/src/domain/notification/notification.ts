@@ -25,8 +25,22 @@ const likeNotificationZodType = z
 export type LikeNotification = z.output<typeof likeNotificationZodType>;
 export const LikeNotification = Schema.create(likeNotificationZodType);
 
+const followNotificationZodType = z
+  .object({
+    type: z.literal('follow'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    followerActorId: ActorId.zodType,
+  })
+  .describe('FollowNotification');
+
+export type FollowNotification = z.output<typeof followNotificationZodType>;
+export const FollowNotification = Schema.create(followNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
+  followNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -64,6 +78,31 @@ const createLikeNotification = (payload: LikeNotification, now: Instant): LikeNo
 };
 
 export type LikeNotificationCreatedStore = Agg.Store<LikeNotificationCreated>;
+
+// Follow通知作成イベント
+export type FollowNotificationCreated = NotificationEvent<
+  FollowNotification,
+  'notification.followNotificationCreated',
+  FollowNotification
+>;
+
+const createFollowNotification = (payload: FollowNotification, now: Instant): FollowNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.followNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type FollowNotificationCreatedStore = Agg.Store<FollowNotificationCreated>;
+
+// Follow通知をActorIdで検索するリゾルバ（重複防止用）
+export type FollowNotificationResolverByActorId = Agg.Resolver<
+  { followerActorId: ActorId; recipientUserId: UserId },
+  FollowNotification | undefined
+>;
 
 // Like通知削除イベント
 export type LikeNotificationDeletedPayload = Readonly<{
@@ -138,6 +177,7 @@ export type NotificationsReadStore = Agg.Store<NotificationsRead>;
 export const Notification = {
   ...schema,
   createLikeNotification,
+  createFollowNotification,
   deleteLikeNotification,
   markAsRead,
   toAggregateId,
@@ -151,8 +191,15 @@ export type LikeNotificationWithDetails = Readonly<{
   createdAt: Instant;
 }>;
 
+// Follow通知と関連情報を含む型
+export type FollowNotificationWithDetails = Readonly<{
+  notification: FollowNotification;
+  followerActor: Actor;
+  createdAt: Instant;
+}>;
+
 // 通知と関連情報を含む型
-export type NotificationWithDetails = LikeNotificationWithDetails;
+export type NotificationWithDetails = LikeNotificationWithDetails | FollowNotificationWithDetails;
 
 // ユーザーIDで通知一覧を取得するリゾルバ
 export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;
