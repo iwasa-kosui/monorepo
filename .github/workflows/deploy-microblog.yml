@@ -43,6 +43,7 @@ jobs:
           Environment="VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}"
           Environment="VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}"
           Environment="VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}"
+          Environment="UPLOAD_DIR=/home/ec2-user/uploads"
           EOF
           sed -i 's/^          //' env.conf
 
