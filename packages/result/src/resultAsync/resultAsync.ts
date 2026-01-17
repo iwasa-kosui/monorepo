@@ -173,4 +173,18 @@ export const isErr = async <T, E>(
   return !awaited.ok;
 };
 
+export const tryFn =
+  <E>(onError: (error: unknown) => E) =>
+  <T, Args extends unknown[]>(fn: (...args: Args) => Promise<T>) =>
+  async (...args: Args): Promise<Result<T, E>> => {
+    try {
+      const val = await fn(...args);
+      return ok(val);
+    } catch (e) {
+      return err(onError(e));
+    }
+  };
+
+export { tryFn as try };
+
 export { flow, pipe };
