@@ -2,6 +2,7 @@ import { federation } from '@fedify/hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 
+import { AboutRouter } from './adaptor/routes/aboutRouter.tsx';
 import { APIRouter } from './adaptor/routes/apiRouter.tsx';
 import { FollowRouter } from './adaptor/routes/followRouter.tsx';
 import { HomeRouter } from './adaptor/routes/homeRouter.tsx';
@@ -41,4 +42,5 @@ app.route('/sign-in', SignInRouter);
 app.route('/follow', FollowRouter);
 app.route('/like', LikeRouter);
 app.route('/notifications', NotificationRouter);
+app.route('/about', AboutRouter);
 export default app;
