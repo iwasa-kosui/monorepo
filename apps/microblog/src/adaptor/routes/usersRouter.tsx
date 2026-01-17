@@ -138,6 +138,44 @@ app.post(
   },
 );
 
+app.post(
+  '/:username/remote-follow',
+  sValidator(
+    'param',
+    z.object({
+      username: Username.zodType,
+    }),
+  ),
+  sValidator(
+    'form',
+    z.object({
+      handle: z.string().min(1),
+    }),
+  ),
+  async (c) => {
+    const { username } = c.req.valid('param');
+    const { handle } = c.req.valid('form');
+    const logger = getLogger('microblog:remote-follow');
+
+    // Extract domain from handle (e.g., @user@example.com -> example.com)
+    const handleMatch = handle.match(/@?[^@]+@([^@]+)/);
+    if (!handleMatch) {
+      logger.warn('Invalid handle format', { handle });
+      return c.text('Invalid handle format. Use @user@server.example', 400);
+    }
+
+    const remoteDomain = handleMatch[1];
+    const url = new URL(c.req.url);
+    const targetUri = `${url.origin}/users/${username}`;
+
+    // Redirect to the remote server's authorize_interaction endpoint
+    const redirectUrl = `https://${remoteDomain}/authorize_interaction?uri=${encodeURIComponent(targetUri)}`;
+    logger.info('Remote follow redirect', { remoteDomain, targetUri, redirectUrl });
+
+    return c.redirect(redirectUrl);
+  },
+);
+
 app.get(
   '/:username/posts/:postId',
   sValidator(
