@@ -403,3 +403,39 @@ const createUseCase = (
 3. **可読性**: Railway Oriented Programmingによる明示的なエラーハンドリング
 4. **保守性**: 各層の責務が明確なレイヤードアーキテクチャ
 5. **追跡可能性**: Event-Driven Designによる状態変化の記録
+
+---
+
+## プレゼンテーション作成（deck）
+
+`talks/` ディレクトリ配下のプレゼンテーションは、[k1LoW/deck](https://github.com/k1LoW/deck) を使用してMarkdownからGoogle Slidesを生成します。
+
+### 基本コマンド
+
+```bash
+# Markdownの変更をGoogle Slidesに反映
+deck apply deck.md
+
+# 変更を監視して自動反映（ライブプレビュー）
+deck apply --watch deck.md
+
+# ブラウザでプレゼンテーションを開く
+deck open deck.md
+```
+
+### Markdown記法
+
+- スライドは `---`（3つ以上のハイフン）で区切る
+- `# 見出し1` → タイトル
+- `## 見出し2` → サブタイトル
+- それ以外のコンテンツ → ボディ
+
+### サポートされる記法
+
+- **太字**、*イタリック*、リンク、コードブロック
+- 画像、テーブル、引用、リスト
+
+### 注意事項
+
+- `deck.md` のfrontmatterに `presentationID` が設定されている場合、そのプレゼンテーションを更新します
+- 改行をそのまま反映したい場合は、frontmatterに `breaks: true` を設定してください
