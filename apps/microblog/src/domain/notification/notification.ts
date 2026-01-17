@@ -1,10 +1,12 @@
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
+import type { Actor } from '../actor/actor.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { Post } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
 import { NotificationId } from './notificationId.ts';
@@ -68,3 +70,17 @@ export const Notification = {
   createLikeNotification,
   toAggregateId,
 } as const;
+
+// Like通知と関連情報を含む型
+export type LikeNotificationWithDetails = Readonly<{
+  notification: LikeNotification;
+  likerActor: Actor;
+  likedPost: Post;
+  createdAt: Instant;
+}>;
+
+// 通知と関連情報を含む型
+export type NotificationWithDetails = LikeNotificationWithDetails;
+
+// ユーザーIDで通知一覧を取得するリゾルバ
+export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;
