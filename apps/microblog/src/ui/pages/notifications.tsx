@@ -25,13 +25,39 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+}
+
 async function checkSubscription() {
   const button = document.getElementById('push-subscribe-btn');
   const status = document.getElementById('push-status');
+  const iosGuide = document.getElementById('ios-install-guide');
 
+  const ios = isIOS();
+  const standalone = isInStandaloneMode();
+
+  // iOS Safari (not PWA) - show install guide
+  if (ios && !standalone) {
+    if (button) button.style.display = 'none';
+    if (status) status.style.display = 'none';
+    if (iosGuide) iosGuide.style.display = 'block';
+    return;
+  }
+
+  // Check Web Push support
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     if (button) button.style.display = 'none';
-    if (status) status.textContent = 'Push notifications not supported';
+    if (status) {
+      status.textContent = 'Push notifications not supported on this browser';
+      status.className = 'text-sm text-gray-500 dark:text-gray-400';
+    }
     return;
   }
 
@@ -142,6 +168,78 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
           >
             Enable Push Notifications
           </button>
+        </div>
+
+        <div id='ios-install-guide' class='hidden mt-4 pt-4 border-t border-gray-200 dark:border-gray-700'>
+          <div class='flex items-start gap-3'>
+            <div class='flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
+              <svg
+                class='w-5 h-5 text-blue-600 dark:text-blue-400'
+                fill='none'
+                stroke='currentColor'
+                viewBox='0 0 24 24'
+              >
+                <path
+                  stroke-linecap='round'
+                  stroke-linejoin='round'
+                  stroke-width='2'
+                  d='M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z'
+                />
+              </svg>
+            </div>
+            <div class='flex-1'>
+              <h3 class='text-sm font-medium text-gray-900 dark:text-white mb-2'>
+                Install this app to enable notifications
+              </h3>
+              <p class='text-sm text-gray-600 dark:text-gray-400 mb-3'>
+                iOS requires this app to be installed on your home screen to receive push notifications.
+              </p>
+              <ol class='text-sm text-gray-600 dark:text-gray-400 space-y-2'>
+                <li class='flex items-start gap-2'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                    1
+                  </span>
+                  <span>
+                    Tap the <strong>Share</strong> button{' '}
+                    <svg class='inline w-4 h-4 align-text-bottom' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path
+                        stroke-linecap='round'
+                        stroke-linejoin='round'
+                        stroke-width='2'
+                        d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z'
+                      />
+                    </svg>{' '}
+                    at the bottom of Safari
+                  </span>
+                </li>
+                <li class='flex items-start gap-2'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                    2
+                  </span>
+                  <span>
+                    Scroll down and tap <strong>"Add to Home Screen"</strong>
+                  </span>
+                </li>
+                <li class='flex items-start gap-2'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                    3
+                  </span>
+                  <span>
+                    Tap <strong>"Add"</strong> in the top right
+                  </span>
+                </li>
+                <li class='flex items-start gap-2'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                    4
+                  </span>
+                  <span>Open the app from your home screen and return here</span>
+                </li>
+              </ol>
+              <p class='text-xs text-gray-500 dark:text-gray-500 mt-3'>
+                Requires iOS 16.4 or later
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

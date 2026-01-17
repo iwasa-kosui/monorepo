@@ -28,6 +28,12 @@ export const Layout: FC<LayoutProps> = (props) => {
         <meta name='viewport' content='width=device-width, initial-scale=1' />
         <meta name='color-scheme' content='light dark' />
         <link rel='icon' href='/favicon.ico' />
+        <link rel='manifest' href='/manifest.json' />
+        <meta name='apple-mobile-web-app-capable' content='yes' />
+        <meta name='apple-mobile-web-app-status-bar-style' content='default' />
+        <meta name='apple-mobile-web-app-title' content='Microblog' />
+        <link rel='apple-touch-icon' href='/icon-192.png' />
+        <meta name='theme-color' content='#111827' />
         <title>{title}</title>
         <meta name='description' content={description} />
 
@@ -71,6 +77,12 @@ export const LayoutClient: FC<{
       <meta name='viewport' content='width=device-width, initial-scale=1' />
       <meta name='color-scheme' content='light dark' />
       <link rel='icon' href='/favicon.ico' />
+      <link rel='manifest' href='/manifest.json' />
+      <meta name='apple-mobile-web-app-capable' content='yes' />
+      <meta name='apple-mobile-web-app-status-bar-style' content='default' />
+      <meta name='apple-mobile-web-app-title' content='Microblog' />
+      <link rel='apple-touch-icon' href='/icon-192.png' />
+      <meta name='theme-color' content='#111827' />
       <title>blog.kosui.me</title>
       <script src='https://cdn.tailwindcss.com' />
       {import.meta.env.PROD ? <script type='module' src={props.client} /> : <script type='module' src={props.server} />}

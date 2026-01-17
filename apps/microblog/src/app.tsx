@@ -21,6 +21,9 @@ app.use(federation(fed, () => undefined));
 app.use('/static/*', serveStatic({ root: './' }));
 app.use('/favicon.ico', serveStatic({ path: './favicon.ico' }));
 app.use('/sw.js', serveStatic({ path: './sw.js' }));
+app.use('/manifest.json', serveStatic({ path: './manifest.json' }));
+app.use('/icon-192.png', serveStatic({ path: './icon-192.png' }));
+app.use('/icon-512.png', serveStatic({ path: './icon-512.png' }));
 app.get('/authorize_interaction', (c) => {
   const url = new URL(String(c.req.url));
   url.pathname = '/follow';
