@@ -23,6 +23,17 @@ export const GetUserPage = ({
   posts,
 }: Props) => (
   <Layout>
+    <div class='flex items-center justify-between mb-6'>
+      <a href='/' class='text-2xl font-bold text-gray-900 dark:text-white hover:opacity-80 transition-opacity'>
+        blog.kosui.me
+      </a>
+      <a
+        href='/about'
+        class='text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
+      >
+        ioriについて
+      </a>
+    </div>
     <section class='mb-8'>
       <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
         <div class='flex items-center gap-4 mb-4'>
