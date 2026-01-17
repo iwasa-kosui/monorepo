@@ -65,6 +65,44 @@ const createLikeNotification = (payload: LikeNotification, now: Instant): LikeNo
 
 export type LikeNotificationCreatedStore = Agg.Store<LikeNotificationCreated>;
 
+// Like通知削除イベント
+export type LikeNotificationDeletedPayload = Readonly<{
+  notificationId: NotificationId;
+  likerActorId: ActorId;
+  likedPostId: PostId;
+}>;
+
+export type LikeNotificationDeleted = NotificationEvent<
+  undefined,
+  'notification.likeNotificationDeleted',
+  LikeNotificationDeletedPayload
+>;
+
+const deleteLikeNotification = (
+  notification: LikeNotification,
+  now: Instant,
+): LikeNotificationDeleted => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.likeNotificationDeleted',
+    {
+      notificationId: notification.notificationId,
+      likerActorId: notification.likerActorId,
+      likedPostId: notification.likedPostId,
+    },
+    now,
+  );
+};
+
+export type LikeNotificationDeletedStore = Agg.Store<LikeNotificationDeleted>;
+
+// Like通知をActorIdとPostIdで検索するリゾルバ
+export type LikeNotificationResolverByActorIdAndPostId = Agg.Resolver<
+  { likerActorId: ActorId; likedPostId: PostId },
+  LikeNotification | undefined
+>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -100,6 +138,7 @@ export type NotificationsReadStore = Agg.Store<NotificationsRead>;
 export const Notification = {
   ...schema,
   createLikeNotification,
+  deleteLikeNotification,
   markAsRead,
   toAggregateId,
 } as const;

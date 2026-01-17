@@ -11,6 +11,8 @@ import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgLikeV2DeletedStore } from '../../pg/likeV2/likeV2DeletedStore.ts';
 import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
+import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
+import { PgLikeNotificationResolverByActorIdAndPostId } from '../../pg/notification/likeNotificationResolverByActorIdAndPostId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 
 const handleUndoFollow = async (ctx: InboxContext<unknown>, undo: Undo, follow: Follow) => {
@@ -63,6 +65,8 @@ const handleUndoLike = async (like: Like) => {
   const useCase = RemoveReceivedLikeUseCase.create({
     likeV2DeletedStore: PgLikeV2DeletedStore.getInstance(),
     likeV2ResolverByActivityUri: PgLikeV2ResolverByActivityUri.getInstance(),
+    likeNotificationResolverByActorIdAndPostId: PgLikeNotificationResolverByActorIdAndPostId.getInstance(),
+    likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
   });
 
   return RA.flow(
