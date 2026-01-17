@@ -16,6 +16,7 @@ import { RemoteUsersRouter } from './adaptor/routes/remoteUsersRouter.tsx';
 import { SignInRouter } from './adaptor/routes/signInRouter.tsx';
 import { SignUpRouter } from './adaptor/routes/signUpRouter.tsx';
 import { UsersRouter } from './adaptor/routes/usersRouter.tsx';
+import { ImageId } from './domain/image/imageId.ts';
 import { Federation } from './federation.ts';
 
 const app = new Hono();
@@ -31,28 +32,25 @@ app.use('/icon-512.png', serveStatic({ path: './icon-512.png' }));
 // Serve uploaded files from UPLOAD_DIR (outside of dist directory)
 app.get('/uploads/:filename', async (c) => {
   const filename = c.req.param('filename');
-  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-  const filePath = path.join(uploadDir, filename);
 
-  // Prevent directory traversal
-  if (!filePath.startsWith(uploadDir)) {
+  // Validate filename is a valid ImageId (UUID) with .webp extension
+  const ext = path.extname(filename).toLowerCase();
+  if (ext !== '.webp') {
+    return c.notFound();
+  }
+  const imageIdPart = path.basename(filename, ext);
+  const imageIdResult = ImageId.parse(imageIdPart);
+  if (!imageIdResult.ok) {
     return c.notFound();
   }
 
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  const filePath = path.join(uploadDir, filename);
+
   try {
     const file = await fs.readFile(filePath);
-    const ext = path.extname(filename).toLowerCase();
-    const contentType = ext === '.webp'
-      ? 'image/webp'
-      : ext === '.png'
-      ? 'image/png'
-      : ext === '.jpg' || ext === '.jpeg'
-      ? 'image/jpeg'
-      : ext === '.gif'
-      ? 'image/gif'
-      : 'application/octet-stream';
     return c.body(file, 200, {
-      'Content-Type': contentType,
+      'Content-Type': 'image/webp',
       'Cache-Control': 'public, max-age=31536000, immutable',
     });
   } catch {
