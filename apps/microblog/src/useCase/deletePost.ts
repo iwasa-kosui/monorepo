@@ -8,7 +8,11 @@ import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } fro
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
-import { TimelineItem, type TimelineItemDeletedStore, type TimelineItemResolverByPostId } from '../domain/timeline/timelineItem.ts';
+import {
+  TimelineItem,
+  type TimelineItemDeletedStore,
+  type TimelineItemResolverByPostId,
+} from '../domain/timeline/timelineItem.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';

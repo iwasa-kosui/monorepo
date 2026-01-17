@@ -5,7 +5,12 @@ import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LocalPost, RemotePost } from '../../../domain/post/post.ts';
-import type { PostTimelineItem, RepostTimelineItem, TimelineItemsResolverByActorIds, TimelineItemWithPost } from '../../../domain/timeline/timelineItem.ts';
+import type {
+  PostTimelineItem,
+  RepostTimelineItem,
+  TimelineItemsResolverByActorIds,
+  TimelineItemWithPost,
+} from '../../../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';

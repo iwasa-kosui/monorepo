@@ -9,7 +9,9 @@ import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { repostsTable } from '../schema.ts';
 
-const resolve = async ({ actorId, objectUri }: { actorId: ActorId; objectUri: string }): RA<Repost | undefined, never> => {
+const resolve = async (
+  { actorId, objectUri }: { actorId: ActorId; objectUri: string },
+): RA<Repost | undefined, never> => {
   const result = await DB.getInstance()
     .select()
     .from(repostsTable)

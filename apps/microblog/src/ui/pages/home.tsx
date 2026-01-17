@@ -64,7 +64,9 @@ export const HomePage = ({
       const scrollTop = document.body.scrollTop;
       const clientHeight = document.body.clientHeight;
       if (scrollTop + clientHeight >= scrollHeight - 10) {
-        const oldest = timelineItems.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
+        const oldest = timelineItems.reduce((prev, curr) =>
+          new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr
+        );
         debouncedFetchData(oldest.createdAt);
       }
     };

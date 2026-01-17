@@ -18,7 +18,9 @@ type Props = Readonly<{
   currentUserId?: UserId;
 }>;
 
-export const PostView = ({ post, repostedBy, onLike, isLiking, onRepost, isReposting, onDelete, isDeleting, currentUserId }: Props) => {
+export const PostView = (
+  { post, repostedBy, onLike, isLiking, onRepost, isReposting, onDelete, isDeleting, currentUserId }: Props,
+) => {
   const isRemotePost = post.type === 'remote' && 'uri' in post;
   const isLocalPost = post.type === 'local';
   const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;

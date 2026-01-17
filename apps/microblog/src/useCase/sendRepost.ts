@@ -3,12 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import {
-  AlreadyRepostedError,
-  Repost,
-  type RepostCreatedStore,
-  type RepostResolver,
-} from '../domain/repost/repost.ts';
+import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
