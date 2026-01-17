@@ -2,8 +2,9 @@
 Description = microblog
 
 [Service]
+User      = ec2-user
+Group     = ec2-user
 ExecStart = /usr/local/bin/microblog
-ExecStop  = /usr/bin/pkill -e node
 Restart   = always
 Type      = simple
 
