@@ -21,22 +21,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24.12.0"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: .
-
-      - name: Build
-        run: pnpm build
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -46,7 +30,6 @@ jobs:
 
       - name: Create directories on server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /opt/microblog"
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "sudo mkdir -p /etc/systemd/system/microblog.service.d"
 
       - name: Create env.conf
@@ -63,17 +46,20 @@ jobs:
           EOF
           sed -i 's/^          //' env.conf
 
-      - name: Deploy files
+      - name: Deploy config files
         run: |
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" microblog.service ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" microblog.sh ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/usr/local/bin/microblog
-          rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" dist/ ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/opt/microblog
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" nginx.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/nginx/nginx.conf
           rsync -av --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_ed25519" env.conf ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}:/etc/systemd/system/microblog.service.d/env.conf
 
+      - name: Build on server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo && git fetch --all && git checkout origin/main -- . && pnpm install && cd apps/microblog && pnpm build"
+
       - name: Run database migration
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo/apps/microblog && git fetch --all && git switch origin/main --detach && pnpm run drizzle:push"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo/apps/microblog && pnpm run drizzle:push"
 
       - name: Restart services
         run: |
