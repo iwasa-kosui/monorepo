@@ -114,3 +114,23 @@ export const postImagesTable = pgTable('post_images', {
   altText: text(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 });
+
+export const receivedLikesTable = pgTable('received_likes', {
+  receivedLikeId: uuid().primaryKey(),
+  likerActorId: uuid().notNull().references(() => actorsTable.actorId),
+  likedPostId: uuid().notNull().references(() => postsTable.postId),
+  likeActivityUri: text().notNull().unique(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('liker_post_unique').on(table.likerActorId, table.likedPostId),
+]);
+
+export const notificationsTable = pgTable('notifications', {
+  notificationId: uuid().primaryKey(),
+  recipientUserId: uuid().notNull().references(() => usersTable.userId),
+  type: varchar({ length: 32 }).notNull(),
+  relatedActorId: uuid().references(() => actorsTable.actorId),
+  relatedPostId: uuid().references(() => postsTable.postId),
+  isRead: integer().notNull().default(0),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+});
