@@ -38,6 +38,9 @@ app.get(
     const logger = getLogger('microblog:get-user');
     logger.info('Get user attempt', { username });
 
+    const sessionId = getCookie(c, 'sessionId');
+    const isLoggedIn = !!sessionId;
+
     const useCase = GetUserProfileUseCase.getInstance();
 
     return RA.flow(
@@ -58,6 +61,7 @@ app.get(
                 ...post,
                 content: sanitize(post.content),
               }))}
+              isLoggedIn={isLoggedIn}
             />,
           );
         },

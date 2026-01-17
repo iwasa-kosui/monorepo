@@ -1,6 +1,10 @@
 import type { FC } from 'hono/jsx';
 
-export const BottomNav: FC = () => (
+type Props = {
+  isLoggedIn?: boolean;
+};
+
+export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
   <nav class='md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom'>
     <div class='flex justify-around items-center h-14'>
       <a
@@ -17,7 +21,7 @@ export const BottomNav: FC = () => (
         </svg>
       </a>
       <a
-        href='#post-modal'
+        href={isLoggedIn ? '#post-modal' : '/sign-in'}
         class='flex flex-col items-center justify-center flex-1 h-full text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors'
       >
         <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
