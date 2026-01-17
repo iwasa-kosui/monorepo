@@ -1,3 +1,5 @@
+import { useRef, useState } from 'hono/jsx';
+
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 
@@ -15,12 +17,31 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
   const isLocalPost = post.type === 'local';
   const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
 
+  // Gesture states for like
+  const [isFloating, setIsFloating] = useState(false);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  const lastTapTime = useRef<number>(0);
+
   // Generate link to post detail page
   const postDetailLink = isLocalPost
     ? `/users/${post.username}/posts/${post.postId}`
     : isRemotePost
     ? post.uri
     : undefined;
+
+  const triggerLike = () => {
+    if (isRemotePost && onLike && !post.liked && !isLiking) {
+      setShowHeartAnimation(true);
+      setIsFloating(true);
+      onLike(post.uri);
+      setTimeout(() => {
+        setShowHeartAnimation(false);
+        setIsFloating(false);
+      }, 800);
+    }
+  };
 
   const handleLikeClick = () => {
     if (isRemotePost && onLike && !post.liked && !isLiking) {
@@ -36,8 +57,68 @@ export const PostView = ({ post, onLike, isLiking, onDelete, isDeleting, current
     }
   };
 
+  // Touch handlers for swipe to like
+  const handleTouchStart = (e: TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: TouchEvent) => {
+    if (!isRemotePost || post.liked || isLiking) return;
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = Math.abs(touchEndY - touchStartY.current);
+
+    // Swipe right detection (minimum 80px, mostly horizontal)
+    if (deltaX > 80 && deltaY < 50) {
+      triggerLike();
+    }
+  };
+
+  // Double tap detection for like
+  const handleClick = (e: MouseEvent) => {
+    if (!isRemotePost || post.liked || isLiking) return;
+    if (lastTapTime.current === null) return;
+
+    const now = Date.now();
+    const timeDiff = now - lastTapTime.current;
+
+    if (timeDiff < 300 && timeDiff > 0) {
+      e.preventDefault();
+      triggerLike();
+    }
+
+    lastTapTime.current = now;
+  };
+
+  const canLike = isRemotePost && !post.liked && !isLiking;
+
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-md transition-shadow'>
+    <article
+      class={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 transition-all duration-300 relative overflow-hidden ${
+        isFloating
+          ? 'shadow-puffy dark:shadow-puffy-dark scale-[1.02] -translate-y-1'
+          : 'hover:shadow-puffy dark:hover:shadow-puffy-dark'
+      } ${canLike ? 'cursor-pointer' : ''}`}
+      onTouchStart={canLike ? handleTouchStart : undefined}
+      onTouchEnd={canLike ? handleTouchEnd : undefined}
+      onClick={canLike ? handleClick : undefined}
+    >
+      {/* Heart animation overlay */}
+      {showHeartAnimation && (
+        <div class='absolute inset-0 flex items-center justify-center pointer-events-none z-10'>
+          <svg
+            class='w-20 h-20 text-pink-500 animate-ping'
+            fill='currentColor'
+            viewBox='0 0 24 24'
+          >
+            <path d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' />
+          </svg>
+        </div>
+      )}
       <div class='flex items-start gap-3'>
         <a
           href={isLocalPost ? `/users/${post.username}` : isRemotePost ? `/remote-users/${post.actorId}` : undefined}

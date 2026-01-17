@@ -31,7 +31,7 @@ const LikeNotificationItem = ({
   const postUrl = `/posts/${likedPost.postId}`;
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-md transition-shadow'>
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
       <div class='flex items-start gap-3'>
         <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900 flex items-center justify-center'>
           <svg
@@ -111,7 +111,7 @@ const FollowNotificationItem = ({
   })(followerActor);
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-md transition-shadow'>
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
       <div class='flex items-start gap-3'>
         <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
           <svg
