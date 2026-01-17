@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { deleteCookie, getCookie } from 'hono/cookie';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import sharp from 'sharp';
 import { z } from 'zod/v4';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
@@ -184,15 +185,20 @@ const app = new Hono()
     }
 
     const imageId = ImageId.generate();
-    const ext = file.name.split('.').pop() || 'jpg';
-    const filename = `${imageId}.${ext}`;
+    const filename = `${imageId}.webp`;
     const uploadDir = path.join(process.cwd(), 'static', 'uploads');
 
     await fs.mkdir(uploadDir, { recursive: true });
 
     const filePath = path.join(uploadDir, filename);
     const arrayBuffer = await file.arrayBuffer();
-    await fs.writeFile(filePath, Buffer.from(arrayBuffer));
+
+    // Convert to WebP format
+    const webpBuffer = await sharp(Buffer.from(arrayBuffer))
+      .webp({ quality: 80 })
+      .toBuffer();
+
+    await fs.writeFile(filePath, webpBuffer);
 
     const url = `/static/uploads/${filename}`;
 

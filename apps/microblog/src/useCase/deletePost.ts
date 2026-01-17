@@ -1,4 +1,4 @@
-import { Delete, type RequestContext, Tombstone } from '@fedify/fedify';
+import { Delete, Note, type RequestContext, Tombstone } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
@@ -9,7 +9,6 @@ import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
-import { Env } from '../env.ts';
 import { Schema } from '../helper/schema.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -89,11 +88,8 @@ const create = ({
         const deleteEvent = Post.deletePost(now)(postId);
         await postDeletedStore.store(deleteEvent);
 
-        // Build Note URI for the Delete activity
-        const noteUri = new URL(
-          `/users/${user.username}/posts/${postId}`,
-          Env.getInstance().ORIGIN,
-        );
+        // Build Note URI for the Delete activity using Fedify context
+        const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: postId });
 
         // Send Delete activity to followers
         await ctx.sendActivity(
