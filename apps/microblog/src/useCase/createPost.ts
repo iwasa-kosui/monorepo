@@ -10,6 +10,8 @@ import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
+import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
+import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Env } from '../env.ts';
 import { Schema } from '../helper/schema.ts';
@@ -41,6 +43,7 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   postImageCreatedStore: PostImageCreatedStore;
+  timelineItemCreatedStore: TimelineItemCreatedStore;
 }>;
 
 const create = ({
@@ -49,6 +52,7 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   postImageCreatedStore,
+  timelineItemCreatedStore,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -71,6 +75,17 @@ const create = ({
       }),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
       RA.bind('post', ({ postEvent }) => postEvent.aggregateState),
+      RA.andThrough(({ post, actor }) => {
+        const timelineItemEvent = TimelineItem.createTimelineItem({
+          timelineItemId: TimelineItemId.generate(),
+          type: 'post',
+          actorId: actor.id,
+          postId: post.postId,
+          repostId: null,
+          createdAt: now,
+        }, now);
+        return timelineItemCreatedStore.store(timelineItemEvent);
+      }),
       RA.andBind('images', async ({ post, imageUrls }) => {
         if (imageUrls.length > 0) {
           const images: PostImage[] = imageUrls.map((url) => ({

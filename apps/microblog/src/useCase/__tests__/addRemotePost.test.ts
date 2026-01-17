@@ -9,6 +9,7 @@ import {
   createMockPostCreatedStore,
   createMockPostImageCreatedStore,
   createMockRemoteActorCreatedStore,
+  createMockTimelineItemCreatedStore,
 } from './helper/mockAdaptors.ts';
 
 describe('AddRemotePostUseCase', () => {
@@ -18,12 +19,14 @@ describe('AddRemotePostUseCase', () => {
     const remoteActorCreatedStore = createMockRemoteActorCreatedStore();
     const logoUriUpdatedStore = createMockLogoUriUpdatedStore();
     const actorResolverByUri = createMockActorResolverByUri();
+    const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
     return {
       postCreatedStore,
       postImageCreatedStore,
       remoteActorCreatedStore,
       logoUriUpdatedStore,
       actorResolverByUri,
+      timelineItemCreatedStore,
     };
   };
 

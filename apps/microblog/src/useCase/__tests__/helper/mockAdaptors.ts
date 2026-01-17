@@ -55,6 +55,16 @@ import type { PostId } from '../../../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
 import type { Session, SessionResolver, SessionStartedStore } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
+import type {
+  TimelineItem,
+  TimelineItemCreated,
+  TimelineItemCreatedStore,
+  TimelineItemDeleted,
+  TimelineItemDeletedStore,
+  TimelineItemResolverByPostId,
+  TimelineItemsResolverByActorIds,
+  TimelineItemWithPost,
+} from '../../../domain/timeline/timelineItem.ts';
 import type { UserCreatedStore } from '../../../domain/user/createUser.ts';
 import type { User, UserResolver, UserResolverByUsername } from '../../../domain/user/user.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
@@ -372,4 +382,41 @@ export const createMockPushSubscriptionsResolverByUserId = (): PushSubscriptions
 
 export const createMockWebPushSender = (): WebPushSender => ({
   send: vi.fn(() => RAImpl.ok(undefined)),
+});
+
+export const createMockTimelineItemCreatedStore = (): TimelineItemCreatedStore & InMemoryStore<TimelineItemCreated> => {
+  const inMemoryStore = createInMemoryStore<TimelineItemCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & TimelineItemCreatedStore['store']
+      & InMemoryStore<TimelineItemCreated>['store'],
+  };
+};
+
+export const createMockTimelineItemDeletedStore = (): TimelineItemDeletedStore & InMemoryStore<TimelineItemDeleted> => {
+  const inMemoryStore = createInMemoryStore<TimelineItemDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & TimelineItemDeletedStore['store']
+      & InMemoryStore<TimelineItemDeleted>['store'],
+  };
+};
+
+export const createMockTimelineItemResolverByPostId = (
+  items: Map<PostId, TimelineItem> = new Map(),
+): TimelineItemResolverByPostId & { setItem: (item: TimelineItem) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(items.get(postId))),
+  setItem: (item: TimelineItem) => items.set(item.postId, item),
+});
+
+export const createMockTimelineItemsResolverByActorIds = (
+  items: TimelineItemWithPost[] = [],
+): TimelineItemsResolverByActorIds & { setItems: (i: TimelineItemWithPost[]) => void } => ({
+  resolve: vi.fn(() => RAImpl.ok(items)),
+  setItems: (i: TimelineItemWithPost[]) => {
+    items.length = 0;
+    items.push(...i);
+  },
 });

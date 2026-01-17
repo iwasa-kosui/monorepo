@@ -13,6 +13,7 @@ import {
   createMockPostImageCreatedStore,
   createMockRequestContext,
   createMockSessionResolver,
+  createMockTimelineItemCreatedStore,
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
@@ -31,12 +32,14 @@ describe('CreatePostUseCase', () => {
     const userResolver = createMockUserResolver();
     const actorResolverByUserId = createMockActorResolverByUserId();
     const postImageCreatedStore = createMockPostImageCreatedStore();
+    const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
     return {
       sessionResolver,
       postCreatedStore,
       userResolver,
       actorResolverByUserId,
       postImageCreatedStore,
+      timelineItemCreatedStore,
     };
   };
 

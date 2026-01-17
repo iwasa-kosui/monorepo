@@ -1,4 +1,4 @@
-import { Create, createFederation, Delete, Follow, Like, Note, Undo } from '@fedify/fedify';
+import { Announce, Create, createFederation, Delete, Follow, Like, Note, Undo } from '@fedify/fedify';
 import { PostgresKvStore, PostgresMessageQueue } from '@fedify/postgres';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -32,7 +32,8 @@ const create = () => {
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)
-    .on(Like, inboxListener.onLike);
+    .on(Like, inboxListener.onLike)
+    .on(Announce, inboxListener.onAnnounce);
 
   federation.setObjectDispatcher(
     Note,

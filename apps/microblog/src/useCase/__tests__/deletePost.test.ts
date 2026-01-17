@@ -15,6 +15,8 @@ import {
   createMockPostResolver,
   createMockRequestContext,
   createMockSessionResolver,
+  createMockTimelineItemDeletedStore,
+  createMockTimelineItemResolverByPostId,
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
@@ -33,12 +35,16 @@ describe('DeletePostUseCase', () => {
     const userResolver = createMockUserResolver();
     const actorResolverByUserId = createMockActorResolverByUserId();
     const postResolver = createMockPostResolver();
+    const timelineItemDeletedStore = createMockTimelineItemDeletedStore();
+    const timelineItemResolverByPostId = createMockTimelineItemResolverByPostId();
     return {
       sessionResolver,
       postDeletedStore,
       userResolver,
       actorResolverByUserId,
       postResolver,
+      timelineItemDeletedStore,
+      timelineItemResolverByPostId,
     };
   };
 

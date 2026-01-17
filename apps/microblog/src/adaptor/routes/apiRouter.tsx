@@ -18,6 +18,7 @@ import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
+import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -27,8 +28,12 @@ import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
-import { PgPostsResolverByActorIds } from '../pg/post/postsResolverByActorIds.ts';
+import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
+import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
+import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
+import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 import { sanitize } from './helper/sanitize.ts';
 
@@ -54,7 +59,7 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-        postsResolverByActorIds: PgPostsResolverByActorIds.getInstance(),
+        timelineItemsResolverByActorIds: PgTimelineItemsResolverByActorIds.getInstance(),
         actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
         actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
       });
@@ -67,12 +72,15 @@ const app = new Hono()
         RA.ok(sessionId),
         RA.andThen((sessionId) => useCase.run({ sessionId: SessionId.orThrow(sessionId), createdAt })),
         RA.match({
-          ok: ({ user, posts, actor, followers, following }) => {
+          ok: ({ user, timelineItems, actor, followers, following }) => {
             return c.json({
               user,
-              posts: posts.map((post) => ({
-                ...post,
-                content: sanitize(post.content),
+              timelineItems: timelineItems.map((item) => ({
+                ...item,
+                post: {
+                  ...item.post,
+                  content: sanitize(item.post.content),
+                },
               })),
               actor,
               followers,
@@ -150,6 +158,49 @@ const app = new Hono()
       return RA.match({
         ok: () => c.json({ success: true }),
         err: (err) => c.json({ error: `Failed to like: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .post(
+    '/v1/repost',
+    sValidator(
+      'json',
+      z.object({
+        objectUri: z.string().min(1),
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const objectUri = body.objectUri;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = SendRepostUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        repostCreatedStore: PgRepostCreatedStore.getInstance(),
+        repostResolver: PgRepostResolver.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        objectUri,
+        request: c.req.raw,
+        ctx,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to repost: ${JSON.stringify(err)}` }, 400),
       })(result);
     },
   )
@@ -233,6 +284,8 @@ const app = new Hono()
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       postDeletedStore: PgPostDeletedStore.getInstance(),
       postResolver: PgPostResolver.getInstance(),
+      timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
+      timelineItemResolverByPostId: PgTimelineItemResolverByPostId.getInstance(),
     });
 
     const result = await useCase.run({
