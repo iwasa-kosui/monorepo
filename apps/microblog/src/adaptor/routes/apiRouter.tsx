@@ -186,7 +186,7 @@ const app = new Hono()
 
     const imageId = ImageId.generate();
     const filename = `${imageId}.webp`;
-    const uploadDir = path.join(process.cwd(), 'static', 'uploads');
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 
     await fs.mkdir(uploadDir, { recursive: true });
 
@@ -200,7 +200,7 @@ const app = new Hono()
 
     await fs.writeFile(filePath, webpBuffer);
 
-    const url = `/static/uploads/${filename}`;
+    const url = `/uploads/${filename}`;
 
     return c.json({
       imageId,
