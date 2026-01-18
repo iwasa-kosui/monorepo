@@ -1,15 +1,37 @@
-import { Endpoints, Image, Person, type RequestContext } from '@fedify/fedify';
+import { Application, Endpoints, Image, Person, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();
 
-  const dispatch = (ctx: RequestContext<unknown>, identifier: string) =>
-    RA.flow(
+  const dispatchInstanceActor = async (ctx: RequestContext<unknown>) => {
+    const keys = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
+    return new Application({
+      id: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
+      preferredUsername: INSTANCE_ACTOR_IDENTIFIER,
+      inbox: ctx.getInboxUri(INSTANCE_ACTOR_IDENTIFIER),
+      endpoints: new Endpoints({
+        sharedInbox: ctx.getInboxUri(),
+      }),
+      url: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
+      publicKey: keys.at(0)?.cryptographicKey,
+      assertionMethods: keys.map((k) => k.multikey),
+    });
+  };
+
+  const dispatch = (ctx: RequestContext<unknown>, identifier: string) => {
+    // Handle instance actor
+    if (identifier === INSTANCE_ACTOR_IDENTIFIER) {
+      return dispatchInstanceActor(ctx);
+    }
+
+    // Handle regular user actors
+    return RA.flow(
       RA.ok(identifier),
       RA.andThen(Username.parse),
       RA.andThen(async (username) => useCase.run({ username })),
@@ -44,6 +66,7 @@ const getInstance = () => {
         },
       }),
     );
+  };
 
   return {
     dispatch,
