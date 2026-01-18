@@ -185,3 +185,21 @@ export const instanceActorKeysTable = pgTable('instance_actor_keys', {
   privateKey: text().notNull(),
   publicKey: text().notNull(),
 });
+
+export const emojiReactsTable = pgTable('emoji_reacts', {
+  emojiReactId: uuid().primaryKey(),
+  actorId: uuid().notNull().references(() => actorsTable.actorId),
+  objectUri: text().notNull(),
+  emoji: varchar({ length: 128 }).notNull(),
+  emojiReactActivityUri: text().unique(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('emoji_react_actor_object_emoji_unique').on(table.actorId, table.objectUri, table.emoji),
+]);
+
+export const notificationEmojiReactsTable = pgTable('notification_emoji_reacts', {
+  notificationId: uuid().primaryKey().references(() => notificationsTable.notificationId),
+  reactorActorId: uuid().notNull().references(() => actorsTable.actorId),
+  reactedPostId: uuid().notNull(),
+  emoji: varchar({ length: 128 }).notNull(),
+});

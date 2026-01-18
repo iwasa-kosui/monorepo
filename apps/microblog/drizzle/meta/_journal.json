@@ -64,6 +64,13 @@
       "when": 1768734996459,
       "tag": "0008_medical_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1768760515284,
+      "tag": "0009_milky_celestials",
+      "breakpoints": true
     }
   ]
 }
