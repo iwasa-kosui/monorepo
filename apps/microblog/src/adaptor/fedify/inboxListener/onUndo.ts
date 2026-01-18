@@ -19,6 +19,7 @@ import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByA
 import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByPostId } from '../../pg/timeline/timelineItemResolverByPostId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
 const handleUndoFollow = async (ctx: InboxContext<unknown>, undo: Undo, follow: Follow) => {
   const actorId = undo.actorId;
@@ -117,10 +118,11 @@ const handleUndoAnnounce = async (announce: Announce) => {
 };
 
 export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
-  // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はデフォルトのdocumentLoaderを使用
-  const documentLoader = ctx.recipient
-    ? await ctx.getDocumentLoader({ identifier: ctx.recipient })
-    : ctx.documentLoader;
+  // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はインスタンスアクターを使用
+  // インスタンスアクターを使用することで、Authorized Fetchモードのサーバーにも対応
+  const documentLoader = await ctx.getDocumentLoader({
+    identifier: ctx.recipient ?? INSTANCE_ACTOR_IDENTIFIER,
+  });
   const object = await undo.getObject({ documentLoader });
 
   if (object instanceof Follow) {
