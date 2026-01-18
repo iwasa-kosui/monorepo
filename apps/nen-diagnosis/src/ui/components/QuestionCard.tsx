@@ -1,5 +1,5 @@
+import { AXIS_INFO } from '../../domain/judgmentAxis/judgmentAxis.ts';
 import type { Answer, Question } from '../../domain/question/question.ts';
-import { TRAIT_AXIS_INFO } from '../../domain/question/question.ts';
 
 type QuestionCardProps = Readonly<{
   question: Question;
@@ -12,7 +12,7 @@ export const QuestionCard = ({
   onAnswer,
   isAnimating,
 }: QuestionCardProps) => {
-  const traitInfo = TRAIT_AXIS_INFO[question.traitAxis];
+  const axisInfo = AXIS_INFO[question.axis];
 
   return (
     <div
@@ -22,10 +22,12 @@ export const QuestionCard = ({
         <div className='mb-4'>
           <div className='flex items-center gap-2 mb-2'>
             <span className='px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-medium'>
-              {traitInfo.japaneseName}を測定
+              {axisInfo.japaneseName}
             </span>
           </div>
-          <p className='text-slate-500 text-sm'>{traitInfo.description}</p>
+          <p className='text-slate-500 text-sm'>
+            {axisInfo.negativeLabel} ↔ {axisInfo.positiveLabel}
+          </p>
         </div>
 
         <h2 className='text-xl md:text-2xl font-bold text-white mb-8 leading-relaxed'>

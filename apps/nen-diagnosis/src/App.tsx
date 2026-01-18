@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import { Diagnosis, type DiagnosisResult, type Score } from './domain/diagnosis/diagnosis.ts';
+import { type AxisScore, Diagnosis, type DiagnosisResult } from './domain/diagnosis/diagnosis.ts';
 import type { Answer } from './domain/question/question.ts';
 import { Question } from './domain/question/question.ts';
 import { ProgressBar } from './ui/components/ProgressBar.tsx';
@@ -13,7 +13,7 @@ type GameState = 'start' | 'playing' | 'result';
 export const App = () => {
   const [gameState, setGameState] = useState<GameState>('start');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [score, setScore] = useState<Score>(Diagnosis.createEmptyScore());
+  const [axisScore, setAxisScore] = useState<AxisScore>(Diagnosis.createEmptyAxisScore());
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -24,17 +24,17 @@ export const App = () => {
   const handleStart = useCallback(() => {
     setGameState('playing');
     setCurrentQuestionIndex(0);
-    setScore(Diagnosis.createEmptyScore());
+    setAxisScore(Diagnosis.createEmptyAxisScore());
     setAnswers([]);
     setResult(null);
   }, []);
 
   const handleAnswer = useCallback(
     (answer: Answer) => {
-      const newScore = Diagnosis.addAnswer(score, answer);
+      const newAxisScore = Diagnosis.addAnswerToAxisScore(axisScore, answer);
       const newAnswers = [...answers, answer];
 
-      setScore(newScore);
+      setAxisScore(newAxisScore);
       setAnswers(newAnswers);
 
       if (currentQuestionIndex < questions.length - 1) {
@@ -45,7 +45,7 @@ export const App = () => {
         }, 300);
       } else {
         const diagnosisResult = Diagnosis.calculate(
-          newScore,
+          newAxisScore,
           newAnswers,
           questions,
         );
@@ -53,13 +53,13 @@ export const App = () => {
         setGameState('result');
       }
     },
-    [score, answers, currentQuestionIndex, questions],
+    [axisScore, answers, currentQuestionIndex, questions],
   );
 
   const handleRestart = useCallback(() => {
     setGameState('start');
     setCurrentQuestionIndex(0);
-    setScore(Diagnosis.createEmptyScore());
+    setAxisScore(Diagnosis.createEmptyAxisScore());
     setAnswers([]);
     setResult(null);
   }, []);

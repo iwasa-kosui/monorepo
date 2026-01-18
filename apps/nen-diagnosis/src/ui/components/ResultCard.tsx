@@ -1,8 +1,13 @@
 import { useCallback, useState } from 'react';
 
 import type { DiagnosisResult } from '../../domain/diagnosis/diagnosis.ts';
+import {
+  AXIS_CONTRIBUTIONS,
+  AXIS_INFO,
+  JUDGMENT_AXES,
+  type JudgmentAxis,
+} from '../../domain/judgmentAxis/judgmentAxis.ts';
 import { NEN_TYPES, NenType } from '../../domain/nenType/nenType.ts';
-import { TRAIT_AXIS_INFO, type TraitAxis } from '../../domain/question/question.ts';
 
 const ShareButton = ({ result }: { result: DiagnosisResult }) => {
   const [copied, setCopied] = useState(false);
@@ -321,36 +326,68 @@ const ScoreBar = ({
   );
 };
 
-const TraitAxisBar = ({
+/**
+ * 二項対立軸のプロファイルバー
+ * スコア範囲: -2 〜 +2
+ */
+const AxisProfileBar = ({
   axis,
-  count,
-  total,
+  score,
+  primaryType,
 }: {
-  axis: TraitAxis;
-  count: number;
-  total: number;
+  axis: JudgmentAxis;
+  score: number;
+  primaryType: NenType;
 }) => {
-  const info = TRAIT_AXIS_INFO[axis];
-  const nenTypeInfo = NenType.getInfo(info.nenType);
-  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  const info = AXIS_INFO[axis];
+  const contribution = AXIS_CONTRIBUTIONS[axis];
+  const primaryInfo = NenType.getInfo(primaryType);
+
+  // スコアを0-100のパーセンテージに変換（-2→0, 0→50, +2→100）
+  const percentage = ((score + 2) / 4) * 100;
+
+  // この軸がprimaryTypeに寄与しているかどうか
+  const isContributing = (score > 0 && contribution.positive.some((c) => c.nenType === primaryType))
+    || (score < 0 && contribution.negative.some((c) => c.nenType === primaryType));
 
   return (
-    <div className='flex items-center gap-3 mb-2'>
-      <div className='w-24 text-right'>
-        <span className='text-xs text-slate-400'>{info.japaneseName}</span>
+    <div className='mb-4'>
+      <div className='flex justify-between items-center mb-1'>
+        <span className='text-xs text-slate-500'>{info.negativeLabel}</span>
+        <span
+          className='text-sm font-medium'
+          style={{ color: isContributing ? primaryInfo.color : '#94a3b8' }}
+        >
+          {info.japaneseName}
+        </span>
+        <span className='text-xs text-slate-500'>{info.positiveLabel}</span>
       </div>
-      <div className='flex-1 bg-slate-700 rounded-full h-3 overflow-hidden'>
+      <div className='relative h-3 bg-slate-700 rounded-full overflow-hidden'>
+        {/* 中央のマーカー */}
+        <div className='absolute left-1/2 top-0 w-0.5 h-full bg-slate-500 z-10' />
+        {/* スコアインジケーター */}
         <div
-          className='h-full rounded-full transition-all duration-1000 ease-out'
+          className='absolute top-0 h-full w-3 rounded-full transition-all duration-500 ease-out'
           style={{
-            width: `${percentage}%`,
-            backgroundColor: nenTypeInfo.color,
+            left: `calc(${percentage}% - 6px)`,
+            backgroundColor: isContributing ? primaryInfo.color : '#64748b',
           }}
         />
+        {/* スコアが偏っている方向を示すバー */}
+        {score !== 0 && (
+          <div
+            className='absolute top-0 h-full transition-all duration-500 ease-out opacity-30'
+            style={{
+              left: score > 0 ? '50%' : `${percentage}%`,
+              width: `${Math.abs(score) * 25}%`,
+              backgroundColor: isContributing ? primaryInfo.color : '#64748b',
+            }}
+          />
+        )}
       </div>
-      <div className='w-16 text-right'>
-        <span className='text-xs text-slate-500'>
-          {count}/{total}問
+      <div className='flex justify-center mt-1'>
+        <span className='text-xs text-slate-400'>
+          {score > 0 ? `+${score}` : score}
         </span>
       </div>
     </div>
@@ -363,13 +400,26 @@ const JudgmentBasisSection = ({
   result: DiagnosisResult;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // 主要タイプに該当する回答のみを抽出
-  const primaryTypeAnswers = result.judgmentBasis.filter(
-    (basis) => basis.nenType === result.primaryType,
-  );
-
   const primaryInfo = NenType.getInfo(result.primaryType);
+  const contribution = AXIS_CONTRIBUTIONS;
+
+  // primaryTypeに寄与している軸とその回答を抽出
+  const contributingAxes = JUDGMENT_AXES.filter((axis) => {
+    const score = result.axisScores[axis];
+    const axisContrib = contribution[axis];
+    return (
+      (score > 0 && axisContrib.positive.some((c) => c.nenType === result.primaryType))
+      || (score < 0 && axisContrib.negative.some((c) => c.nenType === result.primaryType))
+    );
+  });
+
+  // 軸ごとにグループ化した判定根拠
+  const groupedBasis = contributingAxes.map((axis) => {
+    const axisInfo = AXIS_INFO[axis];
+    const score = result.axisScores[axis];
+    const answers = result.judgmentBasis.filter((b) => b.axis === axis);
+    return { axis, axisInfo, score, answers };
+  });
 
   return (
     <div className='bg-slate-900/50 rounded-xl p-6 mb-8'>
@@ -377,60 +427,57 @@ const JudgmentBasisSection = ({
 
       <div className='mb-4'>
         <p className='text-slate-300 text-sm leading-relaxed'>
-          12問中
-          <span
-            className='font-bold mx-1'
-            style={{ color: primaryInfo.color }}
-          >
-            {primaryTypeAnswers.length}問
-          </span>
-          の回答が
+          あなたの回答傾向から
           <span
             className='font-bold mx-1'
             style={{ color: primaryInfo.color }}
           >
             {primaryInfo.japaneseName}
           </span>
-          の特性を示していました。
+          と判定されました。
         </p>
       </div>
 
-      {primaryTypeAnswers.length > 0 && (
-        <div className='space-y-2'>
-          {primaryTypeAnswers.slice(0, isExpanded ? undefined : 3).map((basis) => {
-            const traitInfo = TRAIT_AXIS_INFO[basis.traitAxis];
-            return (
-              <div
-                key={basis.questionId}
-                className='p-3 bg-slate-800/50 rounded-lg border-l-2'
-                style={{ borderColor: primaryInfo.color }}
-              >
-                <div className='flex items-start gap-2'>
-                  <span
-                    className='px-2 py-0.5 rounded text-xs shrink-0'
-                    style={{
-                      backgroundColor: `${primaryInfo.color}20`,
-                      color: primaryInfo.color,
-                    }}
-                  >
-                    {traitInfo.japaneseName}
-                  </span>
-                  <p className='text-slate-400 text-xs leading-relaxed'>
-                    {basis.answerText}
-                  </p>
-                </div>
+      {groupedBasis.length > 0 && (
+        <div className='space-y-4'>
+          {groupedBasis.slice(0, isExpanded ? undefined : 2).map(({ axis, axisInfo, score, answers }) => (
+            <div
+              key={axis}
+              className='p-4 bg-slate-800/50 rounded-lg border-l-2'
+              style={{ borderColor: primaryInfo.color }}
+            >
+              <div className='flex items-center gap-2 mb-2'>
+                <span
+                  className='px-2 py-0.5 rounded text-xs font-medium'
+                  style={{
+                    backgroundColor: `${primaryInfo.color}20`,
+                    color: primaryInfo.color,
+                  }}
+                >
+                  {axisInfo.japaneseName} {score > 0 ? `+${score}` : score}
+                </span>
+                <span className='text-slate-400 text-xs'>
+                  {score > 0 ? axisInfo.positiveLabel : axisInfo.negativeLabel}
+                </span>
               </div>
-            );
-          })}
+              <ul className='space-y-1'>
+                {answers.map((basis) => (
+                  <li key={basis.questionId} className='text-slate-400 text-xs leading-relaxed'>
+                    「{basis.answerText}」
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
 
-          {primaryTypeAnswers.length > 3 && (
+          {groupedBasis.length > 2 && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className='text-purple-400 text-sm hover:text-purple-300 transition-colors'
             >
               {isExpanded
                 ? '折りたたむ'
-                : `他${primaryTypeAnswers.length - 3}件を表示`}
+                : `他${groupedBasis.length - 2}件の根拠を表示`}
             </button>
           )}
         </div>
@@ -444,20 +491,6 @@ export const ResultCard = ({ result, onRestart }: ResultCardProps) => {
   const secondaryInfo = result.secondaryType
     ? NenType.getInfo(result.secondaryType)
     : null;
-
-  const totalQuestions = Object.values(result.traitAxisCounts).reduce(
-    (sum, count) => sum + count,
-    0,
-  );
-
-  const traitAxes: TraitAxis[] = [
-    'simplicity',
-    'whimsicality',
-    'impulsiveness',
-    'rationality',
-    'meticulousness',
-    'individualism',
-  ];
 
   return (
     <div className='animate-fade-in'>
@@ -495,26 +528,26 @@ export const ResultCard = ({ result, onRestart }: ResultCardProps) => {
           </p>
         </div>
 
-        <JudgmentBasisSection result={result} />
-
         <div className='bg-slate-900/50 rounded-xl p-6 mb-8'>
           <h4 className='text-lg font-semibold text-white mb-4'>
-            あなたの傾向
+            あなたの傾向プロファイル
           </h4>
           <p className='text-slate-500 text-xs mb-4'>
-            ヒソカのオーラ別性格分析に基づく6つの特性軸での回答傾向
+            5つの判断軸における傾向（中央が中立、左右に振れるほど傾向が強い）
           </p>
           <div className='mt-4'>
-            {traitAxes.map((axis) => (
-              <TraitAxisBar
+            {JUDGMENT_AXES.map((axis) => (
+              <AxisProfileBar
                 key={axis}
                 axis={axis}
-                count={result.traitAxisCounts[axis]}
-                total={totalQuestions}
+                score={result.axisScores[axis]}
+                primaryType={result.primaryType}
               />
             ))}
           </div>
         </div>
+
+        <JudgmentBasisSection result={result} />
 
         <div className='bg-slate-900/50 rounded-xl p-6 mb-8'>
           <h4 className='text-lg font-semibold text-white mb-4'>

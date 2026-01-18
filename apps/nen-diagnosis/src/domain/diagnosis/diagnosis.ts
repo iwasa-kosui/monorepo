@@ -1,37 +1,35 @@
+import { AXIS_CONTRIBUTIONS, JUDGMENT_AXES, type JudgmentAxis } from '../judgmentAxis/judgmentAxis.ts';
 import { NEN_TYPES, NenType } from '../nenType/nenType.ts';
-import type { Answer, Question, TraitAxis } from '../question/question.ts';
+import type { Answer, Question } from '../question/question.ts';
 
 export type Score = Record<NenType, number>;
 
+export type AxisScore = Record<JudgmentAxis, number>;
+
 /**
- * 判定根拠 - どの回答がどの系統に加点されたか
+ * 判定根拠 - どの回答がどの軸に寄与したか
  */
 export type JudgmentBasis = Readonly<{
   questionId: number;
   questionText: string;
   answerText: string;
-  traitAxis: TraitAxis;
-  nenType: NenType;
+  axis: JudgmentAxis;
+  direction: 'positive' | 'negative';
 }>;
 
-/**
- * 特性軸ごとの回答数
- */
-export type TraitAxisCounts = Record<TraitAxis, number>;
-
 export type DiagnosisResult = Readonly<{
+  /** 各判断軸のスコア（-2〜+2） */
+  axisScores: AxisScore;
   /** 各念タイプのスコア */
-  scores: Score;
+  nenTypeScores: Score;
   /** 判定された主要タイプ */
   primaryType: NenType;
   /** 副次タイプ（2番目に高いスコア） */
   secondaryType: NenType | null;
   /** 各タイプの構成比率（%） */
   percentages: Record<NenType, number>;
-  /** 判定根拠（どの回答がどの系統に加点されたか） */
+  /** 判定根拠（どの回答がどの軸に寄与したか） */
   judgmentBasis: readonly JudgmentBasis[];
-  /** 特性軸ごとの回答数 */
-  traitAxisCounts: TraitAxisCounts;
 }>;
 
 const createEmptyScore = (): Score => ({
@@ -43,22 +41,51 @@ const createEmptyScore = (): Score => ({
   specialization: 0,
 });
 
-const createEmptyTraitAxisCounts = (): TraitAxisCounts => ({
-  simplicity: 0,
-  whimsicality: 0,
-  impulsiveness: 0,
-  rationality: 0,
-  meticulousness: 0,
-  individualism: 0,
+const createEmptyAxisScore = (): AxisScore => ({
+  commitment: 0,
+  logic: 0,
+  independence: 0,
+  caution: 0,
+  honesty: 0,
 });
 
 /**
- * 回答をスコアに加算
+ * 回答を軸スコアに反映
  */
-const addAnswer = (current: Score, answer: Answer): Score => {
+const addAnswerToAxisScore = (current: AxisScore, answer: Answer): AxisScore => {
   const newScore = { ...current };
-  newScore[answer.nenType] += 1;
+  if (answer.direction === 'positive') {
+    newScore[answer.axis] += 1;
+  } else {
+    newScore[answer.axis] -= 1;
+  }
   return newScore;
+};
+
+/**
+ * 軸スコアから念系統スコアを計算
+ */
+const calculateNenTypeScores = (axisScores: AxisScore): Score => {
+  const scores = createEmptyScore();
+
+  for (const axis of JUDGMENT_AXES) {
+    const score = axisScores[axis];
+    const contribution = AXIS_CONTRIBUTIONS[axis];
+
+    if (score > 0) {
+      // +側の念系統に加点
+      for (const { nenType, weight } of contribution.positive) {
+        scores[nenType] += score * weight;
+      }
+    } else if (score < 0) {
+      // -側の念系統に加点
+      for (const { nenType, weight } of contribution.negative) {
+        scores[nenType] += Math.abs(score) * weight;
+      }
+    }
+  }
+
+  return scores;
 };
 
 /**
@@ -105,55 +132,41 @@ const createJudgmentBasis = (
         questionId: question.id,
         questionText: question.text,
         answerText: answer.text,
-        traitAxis: answer.traitAxis,
-        nenType: answer.nenType,
+        axis: answer.axis,
+        direction: answer.direction,
       };
     })
     .filter((basis): basis is JudgmentBasis => basis !== null);
 };
 
-/**
- * 特性軸ごとの回答数を集計
- */
-const countTraitAxes = (answers: readonly Answer[]): TraitAxisCounts => {
-  const counts = createEmptyTraitAxisCounts();
-  for (const answer of answers) {
-    counts[answer.traitAxis] += 1;
-  }
-  return counts;
-};
-
 export const Diagnosis = {
   createEmptyScore,
+  createEmptyAxisScore,
 
-  addAnswer: (currentScore: Score, answer: Answer): Score => {
-    return addAnswer(currentScore, answer);
+  addAnswerToAxisScore: (currentAxisScore: AxisScore, answer: Answer): AxisScore => {
+    return addAnswerToAxisScore(currentAxisScore, answer);
   },
 
   /**
    * 診断結果を計算
-   * 判定根拠を含めた結果を返す
    */
   calculate: (
-    scores: Score,
+    axisScores: AxisScore,
     answers: readonly Answer[],
     questions: readonly Question[],
   ): DiagnosisResult => {
-    const { primary, secondary } = findTopTypes(scores);
-    const percentages = calculatePercentages(scores);
+    const nenTypeScores = calculateNenTypeScores(axisScores);
+    const { primary, secondary } = findTopTypes(nenTypeScores);
+    const percentages = calculatePercentages(nenTypeScores);
     const judgmentBasis = createJudgmentBasis(questions, answers);
-    const traitAxisCounts = countTraitAxes(answers);
-
-    // スコアベースの判定を採用（より客観的）
-    const finalPrimaryType = primary;
 
     return {
-      scores,
-      primaryType: finalPrimaryType,
-      secondaryType: secondary !== finalPrimaryType ? secondary : null,
+      axisScores,
+      nenTypeScores,
+      primaryType: primary,
+      secondaryType: secondary !== primary ? secondary : null,
       percentages,
       judgmentBasis,
-      traitAxisCounts,
     };
   },
 } as const;
