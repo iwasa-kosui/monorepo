@@ -28,7 +28,8 @@ const nenTypeInfoMap: Record<NenType, NenTypeInfo> = {
     name: 'Enhancement',
     japaneseName: '強化系',
     description: '自己の肉体やオーラを強化する能力',
-    personality: '単純で一途。曲がったことが嫌いで、思ったことをすぐ口にする。決意が固く、一度決めたことは最後までやり通す。',
+    personality:
+      '単純で一途。曲がったことが嫌いで、思ったことをすぐ口にする。決意が固く、一度決めたことは最後までやり通す。',
     waterDivinationResult: 'コップの水が溢れる',
     compatibleTypes: ['enhancement', 'transmutation', 'emission'],
     incompatibleTypes: ['specialization'],
@@ -64,7 +65,8 @@ const nenTypeInfoMap: Record<NenType, NenTypeInfo> = {
     name: 'Manipulation',
     japaneseName: '操作系',
     description: '物や生き物を操る能力',
-    personality: '論理的で理屈っぽい。自分の思い通りにしたがり、マイペース。計画性があり、目的のためには手段を選ばない。',
+    personality:
+      '論理的で理屈っぽい。自分の思い通りにしたがり、マイペース。計画性があり、目的のためには手段を選ばない。',
     waterDivinationResult: '葉っぱが水面で動く',
     compatibleTypes: ['emission', 'manipulation', 'specialization'],
     incompatibleTypes: ['conjuration'],
@@ -88,7 +90,8 @@ const nenTypeInfoMap: Record<NenType, NenTypeInfo> = {
     name: 'Specialization',
     japaneseName: '特質系',
     description: '他の系統に分類できない特殊な能力',
-    personality: '個人主義でカリスマ性がある。独自の世界観を持ち、普通とは違う視点で物事を見る。時に周囲を惹きつけ、時に孤立する。',
+    personality:
+      '個人主義でカリスマ性がある。独自の世界観を持ち、普通とは違う視点で物事を見る。時に周囲を惹きつけ、時に孤立する。',
     waterDivinationResult: '予測不能な変化が起こる',
     compatibleTypes: ['manipulation', 'conjuration', 'specialization'],
     incompatibleTypes: ['enhancement'],

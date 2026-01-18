@@ -1,13 +1,37 @@
 import { NEN_TYPES, NenType } from '../nenType/nenType.ts';
-import type { Answer } from '../question/question.ts';
+import type { Answer, Question, TraitAxis } from '../question/question.ts';
 
 export type Score = Record<NenType, number>;
 
+/**
+ * 判定根拠 - どの回答がどの系統に加点されたか
+ */
+export type JudgmentBasis = Readonly<{
+  questionId: number;
+  questionText: string;
+  answerText: string;
+  traitAxis: TraitAxis;
+  nenType: NenType;
+}>;
+
+/**
+ * 特性軸ごとの回答数
+ */
+export type TraitAxisCounts = Record<TraitAxis, number>;
+
 export type DiagnosisResult = Readonly<{
+  /** 各念タイプのスコア */
   scores: Score;
+  /** 判定された主要タイプ */
   primaryType: NenType;
+  /** 副次タイプ（2番目に高いスコア） */
   secondaryType: NenType | null;
+  /** 各タイプの構成比率（%） */
   percentages: Record<NenType, number>;
+  /** 判定根拠（どの回答がどの系統に加点されたか） */
+  judgmentBasis: readonly JudgmentBasis[];
+  /** 特性軸ごとの回答数 */
+  traitAxisCounts: TraitAxisCounts;
 }>;
 
 const createEmptyScore = (): Score => ({
@@ -19,25 +43,31 @@ const createEmptyScore = (): Score => ({
   specialization: 0,
 });
 
-const addScores = (current: Score, answer: Answer): Score => {
+const createEmptyTraitAxisCounts = (): TraitAxisCounts => ({
+  simplicity: 0,
+  whimsicality: 0,
+  impulsiveness: 0,
+  rationality: 0,
+  meticulousness: 0,
+  individualism: 0,
+});
+
+/**
+ * 回答をスコアに加算
+ */
+const addAnswer = (current: Score, answer: Answer): Score => {
   const newScore = { ...current };
-  for (const [type, value] of Object.entries(answer.scores)) {
-    newScore[type as NenType] += value ?? 0;
-  }
+  newScore[answer.nenType] += 1;
   return newScore;
 };
 
+/**
+ * 各念タイプの構成比率を計算
+ */
 const calculatePercentages = (scores: Score): Record<NenType, number> => {
   const total = Object.values(scores).reduce((sum, v) => sum + v, 0);
   if (total === 0) {
-    return {
-      enhancement: 0,
-      transmutation: 0,
-      emission: 0,
-      manipulation: 0,
-      conjuration: 0,
-      specialization: 0,
-    };
+    return createEmptyScore();
   }
 
   const percentages: Record<string, number> = {};
@@ -47,7 +77,12 @@ const calculatePercentages = (scores: Score): Record<NenType, number> => {
   return percentages as Record<NenType, number>;
 };
 
-const findTopTypes = (scores: Score): { primary: NenType; secondary: NenType | null } => {
+/**
+ * スコアが最も高いタイプを特定
+ */
+const findTopTypes = (
+  scores: Score,
+): { primary: NenType; secondary: NenType | null } => {
   const sortedTypes = [...NEN_TYPES].sort((a, b) => scores[b] - scores[a]);
   const primary = sortedTypes[0];
   const secondary = scores[sortedTypes[1]] > 0 ? sortedTypes[1] : null;
@@ -55,41 +90,70 @@ const findTopTypes = (scores: Score): { primary: NenType; secondary: NenType | n
   return { primary, secondary };
 };
 
-const checkForSpecialization = (scores: Score, answers: readonly Answer[]): boolean => {
-  const specializationAnswerCount = answers.filter(a =>
-    a.scores.specialization && a.scores.specialization > 0
-  ).length;
+/**
+ * 判定根拠を生成
+ */
+const createJudgmentBasis = (
+  questions: readonly Question[],
+  answers: readonly Answer[],
+): readonly JudgmentBasis[] => {
+  return answers
+    .map((answer, index) => {
+      const question = questions[index];
+      if (!question) return null;
+      return {
+        questionId: question.id,
+        questionText: question.text,
+        answerText: answer.text,
+        traitAxis: answer.traitAxis,
+        nenType: answer.nenType,
+      };
+    })
+    .filter((basis): basis is JudgmentBasis => basis !== null);
+};
 
-  const sortedScores = Object.values(scores).sort((a, b) => b - a);
-  const topScore = sortedScores[0];
-  const secondScore = sortedScores[1];
-
-  const isBalanced = topScore > 0 && secondScore > 0 && (topScore - secondScore) <= 2;
-
-  return specializationAnswerCount >= 2 || isBalanced;
+/**
+ * 特性軸ごとの回答数を集計
+ */
+const countTraitAxes = (answers: readonly Answer[]): TraitAxisCounts => {
+  const counts = createEmptyTraitAxisCounts();
+  for (const answer of answers) {
+    counts[answer.traitAxis] += 1;
+  }
+  return counts;
 };
 
 export const Diagnosis = {
   createEmptyScore,
 
   addAnswer: (currentScore: Score, answer: Answer): Score => {
-    return addScores(currentScore, answer);
+    return addAnswer(currentScore, answer);
   },
 
-  calculate: (scores: Score, answers: readonly Answer[]): DiagnosisResult => {
+  /**
+   * 診断結果を計算
+   * 判定根拠を含めた結果を返す
+   */
+  calculate: (
+    scores: Score,
+    answers: readonly Answer[],
+    questions: readonly Question[],
+  ): DiagnosisResult => {
     const { primary, secondary } = findTopTypes(scores);
     const percentages = calculatePercentages(scores);
+    const judgmentBasis = createJudgmentBasis(questions, answers);
+    const traitAxisCounts = countTraitAxes(answers);
 
-    const shouldBeSpecialization = checkForSpecialization(scores, answers);
-    const finalPrimaryType = shouldBeSpecialization && primary !== 'specialization'
-      ? (scores.specialization >= scores[primary] ? 'specialization' : primary)
-      : primary;
+    // スコアベースの判定を採用（より客観的）
+    const finalPrimaryType = primary;
 
     return {
       scores,
       primaryType: finalPrimaryType,
       secondaryType: secondary !== finalPrimaryType ? secondary : null,
       percentages,
+      judgmentBasis,
+      traitAxisCounts,
     };
   },
 } as const;

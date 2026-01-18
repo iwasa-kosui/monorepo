@@ -29,25 +29,32 @@ export const App = () => {
     setResult(null);
   }, []);
 
-  const handleAnswer = useCallback((answer: Answer) => {
-    const newScore = Diagnosis.addAnswer(score, answer);
-    const newAnswers = [...answers, answer];
+  const handleAnswer = useCallback(
+    (answer: Answer) => {
+      const newScore = Diagnosis.addAnswer(score, answer);
+      const newAnswers = [...answers, answer];
 
-    setScore(newScore);
-    setAnswers(newAnswers);
+      setScore(newScore);
+      setAnswers(newAnswers);
 
-    if (currentQuestionIndex < questions.length - 1) {
-      setIsAnimating(true);
-      setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setIsAnimating(false);
-      }, 300);
-    } else {
-      const diagnosisResult = Diagnosis.calculate(newScore, newAnswers);
-      setResult(diagnosisResult);
-      setGameState('result');
-    }
-  }, [score, answers, currentQuestionIndex, questions.length]);
+      if (currentQuestionIndex < questions.length - 1) {
+        setIsAnimating(true);
+        setTimeout(() => {
+          setCurrentQuestionIndex((prev) => prev + 1);
+          setIsAnimating(false);
+        }, 300);
+      } else {
+        const diagnosisResult = Diagnosis.calculate(
+          newScore,
+          newAnswers,
+          questions,
+        );
+        setResult(diagnosisResult);
+        setGameState('result');
+      }
+    },
+    [score, answers, currentQuestionIndex, questions],
+  );
 
   const handleRestart = useCallback(() => {
     setGameState('start');
@@ -58,18 +65,17 @@ export const App = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
-        <header className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">
-            念系統診断
-          </h1>
+    <div className='min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900'>
+      <div className='container mx-auto px-4 py-8 max-w-2xl'>
+        <header className='text-center mb-8'>
+          <h1 className='text-2xl font-bold text-white'>念系統診断</h1>
+          <p className='text-slate-500 text-sm mt-1'>
+            ヒソカのオーラ別性格分析
+          </p>
         </header>
 
         <main>
-          {gameState === 'start' && (
-            <StartScreen onStart={handleStart} />
-          )}
+          {gameState === 'start' && <StartScreen onStart={handleStart} />}
 
           {gameState === 'playing' && currentQuestion && (
             <>
@@ -85,15 +91,10 @@ export const App = () => {
             </>
           )}
 
-          {gameState === 'result' && result && (
-            <ResultCard
-              result={result}
-              onRestart={handleRestart}
-            />
-          )}
+          {gameState === 'result' && result && <ResultCard result={result} onRestart={handleRestart} />}
         </main>
 
-        <footer className="text-center mt-8 text-slate-500 text-sm">
+        <footer className='text-center mt-8 text-slate-500 text-sm'>
           <p>This is a fan-made diagnosis app.</p>
         </footer>
       </div>
