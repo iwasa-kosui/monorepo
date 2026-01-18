@@ -30,11 +30,11 @@
 
 ### 1.3 スコープ
 
-| 項目 | 対応 |
-|------|------|
-| Unicode絵文字リアクション受信 | ✓ |
-| Unicode絵文字リアクション送信 | ✓ |
-| リアクション通知 | ✓ |
+| 項目                             | 対応    |
+| -------------------------------- | ------- |
+| Unicode絵文字リアクション受信    | ✓       |
+| Unicode絵文字リアクション送信    | ✓       |
+| リアクション通知                 | ✓       |
 | カスタム絵文字（toot:Emoji）受信 | Phase 2 |
 | カスタム絵文字（toot:Emoji）送信 | Phase 2 |
 
@@ -152,7 +152,9 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 
 const EmojiReactIdSym = Symbol('EmojiReactId');
-const EmojiReactIdSchema = z.string().uuid().brand(EmojiReactIdSym).describe('EmojiReactId');
+const EmojiReactIdSchema = z.string().uuid().brand(EmojiReactIdSym).describe(
+  'EmojiReactId',
+);
 export type EmojiReactId = z.infer<typeof EmojiReactIdSchema>;
 
 export const EmojiReactId = {
@@ -160,7 +162,9 @@ export const EmojiReactId = {
   generate: (): EmojiReactId => randomUUID() as EmojiReactId,
   parse: (data: unknown): Result<EmojiReactId, ValidationError> => {
     const result = EmojiReactIdSchema.safeParse(data);
-    return result.success ? ok(result.data) : err(new ValidationError(result.error));
+    return result.success
+      ? ok(result.data)
+      : err(new ValidationError(result.error));
   },
   orThrow: (data: unknown): EmojiReactId => EmojiReactIdSchema.parse(data),
 } as const;
@@ -172,7 +176,8 @@ export const EmojiReactId = {
 import { z } from 'zod';
 
 // Unicode絵文字の正規表現（簡易版）
-const UNICODE_EMOJI_PATTERN = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})+$/u;
+const UNICODE_EMOJI_PATTERN =
+  /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})+$/u;
 // カスタム絵文字のパターン（:name:形式）
 const CUSTOM_EMOJI_PATTERN = /^:[a-zA-Z0-9_]+:$/;
 
@@ -204,7 +209,9 @@ export const Emoji = {
 
   parseUnicode: (data: unknown): Result<UnicodeEmoji, ValidationError> => {
     const result = UnicodeEmojiSchema.safeParse(data);
-    return result.success ? ok(result.data) : err(new ValidationError(result.error));
+    return result.success
+      ? ok(result.data)
+      : err(new ValidationError(result.error));
   },
 
   isUnicode: (emoji: Emoji): emoji is UnicodeEmoji => {
@@ -235,7 +242,7 @@ const EmojiReactSchema = z.object({
   emojiReactId: EmojiReactId.schema,
   actorId: ActorId.schema,
   objectUri: z.string().url(),
-  emoji: z.string(),  // Unicode絵文字またはショートコード
+  emoji: z.string(), // Unicode絵文字またはショートコード
   emojiReactActivityUri: z.string().url().nullable(),
 }).describe('EmojiReact');
 
@@ -249,20 +256,26 @@ type EmojiReactAggregate = {
   aggregateState: EmojiReact;
 };
 
-const EmojiReactEvent = AggregateEvent.createFactory<EmojiReactAggregate>('emojiReact');
+const EmojiReactEvent = AggregateEvent.createFactory<EmojiReactAggregate>(
+  'emojiReact',
+);
 
 // イベント型
-export type EmojiReactCreated = ReturnType<typeof EmojiReactEvent.create<
-  EmojiReact,
-  'emojiReact.emojiReactCreated',
-  EmojiReact
->>;
+export type EmojiReactCreated = ReturnType<
+  typeof EmojiReactEvent.create<
+    EmojiReact,
+    'emojiReact.emojiReactCreated',
+    EmojiReact
+  >
+>;
 
-export type EmojiReactDeleted = ReturnType<typeof EmojiReactEvent.create<
-  undefined,
-  'emojiReact.emojiReactDeleted',
-  { emojiReactActivityUri: string }
->>;
+export type EmojiReactDeleted = ReturnType<
+  typeof EmojiReactEvent.create<
+    undefined,
+    'emojiReact.emojiReactDeleted',
+    { emojiReactActivityUri: string }
+  >
+>;
 
 // ファクトリ
 export const EmojiReact = {
@@ -401,13 +414,19 @@ export const notificationEmojiReactsTable = pgTable(
   {
     notificationId: uuid('notification_id')
       .primaryKey()
-      .references(() => notificationsTable.notificationId, { onDelete: 'cascade' }),
-    reactorActorId: uuid('reactor_actor_id').notNull().references(() => actorsTable.actorId),
+      .references(() => notificationsTable.notificationId, {
+        onDelete: 'cascade',
+      }),
+    reactorActorId: uuid('reactor_actor_id').notNull().references(() =>
+      actorsTable.actorId
+    ),
     reactedPostId: uuid('reacted_post_id').notNull(),
     emoji: varchar('emoji', { length: 128 }).notNull(),
   },
   (table) => ({
-    postIdx: index('idx_notification_emoji_reacts_post').on(table.reactedPostId),
+    postIdx: index('idx_notification_emoji_reacts_post').on(
+      table.reactedPostId,
+    ),
   }),
 );
 ```
@@ -418,12 +437,12 @@ export const notificationEmojiReactsTable = pgTable(
 
 ### 5.1 ドメインイベント一覧
 
-| イベント名 | 発火条件 | aggregateState |
-|-----------|---------|----------------|
-| `emojiReact.emojiReactCreated` | リアクション作成（受信/送信） | `EmojiReact` |
-| `emojiReact.emojiReactDeleted` | リアクション削除（Undo） | `undefined` |
-| `notification.emojiReactNotificationCreated` | リアクション通知作成 | `EmojiReactNotification` |
-| `notification.emojiReactNotificationDeleted` | リアクション通知削除 | `undefined` |
+| イベント名                                   | 発火条件                      | aggregateState           |
+| -------------------------------------------- | ----------------------------- | ------------------------ |
+| `emojiReact.emojiReactCreated`               | リアクション作成（受信/送信） | `EmojiReact`             |
+| `emojiReact.emojiReactDeleted`               | リアクション削除（Undo）      | `undefined`              |
+| `notification.emojiReactNotificationCreated` | リアクション通知作成          | `EmojiReactNotification` |
+| `notification.emojiReactNotificationDeleted` | リアクション通知削除          | `undefined`              |
 
 ### 5.2 イベントフロー
 
@@ -544,7 +563,9 @@ type EmojiReactResolverByActivityUri = Resolver<
   EmojiReact | undefined
 >;
 
-const resolve = async ({ emojiReactActivityUri }): RA<EmojiReact | undefined, never> => {
+const resolve = async (
+  { emojiReactActivityUri },
+): RA<EmojiReact | undefined, never> => {
   const result = await DB.getInstance()
     .select()
     .from(emojiReactsTable)
@@ -621,22 +642,27 @@ const run = (input: Input): RA<Output, Err> => {
   return RA.flow(
     RA.ok(input),
     // 1. 既存のリアクションを確認
-    RA.andBind('existingReact', ({ emojiReactActivityUri }) =>
-      emojiReactResolverByActivityUri.resolve({ emojiReactActivityUri }),
+    RA.andBind(
+      'existingReact',
+      ({ emojiReactActivityUri }) =>
+        emojiReactResolverByActivityUri.resolve({ emojiReactActivityUri }),
     ),
     RA.andThen(({ existingReact }) =>
-      existingReact ? RA.err(new AlreadyReactedError()) : RA.ok(undefined),
+      existingReact ? RA.err(new AlreadyReactedError()) : RA.ok(undefined)
     ),
     // 2. 対象の投稿を確認
-    RA.andBind('post', ({ reactedPostId }) =>
-      localPostResolver.resolve({ postId: reactedPostId }),
+    RA.andBind(
+      'post',
+      ({ reactedPostId }) =>
+        localPostResolver.resolve({ postId: reactedPostId }),
     ),
     RA.andThen(({ post }) =>
-      post ? RA.ok(undefined) : RA.err(new LocalPostNotFoundError()),
+      post ? RA.ok(undefined) : RA.err(new LocalPostNotFoundError())
     ),
     // 3. リモートアクターをupsert
-    RA.andBind('actor', ({ reactorIdentity }) =>
-      remoteActorUpsert.upsert(reactorIdentity),
+    RA.andBind(
+      'actor',
+      ({ reactorIdentity }) => remoteActorUpsert.upsert(reactorIdentity),
     ),
     // 4. EmojiReactを作成・保存
     RA.andBind('event', (ctx) => {
@@ -664,7 +690,7 @@ const run = (input: Input): RA<Output, Err> => {
         userId: post.authorUserId,
         title: `${actor.displayName} reacted with ${emoji}`,
         body: post.content.substring(0, 100),
-      }),
+      })
     ),
     RA.map(({ event }) => EmojiReact.fromEvent(event)),
   );
@@ -682,11 +708,13 @@ const run = (input: Input): RA<void, EmojiReactNotFoundError> => {
   return RA.flow(
     RA.ok(input),
     // 1. リアクションを検索
-    RA.andBind('emojiReact', ({ emojiReactActivityUri }) =>
-      emojiReactResolverByActivityUri.resolve({ emojiReactActivityUri }),
+    RA.andBind(
+      'emojiReact',
+      ({ emojiReactActivityUri }) =>
+        emojiReactResolverByActivityUri.resolve({ emojiReactActivityUri }),
     ),
     RA.andThen(({ emojiReact }) =>
-      emojiReact ? RA.ok({ emojiReact }) : RA.err(new EmojiReactNotFoundError()),
+      emojiReact ? RA.ok({ emojiReact }) : RA.err(new EmojiReactNotFoundError())
     ),
     // 2. 関連する通知を検索・削除
     RA.andThrough(({ emojiReact }) =>
@@ -695,9 +723,12 @@ const run = (input: Input): RA<void, EmojiReactNotFoundError> => {
         emoji: emojiReact.emoji,
       }).andThen((notification) => {
         if (!notification) return RA.ok(undefined);
-        const event = Notification.deleteEmojiReactNotification(notification, Instant.now());
+        const event = Notification.deleteEmojiReactNotification(
+          notification,
+          Instant.now(),
+        );
         return emojiReactNotificationDeletedStore.store(event);
-      }),
+      })
     ),
     // 3. リアクションを削除
     RA.andThrough(({ emojiReact }) => {
@@ -724,25 +755,38 @@ const run = (input: Input): RA<EmojiReact, SendEmojiReactError> => {
   return RA.flow(
     RA.ok(input),
     // 1. セッション → ユーザー → ローカルアクター解決
-    RA.andBind('session', ({ sessionId }) => sessionResolver.resolve({ sessionId })),
-    RA.andBind('user', ({ session }) => userResolver.resolve({ userId: session.userId })),
-    RA.andBind('localActor', ({ user }) => localActorResolver.resolve({ userId: user.userId })),
+    RA.andBind(
+      'session',
+      ({ sessionId }) => sessionResolver.resolve({ sessionId }),
+    ),
+    RA.andBind(
+      'user',
+      ({ session }) => userResolver.resolve({ userId: session.userId }),
+    ),
+    RA.andBind(
+      'localActor',
+      ({ user }) => localActorResolver.resolve({ userId: user.userId }),
+    ),
     // 2. 既存のリアクションを確認
-    RA.andBind('existingReact', ({ localActor, objectUri, emoji }) =>
-      emojiReactResolverByActorAndObject.resolve({
-        actorId: localActor.actorId,
-        objectUri,
-        emoji,
-      }),
+    RA.andBind(
+      'existingReact',
+      ({ localActor, objectUri, emoji }) =>
+        emojiReactResolverByActorAndObject.resolve({
+          actorId: localActor.actorId,
+          objectUri,
+          emoji,
+        }),
     ),
     RA.andThen(({ existingReact }) =>
-      existingReact ? RA.err(new AlreadyReactedError()) : RA.ok(undefined),
+      existingReact ? RA.err(new AlreadyReactedError()) : RA.ok(undefined)
     ),
     // 3. リモートNoteを取得
-    RA.andBind('remoteNote', ({ objectUri, ctx }) =>
-      ctx.lookupObject(objectUri).then((obj) =>
-        obj instanceof Note ? RA.ok(obj) : RA.err(new InvalidObjectError()),
-      ),
+    RA.andBind(
+      'remoteNote',
+      ({ objectUri, ctx }) =>
+        ctx.lookupObject(objectUri).then((obj) =>
+          obj instanceof Note ? RA.ok(obj) : RA.err(new InvalidObjectError())
+        ),
     ),
     // 4. EmojiReactを作成・保存
     RA.andBind('event', (ctx) => {
@@ -890,8 +934,8 @@ export const onUndo = async (
 ```typescript
 // PRELOADED_CONTEXTSにlitepubを追加
 const PRELOADED_CONTEXTS: Record<string, object> = {
-  'http://joinmastodon.org/ns': { /* 既存 */ },
-  'https://joinmastodon.org/ns': { /* 既存 */ },
+  'http://joinmastodon.org/ns': {/* 既存 */},
+  'https://joinmastodon.org/ns': {/* 既存 */},
   'http://litepub.social/ns': {
     '@context': {
       'litepub': 'http://litepub.social/ns#',
@@ -1028,39 +1072,39 @@ const store = async (...events: readonly EmojiReactNotificationCreated[]): RA<vo
 
 ### Phase 1: 基本的なEmojiReact受信
 
-| # | タスク | 優先度 | 依存 |
-|---|--------|--------|------|
-| 1.1 | ドメインモデル実装（EmojiReact, EmojiReactId） | 高 | - |
-| 1.2 | DBマイグレーション（emoji_reacts, notification_emoji_reacts） | 高 | - |
-| 1.3 | Drizzle ORMスキーマ追加 | 高 | 1.2 |
-| 1.4 | EmojiReactストア/リゾルバー実装 | 高 | 1.1, 1.3 |
-| 1.5 | 通知ドメイン拡張（EmojiReactNotification） | 高 | 1.1 |
-| 1.6 | 通知ストア/リゾルバー拡張 | 高 | 1.3, 1.5 |
-| 1.7 | AddReceivedEmojiReactユースケース | 高 | 1.4, 1.6 |
-| 1.8 | RemoveReceivedEmojiReactユースケース | 高 | 1.4, 1.6 |
-| 1.9 | Inbox Handler（onEmojiReact） | 高 | 1.7 |
-| 1.10 | Undo Handler拡張 | 高 | 1.8 |
-| 1.11 | PRELOADED_CONTEXTSにlitepub追加 | 高 | - |
-| 1.12 | テスト実装 | 高 | 1.1-1.11 |
+| #    | タスク                                                        | 優先度 | 依存     |
+| ---- | ------------------------------------------------------------- | ------ | -------- |
+| 1.1  | ドメインモデル実装（EmojiReact, EmojiReactId）                | 高     | -        |
+| 1.2  | DBマイグレーション（emoji_reacts, notification_emoji_reacts） | 高     | -        |
+| 1.3  | Drizzle ORMスキーマ追加                                       | 高     | 1.2      |
+| 1.4  | EmojiReactストア/リゾルバー実装                               | 高     | 1.1, 1.3 |
+| 1.5  | 通知ドメイン拡張（EmojiReactNotification）                    | 高     | 1.1      |
+| 1.6  | 通知ストア/リゾルバー拡張                                     | 高     | 1.3, 1.5 |
+| 1.7  | AddReceivedEmojiReactユースケース                             | 高     | 1.4, 1.6 |
+| 1.8  | RemoveReceivedEmojiReactユースケース                          | 高     | 1.4, 1.6 |
+| 1.9  | Inbox Handler（onEmojiReact）                                 | 高     | 1.7      |
+| 1.10 | Undo Handler拡張                                              | 高     | 1.8      |
+| 1.11 | PRELOADED_CONTEXTSにlitepub追加                               | 高     | -        |
+| 1.12 | テスト実装                                                    | 高     | 1.1-1.11 |
 
 ### Phase 2: EmojiReact送信
 
-| # | タスク | 優先度 | 依存 |
-|---|--------|--------|------|
-| 2.1 | SendEmojiReactユースケース | 中 | Phase 1 |
-| 2.2 | UndoEmojiReactユースケース | 中 | 2.1 |
-| 2.3 | APIエンドポイント（POST /posts/:id/react） | 中 | 2.1 |
-| 2.4 | APIエンドポイント（DELETE /posts/:id/react） | 中 | 2.2 |
-| 2.5 | フロントエンドUI | 中 | 2.3, 2.4 |
+| #   | タスク                                       | 優先度 | 依存     |
+| --- | -------------------------------------------- | ------ | -------- |
+| 2.1 | SendEmojiReactユースケース                   | 中     | Phase 1  |
+| 2.2 | UndoEmojiReactユースケース                   | 中     | 2.1      |
+| 2.3 | APIエンドポイント（POST /posts/:id/react）   | 中     | 2.1      |
+| 2.4 | APIエンドポイント（DELETE /posts/:id/react） | 中     | 2.2      |
+| 2.5 | フロントエンドUI                             | 中     | 2.3, 2.4 |
 
 ### Phase 3: カスタム絵文字対応
 
-| # | タスク | 優先度 | 依存 |
-|---|--------|--------|------|
-| 3.1 | CustomEmoji型実装 | 低 | Phase 1 |
-| 3.2 | DBスキーマ拡張（カスタム絵文字メタデータ） | 低 | 3.1 |
-| 3.3 | カスタム絵文字解析（toot:Emoji tag） | 低 | 3.1 |
-| 3.4 | カスタム絵文字表示UI | 低 | 3.3 |
+| #   | タスク                                     | 優先度 | 依存    |
+| --- | ------------------------------------------ | ------ | ------- |
+| 3.1 | CustomEmoji型実装                          | 低     | Phase 1 |
+| 3.2 | DBスキーマ拡張（カスタム絵文字メタデータ） | 低     | 3.1     |
+| 3.3 | カスタム絵文字解析（toot:Emoji tag）       | 低     | 3.1     |
+| 3.4 | カスタム絵文字表示UI                       | 低     | 3.3     |
 
 ---
 
@@ -1075,6 +1119,6 @@ const store = async (...events: readonly EmojiReactNotificationCreated[]): RA<vo
 
 ## 改訂履歴
 
-| 日付 | バージョン | 変更内容 |
-|------|-----------|---------|
-| 2026-01-18 | 1.0 | 初版作成 |
+| 日付       | バージョン | 変更内容 |
+| ---------- | ---------- | -------- |
+| 2026-01-18 | 1.0        | 初版作成 |
