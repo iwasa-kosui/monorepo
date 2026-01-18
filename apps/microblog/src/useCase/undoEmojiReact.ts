@@ -1,4 +1,4 @@
-import { type RequestContext } from '@fedify/fedify';
+import { EmojiReact as FedifyEmojiReact, isActor, Note, type RequestContext, Undo } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -13,7 +13,9 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -29,7 +31,8 @@ type Ok = void;
 type Err =
   | SessionExpiredError
   | UserNotFoundError
-  | EmojiReactNotFoundError;
+  | EmojiReactNotFoundError
+  | RemoteNoteLookupError;
 
 export type UndoEmojiReactUseCase = UseCase<Input, Ok, Err>;
 
@@ -76,6 +79,45 @@ const create = ({
         }
         return RA.ok(result.val);
       }),
+      // Lookup the remote note to get the author
+      RA.andBind('note', async ({ user, request, objectUri }) => {
+        const ctx = Federation.getInstance().createContext(request, undefined);
+        const documentLoader = await ctx.getDocumentLoader({
+          identifier: user.username,
+        });
+        const result = await ctx.lookupObject(objectUri.trim(), {
+          documentLoader,
+        });
+
+        if (!(result instanceof Note)) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
+          );
+        }
+
+        if (!result.id) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
+          );
+        }
+
+        return RA.ok(result);
+      }),
+      // Get the note's author
+      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
+        const author = await note.getAttribution();
+        if (!author || !isActor(author)) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
+          );
+        }
+        if (!author.id || !author.inboxId) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
+          );
+        }
+        return RA.ok(author);
+      }),
       // Delete the emoji react from database
       RA.andThrough(async ({ emojiReact }) => {
         // For local emoji reacts without emojiReactActivityUri, we need to handle differently
@@ -89,16 +131,41 @@ const create = ({
         const event = EmojiReact.deleteEmojiReact(emojiReactWithUri, now);
         return emojiReactDeletedStore.store(event);
       }),
-      // Send Undo activity (best effort, only if we can construct the activity)
-      RA.andThrough(async ({ user, ctx }) => {
-        try {
-          const actorUri = ctx.getActorUri(user.username);
-          // Note: Sending Undo for EmojiReact is complex because we'd need to
-          // reference the original EmojiReact activity. For now, we just log.
-          getLogger().info(`EmojiReact deleted for user ${user.username} at ${actorUri}`);
-        } catch (e) {
-          getLogger().warn(`Failed to send Undo EmojiReact activity: ${e}`);
-        }
+      // Send Undo activity to the remote server
+      RA.andThrough(async ({ user, note, noteAuthor, ctx, emoji, emojiReact }) => {
+        const actorUri = ctx.getActorUri(user.username);
+
+        // Construct the original EmojiReact activity ID
+        const originalActivityId = new URL(
+          `#emoji-reacts/${emojiReact.emojiReactId}`,
+          actorUri,
+        );
+
+        // Create Undo activity wrapping the EmojiReact
+        const undoActivityId = new URL(
+          `#undo-emoji-reacts/${emojiReact.emojiReactId}`,
+          actorUri,
+        );
+
+        await ctx.sendActivity(
+          { username: user.username },
+          noteAuthor,
+          new Undo({
+            id: undoActivityId,
+            actor: actorUri,
+            object: new FedifyEmojiReact({
+              id: originalActivityId,
+              actor: actorUri,
+              object: note.id,
+              content: emoji,
+            }),
+            to: noteAuthor.id,
+          }),
+        );
+
+        getLogger().info(
+          `Sent Undo EmojiReact: user=${user.username}, note=${note.id?.href}, emoji=${emoji}`,
+        );
         return RA.ok(undefined);
       }),
       RA.map(() => undefined),

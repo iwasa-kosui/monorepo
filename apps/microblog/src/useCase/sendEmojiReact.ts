@@ -1,4 +1,4 @@
-import { isActor, Note, type RequestContext } from '@fedify/fedify';
+import { EmojiReact as FedifyEmojiReact, isActor, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -138,12 +138,28 @@ const create = ({
           now,
         )),
       RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
-      // Log the EmojiReact creation
-      // Note: Fedify doesn't have native EmojiReact support, so we currently store locally only.
-      // Sending EmojiReact activities to remote servers will require custom JSON-LD handling.
-      RA.andThrough(async ({ user, note, emoji, emojiReactCreated }) => {
+      // Send the EmojiReact activity to the remote server
+      RA.andThrough(async ({ user, note, noteAuthor, ctx, emoji, emojiReactCreated }) => {
+        const actorUri = ctx.getActorUri(user.username);
+        const activityId = new URL(
+          `#emoji-reacts/${emojiReactCreated.aggregateId.emojiReactId}`,
+          actorUri,
+        );
+
+        await ctx.sendActivity(
+          { username: user.username },
+          noteAuthor,
+          new FedifyEmojiReact({
+            id: activityId,
+            actor: actorUri,
+            object: note.id,
+            content: emoji,
+            to: noteAuthor.id,
+          }),
+        );
+
         getLogger().info(
-          `Created EmojiReact: user=${user.username}, note=${note.id?.href}, emoji=${emoji}, id=${emojiReactCreated.aggregateId.emojiReactId}`,
+          `Sent EmojiReact: user=${user.username}, note=${note.id?.href}, emoji=${emoji}, activityId=${activityId.href}`,
         );
         return RA.ok(undefined);
       }),
