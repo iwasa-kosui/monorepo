@@ -397,6 +397,217 @@ const createUseCase = (
 
 ---
 
+## ドメインモデル（microblog）
+
+このセクションでは、`apps/microblog`のドメインモデルと集約設計について説明します。
+
+### 集約一覧
+
+本アプリケーションには以下の集約が存在します：
+
+| 集約 | ID型 | 責務 | 場所 |
+|-----|------|-----|------|
+| **User** | `UserId` | ユーザー情報管理、認証 | `/domain/user/` |
+| **Actor** | `ActorId` | ActivityPubアクター（ローカル/リモート） | `/domain/actor/` |
+| **Post** | `PostId` | 投稿管理（ローカル/リモート） | `/domain/post/` |
+| **Like** | `LikeId` | いいね管理 | `/domain/like/` |
+| **Repost** | `RepostId` | リポスト（共有）管理 | `/domain/repost/` |
+| **Notification** | `NotificationId` | 通知管理（いいね/フォロー） | `/domain/notification/` |
+| **Follow** | 複合ID | フォロー関係管理 | `/domain/follow/` |
+| **TimelineItem** | `TimelineItemId` | タイムラインアイテム | `/domain/timeline/` |
+| **Session** | `SessionId` | セッション管理 | `/domain/session/` |
+| **Key** | `KeyId` | ActivityPub署名用鍵ペア | `/domain/key/` |
+| **PushSubscription** | `PushSubscriptionId` | Web Push購読 | `/domain/pushSubscription/` |
+| **Image** | `ImageId` | 投稿添付画像 | `/domain/image/` |
+
+### 集約間の参照関係
+
+```
+User (id: UserId)
+  ├─→ LocalActor (userId)
+  ├─→ Key (userId)
+  ├─→ Session (userId)
+  └─→ PushSubscription (userId)
+
+Actor (id: ActorId)
+  ├─→ Post (actorId)
+  ├─→ Like (actorId)
+  ├─→ Repost (actorId)
+  ├─→ Notification (likerActorId, followerActorId)
+  └─→ Follow (followerId, followingId)
+
+Post (id: PostId)
+  ├─→ Image (postId) [1:N]
+  ├─→ TimelineItem (postId)
+  ├─→ Repost (originalPostId) [1:N]
+  └─→ Notification (likedPostId) [1:N]
+```
+
+### ドメインイベント
+
+各集約は状態変化をドメインイベントとして発行します。
+
+#### イベント構造
+
+```typescript
+type DomainEvent<TAggregate, TAggregateState, TEventName, TEventPayload> = Readonly<{
+  aggregateId: AggregateId;      // 集約ID
+  aggregateName: string;          // 集約名
+  aggregateState: TAggregateState | undefined;  // 更新後の状態（削除時はundefined）
+  eventId: EventId;               // イベントID
+  eventName: TEventName;          // イベント名
+  eventPayload: TEventPayload;    // イベント固有のペイロード
+  occurredAt: Instant;            // 発生日時
+}>;
+```
+
+#### 主要なドメインイベント
+
+| 集約 | イベント名 | 発火条件 | aggregateState |
+|-----|-----------|---------|----------------|
+| Post | `post.created` | ローカル投稿作成 | `LocalPost` |
+| Post | `post.remotePostCreated` | リモート投稿受信 | `RemotePost` |
+| Post | `post.deleted` | 投稿削除 | `undefined` |
+| Repost | `repost.repostCreated` | リポスト作成 | `Repost` |
+| Repost | `repost.repostDeleted` | リポスト削除 | `undefined` |
+| Notification | `notification.likeNotificationCreated` | いいね通知作成 | `LikeNotification` |
+| Notification | `notification.likeNotificationDeleted` | いいね通知削除 | `undefined` |
+| TimelineItem | `timelineItem.created` | タイムラインアイテム作成 | `TimelineItem` |
+| TimelineItem | `timelineItem.deleted` | タイムラインアイテム削除 | `undefined` |
+| Follow | `follow.followAccepted` | フォロー承認 | `Follow` |
+| Follow | `follow.undoFollowingProcessed` | フォロー解除 | `undefined` |
+
+### 集約境界の規則
+
+#### 1. 集約間はID参照のみ
+
+集約間の参照は、常にIDを介して行います。直接的なオブジェクト参照は禁止です。
+
+```typescript
+// ✓ 正しい: ID参照
+type LikeNotification = {
+  likedPostId: PostId;  // PostのIDを保持
+};
+
+// ✗ 間違い: 直接参照
+type LikeNotification = {
+  likedPost: Post;  // Postオブジェクトを直接保持
+};
+```
+
+#### 2. ストアは自身の集約のみを操作
+
+各集約のストア（Store）は、自身の集約のデータのみを操作します。他の集約のデータを直接削除・変更してはいけません。
+
+```typescript
+// ✓ 正しい: PostDeletedStoreはPostのみ削除
+const PostDeletedStore = {
+  store: async (event: PostDeleted) => {
+    await tx.delete(postsTable).where(eq(postsTable.postId, event.eventPayload.postId));
+    await tx.delete(postImagesTable).where(eq(postImagesTable.postId, event.eventPayload.postId));
+    // Post集約内のデータのみ削除
+  }
+};
+
+// ✗ 間違い: PostDeletedStoreが他の集約を削除
+const PostDeletedStore = {
+  store: async (event: PostDeleted) => {
+    await tx.delete(notificationsTable).where(...);  // Notification集約を直接削除
+  }
+};
+```
+
+#### 3. カスケード削除はユースケース層で実装
+
+親集約の削除時に子集約も削除する必要がある場合、ユースケース層で各集約のストアを個別に呼び出します。
+
+```typescript
+// useCase/deletePost.ts
+const run = async ({ postId }) => {
+  // 1. TimelineItem削除
+  const timelineItems = await timelineItemsResolverByPostId.resolve({ postId });
+  for (const item of timelineItems) {
+    await timelineItemDeletedStore.store(TimelineItem.deleteTimelineItem(item.id, now));
+  }
+
+  // 2. LikeNotification削除
+  const notifications = await likeNotificationsResolverByPostId.resolve({ postId });
+  for (const notification of notifications) {
+    await likeNotificationDeletedStore.store(Notification.deleteLikeNotification(notification, now));
+  }
+
+  // 3. Repost削除
+  const reposts = await repostsResolverByOriginalPostId.resolve({ originalPostId: postId });
+  for (const repost of reposts) {
+    await repostDeletedStore.store(Repost.deleteRepost(repost, now));
+  }
+
+  // 4. Post削除
+  await postDeletedStore.store(Post.deletePost(now)(postId));
+};
+```
+
+#### 4. 削除順序は子→親
+
+カスケード削除の順序は、参照関係の子から親へ向かう順序で実行します。
+
+```
+Post削除時の正しい順序:
+  1. TimelineItem削除 (postIdを参照)
+  2. LikeNotification削除 (likedPostIdを参照)
+  3. Repost削除 (originalPostIdを参照)
+  4. Post削除 ← 最後
+```
+
+#### 5. 削除イベントには既存データが必要
+
+削除イベントを生成する際は、実際に存在するエンティティのデータを使用します。存在しないIDで削除イベントを生成してはいけません。
+
+```typescript
+// ✓ 正しい: 既存のエンティティから削除イベントを生成
+const notification = await notificationResolver.resolve({ postId });
+if (notification) {
+  const event = Notification.deleteLikeNotification(notification, now);
+  await store.store(event);
+}
+
+// ✗ 間違い: 存在確認なしに削除イベントを生成
+const event = Notification.deleteLikeNotification({
+  notificationId: NotificationId.generate(),  // 存在しないID
+  ...
+}, now);
+```
+
+### ストアとリゾルバーのパターン
+
+#### Store（書き込み）
+
+```typescript
+type Store<T extends DomainEvent> = Readonly<{
+  store: (event: T) => ResultAsync<void, never>;
+}>;
+```
+
+#### Resolver（読み取り）
+
+```typescript
+type Resolver<TCondition, TResolved> = Readonly<{
+  resolve: (condition: TCondition) => ResultAsync<TResolved, never>;
+}>;
+```
+
+#### 命名規則
+
+| パターン | 命名規則 | 例 |
+|---------|---------|-----|
+| 単一取得 | `{Entity}Resolver` | `PostResolver` |
+| 条件取得 | `{Entity}ResolverBy{Condition}` | `PostsResolverByActorId` |
+| 複数取得 | `{Entities}ResolverBy{Condition}` | `TimelineItemsResolverByPostId` |
+| 作成ストア | `{Event}Store` | `PostCreatedStore` |
+| 削除ストア | `{Event}Store` | `PostDeletedStore` |
+
+---
+
 ## まとめ
 
 これらの設計パターンを組み合わせることで、以下を実現します:
