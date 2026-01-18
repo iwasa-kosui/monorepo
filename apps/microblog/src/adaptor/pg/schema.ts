@@ -173,3 +173,15 @@ export const timelineItemsTable = pgTable('timeline_items', {
   createdAt: timestamp({ mode: 'date' }).notNull(),
   deletedAt: timestamp({ mode: 'date' }),
 });
+
+/**
+ * Stores key pairs for the instance actor.
+ * The instance actor is a special Application actor that represents the server
+ * and is used for authenticated requests from the shared inbox.
+ */
+export const instanceActorKeysTable = pgTable('instance_actor_keys', {
+  keyId: uuid().primaryKey(),
+  type: varchar({ length: 32 }).notNull().unique(),
+  privateKey: text().notNull(),
+  publicKey: text().notNull(),
+});

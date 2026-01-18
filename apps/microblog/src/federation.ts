@@ -21,6 +21,7 @@ import { InboxListener } from './adaptor/fedify/inboxListener/inboxListener.ts';
 import { KeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcher.ts';
 import { ObjectDispatcher } from './adaptor/fedify/objectDispatcher.ts';
 import { OutboxDispatcher } from './adaptor/fedify/outboxDispatcher.ts';
+import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
 import { Username } from './domain/user/username.ts';
 import { Env } from './env.ts';
@@ -96,8 +97,10 @@ const create = () => {
     contextLoaderFactory: createContextLoaderFactory(),
   });
   const inboxListener = InboxListener.getInstance();
+  const sharedKeyDispatcher = SharedKeyDispatcher.getInstance();
   federation
     .setInboxListeners('/users/{identifier}/inbox', '/inbox')
+    .setSharedKeyDispatcher(sharedKeyDispatcher.dispatch)
     .on(Follow, inboxListener.onFollow)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
