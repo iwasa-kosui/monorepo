@@ -142,21 +142,22 @@ export const QUESTIONS: readonly Question[] = [
       },
     ],
   },
-  // === 軸4: 慎重さ（caution）===
+  // === 軸4: 几帳面さ（caution）===
+  // 放出系の特徴「細かいことを気にしない、大雑把」を識別するための質問
   {
     id: 7,
     axis: 'caution',
-    text: '仕事や課題に取り組むとき、あなたは？',
+    text: '書類やメールを送る前に、あなたは？',
     answers: [
       {
         id: '7a',
-        text: '細部まで完璧に仕上げないと気が済まない',
+        text: '誤字脱字がないか何度も確認する',
         axis: 'caution',
         direction: 'positive',
       },
       {
         id: '7b',
-        text: '勢いで一気に終わらせたい。完璧より完了',
+        text: '細かいことは気にしない。意味が伝わればOK',
         axis: 'caution',
         direction: 'negative',
       },
@@ -165,17 +166,17 @@ export const QUESTIONS: readonly Question[] = [
   {
     id: 8,
     axis: 'caution',
-    text: '部屋の片付けについて、あなたのスタンスは？',
+    text: '計画を立てるとき、あなたは？',
     answers: [
       {
         id: '8a',
-        text: '定位置を決めて必ず元に戻す',
+        text: 'スケジュールを細かく決めて、その通りに進めたい',
         axis: 'caution',
         direction: 'positive',
       },
       {
         id: '8b',
-        text: '散らかっても気にならない',
+        text: '大まかな方向だけ決めて、あとは流れに任せる',
         axis: 'caution',
         direction: 'negative',
       },

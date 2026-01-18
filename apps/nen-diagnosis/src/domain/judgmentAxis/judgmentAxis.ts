@@ -58,10 +58,10 @@ export const AXIS_INFO: Record<JudgmentAxis, AxisInfo> = {
   },
   caution: {
     id: 'caution',
-    japaneseName: '慎重さ',
-    positiveLabel: '慎重・几帳面',
-    negativeLabel: '大胆・大雑把',
-    description: '行動の際の細やかさ',
+    japaneseName: '几帳面さ',
+    positiveLabel: '几帳面・緻密',
+    negativeLabel: '大雑把・おおらか',
+    description: '細かいことへのこだわり度合い',
   },
   honesty: {
     id: 'honesty',
@@ -128,16 +128,14 @@ export const AXIS_CONTRIBUTIONS: Record<JudgmentAxis, AxisContribution> = {
     negative: [{ nenType: 'enhancement', weight: 0.8 }],
   },
   caution: {
-    // 慎重・几帳面 → 具現化系（主）、操作系（副）
+    // 几帳面・緻密 → 具現化系（主）、操作系（副）
     positive: [
       { nenType: 'conjuration', weight: 1.0 },
       { nenType: 'manipulation', weight: 0.5 },
     ],
-    // 大胆・大雑把 → 放出系（主）、強化系（副）
-    negative: [
-      { nenType: 'emission', weight: 1.0 },
-      { nenType: 'enhancement', weight: 0.3 },
-    ],
+    // 大雑把・おおらか → 放出系（主）
+    // 放出系の特徴「細かいことを気にしない」を強く反映
+    negative: [{ nenType: 'emission', weight: 1.5 }],
   },
   honesty: {
     // 率直・正直 → 強化系（主）
