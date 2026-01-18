@@ -12,14 +12,15 @@ import { PgPostResolver } from '../../pg/post/postResolver.ts';
 import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
 import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { ActorIdentity } from '../actorIdentity.ts';
+import { InboxActorResolver } from '../inboxActorResolver.ts';
 
 export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce) => {
-  const actor = await activity.getActor();
-  if (!actor) {
-    getLogger().warn('Announce activity has no actor');
+  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  if (!actorResult.ok) {
+    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
+  const { actorIdentity: reposterIdentity } = actorResult.val;
   if (!activity.id) {
     getLogger().warn('Announce activity has no id');
     return;
@@ -61,16 +62,12 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   });
 
   return RA.flow(
-    RA.ok(actor),
-    RA.andBind('reposterIdentity', ActorIdentity.fromFedifyActor),
-    RA.andThen(({ reposterIdentity }) =>
-      useCase.run({
-        announceActivityUri,
-        repostedPostId,
-        reposterIdentity,
-        objectUri,
-      })
-    ),
+    useCase.run({
+      announceActivityUri,
+      repostedPostId,
+      reposterIdentity,
+      objectUri,
+    }),
     RA.match({
       ok: ({ actor: reposterActor }) => {
         getLogger().info(

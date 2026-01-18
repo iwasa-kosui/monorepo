@@ -117,7 +117,11 @@ const handleUndoAnnounce = async (announce: Announce) => {
 };
 
 export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
-  const object = await undo.getObject();
+  // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はデフォルトのdocumentLoaderを使用
+  const documentLoader = ctx.recipient
+    ? await ctx.getDocumentLoader({ identifier: ctx.recipient })
+    : ctx.documentLoader;
+  const object = await undo.getObject({ documentLoader });
 
   if (object instanceof Follow) {
     return handleUndoFollow(ctx, undo, object);
