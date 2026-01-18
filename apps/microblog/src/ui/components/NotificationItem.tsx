@@ -5,6 +5,7 @@ import type {
   FollowNotificationWithDetails,
   LikeNotificationWithDetails,
   NotificationWithDetails,
+  RepostNotificationWithDetails,
 } from '../../domain/notification/notification.ts';
 
 type Props = Readonly<{
@@ -161,6 +162,89 @@ const FollowNotificationItem = ({
   );
 };
 
+const RepostNotificationItem = ({
+  notification,
+  sanitizedContent,
+}: { notification: RepostNotificationWithDetails; sanitizedContent: string }) => {
+  const { reposterActor, repostedPost, createdAt } = notification;
+
+  const handle = Actor.match({
+    onLocal: LocalActor.getHandle,
+    onRemote: (x) => RemoteActor.getHandle(x) ?? reposterActor.uri,
+  })(reposterActor);
+
+  const actorUrl = Actor.match({
+    onLocal: (x) => x.uri,
+    onRemote: (x) => `/remote-users/${x.id}`,
+  })(reposterActor);
+
+  const postUrl = `/posts/${repostedPost.postId}`;
+
+  return (
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+      <div class='flex items-start gap-3'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900 flex items-center justify-center'>
+          <svg
+            class='w-4 h-4 text-green-500 dark:text-green-400'
+            fill='currentColor'
+            viewBox='0 0 20 20'
+          >
+            <path
+              fill-rule='evenodd'
+              d='M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z'
+              clip-rule='evenodd'
+            />
+          </svg>
+        </div>
+
+        <div class='flex-1 min-w-0'>
+          <div class='flex items-center gap-2 mb-2'>
+            <a
+              href={actorUrl}
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity'
+            >
+              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+                {reposterActor.logoUri
+                  ? (
+                    <img
+                      src={reposterActor.logoUri}
+                      alt='Actor Logo'
+                      class='w-6 h-6 rounded-full object-cover'
+                    />
+                  )
+                  : handle.charAt(0).toUpperCase()}
+              </div>
+              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+                {handle}
+              </span>
+            </a>
+            <span class='text-sm text-gray-500 dark:text-gray-400'>
+              reposted your post
+            </span>
+          </div>
+
+          <a
+            href={postUrl}
+            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+          >
+            <div
+              class='text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400'
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+            />
+          </a>
+
+          <time
+            dateTime={new Date(createdAt).toISOString()}
+            class='block mt-2 text-xs text-gray-400 dark:text-gray-500'
+          >
+            {new Date(createdAt).toLocaleString()}
+          </time>
+        </div>
+      </div>
+    </article>
+  );
+};
+
 export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
   if (notification.notification.type === 'like') {
     return (
@@ -173,6 +257,15 @@ export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
 
   if (notification.notification.type === 'follow') {
     return <FollowNotificationItem notification={notification as FollowNotificationWithDetails} />;
+  }
+
+  if (notification.notification.type === 'repost') {
+    return (
+      <RepostNotificationItem
+        notification={notification as RepostNotificationWithDetails}
+        sanitizedContent={sanitizedContent}
+      />
+    );
   }
 
   return null;

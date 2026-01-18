@@ -8,6 +8,7 @@ import { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts'
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
+import { PgRepostNotificationCreatedStore } from '../../pg/notification/repostNotificationCreatedStore.ts';
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
 import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
 import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
@@ -58,6 +59,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
     timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+    repostNotificationCreatedStore: PgRepostNotificationCreatedStore.getInstance(),
   });
 
   return RA.flow(

@@ -8,6 +8,7 @@ import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
 import type { Post } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
+import { RepostId } from '../repost/repostId.ts';
 import { UserId } from '../user/userId.ts';
 import { NotificationId } from './notificationId.ts';
 
@@ -38,9 +39,25 @@ const followNotificationZodType = z
 export type FollowNotification = z.output<typeof followNotificationZodType>;
 export const FollowNotification = Schema.create(followNotificationZodType);
 
+const repostNotificationZodType = z
+  .object({
+    type: z.literal('repost'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    reposterActorId: ActorId.zodType,
+    repostedPostId: PostId.zodType,
+    repostId: RepostId.zodType,
+  })
+  .describe('RepostNotification');
+
+export type RepostNotification = z.output<typeof repostNotificationZodType>;
+export const RepostNotification = Schema.create(repostNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
+  repostNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -97,6 +114,25 @@ const createFollowNotification = (payload: FollowNotification, now: Instant): Fo
 };
 
 export type FollowNotificationCreatedStore = Agg.Store<FollowNotificationCreated>;
+
+// Repost通知作成イベント
+export type RepostNotificationCreated = NotificationEvent<
+  RepostNotification,
+  'notification.repostNotificationCreated',
+  RepostNotification
+>;
+
+const createRepostNotification = (payload: RepostNotification, now: Instant): RepostNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.repostNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type RepostNotificationCreatedStore = Agg.Store<RepostNotificationCreated>;
 
 // Follow通知をActorIdで検索するリゾルバ（重複防止用）
 export type FollowNotificationResolverByActorId = Agg.Resolver<
@@ -178,6 +214,7 @@ export const Notification = {
   ...schema,
   createLikeNotification,
   createFollowNotification,
+  createRepostNotification,
   deleteLikeNotification,
   markAsRead,
   toAggregateId,
@@ -198,8 +235,16 @@ export type FollowNotificationWithDetails = Readonly<{
   createdAt: Instant;
 }>;
 
+// Repost通知と関連情報を含む型
+export type RepostNotificationWithDetails = Readonly<{
+  notification: RepostNotification;
+  reposterActor: Actor;
+  repostedPost: Post;
+  createdAt: Instant;
+}>;
+
 // 通知と関連情報を含む型
-export type NotificationWithDetails = LikeNotificationWithDetails | FollowNotificationWithDetails;
+export type NotificationWithDetails = LikeNotificationWithDetails | FollowNotificationWithDetails | RepostNotificationWithDetails;
 
 // ユーザーIDで通知一覧を取得するリゾルバ
 export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;

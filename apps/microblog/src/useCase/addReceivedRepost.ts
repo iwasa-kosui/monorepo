@@ -4,6 +4,12 @@ import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import {
+  Notification,
+  type RepostNotification,
+  type RepostNotificationCreatedStore,
+} from '../domain/notification/notification.ts';
+import { NotificationId } from '../domain/notification/notificationId.ts';
 import type { LocalPost, Post, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import {
@@ -66,6 +72,7 @@ type Deps = Readonly<{
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  repostNotificationCreatedStore: RepostNotificationCreatedStore;
 }>;
 
 const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
@@ -78,6 +85,7 @@ const create = ({
   logoUriUpdatedStore,
   actorResolverByUri,
   timelineItemCreatedStore,
+  repostNotificationCreatedStore,
 }: Deps): AddReceivedRepostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -133,6 +141,21 @@ const create = ({
           createdAt: now,
         }, now);
         return timelineItemCreatedStore.store(timelineItemEvent);
+      }),
+      // Repost通知を作成
+      RA.andThrough(({ repost, actor, post }) => {
+        const notificationId = NotificationId.generate();
+        const notification: RepostNotification = {
+          type: 'repost',
+          notificationId,
+          recipientUserId: post.userId,
+          isRead: false,
+          reposterActorId: actor.id,
+          repostedPostId: post.postId,
+          repostId: repost.repostId,
+        };
+        const event = Notification.createRepostNotification(notification, now);
+        return repostNotificationCreatedStore.store(event);
       }),
       RA.map(({ repost, actor }) => ({ repost, actor })),
     );

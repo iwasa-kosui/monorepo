@@ -12,10 +12,13 @@ import {
   type LikeNotificationWithDetails,
   type NotificationsResolverByUserId,
   type NotificationWithDetails,
+  type RepostNotification,
+  type RepostNotificationWithDetails,
 } from '../../../domain/notification/notification.ts';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { LocalPost, type Post, RemotePost } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
+import { RepostId } from '../../../domain/repost/repostId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
@@ -25,6 +28,7 @@ import {
   localPostsTable,
   notificationFollowsTable,
   notificationLikesTable,
+  notificationRepostsTable,
   notificationsTable,
   postsTable,
   remoteActorsTable,
@@ -212,8 +216,71 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       };
     });
 
-    // 両方の通知をマージして日時でソート
-    const notifications: NotificationWithDetails[] = [...likeNotifications, ...followNotifications].sort(
+    // Repost通知を取得（アクターとポスト情報も含む）
+    const repostRows = await db
+      .select({
+        notifications: notificationsTable,
+        notificationReposts: notificationRepostsTable,
+        reposterActors: actorsTable,
+        reposterRemoteActors: remoteActorsTable,
+        reposterLocalActors: localActorsTable,
+        posts: postsTable,
+        localPosts: localPostsTable,
+        remotePosts: remotePostsTable,
+      })
+      .from(notificationsTable)
+      .innerJoin(
+        notificationRepostsTable,
+        eq(notificationsTable.notificationId, notificationRepostsTable.notificationId),
+      )
+      .innerJoin(actorsTable, eq(notificationRepostsTable.reposterActorId, actorsTable.actorId))
+      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .innerJoin(postsTable, eq(notificationRepostsTable.repostedPostId, postsTable.postId))
+      .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+      .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
+      .where(eq(notificationsTable.recipientUserId, userId))
+      .orderBy(desc(notificationsTable.createdAt))
+      .limit(50)
+      .execute();
+
+    const repostNotifications: RepostNotificationWithDetails[] = repostRows.map((row) => {
+      const repostNotification: RepostNotification = {
+        type: 'repost',
+        notificationId: NotificationId.orThrow(row.notifications.notificationId),
+        recipientUserId: row.notifications.recipientUserId as UserId,
+        isRead: row.notifications.isRead === 1,
+        reposterActorId: ActorId.orThrow(row.notificationReposts.reposterActorId),
+        repostedPostId: PostId.orThrow(row.notificationReposts.repostedPostId),
+        repostId: RepostId.orThrow(row.notificationReposts.repostId),
+      };
+
+      const reposterActor = reconstructActor({
+        actors: row.reposterActors,
+        remote_actors: row.reposterRemoteActors,
+        local_actors: row.reposterLocalActors,
+      });
+
+      const repostedPost = reconstructPost({
+        posts: row.posts,
+        local_posts: row.localPosts,
+        remote_posts: row.remotePosts,
+      });
+
+      return {
+        notification: repostNotification,
+        reposterActor,
+        repostedPost,
+        createdAt: row.notifications.createdAt.getTime() as Instant,
+      };
+    });
+
+    // すべての通知をマージして日時でソート
+    const notifications: NotificationWithDetails[] = [
+      ...likeNotifications,
+      ...followNotifications,
+      ...repostNotifications,
+    ].sort(
       (a, b) => b.createdAt - a.createdAt,
     ).slice(0, 50);
 
