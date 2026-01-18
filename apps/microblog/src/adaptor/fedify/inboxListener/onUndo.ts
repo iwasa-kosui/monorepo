@@ -1,17 +1,22 @@
-import { Announce, Follow, type InboxContext, Like, Undo } from '@fedify/fedify';
+import { Activity, Announce, Follow, type InboxContext, Like, Undo } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../../domain/user/username.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
+import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
+import { PgEmojiReactDeletedStore } from '../../pg/emojiReact/emojiReactDeletedStore.ts';
+import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgLikeV2DeletedStore } from '../../pg/likeV2/likeV2DeletedStore.ts';
 import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
+import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
+import { PgEmojiReactNotificationResolverByActorIdAndPostIdAndEmoji } from '../../pg/notification/emojiReactNotificationResolverByActorIdAndPostIdAndEmoji.ts';
 import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationResolverByActorIdAndPostId } from '../../pg/notification/likeNotificationResolverByActorIdAndPostId.ts';
 import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
@@ -117,6 +122,53 @@ const handleUndoAnnounce = async (announce: Announce) => {
   );
 };
 
+type JsonLdEmojiReact = {
+  type: string;
+  id?: string;
+};
+
+const isEmojiReactJsonLd = (json: unknown): json is JsonLdEmojiReact => {
+  if (typeof json !== 'object' || json === null) return false;
+  const obj = json as Record<string, unknown>;
+  return obj.type === 'EmojiReact' || obj.type === 'litepub:EmojiReact';
+};
+
+const handleUndoEmojiReact = async (object: Activity) => {
+  const json = await object.toJsonLd();
+  if (!isEmojiReactJsonLd(json)) {
+    return false;
+  }
+
+  const emojiReactActivityUri = json.id;
+  if (!emojiReactActivityUri) {
+    getLogger().warn('Undo EmojiReact activity has no EmojiReact id');
+    return true;
+  }
+
+  const useCase = RemoveReceivedEmojiReactUseCase.create({
+    emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
+    emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
+    emojiReactNotificationResolverByActorIdAndPostIdAndEmoji: PgEmojiReactNotificationResolverByActorIdAndPostIdAndEmoji
+      .getInstance(),
+    emojiReactNotificationDeletedStore: PgEmojiReactNotificationDeletedStore.getInstance(),
+  });
+
+  await RA.flow(
+    RA.ok({ emojiReactActivityUri }),
+    RA.andThen(({ emojiReactActivityUri }) => useCase.run({ emojiReactActivityUri })),
+    RA.match({
+      ok: () => {
+        getLogger().info(`Processed Undo EmojiReact: ${emojiReactActivityUri}`);
+      },
+      err: (err) => {
+        getLogger().warn(`Failed to process Undo EmojiReact: ${emojiReactActivityUri} - ${JSON.stringify(err)}`);
+      },
+    }),
+  );
+
+  return true;
+};
+
 export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
   // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はインスタンスアクターを使用
   // インスタンスアクターを使用することで、Authorized Fetchモードのサーバーにも対応
@@ -135,6 +187,14 @@ export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
 
   if (object instanceof Announce) {
     return handleUndoAnnounce(object);
+  }
+
+  // Try to handle EmojiReact (custom activity type not natively supported by Fedify)
+  if (object instanceof Activity) {
+    const handled = await handleUndoEmojiReact(object);
+    if (handled) {
+      return;
+    }
   }
 
   getLogger().info(`Unhandled Undo activity type: ${object?.constructor?.name}`);
