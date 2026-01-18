@@ -33,6 +33,10 @@ import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../..
 import type {
   FollowNotificationCreated,
   FollowNotificationCreatedStore,
+  LikeNotification,
+  LikeNotificationDeleted,
+  LikeNotificationDeletedStore,
+  LikeNotificationsResolverByPostId,
 } from '../../../domain/notification/notification.ts';
 import type { HashedPassword } from '../../../domain/password/password.ts';
 import type {
@@ -53,6 +57,12 @@ import type {
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
+import type {
+  Repost,
+  RepostDeleted,
+  RepostDeletedStore,
+  RepostsResolverByOriginalPostId,
+} from '../../../domain/repost/repost.ts';
 import type { Session, SessionResolver, SessionStartedStore } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
 import type {
@@ -419,4 +429,41 @@ export const createMockTimelineItemsResolverByActorIds = (
     items.length = 0;
     items.push(...i);
   },
+});
+
+export const createMockLikeNotificationDeletedStore = ():
+  & LikeNotificationDeletedStore
+  & InMemoryStore<LikeNotificationDeleted> =>
+{
+  const inMemoryStore = createInMemoryStore<LikeNotificationDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & LikeNotificationDeletedStore['store']
+      & InMemoryStore<LikeNotificationDeleted>['store'],
+  };
+};
+
+export const createMockLikeNotificationsResolverByPostId = (
+  notifications: Map<PostId, LikeNotification[]> = new Map(),
+): LikeNotificationsResolverByPostId & { setNotifications: (postId: PostId, n: LikeNotification[]) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(notifications.get(postId) ?? [])),
+  setNotifications: (postId: PostId, n: LikeNotification[]) => notifications.set(postId, n),
+});
+
+export const createMockRepostDeletedStore = (): RepostDeletedStore & InMemoryStore<RepostDeleted> => {
+  const inMemoryStore = createInMemoryStore<RepostDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & RepostDeletedStore['store']
+      & InMemoryStore<RepostDeleted>['store'],
+  };
+};
+
+export const createMockRepostsResolverByOriginalPostId = (
+  reposts: Map<PostId, Repost[]> = new Map(),
+): RepostsResolverByOriginalPostId & { setReposts: (postId: PostId, r: Repost[]) => void } => ({
+  resolve: vi.fn(({ originalPostId }: { originalPostId: PostId }) => RAImpl.ok(reposts.get(originalPostId) ?? [])),
+  setReposts: (postId: PostId, r: Repost[]) => reposts.set(postId, r),
 });

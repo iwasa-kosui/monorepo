@@ -25,11 +25,15 @@ import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollow
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
+import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
+import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
+import { PgRepostsResolverByOriginalPostId } from '../pg/repost/repostsResolverByOriginalPostId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
@@ -286,6 +290,10 @@ const app = new Hono()
       postResolver: PgPostResolver.getInstance(),
       timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
       timelineItemResolverByPostId: PgTimelineItemResolverByPostId.getInstance(),
+      likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
+      likeNotificationsResolverByPostId: PgLikeNotificationsResolverByPostId.getInstance(),
+      repostDeletedStore: PgRepostDeletedStore.getInstance(),
+      repostsResolverByOriginalPostId: PgRepostsResolverByOriginalPostId.getInstance(),
     });
 
     const result = await useCase.run({

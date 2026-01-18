@@ -11,8 +11,12 @@ import { DeletePostUseCase } from '../deletePost.ts';
 import { arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
+  createMockLikeNotificationDeletedStore,
+  createMockLikeNotificationsResolverByPostId,
   createMockPostDeletedStore,
   createMockPostResolver,
+  createMockRepostDeletedStore,
+  createMockRepostsResolverByOriginalPostId,
   createMockRequestContext,
   createMockSessionResolver,
   createMockTimelineItemDeletedStore,
@@ -37,6 +41,10 @@ describe('DeletePostUseCase', () => {
     const postResolver = createMockPostResolver();
     const timelineItemDeletedStore = createMockTimelineItemDeletedStore();
     const timelineItemResolverByPostId = createMockTimelineItemResolverByPostId();
+    const likeNotificationDeletedStore = createMockLikeNotificationDeletedStore();
+    const likeNotificationsResolverByPostId = createMockLikeNotificationsResolverByPostId();
+    const repostDeletedStore = createMockRepostDeletedStore();
+    const repostsResolverByOriginalPostId = createMockRepostsResolverByOriginalPostId();
     return {
       sessionResolver,
       postDeletedStore,
@@ -45,6 +53,10 @@ describe('DeletePostUseCase', () => {
       postResolver,
       timelineItemDeletedStore,
       timelineItemResolverByPostId,
+      likeNotificationDeletedStore,
+      likeNotificationsResolverByPostId,
+      repostDeletedStore,
+      repostsResolverByOriginalPostId,
     };
   };
 

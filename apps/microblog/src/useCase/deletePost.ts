@@ -4,8 +4,14 @@ import z from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import {
+  type LikeNotificationDeletedStore,
+  type LikeNotificationsResolverByPostId,
+  Notification,
+} from '../domain/notification/notification.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
+import { Repost, type RepostDeletedStore, type RepostsResolverByOriginalPostId } from '../domain/repost/repost.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
 import {
@@ -55,6 +61,10 @@ type Deps = Readonly<{
   postResolver: PostResolver;
   timelineItemDeletedStore: TimelineItemDeletedStore;
   timelineItemResolverByPostId: TimelineItemResolverByPostId;
+  likeNotificationDeletedStore: LikeNotificationDeletedStore;
+  likeNotificationsResolverByPostId: LikeNotificationsResolverByPostId;
+  repostDeletedStore: RepostDeletedStore;
+  repostsResolverByOriginalPostId: RepostsResolverByOriginalPostId;
 }>;
 
 const create = ({
@@ -65,6 +75,10 @@ const create = ({
   postResolver,
   timelineItemDeletedStore,
   timelineItemResolverByPostId,
+  likeNotificationDeletedStore,
+  likeNotificationsResolverByPostId,
+  repostDeletedStore,
+  repostsResolverByOriginalPostId,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -93,16 +107,34 @@ const create = ({
           return RA.err(UnauthorizedError.create());
         }
 
-        // Create delete event
-        const deleteEvent = Post.deletePost(now)(postId);
-        await postDeletedStore.store(deleteEvent);
-
-        // Delete timeline item
+        // Delete related timeline items first
         const timelineItem = await timelineItemResolverByPostId.resolve({ postId });
         if (timelineItem.ok && timelineItem.val) {
           const timelineItemDeletedEvent = TimelineItem.deleteTimelineItem(timelineItem.val.timelineItemId, now);
           await timelineItemDeletedStore.store(timelineItemDeletedEvent);
         }
+
+        // Delete related like notifications
+        const notificationsResult = await likeNotificationsResolverByPostId.resolve({ postId });
+        if (notificationsResult.ok) {
+          for (const notification of notificationsResult.val) {
+            const event = Notification.deleteLikeNotification(notification, now);
+            await likeNotificationDeletedStore.store(event);
+          }
+        }
+
+        // Delete related reposts
+        const repostsResult = await repostsResolverByOriginalPostId.resolve({ originalPostId: postId });
+        if (repostsResult.ok) {
+          for (const repost of repostsResult.val) {
+            const event = Repost.deleteRepost(repost, now);
+            await repostDeletedStore.store(event);
+          }
+        }
+
+        // Delete the post via event store
+        const deleteEvent = Post.deletePost(now)(postId);
+        await postDeletedStore.store(deleteEvent);
 
         // Build Note URI for the Delete activity using Fedify context
         const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: postId });
