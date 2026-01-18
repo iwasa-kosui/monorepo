@@ -1,7 +1,5 @@
 {
   "$schema": "https://unpkg.com/wrangler/config-schema.json",
   "name": "nen-diagnosis",
-  "pages": {
-    "build_output_directory": "dist"
-  }
+  "pages_build_output_dir": "dist"
 }
