@@ -9,11 +9,14 @@ import { PostId } from '../../../domain/post/postId.ts';
 import { Repost } from '../../../domain/repost/repost.ts';
 import { TimelineItem } from '../../../domain/timeline/timelineItem.ts';
 import { DB } from '../../pg/db.ts';
-import { PgLikeNotificationsDeletedByPostIdStore } from '../../pg/notification/likeNotificationsDeletedByPostIdStore.ts';
+import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
+import { PgLikeNotificationsResolverByPostId } from '../../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgPostDeletedStore } from '../../pg/post/postDeletedStore.ts';
-import { PgRepostsOriginalPostUnlinkedStore } from '../../pg/repost/repostsOriginalPostUnlinkedStore.ts';
+import { PgRepostOriginalPostUnlinkedStore } from '../../pg/repost/repostOriginalPostUnlinkedStore.ts';
+import { PgRepostsResolverByOriginalPostId } from '../../pg/repost/repostsResolverByOriginalPostId.ts';
 import { remotePostsTable } from '../../pg/schema.ts';
-import { PgTimelineItemsDeletedByPostIdStore } from '../../pg/timeline/timelineItemsDeletedByPostIdStore.ts';
+import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDeletedStore.ts';
+import { PgTimelineItemsResolverByPostId } from '../../pg/timeline/timelineItemsResolverByPostId.ts';
 
 export const onDelete = async (
   ctx: InboxContext<unknown>,
@@ -46,15 +49,35 @@ export const onDelete = async (
   const postId = PostId.parseOrThrow(remotePost.postId);
   const now = Instant.now();
 
-  // Delete related data from other aggregates
-  const timelineItemsDeletedEvent = TimelineItem.deleteTimelineItemsByPostId(postId, now);
-  await PgTimelineItemsDeletedByPostIdStore.getInstance().store(timelineItemsDeletedEvent);
+  // Delete related timeline items
+  const timelineItemsResult = await PgTimelineItemsResolverByPostId.getInstance().resolve({ postId });
+  if (timelineItemsResult.ok) {
+    const timelineItemDeletedStore = PgTimelineItemDeletedStore.getInstance();
+    for (const timelineItem of timelineItemsResult.val) {
+      const event = TimelineItem.deleteTimelineItem(timelineItem.timelineItemId, now);
+      await timelineItemDeletedStore.store(event);
+    }
+  }
 
-  const notificationsDeletedEvent = Notification.deleteLikeNotificationsByPostId(postId, now);
-  await PgLikeNotificationsDeletedByPostIdStore.getInstance().store(notificationsDeletedEvent);
+  // Delete related notifications
+  const notificationsResult = await PgLikeNotificationsResolverByPostId.getInstance().resolve({ postId });
+  if (notificationsResult.ok) {
+    const notificationDeletedStore = PgLikeNotificationDeletedStore.getInstance();
+    for (const notification of notificationsResult.val) {
+      const event = Notification.deleteLikeNotification(notification, now);
+      await notificationDeletedStore.store(event);
+    }
+  }
 
-  const repostsUnlinkedEvent = Repost.unlinkOriginalPost(postId, now);
-  await PgRepostsOriginalPostUnlinkedStore.getInstance().store(repostsUnlinkedEvent);
+  // Unlink related reposts
+  const repostsResult = await PgRepostsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId });
+  if (repostsResult.ok) {
+    const repostUnlinkedStore = PgRepostOriginalPostUnlinkedStore.getInstance();
+    for (const repost of repostsResult.val) {
+      const event = Repost.unlinkOriginalPost(repost, now);
+      await repostUnlinkedStore.store(event);
+    }
+  }
 
   // Delete the post via event store
   const deleteEvent = Post.deletePost(now)(postId);

@@ -42,10 +42,10 @@ export type RepostDeleted = RepostEvent<
   'repost.repostDeleted',
   { announceActivityUri: string }
 >;
-export type RepostsOriginalPostUnlinked = RepostEvent<
-  undefined,
+export type RepostOriginalPostUnlinked = RepostEvent<
+  Repost,
   'repost.originalPostUnlinked',
-  { originalPostId: PostId }
+  { repostId: RepostId; originalPostId: PostId }
 >;
 
 const createRepost = (payload: Repost, now: Instant): RepostCreated => {
@@ -71,19 +71,23 @@ const deleteRepost = (repost: Repost, now: Instant): RepostDeleted => {
   );
 };
 
-const unlinkOriginalPost = (originalPostId: PostId, now: Instant): RepostsOriginalPostUnlinked => {
+const unlinkOriginalPost = (repost: Repost, now: Instant): RepostOriginalPostUnlinked => {
+  if (!repost.originalPostId) {
+    throw new Error('Cannot unlink a repost without originalPostId');
+  }
+  const updatedRepost: Repost = { ...repost, originalPostId: null };
   return RepostEvent.create(
-    { repostId: RepostId.generate() },
-    undefined,
+    toAggregateId(repost),
+    updatedRepost,
     'repost.originalPostUnlinked',
-    { originalPostId },
+    { repostId: repost.repostId, originalPostId: repost.originalPostId },
     now,
   );
 };
 
 export type RepostCreatedStore = Agg.Store<RepostCreated>;
 export type RepostDeletedStore = Agg.Store<RepostDeleted>;
-export type RepostsOriginalPostUnlinkedStore = Agg.Store<RepostsOriginalPostUnlinked>;
+export type RepostOriginalPostUnlinkedStore = Agg.Store<RepostOriginalPostUnlinked>;
 export type RepostResolverByActivityUri = Agg.Resolver<
   { announceActivityUri: string },
   Repost | undefined
@@ -91,6 +95,10 @@ export type RepostResolverByActivityUri = Agg.Resolver<
 export type RepostResolver = Agg.Resolver<
   { actorId: ActorId; objectUri: string },
   Repost | undefined
+>;
+export type RepostsResolverByOriginalPostId = Agg.Resolver<
+  { originalPostId: PostId },
+  Repost[]
 >;
 
 export const Repost = {

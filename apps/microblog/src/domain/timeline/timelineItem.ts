@@ -51,11 +51,6 @@ export type TimelineItemDeleted = TimelineItemEvent<
   'timelineItem.deleted',
   { timelineItemId: TimelineItemId }
 >;
-export type TimelineItemsDeletedByPostId = TimelineItemEvent<
-  undefined,
-  'timelineItem.deletedByPostId',
-  { postId: PostId }
->;
 
 const createTimelineItem = (payload: TimelineItem, now: Instant): TimelineItemCreated => {
   return TimelineItemEvent.create(
@@ -77,19 +72,8 @@ const deleteTimelineItem = (timelineItemId: TimelineItemId, now: Instant): Timel
   );
 };
 
-const deleteTimelineItemsByPostId = (postId: PostId, now: Instant): TimelineItemsDeletedByPostId => {
-  return TimelineItemEvent.create(
-    { timelineItemId: TimelineItemId.generate() },
-    undefined,
-    'timelineItem.deletedByPostId',
-    { postId },
-    now,
-  );
-};
-
 export type TimelineItemCreatedStore = Agg.Store<TimelineItemCreated>;
 export type TimelineItemDeletedStore = Agg.Store<TimelineItemDeleted>;
-export type TimelineItemsDeletedByPostIdStore = Agg.Store<TimelineItemsDeletedByPostId>;
 export type TimelineItemsResolverByActorIds = Agg.Resolver<
   {
     actorIds: ActorId[];
@@ -101,6 +85,10 @@ export type TimelineItemsResolverByActorIds = Agg.Resolver<
 export type TimelineItemResolverByPostId = Agg.Resolver<
   { postId: PostId },
   TimelineItem | undefined
+>;
+export type TimelineItemsResolverByPostId = Agg.Resolver<
+  { postId: PostId },
+  TimelineItem[]
 >;
 
 export type PostTimelineItem = {
@@ -128,7 +116,6 @@ export const TimelineItem = {
   ...schema,
   createTimelineItem,
   deleteTimelineItem,
-  deleteTimelineItemsByPostId,
   toAggregateId,
   Type: TimelineItemType,
 } as const;

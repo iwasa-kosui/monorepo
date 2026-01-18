@@ -1,17 +1,17 @@
 import { RA } from '@iwasa-kosui/result';
 import { eq } from 'drizzle-orm';
 
-import type {
-  TimelineItemsDeletedByPostId,
-  TimelineItemsDeletedByPostIdStore,
-} from '../../../domain/timeline/timelineItem.ts';
+import type { RepostOriginalPostUnlinked, RepostOriginalPostUnlinkedStore } from '../../../domain/repost/repost.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { domainEventsTable, timelineItemsTable } from '../schema.ts';
+import { domainEventsTable, repostsTable } from '../schema.ts';
 
-const store = async (event: TimelineItemsDeletedByPostId): RA<void, never> => {
+const store = async (event: RepostOriginalPostUnlinked): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    await tx.delete(timelineItemsTable).where(eq(timelineItemsTable.postId, event.eventPayload.postId));
+    await tx
+      .update(repostsTable)
+      .set({ originalPostId: null })
+      .where(eq(repostsTable.repostId, event.eventPayload.repostId));
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
       aggregateId: event.aggregateId,
@@ -26,11 +26,11 @@ const store = async (event: TimelineItemsDeletedByPostId): RA<void, never> => {
 };
 
 const getInstance = singleton(
-  (): TimelineItemsDeletedByPostIdStore => ({
+  (): RepostOriginalPostUnlinkedStore => ({
     store,
   }),
 );
 
-export const PgTimelineItemsDeletedByPostIdStore = {
+export const PgRepostOriginalPostUnlinkedStore = {
   getInstance,
 } as const;
