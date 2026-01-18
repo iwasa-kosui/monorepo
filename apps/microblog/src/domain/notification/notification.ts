@@ -38,9 +38,25 @@ const followNotificationZodType = z
 export type FollowNotification = z.output<typeof followNotificationZodType>;
 export const FollowNotification = Schema.create(followNotificationZodType);
 
+const emojiReactNotificationZodType = z
+  .object({
+    type: z.literal('emojiReact'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    reactorActorId: ActorId.zodType,
+    reactedPostId: PostId.zodType,
+    emoji: z.string(),
+  })
+  .describe('EmojiReactNotification');
+
+export type EmojiReactNotification = z.output<typeof emojiReactNotificationZodType>;
+export const EmojiReactNotification = Schema.create(emojiReactNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
+  emojiReactNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -148,6 +164,71 @@ export type LikeNotificationsResolverByPostId = Agg.Resolver<
   LikeNotification[]
 >;
 
+// EmojiReact通知作成イベント
+export type EmojiReactNotificationCreated = NotificationEvent<
+  EmojiReactNotification,
+  'notification.emojiReactNotificationCreated',
+  EmojiReactNotification
+>;
+
+const createEmojiReactNotification = (payload: EmojiReactNotification, now: Instant): EmojiReactNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.emojiReactNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type EmojiReactNotificationCreatedStore = Agg.Store<EmojiReactNotificationCreated>;
+
+// EmojiReact通知削除イベント
+export type EmojiReactNotificationDeletedPayload = Readonly<{
+  notificationId: NotificationId;
+  reactorActorId: ActorId;
+  reactedPostId: PostId;
+  emoji: string;
+}>;
+
+export type EmojiReactNotificationDeleted = NotificationEvent<
+  undefined,
+  'notification.emojiReactNotificationDeleted',
+  EmojiReactNotificationDeletedPayload
+>;
+
+const deleteEmojiReactNotification = (
+  notification: EmojiReactNotification,
+  now: Instant,
+): EmojiReactNotificationDeleted => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.emojiReactNotificationDeleted',
+    {
+      notificationId: notification.notificationId,
+      reactorActorId: notification.reactorActorId,
+      reactedPostId: notification.reactedPostId,
+      emoji: notification.emoji,
+    },
+    now,
+  );
+};
+
+export type EmojiReactNotificationDeletedStore = Agg.Store<EmojiReactNotificationDeleted>;
+
+// EmojiReact通知をActorIdとPostIdとEmojiで検索するリゾルバ
+export type EmojiReactNotificationResolverByActorIdAndPostIdAndEmoji = Agg.Resolver<
+  { reactorActorId: ActorId; reactedPostId: PostId; emoji: string },
+  EmojiReactNotification | undefined
+>;
+
+// EmojiReact通知をPostIdで検索するリゾルバ
+export type EmojiReactNotificationsResolverByPostId = Agg.Resolver<
+  { postId: PostId },
+  EmojiReactNotification[]
+>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -185,6 +266,8 @@ export const Notification = {
   createLikeNotification,
   createFollowNotification,
   deleteLikeNotification,
+  createEmojiReactNotification,
+  deleteEmojiReactNotification,
   markAsRead,
   toAggregateId,
 } as const;
@@ -204,8 +287,19 @@ export type FollowNotificationWithDetails = Readonly<{
   createdAt: Instant;
 }>;
 
+// EmojiReact通知と関連情報を含む型
+export type EmojiReactNotificationWithDetails = Readonly<{
+  notification: EmojiReactNotification;
+  reactorActor: Actor;
+  reactedPost: Post;
+  createdAt: Instant;
+}>;
+
 // 通知と関連情報を含む型
-export type NotificationWithDetails = LikeNotificationWithDetails | FollowNotificationWithDetails;
+export type NotificationWithDetails =
+  | LikeNotificationWithDetails
+  | FollowNotificationWithDetails
+  | EmojiReactNotificationWithDetails;
 
 // ユーザーIDで通知一覧を取得するリゾルバ
 export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;
