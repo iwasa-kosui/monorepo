@@ -8,7 +8,9 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
   const [copied, setCopied] = useState(false);
   const primaryInfo = NenType.getInfo(result.primaryType);
 
-  const shareText = `念系統診断の結果は「${primaryInfo.japaneseName}」でした！\n${primaryInfo.personality.slice(0, 50)}...`;
+  const shareText = `念系統診断の結果は「${primaryInfo.japaneseName}」でした！\n${
+    primaryInfo.personality.slice(0, 50)
+  }...`;
   const shareUrl = window.location.href;
 
   const handleShare = useCallback(async () => {
@@ -35,7 +37,9 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
   }, [shareText, shareUrl]);
 
   const handleTwitterShare = useCallback(() => {
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${
+      encodeURIComponent(shareUrl)
+    }`;
     window.open(twitterUrl, '_blank', 'noopener,noreferrer');
   }, [shareText, shareUrl]);
 
@@ -47,26 +51,28 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
           text-white font-medium transition-all duration-200
           flex items-center justify-center gap-2'
       >
-        {copied ? (
-          'コピーしました!'
-        ) : (
-          <>
-            <svg
-              className='w-5 h-5'
-              fill='none'
-              stroke='currentColor'
-              viewBox='0 0 24 24'
-            >
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z'
-              />
-            </svg>
-            シェア
-          </>
-        )}
+        {copied
+          ? (
+            'コピーしました!'
+          )
+          : (
+            <>
+              <svg
+                className='w-5 h-5'
+                fill='none'
+                stroke='currentColor'
+                viewBox='0 0 24 24'
+              >
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z'
+                />
+              </svg>
+              シェア
+            </>
+          )}
       </button>
       <button
         onClick={handleTwitterShare}
@@ -144,11 +150,9 @@ const WaterDivinationAnimation = ({ nenType }: { nenType: NenType }) => {
               rx='38'
               ry='6'
               fill='rgba(255,255,255,0.3)'
-              style={
-                nenType === 'transmutation'
-                  ? { animation: 'water-wave 3s ease-in-out infinite' }
-                  : {}
-              }
+              style={nenType === 'transmutation'
+                ? { animation: 'water-wave 3s ease-in-out infinite' }
+                : {}}
             />
 
             {/* 放出系: 色が変わるオーバーレイ */}
@@ -212,11 +216,9 @@ const WaterDivinationAnimation = ({ nenType }: { nenType: NenType }) => {
 
           {/* 葉っぱ */}
           <g
-            style={
-              nenType === 'manipulation'
-                ? { animation: 'leaf-move 2s ease-in-out infinite' }
-                : {}
-            }
+            style={nenType === 'manipulation'
+              ? { animation: 'leaf-move 2s ease-in-out infinite' }
+              : {}}
           >
             <ellipse
               cx='70'
@@ -275,10 +277,9 @@ const WaterDivinationAnimation = ({ nenType }: { nenType: NenType }) => {
           className='absolute inset-0 rounded-full blur-xl opacity-30'
           style={{
             backgroundColor: info.color,
-            animation:
-              nenType === 'specialization'
-                ? 'special-glow 2s ease-in-out infinite'
-                : 'glow 2s ease-in-out infinite alternate',
+            animation: nenType === 'specialization'
+              ? 'special-glow 2s ease-in-out infinite'
+              : 'glow 2s ease-in-out infinite alternate',
           }}
         />
       </div>
