@@ -10,10 +10,8 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
-import { Layout } from '../../layout.tsx';
-import { GetUserPage } from '../../ui/pages/getUser.tsx';
+import { Layout, LayoutClient } from '../../layout.tsx';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
-import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
@@ -41,43 +39,14 @@ app.get(
     const sessionId = getCookie(c, 'sessionId');
     const isLoggedIn = !!sessionId;
 
-    const useCase = GetUserProfileUseCase.getInstance();
-
-    return RA.flow(
-      RA.ok(username),
-      RA.andThen((username) => useCase.run({ username })),
-      RA.match({
-        ok: ({ user, actor, followers, following, posts }) => {
-          const url = new URL(c.req.url);
-          const handle = `@${user.username}@${url.host}`;
-          return c.html(
-            <GetUserPage
-              user={user}
-              actor={actor}
-              handle={handle}
-              followers={followers}
-              following={following}
-              posts={posts.map((post) => ({
-                ...post,
-                content: sanitize(post.content),
-              }))}
-              isLoggedIn={isLoggedIn}
-            />,
-          );
-        },
-        err: (err) => {
-          logger.error('Get user failed', { error: String(err) });
-          return c.html(
-            <Layout>
-              <section>
-                <h1>User Profile</h1>
-                <p>Error retrieving user: {err.message}</p>
-              </section>
-            </Layout>,
-            404,
-          );
-        },
-      }),
+    return c.html(
+      <LayoutClient
+        client='/static/localUser.js'
+        server='/src/ui/pages/localUser.tsx'
+        isLoggedIn={isLoggedIn}
+      >
+        <div id='root' />
+      </LayoutClient>,
     );
   },
 );

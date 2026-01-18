@@ -12,10 +12,12 @@ import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { Federation } from '../../federation.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts';
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
+import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
@@ -383,6 +385,67 @@ const app = new Hono()
               remoteActor,
               isFollowing,
               isLoggedIn: true,
+              posts: posts.map((post) => ({
+                ...post,
+                content: sanitize(post.content),
+              })),
+            });
+          },
+          err: (err) => {
+            return c.json({ error: err.message }, 400);
+          },
+        }),
+      );
+    },
+  )
+  .get(
+    '/v1/users/:username/posts',
+    sValidator(
+      'param',
+      z.object({
+        username: Username.zodType,
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(',') },
+            400,
+          );
+        }
+      },
+    ),
+    sValidator(
+      'query',
+      z.object({
+        createdAt: z.optional(z.coerce.number().pipe(Instant.zodType)),
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(',') },
+            400,
+          );
+        }
+      },
+    ),
+    async (c) => {
+      const { username } = c.req.valid('param');
+      const { createdAt } = c.req.valid('query');
+
+      const useCase = GetUserPostsUseCase.getInstance();
+
+      return RA.flow(
+        useCase.run({ username, createdAt }),
+        RA.match({
+          ok: ({ user, actor, following, followers, posts }) => {
+            const url = new URL(c.req.url);
+            const handle = `@${user.username}@${url.host}`;
+            return c.json({
+              user,
+              actor,
+              handle,
+              following,
+              followers,
               posts: posts.map((post) => ({
                 ...post,
                 content: sanitize(post.content),
