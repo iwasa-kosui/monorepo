@@ -136,7 +136,7 @@ export const notificationsTable = pgTable('notifications', {
 export const notificationLikesTable = pgTable('notification_likes', {
   notificationId: uuid().primaryKey().references(() => notificationsTable.notificationId),
   likerActorId: uuid().notNull().references(() => actorsTable.actorId),
-  likedPostId: uuid().notNull().references(() => postsTable.postId),
+  likedPostId: uuid().notNull(),
 });
 
 export const notificationFollowsTable = pgTable('notification_follows', {
@@ -157,7 +157,7 @@ export const repostsTable = pgTable('reposts', {
   repostId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
   objectUri: text().notNull(),
-  originalPostId: uuid().references(() => postsTable.postId),
+  originalPostId: uuid(),
   announceActivityUri: text().unique(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
@@ -168,8 +168,8 @@ export const timelineItemsTable = pgTable('timeline_items', {
   timelineItemId: uuid().primaryKey(),
   type: varchar({ length: 16 }).notNull(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
-  postId: uuid().notNull().references(() => postsTable.postId),
-  repostId: uuid().references(() => repostsTable.repostId),
+  postId: uuid().notNull(),
+  repostId: uuid(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
   deletedAt: timestamp({ mode: 'date' }),
 });
