@@ -15,6 +15,18 @@ import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './he
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
+export type SendActivityError = Readonly<{
+  type: 'SendActivityError';
+  message: string;
+}>;
+
+export const SendActivityError = {
+  create: (message: string): SendActivityError => ({
+    type: 'SendActivityError',
+    message,
+  }),
+} as const;
+
 type Input = Readonly<{
   sessionId: SessionId;
   handle: string;
@@ -24,7 +36,7 @@ type Input = Readonly<{
 
 type Ok = void;
 
-type Err = SessionExpiredError | UserNotFoundError | RemoteActorLookupError | ParseActorIdentityError;
+type Err = SessionExpiredError | UserNotFoundError | RemoteActorLookupError | ParseActorIdentityError | SendActivityError;
 
 export type SendFollowRequestUseCase = UseCase<Input, Ok, Err>;
 
@@ -88,18 +100,25 @@ const create = ({
         );
         return followRequestedStore.store(followRequested);
       }),
-      RA.andThrough(async ({ user, followingFedifyActor, ctx }) => {
-        await ctx.sendActivity(
-          { username: user.username },
-          followingFedifyActor,
-          new Follow({
-            actor: ctx.getActorUri(user.username),
-            object: followingFedifyActor.id,
-            to: followingFedifyActor.id,
-          }),
-        );
-        return RA.ok(undefined);
-      }),
+      RA.andThrough(({ user, followingFedifyActor, ctx }) =>
+        RA.try(
+          async () => {
+            await ctx.sendActivity(
+              { username: user.username },
+              followingFedifyActor,
+              new Follow({
+                actor: ctx.getActorUri(user.username),
+                object: followingFedifyActor.id,
+                to: followingFedifyActor.id,
+              }),
+            );
+          },
+          (error) =>
+            SendActivityError.create(
+              error instanceof Error ? error.message : 'Failed to send follow activity',
+            ),
+        )(),
+      ),
       RA.map(() => undefined),
     );
 

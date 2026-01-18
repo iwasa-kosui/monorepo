@@ -43,8 +43,23 @@ const getInstance = singleton((): RemoteActorLookup => {
     identifier,
   }) => {
     const ctx = Federation.getInstance().createContext(request, undefined);
-    const documentLoader = await ctx.getDocumentLoader({ identifier });
-    const result = await ctx.lookupObject(handle.trim(), { documentLoader });
+
+    const lookupResult = await RA.try(
+      async () => {
+        const documentLoader = await ctx.getDocumentLoader({ identifier });
+        return ctx.lookupObject(handle.trim(), { documentLoader });
+      },
+      (error) =>
+        RemoteActorLookupError.create(
+          handle,
+          error instanceof Error ? error.message : 'Failed to lookup remote actor',
+        ),
+    )();
+
+    if (!lookupResult.ok) {
+      return lookupResult;
+    }
+    const result = lookupResult.val;
 
     if (!isActor(result)) {
       return RA.err(

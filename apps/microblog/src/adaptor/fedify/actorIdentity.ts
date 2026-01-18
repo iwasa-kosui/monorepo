@@ -6,6 +6,7 @@ export type ActorIdentity = Readonly<{
   inboxUrl: string;
   url: string | undefined;
   username: string | undefined;
+  logoUri: string | undefined;
 }>;
 
 export type ParseActorIdentityError = Readonly<{
@@ -28,13 +29,20 @@ export const ActorIdentity = {
     if (!actor.inboxId) {
       return RA.err(ParseActorIdentityError.create('Actor inboxId is missing'));
     }
-    const icon = await actor.getIcon();
+    let logoUri: string | undefined;
+    try {
+      const icon = await actor.getIcon();
+      logoUri = icon?.url?.href?.toString() ?? undefined;
+    } catch {
+      // Icon fetch failed, continue without logo
+      logoUri = undefined;
+    }
     return RA.ok({
       uri: actor.id.href,
       inboxUrl: actor.inboxId.href,
       url: actor.url?.href?.toString() ?? undefined,
       username: actor.preferredUsername?.toString() ?? undefined,
-      logoUri: icon?.url?.href ?? undefined,
+      logoUri,
     });
   },
 } as const;
