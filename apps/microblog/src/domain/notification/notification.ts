@@ -136,6 +136,32 @@ const deleteLikeNotification = (
 
 export type LikeNotificationDeletedStore = Agg.Store<LikeNotificationDeleted>;
 
+// Like通知をPostIdで一括削除するイベント
+export type LikeNotificationsDeletedByPostIdPayload = Readonly<{
+  postId: PostId;
+}>;
+
+export type LikeNotificationsDeletedByPostId = NotificationEvent<
+  undefined,
+  'notification.likeNotificationsDeletedByPostId',
+  LikeNotificationsDeletedByPostIdPayload
+>;
+
+const deleteLikeNotificationsByPostId = (
+  postId: PostId,
+  now: Instant,
+): LikeNotificationsDeletedByPostId => {
+  return NotificationEvent.create(
+    { notificationId: NotificationId.generate() },
+    undefined,
+    'notification.likeNotificationsDeletedByPostId',
+    { postId },
+    now,
+  );
+};
+
+export type LikeNotificationsDeletedByPostIdStore = Agg.Store<LikeNotificationsDeletedByPostId>;
+
 // Like通知をActorIdとPostIdで検索するリゾルバ
 export type LikeNotificationResolverByActorIdAndPostId = Agg.Resolver<
   { likerActorId: ActorId; likedPostId: PostId },
@@ -179,6 +205,7 @@ export const Notification = {
   createLikeNotification,
   createFollowNotification,
   deleteLikeNotification,
+  deleteLikeNotificationsByPostId,
   markAsRead,
   toAggregateId,
 } as const;

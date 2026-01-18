@@ -4,24 +4,11 @@ import { eq } from 'drizzle-orm';
 import type { PostDeleted, PostDeletedStore } from '../../../domain/post/post.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import {
-  domainEventsTable,
-  localPostsTable,
-  notificationLikesTable,
-  postImagesTable,
-  postsTable,
-  remotePostsTable,
-  repostsTable,
-  timelineItemsTable,
-} from '../schema.ts';
+import { domainEventsTable, localPostsTable, postImagesTable, postsTable, remotePostsTable } from '../schema.ts';
 
 const store = async (event: PostDeleted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     const { postId } = event.eventPayload;
-    // Delete/update related records from other aggregates
-    await tx.delete(timelineItemsTable).where(eq(timelineItemsTable.postId, postId));
-    await tx.delete(notificationLikesTable).where(eq(notificationLikesTable.likedPostId, postId));
-    await tx.update(repostsTable).set({ originalPostId: null }).where(eq(repostsTable.originalPostId, postId));
     // Delete related records (same aggregate)
     await tx.delete(postImagesTable).where(eq(postImagesTable.postId, postId));
     await tx.delete(localPostsTable).where(eq(localPostsTable.postId, postId));

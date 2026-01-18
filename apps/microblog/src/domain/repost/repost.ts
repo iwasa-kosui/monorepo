@@ -42,6 +42,11 @@ export type RepostDeleted = RepostEvent<
   'repost.repostDeleted',
   { announceActivityUri: string }
 >;
+export type RepostsOriginalPostUnlinked = RepostEvent<
+  undefined,
+  'repost.originalPostUnlinked',
+  { originalPostId: PostId }
+>;
 
 const createRepost = (payload: Repost, now: Instant): RepostCreated => {
   return RepostEvent.create(
@@ -66,8 +71,19 @@ const deleteRepost = (repost: Repost, now: Instant): RepostDeleted => {
   );
 };
 
+const unlinkOriginalPost = (originalPostId: PostId, now: Instant): RepostsOriginalPostUnlinked => {
+  return RepostEvent.create(
+    { repostId: RepostId.generate() },
+    undefined,
+    'repost.originalPostUnlinked',
+    { originalPostId },
+    now,
+  );
+};
+
 export type RepostCreatedStore = Agg.Store<RepostCreated>;
 export type RepostDeletedStore = Agg.Store<RepostDeleted>;
+export type RepostsOriginalPostUnlinkedStore = Agg.Store<RepostsOriginalPostUnlinked>;
 export type RepostResolverByActivityUri = Agg.Resolver<
   { announceActivityUri: string },
   Repost | undefined
@@ -81,6 +97,7 @@ export const Repost = {
   ...schema,
   createRepost,
   deleteRepost,
+  unlinkOriginalPost,
   toAggregateId,
 } as const;
 
