@@ -18,7 +18,11 @@ export type Question = Readonly<{
 }>;
 
 /**
- * 質問リスト - 各軸について2問ずつ、計10問
+ * 質問リスト - 各軸について2問ずつ、計14問
+ *
+ * 改善版:
+ * - empathy（情の深さ）軸を追加: 放出系の識別を強化
+ * - charisma（カリスマ性）軸を追加: 特質系の識別を強化
  */
 export const QUESTIONS: readonly Question[] = [
   // === 軸1: 一途さ（commitment）===
@@ -212,6 +216,84 @@ export const QUESTIONS: readonly Question[] = [
         id: '10b',
         text: '嘘も方便。状況に応じて使い分けるのは当然',
         axis: 'honesty',
+        direction: 'negative',
+      },
+    ],
+  },
+  // === 軸6: 情の深さ（empathy）===
+  {
+    id: 11,
+    axis: 'empathy',
+    text: '困っている見知らぬ人を見かけたとき、あなたは？',
+    answers: [
+      {
+        id: '11a',
+        text: '放っておけない。声をかけて助けたい',
+        axis: 'empathy',
+        direction: 'positive',
+      },
+      {
+        id: '11b',
+        text: '自分には関係ない。余計なことはしない',
+        axis: 'empathy',
+        direction: 'negative',
+      },
+    ],
+  },
+  {
+    id: 12,
+    axis: 'empathy',
+    text: '友人が失敗して落ち込んでいるとき、あなたは？',
+    answers: [
+      {
+        id: '12a',
+        text: '一緒に悔しがり、励ます。感情を共有したい',
+        axis: 'empathy',
+        direction: 'positive',
+      },
+      {
+        id: '12b',
+        text: '冷静に分析して、次に活かすアドバイスをする',
+        axis: 'empathy',
+        direction: 'negative',
+      },
+    ],
+  },
+  // === 軸7: カリスマ性（charisma）===
+  {
+    id: 13,
+    axis: 'charisma',
+    text: 'グループで何かを決めるとき、あなたの立場は？',
+    answers: [
+      {
+        id: '13a',
+        text: '自然とみんなが自分の意見を聞きにくる',
+        axis: 'charisma',
+        direction: 'positive',
+      },
+      {
+        id: '13b',
+        text: '他の人の意見をまとめる側に回る',
+        axis: 'charisma',
+        direction: 'negative',
+      },
+    ],
+  },
+  {
+    id: 14,
+    axis: 'charisma',
+    text: '初対面の人との関係について、あなたは？',
+    answers: [
+      {
+        id: '14a',
+        text: 'なぜか人に興味を持たれやすい',
+        axis: 'charisma',
+        direction: 'positive',
+      },
+      {
+        id: '14b',
+        text: '目立たず、静かにしていることが多い',
+        axis: 'charisma',
         direction: 'negative',
       },
     ],

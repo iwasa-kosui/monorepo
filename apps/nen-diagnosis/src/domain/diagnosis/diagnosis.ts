@@ -47,6 +47,8 @@ const createEmptyAxisScore = (): AxisScore => ({
   independence: 0,
   caution: 0,
   honesty: 0,
+  empathy: 0,
+  charisma: 0,
 });
 
 /**
