@@ -519,28 +519,36 @@ const PostDeletedStore = {
 
 #### 3. カスケード削除はユースケース層で実装
 
-親集約の削除時に子集約も削除する必要がある場合、ユースケース層で各集約のストアを個別に呼び出します。
+親集約の削除時に子集約も削除する必要がある場合、ユースケース層で各集約のストアを呼び出します。
+リゾルバーは並列実行し、イベントはバッチでストアに渡すことでN+1問題を回避します。
 
 ```typescript
 // useCase/deletePost.ts
 const run = async ({ postId }) => {
-  // 1. TimelineItem削除
-  const timelineItems = await timelineItemsResolverByPostId.resolve({ postId });
-  for (const item of timelineItems) {
-    await timelineItemDeletedStore.store(TimelineItem.deleteTimelineItem(item.id, now));
-  }
+  // 1. 関連エンティティを並列で取得
+  const [timelineItemResult, notificationsResult, repostsResult] = await Promise.all([
+    timelineItemResolverByPostId.resolve({ postId }),
+    likeNotificationsResolverByPostId.resolve({ postId }),
+    repostsResolverByOriginalPostId.resolve({ originalPostId: postId }),
+  ]);
 
-  // 2. LikeNotification削除
-  const notifications = await likeNotificationsResolverByPostId.resolve({ postId });
-  for (const notification of notifications) {
-    await likeNotificationDeletedStore.store(Notification.deleteLikeNotification(notification, now));
-  }
+  // 2. 削除イベントを生成
+  const timelineItemEvents = timelineItemResult.ok && timelineItemResult.val
+    ? [TimelineItem.deleteTimelineItem(timelineItemResult.val.timelineItemId, now)]
+    : [];
+  const notificationEvents = notificationsResult.ok
+    ? notificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
+    : [];
+  const repostEvents = repostsResult.ok
+    ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
+    : [];
 
-  // 3. Repost削除
-  const reposts = await repostsResolverByOriginalPostId.resolve({ originalPostId: postId });
-  for (const repost of reposts) {
-    await repostDeletedStore.store(Repost.deleteRepost(repost, now));
-  }
+  // 3. 関連集約をバッチ削除（各ストアは1トランザクションで処理）
+  await Promise.all([
+    timelineItemDeletedStore.store(...timelineItemEvents),
+    likeNotificationDeletedStore.store(...notificationEvents),
+    repostDeletedStore.store(...repostEvents),
+  ]);
 
   // 4. Post削除
   await postDeletedStore.store(Post.deletePost(now)(postId));
@@ -584,9 +592,15 @@ const event = Notification.deleteLikeNotification({
 
 ```typescript
 type Store<T extends DomainEvent> = Readonly<{
-  store: (event: T) => ResultAsync<void, never>;
+  store: (...events: readonly T[]) => ResultAsync<void, never>;
 }>;
 ```
+
+**特徴:**
+- rest parameterで複数イベントを受け取り、1トランザクションで処理
+- 単一イベント: `store(event)`
+- 複数イベント: `store(event1, event2)` または `store(...events)`
+- N+1問題を回避し、パフォーマンスを向上
 
 #### Resolver（読み取り）
 
