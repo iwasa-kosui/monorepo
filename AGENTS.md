@@ -7,8 +7,11 @@
 コードを変更した場合、以下のコマンドを**必ず**実行してください：
 
 ```bash
-# 型チェック
-pnpm exec tsc --noEmit
+# ワークスペースパッケージのビルド（初回または依存変更時）
+pnpm --filter result run build
+
+# 型チェック（apps/microblogディレクトリで実行）
+cd apps/microblog && pnpm exec tsc --noEmit
 
 # Lintエラーの自動修正
 pnpm lint:fix

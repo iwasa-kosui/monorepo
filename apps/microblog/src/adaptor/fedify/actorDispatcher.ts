@@ -15,6 +15,8 @@ const getInstance = () => {
       id: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
       preferredUsername: INSTANCE_ACTOR_IDENTIFIER,
       inbox: ctx.getInboxUri(INSTANCE_ACTOR_IDENTIFIER),
+      outbox: ctx.getOutboxUri(INSTANCE_ACTOR_IDENTIFIER),
+      followers: ctx.getFollowersUri(INSTANCE_ACTOR_IDENTIFIER),
       endpoints: new Endpoints({
         sharedInbox: ctx.getInboxUri(),
       }),
