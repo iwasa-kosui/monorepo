@@ -29,5 +29,5 @@ export type Resolver<TCondition, TResolved> = Readonly<{
 }>;
 
 export type Store<T extends AnyDomainEvent> = Readonly<{
-  store: (event: T) => RA<void, never>;
+  store: (...events: readonly T[]) => RA<void, never>;
 }>;

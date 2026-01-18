@@ -49,35 +49,32 @@ export const onDelete = async (
   const postId = PostId.parseOrThrow(remotePost.postId);
   const now = Instant.now();
 
-  // Delete related timeline items
-  const timelineItemsResult = await PgTimelineItemsResolverByPostId.getInstance().resolve({ postId });
-  if (timelineItemsResult.ok) {
-    const timelineItemDeletedStore = PgTimelineItemDeletedStore.getInstance();
-    for (const timelineItem of timelineItemsResult.val) {
-      const event = TimelineItem.deleteTimelineItem(timelineItem.timelineItemId, now);
-      await timelineItemDeletedStore.store(event);
-    }
-  }
+  // Resolve all related entities in parallel
+  const [timelineItemsResult, notificationsResult, repostsResult] = await Promise.all([
+    PgTimelineItemsResolverByPostId.getInstance().resolve({ postId }),
+    PgLikeNotificationsResolverByPostId.getInstance().resolve({ postId }),
+    PgRepostsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
+  ]);
 
-  // Delete related notifications
-  const notificationsResult = await PgLikeNotificationsResolverByPostId.getInstance().resolve({ postId });
-  if (notificationsResult.ok) {
-    const notificationDeletedStore = PgLikeNotificationDeletedStore.getInstance();
-    for (const notification of notificationsResult.val) {
-      const event = Notification.deleteLikeNotification(notification, now);
-      await notificationDeletedStore.store(event);
-    }
-  }
+  // Generate all delete events
+  const timelineItemEvents = timelineItemsResult.ok
+    ? timelineItemsResult.val.map((item) => TimelineItem.deleteTimelineItem(item.timelineItemId, now))
+    : [];
 
-  // Delete related reposts
-  const repostsResult = await PgRepostsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId });
-  if (repostsResult.ok) {
-    const repostDeletedStore = PgRepostDeletedStore.getInstance();
-    for (const repost of repostsResult.val) {
-      const event = Repost.deleteRepost(repost, now);
-      await repostDeletedStore.store(event);
-    }
-  }
+  const notificationEvents = notificationsResult.ok
+    ? notificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
+    : [];
+
+  const repostEvents = repostsResult.ok
+    ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
+    : [];
+
+  // Store all events in batch (each store handles its own transaction)
+  await Promise.all([
+    PgTimelineItemDeletedStore.getInstance().store(...timelineItemEvents),
+    PgLikeNotificationDeletedStore.getInstance().store(...notificationEvents),
+    PgRepostDeletedStore.getInstance().store(...repostEvents),
+  ]);
 
   // Delete the post via event store
   const deleteEvent = Post.deletePost(now)(postId);
