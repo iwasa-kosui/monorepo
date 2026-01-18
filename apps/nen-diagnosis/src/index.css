@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+
+:root {
+  --color-enhancement: #FFD700;
+  --color-transmutation: #9370DB;
+  --color-emission: #FF6347;
+  --color-manipulation: #4169E1;
+  --color-conjuration: #32CD32;
+  --color-specialization: #FF69B4;
+}
+
+body {
+  @apply bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen text-white;
+}
+
+.nen-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+  to {
+    box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+  }
+}
+
+.water-overflow {
+  animation: overflow 1.5s ease-out;
+}
+
+@keyframes overflow {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
