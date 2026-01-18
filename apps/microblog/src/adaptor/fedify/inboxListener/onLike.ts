@@ -14,14 +14,15 @@ import { PgLikeNotificationCreatedStore } from '../../pg/notification/notificati
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { ActorIdentity } from '../actorIdentity.ts';
+import { InboxActorResolver } from '../inboxActorResolver.ts';
 
 export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
-  const actor = await activity.getActor();
-  if (!actor) {
-    getLogger().warn('Like activity has no actor');
+  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  if (!actorResult.ok) {
+    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
+  const { actorIdentity: likerIdentity } = actorResult.val;
   if (!activity.id) {
     getLogger().warn('Like activity has no id');
     return;
@@ -65,16 +66,12 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   });
 
   return RA.flow(
-    RA.ok(actor),
-    RA.andBind('likerIdentity', ActorIdentity.fromFedifyActor),
-    RA.andThen(({ likerIdentity }) =>
-      useCase.run({
-        likeActivityUri,
-        likedPostId,
-        likerIdentity,
-        objectUri,
-      })
-    ),
+    useCase.run({
+      likeActivityUri,
+      likedPostId,
+      likerIdentity,
+      objectUri,
+    }),
     RA.match({
       ok: ({ actor: likerActor }) => {
         getLogger().info(

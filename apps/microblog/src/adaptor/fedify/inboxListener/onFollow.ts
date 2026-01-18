@@ -14,16 +14,18 @@ import { PgFollowNotificationCreatedStore } from '../../pg/notification/followNo
 import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { ActorIdentity } from '../actorIdentity.ts';
+import { InboxActorResolver } from '../inboxActorResolver.ts';
 
 export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => {
   if (!activity.objectId) {
     return;
   }
-  const follower = await activity.getActor();
-  if (!follower || !follower.id || !follower.inboxId) {
+  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  if (!actorResult.ok) {
+    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
+  const { actor: follower, actorIdentity: followerIdentity } = actorResult.val;
   const useCase = AcceptFollowRequestUseCase.create({
     followedStore: PgFollowedStore.getInstance(),
     followResolver: PgFollowResolver.getInstance(),
@@ -48,16 +50,8 @@ export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => 
       }
       return RA.ok(object);
     }),
-    RA.andBind('follower', async () => {
-      const follower = await activity.getActor();
-      if (!follower || !follower.id || !follower.inboxId) {
-        return RA.err(new Error('Invalid follower actor'));
-      }
-      return RA.ok(follower);
-    }),
-    RA.andBind('followerIdentity', ({ follower }) => ActorIdentity.fromFedifyActor(follower)),
     RA.andBind('username', ({ object }) => Username.parse(object.identifier)),
-    RA.andThrough(async ({ username, followerIdentity, object }) => {
+    RA.andThrough(async ({ username, object }) => {
       await useCase.run({
         username,
         follower: followerIdentity,

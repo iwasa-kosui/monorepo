@@ -1,4 +1,4 @@
-import { Create, Document, Image, type InboxContext, Note } from '@fedify/fedify';
+import { Create, Document, type DocumentLoader, Image, type InboxContext, Note } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -9,16 +9,19 @@ import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStor
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { ActorIdentity } from '../actorIdentity.ts';
+import { InboxActorResolver } from '../inboxActorResolver.ts';
 
 type Attachment = Readonly<{
   url: string;
   altText: string | null;
 }>;
 
-const extractAttachments = async (note: Note): Promise<Attachment[]> => {
+const extractAttachments = async (
+  note: Note,
+  documentLoader: DocumentLoader,
+): Promise<Attachment[]> => {
   const attachments: Attachment[] = [];
-  for await (const attachment of note.getAttachments()) {
+  for await (const attachment of note.getAttachments({ documentLoader })) {
     if (attachment instanceof Document || attachment instanceof Image) {
       const url = attachment.url;
       if (url instanceof URL) {
@@ -33,12 +36,20 @@ const extractAttachments = async (note: Note): Promise<Attachment[]> => {
 };
 
 export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
-  const object = await activity.getObject();
-  if (!(object instanceof Note)) {
+  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  if (!actorResult.ok) {
+    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
-  const actor = await activity.getActor();
-  if (!actor) {
+  const { actorIdentity, documentLoaderOptions } = actorResult.val;
+  const documentLoader = documentLoaderOptions.documentLoader;
+  if (!documentLoader) {
+    getLogger().warn('documentLoader is undefined');
+    return;
+  }
+
+  const object = await activity.getObject({ documentLoader });
+  if (!(object instanceof Note)) {
     return;
   }
   if (!object.id) {
@@ -55,18 +66,15 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
   });
 
+  const attachments = await extractAttachments(object, documentLoader);
+
   return RA.flow(
-    RA.ok(actor),
-    RA.andBind('actorIdentity', ActorIdentity.fromFedifyActor),
-    RA.andBind('attachments', async () => RA.ok(await extractAttachments(object))),
-    RA.andThen(({ actorIdentity, attachments }) =>
-      useCase.run({
-        content: String(object.content),
-        uri: objectUri,
-        actorIdentity,
-        attachments,
-      })
-    ),
+    useCase.run({
+      content: String(object.content),
+      uri: objectUri,
+      actorIdentity,
+      attachments,
+    }),
     RA.match({
       ok: ({ actor: createdActor }) => {
         getLogger().info(
