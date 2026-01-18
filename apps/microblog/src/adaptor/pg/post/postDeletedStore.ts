@@ -9,12 +9,10 @@ import { domainEventsTable, localPostsTable, postImagesTable, postsTable, remote
 const store = async (event: PostDeleted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     const { postId } = event.eventPayload;
-    // Delete related records first (foreign key constraints)
+    // Delete related records (same aggregate)
     await tx.delete(postImagesTable).where(eq(postImagesTable.postId, postId));
     await tx.delete(localPostsTable).where(eq(localPostsTable.postId, postId));
-    await tx
-      .delete(remotePostsTable)
-      .where(eq(remotePostsTable.postId, postId));
+    await tx.delete(remotePostsTable).where(eq(remotePostsTable.postId, postId));
     // Delete the post
     await tx.delete(postsTable).where(eq(postsTable.postId, postId));
     // Record the event

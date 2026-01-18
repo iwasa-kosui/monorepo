@@ -142,6 +142,12 @@ export type LikeNotificationResolverByActorIdAndPostId = Agg.Resolver<
   LikeNotification | undefined
 >;
 
+// Like通知をPostIdで検索するリゾルバ
+export type LikeNotificationsResolverByPostId = Agg.Resolver<
+  { postId: PostId },
+  LikeNotification[]
+>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;

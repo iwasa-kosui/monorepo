@@ -40,7 +40,7 @@ export type RepostCreated = RepostEvent<Repost, 'repost.repostCreated', Repost>;
 export type RepostDeleted = RepostEvent<
   undefined,
   'repost.repostDeleted',
-  { announceActivityUri: string }
+  { repostId: RepostId }
 >;
 
 const createRepost = (payload: Repost, now: Instant): RepostCreated => {
@@ -54,14 +54,11 @@ const createRepost = (payload: Repost, now: Instant): RepostCreated => {
 };
 
 const deleteRepost = (repost: Repost, now: Instant): RepostDeleted => {
-  if (!repost.announceActivityUri) {
-    throw new Error('Cannot delete a repost without announceActivityUri');
-  }
   return RepostEvent.create(
     toAggregateId(repost),
     undefined,
     'repost.repostDeleted',
-    { announceActivityUri: repost.announceActivityUri },
+    { repostId: repost.repostId },
     now,
   );
 };
@@ -75,6 +72,10 @@ export type RepostResolverByActivityUri = Agg.Resolver<
 export type RepostResolver = Agg.Resolver<
   { actorId: ActorId; objectUri: string },
   Repost | undefined
+>;
+export type RepostsResolverByOriginalPostId = Agg.Resolver<
+  { originalPostId: PostId },
+  Repost[]
 >;
 
 export const Repost = {

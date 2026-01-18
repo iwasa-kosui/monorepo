@@ -8,9 +8,7 @@ import { domainEventsTable, repostsTable } from '../schema.ts';
 
 const store = async (event: RepostDeleted): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    await tx
-      .delete(repostsTable)
-      .where(eq(repostsTable.announceActivityUri, event.eventPayload.announceActivityUri));
+    await tx.delete(repostsTable).where(eq(repostsTable.repostId, event.eventPayload.repostId));
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
       aggregateId: event.aggregateId,
