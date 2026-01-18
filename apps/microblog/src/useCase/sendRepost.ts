@@ -1,12 +1,15 @@
 import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
+import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
+import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
+import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
@@ -52,6 +55,8 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   repostCreatedStore: RepostCreatedStore;
   repostResolver: RepostResolver;
+  remotePostUpserter: RemotePostUpserter;
+  timelineItemCreatedStore: TimelineItemCreatedStore;
 }>;
 
 const create = ({
@@ -60,6 +65,8 @@ const create = ({
   actorResolverByUserId,
   repostCreatedStore,
   repostResolver,
+  remotePostUpserter,
+  timelineItemCreatedStore,
 }: Deps): SendRepostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -134,27 +141,57 @@ const create = ({
         }
         return RA.ok(author);
       }),
-      // Create and store Repost
-      RA.bind('repostCreated', ({ actor, objectUri, ctx, user }) => {
+      // Get or create the remote post for timeline display
+      RA.andBind('remotePost', async ({ note, noteAuthor, objectUri }) => {
+        const noteAuthorIcon = await noteAuthor.getIcon();
+        return remotePostUpserter.resolve({
+          uri: objectUri,
+          content: String(note.content ?? ''),
+          authorIdentity: {
+            uri: noteAuthor.id!.href,
+            inboxUrl: noteAuthor.inboxId!.href,
+            url: noteAuthor.url instanceof URL ? noteAuthor.url.href : undefined,
+            username: typeof noteAuthor.preferredUsername === 'string'
+              ? noteAuthor.preferredUsername
+              : noteAuthor.preferredUsername?.toString(),
+            logoUri: noteAuthorIcon?.url instanceof URL ? noteAuthorIcon.url.href : undefined,
+          },
+        });
+      }),
+      // Create, store Repost, create TimelineItem, and send Announce
+      RA.andThrough(async ({ actor, objectUri, ctx, user, remotePost, note, noteAuthor }) => {
+        // Create repost
         const repostId = RepostId.generate();
         const announceActivityUri = new URL(
           `#announces/${repostId}`,
           ctx.getActorUri(user.username),
         ).href;
-        return Repost.createRepost(
+        const repostCreated = Repost.createRepost(
           {
             repostId,
             actorId: actor.id,
             objectUri,
-            originalPostId: null,
+            originalPostId: remotePost.postId,
             announceActivityUri,
           },
           now,
         );
-      }),
-      RA.andThrough(async ({ repostCreated }) => repostCreatedStore.store(repostCreated)),
-      // Send the Announce activity
-      RA.andThrough(async ({ user, note, noteAuthor, ctx, repostCreated }) => {
+
+        // Store repost
+        await repostCreatedStore.store(repostCreated);
+
+        // Create TimelineItem
+        const timelineItemEvent = TimelineItem.createTimelineItem({
+          timelineItemId: TimelineItemId.generate(),
+          type: 'repost',
+          actorId: actor.id,
+          postId: remotePost.postId,
+          repostId: repostCreated.aggregateState.repostId,
+          createdAt: now,
+        }, now);
+        await timelineItemCreatedStore.store(timelineItemEvent);
+
+        // Send the Announce activity
         const actorUri = ctx.getActorUri(user.username);
         const followersUri = new URL(`${actorUri.href}/followers`);
 

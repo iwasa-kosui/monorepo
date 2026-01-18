@@ -32,11 +32,13 @@ import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNoti
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
+import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
 import { PgRepostsResolverByOriginalPostId } from '../pg/repost/repostsResolverByOriginalPostId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
@@ -195,6 +197,8 @@ const app = new Hono()
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         repostCreatedStore: PgRepostCreatedStore.getInstance(),
         repostResolver: PgRepostResolver.getInstance(),
+        remotePostUpserter: PgRemotePostUpserter.getInstance(),
+        timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
       });
 
       const result = await useCase.run({
