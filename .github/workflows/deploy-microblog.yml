@@ -56,7 +56,7 @@ jobs:
 
       - name: Build on server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo && git fetch --all && git checkout origin/main -- . && pnpm install && cd apps/microblog && pnpm build"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }} "cd monorepo && git fetch --all && git switch origin/main --detach && pnpm install && cd apps/microblog && pnpm build"
 
       - name: Run database migration
         run: |
