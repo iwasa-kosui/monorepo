@@ -8,9 +8,8 @@ import { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts'
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
+import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
 import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
 import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
@@ -39,8 +38,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     repostCreatedStore: PgRepostCreatedStore.getInstance(),
     repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
     postResolver: PgPostResolver.getInstance(),
-    postResolverByUri: PgPostResolverByUri.getInstance(),
-    postCreatedStore: PgPostCreatedStore.getInstance(),
+    remotePostUpserter: PgRemotePostUpserter.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),

@@ -1,12 +1,9 @@
 import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA } from '@iwasa-kosui/result';
 
-import type { PostResolverByUri } from '../adaptor/pg/post/postResolverByUri.ts';
-import type { ActorResolverByUri, ActorResolverByUserId } from '../domain/actor/actor.ts';
-import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
-import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
+import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Post, type PostCreatedStore, type RemotePost } from '../domain/post/post.ts';
 import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -16,7 +13,6 @@ import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
-import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -59,11 +55,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   repostCreatedStore: RepostCreatedStore;
   repostResolver: RepostResolver;
-  postResolverByUri: PostResolverByUri;
-  postCreatedStore: PostCreatedStore;
-  remoteActorCreatedStore: RemoteActorCreatedStore;
-  logoUriUpdatedStore: LogoUriUpdatedStore;
-  actorResolverByUri: ActorResolverByUri;
+  remotePostUpserter: RemotePostUpserter;
   timelineItemCreatedStore: TimelineItemCreatedStore;
 }>;
 
@@ -73,11 +65,7 @@ const create = ({
   actorResolverByUserId,
   repostCreatedStore,
   repostResolver,
-  postResolverByUri,
-  postCreatedStore,
-  remoteActorCreatedStore,
-  logoUriUpdatedStore,
-  actorResolverByUri,
+  remotePostUpserter,
   timelineItemCreatedStore,
 }: Deps): SendRepostUseCase => {
   const now = Instant.now();
@@ -154,46 +142,21 @@ const create = ({
         return RA.ok(author);
       }),
       // Get or create the remote post for timeline display
-      RA.andBind('remotePost', async ({ note, noteAuthor, objectUri }): Promise<Result<RemotePost, never>> => {
-        // First, check if the remote post already exists
-        const existingPost = await postResolverByUri.resolve({ uri: objectUri });
-        if (existingPost.ok && existingPost.val) {
-          return RA.ok(existingPost.val);
-        }
-
-        // If not, upsert the remote actor and create the remote post
-        // Note: noteAuthor.id and noteAuthor.inboxId are guaranteed to be non-null by the previous step
+      RA.andBind('remotePost', async ({ note, noteAuthor, objectUri }) => {
         const noteAuthorIcon = await noteAuthor.getIcon();
-        const remoteActorResult = await upsertRemoteActor({
-          now,
-          remoteActorCreatedStore,
-          logoUriUpdatedStore,
-          actorResolverByUri,
-        })({
-          uri: noteAuthor.id!.href,
-          inboxUrl: noteAuthor.inboxId!.href,
-          url: noteAuthor.url instanceof URL ? noteAuthor.url.href : undefined,
-          username: typeof noteAuthor.preferredUsername === 'string'
-            ? noteAuthor.preferredUsername
-            : noteAuthor.preferredUsername?.toString(),
-          logoUri: noteAuthorIcon?.url instanceof URL ? noteAuthorIcon.url.href : undefined,
-        });
-
-        if (!remoteActorResult.ok) {
-          // This should never happen as upsertRemoteActor returns Result<Actor, never>
-          throw new Error('Failed to upsert remote actor');
-        }
-
-        const remoteActor = remoteActorResult.val;
-        const contentText = String(note.content ?? '');
-
-        const createPost = Post.createRemotePost(now)({
-          content: contentText,
+        return remotePostUpserter.resolve({
           uri: objectUri,
-          actorId: remoteActor.id,
+          content: String(note.content ?? ''),
+          authorIdentity: {
+            uri: noteAuthor.id!.href,
+            inboxUrl: noteAuthor.inboxId!.href,
+            url: noteAuthor.url instanceof URL ? noteAuthor.url.href : undefined,
+            username: typeof noteAuthor.preferredUsername === 'string'
+              ? noteAuthor.preferredUsername
+              : noteAuthor.preferredUsername?.toString(),
+            logoUri: noteAuthorIcon?.url instanceof URL ? noteAuthorIcon.url.href : undefined,
+          },
         });
-        await postCreatedStore.store(createPost);
-        return RA.ok(createPost.aggregateState);
       }),
       // Create, store Repost, create TimelineItem, and send Announce
       RA.andThrough(async ({ actor, objectUri, ctx, user, remotePost, note, noteAuthor }) => {

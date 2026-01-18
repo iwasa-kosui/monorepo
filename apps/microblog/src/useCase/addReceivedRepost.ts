@@ -1,17 +1,11 @@
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA } from '@iwasa-kosui/result';
 
-import type { PostResolverByUri } from '../adaptor/pg/post/postResolverByUri.ts';
+import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import {
-  type LocalPost,
-  Post,
-  type PostCreatedStore,
-  type PostResolver,
-  type RemotePost,
-} from '../domain/post/post.ts';
+import { type LocalPost, type PostResolver, type RemotePost } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import {
   AlreadyRepostedError,
@@ -85,8 +79,7 @@ type Deps = Readonly<{
   repostCreatedStore: RepostCreatedStore;
   repostResolverByActivityUri: RepostResolverByActivityUri;
   postResolver: PostResolver;
-  postResolverByUri: PostResolverByUri;
-  postCreatedStore: PostCreatedStore;
+  remotePostUpserter: RemotePostUpserter;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
@@ -99,8 +92,7 @@ const create = ({
   repostCreatedStore,
   repostResolverByActivityUri,
   postResolver,
-  postResolverByUri,
-  postCreatedStore,
+  remotePostUpserter,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUri,
@@ -190,34 +182,7 @@ const create = ({
           actorResolverByUri,
         })(reposterIdentity)),
       // Get or create the remote post being reposted
-      RA.andBind('post', async ({ remotePostIdentity }): Promise<Result<RemotePost, never>> => {
-        // First, check if the remote post already exists
-        const existingPost = await postResolverByUri.resolve({ uri: remotePostIdentity.uri });
-        if (existingPost.ok && existingPost.val) {
-          return RA.ok(existingPost.val);
-        }
-
-        // If not, upsert the remote author and create the remote post
-        const authorResult = await upsertRemoteActor({
-          now,
-          remoteActorCreatedStore,
-          logoUriUpdatedStore,
-          actorResolverByUri,
-        })(remotePostIdentity.authorIdentity);
-
-        if (!authorResult.ok) {
-          // This should never happen as upsertRemoteActor returns Result<Actor, never>
-          throw new Error('Failed to upsert remote actor');
-        }
-
-        const createPost = Post.createRemotePost(now)({
-          content: remotePostIdentity.content,
-          uri: remotePostIdentity.uri,
-          actorId: authorResult.val.id,
-        });
-        await postCreatedStore.store(createPost);
-        return RA.ok(createPost.aggregateState);
-      }),
+      RA.andBind('post', ({ remotePostIdentity }) => remotePostUpserter.resolve(remotePostIdentity)),
       // Create and store the repost
       RA.andBind('repost', ({ actor, announceActivityUri, post }) => {
         const repostId = RepostId.generate();
