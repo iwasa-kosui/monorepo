@@ -20,21 +20,27 @@ import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../.
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
+import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
+import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
+import { PgRemoteActorCreatedStore } from '../pg/actor/remoteActorCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
+import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
+import { PgPostResolverByUri } from '../pg/post/postResolverByUri.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
 import { PgRepostsResolverByOriginalPostId } from '../pg/repost/repostsResolverByOriginalPostId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
@@ -193,6 +199,12 @@ const app = new Hono()
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         repostCreatedStore: PgRepostCreatedStore.getInstance(),
         repostResolver: PgRepostResolver.getInstance(),
+        postResolverByUri: PgPostResolverByUri.getInstance(),
+        postCreatedStore: PgPostCreatedStore.getInstance(),
+        remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
+        logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+        actorResolverByUri: PgActorResolverByUri.getInstance(),
+        timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
       });
 
       const result = await useCase.run({
