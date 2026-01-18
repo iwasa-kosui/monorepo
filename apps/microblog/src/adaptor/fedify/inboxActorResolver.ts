@@ -2,6 +2,7 @@ import type { Activity, Actor, InboxContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
 import { ActorIdentity, type FromFedifyActorOptions, type ParseActorIdentityError } from './actorIdentity.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
 export type InboxActorResolverError =
   | Readonly<{
@@ -34,10 +35,11 @@ export type InboxActorResolver = Readonly<{
 
 const createInstance = (): InboxActorResolver => {
   const resolve: InboxActorResolver['resolve'] = async (ctx, activity) => {
-    // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はデフォルトのdocumentLoaderを使用
-    const documentLoader = ctx.recipient
-      ? await ctx.getDocumentLoader({ identifier: ctx.recipient })
-      : ctx.documentLoader;
+    // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はインスタンスアクターを使用
+    // インスタンスアクターを使用することで、Authorized Fetchモードのサーバーにも対応
+    const documentLoader = await ctx.getDocumentLoader({
+      identifier: ctx.recipient ?? INSTANCE_ACTOR_IDENTIFIER,
+    });
     const documentLoaderOptions: FromFedifyActorOptions = { documentLoader };
 
     const actor = await activity.getActor(documentLoaderOptions);
