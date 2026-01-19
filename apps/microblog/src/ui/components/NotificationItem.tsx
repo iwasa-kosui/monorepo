@@ -1,6 +1,7 @@
 import { Actor } from '../../domain/actor/actor.ts';
 import { LocalActor } from '../../domain/actor/localActor.ts';
 import { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import type {
   EmojiReactNotificationWithDetails,
   FollowNotificationWithDetails,
@@ -88,12 +89,12 @@ const LikeNotificationItem = ({
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
-          <a href={postUrl}>
+          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
             <time
               dateTime={new Date(createdAt).toISOString()}
               class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
             >
-              {new Date(createdAt).toLocaleString()}
+              {Instant.formatRelative(createdAt)}
             </time>
           </a>
         </div>
@@ -163,8 +164,9 @@ const FollowNotificationItem = ({
           <time
             dateTime={new Date(createdAt).toISOString()}
             class='block mt-2 text-xs text-gray-400 dark:text-gray-500'
+            title={new Date(createdAt).toLocaleString()}
           >
-            {new Date(createdAt).toLocaleString()}
+            {Instant.formatRelative(createdAt)}
           </time>
         </div>
       </div>
@@ -242,12 +244,12 @@ const EmojiReactNotificationItem = ({
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
-          <a href={postUrl}>
+          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
             <time
               dateTime={new Date(createdAt).toISOString()}
               class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
             >
-              {new Date(createdAt).toLocaleString()}
+              {Instant.formatRelative(createdAt)}
             </time>
           </a>
         </div>
