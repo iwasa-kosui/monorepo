@@ -321,7 +321,7 @@ export const PostView = (
                     onShowThread(objectUri);
                   }
                 }}
-                class='flex items-center gap-1 text-sm transition-colors text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400'
+                class='flex items-center gap-1 text-sm transition-colors text-gray-500 hover:text-orange-500 dark:text-gray-400 dark:hover:text-orange-400'
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
