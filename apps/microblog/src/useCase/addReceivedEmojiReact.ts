@@ -124,7 +124,7 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(reactorIdentity)),
-      RA.andBind('emojiReact', ({ actor, objectUri, emojiReactActivityUri, emoji }) => {
+      RA.andBind('emojiReact', ({ actor, objectUri, emojiReactActivityUri, emoji, emojiImageUrl }) => {
         const emojiReactId = EmojiReactId.generate();
         const emojiReact: EmojiReact = {
           emojiReactId,
@@ -132,6 +132,7 @@ const create = ({
           objectUri,
           emoji,
           emojiReactActivityUri,
+          emojiImageUrl: emojiImageUrl ?? null,
         };
         const event = EmojiReact.createEmojiReact(emojiReact, now);
         return emojiReactCreatedStore.store(event).then(() => RA.ok(emojiReact));
