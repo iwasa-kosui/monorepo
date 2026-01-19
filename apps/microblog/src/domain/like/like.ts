@@ -34,6 +34,11 @@ type LikeEvent<
 const LikeEvent = AggregateEvent.createFactory<LikeAggregate>('like');
 
 export type LikeCreated = LikeEvent<Like, 'like.likeCreated', Like>;
+export type LikeDeleted = LikeEvent<
+  undefined,
+  'like.likeDeleted',
+  { likeId: LikeId }
+>;
 
 const createLike = (payload: Like, now: Instant): LikeCreated => {
   return LikeEvent.create(
@@ -45,7 +50,18 @@ const createLike = (payload: Like, now: Instant): LikeCreated => {
   );
 };
 
+const deleteLike = (like: Like, now: Instant): LikeDeleted => {
+  return LikeEvent.create(
+    toAggregateId(like),
+    undefined,
+    'like.likeDeleted',
+    { likeId: like.likeId },
+    now,
+  );
+};
+
 export type LikeCreatedStore = Agg.Store<LikeCreated>;
+export type LikeDeletedStore = Agg.Store<LikeDeleted>;
 export type LikeResolver = Agg.Resolver<
   { actorId: ActorId; objectUri: string },
   Like | undefined
@@ -53,6 +69,7 @@ export type LikeResolver = Agg.Resolver<
 export const Like = {
   ...schema,
   createLike,
+  deleteLike,
   toAggregateId,
 } as const;
 
@@ -73,5 +90,21 @@ export const AlreadyLikedError = {
     type: 'AlreadyLikedError',
     message: `The actor with ID "${actorId}" has already liked the object "${objectUri}".`,
     detail: { actorId, objectUri },
+  }),
+} as const;
+
+export type NotLikedError = Readonly<{
+  type: 'NotLikedError';
+  message: string;
+  detail: {
+    objectUri: string;
+  };
+}>;
+
+export const NotLikedError = {
+  create: (objectUri: string): NotLikedError => ({
+    type: 'NotLikedError',
+    message: `No like found for object "${objectUri}"`,
+    detail: { objectUri },
   }),
 } as const;
