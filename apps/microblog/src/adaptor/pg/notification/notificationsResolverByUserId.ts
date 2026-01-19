@@ -82,7 +82,7 @@ const reconstructPost = (row: {
     deletedAt: Date | null;
   };
   local_posts: { postId: string; userId: string; inReplyToUri: string | null } | null;
-  remote_posts: { postId: string; uri: string } | null;
+  remote_posts: { postId: string; uri: string; inReplyToUri: string | null } | null;
 }): Post => {
   if (row.local_posts) {
     return LocalPost.orThrow({
@@ -102,6 +102,7 @@ const reconstructPost = (row: {
       content: row.posts.content,
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
+      inReplyToUri: row.remote_posts.inReplyToUri,
       type: 'remote',
     });
   }

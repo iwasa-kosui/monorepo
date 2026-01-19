@@ -34,6 +34,7 @@ const getInstance = singleton((): PostResolverByUri => {
       content: row.posts.content,
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
+      inReplyToUri: row.remote_posts.inReplyToUri,
       type: 'remote',
     }));
   };

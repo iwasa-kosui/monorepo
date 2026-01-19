@@ -27,6 +27,7 @@ export type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
   authorIdentity: ActorIdentity;
+  inReplyToUri?: string | null;
 }>;
 
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
@@ -72,6 +73,7 @@ const create = ({
       content: identity.content,
       uri: identity.uri,
       actorId: authorResult.val.id,
+      inReplyToUri: identity.inReplyToUri,
     });
     await postCreatedStore.store(createPost);
     return RA.ok(createPost.aggregateState);

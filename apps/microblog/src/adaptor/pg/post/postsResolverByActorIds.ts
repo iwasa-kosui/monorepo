@@ -138,6 +138,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           actorId: row.posts.actorId,
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
+          inReplyToUri: row.remote_posts.inReplyToUri,
           type: 'remote',
         });
         return {
