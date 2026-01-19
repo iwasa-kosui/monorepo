@@ -98,6 +98,7 @@ describe('GetUserProfileUseCase', () => {
           username: user.username,
           logoUri: undefined,
           liked: false,
+          reposted: false,
           images: [],
           inReplyToUri: null,
         },

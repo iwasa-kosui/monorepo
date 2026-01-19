@@ -67,6 +67,7 @@ const getInstance = singleton((): LocalPostsResolver => {
           username: Username.orThrow(row.users.username),
           logoUri: row.actors.logoUri ?? undefined,
           liked: false,
+          reposted: false,
           images,
         };
       }),

@@ -105,6 +105,26 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       imagesByPostId.set(imageRow.postId, existing);
     }
 
+    // Fetch current user's reposts to determine reposted state
+    const repostedPostIds = new Set<string>();
+    if (currentActorId && postIds.length > 0) {
+      const repostRows = await DB.getInstance()
+        .select({ originalPostId: repostsTable.originalPostId })
+        .from(repostsTable)
+        .where(
+          and(
+            eq(repostsTable.actorId, currentActorId),
+            inArray(repostsTable.originalPostId, postIds),
+          ),
+        )
+        .execute();
+      for (const row of repostRows) {
+        if (row.originalPostId) {
+          repostedPostIds.add(row.originalPostId);
+        }
+      }
+    }
+
     // Fetch reposter info for reposts
     const reposterActorIds = rows
       .filter(row => row.timeline_items.type === 'repost')
@@ -136,6 +156,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       const isRepost = row.timeline_items.type === 'repost';
 
       // Build post with author
+      const reposted = repostedPostIds.has(row.posts.postId);
       let post;
       if (row.local_posts) {
         const localPost = LocalPost.orThrow({
@@ -152,6 +173,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           username: Username.orThrow(row.users!.username),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: false,
+          reposted,
           images,
         };
       } else if (row.remote_posts) {
@@ -168,6 +190,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           username: Username.orThrow(row.remote_actors!.username!),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: row.likes !== null,
+          reposted,
           images,
         };
       } else {
