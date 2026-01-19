@@ -42,6 +42,7 @@ import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
+import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
@@ -654,6 +655,45 @@ const app = new Hono()
           },
         }),
       );
+    },
+  )
+  .get(
+    '/v1/thread',
+    sValidator(
+      'query',
+      z.object({
+        objectUri: z.string(),
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(',') },
+            400,
+          );
+        }
+      },
+    ),
+    async (c) => {
+      const { objectUri } = c.req.valid('query');
+
+      const threadResolver = PgThreadResolver.getInstance();
+      const result = await threadResolver.resolve({ objectUri });
+
+      if (!result.ok) {
+        return c.json({ error: String(result.err) }, 400);
+      }
+
+      const { ancestors, descendants } = result.val;
+      return c.json({
+        ancestors: ancestors.map((post) => ({
+          ...post,
+          content: sanitize(post.content),
+        })),
+        descendants: descendants.map((post) => ({
+          ...post,
+          content: sanitize(post.content),
+        })),
+      });
     },
   );
 
