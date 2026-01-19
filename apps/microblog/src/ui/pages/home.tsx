@@ -96,7 +96,7 @@ export const HomePage = ({
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const touchStartY = useRef<number>(0);
-  const pullThreshold = 80; // pixels to trigger refresh
+  const pullThreshold = 60; // pixels to trigger refresh
 
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -132,7 +132,7 @@ export const HomePage = ({
 
     const currentY = e.touches[0].clientY;
     const startY = touchStartY.current ?? 0;
-    const distance = Math.max(0, (currentY - startY) * 0.5);
+    const distance = Math.max(0, (currentY - startY) * 0.7);
     setPullDistance(Math.min(distance, pullThreshold * 1.5));
   };
 
