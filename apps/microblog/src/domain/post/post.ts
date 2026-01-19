@@ -56,24 +56,26 @@ export type PostCreated = PostEvent<Post, 'post.created', Post>;
 export type RemotePostCreated = PostEvent<RemotePost, 'post.remotePostCreated', RemotePost>;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
-const createPost =
-  (now: Instant) => (payload: Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'> & { inReplyToUri?: string | null }): PostCreated => {
-    const postId = PostId.generate();
-    const post: LocalPost = {
-      ...payload,
-      postId,
-      type: 'local',
-      createdAt: now,
-      inReplyToUri: payload.inReplyToUri ?? null,
-    };
-    return PostEvent.create(
-      postId,
-      post,
-      'post.created',
-      post,
-      now,
-    );
+const createPost = (now: Instant) =>
+(
+  payload: Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'> & { inReplyToUri?: string | null },
+): PostCreated => {
+  const postId = PostId.generate();
+  const post: LocalPost = {
+    ...payload,
+    postId,
+    type: 'local',
+    createdAt: now,
+    inReplyToUri: payload.inReplyToUri ?? null,
   };
+  return PostEvent.create(
+    postId,
+    post,
+    'post.created',
+    post,
+    now,
+  );
+};
 
 const createRemotePost =
   (now: Instant) => (payload: Omit<RemotePost, 'type' | 'createdAt' | 'postId'>): RemotePostCreated => {

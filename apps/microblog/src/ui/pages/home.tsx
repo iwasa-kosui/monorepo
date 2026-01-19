@@ -366,7 +366,8 @@ export const HomePage = ({
         <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCancelReply}>
           <div
             class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-lg w-full mx-4'
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) =>
+              e.stopPropagation()}
           >
             <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
               Reply
@@ -376,7 +377,8 @@ export const HomePage = ({
             </p>
             <textarea
               value={replyContent}
-              onInput={(e) => setReplyContent((e.target as HTMLTextAreaElement).value)}
+              onInput={(e) =>
+                setReplyContent((e.target as HTMLTextAreaElement).value)}
               placeholder='Write your reply...'
               class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3 resize-none'
               rows={4}
