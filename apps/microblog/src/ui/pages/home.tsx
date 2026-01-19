@@ -94,9 +94,13 @@ export const HomePage = ({
 }: Props) => {
   const [replyContent, setReplyContent] = useState('');
   const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
+  const isPullingRef = useRef(false);
   const touchStartY = useRef<number>(0);
   const pullThreshold = 60; // pixels to trigger refresh
+  // Store latest values in refs to avoid stale closures in event handlers
+  const pullDistanceRef = useRef(0);
+  const isRefreshingRef = useRef(isRefreshing);
+  isRefreshingRef.current = isRefreshing;
 
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -114,39 +118,43 @@ export const HomePage = ({
   };
   const debouncedFetchData = debounce(fetchData, 300);
 
-  // Pull to refresh handlers
-  const handleTouchStart = (e: TouchEvent) => {
-    if (window.scrollY === 0) {
-      touchStartY.current = e.touches[0].clientY;
-      setIsPulling(true);
-    }
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isPulling || isRefreshing) return;
-    if (window.scrollY > 0) {
-      setIsPulling(false);
-      setPullDistance(0);
-      return;
-    }
-
-    const currentY = e.touches[0].clientY;
-    const startY = touchStartY.current ?? 0;
-    const distance = Math.max(0, (currentY - startY) * 0.7);
-    setPullDistance(Math.min(distance, pullThreshold * 1.5));
-  };
-
-  const handleTouchEnd = () => {
-    if (!isPulling) return;
-    setIsPulling(false);
-
-    if (pullDistance >= pullThreshold && !isRefreshing) {
-      onRefresh();
-    }
-    setPullDistance(0);
-  };
-
+  // Pull to refresh handlers - use refs to avoid re-registering event listeners
   useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) {
+        touchStartY.current = e.touches[0].clientY;
+        isPullingRef.current = true;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isPullingRef.current || isRefreshingRef.current) return;
+      if (window.scrollY > 0) {
+        isPullingRef.current = false;
+        setPullDistance(0);
+        pullDistanceRef.current = 0;
+        return;
+      }
+
+      const currentY = e.touches[0].clientY;
+      const startY = touchStartY.current ?? 0;
+      const distance = Math.max(0, (currentY - startY) * 0.7);
+      const clampedDistance = Math.min(distance, pullThreshold * 1.5);
+      setPullDistance(clampedDistance);
+      pullDistanceRef.current = clampedDistance;
+    };
+
+    const handleTouchEnd = () => {
+      if (!isPullingRef.current) return;
+      isPullingRef.current = false;
+
+      if (pullDistanceRef.current >= pullThreshold && !isRefreshingRef.current) {
+        onRefresh();
+      }
+      setPullDistance(0);
+      pullDistanceRef.current = 0;
+    };
+
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('touchend', handleTouchEnd);
@@ -156,7 +164,7 @@ export const HomePage = ({
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isPulling, pullDistance, isRefreshing]);
+  }, [onRefresh]);
 
   // Scroll selected post into view
   const scrollToSelected = (index: number) => {
