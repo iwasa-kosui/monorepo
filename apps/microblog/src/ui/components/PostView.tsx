@@ -16,10 +16,24 @@ type Props = Readonly<{
   onDelete?: (postId: string) => void;
   isDeleting?: boolean;
   currentUserId?: UserId;
+  isSelected?: boolean;
+  dataIndex?: number;
 }>;
 
 export const PostView = (
-  { post, repostedBy, onLike, isLiking, onRepost, isReposting, onDelete, isDeleting, currentUserId }: Props,
+  {
+    post,
+    repostedBy,
+    onLike,
+    isLiking,
+    onRepost,
+    isReposting,
+    onDelete,
+    isDeleting,
+    currentUserId,
+    isSelected,
+    dataIndex,
+  }: Props,
 ) => {
   const isRemotePost = post.type === 'remote' && 'uri' in post;
   const isLocalPost = post.type === 'local';
@@ -112,11 +126,12 @@ export const PostView = (
 
   return (
     <article
+      data-post-index={dataIndex}
       class={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 transition-all duration-300 relative overflow-hidden ${
         isFloating
           ? 'shadow-puffy dark:shadow-puffy-dark scale-[1.02] -translate-y-1'
           : 'hover:shadow-puffy dark:hover:shadow-puffy-dark'
-      } ${canLike ? 'cursor-pointer' : ''}`}
+      } ${canLike ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
       onTouchStart={canLike ? handleTouchStart : undefined}
       onTouchEnd={canLike ? handleTouchEnd : undefined}
       onClick={canLike ? handleClick : undefined}
