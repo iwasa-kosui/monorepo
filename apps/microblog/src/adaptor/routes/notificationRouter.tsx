@@ -36,15 +36,19 @@ app.get('/', async (c) => {
     RA.andBind('result', (sessionId) => useCase.run({ sessionId })),
     RA.match({
       ok: ({ result: { user, notifications } }) => {
-        const notificationsWithSanitizedContent = notifications.map((n) => ({
-          notification: n,
-          sanitizedContent: n.notification.type === 'like'
-            ? sanitize(
+        const notificationsWithSanitizedContent = notifications.map((n) => {
+          let sanitizedContent = '';
+          if (n.notification.type === 'like') {
+            sanitizedContent = sanitize(
               (n as { likedPost: { content: string } }).likedPost.content,
-            )
-            : '',
-        }));
-        console.log(notificationsWithSanitizedContent);
+            );
+          } else if (n.notification.type === 'emojiReact') {
+            sanitizedContent = sanitize(
+              (n as { reactedPost: { content: string } }).reactedPost.content,
+            );
+          }
+          return { notification: n, sanitizedContent };
+        });
         return c.html(
           <NotificationsPage
             user={user}

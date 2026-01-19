@@ -276,7 +276,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       };
     });
 
-    // 全ての通知をマージして日時でソート
+    // すべての通知をマージして日時でソート
     const notifications: NotificationWithDetails[] = [
       ...likeNotifications,
       ...followNotifications,
