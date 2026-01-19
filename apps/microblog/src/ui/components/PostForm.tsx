@@ -1,4 +1,4 @@
-import { useState } from 'hono/jsx';
+import { useRef, useState } from 'hono/jsx';
 
 type Props = Readonly<{
   id?: string;
@@ -10,6 +10,17 @@ export const PostForm = ({ id, formId }: Props) => {
   const [previewHtml, setPreviewHtml] = useState('');
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Command+Enter (Mac) or Ctrl+Enter (Windows/Linux) to submit
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (formRef.current && content.trim()) {
+        formRef.current.submit();
+      }
+    }
+  };
 
   const handleContentChange = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
@@ -64,14 +75,15 @@ export const PostForm = ({ id, formId }: Props) => {
   };
 
   return (
-    <form id={formId ?? id} method='post' action='/posts'>
+    <form id={formId ?? id} method='post' action='/posts' ref={formRef}>
       <textarea
         name='content'
         rows={3}
-        placeholder="What's on your mind?"
+        placeholder="What's on your mind? (⌘+Enter to post)"
         required
         value={content}
         onInput={handleContentChange}
+        onKeyDown={handleKeyDown}
         class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
       />
       <input type='hidden' name='imageUrls' value={uploadedUrls.join(',')} />

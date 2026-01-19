@@ -27,6 +27,8 @@ type Props = Readonly<{
   repostingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
+  selectedIndex: number;
+  setSelectedIndex: (index: number) => void;
 }>;
 
 export const HomePage = ({
@@ -42,6 +44,8 @@ export const HomePage = ({
   repostingPostUri,
   onDelete,
   deletingPostId,
+  selectedIndex,
+  setSelectedIndex,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -58,6 +62,88 @@ export const HomePage = ({
     };
   };
   const debouncedFetchData = debounce(fetchData, 300);
+
+  // Scroll selected post into view
+  const scrollToSelected = (index: number) => {
+    const postElements = document.querySelectorAll('[data-post-index]');
+    const targetElement = postElements[index] as HTMLElement | undefined;
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      const selectedItem = timelineItems[selectedIndex];
+      if (!selectedItem) return;
+
+      const post = selectedItem.post;
+      const isRemotePost = post.type === 'remote' && 'uri' in post;
+
+      switch (e.key) {
+        case 'j': // Move down
+          e.preventDefault();
+          if (selectedIndex < timelineItems.length - 1) {
+            const newIndex = selectedIndex + 1;
+            setSelectedIndex(newIndex);
+            scrollToSelected(newIndex);
+          }
+          break;
+        case 'k': // Move up
+          e.preventDefault();
+          if (selectedIndex > 0) {
+            const newIndex = selectedIndex - 1;
+            setSelectedIndex(newIndex);
+            scrollToSelected(newIndex);
+          }
+          break;
+        case 'l': // Like selected post
+          e.preventDefault();
+          if (isRemotePost && !post.liked && !likingPostUri) {
+            onLike(post.uri);
+          }
+          break;
+        case 'r': // Repost selected post
+          e.preventDefault();
+          if (isRemotePost && !repostingPostUri) {
+            onRepost(post.uri);
+          }
+          break;
+        case 'o': // Open selected post
+        case 'Enter':
+          e.preventDefault();
+          if (post.type === 'local') {
+            window.location.href = `/users/${post.username}/posts/${post.postId}`;
+          } else if (isRemotePost) {
+            window.open(post.uri, '_blank');
+          }
+          break;
+        case 'g': // Go to top (gg in vim, but we use single g)
+          e.preventDefault();
+          setSelectedIndex(0);
+          scrollToSelected(0);
+          break;
+        case 'G': { // Go to bottom (Shift+G)
+          e.preventDefault();
+          const lastIndex = timelineItems.length - 1;
+          setSelectedIndex(lastIndex);
+          scrollToSelected(lastIndex);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri]);
+
   useEffect(() => {
     const handleScroll = () => {
       const scrollHeight = document.body.scrollHeight;
@@ -222,7 +308,7 @@ export const HomePage = ({
         </form>
       </Modal>
       <section class='space-y-4'>
-        {timelineItems.map((item) => (
+        {timelineItems.map((item, index) => (
           <PostView
             key={item.timelineItemId}
             post={item.post}
@@ -238,6 +324,8 @@ export const HomePage = ({
             onDelete={onDelete}
             isDeleting={deletingPostId === item.post.postId}
             currentUserId={user.id}
+            isSelected={selectedIndex === index}
+            dataIndex={index}
           />
         ))}
       </section>
@@ -251,6 +339,7 @@ const App = () => {
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -382,6 +471,8 @@ const App = () => {
       repostingPostUri={repostingPostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
+      selectedIndex={selectedIndex}
+      setSelectedIndex={setSelectedIndex}
     />
   );
 };
