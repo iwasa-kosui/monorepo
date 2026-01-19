@@ -14,6 +14,8 @@ type Props = Readonly<{
   isLiking?: boolean;
   onRepost?: (objectUri: string) => void;
   isReposting?: boolean;
+  onUndoRepost?: (objectUri: string) => void;
+  isUndoingRepost?: boolean;
   onDelete?: (postId: string) => void;
   isDeleting?: boolean;
   onEmojiReact?: (objectUri: string, emoji: string) => void;
@@ -36,6 +38,8 @@ export const PostView = (
     isLiking,
     onRepost,
     isReposting,
+    onUndoRepost,
+    isUndoingRepost,
     onDelete,
     isDeleting,
     onEmojiReact,
@@ -103,6 +107,12 @@ export const PostView = (
     }
   };
 
+  const handleUndoRepostClick = () => {
+    if (isRemotePost && onUndoRepost && !isUndoingRepost) {
+      onUndoRepost(post.uri);
+    }
+  };
+
   // Touch handlers for swipe to like
   const handleTouchStart = (e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -156,24 +166,40 @@ export const PostView = (
     >
       {/* Repost header */}
       {repostedBy && (
-        <div class='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            class='h-4 w-4'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'
-            stroke-width='2'
-          >
-            <path
-              stroke-linecap='round'
-              stroke-linejoin='round'
-              d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
-            />
-          </svg>
-          <span>
-            {repostedBy.username} がリポスト
-          </span>
+        <div class='flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
+          <div class='flex items-center gap-2'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              class='h-4 w-4'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'
+              stroke-width='2'
+            >
+              <path
+                stroke-linecap='round'
+                stroke-linejoin='round'
+                d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+              />
+            </svg>
+            <span>
+              {repostedBy.username} がリポスト
+            </span>
+          </div>
+          {onUndoRepost && (
+            <button
+              type='button'
+              onClick={handleUndoRepostClick}
+              class={`text-xs px-2 py-1 rounded-lg transition-colors ${
+                isUndoingRepost
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-wait'
+                  : 'bg-gray-100 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-600 dark:hover:text-red-400'
+              }`}
+              disabled={isUndoingRepost}
+            >
+              {isUndoingRepost ? '取り消し中...' : 'リポスト取り消し'}
+            </button>
+          )}
         </div>
       )}
       {/* Heart animation overlay */}

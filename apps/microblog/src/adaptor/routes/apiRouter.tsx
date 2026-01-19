@@ -24,6 +24,7 @@ import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
+import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -49,6 +50,7 @@ import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
+import { PgTimelineItemResolverByRepostId } from '../pg/timeline/timelineItemResolverByRepostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 import { sanitize } from './helper/sanitize.ts';
@@ -219,6 +221,51 @@ const app = new Hono()
       return RA.match({
         ok: () => c.json({ success: true }),
         err: (err) => c.json({ error: `Failed to repost: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .delete(
+    '/v1/repost',
+    sValidator(
+      'json',
+      z.object({
+        objectUri: z.string().min(1),
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const objectUri = body.objectUri;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = UndoRepostUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        repostResolver: PgRepostResolver.getInstance(),
+        repostDeletedStore: PgRepostDeletedStore.getInstance(),
+        timelineItemResolverByRepostId: PgTimelineItemResolverByRepostId.getInstance(),
+        timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        objectUri,
+        request: c.req.raw,
+        ctx,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to undo repost: ${JSON.stringify(err)}` }, 400),
       })(result);
     },
   )
