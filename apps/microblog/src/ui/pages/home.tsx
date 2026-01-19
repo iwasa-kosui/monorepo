@@ -1,5 +1,5 @@
 import { hc } from 'hono/client';
-import { useEffect, useState } from 'hono/jsx';
+import { useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
@@ -21,6 +21,8 @@ type Props = Readonly<{
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
+  onRefresh: () => Promise<void>;
+  isRefreshing: boolean;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
   onRepost: (objectUri: string) => Promise<void>;
@@ -51,6 +53,8 @@ export const HomePage = ({
   followers,
   following,
   fetchData,
+  onRefresh,
+  isRefreshing,
   onLike,
   likingPostUri,
   onRepost,
@@ -74,6 +78,11 @@ export const HomePage = ({
   isSendingReply,
 }: Props) => {
   const [replyContent, setReplyContent] = useState('');
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef<number>(0);
+  const pullThreshold = 80; // pixels to trigger refresh
+
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
   const debounce = <T extends unknown[]>(
@@ -89,6 +98,50 @@ export const HomePage = ({
     };
   };
   const debouncedFetchData = debounce(fetchData, 300);
+
+  // Pull to refresh handlers
+  const handleTouchStart = (e: TouchEvent) => {
+    if (window.scrollY === 0) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isPulling || isRefreshing) return;
+    if (window.scrollY > 0) {
+      setIsPulling(false);
+      setPullDistance(0);
+      return;
+    }
+
+    const currentY = e.touches[0].clientY;
+    const startY = touchStartY.current ?? 0;
+    const distance = Math.max(0, (currentY - startY) * 0.5);
+    setPullDistance(Math.min(distance, pullThreshold * 1.5));
+  };
+
+  const handleTouchEnd = () => {
+    if (!isPulling) return;
+    setIsPulling(false);
+
+    if (pullDistance >= pullThreshold && !isRefreshing) {
+      onRefresh();
+    }
+    setPullDistance(0);
+  };
+
+  useEffect(() => {
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isPulling, pullDistance, isRefreshing]);
 
   // Scroll selected post into view
   const scrollToSelected = (index: number) => {
@@ -359,6 +412,65 @@ export const HomePage = ({
           </div>
         </form>
       </Modal>
+      {/* Pull to Refresh Indicator */}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div
+          class='flex items-center justify-center overflow-hidden transition-all duration-200'
+          style={{ height: isRefreshing ? '48px' : `${pullDistance}px` }}
+        >
+          <div class='flex items-center gap-2 text-gray-500 dark:text-gray-400'>
+            {isRefreshing
+              ? (
+                <>
+                  <svg class='animate-spin h-5 w-5' viewBox='0 0 24 24'>
+                    <circle
+                      class='opacity-25'
+                      cx='12'
+                      cy='12'
+                      r='10'
+                      stroke='currentColor'
+                      stroke-width='4'
+                      fill='none'
+                    />
+                    <path
+                      class='opacity-75'
+                      fill='currentColor'
+                      d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                    />
+                  </svg>
+                  <span class='text-sm'>更新中...</span>
+                </>
+              )
+              : pullDistance >= pullThreshold
+              ? (
+                <>
+                  <svg class='h-5 w-5 rotate-180' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M19 14l-7 7m0 0l-7-7m7 7V3'
+                    />
+                  </svg>
+                  <span class='text-sm'>離して更新</span>
+                </>
+              )
+              : (
+                <>
+                  <svg class='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M19 14l-7 7m0 0l-7-7m7 7V3'
+                    />
+                  </svg>
+                  <span class='text-sm'>引っ張って更新</span>
+                </>
+              )}
+          </div>
+        </div>
+      )}
       {/* Reply Modal */}
       {replyingToUri && (
         <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCancelReply}>
@@ -460,6 +572,7 @@ const App = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -484,6 +597,22 @@ const App = () => {
       });
     } else {
       setData(latest);
+    }
+  };
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await client.v1.home.$get({
+        query: { createdAt: undefined },
+      });
+      const latest = await res.json();
+      setData(latest);
+      setSelectedIndex(0);
+    } catch (error) {
+      console.error('Failed to refresh:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -697,6 +826,8 @@ const App = () => {
       followers={data.followers}
       following={data.following}
       fetchData={fetchData}
+      onRefresh={refreshData}
+      isRefreshing={isRefreshing}
       onLike={handleLike}
       likingPostUri={likingPostUri}
       onRepost={handleRepost}
