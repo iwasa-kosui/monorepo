@@ -289,7 +289,7 @@ export const HomePage = ({
   }, [timelineItems]);
   return (
     <>
-      <section class='mb-8'>
+      <section class='mb-8 hidden md:block'>
         <header class='mb-4'>
           <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
             Hi, {String(user.username)}
