@@ -289,7 +289,7 @@ export const HomePage = ({
   }, [timelineItems]);
   return (
     <>
-      <section class='mb-8 hidden md:block'>
+      <section class='mb-8'>
         <header class='mb-4'>
           <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
             Hi, {String(user.username)}
@@ -596,7 +596,7 @@ export const HomePage = ({
                   {threadData.ancestors.length > 0 && (
                     <>
                       {threadData.ancestors.map((post) => (
-                        <div key={post.postId} class='relative pl-4 border-l-2 border-gray-300 dark:border-gray-600'>
+                        <div key={post.postId} class='relative'>
                           <PostView
                             post={post}
                             currentUserId={user.id}
@@ -619,7 +619,7 @@ export const HomePage = ({
                     ? (
                       <>
                         {threadData.descendants.map((post) => (
-                          <div key={post.postId} class='relative pl-4 border-l-2 border-gray-300 dark:border-gray-600'>
+                          <div key={post.postId} class='relative'>
                             <PostView
                               post={post}
                               currentUserId={user.id}
