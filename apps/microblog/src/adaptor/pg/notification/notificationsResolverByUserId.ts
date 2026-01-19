@@ -254,6 +254,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         reactorActorId: ActorId.orThrow(row.notificationEmojiReacts.reactorActorId),
         reactedPostId: PostId.orThrow(row.notificationEmojiReacts.reactedPostId),
         emoji: row.notificationEmojiReacts.emoji,
+        emojiImageUrl: row.notificationEmojiReacts.emojiImageUrl,
       };
 
       const reactorActor = reconstructActor({

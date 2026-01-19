@@ -20,25 +20,66 @@ import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/p
 import { WebPushSender } from '../../webPush/webPushSender.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 
+type EmojiInfo = Readonly<{
+  emoji: string;
+  emojiImageUrl: string | null;
+}>;
+
+type EmojiTag = Readonly<{
+  type: string;
+  name?: string;
+  icon?: {
+    type?: string;
+    url?: string;
+  };
+}>;
+
+/**
+ * Extracts emoji image URL from tag array
+ * Misskey sends custom emoji info in the tag array with type "Emoji"
+ */
+const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null => {
+  if (!Array.isArray(tags)) return null;
+
+  for (const tag of tags as EmojiTag[]) {
+    if (tag.type === 'Emoji' && tag.name === emojiName && tag.icon?.url) {
+      return tag.icon.url;
+    }
+  }
+  return null;
+};
+
 /**
  * Extracts emoji from Misskey-style Like activity
  * Misskey sends emoji reactions as Like with content field containing the emoji
  * or _misskey_reaction field for custom emojis
+ * Custom emoji images are in the tag array
  */
-const extractEmojiFromLike = async (activity: Like): Promise<string | null> => {
+const extractEmojiFromLike = async (activity: Like): Promise<EmojiInfo | null> => {
   const json = await activity.toJsonLd() as Record<string, unknown>;
+  let emoji: string | null = null;
+
   // Check _misskey_reaction first (Misskey-specific)
   const misskeyReaction = json._misskey_reaction;
   if (typeof misskeyReaction === 'string' && misskeyReaction.length > 0) {
-    return misskeyReaction;
+    emoji = misskeyReaction;
   }
+
   // Check content field (standard ActivityPub)
-  const content = json.content;
-  if (typeof content === 'string' && content.length > 0 && content !== '👍') {
-    // Only treat as emoji reaction if content is not the default like emoji
-    return content;
+  if (!emoji) {
+    const content = json.content;
+    if (typeof content === 'string' && content.length > 0 && content !== '👍') {
+      // Only treat as emoji reaction if content is not the default like emoji
+      emoji = content;
+    }
   }
-  return null;
+
+  if (!emoji) return null;
+
+  // Extract emoji image URL from tags for custom emojis
+  const emojiImageUrl = extractEmojiImageUrl(json.tag, emoji);
+
+  return { emoji, emojiImageUrl };
 };
 
 export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
@@ -79,8 +120,8 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   const objectUri = `${env.ORIGIN}/users/${parsed.values.identifier}/posts/${postId}`;
 
   // Check if this is an emoji reaction (Misskey-style)
-  const emoji = await extractEmojiFromLike(activity);
-  if (emoji) {
+  const emojiInfo = await extractEmojiFromLike(activity);
+  if (emojiInfo) {
     // Process as EmojiReact
     const useCase = AddReceivedEmojiReactUseCase.create({
       emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
@@ -100,12 +141,13 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
         reactedPostId: postId,
         reactorIdentity: actorIdentity,
         objectUri,
-        emoji,
+        emoji: emojiInfo.emoji,
+        emojiImageUrl: emojiInfo.emojiImageUrl,
       }),
       RA.match({
         ok: ({ actor: reactorActor }) => {
           getLogger().info(
-            `Processed emoji reaction (via Like): ${activityUri} by ${reactorActor.uri} with ${emoji}`,
+            `Processed emoji reaction (via Like): ${activityUri} by ${reactorActor.uri} with ${emojiInfo.emoji}`,
           );
         },
         err: (err) => {

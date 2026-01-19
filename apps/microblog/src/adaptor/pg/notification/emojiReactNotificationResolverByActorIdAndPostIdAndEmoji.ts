@@ -57,6 +57,7 @@ const getInstance = singleton((): EmojiReactNotificationResolverByActorIdAndPost
       reactorActorId: row.notificationEmojiReacts.reactorActorId as ActorId,
       reactedPostId: row.notificationEmojiReacts.reactedPostId as PostId,
       emoji: row.notificationEmojiReacts.emoji,
+      emojiImageUrl: row.notificationEmojiReacts.emojiImageUrl,
     };
 
     return RA.ok(notification);

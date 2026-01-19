@@ -22,6 +22,7 @@ const store = async (event: EmojiReactNotificationCreated): RA<void, never> => {
       reactorActorId: event.aggregateState.reactorActorId,
       reactedPostId: event.aggregateState.reactedPostId,
       emoji: event.aggregateState.emoji,
+      emojiImageUrl: event.aggregateState.emojiImageUrl,
     });
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,

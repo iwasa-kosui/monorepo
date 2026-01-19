@@ -16,18 +16,42 @@ import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/p
 import { WebPushSender } from '../../webPush/webPushSender.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 
+type EmojiTag = Readonly<{
+  type: string;
+  name?: string;
+  icon?: {
+    type?: string;
+    url?: string;
+  };
+}>;
+
 type JsonLdEmojiReact = {
   type: 'EmojiReact';
   id?: string;
   actor?: string;
   object?: string;
   content?: string;
+  tag?: unknown;
 };
 
 const isEmojiReactJsonLd = (json: unknown): json is JsonLdEmojiReact => {
   if (typeof json !== 'object' || json === null) return false;
   const obj = json as Record<string, unknown>;
   return obj.type === 'EmojiReact' || obj.type === 'litepub:EmojiReact';
+};
+
+/**
+ * Extracts emoji image URL from tag array
+ */
+const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null => {
+  if (!Array.isArray(tags)) return null;
+
+  for (const tag of tags as EmojiTag[]) {
+    if (tag.type === 'Emoji' && tag.name === emojiName && tag.icon?.url) {
+      return tag.icon.url;
+    }
+  }
+  return null;
 };
 
 const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, json: JsonLdEmojiReact) => {
@@ -55,6 +79,9 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
     getLogger().warn('EmojiReact activity has no content (emoji)');
     return;
   }
+
+  // Extract emoji image URL from tags for custom emojis
+  const emojiImageUrl = extractEmojiImageUrl(json.tag, emoji);
 
   // Parse the object URI to extract post ID
   const objectId = activity.objectId;
@@ -100,6 +127,7 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
       reactorIdentity,
       objectUri: localObjectUri,
       emoji,
+      emojiImageUrl,
     }),
     RA.match({
       ok: ({ actor: reactorActor }) => {

@@ -180,7 +180,7 @@ const EmojiReactNotificationItem = ({
   sanitizedContent: string;
 }) => {
   const { reactorActor, reactedPost, createdAt } = notification;
-  const { emoji } = notification.notification;
+  const { emoji, emojiImageUrl } = notification.notification;
 
   const handle = Actor.match({
     onLocal: LocalActor.getHandle,
@@ -194,11 +194,15 @@ const EmojiReactNotificationItem = ({
 
   const postUrl = `/posts/${reactedPost.postId}`;
 
+  const emojiDisplay = emojiImageUrl
+    ? <img src={emojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
+    : <span class='text-lg'>{emoji}</span>;
+
   return (
     <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
       <div class='flex items-start gap-3'>
         <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center'>
-          <span class='text-lg'>{emoji}</span>
+          {emojiDisplay}
         </div>
 
         <div class='flex-1 min-w-0'>
@@ -224,8 +228,8 @@ const EmojiReactNotificationItem = ({
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400'>
-              reacted with {emoji}
+            <span class='text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1'>
+              reacted with {emojiDisplay}
             </span>
           </div>
 
