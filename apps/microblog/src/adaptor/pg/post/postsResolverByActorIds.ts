@@ -18,6 +18,7 @@ import {
   postsTable,
   remoteActorsTable,
   remotePostsTable,
+  repostsTable,
   usersTable,
 } from '../schema.ts';
 
@@ -88,8 +89,29 @@ const getInstance = singleton((): PostsResolverByActorIds => {
       imagesByPostId.set(imageRow.postId, existing);
     }
 
+    // Fetch current user's reposts to determine reposted state
+    const repostedPostIds = new Set<string>();
+    if (currentActorId && postIds.length > 0) {
+      const repostRows = await DB.getInstance()
+        .select({ originalPostId: repostsTable.originalPostId })
+        .from(repostsTable)
+        .where(
+          and(
+            eq(repostsTable.actorId, currentActorId),
+            inArray(repostsTable.originalPostId, postIds),
+          ),
+        )
+        .execute();
+      for (const row of repostRows) {
+        if (row.originalPostId) {
+          repostedPostIds.add(row.originalPostId);
+        }
+      }
+    }
+
     return RA.ok(rows.map(row => {
       const images = imagesByPostId.get(row.posts.postId) ?? [];
+      const reposted = repostedPostIds.has(row.posts.postId);
       if (row.local_posts) {
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
@@ -105,6 +127,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           username: Username.orThrow(row.users!.username),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: false,
+          reposted,
           images,
         };
       }
@@ -122,6 +145,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           username: Username.orThrow(row.remote_actors!.username!),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: row.likes !== null,
+          reposted,
           images,
         };
       }

@@ -80,6 +80,7 @@ describe('GetRemoteActorPostsUseCase', () => {
           username: 'remote' as Username,
           logoUri: undefined,
           liked: false,
+          reposted: false,
           images: [],
         },
       ];

@@ -37,6 +37,7 @@ export type PostWithAuthor = Post & {
   username: Username;
   logoUri: string | undefined;
   liked: boolean;
+  reposted: boolean;
   images: PostImage[];
 };
 

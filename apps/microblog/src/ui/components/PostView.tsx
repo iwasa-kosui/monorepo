@@ -100,16 +100,23 @@ export const PostView = (
   };
 
   const handleRepostClick = () => {
-    if (isRemotePost && onRepost && !isReposting) {
-      if (confirm('Are you sure you want to repost this post?')) {
-        onRepost(post.uri);
-      }
-    }
-  };
+    if (!isRemotePost) return;
+    if (isReposting || isUndoingRepost) return;
 
-  const handleUndoRepostClick = () => {
-    if (isRemotePost && onUndoRepost && !isUndoingRepost) {
-      onUndoRepost(post.uri);
+    if (post.reposted) {
+      // Undo repost
+      if (onUndoRepost) {
+        if (confirm('リポストを取り消しますか？')) {
+          onUndoRepost(post.uri);
+        }
+      }
+    } else {
+      // Repost
+      if (onRepost) {
+        if (confirm('リポストしますか？')) {
+          onRepost(post.uri);
+        }
+      }
     }
   };
 
@@ -166,7 +173,7 @@ export const PostView = (
     >
       {/* Repost header */}
       {repostedBy && (
-        <div class='flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
+        <div class='flex items-center text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
           <div class='flex items-center gap-2'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -186,20 +193,6 @@ export const PostView = (
               {repostedBy.username} がリポスト
             </span>
           </div>
-          {onUndoRepost && (
-            <button
-              type='button'
-              onClick={handleUndoRepostClick}
-              class={`text-xs px-2 py-1 rounded-lg transition-colors ${
-                isUndoingRepost
-                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-wait'
-                  : 'bg-gray-100 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-600 dark:hover:text-red-400'
-              }`}
-              disabled={isUndoingRepost}
-            >
-              {isUndoingRepost ? '取り消し中...' : 'リポスト取り消し'}
-            </button>
-          )}
         </div>
       )}
       {/* Heart animation overlay */}
@@ -344,17 +337,25 @@ export const PostView = (
                 type='button'
                 onClick={handleRepostClick}
                 class={`flex items-center gap-1 transition-colors ${
-                  isReposting
+                  post.reposted
+                    ? 'text-green-500 dark:text-green-400'
+                    : isReposting || isUndoingRepost
                     ? 'text-green-300 dark:text-green-600 cursor-wait'
                     : 'text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400'
                 }`}
-                title={isReposting ? 'Reposting...' : 'Repost'}
-                disabled={isReposting}
+                title={isReposting
+                  ? 'リポスト中...'
+                  : isUndoingRepost
+                  ? 'リポスト取り消し中...'
+                  : post.reposted
+                  ? 'リポストを取り消す'
+                  : 'リポスト'}
+                disabled={isReposting || isUndoingRepost}
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   class='h-5 w-5'
-                  fill='none'
+                  fill={post.reposted ? 'currentColor' : 'none'}
                   viewBox='0 0 24 24'
                   stroke='currentColor'
                   stroke-width='2'
