@@ -47,7 +47,7 @@ type Props = Readonly<{
   isSendingReply: boolean;
   onShowThread: (objectUri: string) => void;
   threadModalUri: string | null;
-  threadData: { ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null;
+  threadData: { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null;
   isLoadingThread: boolean;
   onCloseThread: () => void;
 }>;
@@ -605,13 +605,15 @@ export const HomePage = ({
                       ))}
                     </>
                   )}
-                  {/* Current post indicator */}
-                  <div class='py-2'>
-                    <div class='h-px bg-blue-500 dark:bg-blue-400' />
-                    <p class='text-xs text-blue-500 dark:text-blue-400 text-center mt-1'>
-                      Current Post
-                    </p>
-                  </div>
+                  {/* Current post */}
+                  {threadData.currentPost && (
+                    <div class='relative ring-2 ring-blue-500 dark:ring-blue-400 rounded-3xl'>
+                      <PostView
+                        post={threadData.currentPost}
+                        currentUserId={user.id}
+                      />
+                    </div>
+                  )}
                   {/* Descendants (replies below) */}
                   {threadData.descendants.length > 0
                     ? (
@@ -626,7 +628,7 @@ export const HomePage = ({
                         ))}
                       </>
                     )
-                    : threadData.ancestors.length === 0 && (
+                    : threadData.ancestors.length === 0 && !threadData.currentPost && (
                       <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
                         No replies in this thread yet
                       </p>
@@ -692,7 +694,9 @@ const App = () => {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [threadModalUri, setThreadModalUri] = useState<string | null>(null);
-  const [threadData, setThreadData] = useState<{ ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null>(
+  const [threadData, setThreadData] = useState<
+    { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null
+  >(
     null,
   );
   const [isLoadingThread, setIsLoadingThread] = useState(false);
@@ -938,8 +942,10 @@ const App = () => {
         query: { objectUri },
       });
       const result = await res.json();
-      if ('ancestors' in result && 'descendants' in result) {
-        setThreadData(result as { ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] });
+      if ('currentPost' in result && 'ancestors' in result && 'descendants' in result) {
+        setThreadData(
+          result as { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] },
+        );
       } else if ('error' in result) {
         console.error('Failed to load thread:', result.error);
       }
