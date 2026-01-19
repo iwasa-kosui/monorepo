@@ -5,6 +5,7 @@ import { render } from 'hono/jsx/dom';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { Actor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
+import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import type { User } from '../../domain/user/user.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
@@ -44,6 +45,11 @@ type Props = Readonly<{
   onSendReply: (objectUri: string, content: string) => Promise<void>;
   onCancelReply: () => void;
   isSendingReply: boolean;
+  onShowThread: (objectUri: string) => void;
+  threadModalUri: string | null;
+  threadData: { ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null;
+  isLoadingThread: boolean;
+  onCloseThread: () => void;
 }>;
 
 export const HomePage = ({
@@ -76,6 +82,11 @@ export const HomePage = ({
   onSendReply,
   onCancelReply,
   isSendingReply,
+  onShowThread,
+  threadModalUri,
+  threadData,
+  isLoadingThread,
+  onCloseThread,
 }: Props) => {
   const [replyContent, setReplyContent] = useState('');
   const [pullDistance, setPullDistance] = useState(0);
@@ -232,8 +243,11 @@ export const HomePage = ({
           }
           break;
         }
-        case 'Escape': { // Close emoji picker or reply modal
-          if (replyingToUri !== null) {
+        case 'Escape': { // Close emoji picker, reply modal, or thread modal
+          if (threadModalUri !== null) {
+            e.preventDefault();
+            onCloseThread();
+          } else if (replyingToUri !== null) {
             e.preventDefault();
             onCancelReply();
           } else if (emojiPickerOpenForIndex !== null) {
@@ -247,7 +261,15 @@ export const HomePage = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri, emojiPickerOpenForIndex, replyingToUri]);
+  }, [
+    selectedIndex,
+    timelineItems,
+    likingPostUri,
+    repostingPostUri,
+    emojiPickerOpenForIndex,
+    replyingToUri,
+    threadModalUri,
+  ]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -524,6 +546,101 @@ export const HomePage = ({
           </div>
         </div>
       )}
+      {/* Thread Modal */}
+      {threadModalUri && (
+        <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCloseThread}>
+          <div
+            class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto'
+            onClick={(e) =>
+              e.stopPropagation()}
+          >
+            <div class='flex items-center justify-between mb-4'>
+              <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
+                Thread
+              </h2>
+              <button
+                type='button'
+                onClick={onCloseThread}
+                class='text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+              >
+                <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                  <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                </svg>
+              </button>
+            </div>
+            {isLoadingThread
+              ? (
+                <div class='flex items-center justify-center py-8'>
+                  <svg class='animate-spin h-8 w-8 text-blue-500' viewBox='0 0 24 24'>
+                    <circle
+                      class='opacity-25'
+                      cx='12'
+                      cy='12'
+                      r='10'
+                      stroke='currentColor'
+                      stroke-width='4'
+                      fill='none'
+                    />
+                    <path
+                      class='opacity-75'
+                      fill='currentColor'
+                      d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                    />
+                  </svg>
+                </div>
+              )
+              : threadData
+              ? (
+                <div class='space-y-3'>
+                  {/* Ancestors (replies above) */}
+                  {threadData.ancestors.length > 0 && (
+                    <>
+                      {threadData.ancestors.map((post) => (
+                        <div key={post.postId} class='relative pl-4 border-l-2 border-gray-300 dark:border-gray-600'>
+                          <PostView
+                            post={post}
+                            currentUserId={user.id}
+                          />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {/* Current post indicator */}
+                  <div class='py-2'>
+                    <div class='h-px bg-blue-500 dark:bg-blue-400' />
+                    <p class='text-xs text-blue-500 dark:text-blue-400 text-center mt-1'>
+                      Current Post
+                    </p>
+                  </div>
+                  {/* Descendants (replies below) */}
+                  {threadData.descendants.length > 0
+                    ? (
+                      <>
+                        {threadData.descendants.map((post) => (
+                          <div key={post.postId} class='relative pl-4 border-l-2 border-gray-300 dark:border-gray-600'>
+                            <PostView
+                              post={post}
+                              currentUserId={user.id}
+                            />
+                          </div>
+                        ))}
+                      </>
+                    )
+                    : threadData.ancestors.length === 0 && (
+                      <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
+                        No replies in this thread yet
+                      </p>
+                    )}
+                </div>
+              )
+              : (
+                <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
+                  Failed to load thread
+                </p>
+              )}
+          </div>
+        </div>
+      )}
       <section class='space-y-4'>
         {timelineItems.map((item, index) => {
           const postUri = item.post.type === 'remote' && 'uri' in item.post ? item.post.uri : null;
@@ -551,6 +668,7 @@ export const HomePage = ({
               isEmojiPickerOpen={emojiPickerOpenForIndex === index}
               onToggleEmojiPicker={() => setEmojiPickerOpenForIndex(emojiPickerOpenForIndex === index ? null : index)}
               onReply={onReply}
+              onShowThread={onShowThread}
             />
           );
         })}
@@ -573,6 +691,11 @@ const App = () => {
   const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [threadModalUri, setThreadModalUri] = useState<string | null>(null);
+  const [threadData, setThreadData] = useState<{ ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null>(
+    null,
+  );
+  const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -806,6 +929,32 @@ const App = () => {
     }
   };
 
+  const handleShowThread = async (objectUri: string) => {
+    setThreadModalUri(objectUri);
+    setThreadData(null);
+    setIsLoadingThread(true);
+    try {
+      const res = await client.v1.thread.$get({
+        query: { objectUri },
+      });
+      const result = await res.json();
+      if ('ancestors' in result && 'descendants' in result) {
+        setThreadData(result as { ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] });
+      } else if ('error' in result) {
+        console.error('Failed to load thread:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to load thread:', error);
+    } finally {
+      setIsLoadingThread(false);
+    }
+  };
+
+  const handleCloseThread = () => {
+    setThreadModalUri(null);
+    setThreadData(null);
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -849,6 +998,11 @@ const App = () => {
       onSendReply={handleSendReply}
       onCancelReply={handleCancelReply}
       isSendingReply={isSendingReply}
+      onShowThread={handleShowThread}
+      threadModalUri={threadModalUri}
+      threadData={threadData}
+      isLoadingThread={isLoadingThread}
+      onCloseThread={handleCloseThread}
     />
   );
 };
