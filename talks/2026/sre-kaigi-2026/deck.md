@@ -1,7 +1,6 @@
 ---
-presentationID: 1wu9iH8VOLA3JHpRSR4B4wdlSjdFnww-S3Ru7keN9MWk
+presentationID: 1g-QilHBVeoCd7lxMb0JNHUbHbFgkEJ3uj_5fnFy3p3w
 ---
-
 # 開発チームが信頼性向上のためにできること
 
 ## 医療SaaS企業を支える共通基盤の挑戦
