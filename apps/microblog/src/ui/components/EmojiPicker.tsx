@@ -47,7 +47,7 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
   return (
     <div
       ref={containerRef}
-      class='absolute bottom-full right-0 mb-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 z-50'
+      class='absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 z-50'
     >
       {isLoading
         ? (
