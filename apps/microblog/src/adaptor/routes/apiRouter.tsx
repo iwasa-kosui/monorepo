@@ -21,6 +21,7 @@ import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
+import { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
@@ -30,11 +31,13 @@ import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollo
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndObjectAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndObjectAndEmoji.ts';
+import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
+import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
@@ -306,6 +309,54 @@ const app = new Hono()
       return RA.match({
         ok: () => c.json({ success: true }),
         err: (err) => c.json({ error: `Failed to undo react: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .post(
+    '/v1/reply',
+    sValidator(
+      'json',
+      z.object({
+        objectUri: z.string().min(1),
+        content: z.string().min(1),
+        imageUrls: z.optional(z.array(z.string())),
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { objectUri, content, imageUrls = [] } = body;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = SendReplyUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        postCreatedStore: PgPostCreatedStore.getInstance(),
+        postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
+        timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        objectUri,
+        content,
+        imageUrls,
+        request: c.req.raw,
+        ctx,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to reply: ${JSON.stringify(err)}` }, 400),
       })(result);
     },
   )

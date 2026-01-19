@@ -106,6 +106,7 @@ describe('DeletePostUseCase', () => {
         content: 'Post to delete',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: user.id,
+        inReplyToUri: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(post);
@@ -150,6 +151,7 @@ describe('DeletePostUseCase', () => {
           content: 'Test',
           createdAt: Date.now() as LocalPost['createdAt'],
           userId: user.id,
+          inReplyToUri: null,
         };
         setupValidUserSession(deps, user, session, actor);
         deps.postResolver.setPost(post);
@@ -299,6 +301,7 @@ describe('DeletePostUseCase', () => {
         content: 'Other user post',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: otherUserId,
+        inReplyToUri: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(otherPost);
@@ -411,6 +414,7 @@ describe('DeletePostUseCase', () => {
         content: 'Test',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: user.id,
+        inReplyToUri: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(post);
@@ -469,6 +473,7 @@ describe('DeletePostUseCase', () => {
         content: 'Test',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: user.id,
+        inReplyToUri: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(post);

@@ -98,6 +98,7 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
           userId: row.local_posts.userId,
+          inReplyToUri: row.local_posts.inReplyToUri,
           type: 'local',
         });
         return {

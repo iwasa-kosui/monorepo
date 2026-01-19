@@ -27,6 +27,7 @@ describe('GetPostUseCase', () => {
         content: 'Hello, world!',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: crypto.randomUUID() as LocalPost['userId'],
+        inReplyToUri: null,
       };
       deps.postResolver.setPost(post);
 
@@ -50,6 +51,7 @@ describe('GetPostUseCase', () => {
         content: 'Post with images',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: crypto.randomUUID() as LocalPost['userId'],
+        inReplyToUri: null,
       };
       const images = [
         {
@@ -131,6 +133,7 @@ describe('GetPostUseCase', () => {
         content: 'Test',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: crypto.randomUUID() as LocalPost['userId'],
+        inReplyToUri: null,
       };
       deps.postResolver.setPost(post);
 
@@ -149,6 +152,7 @@ describe('GetPostUseCase', () => {
         content: 'Test',
         createdAt: Date.now() as LocalPost['createdAt'],
         userId: crypto.randomUUID() as LocalPost['userId'],
+        inReplyToUri: null,
       };
       deps.postResolver.setPost(post);
 

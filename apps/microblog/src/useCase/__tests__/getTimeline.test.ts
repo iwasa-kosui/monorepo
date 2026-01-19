@@ -128,6 +128,7 @@ describe('GetTimelineUseCase', () => {
         logoUri: undefined,
         liked: false,
         images: [],
+        inReplyToUri: null,
       };
       const timelineItems: TimelineItemWithPost[] = [
         {
