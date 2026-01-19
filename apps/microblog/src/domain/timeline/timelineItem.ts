@@ -90,6 +90,10 @@ export type TimelineItemsResolverByPostId = Agg.Resolver<
   { postId: PostId },
   TimelineItem[]
 >;
+export type TimelineItemResolverByRepostId = Agg.Resolver<
+  { repostId: RepostId },
+  TimelineItem | undefined
+>;
 
 export type PostTimelineItem = {
   type: 'post';

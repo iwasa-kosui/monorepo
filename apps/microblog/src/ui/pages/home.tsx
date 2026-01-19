@@ -25,6 +25,8 @@ type Props = Readonly<{
   likingPostUri: string | null;
   onRepost: (objectUri: string) => Promise<void>;
   repostingPostUri: string | null;
+  onUndoRepost: (objectUri: string) => Promise<void>;
+  undoingRepostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
   onEmojiReact: (objectUri: string, emoji: string) => Promise<void>;
@@ -53,6 +55,8 @@ export const HomePage = ({
   likingPostUri,
   onRepost,
   repostingPostUri,
+  onUndoRepost,
+  undoingRepostUri,
   onDelete,
   deletingPostId,
   onEmojiReact,
@@ -136,12 +140,6 @@ export const HomePage = ({
           e.preventDefault();
           if (isRemotePost && !post.liked && !likingPostUri) {
             onLike(post.uri);
-          }
-          break;
-        case 'r': // Repost selected post
-          e.preventDefault();
-          if (isRemotePost && !repostingPostUri) {
-            onRepost(post.uri);
           }
           break;
         case 'o': // Open selected post
@@ -417,6 +415,7 @@ export const HomePage = ({
       <section class='space-y-4'>
         {timelineItems.map((item, index) => {
           const postUri = item.post.type === 'remote' && 'uri' in item.post ? item.post.uri : null;
+          const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;
           return (
             <PostView
               key={item.timelineItemId}
@@ -426,6 +425,8 @@ export const HomePage = ({
               isLiking={postUri !== null && likingPostUri === postUri}
               onRepost={onRepost}
               isReposting={postUri !== null && repostingPostUri === postUri}
+              onUndoRepost={isMyRepost ? onUndoRepost : undefined}
+              isUndoingRepost={postUri !== null && undoingRepostUri === postUri}
               onDelete={onDelete}
               isDeleting={deletingPostId === item.post.postId}
               onEmojiReact={onEmojiReact}
@@ -451,6 +452,7 @@ const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
+  const [undoingRepostUri, setUndoingRepostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [emojiReactingUri, setEmojiReactingUri] = useState<string | null>(null);
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
@@ -533,6 +535,31 @@ const App = () => {
       alert('Failed to repost. Please try again.');
     } finally {
       setRepostingPostUri(null);
+    }
+  };
+
+  const handleUndoRepost = async (objectUri: string) => {
+    if (!confirm('Are you sure you want to undo this repost?')) {
+      return;
+    }
+    setUndoingRepostUri(objectUri);
+    try {
+      const res = await client.v1.repost.$delete({
+        json: { objectUri },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Refresh the timeline to remove the repost
+        fetchData(undefined);
+      } else if ('error' in result) {
+        console.error('Failed to undo repost:', result.error);
+        alert(`Failed to undo repost: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to undo repost:', error);
+      alert('Failed to undo repost. Please try again.');
+    } finally {
+      setUndoingRepostUri(null);
     }
   };
 
@@ -674,6 +701,8 @@ const App = () => {
       likingPostUri={likingPostUri}
       onRepost={handleRepost}
       repostingPostUri={repostingPostUri}
+      onUndoRepost={handleUndoRepost}
+      undoingRepostUri={undoingRepostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
       onEmojiReact={handleEmojiReact}
