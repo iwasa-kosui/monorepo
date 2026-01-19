@@ -38,6 +38,7 @@ type Input = Readonly<{
   reactorIdentity: ActorIdentity;
   objectUri: string;
   emoji: string;
+  emojiImageUrl?: string | null;
 }>;
 
 type Ok = Readonly<{
@@ -135,7 +136,7 @@ const create = ({
         const event = EmojiReact.createEmojiReact(emojiReact, now);
         return emojiReactCreatedStore.store(event).then(() => RA.ok(emojiReact));
       }),
-      RA.andThrough(({ post, actor, emoji }) => {
+      RA.andThrough(({ post, actor, emoji, emojiImageUrl }) => {
         const notificationId = NotificationId.generate();
         const notification: EmojiReactNotification = {
           type: 'emojiReact',
@@ -145,6 +146,7 @@ const create = ({
           reactorActorId: actor.id,
           reactedPostId: post.postId,
           emoji,
+          emojiImageUrl: emojiImageUrl ?? null,
         };
         const event = Notification.createEmojiReactNotification(notification, now);
         return emojiReactNotificationCreatedStore.store(event);

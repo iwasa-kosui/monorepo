@@ -47,6 +47,7 @@ const emojiReactNotificationZodType = z
     reactorActorId: ActorId.zodType,
     reactedPostId: PostId.zodType,
     emoji: z.string(),
+    emojiImageUrl: z.nullable(z.string()),
   })
   .describe('EmojiReactNotification');
 

@@ -202,4 +202,5 @@ export const notificationEmojiReactsTable = pgTable('notification_emoji_reacts',
   reactorActorId: uuid().notNull().references(() => actorsTable.actorId),
   reactedPostId: uuid().notNull(),
   emoji: varchar({ length: 128 }).notNull(),
+  emojiImageUrl: text(),
 });
