@@ -96,6 +96,7 @@ export const remotePostsTable = pgTable('remote_posts', {
 export const localPostsTable = pgTable('local_posts', {
   postId: uuid().primaryKey().references(() => postsTable.postId),
   userId: uuid().notNull().references(() => usersTable.userId),
+  inReplyToUri: text(),
 });
 
 export const likesTable = pgTable('likes', {

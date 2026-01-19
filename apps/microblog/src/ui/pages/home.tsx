@@ -35,6 +35,11 @@ type Props = Readonly<{
   setSelectedIndex: (index: number) => void;
   emojiPickerOpenForIndex: number | null;
   setEmojiPickerOpenForIndex: (index: number | null) => void;
+  onReply: (objectUri: string) => void;
+  replyingToUri: string | null;
+  onSendReply: (objectUri: string, content: string) => Promise<void>;
+  onCancelReply: () => void;
+  isSendingReply: boolean;
 }>;
 
 export const HomePage = ({
@@ -58,7 +63,13 @@ export const HomePage = ({
   setSelectedIndex,
   emojiPickerOpenForIndex,
   setEmojiPickerOpenForIndex,
+  onReply,
+  replyingToUri,
+  onSendReply,
+  onCancelReply,
+  isSendingReply,
 }: Props) => {
+  const [replyContent, setReplyContent] = useState('');
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
   const debounce = <T extends unknown[]>(
@@ -163,8 +174,18 @@ export const HomePage = ({
           }
           break;
         }
-        case 'Escape': { // Close emoji picker
-          if (emojiPickerOpenForIndex !== null) {
+        case 'p': { // Reply to selected post
+          e.preventDefault();
+          if (isRemotePost) {
+            onReply(post.uri);
+          }
+          break;
+        }
+        case 'Escape': { // Close emoji picker or reply modal
+          if (replyingToUri !== null) {
+            e.preventDefault();
+            onCancelReply();
+          } else if (emojiPickerOpenForIndex !== null) {
             e.preventDefault();
             setEmojiPickerOpenForIndex(null);
           }
@@ -175,7 +196,7 @@ export const HomePage = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri, emojiPickerOpenForIndex]);
+  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri, emojiPickerOpenForIndex, replyingToUri]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -340,6 +361,59 @@ export const HomePage = ({
           </div>
         </form>
       </Modal>
+      {/* Reply Modal */}
+      {replyingToUri && (
+        <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCancelReply}>
+          <div
+            class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-lg w-full mx-4'
+            onClick={(e) =>
+              e.stopPropagation()}
+          >
+            <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
+              Reply
+            </h2>
+            <p class='text-gray-500 dark:text-gray-400 text-xs mb-3 truncate'>
+              Replying to: {replyingToUri}
+            </p>
+            <textarea
+              value={replyContent}
+              onInput={(e) =>
+                setReplyContent((e.target as HTMLTextAreaElement).value)}
+              placeholder='Write your reply...'
+              class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3 resize-none'
+              rows={4}
+              disabled={isSendingReply}
+            />
+            <div class='flex gap-2 justify-end'>
+              <button
+                type='button'
+                onClick={onCancelReply}
+                class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
+                disabled={isSendingReply}
+              >
+                Cancel
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  if (replyContent.trim()) {
+                    onSendReply(replyingToUri, replyContent);
+                    setReplyContent('');
+                  }
+                }}
+                class={`px-5 py-2 text-white text-sm font-medium rounded-2xl transition-colors ${
+                  isSendingReply || !replyContent.trim()
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-500 hover:bg-blue-600'
+                }`}
+                disabled={isSendingReply || !replyContent.trim()}
+              >
+                {isSendingReply ? 'Sending...' : 'Send Reply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <section class='space-y-4'>
         {timelineItems.map((item, index) => {
           const postUri = item.post.type === 'remote' && 'uri' in item.post ? item.post.uri : null;
@@ -363,6 +437,7 @@ export const HomePage = ({
               dataIndex={index}
               isEmojiPickerOpen={emojiPickerOpenForIndex === index}
               onToggleEmojiPicker={() => setEmojiPickerOpenForIndex(emojiPickerOpenForIndex === index ? null : index)}
+              onReply={onReply}
             />
           );
         })}
@@ -381,6 +456,8 @@ const App = () => {
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
   const [emojiPickerOpenForIndex, setEmojiPickerOpenForIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
+  const [isSendingReply, setIsSendingReply] = useState(false);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -542,6 +619,37 @@ const App = () => {
     }
   };
 
+  const handleReply = (objectUri: string) => {
+    setReplyingToUri(objectUri);
+  };
+
+  const handleCancelReply = () => {
+    setReplyingToUri(null);
+  };
+
+  const handleSendReply = async (objectUri: string, content: string) => {
+    setIsSendingReply(true);
+    try {
+      const res = await client.v1.reply.$post({
+        json: { objectUri, content },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Refresh the timeline to show the new reply
+        fetchData(undefined);
+        setReplyingToUri(null);
+      } else if ('error' in result) {
+        console.error('Failed to send reply:', result.error);
+        alert(`Failed to send reply: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to send reply:', error);
+      alert('Failed to send reply. Please try again.');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -576,6 +684,11 @@ const App = () => {
       setSelectedIndex={setSelectedIndex}
       emojiPickerOpenForIndex={emojiPickerOpenForIndex}
       setEmojiPickerOpenForIndex={setEmojiPickerOpenForIndex}
+      onReply={handleReply}
+      replyingToUri={replyingToUri}
+      onSendReply={handleSendReply}
+      onCancelReply={handleCancelReply}
+      isSendingReply={isSendingReply}
     />
   );
 };

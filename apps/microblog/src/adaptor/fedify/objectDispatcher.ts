@@ -22,6 +22,7 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
     RA.andThen(async (input) => useCase.run(input)),
     RA.match({
       ok: ({ post, postImages }) => {
+        const inReplyToUri = post.type === 'local' && post.inReplyToUri ? new URL(post.inReplyToUri) : undefined;
         return new Note({
           id: ctx.getObjectUri(Note, values),
           attribution: ctx.getActorUri(values.identifier),
@@ -31,6 +32,7 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
           mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
           url: ctx.getObjectUri(Note, values),
+          replyTarget: inReplyToUri,
           attachments: postImages.map((image) =>
             new Document({
               url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),

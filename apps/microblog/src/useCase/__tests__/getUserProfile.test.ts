@@ -99,6 +99,7 @@ describe('GetUserProfileUseCase', () => {
           logoUri: undefined,
           liked: false,
           images: [],
+          inReplyToUri: null,
         },
       ];
       deps.postsResolverByActorIds.setPosts(posts);

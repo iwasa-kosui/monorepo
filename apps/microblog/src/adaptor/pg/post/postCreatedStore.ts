@@ -19,6 +19,7 @@ const store = async (event: PostCreated | RemotePostCreated): RA<void, never> =>
       await tx.insert(localPostsTable).values({
         postId: post.postId,
         userId: post.userId,
+        inReplyToUri: post.inReplyToUri,
       });
     }
     if (post.type === 'remote') {
