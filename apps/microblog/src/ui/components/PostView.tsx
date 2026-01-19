@@ -256,26 +256,6 @@ export const PostView = (
               ))}
             </div>
           )}
-          {/* My reactions display */}
-          {myReactions.length > 0 && (
-            <div class='mt-2 flex flex-wrap gap-1'>
-              {myReactions.map((emoji) => (
-                <button
-                  key={emoji}
-                  type='button'
-                  onClick={() => {
-                    if (isRemotePost && onUndoEmojiReact) {
-                      onUndoEmojiReact(post.uri, emoji);
-                    }
-                  }}
-                  class='px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
-                  title='Click to remove reaction'
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
           <div class='mt-3 flex items-center justify-end gap-4'>
             {isRemotePost && (
               <button
@@ -409,6 +389,27 @@ export const PostView = (
               </button>
             )}
           </div>
+          {/* My reactions display */}
+          {myReactions.length > 0 && (
+            <div class='mt-2 flex flex-wrap items-center gap-1'>
+              {myReactions.map((emoji) => (
+                <button
+                  key={emoji}
+                  type='button'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isRemotePost && onUndoEmojiReact) {
+                      onUndoEmojiReact(post.uri, emoji);
+                    }
+                  }}
+                  class='inline-flex items-center px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
+                  title='Click to remove reaction'
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </article>
