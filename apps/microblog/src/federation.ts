@@ -1,4 +1,5 @@
 import {
+  Activity,
   Announce,
   Create,
   createFederation,
@@ -64,6 +65,12 @@ const PRELOADED_CONTEXTS: Record<string, object> = {
       'votersCount': 'toot:votersCount',
     },
   },
+  'http://litepub.social/ns': {
+    '@context': {
+      'litepub': 'http://litepub.social/ns#',
+      'EmojiReact': 'litepub:EmojiReact',
+    },
+  },
 };
 
 /**
@@ -106,7 +113,8 @@ const create = () => {
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)
     .on(Like, inboxListener.onLike)
-    .on(Announce, inboxListener.onAnnounce);
+    .on(Announce, inboxListener.onAnnounce)
+    .on(Activity, inboxListener.onActivity);
 
   federation.setObjectDispatcher(
     Note,

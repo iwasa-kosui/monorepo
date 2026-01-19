@@ -6,6 +6,8 @@ import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
 import type { Instant } from '../../../domain/instant/instant.ts';
 import {
+  type EmojiReactNotification,
+  type EmojiReactNotificationWithDetails,
   type FollowNotification,
   type FollowNotificationWithDetails,
   type LikeNotification,
@@ -23,6 +25,7 @@ import {
   actorsTable,
   localActorsTable,
   localPostsTable,
+  notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
   notificationsTable,
@@ -212,8 +215,73 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       };
     });
 
-    // 両方の通知をマージして日時でソート
-    const notifications: NotificationWithDetails[] = [...likeNotifications, ...followNotifications].sort(
+    // EmojiReact通知を取得（アクターとポスト情報も含む）
+    const emojiReactRows = await db
+      .select({
+        notifications: notificationsTable,
+        notificationEmojiReacts: notificationEmojiReactsTable,
+        reactorActors: actorsTable,
+        reactorRemoteActors: remoteActorsTable,
+        reactorLocalActors: localActorsTable,
+        reactorUsers: usersTable,
+        posts: postsTable,
+        localPosts: localPostsTable,
+        remotePosts: remotePostsTable,
+      })
+      .from(notificationsTable)
+      .innerJoin(
+        notificationEmojiReactsTable,
+        eq(notificationsTable.notificationId, notificationEmojiReactsTable.notificationId),
+      )
+      .innerJoin(actorsTable, eq(notificationEmojiReactsTable.reactorActorId, actorsTable.actorId))
+      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
+      .innerJoin(postsTable, eq(notificationEmojiReactsTable.reactedPostId, postsTable.postId))
+      .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+      .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
+      .where(eq(notificationsTable.recipientUserId, userId))
+      .orderBy(desc(notificationsTable.createdAt))
+      .limit(50)
+      .execute();
+
+    const emojiReactNotifications: EmojiReactNotificationWithDetails[] = emojiReactRows.map((row) => {
+      const emojiReactNotification: EmojiReactNotification = {
+        type: 'emojiReact',
+        notificationId: NotificationId.orThrow(row.notifications.notificationId),
+        recipientUserId: row.notifications.recipientUserId as UserId,
+        isRead: row.notifications.isRead === 1,
+        reactorActorId: ActorId.orThrow(row.notificationEmojiReacts.reactorActorId),
+        reactedPostId: PostId.orThrow(row.notificationEmojiReacts.reactedPostId),
+        emoji: row.notificationEmojiReacts.emoji,
+      };
+
+      const reactorActor = reconstructActor({
+        actors: row.reactorActors,
+        remote_actors: row.reactorRemoteActors,
+        local_actors: row.reactorLocalActors,
+      });
+
+      const reactedPost = reconstructPost({
+        posts: row.posts,
+        local_posts: row.localPosts,
+        remote_posts: row.remotePosts,
+      });
+
+      return {
+        notification: emojiReactNotification,
+        reactorActor,
+        reactedPost,
+        createdAt: row.notifications.createdAt.getTime() as Instant,
+      };
+    });
+
+    // 全ての通知をマージして日時でソート
+    const notifications: NotificationWithDetails[] = [
+      ...likeNotifications,
+      ...followNotifications,
+      ...emojiReactNotifications,
+    ].sort(
       (a, b) => b.createdAt - a.createdAt,
     ).slice(0, 50);
 
