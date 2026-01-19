@@ -14,6 +14,7 @@ const zodType = z
     objectUri: z.string(),
     emoji: z.string(),
     emojiReactActivityUri: z.nullable(z.string()),
+    emojiImageUrl: z.nullable(z.string()),
   })
   .describe('EmojiReact');
 

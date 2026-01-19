@@ -134,6 +134,7 @@ const create = ({
             objectUri,
             emoji,
             emojiReactActivityUri: null, // Will be set after sending
+            emojiImageUrl: null, // Local emoji reacts use standard Unicode emoji
           },
           now,
         )),

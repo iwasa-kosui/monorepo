@@ -192,6 +192,7 @@ export const emojiReactsTable = pgTable('emoji_reacts', {
   objectUri: text().notNull(),
   emoji: varchar({ length: 128 }).notNull(),
   emojiReactActivityUri: text().unique(),
+  emojiImageUrl: text(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
   unique('emoji_react_actor_object_emoji_unique').on(table.actorId, table.objectUri, table.emoji),

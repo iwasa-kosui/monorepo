@@ -20,6 +20,7 @@ const resolve = async ({ objectUri }: { objectUri: string }): RA<ReadonlyArray<E
     objectUri: row.objectUri,
     emoji: row.emoji,
     emojiReactActivityUri: row.emojiReactActivityUri,
+    emojiImageUrl: row.emojiImageUrl,
   })));
 };
 

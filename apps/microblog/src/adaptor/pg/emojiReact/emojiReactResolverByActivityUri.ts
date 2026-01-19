@@ -28,6 +28,7 @@ const resolve = async (
     objectUri: row.objectUri,
     emoji: row.emoji,
     emojiReactActivityUri: row.emojiReactActivityUri,
+    emojiImageUrl: row.emojiImageUrl,
   });
 };
 
