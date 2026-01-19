@@ -1,5 +1,6 @@
 import { useRef, useState } from 'hono/jsx';
 
+import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
@@ -244,9 +245,10 @@ export const PostView = (
               target={isRemotePost ? '_blank' : undefined}
               rel={isRemotePost ? 'noopener noreferrer' : undefined}
               class='text-sm text-gray-500 dark:text-gray-400 hover:underline'
+              title={new Date(post.createdAt).toLocaleString()}
             >
               <time dateTime={new Date(post.createdAt).toISOString()}>
-                {new Date(post.createdAt).toLocaleString()}
+                {Instant.formatRelative(post.createdAt)}
               </time>
             </a>
           </div>
