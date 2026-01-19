@@ -30,6 +30,7 @@ import type {
 } from '../../../domain/follow/follow.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
 import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
+import type { MutedActorIdsResolverByMuterId } from '../../../domain/mute/mute.ts';
 import type {
   FollowNotificationCreated,
   FollowNotificationCreatedStore,
@@ -466,4 +467,11 @@ export const createMockRepostsResolverByOriginalPostId = (
 ): RepostsResolverByOriginalPostId & { setReposts: (postId: PostId, r: Repost[]) => void } => ({
   resolve: vi.fn(({ originalPostId }: { originalPostId: PostId }) => RAImpl.ok(reposts.get(originalPostId) ?? [])),
   setReposts: (postId: PostId, r: Repost[]) => reposts.set(postId, r),
+});
+
+export const createMockMutedActorIdsResolverByMuterId = (
+  mutedActorIds: Map<UserId, ActorId[]> = new Map(),
+): MutedActorIdsResolverByMuterId & { setMutedActorIds: (muterId: UserId, actorIds: ActorId[]) => void } => ({
+  resolve: vi.fn(({ muterId }: { muterId: UserId }) => RAImpl.ok(mutedActorIds.get(muterId) ?? [])),
+  setMutedActorIds: (muterId: UserId, actorIds: ActorId[]) => mutedActorIds.set(muterId, actorIds),
 });

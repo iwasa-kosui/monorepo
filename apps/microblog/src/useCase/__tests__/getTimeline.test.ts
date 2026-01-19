@@ -15,6 +15,7 @@ import {
   createMockActorResolverByUserId,
   createMockActorsResolverByFollowerId,
   createMockActorsResolverByFollowingId,
+  createMockMutedActorIdsResolverByMuterId,
   createMockSessionResolver,
   createMockTimelineItemsResolverByActorIds,
   createMockUserResolver,
@@ -28,6 +29,7 @@ describe('GetTimelineUseCase', () => {
     const timelineItemsResolverByActorIds = createMockTimelineItemsResolverByActorIds();
     const actorsResolverByFollowerId = createMockActorsResolverByFollowerId();
     const actorsResolverByFollowingId = createMockActorsResolverByFollowingId();
+    const mutedActorIdsResolverByMuterId = createMockMutedActorIdsResolverByMuterId();
     return {
       sessionResolver,
       userResolver,
@@ -35,6 +37,7 @@ describe('GetTimelineUseCase', () => {
       timelineItemsResolverByActorIds,
       actorsResolverByFollowerId,
       actorsResolverByFollowingId,
+      mutedActorIdsResolverByMuterId,
     };
   };
 

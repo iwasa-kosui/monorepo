@@ -207,3 +207,12 @@ export const notificationEmojiReactsTable = pgTable('notification_emoji_reacts',
   emoji: varchar({ length: 128 }).notNull(),
   emojiImageUrl: text(),
 });
+
+export const mutesTable = pgTable('mutes', {
+  muteId: uuid().primaryKey(),
+  muterId: uuid().notNull().references(() => usersTable.userId),
+  mutedActorId: uuid().notNull().references(() => actorsTable.actorId),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('muter_muted_unique').on(table.muterId, table.mutedActorId),
+]);

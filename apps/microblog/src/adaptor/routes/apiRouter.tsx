@@ -19,6 +19,7 @@ import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
+import { MuteUseCase } from '../../useCase/mute.ts';
 import { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../useCase/sendReply.ts';
@@ -26,6 +27,7 @@ import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
+import { UnmuteUseCase } from '../../useCase/unmute.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -37,6 +39,10 @@ import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgMuteCreatedStore } from '../pg/mute/muteCreatedStore.ts';
+import { PgMutedActorIdsResolverByMuterId } from '../pg/mute/mutedActorIdsResolverByMuterId.ts';
+import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
+import { PgMuteResolver } from '../pg/mute/muteResolver.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
@@ -83,6 +89,7 @@ const app = new Hono()
         timelineItemsResolverByActorIds: PgTimelineItemsResolverByActorIds.getInstance(),
         actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
         actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
+        mutedActorIdsResolverByMuterId: PgMutedActorIdsResolverByMuterId.getInstance(),
       });
       const sessionId = getCookie(c, 'sessionId');
       if (!sessionId) {
@@ -406,6 +413,108 @@ const app = new Hono()
     },
   )
   .post(
+    '/v1/mute',
+    sValidator(
+      'json',
+      z.object({
+        actorId: ActorId.zodType,
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { actorId: mutedActorId } = body;
+
+      const now = Instant.now();
+      const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
+      const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const userResult = await RA.flow(
+        RA.ok(sessionIdResult.val),
+        RA.andBind('session', resolveSession),
+        RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+        RA.map(({ user }) => user),
+      );
+
+      if (!userResult.ok) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const useCase = MuteUseCase.create({
+        muteResolver: PgMuteResolver.getInstance(),
+        muteCreatedStore: PgMuteCreatedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        muterId: userResult.val.id,
+        mutedActorId,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to mute: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .delete(
+    '/v1/mute',
+    sValidator(
+      'json',
+      z.object({
+        actorId: ActorId.zodType,
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { actorId: mutedActorId } = body;
+
+      const now = Instant.now();
+      const resolveSession = resolveSessionWith(PgSessionResolver.getInstance(), now);
+      const resolveUser = resolveUserWith(PgUserResolver.getInstance());
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const userResult = await RA.flow(
+        RA.ok(sessionIdResult.val),
+        RA.andBind('session', resolveSession),
+        RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+        RA.map(({ user }) => user),
+      );
+
+      if (!userResult.ok) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const useCase = UnmuteUseCase.create({
+        muteResolver: PgMuteResolver.getInstance(),
+        muteDeletedStore: PgMuteDeletedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        muterId: userResult.val.id,
+        mutedActorId,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to unmute: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .post(
     '/v1/reply',
     sValidator(
       'json',
@@ -610,15 +719,22 @@ const app = new Hono()
         RA.andBind('session', resolveSession),
         RA.andBind('user', ({ session }) => resolveUser(session.userId)),
         RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-        RA.map(({ actor }) => actor.id),
+        RA.map(({ user, actor }) => ({ userId: user.id, actorId: actor.id })),
       );
 
       if (!currentUserResult.ok) {
         return c.json({ error: 'Unauthorized' }, 401);
       }
 
-      const currentUserActorId = currentUserResult.val;
+      const { userId: currentUserId, actorId: currentUserActorId } = currentUserResult.val;
       const useCase = GetRemoteActorPostsUseCase.getInstance();
+
+      // Check if the remote actor is muted
+      const muteResult = await PgMuteResolver.getInstance().resolve({
+        muterId: currentUserId,
+        mutedActorId: actorId,
+      });
+      const isMuted = muteResult.ok && muteResult.val !== undefined;
 
       return RA.flow(
         useCase.run({ actorId, currentUserActorId, createdAt }),
@@ -627,6 +743,7 @@ const app = new Hono()
             return c.json({
               remoteActor,
               isFollowing,
+              isMuted,
               isLoggedIn: true,
               posts: posts.map((post) => ({
                 ...post,
