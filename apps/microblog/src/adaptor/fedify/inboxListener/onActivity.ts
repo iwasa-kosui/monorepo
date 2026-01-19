@@ -41,16 +41,39 @@ const isEmojiReactJsonLd = (json: unknown): json is JsonLdEmojiReact => {
 };
 
 /**
+ * Normalizes tags to an array (handles both single object and array cases)
+ */
+const normalizeTags = (tags: unknown): EmojiTag[] => {
+  if (Array.isArray(tags)) {
+    return tags as EmojiTag[];
+  }
+  if (tags && typeof tags === 'object') {
+    return [tags as EmojiTag];
+  }
+  return [];
+};
+
+/**
  * Extracts emoji image URL from tag array
  */
 const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null => {
-  if (!Array.isArray(tags)) return null;
+  const normalizedTags = normalizeTags(tags);
 
-  for (const tag of tags as EmojiTag[]) {
+  if (normalizedTags.length === 0) {
+    getLogger().debug(`extractEmojiImageUrl (EmojiReact): no tags found, original: ${JSON.stringify(tags)}`);
+    return null;
+  }
+
+  for (const tag of normalizedTags) {
+    getLogger().debug(
+      `extractEmojiImageUrl (EmojiReact): checking tag: ${JSON.stringify(tag)}, emojiName: ${emojiName}`,
+    );
     if (tag.type === 'Emoji' && tag.name === emojiName && tag.icon?.url) {
+      getLogger().debug(`extractEmojiImageUrl (EmojiReact): found match, url: ${tag.icon.url}`);
       return tag.icon.url;
     }
   }
+  getLogger().debug(`extractEmojiImageUrl (EmojiReact): no match found for emojiName: ${emojiName}`);
   return null;
 };
 

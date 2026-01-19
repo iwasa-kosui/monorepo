@@ -35,17 +35,39 @@ type EmojiTag = Readonly<{
 }>;
 
 /**
+ * Normalizes tags to an array (handles both single object and array cases)
+ */
+const normalizeTags = (tags: unknown): EmojiTag[] => {
+  if (Array.isArray(tags)) {
+    return tags as EmojiTag[];
+  }
+  if (tags && typeof tags === 'object') {
+    return [tags as EmojiTag];
+  }
+  return [];
+};
+
+/**
  * Extracts emoji image URL from tag array
  * Misskey sends custom emoji info in the tag array with type "Emoji"
  */
 const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null => {
-  if (!Array.isArray(tags)) return null;
+  const normalizedTags = normalizeTags(tags);
 
-  for (const tag of tags as EmojiTag[]) {
+  if (normalizedTags.length === 0) {
+    getLogger().debug(`extractEmojiImageUrl: no tags found, original: ${JSON.stringify(tags)}`);
+    return null;
+  }
+
+  for (const tag of normalizedTags) {
+    getLogger().debug(`extractEmojiImageUrl: checking tag: ${JSON.stringify(tag)}, emojiName: ${emojiName}`);
+    // Check for Emoji type tag with matching name
     if (tag.type === 'Emoji' && tag.name === emojiName && tag.icon?.url) {
+      getLogger().debug(`extractEmojiImageUrl: found match, url: ${tag.icon.url}`);
       return tag.icon.url;
     }
   }
+  getLogger().debug(`extractEmojiImageUrl: no match found for emojiName: ${emojiName}`);
   return null;
 };
 
@@ -58,6 +80,11 @@ const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null =
 const extractEmojiFromLike = async (activity: Like): Promise<EmojiInfo | null> => {
   const json = await activity.toJsonLd() as Record<string, unknown>;
   let emoji: string | null = null;
+
+  getLogger().debug(`extractEmojiFromLike: json keys: ${Object.keys(json).join(', ')}`);
+  getLogger().debug(`extractEmojiFromLike: _misskey_reaction: ${JSON.stringify(json._misskey_reaction)}`);
+  getLogger().debug(`extractEmojiFromLike: content: ${JSON.stringify(json.content)}`);
+  getLogger().debug(`extractEmojiFromLike: tag: ${JSON.stringify(json.tag)}`);
 
   // Check _misskey_reaction first (Misskey-specific)
   const misskeyReaction = json._misskey_reaction;
@@ -76,8 +103,12 @@ const extractEmojiFromLike = async (activity: Like): Promise<EmojiInfo | null> =
 
   if (!emoji) return null;
 
+  getLogger().debug(`extractEmojiFromLike: extracted emoji: ${emoji}`);
+
   // Extract emoji image URL from tags for custom emojis
   const emojiImageUrl = extractEmojiImageUrl(json.tag, emoji);
+
+  getLogger().debug(`extractEmojiFromLike: emojiImageUrl: ${emojiImageUrl}`);
 
   return { emoji, emojiImageUrl };
 };
