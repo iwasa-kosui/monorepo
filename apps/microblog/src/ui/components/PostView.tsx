@@ -96,7 +96,9 @@ export const PostView = (
 
   const handleRepostClick = () => {
     if (isRemotePost && onRepost && !isReposting) {
-      onRepost(post.uri);
+      if (confirm('Are you sure you want to repost this post?')) {
+        onRepost(post.uri);
+      }
     }
   };
 
