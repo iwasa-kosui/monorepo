@@ -27,8 +27,14 @@ type Props = Readonly<{
   repostingPostUri: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
+  onEmojiReact: (objectUri: string, emoji: string) => Promise<void>;
+  onUndoEmojiReact: (objectUri: string, emoji: string) => Promise<void>;
+  emojiReactingUri: string | null;
+  myReactions: ReadonlyMap<string, readonly string[]>;
   selectedIndex: number;
   setSelectedIndex: (index: number) => void;
+  emojiPickerOpenForIndex: number | null;
+  setEmojiPickerOpenForIndex: (index: number | null) => void;
 }>;
 
 export const HomePage = ({
@@ -44,8 +50,14 @@ export const HomePage = ({
   repostingPostUri,
   onDelete,
   deletingPostId,
+  onEmojiReact,
+  onUndoEmojiReact,
+  emojiReactingUri,
+  myReactions,
   selectedIndex,
   setSelectedIndex,
+  emojiPickerOpenForIndex,
+  setEmojiPickerOpenForIndex,
 }: Props) => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
@@ -137,12 +149,28 @@ export const HomePage = ({
           scrollToSelected(lastIndex);
           break;
         }
+        case 'e': { // Open emoji picker for selected post
+          e.preventDefault();
+          if (isRemotePost) {
+            setEmojiPickerOpenForIndex(
+              emojiPickerOpenForIndex === selectedIndex ? null : selectedIndex,
+            );
+          }
+          break;
+        }
+        case 'Escape': { // Close emoji picker
+          if (emojiPickerOpenForIndex !== null) {
+            e.preventDefault();
+            setEmojiPickerOpenForIndex(null);
+          }
+          break;
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri]);
+  }, [selectedIndex, timelineItems, likingPostUri, repostingPostUri, emojiPickerOpenForIndex]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -308,26 +336,31 @@ export const HomePage = ({
         </form>
       </Modal>
       <section class='space-y-4'>
-        {timelineItems.map((item, index) => (
-          <PostView
-            key={item.timelineItemId}
-            post={item.post}
-            repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
-            onLike={onLike}
-            isLiking={item.post.type === 'remote'
-              && 'uri' in item.post
-              && likingPostUri === item.post.uri}
-            onRepost={onRepost}
-            isReposting={item.post.type === 'remote'
-              && 'uri' in item.post
-              && repostingPostUri === item.post.uri}
-            onDelete={onDelete}
-            isDeleting={deletingPostId === item.post.postId}
-            currentUserId={user.id}
-            isSelected={selectedIndex === index}
-            dataIndex={index}
-          />
-        ))}
+        {timelineItems.map((item, index) => {
+          const postUri = item.post.type === 'remote' && 'uri' in item.post ? item.post.uri : null;
+          return (
+            <PostView
+              key={item.timelineItemId}
+              post={item.post}
+              repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
+              onLike={onLike}
+              isLiking={postUri !== null && likingPostUri === postUri}
+              onRepost={onRepost}
+              isReposting={postUri !== null && repostingPostUri === postUri}
+              onDelete={onDelete}
+              isDeleting={deletingPostId === item.post.postId}
+              onEmojiReact={onEmojiReact}
+              onUndoEmojiReact={onUndoEmojiReact}
+              isEmojiReacting={postUri !== null && emojiReactingUri === postUri}
+              myReactions={postUri ? myReactions.get(postUri) ?? [] : []}
+              currentUserId={user.id}
+              isSelected={selectedIndex === index}
+              dataIndex={index}
+              isEmojiPickerOpen={emojiPickerOpenForIndex === index}
+              onToggleEmojiPicker={() => setEmojiPickerOpenForIndex(emojiPickerOpenForIndex === index ? null : index)}
+            />
+          );
+        })}
       </section>
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>
@@ -339,6 +372,9 @@ const App = () => {
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
   const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [emojiReactingUri, setEmojiReactingUri] = useState<string | null>(null);
+  const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
+  const [emojiPickerOpenForIndex, setEmojiPickerOpenForIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [data, setData] = useState<
     | { error: string }
@@ -445,6 +481,62 @@ const App = () => {
     }
   };
 
+  const handleEmojiReact = async (objectUri: string, emoji: string) => {
+    setEmojiReactingUri(objectUri);
+    try {
+      const res = await client.v1.react.$post({
+        json: { objectUri, emoji },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Add the reaction to local state
+        setMyReactions((prev) => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(objectUri) ?? [];
+          if (!existing.includes(emoji)) {
+            newMap.set(objectUri, [...existing, emoji]);
+          }
+          return newMap;
+        });
+      } else if ('error' in result) {
+        console.error('Failed to react:', result.error);
+        alert(`Failed to react: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to react:', error);
+      alert('Failed to add reaction. Please try again.');
+    } finally {
+      setEmojiReactingUri(null);
+    }
+  };
+
+  const handleUndoEmojiReact = async (objectUri: string, emoji: string) => {
+    setEmojiReactingUri(objectUri);
+    try {
+      const res = await client.v1.react.$delete({
+        json: { objectUri, emoji },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Remove the reaction from local state
+        setMyReactions((prev) => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(objectUri) ?? [];
+          newMap.set(objectUri, existing.filter((e) => e !== emoji));
+          return newMap;
+        });
+      } else if ('error' in result) {
+        console.error('Failed to undo react:', result.error);
+        alert(`Failed to undo reaction: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to undo react:', error);
+      alert('Failed to remove reaction. Please try again.');
+    } finally {
+      setEmojiReactingUri(null);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -471,8 +563,14 @@ const App = () => {
       repostingPostUri={repostingPostUri}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
+      onEmojiReact={handleEmojiReact}
+      onUndoEmojiReact={handleUndoEmojiReact}
+      emojiReactingUri={emojiReactingUri}
+      myReactions={myReactions}
       selectedIndex={selectedIndex}
       setSelectedIndex={setSelectedIndex}
+      emojiPickerOpenForIndex={emojiPickerOpenForIndex}
+      setEmojiPickerOpenForIndex={setEmojiPickerOpenForIndex}
     />
   );
 };
