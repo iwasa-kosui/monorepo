@@ -683,8 +683,14 @@ const app = new Hono()
         return c.json({ error: String(result.err) }, 400);
       }
 
-      const { ancestors, descendants } = result.val;
+      const { currentPost, ancestors, descendants } = result.val;
       return c.json({
+        currentPost: currentPost
+          ? {
+            ...currentPost,
+            content: sanitize(currentPost.content),
+          }
+          : null,
         ancestors: ancestors.map((post) => ({
           ...post,
           content: sanitize(post.content),

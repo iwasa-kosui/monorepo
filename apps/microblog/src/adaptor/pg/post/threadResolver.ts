@@ -19,12 +19,13 @@ import {
 
 export type ThreadResolver = Agg.Resolver<
   { objectUri: string },
-  { ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
+  { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
 >;
 
 const getInstance = singleton((): ThreadResolver => {
   const resolve = async ({ objectUri }: { objectUri: string }) => {
-    // Find the post by URI (either remote post URI or local post path)
+    // Find the current post by URI (either remote post URI or local post path)
+    const currentPost = await getPostByUri(objectUri);
     const ancestors: PostWithAuthor[] = [];
     const descendants: PostWithAuthor[] = [];
 
@@ -111,7 +112,7 @@ const getInstance = singleton((): ThreadResolver => {
       descendants.push(post);
     }
 
-    return RA.ok({ ancestors, descendants });
+    return RA.ok({ currentPost, ancestors, descendants });
   };
 
   return { resolve };
