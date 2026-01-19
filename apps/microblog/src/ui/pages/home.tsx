@@ -87,9 +87,14 @@ export const HomePage = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if user is typing in an input or textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      // Skip if user is typing in an input, textarea, or contenteditable
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (
+        activeElement
+        && (activeElement.tagName === 'INPUT'
+          || activeElement.tagName === 'TEXTAREA'
+          || activeElement.isContentEditable)
+      ) {
         return;
       }
 
