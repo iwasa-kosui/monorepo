@@ -10,7 +10,7 @@ type PostRow = Readonly<{
     deletedAt: Date | null;
   };
   local_posts: { postId: string; userId: string; inReplyToUri: string | null } | null;
-  remote_posts: { postId: string; uri: string } | null;
+  remote_posts: { postId: string; uri: string; inReplyToUri: string | null } | null;
 }>;
 
 export type ReconstructPostError = Readonly<{
@@ -49,6 +49,7 @@ export const reconstructPost = (row: PostRow): Post => {
       content: row.posts.content,
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
+      inReplyToUri: row.remote_posts.inReplyToUri,
       type: 'remote',
     });
   }

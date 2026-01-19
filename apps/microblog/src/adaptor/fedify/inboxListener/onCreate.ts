@@ -67,6 +67,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
   });
 
   const attachments = await extractAttachments(object, documentLoader);
+  const inReplyToUri = object.replyTargetId?.href ?? null;
 
   return RA.flow(
     useCase.run({
@@ -74,6 +75,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
       uri: objectUri,
       actorIdentity,
       attachments,
+      inReplyToUri,
     }),
     RA.match({
       ok: ({ actor: createdActor }) => {

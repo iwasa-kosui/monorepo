@@ -30,6 +30,7 @@ type Input = Readonly<{
   uri: string;
   actorIdentity: ActorIdentity;
   attachments: Attachment[];
+  inReplyToUri?: string | null;
 }>;
 
 type Ok = Readonly<{
@@ -70,11 +71,12 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(actorIdentity)),
-      RA.andBind('post', ({ actor, content, uri }) => {
+      RA.andBind('post', ({ actor, content, uri, inReplyToUri }) => {
         const createPost = Post.createRemotePost(now)({
           content,
           uri,
           actorId: actor.id,
+          inReplyToUri,
         });
         return postCreatedStore.store(createPost).then(() => RA.ok(createPost));
       }),

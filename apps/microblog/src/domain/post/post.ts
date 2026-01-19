@@ -25,6 +25,7 @@ const remotePostZodType = z.object({
   content: z.string(),
   createdAt: Instant.zodType,
   uri: z.string(),
+  inReplyToUri: z.nullable(z.string()),
 });
 
 export type LocalPost = z.infer<typeof localPostZodType>;
@@ -78,23 +79,26 @@ const createPost = (now: Instant) =>
   );
 };
 
-const createRemotePost =
-  (now: Instant) => (payload: Omit<RemotePost, 'type' | 'createdAt' | 'postId'>): RemotePostCreated => {
-    const postId = PostId.generate();
-    const post: RemotePost = {
-      ...payload,
-      postId,
-      type: 'remote',
-      createdAt: now,
-    };
-    return PostEvent.create(
-      postId,
-      post,
-      'post.remotePostCreated',
-      post,
-      Instant.now(),
-    );
+const createRemotePost = (now: Instant) =>
+(
+  payload: Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'> & { inReplyToUri?: string | null },
+): RemotePostCreated => {
+  const postId = PostId.generate();
+  const post: RemotePost = {
+    ...payload,
+    postId,
+    type: 'remote',
+    createdAt: now,
+    inReplyToUri: payload.inReplyToUri ?? null,
   };
+  return PostEvent.create(
+    postId,
+    post,
+    'post.remotePostCreated',
+    post,
+    Instant.now(),
+  );
+};
 
 const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   return PostEvent.create(

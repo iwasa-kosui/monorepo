@@ -33,6 +33,7 @@ const store = async (event: PostCreated | RemotePostCreated): RA<void, never> =>
       await tx.insert(remotePostsTable).values({
         postId: post.postId,
         uri: post.uri,
+        inReplyToUri: post.inReplyToUri,
       });
     }
     await tx.insert(domainEventsTable).values({

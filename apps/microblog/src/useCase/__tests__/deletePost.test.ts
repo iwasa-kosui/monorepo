@@ -347,6 +347,7 @@ describe('DeletePostUseCase', () => {
         content: 'Remote post',
         createdAt: Date.now() as RemotePost['createdAt'],
         uri: 'https://remote.example.com/posts/1',
+        inReplyToUri: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(remotePost);

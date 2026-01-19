@@ -35,14 +35,25 @@ const getInstance = singleton((): ThreadResolver => {
       const post = await getPostByUri(currentUri);
       if (!post) break;
 
-      // Get the inReplyToUri for this post
-      const localPostRow = await DB.getInstance()
-        .select({ inReplyToUri: localPostsTable.inReplyToUri })
-        .from(localPostsTable)
-        .where(eq(localPostsTable.postId, post.postId))
-        .execute();
+      // Get the inReplyToUri for this post (check both local and remote posts)
+      let inReplyToUri: string | null = null;
 
-      const inReplyToUri = localPostRow[0]?.inReplyToUri ?? null;
+      if (post.type === 'local') {
+        const localPostRow = await DB.getInstance()
+          .select({ inReplyToUri: localPostsTable.inReplyToUri })
+          .from(localPostsTable)
+          .where(eq(localPostsTable.postId, post.postId))
+          .execute();
+        inReplyToUri = localPostRow[0]?.inReplyToUri ?? null;
+      } else if (post.type === 'remote') {
+        const remotePostRow = await DB.getInstance()
+          .select({ inReplyToUri: remotePostsTable.inReplyToUri })
+          .from(remotePostsTable)
+          .where(eq(remotePostsTable.postId, post.postId))
+          .execute();
+        inReplyToUri = remotePostRow[0]?.inReplyToUri ?? null;
+      }
+
       if (inReplyToUri && inReplyToUri !== objectUri) {
         const ancestorPost = await getPostByUri(inReplyToUri);
         if (ancestorPost) {
@@ -145,6 +156,7 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         actorId: row.posts.actorId,
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
+        inReplyToUri: row.remote_posts.inReplyToUri,
         type: 'remote',
       }),
       username: Username.orThrow(row.remote_actors?.username ?? 'unknown'),
