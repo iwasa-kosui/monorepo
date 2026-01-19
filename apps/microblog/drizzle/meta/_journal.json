@@ -71,6 +71,13 @@
       "when": 1768760515284,
       "tag": "0009_milky_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1768823137740,
+      "tag": "0010_jazzy_raza",
+      "breakpoints": true
     }
   ]
 }
