@@ -59,7 +59,7 @@ export const PostView = (
   const isRemotePost = post.type === 'remote' && 'uri' in post;
   const isLocalPost = post.type === 'local';
   const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
-  const inReplyToUri = isLocalPost && 'inReplyToUri' in post ? post.inReplyToUri : null;
+  const inReplyToUri = 'inReplyToUri' in post ? post.inReplyToUri : null;
 
   // Gesture states for like
   const [isFloating, setIsFloating] = useState(false);
@@ -310,7 +310,7 @@ export const PostView = (
             </div>
           )}
           {/* Show thread link */}
-          {onShowThread && (inReplyToUri || isRemotePost) && (
+          {onShowThread && inReplyToUri && (
             <div class='mt-2'>
               <button
                 type='button'
@@ -321,7 +321,7 @@ export const PostView = (
                     onShowThread(objectUri);
                   }
                 }}
-                class='flex items-center gap-1 text-sm text-blue-500 dark:text-blue-400 hover:underline'
+                class='flex items-center gap-1 text-sm transition-colors text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400'
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
