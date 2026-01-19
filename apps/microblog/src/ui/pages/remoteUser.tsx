@@ -71,11 +71,11 @@ export const RemoteUserPage = ({
                   displayName.charAt(0).toUpperCase()
                 )}
             </div>
-            <div class='flex-1'>
-              <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
+            <div class='flex-1 min-w-0'>
+              <h1 class='text-2xl font-bold text-gray-900 dark:text-white truncate'>
                 {displayName}
               </h1>
-              <p class='text-gray-500 dark:text-gray-400'>@{handle}</p>
+              <p class='text-gray-500 dark:text-gray-400 truncate'>@{handle}</p>
             </div>
           </div>
 
