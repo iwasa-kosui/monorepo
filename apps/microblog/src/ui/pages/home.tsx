@@ -26,6 +26,8 @@ type Props = Readonly<{
   isRefreshing: boolean;
   onLike: (objectUri: string) => Promise<void>;
   likingPostUri: string | null;
+  onUndoLike: (objectUri: string) => Promise<void>;
+  undoingLikeUri: string | null;
   onRepost: (objectUri: string) => Promise<void>;
   repostingPostUri: string | null;
   onUndoRepost: (objectUri: string) => Promise<void>;
@@ -63,6 +65,8 @@ export const HomePage = ({
   isRefreshing,
   onLike,
   likingPostUri,
+  onUndoLike,
+  undoingLikeUri,
   onRepost,
   repostingPostUri,
   onUndoRepost,
@@ -654,6 +658,8 @@ export const HomePage = ({
               repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
               onLike={onLike}
               isLiking={postUri !== null && likingPostUri === postUri}
+              onUndoLike={onUndoLike}
+              isUndoingLike={postUri !== null && undoingLikeUri === postUri}
               onRepost={onRepost}
               isReposting={postUri !== null && repostingPostUri === postUri}
               onUndoRepost={isMyRepost ? onUndoRepost : undefined}
@@ -683,6 +689,7 @@ export const HomePage = ({
 const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [undoingLikeUri, setUndoingLikeUri] = useState<string | null>(null);
   const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
   const [undoingRepostUri, setUndoingRepostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -769,6 +776,37 @@ const App = () => {
       console.error('Failed to like:', error);
     } finally {
       setLikingPostUri(null);
+    }
+  };
+
+  const handleUndoLike = async (objectUri: string) => {
+    setUndoingLikeUri(objectUri);
+    try {
+      const res = await client.v1.like.$delete({
+        json: { objectUri },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        // Update the post's liked status in the local state
+        if (data && !('error' in data)) {
+          setData({
+            ...data,
+            timelineItems: data.timelineItems.map((item) =>
+              item.post.type === 'remote' && 'uri' in item.post && item.post.uri === objectUri
+                ? { ...item, post: { ...item.post, liked: false } }
+                : item
+            ),
+          });
+        }
+      } else if ('error' in result) {
+        console.error('Failed to undo like:', result.error);
+        alert(`Failed to undo like: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to undo like:', error);
+      alert('Failed to undo like. Please try again.');
+    } finally {
+      setUndoingLikeUri(null);
     }
   };
 
@@ -985,6 +1023,8 @@ const App = () => {
       isRefreshing={isRefreshing}
       onLike={handleLike}
       likingPostUri={likingPostUri}
+      onUndoLike={handleUndoLike}
+      undoingLikeUri={undoingLikeUri}
       onRepost={handleRepost}
       repostingPostUri={repostingPostUri}
       onUndoRepost={handleUndoRepost}

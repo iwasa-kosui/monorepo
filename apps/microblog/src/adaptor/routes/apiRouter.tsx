@@ -24,6 +24,7 @@ import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
+import { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
@@ -34,6 +35,7 @@ import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStor
 import { PgEmojiReactResolverByActorAndObjectAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndObjectAndEmoji.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
+import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
@@ -177,6 +179,49 @@ const app = new Hono()
       return RA.match({
         ok: () => c.json({ success: true }),
         err: (err) => c.json({ error: `Failed to like: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .delete(
+    '/v1/like',
+    sValidator(
+      'json',
+      z.object({
+        objectUri: z.string().min(1),
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const objectUri = body.objectUri;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = UndoLikeUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        likeResolver: PgLikeResolver.getInstance(),
+        likeDeletedStore: PgLikeDeletedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        objectUri,
+        request: c.req.raw,
+        ctx,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to undo like: ${JSON.stringify(err)}` }, 400),
       })(result);
     },
   )

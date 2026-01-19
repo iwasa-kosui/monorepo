@@ -12,6 +12,8 @@ type Props = Readonly<{
   };
   onLike?: (objectUri: string) => void;
   isLiking?: boolean;
+  onUndoLike?: (objectUri: string) => void;
+  isUndoingLike?: boolean;
   onRepost?: (objectUri: string) => void;
   isReposting?: boolean;
   onUndoRepost?: (objectUri: string) => void;
@@ -37,6 +39,8 @@ export const PostView = (
     repostedBy,
     onLike,
     isLiking,
+    onUndoLike,
+    isUndoingLike,
     onRepost,
     isReposting,
     onUndoRepost,
@@ -88,8 +92,21 @@ export const PostView = (
   };
 
   const handleLikeClick = () => {
-    if (isRemotePost && onLike && !post.liked && !isLiking) {
-      onLike(post.uri);
+    if (!isRemotePost) return;
+    if (isLiking || isUndoingLike) return;
+
+    if (post.liked) {
+      // Undo like
+      if (onUndoLike) {
+        if (confirm('いいねを取り消しますか？')) {
+          onUndoLike(post.uri);
+        }
+      }
+    } else {
+      // Like
+      if (onLike) {
+        onLike(post.uri);
+      }
     }
   };
 
@@ -382,12 +399,18 @@ export const PostView = (
                 class={`flex items-center gap-1 transition-colors ${
                   post.liked
                     ? 'text-red-500 dark:text-red-400'
-                    : isLiking
+                    : isLiking || isUndoingLike
                     ? 'text-pink-300 dark:text-pink-600 cursor-wait'
                     : 'text-gray-500 hover:text-pink-500 dark:text-gray-400 dark:hover:text-pink-400'
                 }`}
-                title={post.liked ? 'Already liked' : isLiking ? 'Liking...' : 'Like this post'}
-                disabled={post.liked || isLiking}
+                title={isLiking
+                  ? 'いいね中...'
+                  : isUndoingLike
+                  ? 'いいね取り消し中...'
+                  : post.liked
+                  ? 'いいねを取り消す'
+                  : 'いいね'}
+                disabled={isLiking || isUndoingLike}
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
