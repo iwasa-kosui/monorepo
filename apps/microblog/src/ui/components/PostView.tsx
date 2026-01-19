@@ -140,7 +140,7 @@ export const PostView = (
   return (
     <article
       data-post-index={dataIndex}
-      class={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 transition-all duration-300 relative overflow-hidden ${
+      class={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 transition-all duration-300 relative ${
         isFloating
           ? 'shadow-puffy dark:shadow-puffy-dark scale-[1.02] -translate-y-1'
           : 'hover:shadow-puffy dark:hover:shadow-puffy-dark'
