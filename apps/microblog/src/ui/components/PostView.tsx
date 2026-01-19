@@ -2,6 +2,7 @@ import { useRef, useState } from 'hono/jsx';
 
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { EmojiPicker } from './EmojiPicker.tsx';
 
 type Props = Readonly<{
   post: PostWithAuthor;
@@ -15,9 +16,15 @@ type Props = Readonly<{
   isReposting?: boolean;
   onDelete?: (postId: string) => void;
   isDeleting?: boolean;
+  onEmojiReact?: (objectUri: string, emoji: string) => void;
+  onUndoEmojiReact?: (objectUri: string, emoji: string) => void;
+  isEmojiReacting?: boolean;
+  myReactions?: readonly string[];
   currentUserId?: UserId;
   isSelected?: boolean;
   dataIndex?: number;
+  isEmojiPickerOpen?: boolean;
+  onToggleEmojiPicker?: () => void;
 }>;
 
 export const PostView = (
@@ -30,9 +37,15 @@ export const PostView = (
     isReposting,
     onDelete,
     isDeleting,
+    onEmojiReact,
+    onUndoEmojiReact,
+    isEmojiReacting,
+    myReactions = [],
     currentUserId,
     isSelected,
     dataIndex,
+    isEmojiPickerOpen,
+    onToggleEmojiPicker,
   }: Props,
 ) => {
   const isRemotePost = post.type === 'remote' && 'uri' in post;
@@ -243,6 +256,26 @@ export const PostView = (
               ))}
             </div>
           )}
+          {/* My reactions display */}
+          {myReactions.length > 0 && (
+            <div class='mt-2 flex flex-wrap gap-1'>
+              {myReactions.map((emoji) => (
+                <button
+                  key={emoji}
+                  type='button'
+                  onClick={() => {
+                    if (isRemotePost && onUndoEmojiReact) {
+                      onUndoEmojiReact(post.uri, emoji);
+                    }
+                  }}
+                  class='px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
+                  title='Click to remove reaction'
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
           <div class='mt-3 flex items-center justify-end gap-4'>
             {isRemotePost && (
               <button
@@ -301,6 +334,51 @@ export const PostView = (
                   />
                 </svg>
               </button>
+            )}
+            {/* Emoji reaction button */}
+            {isRemotePost && onEmojiReact && (
+              <div class='relative'>
+                <button
+                  type='button'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleEmojiPicker?.();
+                  }}
+                  class={`flex items-center gap-1 transition-colors ${
+                    isEmojiReacting
+                      ? 'text-yellow-300 dark:text-yellow-600 cursor-wait'
+                      : 'text-gray-500 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400'
+                  }`}
+                  title={isEmojiReacting ? 'Reacting...' : 'Add emoji reaction (e)'}
+                  disabled={isEmojiReacting}
+                >
+                  <svg
+                    xmlns='http://www.w3.org/2000/svg'
+                    class='h-5 w-5'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    stroke='currentColor'
+                    stroke-width='2'
+                  >
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      d='M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                    />
+                  </svg>
+                </button>
+                <EmojiPicker
+                  isOpen={isEmojiPickerOpen ?? false}
+                  onClose={() => onToggleEmojiPicker?.()}
+                  onSelect={(emoji) => {
+                    if (isRemotePost) {
+                      onEmojiReact(post.uri, emoji);
+                      onToggleEmojiPicker?.();
+                    }
+                  }}
+                  isLoading={isEmojiReacting}
+                />
+              </div>
             )}
             {isOwner && (
               <button
