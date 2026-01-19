@@ -72,6 +72,40 @@ const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null =
 };
 
 /**
+ * Extracts emoji image URL from Fedify's tag objects
+ * This uses Fedify's getTags() method which returns Emoji | Hashtag | Mention objects
+ */
+const extractEmojiImageUrlFromFedifyTags = async (
+  activity: Like,
+  emojiName: string,
+): Promise<string | null> => {
+  try {
+    // Try to use Fedify's getTags() method which should return parsed tag objects
+    const tags = activity.getTags();
+    for await (const tag of tags) {
+      const tagJson = await tag.toJsonLd() as Record<string, unknown>;
+      getLogger().debug(`extractEmojiImageUrlFromFedifyTags: tag JSON: ${JSON.stringify(tagJson)}`);
+
+      // Check if this is an Emoji tag with matching name
+      if (tagJson.type === 'Emoji' || tagJson.type === 'toot:Emoji') {
+        const tagName = tagJson.name as string | undefined;
+        if (tagName === emojiName) {
+          // Try to get the icon URL
+          const icon = tagJson.icon as Record<string, unknown> | undefined;
+          if (icon?.url && typeof icon.url === 'string') {
+            getLogger().debug(`extractEmojiImageUrlFromFedifyTags: found icon URL: ${icon.url}`);
+            return icon.url;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    getLogger().debug(`extractEmojiImageUrlFromFedifyTags: error: ${err}`);
+  }
+  return null;
+};
+
+/**
  * Extracts emoji from Misskey-style Like activity
  * Misskey sends emoji reactions as Like with content field containing the emoji
  * or _misskey_reaction field for custom emojis
@@ -105,8 +139,13 @@ const extractEmojiFromLike = async (activity: Like): Promise<EmojiInfo | null> =
 
   getLogger().debug(`extractEmojiFromLike: extracted emoji: ${emoji}`);
 
-  // Extract emoji image URL from tags for custom emojis
-  const emojiImageUrl = extractEmojiImageUrl(json.tag, emoji);
+  // First try using Fedify's getTags() method
+  let emojiImageUrl = await extractEmojiImageUrlFromFedifyTags(activity, emoji);
+
+  // Fallback to json.tag from toJsonLd()
+  if (!emojiImageUrl) {
+    emojiImageUrl = extractEmojiImageUrl(json.tag, emoji);
+  }
 
   getLogger().debug(`extractEmojiFromLike: emojiImageUrl: ${emojiImageUrl}`);
 
