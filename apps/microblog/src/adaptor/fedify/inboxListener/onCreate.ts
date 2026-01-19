@@ -3,11 +3,14 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
+import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
+import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 
@@ -82,6 +85,26 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
         getLogger().info(
           `Processed Create activity: ${objectUri} by ${createdActor.uri}`,
         );
+
+        // Fetch reply notes recursively in the background
+        if (inReplyToUri) {
+          const fetchReplyNotesUseCase = FetchReplyNotesRecursiveUseCase.create({
+            postResolverByUri: PgPostResolverByUri.getInstance(),
+            remotePostUpserter: PgRemotePostUpserter.getInstance(),
+          });
+
+          void fetchReplyNotesUseCase.run({
+            inReplyToUri,
+            documentLoader,
+            lookupObject: (uri, options) => ctx.lookupObject(uri, options),
+          }).then((result) => {
+            if (result.ok && result.val.fetchedPosts.length > 0) {
+              getLogger().info(
+                `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
+              );
+            }
+          });
+        }
       },
       err: (err) => {
         getLogger().warn(
