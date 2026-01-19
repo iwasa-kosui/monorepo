@@ -53,6 +53,7 @@ export const PostView = (
   const isRemotePost = post.type === 'remote' && 'uri' in post;
   const isLocalPost = post.type === 'local';
   const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
+  const inReplyToUri = isLocalPost && 'inReplyToUri' in post ? post.inReplyToUri : null;
 
   // Gesture states for like
   const [isFloating, setIsFloating] = useState(false);
@@ -228,6 +229,33 @@ export const PostView = (
               </time>
             </a>
           </div>
+          {/* Reply to indicator */}
+          {inReplyToUri && (
+            <div class='flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mt-1'>
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                class='h-3.5 w-3.5'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'
+                stroke-width='2'
+              >
+                <path
+                  stroke-linecap='round'
+                  stroke-linejoin='round'
+                  d='M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6'
+                />
+              </svg>
+              <a
+                href={inReplyToUri}
+                target='_blank'
+                rel='noopener noreferrer'
+                class='hover:underline hover:text-blue-500 dark:hover:text-blue-400 truncate max-w-xs'
+              >
+                返信先を表示
+              </a>
+            </div>
+          )}
           <div
             class='mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline  [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4'
             dangerouslySetInnerHTML={{ __html: post.content }}
