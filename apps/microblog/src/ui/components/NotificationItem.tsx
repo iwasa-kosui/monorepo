@@ -56,7 +56,7 @@ const LikeNotificationItem = ({
           <div class='flex items-center gap-2 mb-2'>
             <a
               href={actorUrl}
-              class='flex items-center gap-2 hover:opacity-80 transition-opacity'
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
                 {likerActor.logoUri
@@ -75,7 +75,7 @@ const LikeNotificationItem = ({
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400'>
+            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
               liked your post
             </span>
           </div>
@@ -137,7 +137,7 @@ const FollowNotificationItem = ({
           <div class='flex items-center gap-2'>
             <a
               href={actorUrl}
-              class='flex items-center gap-2 hover:opacity-80 transition-opacity'
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
                 {followerActor.logoUri
@@ -156,7 +156,7 @@ const FollowNotificationItem = ({
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400'>
+            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
               started following you
             </span>
           </div>
@@ -211,7 +211,7 @@ const EmojiReactNotificationItem = ({
           <div class='flex items-center gap-2 mb-2'>
             <a
               href={actorUrl}
-              class='flex items-center gap-2 hover:opacity-80 transition-opacity'
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
                 {reactorActor.logoUri
@@ -230,7 +230,7 @@ const EmojiReactNotificationItem = ({
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1'>
+            <span class='text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 flex-shrink-0'>
               reacted with {emojiDisplay}
             </span>
           </div>
