@@ -141,9 +141,15 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           inReplyToUri: row.remote_posts.inReplyToUri,
           type: 'remote',
         });
+        if (row.remote_actors === null) {
+          throw new Error(`Remote actor not found for postId: ${row.posts.postId}`);
+        }
+        if (row.remote_actors.username === null) {
+          throw new Error(`Remote actor username is null for postId: ${row.posts.postId}`);
+        }
         return {
           ...post,
-          username: Username.orThrow(row.remote_actors!.username!),
+          username: Username.orThrow(row.remote_actors.username),
           logoUri: row.actors!.logoUri ?? undefined,
           liked: row.likes !== null,
           reposted,
