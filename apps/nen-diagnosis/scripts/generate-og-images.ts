@@ -184,15 +184,78 @@ const createCupSvg = (nenType: NenType, color: string): string => {
   `;
 };
 
+const createLargeCupSvg = (nenType: NenType, color: string): string => {
+  const waterColor = nenType === 'emission' ? color : 'rgba(100, 180, 255, 0.7)';
+
+  let extraElements = '';
+
+  if (nenType === 'enhancement') {
+    extraElements = `
+      <circle cx="50" cy="35" r="8" fill="rgba(100, 180, 255, 0.8)" />
+      <circle cx="150" cy="30" r="6" fill="rgba(100, 180, 255, 0.8)" />
+      <circle cx="100" cy="25" r="7" fill="rgba(100, 180, 255, 0.8)" />
+    `;
+  } else if (nenType === 'conjuration') {
+    extraElements = `
+      <circle cx="70" cy="100" r="10" fill="${color}" opacity="0.8" />
+      <circle cx="110" cy="130" r="8" fill="${color}" opacity="0.7" />
+      <circle cx="140" cy="95" r="9" fill="${color}" opacity="0.9" />
+      <circle cx="85" cy="145" r="7" fill="${color}" opacity="0.6" />
+    `;
+  } else if (nenType === 'specialization') {
+    extraElements = `
+      <circle cx="100" cy="105" r="45" fill="${color}" opacity="0.2" />
+      <circle cx="100" cy="105" r="28" fill="${color}" opacity="0.4" />
+    `;
+  }
+
+  return `
+    <svg width="300" height="330" viewBox="0 0 200 240">
+      <defs>
+        <clipPath id="cupClipLarge">
+          <path d="M45 40 L38 165 Q38 185 100 185 Q162 185 162 165 L155 40 Z" />
+        </clipPath>
+        <radialGradient id="glowGradientLarge" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" style="stop-color:${color};stop-opacity:0.6" />
+          <stop offset="100%" style="stop-color:${color};stop-opacity:0" />
+        </radialGradient>
+      </defs>
+
+      <!-- グロー効果 -->
+      <ellipse cx="100" cy="120" rx="90" ry="80" fill="url(#glowGradientLarge)" />
+
+      <!-- コップ本体 -->
+      <path
+        d="M42 30 L35 170 Q35 195 100 195 Q165 195 165 170 L158 30 Z"
+        fill="rgba(200, 220, 255, 0.25)"
+        stroke="rgba(255,255,255,0.6)"
+        stroke-width="3"
+      />
+
+      <!-- 水 -->
+      <g clip-path="url(#cupClipLarge)">
+        <rect x="38" y="55" width="124" height="130" fill="${waterColor}" />
+        <ellipse cx="100" cy="58" rx="56" ry="10" fill="rgba(255,255,255,0.5)" />
+        ${extraElements}
+      </g>
+
+      <!-- 葉っぱ -->
+      <ellipse cx="100" cy="58" rx="20" ry="10" fill="#228B22" opacity="0.9" />
+      <path d="M100 46 Q103 58 100 70" stroke="#1a6b1a" stroke-width="2" fill="none" />
+
+      <!-- コップの光沢 -->
+      <path d="M50 40 L46 155" stroke="rgba(255,255,255,0.5)" stroke-width="4" stroke-linecap="round" />
+    </svg>
+  `;
+};
+
 const createOgImage = (
   nenType: NenType | null,
   info: NenTypeInfo | null,
 ): Parameters<typeof satori>[0] => {
   const isDefault = !nenType || !info;
   const color = info?.color ?? '#6366f1';
-  const title = isDefault
-    ? '念系統診断'
-    : `念系統診断の結果は...`;
+  const title = isDefault ? '念系統診断' : '念系統診断の結果';
   const subtitle = info?.japaneseName ?? 'オーラ別性格診断';
   const description = info?.waterDivinationResult ?? 'あなたの念系統を診断します';
 
@@ -206,90 +269,74 @@ const createOgImage = (
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        background: `linear-gradient(135deg, #1e293b 0%, #0f172a 50%, ${color}22 100%)`,
+        background: `linear-gradient(180deg, #0f172a 0%, #1e293b 50%, ${color}40 100%)`,
         fontFamily: 'Noto Sans JP',
+        position: 'relative',
       },
       children: [
+        // コップを中央に大きく配置
+        {
+          type: 'img',
+          props: {
+            src: `data:image/svg+xml;base64,${Buffer.from(createLargeCupSvg(nenType ?? 'enhancement', color)).toString('base64')}`,
+            width: 300,
+            height: 330,
+            style: {
+              marginBottom: '20px',
+            },
+          },
+        },
+        // タイトル
         {
           type: 'div',
           props: {
             style: {
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '60px',
+              fontSize: '32px',
+              color: '#e2e8f0',
+              marginBottom: '8px',
             },
-            children: [
-              {
-                type: 'img',
-                props: {
-                  src: `data:image/svg+xml;base64,${Buffer.from(createCupSvg(nenType ?? 'enhancement', color)).toString('base64')}`,
-                  width: 200,
-                  height: 220,
-                  style: {},
-                },
-              },
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                  },
-                  children: [
-                    {
-                      type: 'div',
-                      props: {
-                        style: {
-                          fontSize: '36px',
-                          color: '#94a3b8',
-                          marginBottom: '16px',
-                        },
-                        children: title,
-                      },
-                    },
-                    {
-                      type: 'div',
-                      props: {
-                        style: {
-                          fontSize: isDefault ? '48px' : '72px',
-                          fontWeight: 'bold',
-                          color: color,
-                          marginBottom: '20px',
-                          textShadow: `0 0 40px ${color}66`,
-                        },
-                        children: subtitle,
-                      },
-                    },
-                    {
-                      type: 'div',
-                      props: {
-                        style: {
-                          fontSize: '28px',
-                          color: '#64748b',
-                          borderLeft: `4px solid ${color}`,
-                          paddingLeft: '16px',
-                        },
-                        children: description,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
+            children: title,
           },
         },
+        // サブタイトル（念系統名）
+        {
+          type: 'div',
+          props: {
+            style: {
+              fontSize: isDefault ? '56px' : '72px',
+              fontWeight: 'bold',
+              color: '#ffffff',
+              textShadow: `0 0 60px ${color}, 0 0 30px ${color}`,
+              marginBottom: '12px',
+            },
+            children: subtitle,
+          },
+        },
+        // 説明
+        {
+          type: 'div',
+          props: {
+            style: {
+              fontSize: '24px',
+              color: '#cbd5e1',
+              padding: '8px 24px',
+              borderRadius: '8px',
+              background: 'rgba(0,0,0,0.3)',
+            },
+            children: description,
+          },
+        },
+        // フッター
         {
           type: 'div',
           props: {
             style: {
               position: 'absolute',
-              bottom: '30px',
-              fontSize: '24px',
-              color: '#475569',
+              bottom: '24px',
+              fontSize: '20px',
+              color: '#64748b',
             },
-            children: 'nen-diagnosis',
+            children: 'nen.kosui.me',
           },
         },
       ],
