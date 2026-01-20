@@ -223,7 +223,7 @@ const createOgImage = (
               {
                 type: 'img',
                 props: {
-                  src: `data:image/svg+xml,${encodeURIComponent(createCupSvg(nenType ?? 'enhancement', color))}`,
+                  src: `data:image/svg+xml;base64,${Buffer.from(createCupSvg(nenType ?? 'enhancement', color)).toString('base64')}`,
                   width: 200,
                   height: 220,
                   style: {},
