@@ -650,23 +650,24 @@ const app = new Hono()
         RA.andBind('session', resolveSession),
         RA.andBind('user', ({ session }) => resolveUser(session.userId)),
         RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-        RA.map(({ actor }) => actor.id),
+        RA.map(({ user, actor }) => ({ userId: user.id, actorId: actor.id })),
       );
 
       if (!currentUserResult.ok) {
         return c.json({ error: 'Unauthorized' }, 401);
       }
 
-      const currentUserActorId = currentUserResult.val;
+      const { userId: currentUserId, actorId: currentUserActorId } = currentUserResult.val;
       const useCase = GetRemoteActorPostsUseCase.getInstance();
 
       return RA.flow(
-        useCase.run({ actorId, currentUserActorId, createdAt }),
+        useCase.run({ actorId, currentUserActorId, currentUserId, createdAt }),
         RA.match({
-          ok: ({ remoteActor, isFollowing, posts }) => {
+          ok: ({ remoteActor, isFollowing, isMuted, posts }) => {
             return c.json({
               remoteActor,
               isFollowing,
+              isMuted,
               isLoggedIn: true,
               posts: posts.map((post) => ({
                 ...post,

@@ -45,7 +45,7 @@ import type {
   LikeResolver,
   LikesResolverByPostId,
 } from '../../../domain/like/like.ts';
-import type { MutedActorIdsResolverByUserId } from '../../../domain/mute/mute.ts';
+import type { Mute, MutedActorIdsResolverByUserId, MuteResolver } from '../../../domain/mute/mute.ts';
 import type {
   EmojiReactNotification,
   EmojiReactNotificationDeleted,
@@ -576,6 +576,18 @@ export const createMockMutedActorIdsResolverByUserId = (
 ): MutedActorIdsResolverByUserId & { setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => void } => ({
   resolve: vi.fn((userId: UserId) => RAImpl.ok(mutedActorIds.get(userId) ?? [])),
   setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => mutedActorIds.set(userId, actorIds),
+});
+
+const muteKey = (userId: UserId, mutedActorId: ActorId) => `${userId}:${mutedActorId}`;
+
+export const createMockMuteResolver = (
+  mutes: Map<string, Mute> = new Map(),
+): MuteResolver & { setMute: (mute: Mute) => void; removeMute: (userId: UserId, mutedActorId: ActorId) => void } => ({
+  resolve: vi.fn(({ userId, mutedActorId }: { userId: UserId; mutedActorId: ActorId }) =>
+    RAImpl.ok(mutes.get(muteKey(userId, mutedActorId)))
+  ),
+  setMute: (mute: Mute) => mutes.set(muteKey(mute.userId, mute.mutedActorId), mute),
+  removeMute: (userId: UserId, mutedActorId: ActorId) => mutes.delete(muteKey(userId, mutedActorId)),
 });
 
 export const createMockLikeDeletedStore = (): LikeDeletedStore & InMemoryStore<LikeDeleted> => {

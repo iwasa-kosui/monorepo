@@ -11,6 +11,7 @@ import { arbActorId, arbRemoteActor } from './helper/arbitraries.ts';
 import {
   createMockActorResolverById,
   createMockFollowResolver,
+  createMockMuteResolver,
   createMockPostsResolverByActorIdWithPagination,
 } from './helper/mockAdaptors.ts';
 
@@ -18,10 +19,12 @@ describe('GetRemoteActorPostsUseCase', () => {
   const createDeps = () => {
     const actorResolverById = createMockActorResolverById();
     const followResolver = createMockFollowResolver();
+    const muteResolver = createMockMuteResolver();
     const postsResolverByActorIdWithPagination = createMockPostsResolverByActorIdWithPagination();
     return {
       actorResolverById,
       followResolver,
+      muteResolver,
       postsResolverByActorIdWithPagination,
     };
   };
