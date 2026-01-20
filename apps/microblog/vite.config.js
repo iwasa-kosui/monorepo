@@ -35,5 +35,8 @@ export default defineConfig(({ mode }) => {
         entry: 'src/app.tsx',
       }),
     ],
+    build: {
+      sourcemap: true,
+    }
   };
 });
