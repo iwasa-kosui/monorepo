@@ -76,9 +76,9 @@ const loadFont = async (): Promise<ArrayBuffer> => {
 
   const cssResponse = await fetch(cssUrl, {
     headers: {
-      // woff2形式を取得するためにモダンブラウザのUser-Agentを指定
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      // TTF形式を取得するために古いブラウザのUser-Agentを指定
+      // (Satoriはwoff2をサポートしていないため)
+      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; rv:10.0) Gecko/20100101 Firefox/10.0',
     },
   });
 
