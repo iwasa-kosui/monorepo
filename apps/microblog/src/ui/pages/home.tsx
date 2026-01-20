@@ -189,6 +189,59 @@ export const HomePage = ({
         return;
       }
 
+      // Check if post modal is open
+      const isPostModalOpen = window.location.hash === '#post-modal';
+
+      // N key: Open post modal (when not already open)
+      if (e.key === 'n' || e.key === 'N') {
+        if (!isPostModalOpen) {
+          e.preventDefault();
+          window.location.hash = '#post-modal';
+        }
+        return;
+      }
+
+      // Escape key: Close modal or clear focus
+      if (e.key === 'Escape') {
+        if (isPostModalOpen) {
+          e.preventDefault();
+          window.location.hash = '';
+          return;
+        }
+        if (threadModalUri !== null) {
+          e.preventDefault();
+          onCloseThread();
+          return;
+        }
+        if (replyingToUri !== null) {
+          e.preventDefault();
+          onCancelReply();
+          return;
+        }
+        if (emojiPickerOpenForIndex !== null) {
+          e.preventDefault();
+          setEmojiPickerOpenForIndex(null);
+          return;
+        }
+        // Clear focus if a post is selected
+        if (selectedIndex >= 0) {
+          e.preventDefault();
+          setSelectedIndex(-1);
+          return;
+        }
+        return;
+      }
+
+      // J/K keys: If no post is focused, focus the first post
+      if (e.key === 'j' || e.key === 'k') {
+        if (selectedIndex < 0 && timelineItems.length > 0) {
+          e.preventDefault();
+          setSelectedIndex(0);
+          scrollToSelected(0);
+          return;
+        }
+      }
+
       const selectedItem = timelineItems[selectedIndex];
       if (!selectedItem) return;
 
@@ -212,10 +265,14 @@ export const HomePage = ({
             scrollToSelected(newIndex);
           }
           break;
-        case 'l': // Like selected post
+        case 'l': // Like or undo like selected post
           e.preventDefault();
-          if (isRemotePost && !post.liked && !likingPostUri) {
-            onLike(post.uri);
+          if (isRemotePost) {
+            if (post.liked && !undoingLikeUri) {
+              onUndoLike(post.uri);
+            } else if (!post.liked && !likingPostUri) {
+              onLike(post.uri);
+            }
           }
           break;
         case 'o': // Open selected post
@@ -255,19 +312,6 @@ export const HomePage = ({
           }
           break;
         }
-        case 'Escape': { // Close emoji picker, reply modal, or thread modal
-          if (threadModalUri !== null) {
-            e.preventDefault();
-            onCloseThread();
-          } else if (replyingToUri !== null) {
-            e.preventDefault();
-            onCancelReply();
-          } else if (emojiPickerOpenForIndex !== null) {
-            e.preventDefault();
-            setEmojiPickerOpenForIndex(null);
-          }
-          break;
-        }
       }
     };
 
@@ -277,6 +321,7 @@ export const HomePage = ({
     selectedIndex,
     timelineItems,
     likingPostUri,
+    undoingLikeUri,
     repostingPostUri,
     emojiPickerOpenForIndex,
     replyingToUri,
@@ -704,7 +749,7 @@ const App = () => {
   const [emojiReactingUri, setEmojiReactingUri] = useState<string | null>(null);
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
   const [emojiPickerOpenForIndex, setEmojiPickerOpenForIndex] = useState<number | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -750,7 +795,7 @@ const App = () => {
       });
       const latest = await res.json();
       setData(latest);
-      setSelectedIndex(0);
+      setSelectedIndex(-1);
     } catch (error) {
       console.error('Failed to refresh:', error);
     } finally {

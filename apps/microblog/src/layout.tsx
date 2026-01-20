@@ -87,6 +87,8 @@ export const Layout: FC<LayoutProps> = (props) => {
                   boxShadow: {
                     'puffy': '0px 3px 15px 0px hsla(5, 70%, 90%, 0.6)',
                     'puffy-dark': '0px 3px 15px 0px hsla(5, 30%, 20%, 0.4)',
+                    'focus-ring': '0px 0px 0px 2px hsla(20, 70%, 55%, 1), 0px 3px 15px 0px hsla(20, 60%, 60%, 0.5)',
+                    'focus-ring-dark': '0px 0px 0px 2px hsla(20, 60%, 50%, 1), 0px 3px 15px 0px hsla(20, 50%, 35%, 0.5)',
                   },
                 },
               },
@@ -151,6 +153,8 @@ export const LayoutClient: FC<{
                   boxShadow: {
                     'puffy': '0px 3px 15px 0px hsla(5, 70%, 90%, 0.6)',
                     'puffy-dark': '0px 3px 15px 0px hsla(5, 30%, 20%, 0.4)',
+                    'focus-ring': '0px 0px 0px 2px hsla(20, 70%, 55%, 1), 0px 3px 15px 0px hsla(20, 60%, 60%, 0.5)',
+                    'focus-ring-dark': '0px 0px 0px 2px hsla(20, 60%, 50%, 1), 0px 3px 15px 0px hsla(20, 50%, 35%, 0.5)',
                   },
                 },
               },

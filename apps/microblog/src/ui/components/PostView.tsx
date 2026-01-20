@@ -186,7 +186,7 @@ export const PostView = (
         isFloating
           ? 'shadow-puffy dark:shadow-puffy-dark scale-[1.02] -translate-y-1'
           : 'hover:shadow-puffy dark:hover:shadow-puffy-dark'
-      } ${canLike ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
+      } ${canLike ? 'cursor-pointer' : ''} ${isSelected ? 'shadow-focus-ring dark:shadow-focus-ring-dark' : ''}`}
       onTouchStart={canLike ? handleTouchStart : undefined}
       onTouchEnd={canLike ? handleTouchEnd : undefined}
       onClick={canLike ? handleClick : undefined}
