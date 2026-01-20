@@ -98,6 +98,7 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
         if (inReplyToUri) {
           const fetchReplyNotesUseCase = FetchReplyNotesRecursiveUseCase.create({
             postResolverByUri: PgPostResolverByUri.getInstance(),
+            localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
             remotePostUpserter: PgRemotePostUpserter.getInstance(),
           });
 

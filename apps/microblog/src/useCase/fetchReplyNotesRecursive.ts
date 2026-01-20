@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
+import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
 import type { PostResolverByUri } from '../adaptor/pg/post/postResolverByUri.ts';
 import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { RemotePost } from '../domain/post/post.ts';
@@ -29,11 +30,13 @@ export type FetchReplyNotesRecursiveUseCase = Readonly<{
 
 type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
+  localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
 }>;
 
 const create = ({
   postResolverByUri,
+  localPostResolverByUri,
   remotePostUpserter,
 }: Deps): FetchReplyNotesRecursiveUseCase => {
   const fetchNote = async (
@@ -89,12 +92,22 @@ const create = ({
       }
       visited.add(currentUri);
 
-      // Check if the post already exists in the database
-      const existingPostResult = await postResolverByUri.resolve({ uri: currentUri });
-      if (existingPostResult.ok && existingPostResult.val) {
-        getLogger().debug(`Post already exists in DB: ${currentUri}`);
+      // Check if the post already exists in the database (as remote post)
+      const existingRemotePostResult = await postResolverByUri.resolve({ uri: currentUri });
+      if (existingRemotePostResult.ok && existingRemotePostResult.val) {
+        getLogger().debug(`Remote post already exists in DB: ${currentUri}`);
         // Continue traversing the chain using the existing post's inReplyToUri
-        currentUri = existingPostResult.val.inReplyToUri;
+        currentUri = existingRemotePostResult.val.inReplyToUri;
+        depth++;
+        continue;
+      }
+
+      // Check if the post already exists as a local post
+      const existingLocalPostResult = await localPostResolverByUri.resolve({ uri: currentUri });
+      if (existingLocalPostResult.ok && existingLocalPostResult.val) {
+        getLogger().debug(`Local post already exists in DB: ${currentUri}`);
+        // Continue traversing the chain using the existing local post's inReplyToUri
+        currentUri = existingLocalPostResult.val.inReplyToUri;
         depth++;
         continue;
       }
