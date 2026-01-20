@@ -14,7 +14,10 @@ import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import { Federation } from '../../federation.ts';
+import { CreateMuteUseCase } from '../../useCase/createMute.ts';
+import { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
+import { GetMutesUseCase } from '../../useCase/getMutes.ts';
 import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts';
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
@@ -37,6 +40,11 @@ import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgMuteCreatedStore } from '../pg/mute/muteCreatedStore.ts';
+import { PgMutedActorIdsResolverByUserId } from '../pg/mute/mutedActorIdsResolverByUserId.ts';
+import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
+import { PgMuteResolver } from '../pg/mute/muteResolver.ts';
+import { PgMutesResolverByUserId } from '../pg/mute/mutesResolverByUserId.ts';
 import { PgEmojiReactNotificationDeletedStore } from '../pg/notification/emojiReactNotificationDeletedStore.ts';
 import { PgEmojiReactNotificationsResolverByPostId } from '../pg/notification/emojiReactNotificationsResolverByPostId.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
@@ -92,6 +100,7 @@ const app = new Hono()
         timelineItemsResolverByActorIds: PgTimelineItemsResolverByActorIds.getInstance(),
         actorsResolverByFollowerId: PgActorResolverByFollowerId.getInstance(),
         actorsResolverByFollowingId: PgActorResolverByFollowingId.getInstance(),
+        mutedActorIdsResolverByUserId: PgMutedActorIdsResolverByUserId.getInstance(),
       });
       const sessionId = getCookie(c, 'sessionId');
       if (!sessionId) {
@@ -763,6 +772,109 @@ const app = new Hono()
           content: sanitize(post.content),
         })),
       });
+    },
+  )
+  .get('/v1/mutes', async (c) => {
+    const sessionId = getCookie(c, 'sessionId');
+    if (!sessionId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const sessionIdResult = SessionId.parse(sessionId);
+    if (!sessionIdResult.ok) {
+      return c.json({ error: 'Invalid session' }, 401);
+    }
+
+    const useCase = GetMutesUseCase.create({
+      sessionResolver: PgSessionResolver.getInstance(),
+      userResolver: PgUserResolver.getInstance(),
+      mutesResolverByUserId: PgMutesResolverByUserId.getInstance(),
+    });
+
+    const result = await useCase.run({
+      sessionId: sessionIdResult.val,
+    });
+
+    return RA.match({
+      ok: (mutes) => c.json({ mutes }),
+      err: (err) => c.json({ error: `Failed to get mutes: ${JSON.stringify(err)}` }, 400),
+    })(result);
+  })
+  .post(
+    '/v1/mute',
+    sValidator(
+      'json',
+      z.object({
+        actorId: ActorId.zodType,
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { actorId } = body;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const useCase = CreateMuteUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        muteCreatedStore: PgMuteCreatedStore.getInstance(),
+        muteResolver: PgMuteResolver.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        mutedActorId: actorId,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to mute: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .delete(
+    '/v1/mute',
+    sValidator(
+      'json',
+      z.object({
+        actorId: ActorId.zodType,
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { actorId } = body;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const useCase = DeleteMuteUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        muteDeletedStore: PgMuteDeletedStore.getInstance(),
+        muteResolver: PgMuteResolver.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        mutedActorId: actorId,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to unmute: ${JSON.stringify(err)}` }, 400),
+      })(result);
     },
   );
 

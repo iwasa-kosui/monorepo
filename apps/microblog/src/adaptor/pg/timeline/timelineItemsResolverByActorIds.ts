@@ -31,12 +31,14 @@ import {
 
 const getInstance = singleton((): TimelineItemsResolverByActorIds => {
   const resolve = async (
-    { actorIds, currentActorId, createdAt }: {
+    { actorIds, currentActorId, createdAt, mutedActorIds }: {
       actorIds: ActorId[];
       currentActorId: ActorId | undefined;
       createdAt: Instant | undefined;
+      mutedActorIds: ReadonlyArray<ActorId>;
     },
   ) => {
+    const mutedActorIdSet = new Set(mutedActorIds);
     const rows = await DB.getInstance().select()
       .from(timelineItemsTable)
       .innerJoin(
@@ -151,7 +153,10 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       }
     }
 
-    const result: TimelineItemWithPost[] = rows.map(row => {
+    // Filter out posts from muted actors (covers repost case where original post author is muted)
+    const filteredRows = rows.filter(row => !mutedActorIdSet.has(row.posts.actorId as ActorId));
+
+    const result: TimelineItemWithPost[] = filteredRows.map(row => {
       const images = imagesByPostId.get(row.posts.postId) ?? [];
       const isRepost = row.timeline_items.type === 'repost';
 

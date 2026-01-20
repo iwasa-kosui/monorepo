@@ -31,6 +31,7 @@ import type {
 } from '../../../domain/follow/follow.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
 import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
+import type { MutedActorIdsResolverByUserId } from '../../../domain/mute/mute.ts';
 import type {
   EmojiReactNotification,
   EmojiReactNotificationDeleted,
@@ -554,4 +555,11 @@ export const createMockEmojiReactNotificationsResolverByPostId = (
 } => ({
   resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(notifications.get(postId) ?? [])),
   setNotifications: (postId: PostId, n: EmojiReactNotification[]) => notifications.set(postId, n),
+});
+
+export const createMockMutedActorIdsResolverByUserId = (
+  mutedActorIds: Map<UserId, ActorId[]> = new Map(),
+): MutedActorIdsResolverByUserId & { setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => void } => ({
+  resolve: vi.fn((userId: UserId) => RAImpl.ok(mutedActorIds.get(userId) ?? [])),
+  setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => mutedActorIds.set(userId, actorIds),
 });

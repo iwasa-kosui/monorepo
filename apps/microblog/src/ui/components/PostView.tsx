@@ -2,6 +2,7 @@ import { useRef, useState } from 'hono/jsx';
 
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 
@@ -11,18 +12,18 @@ type Props = Readonly<{
     username: string;
     logoUri?: string;
   };
-  onLike?: (objectUri: string) => void;
+  onLike?: (postId: PostId) => void;
   isLiking?: boolean;
-  onUndoLike?: (objectUri: string) => void;
+  onUndoLike?: (postId: PostId) => void;
   isUndoingLike?: boolean;
-  onRepost?: (objectUri: string) => void;
+  onRepost?: (postId: PostId) => void;
   isReposting?: boolean;
-  onUndoRepost?: (objectUri: string) => void;
+  onUndoRepost?: (postId: PostId) => void;
   isUndoingRepost?: boolean;
-  onDelete?: (postId: string) => void;
+  onDelete?: (postId: PostId) => void;
   isDeleting?: boolean;
-  onEmojiReact?: (objectUri: string, emoji: string) => void;
-  onUndoEmojiReact?: (objectUri: string, emoji: string) => void;
+  onEmojiReact?: (postId: PostId, emoji: string) => void;
+  onUndoEmojiReact?: (postId: PostId, emoji: string) => void;
   isEmojiReacting?: boolean;
   myReactions?: readonly string[];
   currentUserId?: UserId;
@@ -30,8 +31,8 @@ type Props = Readonly<{
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
-  onReply?: (objectUri: string) => void;
-  onShowThread?: (objectUri: string) => void;
+  onReply?: (postId: PostId) => void;
+  onShowThread?: (postId: PostId) => void;
 }>;
 
 export const PostView = (
@@ -84,7 +85,7 @@ export const PostView = (
     if (isRemotePost && onLike && !post.liked && !isLiking) {
       setShowHeartAnimation(true);
       setIsFloating(true);
-      onLike(post.uri);
+      onLike(post.postId);
       setTimeout(() => {
         setShowHeartAnimation(false);
         setIsFloating(false);
@@ -100,13 +101,13 @@ export const PostView = (
       // Undo like
       if (onUndoLike) {
         if (confirm('いいねを取り消しますか？')) {
-          onUndoLike(post.uri);
+          onUndoLike(post.postId);
         }
       }
     } else {
       // Like
       if (onLike) {
-        onLike(post.uri);
+        onLike(post.postId);
       }
     }
   };
@@ -127,14 +128,14 @@ export const PostView = (
       // Undo repost
       if (onUndoRepost) {
         if (confirm('リポストを取り消しますか？')) {
-          onUndoRepost(post.uri);
+          onUndoRepost(post.postId);
         }
       }
     } else {
       // Repost
       if (onRepost) {
         if (confirm('リポストしますか？')) {
-          onRepost(post.uri);
+          onRepost(post.postId);
         }
       }
     }
@@ -227,25 +228,29 @@ export const PostView = (
           </svg>
         </div>
       )}
-      <div class='flex items-start gap-3'>
-        <a
-          href={isLocalPost ? `/users/${post.username}` : isRemotePost ? `/remote-users/${post.actorId}` : undefined}
-          class='w-11 h-11 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold text-sm flex-shrink-0'
-        >
-          {post.logoUri
-            ? (
-              <img
-                src={post.logoUri}
-                alt='Author Logo'
-                class='w-11 h-11 rounded-2xl object-cover'
-              />
-            )
-            : (
-              String(post.username).charAt(0).toUpperCase()
-            )}
-        </a>
+      <div class='flex flex-col gap-3'>
         <div class='flex-1 min-w-0'>
           <div class='flex items-center gap-2'>
+            <a
+              href={isLocalPost
+                ? `/users/${post.username}`
+                : isRemotePost
+                ? `/remote-users/${post.actorId}`
+                : undefined}
+              class='w-8 h-8 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold text-sm flex-shrink-0'
+            >
+              {post.logoUri
+                ? (
+                  <img
+                    src={post.logoUri}
+                    alt='Author Logo'
+                    class='w-8 h-8 rounded-2xl object-cover'
+                  />
+                )
+                : (
+                  String(post.username).charAt(0).toUpperCase()
+                )}
+            </a>
             <a
               href={isLocalPost
                 ? `/users/${post.username}`
@@ -269,6 +274,8 @@ export const PostView = (
               </time>
             </a>
           </div>
+        </div>
+        <div>
           <div
             class='mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline  [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4'
             dangerouslySetInnerHTML={{ __html: post.content }}
@@ -308,10 +315,7 @@ export const PostView = (
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation();
-                  const objectUri = isRemotePost ? post.uri : postDetailLink;
-                  if (objectUri) {
-                    onShowThread(objectUri);
-                  }
+                  onShowThread(post.postId);
                 }}
                 class='flex items-center gap-1 text-sm transition-colors text-gray-500 hover:text-orange-500 dark:text-gray-400 dark:hover:text-orange-400'
               >
@@ -335,10 +339,10 @@ export const PostView = (
           )}
           <div class='mt-3 flex items-center justify-end gap-4'>
             {/* Reply button */}
-            {isRemotePost && onReply && (
+            {onReply && (
               <button
                 type='button'
-                onClick={() => onReply(post.uri)}
+                onClick={() => onReply(post.postId)}
                 class='flex items-center gap-1 transition-colors text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400'
                 title='Reply (p)'
               >
@@ -358,7 +362,7 @@ export const PostView = (
                 </svg>
               </button>
             )}
-            {isRemotePost && (
+            {
               <button
                 type='button'
                 onClick={handleRepostClick}
@@ -393,8 +397,8 @@ export const PostView = (
                   />
                 </svg>
               </button>
-            )}
-            {isRemotePost && (
+            }
+            {
               <button
                 type='button'
                 onClick={handleLikeClick}
@@ -429,9 +433,9 @@ export const PostView = (
                   />
                 </svg>
               </button>
-            )}
+            }
             {/* Emoji reaction button */}
-            {isRemotePost && onEmojiReact && (
+            {onEmojiReact && (
               <div class='relative'>
                 <button
                   type='button'
@@ -467,7 +471,7 @@ export const PostView = (
                   onClose={() => onToggleEmojiPicker?.()}
                   onSelect={(emoji) => {
                     if (isRemotePost) {
-                      onEmojiReact(post.uri, emoji);
+                      onEmojiReact(post.postId, emoji);
                       onToggleEmojiPicker?.();
                     }
                   }}
@@ -514,7 +518,7 @@ export const PostView = (
                   onClick={(e) => {
                     e.stopPropagation();
                     if (isRemotePost && onUndoEmojiReact) {
-                      onUndoEmojiReact(post.uri, emoji);
+                      onUndoEmojiReact(post.postId, emoji);
                     }
                   }}
                   class='inline-flex items-center px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
