@@ -11,10 +11,14 @@ import { DeletePostUseCase } from '../deletePost.ts';
 import { arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
+  createMockEmojiReactDeletedStore,
   createMockEmojiReactNotificationDeletedStore,
   createMockEmojiReactNotificationsResolverByPostId,
+  createMockEmojiReactsResolverByPostId,
+  createMockLikeDeletedStore,
   createMockLikeNotificationDeletedStore,
   createMockLikeNotificationsResolverByPostId,
+  createMockLikesResolverByPostId,
   createMockPostDeletedStore,
   createMockPostResolver,
   createMockReplyNotificationDeletedStore,
@@ -55,6 +59,10 @@ describe('DeletePostUseCase', () => {
     const replyNotificationsResolverByOriginalPostId = createMockReplyNotificationsResolverByOriginalPostId();
     const repostDeletedStore = createMockRepostDeletedStore();
     const repostsResolverByPostId = createMockRepostsResolverByPostId();
+    const likeDeletedStore = createMockLikeDeletedStore();
+    const likesResolverByPostId = createMockLikesResolverByPostId();
+    const emojiReactDeletedStore = createMockEmojiReactDeletedStore();
+    const emojiReactsResolverByPostId = createMockEmojiReactsResolverByPostId();
     return {
       sessionResolver,
       postDeletedStore,
@@ -72,6 +80,10 @@ describe('DeletePostUseCase', () => {
       replyNotificationsResolverByOriginalPostId,
       repostDeletedStore,
       repostsResolverByPostId,
+      likeDeletedStore,
+      likesResolverByPostId,
+      emojiReactDeletedStore,
+      emojiReactsResolverByPostId,
     };
   };
 

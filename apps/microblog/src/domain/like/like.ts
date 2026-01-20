@@ -67,6 +67,7 @@ export type LikeResolver = Agg.Resolver<
   { actorId: ActorId; postId: PostId },
   Like | undefined
 >;
+export type LikesResolverByPostId = Agg.Resolver<{ postId: PostId }, Like[]>;
 export const Like = {
   ...schema,
   createLike,
