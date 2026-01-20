@@ -703,7 +703,24 @@ export const HomePage = ({
                     <>
                       {threadData.ancestors.map((post) => (
                         <div key={post.postId} class='relative'>
-                          <PostView post={post} currentUserId={user.id} onReply={onReply} />
+                          <PostView
+                            post={post}
+                            currentUserId={user.id}
+                            onReply={onReply}
+                            onLike={onLike}
+                            isLiking={likingPostId === post.postId}
+                            onUndoLike={onUndoLike}
+                            isUndoingLike={undoingLikePostId === post.postId}
+                            onRepost={onRepost}
+                            isReposting={repostingPostId === post.postId}
+                            isUndoingRepost={undoingRepostPostId === post.postId}
+                            onDelete={onDelete}
+                            isDeleting={deletingPostId === post.postId}
+                            onEmojiReact={onEmojiReact}
+                            onUndoEmojiReact={onUndoEmojiReact}
+                            isEmojiReacting={emojiReactingPostId === post.postId}
+                            myReactions={myReactions.get(post.postId) ?? []}
+                          />
                         </div>
                       ))}
                     </>
@@ -715,6 +732,19 @@ export const HomePage = ({
                         post={threadData.currentPost}
                         currentUserId={user.id}
                         onReply={onReply}
+                        onLike={onLike}
+                        isLiking={likingPostId === threadData.currentPost.postId}
+                        onUndoLike={onUndoLike}
+                        isUndoingLike={undoingLikePostId === threadData.currentPost.postId}
+                        onRepost={onRepost}
+                        isReposting={repostingPostId === threadData.currentPost.postId}
+                        isUndoingRepost={undoingRepostPostId === threadData.currentPost.postId}
+                        onDelete={onDelete}
+                        isDeleting={deletingPostId === threadData.currentPost.postId}
+                        onEmojiReact={onEmojiReact}
+                        onUndoEmojiReact={onUndoEmojiReact}
+                        isEmojiReacting={emojiReactingPostId === threadData.currentPost.postId}
+                        myReactions={myReactions.get(threadData.currentPost.postId) ?? []}
                       />
                     </div>
                   )}
@@ -724,7 +754,24 @@ export const HomePage = ({
                       <>
                         {threadData.descendants.map((post) => (
                           <div key={post.postId} class='relative'>
-                            <PostView post={post} currentUserId={user.id} onReply={onReply} />
+                            <PostView
+                              post={post}
+                              currentUserId={user.id}
+                              onReply={onReply}
+                              onLike={onLike}
+                              isLiking={likingPostId === post.postId}
+                              onUndoLike={onUndoLike}
+                              isUndoingLike={undoingLikePostId === post.postId}
+                              onRepost={onRepost}
+                              isReposting={repostingPostId === post.postId}
+                              isUndoingRepost={undoingRepostPostId === post.postId}
+                              onDelete={onDelete}
+                              isDeleting={deletingPostId === post.postId}
+                              onEmojiReact={onEmojiReact}
+                              onUndoEmojiReact={onUndoEmojiReact}
+                              isEmojiReacting={emojiReactingPostId === post.postId}
+                              myReactions={myReactions.get(post.postId) ?? []}
+                            />
                           </div>
                         ))}
                       </>
