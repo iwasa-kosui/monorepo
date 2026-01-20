@@ -49,7 +49,11 @@ type Props = Readonly<{
   isSendingReply: boolean;
   onShowThread: (objectUri: string) => void;
   threadModalUri: string | null;
-  threadData: { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null;
+  threadData: {
+    currentPost: PostWithAuthor | null;
+    ancestors: PostWithAuthor[];
+    descendants: PostWithAuthor[];
+  } | null;
   isLoadingThread: boolean;
   onCloseThread: () => void;
 }>;
@@ -148,7 +152,10 @@ export const HomePage = ({
       if (!isPullingRef.current) return;
       isPullingRef.current = false;
 
-      if (pullDistanceRef.current >= pullThreshold && !isRefreshingRef.current) {
+      if (
+        (pullDistanceRef.current ?? 0) >= pullThreshold
+        && !isRefreshingRef.current
+      ) {
         onRefresh();
       }
       setPullDistance(0);
@@ -304,14 +311,16 @@ export const HomePage = ({
           setSelectedIndex(0);
           scrollToSelected(0);
           break;
-        case 'G': { // Go to bottom (Shift+G)
+        case 'G': {
+          // Go to bottom (Shift+G)
           e.preventDefault();
           const lastIndex = timelineItems.length - 1;
           setSelectedIndex(lastIndex);
           scrollToSelected(lastIndex);
           break;
         }
-        case 'e': { // Open emoji picker for selected post
+        case 'e': {
+          // Open emoji picker for selected post
           e.preventDefault();
           if (isRemotePost) {
             setEmojiPickerOpenForIndex(
@@ -320,7 +329,8 @@ export const HomePage = ({
           }
           break;
         }
-        case 'p': { // Reply to selected post
+        case 'p': {
+          // Reply to selected post
           e.preventDefault();
           if (isRemotePost) {
             onReply(post.uri);
@@ -385,7 +395,12 @@ export const HomePage = ({
                     )}
                 </div>
                 <div class='absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
-                  <svg class='w-5 h-5 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <svg
+                    class='w-5 h-5 text-white'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                  >
                     <path
                       stroke-linecap='round'
                       stroke-linejoin='round'
@@ -538,7 +553,12 @@ export const HomePage = ({
               : pullDistance >= pullThreshold
               ? (
                 <>
-                  <svg class='h-5 w-5 rotate-180' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                  <svg
+                    class='h-5 w-5 rotate-180'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    stroke='currentColor'
+                  >
                     <path
                       stroke-linecap='round'
                       stroke-linejoin='round'
@@ -551,7 +571,12 @@ export const HomePage = ({
               )
               : (
                 <>
-                  <svg class='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                  <svg
+                    class='h-5 w-5'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    stroke='currentColor'
+                  >
                     <path
                       stroke-linecap='round'
                       stroke-linejoin='round'
@@ -567,11 +592,13 @@ export const HomePage = ({
       )}
       {/* Reply Modal */}
       {replyingToUri && (
-        <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCancelReply}>
+        <div
+          class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
+          onClick={onCancelReply}
+        >
           <div
             class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-lg w-full mx-4'
-            onClick={(e) =>
-              e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
               Reply
@@ -581,8 +608,7 @@ export const HomePage = ({
             </p>
             <textarea
               value={replyContent}
-              onInput={(e) =>
-                setReplyContent((e.target as HTMLTextAreaElement).value)}
+              onInput={(e) => setReplyContent((e.target as HTMLTextAreaElement).value)}
               placeholder='Write your reply...'
               class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3 resize-none'
               rows={4}
@@ -620,11 +646,13 @@ export const HomePage = ({
       )}
       {/* Thread Modal */}
       {threadModalUri && (
-        <div class='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={onCloseThread}>
+        <div
+          class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
+          onClick={onCloseThread}
+        >
           <div
             class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto'
-            onClick={(e) =>
-              e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div class='flex items-center justify-between mb-4'>
               <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
@@ -635,15 +663,28 @@ export const HomePage = ({
                 onClick={onCloseThread}
                 class='text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               >
-                <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                  <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+                <svg
+                  class='w-5 h-5'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                >
+                  <path
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                    stroke-width='2'
+                    d='M6 18L18 6M6 6l12 12'
+                  />
                 </svg>
               </button>
             </div>
             {isLoadingThread
               ? (
                 <div class='flex items-center justify-center py-8'>
-                  <svg class='animate-spin h-8 w-8 text-blue-500' viewBox='0 0 24 24'>
+                  <svg
+                    class='animate-spin h-8 w-8 text-blue-500'
+                    viewBox='0 0 24 24'
+                  >
                     <circle
                       class='opacity-25'
                       cx='12'
@@ -669,10 +710,7 @@ export const HomePage = ({
                     <>
                       {threadData.ancestors.map((post) => (
                         <div key={post.postId} class='relative'>
-                          <PostView
-                            post={post}
-                            currentUserId={user.id}
-                          />
+                          <PostView post={post} currentUserId={user.id} />
                         </div>
                       ))}
                     </>
@@ -692,18 +730,18 @@ export const HomePage = ({
                       <>
                         {threadData.descendants.map((post) => (
                           <div key={post.postId} class='relative'>
-                            <PostView
-                              post={post}
-                              currentUserId={user.id}
-                            />
+                            <PostView post={post} currentUserId={user.id} />
                           </div>
                         ))}
                       </>
                     )
-                    : threadData.ancestors.length === 0 && !threadData.currentPost && (
-                      <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                        No replies in this thread yet
-                      </p>
+                    : (
+                      threadData.ancestors.length === 0
+                      && !threadData.currentPost && (
+                        <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
+                          No replies in this thread yet
+                        </p>
+                      )
                     )}
                 </div>
               )
@@ -717,7 +755,9 @@ export const HomePage = ({
       )}
       <section class='space-y-4'>
         {timelineItems.map((item, index) => {
-          const postUri = item.post.type === 'remote' && 'uri' in item.post ? item.post.uri : null;
+          const postUri = item.post.type === 'remote' && 'uri' in item.post
+            ? item.post.uri
+            : null;
           const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;
           return (
             <PostView
@@ -737,12 +777,15 @@ export const HomePage = ({
               onEmojiReact={onEmojiReact}
               onUndoEmojiReact={onUndoEmojiReact}
               isEmojiReacting={postUri !== null && emojiReactingUri === postUri}
-              myReactions={postUri ? myReactions.get(postUri) ?? [] : []}
+              myReactions={postUri ? (myReactions.get(postUri) ?? []) : []}
               currentUserId={user.id}
               isSelected={selectedIndex === index}
               dataIndex={index}
               isEmojiPickerOpen={emojiPickerOpenForIndex === index}
-              onToggleEmojiPicker={() => setEmojiPickerOpenForIndex(emojiPickerOpenForIndex === index ? null : index)}
+              onToggleEmojiPicker={() =>
+                setEmojiPickerOpenForIndex(
+                  emojiPickerOpenForIndex === index ? null : index,
+                )}
               onReply={onReply}
               onShowThread={onShowThread}
             />
@@ -762,18 +805,24 @@ const App = () => {
   const [undoingRepostUri, setUndoingRepostUri] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [emojiReactingUri, setEmojiReactingUri] = useState<string | null>(null);
-  const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
-  const [emojiPickerOpenForIndex, setEmojiPickerOpenForIndex] = useState<number | null>(null);
+  const [myReactions, setMyReactions] = useState<Map<string, string[]>>(
+    new Map(),
+  );
+  const [emojiPickerOpenForIndex, setEmojiPickerOpenForIndex] = useState<
+    number | null
+  >(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [threadModalUri, setThreadModalUri] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<
-    { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] } | null
-  >(
-    null,
-  );
+    {
+      currentPost: PostWithAuthor | null;
+      ancestors: PostWithAuthor[];
+      descendants: PostWithAuthor[];
+    } | null
+  >(null);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [data, setData] = useState<
     | { error: string }
@@ -831,7 +880,9 @@ const App = () => {
           setData({
             ...data,
             timelineItems: data.timelineItems.map((item) =>
-              item.post.type === 'remote' && 'uri' in item.post && item.post.uri === objectUri
+              item.post.type === 'remote'
+                && 'uri' in item.post
+                && item.post.uri === objectUri
                 ? { ...item, post: { ...item.post, liked: true } }
                 : item
             ),
@@ -860,7 +911,9 @@ const App = () => {
           setData({
             ...data,
             timelineItems: data.timelineItems.map((item) =>
-              item.post.type === 'remote' && 'uri' in item.post && item.post.uri === objectUri
+              item.post.type === 'remote'
+                && 'uri' in item.post
+                && item.post.uri === objectUri
                 ? { ...item, post: { ...item.post, liked: false } }
                 : item
             ),
@@ -937,7 +990,9 @@ const App = () => {
         if (data && !('error' in data)) {
           setData({
             ...data,
-            timelineItems: data.timelineItems.filter((item) => item.post.postId !== postId),
+            timelineItems: data.timelineItems.filter(
+              (item) => item.post.postId !== postId,
+            ),
           });
         }
       } else if ('error' in result) {
@@ -993,7 +1048,10 @@ const App = () => {
         setMyReactions((prev) => {
           const newMap = new Map(prev);
           const existing = newMap.get(objectUri) ?? [];
-          newMap.set(objectUri, existing.filter((e) => e !== emoji));
+          newMap.set(
+            objectUri,
+            existing.filter((e) => e !== emoji),
+          );
           return newMap;
         });
       } else if ('error' in result) {
@@ -1048,9 +1106,17 @@ const App = () => {
         query: { objectUri },
       });
       const result = await res.json();
-      if ('currentPost' in result && 'ancestors' in result && 'descendants' in result) {
+      if (
+        'currentPost' in result
+        && 'ancestors' in result
+        && 'descendants' in result
+      ) {
         setThreadData(
-          result as { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] },
+          result as {
+            currentPost: PostWithAuthor | null;
+            ancestors: PostWithAuthor[];
+            descendants: PostWithAuthor[];
+          },
         );
       } else if ('error' in result) {
         console.error('Failed to load thread:', result.error);

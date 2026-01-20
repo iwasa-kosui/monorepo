@@ -15,14 +15,14 @@ pnpm add @iwasa-kosui/result
 `Result<T, E>` は成功値 `T` またはエラー値 `E` を表す型です。
 
 ```typescript
-import { Result } from "@iwasa-kosui/result";
+import { Result } from '@iwasa-kosui/result';
 
 // 成功値を作成
 const success = Result.ok(42);
 // { ok: true, val: 42 }
 
 // エラー値を作成
-const failure = Result.err("Something went wrong");
+const failure = Result.err('Something went wrong');
 // { ok: false, err: "Something went wrong" }
 ```
 
@@ -45,11 +45,11 @@ if (Result.isErr(result)) {
 成功値を変換します。エラーの場合は何もしません。
 
 ```typescript
-import { flow } from "@iwasa-kosui/result";
+import { flow } from '@iwasa-kosui/result';
 
 const result = flow(
   Result.ok(21),
-  Result.map((x) => x * 2)
+  Result.map((x) => x * 2),
 );
 // Result.ok(42)
 ```
@@ -60,8 +60,8 @@ const result = flow(
 
 ```typescript
 const result = flow(
-  Result.err("error"),
-  Result.mapErr((e) => e.toUpperCase())
+  Result.err('error'),
+  Result.mapErr((e) => e.toUpperCase()),
 );
 // Result.err("ERROR")
 ```
@@ -72,11 +72,11 @@ const result = flow(
 
 ```typescript
 const divide = (a: number, b: number): Result<number, string> =>
-  b === 0 ? Result.err("Division by zero") : Result.ok(a / b);
+  b === 0 ? Result.err('Division by zero') : Result.ok(a / b);
 
 const result = flow(
   Result.ok(10),
-  Result.andThen((x) => divide(x, 2))
+  Result.andThen((x) => divide(x, 2)),
 );
 // Result.ok(5)
 ```
@@ -87,8 +87,8 @@ const result = flow(
 
 ```typescript
 const result = flow(
-  Result.err("error"),
-  Result.orElse((e) => Result.ok(0)) // エラーをリカバリ
+  Result.err('error'),
+  Result.orElse((e) => Result.ok(0)), // エラーをリカバリ
 );
 // Result.ok(0)
 ```
@@ -103,7 +103,7 @@ const result = flow(
   Result.andThrough((x) => {
     console.log(x); // 副作用
     return Result.ok(undefined);
-  })
+  }),
 );
 // Result.ok(42)
 ```
@@ -124,8 +124,8 @@ const result = Result.combine({
 
 const errorResult = Result.combine({
   a: Result.ok(1),
-  b: Result.err("error in b"),
-  c: Result.err("error in c"),
+  b: Result.err('error in b'),
+  c: Result.err('error in c'),
 });
 // Result.err(["error in b", "error in c"])
 ```
@@ -150,8 +150,8 @@ const result = Result.all([
 ```typescript
 const result = flow(
   Result.ok({ a: 1 }),
-  Result.bind("b", (obj) => Result.ok(obj.a + 1)),
-  Result.bind("c", (obj) => Result.ok(obj.b + 1))
+  Result.bind('b', (obj) => Result.ok(obj.a + 1)),
+  Result.bind('c', (obj) => Result.ok(obj.b + 1)),
 );
 // Result.ok({ a: 1, b: 2, c: 3 })
 ```
@@ -164,8 +164,8 @@ const result = flow(
 
 ```typescript
 const value = flow(
-  Result.err("error"),
-  Result.unwrapOr(0)
+  Result.err('error'),
+  Result.unwrapOr(0),
 );
 // 0
 ```
@@ -178,7 +178,7 @@ const value = flow(
 const value = Result.unsafeUnwrap(Result.ok(42));
 // 42
 
-const error = Result.unsafeUnwrapErr(Result.err("error"));
+const error = Result.unsafeUnwrapErr(Result.err('error'));
 // "error"
 ```
 
@@ -192,7 +192,7 @@ const message = flow(
   Result.match({
     ok: (val) => `Success: ${val}`,
     err: (err) => `Error: ${err}`,
-  })
+  }),
 );
 // "Success: 42"
 ```
@@ -202,12 +202,12 @@ const message = flow(
 非同期処理のためのユーティリティも提供しています。
 
 ```typescript
-import { ResultAsync } from "@iwasa-kosui/result";
+import { ResultAsync } from '@iwasa-kosui/result';
 
 const result = await flow(
   ResultAsync.ok(fetchData()),
   ResultAsync.map(async (data) => process(data)),
-  ResultAsync.andThen(async (processed) => validate(processed))
+  ResultAsync.andThen(async (processed) => validate(processed)),
 );
 ```
 
@@ -218,19 +218,19 @@ const result = await flow(
 `@iwasa-kosui/pipe` の `pipe` と `flow` を再エクスポートしています。
 
 ```typescript
-import { pipe, flow } from "@iwasa-kosui/result";
+import { flow, pipe } from '@iwasa-kosui/result';
 
 // flow: 値を最初の引数として渡し、関数を順番に適用
 const result = flow(
   Result.ok(1),
   Result.map((x) => x + 1),
-  Result.map((x) => x * 2)
+  Result.map((x) => x * 2),
 );
 
 // pipe: 関数を合成して新しい関数を作成
 const transform = pipe(
   Result.map((x: number) => x + 1),
-  Result.map((x) => x * 2)
+  Result.map((x) => x * 2),
 );
 const result = transform(Result.ok(1));
 ```

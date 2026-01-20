@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  result:
+    name: "packages/result"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter result run lint
+
+      - name: Format check
+        run: pnpm --filter result run format:check
+
+      - name: Type check
+        run: pnpm --filter result run typecheck
+
+      - name: Build
+        run: pnpm --filter result run build
+
+      - name: Test
+        run: pnpm --filter result run test:ci
+
+  microblog:
+    name: "apps/microblog"
+    runs-on: ubuntu-latest
+    env:
+      VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
+      VAPID_PRIVATE_KEY: "dummy-private-key-for-ci"
+      VAPID_SUBJECT: "mailto:ci@example.com"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages/result
+        run: pnpm --filter result run build
+
+      - name: Lint
+        run: pnpm --filter microblog run lint
+
+      - name: Format check
+        run: pnpm --filter microblog run format:check
+
+      - name: Type check
+        run: pnpm --filter microblog run typecheck
+
+      - name: Build
+        run: pnpm --filter microblog run build
+
+      - name: Test
+        run: pnpm --filter microblog run test:ci
+
+  nen-diagnosis:
+    name: "apps/nen-diagnosis"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages/result
+        run: pnpm --filter result run build
+
+      - name: Lint
+        run: pnpm --filter nen-diagnosis run lint
+
+      - name: Format check
+        run: pnpm --filter nen-diagnosis run format:check
+
+      - name: Type check
+        run: pnpm --filter nen-diagnosis run typecheck
+
+      - name: Build
+        run: pnpm --filter nen-diagnosis run build
+
+      - name: Test
+        run: pnpm --filter nen-diagnosis run test:ci

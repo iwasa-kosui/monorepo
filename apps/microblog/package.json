@@ -60,13 +60,12 @@
     "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
     "compose:up": "dotenvx run -- docker compose up -d",
     "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans",
-    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:ci": "vitest --run",
+    "typecheck": "tsc",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "dprint fmt",
-    "format:check": "dprint check",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "format:check": "dprint check"
   }
 }

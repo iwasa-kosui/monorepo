@@ -278,7 +278,9 @@ const createOgImage = (
         {
           type: 'img',
           props: {
-            src: `data:image/svg+xml;base64,${Buffer.from(createLargeCupSvg(nenType ?? 'enhancement', color)).toString('base64')}`,
+            src: `data:image/svg+xml;base64,${
+              Buffer.from(createLargeCupSvg(nenType ?? 'enhancement', color)).toString('base64')
+            }`,
             width: 300,
             height: 330,
             style: {
