@@ -59,7 +59,7 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
       .leftJoin(
         likesTable,
         and(
-          eq(likesTable.objectUri, remotePostsTable.uri),
+          eq(likesTable.postId, postsTable.postId),
           eq(likesTable.actorId, currentActorId ?? randomUUID()),
         ),
       )
@@ -93,19 +93,17 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
     const repostedPostIds = new Set<string>();
     if (currentActorId && postIds.length > 0) {
       const repostRows = await DB.getInstance()
-        .select({ originalPostId: repostsTable.originalPostId })
+        .select({ postId: repostsTable.postId })
         .from(repostsTable)
         .where(
           and(
             eq(repostsTable.actorId, currentActorId),
-            inArray(repostsTable.originalPostId, postIds),
+            inArray(repostsTable.postId, postIds),
           ),
         )
         .execute();
       for (const row of repostRows) {
-        if (row.originalPostId) {
-          repostedPostIds.add(row.originalPostId);
-        }
+        repostedPostIds.add(row.postId);
       }
     }
 

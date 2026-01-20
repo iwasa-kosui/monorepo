@@ -24,31 +24,31 @@ type Props = Readonly<{
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onRefresh: () => Promise<void>;
   isRefreshing: boolean;
-  onLike: (objectUri: string) => Promise<void>;
-  likingPostUri: string | null;
-  onUndoLike: (objectUri: string) => Promise<void>;
-  undoingLikeUri: string | null;
-  onRepost: (objectUri: string) => Promise<void>;
-  repostingPostUri: string | null;
-  onUndoRepost: (objectUri: string) => Promise<void>;
-  undoingRepostUri: string | null;
+  onLike: (postId: string) => Promise<void>;
+  likingPostId: string | null;
+  onUndoLike: (postId: string) => Promise<void>;
+  undoingLikePostId: string | null;
+  onRepost: (postId: string) => Promise<void>;
+  repostingPostId: string | null;
+  onUndoRepost: (postId: string) => Promise<void>;
+  undoingRepostPostId: string | null;
   onDelete: (postId: string) => Promise<void>;
   deletingPostId: string | null;
-  onEmojiReact: (objectUri: string, emoji: string) => Promise<void>;
-  onUndoEmojiReact: (objectUri: string, emoji: string) => Promise<void>;
-  emojiReactingUri: string | null;
+  onEmojiReact: (postId: string, emoji: string) => Promise<void>;
+  onUndoEmojiReact: (postId: string, emoji: string) => Promise<void>;
+  emojiReactingPostId: string | null;
   myReactions: ReadonlyMap<string, readonly string[]>;
   selectedIndex: number;
   setSelectedIndex: (index: number) => void;
   emojiPickerOpenForIndex: number | null;
   setEmojiPickerOpenForIndex: (index: number | null) => void;
-  onReply: (objectUri: string) => void;
-  replyingToUri: string | null;
-  onSendReply: (objectUri: string, content: string) => Promise<void>;
+  onReply: (postId: string) => void;
+  replyingToPostId: string | null;
+  onSendReply: (postId: string, content: string) => Promise<void>;
   onCancelReply: () => void;
   isSendingReply: boolean;
-  onShowThread: (objectUri: string) => void;
-  threadModalUri: string | null;
+  onShowThread: (postId: string) => void;
+  threadModalPostId: string | null;
   threadData: {
     currentPost: PostWithAuthor | null;
     ancestors: PostWithAuthor[];
@@ -68,30 +68,30 @@ export const HomePage = ({
   onRefresh,
   isRefreshing,
   onLike,
-  likingPostUri,
+  likingPostId,
   onUndoLike,
-  undoingLikeUri,
+  undoingLikePostId,
   onRepost,
-  repostingPostUri,
+  repostingPostId,
   onUndoRepost,
-  undoingRepostUri,
+  undoingRepostPostId,
   onDelete,
   deletingPostId,
   onEmojiReact,
   onUndoEmojiReact,
-  emojiReactingUri,
+  emojiReactingPostId,
   myReactions,
   selectedIndex,
   setSelectedIndex,
   emojiPickerOpenForIndex,
   setEmojiPickerOpenForIndex,
   onReply,
-  replyingToUri,
+  replyingToPostId,
   onSendReply,
   onCancelReply,
   isSendingReply,
   onShowThread,
-  threadModalUri,
+  threadModalPostId,
   threadData,
   isLoadingThread,
   onCloseThread,
@@ -230,12 +230,12 @@ export const HomePage = ({
           window.location.hash = '';
           return;
         }
-        if (threadModalUri !== null) {
+        if (threadModalPostId !== null) {
           e.preventDefault();
           onCloseThread();
           return;
         }
-        if (replyingToUri !== null) {
+        if (replyingToPostId !== null) {
           e.preventDefault();
           onCancelReply();
           return;
@@ -268,7 +268,6 @@ export const HomePage = ({
       if (!selectedItem) return;
 
       const post = selectedItem.post;
-      const isRemotePost = post.type === 'remote' && 'uri' in post;
 
       switch (e.key) {
         case 'j': // Move down
@@ -289,12 +288,10 @@ export const HomePage = ({
           break;
         case 'l': // Like or undo like selected post
           e.preventDefault();
-          if (isRemotePost) {
-            if (post.liked && !undoingLikeUri) {
-              onUndoLike(post.uri);
-            } else if (!post.liked && !likingPostUri) {
-              onLike(post.uri);
-            }
+          if (post.liked && !undoingLikePostId) {
+            onUndoLike(post.postId);
+          } else if (!post.liked && !likingPostId) {
+            onLike(post.postId);
           }
           break;
         case 'o': // Open selected post
@@ -302,7 +299,7 @@ export const HomePage = ({
           e.preventDefault();
           if (post.type === 'local') {
             window.location.href = `/users/${post.username}/posts/${post.postId}`;
-          } else if (isRemotePost) {
+          } else if (post.type === 'remote' && 'uri' in post) {
             window.open(post.uri, '_blank');
           }
           break;
@@ -322,19 +319,15 @@ export const HomePage = ({
         case 'e': {
           // Open emoji picker for selected post
           e.preventDefault();
-          if (isRemotePost) {
-            setEmojiPickerOpenForIndex(
-              emojiPickerOpenForIndex === selectedIndex ? null : selectedIndex,
-            );
-          }
+          setEmojiPickerOpenForIndex(
+            emojiPickerOpenForIndex === selectedIndex ? null : selectedIndex,
+          );
           break;
         }
         case 'p': {
           // Reply to selected post
           e.preventDefault();
-          if (isRemotePost) {
-            onReply(post.uri);
-          }
+          onReply(post.postId);
           break;
         }
       }
@@ -345,12 +338,12 @@ export const HomePage = ({
   }, [
     selectedIndex,
     timelineItems,
-    likingPostUri,
-    undoingLikeUri,
-    repostingPostUri,
+    likingPostId,
+    undoingLikePostId,
+    repostingPostId,
     emojiPickerOpenForIndex,
-    replyingToUri,
-    threadModalUri,
+    replyingToPostId,
+    threadModalPostId,
   ]);
 
   useEffect(() => {
@@ -591,7 +584,7 @@ export const HomePage = ({
         </div>
       )}
       {/* Reply Modal */}
-      {replyingToUri && (
+      {replyingToPostId && (
         <div
           class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
           onClick={onCancelReply}
@@ -604,7 +597,7 @@ export const HomePage = ({
               Reply
             </h2>
             <p class='text-gray-500 dark:text-gray-400 text-xs mb-3 truncate'>
-              Replying to: {replyingToUri}
+              Replying to post: {replyingToPostId}
             </p>
             <textarea
               value={replyContent}
@@ -627,7 +620,7 @@ export const HomePage = ({
                 type='button'
                 onClick={() => {
                   if (replyContent.trim()) {
-                    onSendReply(replyingToUri, replyContent);
+                    onSendReply(replyingToPostId, replyContent);
                     setReplyContent('');
                   }
                 }}
@@ -645,7 +638,7 @@ export const HomePage = ({
         </div>
       )}
       {/* Thread Modal */}
-      {threadModalUri && (
+      {threadModalPostId && (
         <div
           class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
           onClick={onCloseThread}
@@ -710,7 +703,7 @@ export const HomePage = ({
                     <>
                       {threadData.ancestors.map((post) => (
                         <div key={post.postId} class='relative'>
-                          <PostView post={post} currentUserId={user.id} />
+                          <PostView post={post} currentUserId={user.id} onReply={onReply} />
                         </div>
                       ))}
                     </>
@@ -721,6 +714,7 @@ export const HomePage = ({
                       <PostView
                         post={threadData.currentPost}
                         currentUserId={user.id}
+                        onReply={onReply}
                       />
                     </div>
                   )}
@@ -730,7 +724,7 @@ export const HomePage = ({
                       <>
                         {threadData.descendants.map((post) => (
                           <div key={post.postId} class='relative'>
-                            <PostView post={post} currentUserId={user.id} />
+                            <PostView post={post} currentUserId={user.id} onReply={onReply} />
                           </div>
                         ))}
                       </>
@@ -755,9 +749,7 @@ export const HomePage = ({
       )}
       <section class='space-y-4'>
         {timelineItems.map((item, index) => {
-          const postUri = item.post.type === 'remote' && 'uri' in item.post
-            ? item.post.uri
-            : null;
+          const postId = item.post.postId;
           const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;
           return (
             <PostView
@@ -765,19 +757,19 @@ export const HomePage = ({
               post={item.post}
               repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
               onLike={onLike}
-              isLiking={postUri !== null && likingPostUri === postUri}
+              isLiking={likingPostId === postId}
               onUndoLike={onUndoLike}
-              isUndoingLike={postUri !== null && undoingLikeUri === postUri}
+              isUndoingLike={undoingLikePostId === postId}
               onRepost={onRepost}
-              isReposting={postUri !== null && repostingPostUri === postUri}
+              isReposting={repostingPostId === postId}
               onUndoRepost={isMyRepost ? onUndoRepost : undefined}
-              isUndoingRepost={postUri !== null && undoingRepostUri === postUri}
+              isUndoingRepost={undoingRepostPostId === postId}
               onDelete={onDelete}
-              isDeleting={deletingPostId === item.post.postId}
+              isDeleting={deletingPostId === postId}
               onEmojiReact={onEmojiReact}
               onUndoEmojiReact={onUndoEmojiReact}
-              isEmojiReacting={postUri !== null && emojiReactingUri === postUri}
-              myReactions={postUri ? (myReactions.get(postUri) ?? []) : []}
+              isEmojiReacting={emojiReactingPostId === postId}
+              myReactions={myReactions.get(postId) ?? []}
               currentUserId={user.id}
               isSelected={selectedIndex === index}
               dataIndex={index}
@@ -799,12 +791,12 @@ export const HomePage = ({
 
 const App = () => {
   const [init, setInit] = useState(false);
-  const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
-  const [undoingLikeUri, setUndoingLikeUri] = useState<string | null>(null);
-  const [repostingPostUri, setRepostingPostUri] = useState<string | null>(null);
-  const [undoingRepostUri, setUndoingRepostUri] = useState<string | null>(null);
+  const [likingPostId, setLikingPostId] = useState<string | null>(null);
+  const [undoingLikePostId, setUndoingLikePostId] = useState<string | null>(null);
+  const [repostingPostId, setRepostingPostId] = useState<string | null>(null);
+  const [undoingRepostPostId, setUndoingRepostPostId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
-  const [emojiReactingUri, setEmojiReactingUri] = useState<string | null>(null);
+  const [emojiReactingPostId, setEmojiReactingPostId] = useState<string | null>(null);
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(
     new Map(),
   );
@@ -812,10 +804,10 @@ const App = () => {
     number | null
   >(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [replyingToUri, setReplyingToUri] = useState<string | null>(null);
+  const [replyingToPostId, setReplyingToPostId] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [threadModalUri, setThreadModalUri] = useState<string | null>(null);
+  const [threadModalPostId, setThreadModalPostId] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<
     {
       currentPost: PostWithAuthor | null;
@@ -867,11 +859,11 @@ const App = () => {
     }
   };
 
-  const handleLike = async (objectUri: string) => {
-    setLikingPostUri(objectUri);
+  const handleLike = async (postId: string) => {
+    setLikingPostId(postId);
     try {
       const res = await client.v1.like.$post({
-        json: { objectUri },
+        json: { postId },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -880,9 +872,7 @@ const App = () => {
           setData({
             ...data,
             timelineItems: data.timelineItems.map((item) =>
-              item.post.type === 'remote'
-                && 'uri' in item.post
-                && item.post.uri === objectUri
+              item.post.postId === postId
                 ? { ...item, post: { ...item.post, liked: true } }
                 : item
             ),
@@ -894,15 +884,15 @@ const App = () => {
     } catch (error) {
       console.error('Failed to like:', error);
     } finally {
-      setLikingPostUri(null);
+      setLikingPostId(null);
     }
   };
 
-  const handleUndoLike = async (objectUri: string) => {
-    setUndoingLikeUri(objectUri);
+  const handleUndoLike = async (postId: string) => {
+    setUndoingLikePostId(postId);
     try {
       const res = await client.v1.like.$delete({
-        json: { objectUri },
+        json: { postId },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -911,9 +901,7 @@ const App = () => {
           setData({
             ...data,
             timelineItems: data.timelineItems.map((item) =>
-              item.post.type === 'remote'
-                && 'uri' in item.post
-                && item.post.uri === objectUri
+              item.post.postId === postId
                 ? { ...item, post: { ...item.post, liked: false } }
                 : item
             ),
@@ -927,15 +915,15 @@ const App = () => {
       console.error('Failed to undo like:', error);
       alert('Failed to undo like. Please try again.');
     } finally {
-      setUndoingLikeUri(null);
+      setUndoingLikePostId(null);
     }
   };
 
-  const handleRepost = async (objectUri: string) => {
-    setRepostingPostUri(objectUri);
+  const handleRepost = async (postId: string) => {
+    setRepostingPostId(postId);
     try {
       const res = await client.v1.repost.$post({
-        json: { objectUri },
+        json: { postId },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -949,18 +937,18 @@ const App = () => {
       console.error('Failed to repost:', error);
       alert('Failed to repost. Please try again.');
     } finally {
-      setRepostingPostUri(null);
+      setRepostingPostId(null);
     }
   };
 
-  const handleUndoRepost = async (objectUri: string) => {
+  const handleUndoRepost = async (postId: string) => {
     if (!confirm('Are you sure you want to undo this repost?')) {
       return;
     }
-    setUndoingRepostUri(objectUri);
+    setUndoingRepostPostId(postId);
     try {
       const res = await client.v1.repost.$delete({
-        json: { objectUri },
+        json: { postId },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -974,7 +962,7 @@ const App = () => {
       console.error('Failed to undo repost:', error);
       alert('Failed to undo repost. Please try again.');
     } finally {
-      setUndoingRepostUri(null);
+      setUndoingRepostPostId(null);
     }
   };
 
@@ -1007,20 +995,20 @@ const App = () => {
     }
   };
 
-  const handleEmojiReact = async (objectUri: string, emoji: string) => {
-    setEmojiReactingUri(objectUri);
+  const handleEmojiReact = async (postId: string, emoji: string) => {
+    setEmojiReactingPostId(postId);
     try {
       const res = await client.v1.react.$post({
-        json: { objectUri, emoji },
+        json: { postId, emoji },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
         // Add the reaction to local state
         setMyReactions((prev) => {
           const newMap = new Map(prev);
-          const existing = newMap.get(objectUri) ?? [];
+          const existing = newMap.get(postId) ?? [];
           if (!existing.includes(emoji)) {
-            newMap.set(objectUri, [...existing, emoji]);
+            newMap.set(postId, [...existing, emoji]);
           }
           return newMap;
         });
@@ -1032,24 +1020,24 @@ const App = () => {
       console.error('Failed to react:', error);
       alert('Failed to add reaction. Please try again.');
     } finally {
-      setEmojiReactingUri(null);
+      setEmojiReactingPostId(null);
     }
   };
 
-  const handleUndoEmojiReact = async (objectUri: string, emoji: string) => {
-    setEmojiReactingUri(objectUri);
+  const handleUndoEmojiReact = async (postId: string, emoji: string) => {
+    setEmojiReactingPostId(postId);
     try {
       const res = await client.v1.react.$delete({
-        json: { objectUri, emoji },
+        json: { postId, emoji },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
         // Remove the reaction from local state
         setMyReactions((prev) => {
           const newMap = new Map(prev);
-          const existing = newMap.get(objectUri) ?? [];
+          const existing = newMap.get(postId) ?? [];
           newMap.set(
-            objectUri,
+            postId,
             existing.filter((e) => e !== emoji),
           );
           return newMap;
@@ -1062,29 +1050,29 @@ const App = () => {
       console.error('Failed to undo react:', error);
       alert('Failed to remove reaction. Please try again.');
     } finally {
-      setEmojiReactingUri(null);
+      setEmojiReactingPostId(null);
     }
   };
 
-  const handleReply = (objectUri: string) => {
-    setReplyingToUri(objectUri);
+  const handleReply = (postId: string) => {
+    setReplyingToPostId(postId);
   };
 
   const handleCancelReply = () => {
-    setReplyingToUri(null);
+    setReplyingToPostId(null);
   };
 
-  const handleSendReply = async (objectUri: string, content: string) => {
+  const handleSendReply = async (postId: string, content: string) => {
     setIsSendingReply(true);
     try {
       const res = await client.v1.reply.$post({
-        json: { objectUri, content },
+        json: { postId, content },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
         // Refresh the timeline to show the new reply
         fetchData(undefined);
-        setReplyingToUri(null);
+        setReplyingToPostId(null);
       } else if ('error' in result) {
         console.error('Failed to send reply:', result.error);
         alert(`Failed to send reply: ${result.error}`);
@@ -1097,13 +1085,13 @@ const App = () => {
     }
   };
 
-  const handleShowThread = async (objectUri: string) => {
-    setThreadModalUri(objectUri);
+  const handleShowThread = async (postId: string) => {
+    setThreadModalPostId(postId);
     setThreadData(null);
     setIsLoadingThread(true);
     try {
       const res = await client.v1.thread.$get({
-        query: { objectUri },
+        query: { postId },
       });
       const result = await res.json();
       if (
@@ -1129,7 +1117,7 @@ const App = () => {
   };
 
   const handleCloseThread = () => {
-    setThreadModalUri(null);
+    setThreadModalPostId(null);
     setThreadData(null);
   };
 
@@ -1156,30 +1144,30 @@ const App = () => {
       onRefresh={refreshData}
       isRefreshing={isRefreshing}
       onLike={handleLike}
-      likingPostUri={likingPostUri}
+      likingPostId={likingPostId}
       onUndoLike={handleUndoLike}
-      undoingLikeUri={undoingLikeUri}
+      undoingLikePostId={undoingLikePostId}
       onRepost={handleRepost}
-      repostingPostUri={repostingPostUri}
+      repostingPostId={repostingPostId}
       onUndoRepost={handleUndoRepost}
-      undoingRepostUri={undoingRepostUri}
+      undoingRepostPostId={undoingRepostPostId}
       onDelete={handleDelete}
       deletingPostId={deletingPostId}
       onEmojiReact={handleEmojiReact}
       onUndoEmojiReact={handleUndoEmojiReact}
-      emojiReactingUri={emojiReactingUri}
+      emojiReactingPostId={emojiReactingPostId}
       myReactions={myReactions}
       selectedIndex={selectedIndex}
       setSelectedIndex={setSelectedIndex}
       emojiPickerOpenForIndex={emojiPickerOpenForIndex}
       setEmojiPickerOpenForIndex={setEmojiPickerOpenForIndex}
       onReply={handleReply}
-      replyingToUri={replyingToUri}
+      replyingToPostId={replyingToPostId}
       onSendReply={handleSendReply}
       onCancelReply={handleCancelReply}
       isSendingReply={isSendingReply}
       onShowThread={handleShowThread}
-      threadModalUri={threadModalUri}
+      threadModalPostId={threadModalPostId}
       threadData={threadData}
       isLoadingThread={isLoadingThread}
       onCloseThread={handleCloseThread}

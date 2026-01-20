@@ -10,8 +10,7 @@ const store = async (event: RepostCreated): RA<void, never> => {
     await tx.insert(repostsTable).values({
       repostId: event.aggregateState.repostId,
       actorId: event.aggregateState.actorId,
-      objectUri: event.aggregateState.objectUri,
-      originalPostId: event.aggregateState.originalPostId,
+      postId: event.aggregateState.postId,
       announceActivityUri: event.aggregateState.announceActivityUri,
       createdAt: new Date(event.occurredAt),
     });

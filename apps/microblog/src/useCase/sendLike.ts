@@ -5,16 +5,17 @@ import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { AlreadyLikedError, Like as AppLike, type LikeCreatedStore, type LikeResolver } from '../domain/like/like.ts';
 import { LikeId } from '../domain/like/likeId.ts';
+import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
-  objectUri: string;
+  postId: PostId;
   request: Request;
   ctx: RequestContext<unknown>;
 }>;
@@ -41,6 +42,7 @@ export const RemoteNoteLookupError = {
 type Err =
   | SessionExpiredError
   | UserNotFoundError
+  | PostNotFoundError
   | RemoteNoteLookupError
   | AlreadyLikedError;
 
@@ -52,6 +54,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   likeCreatedStore: LikeCreatedStore;
   likeResolver: LikeResolver;
+  postResolver: PostResolver;
 }>;
 
 const create = ({
@@ -60,11 +63,28 @@ const create = ({
   actorResolverByUserId,
   likeCreatedStore,
   likeResolver,
+  postResolver,
 }: Deps): SendLikeUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
   const resolveUser = resolveUserWith(userResolver);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+
+  const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
+    RA.flow(
+      postResolver.resolve(postId),
+      RA.andThen((post) =>
+        post === undefined
+          ? RA.err(
+            {
+              type: 'PostNotFoundError',
+              message: `Post not found: ${postId}`,
+              detail: { postId },
+            } as PostNotFoundError,
+          )
+          : RA.ok(post)
+      ),
+    );
 
   const run = async (input: Input) =>
     RA.flow(
@@ -72,26 +92,45 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      // Resolve the post
+      RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
       // Check if already liked
-      RA.andThrough(async ({ actor, objectUri }) => {
+      RA.andThrough(async ({ actor, postId }) => {
         return RA.flow(
           likeResolver.resolve({
             actorId: actor.id,
-            objectUri,
+            postId,
           }),
           RA.andThen((like) => {
             if (like !== undefined) {
               return RA.err(
-                AlreadyLikedError.create({ actorId: actor.id, objectUri }),
+                AlreadyLikedError.create({ actorId: actor.id, postId }),
               );
             }
             return RA.ok(undefined);
           }),
         );
       }),
-      // Lookup the remote note
-      RA.andBind('note', async ({ user, request, objectUri }) => {
-        const ctx = Federation.getInstance().createContext(request, undefined);
+      // Create and store like
+      RA.bind('likeCreated', ({ actor, postId }) =>
+        AppLike.createLike(
+          {
+            likeId: LikeId.generate(),
+            actorId: actor.id,
+            postId,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ likeCreated }) => likeCreatedStore.store(likeCreated)),
+      // Send ActivityPub Like if remote post
+      RA.andThrough(async ({ user, post, ctx, likeCreated }) => {
+        // Local posts don't need ActivityPub delivery
+        if (post.type === 'local') {
+          return RA.ok(undefined);
+        }
+
+        // For remote posts, lookup and send ActivityPub Like
+        const objectUri = post.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
         });
@@ -107,24 +146,14 @@ const create = ({
 
         if (!result.id) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note ID',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
           );
         }
 
-        return RA.ok(result);
-      }),
-      // Get the note's author
-      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
-        const author = await note.getAttribution();
+        const author = await result.getAttribution();
         if (!author || !isActor(author)) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note author',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
           );
         }
         if (!author.id || !author.inboxId) {
@@ -132,31 +161,18 @@ const create = ({
             RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
           );
         }
-        return RA.ok(author);
-      }),
-      RA.bind('likeCreated', ({ actor, objectUri }) =>
-        AppLike.createLike(
-          {
-            likeId: LikeId.generate(),
-            actorId: actor.id,
-            objectUri,
-          },
-          now,
-        )),
-      RA.andThrough(async ({ likeCreated }) => likeCreatedStore.store(likeCreated)),
-      // Send the Like activity
-      RA.andThrough(async ({ user, note, noteAuthor, ctx, likeCreated }) => {
+
         await ctx.sendActivity(
           { username: user.username },
-          noteAuthor,
+          author,
           new Like({
             id: new URL(
               `#likes/${likeCreated.aggregateId.likeId}`,
               ctx.getActorUri(user.username),
             ),
             actor: ctx.getActorUri(user.username),
-            object: note.id,
-            to: noteAuthor.id,
+            object: result.id,
+            to: author.id,
           }),
         );
         return RA.ok(undefined);

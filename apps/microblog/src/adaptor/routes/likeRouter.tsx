@@ -4,12 +4,14 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import z from 'zod/v4';
 
+import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Federation } from '../../federation.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 
@@ -20,12 +22,12 @@ app.post(
   sValidator(
     'form',
     z.object({
-      objectUri: z.string().min(1),
+      postId: PostId.zodType,
     }),
   ),
   async (c) => {
     const form = c.req.valid('form');
-    const objectUri = form.objectUri;
+    const postId = form.postId;
 
     const sessionIdResult = await RA.flow(
       RA.ok(getCookie(c, 'sessionId')),
@@ -43,11 +45,12 @@ app.post(
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       likeCreatedStore: PgLikeCreatedStore.getInstance(),
       likeResolver: PgLikeResolver.getInstance(),
+      postResolver: PgPostResolver.getInstance(),
     });
 
     const result = await useCase.run({
       sessionId: sessionIdResult.val,
-      objectUri,
+      postId,
       request: c.req.raw,
       ctx,
     });

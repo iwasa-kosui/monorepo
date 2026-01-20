@@ -24,8 +24,7 @@ const resolve = async ({ announceActivityUri }: { announceActivityUri: string })
   return RA.ok({
     repostId: RepostId.orThrow(row.repostId),
     actorId: ActorId.orThrow(row.actorId),
-    objectUri: row.objectUri,
-    originalPostId: row.originalPostId ? PostId.orThrow(row.originalPostId) : null,
+    postId: PostId.orThrow(row.postId),
     announceActivityUri: row.announceActivityUri,
   });
 };

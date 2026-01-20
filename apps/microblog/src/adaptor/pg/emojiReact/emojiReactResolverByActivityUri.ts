@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { EmojiReact, EmojiReactResolverByActivityUri } from '../../../domain/emojiReact/emojiReact.ts';
 import { EmojiReactId } from '../../../domain/emojiReact/emojiReactId.ts';
+import { PostId } from '../../../domain/post/postId.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { emojiReactsTable } from '../schema.ts';
@@ -25,7 +26,7 @@ const resolve = async (
   return RA.ok({
     emojiReactId: EmojiReactId.orThrow(row.emojiReactId),
     actorId: ActorId.orThrow(row.actorId),
-    objectUri: row.objectUri,
+    postId: PostId.orThrow(row.postId),
     emoji: row.emoji,
     emojiReactActivityUri: row.emojiReactActivityUri,
     emojiImageUrl: row.emojiImageUrl,

@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { AlreadyLikedError, Like } from '../../domain/like/like.ts';
 import type { LikeId } from '../../domain/like/likeId.ts';
+import type { LocalPost } from '../../domain/post/post.ts';
+import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -13,6 +15,7 @@ import {
   createMockActorResolverByUserId,
   createMockLikeCreatedStore,
   createMockLikeResolver,
+  createMockPostResolver,
   createMockRequestContext,
   createMockSessionResolver,
   createMockUserResolver,
@@ -36,12 +39,14 @@ describe('SendLikeUseCase', () => {
     const actorResolverByUserId = createMockActorResolverByUserId();
     const likeCreatedStore = createMockLikeCreatedStore();
     const likeResolver = createMockLikeResolver();
+    const postResolver = createMockPostResolver();
     return {
       sessionResolver,
       userResolver,
       actorResolverByUserId,
       likeCreatedStore,
       likeResolver,
+      postResolver,
     };
   };
 
@@ -80,7 +85,7 @@ describe('SendLikeUseCase', () => {
 
       const result = await useCase.run({
         sessionId: expiredSession.sessionId,
-        objectUri: 'https://remote.example.com/posts/1',
+        postId: crypto.randomUUID() as PostId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -99,7 +104,7 @@ describe('SendLikeUseCase', () => {
 
       const result = await useCase.run({
         sessionId: crypto.randomUUID() as Session['sessionId'],
-        objectUri: 'https://remote.example.com/posts/1',
+        postId: crypto.randomUUID() as PostId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -124,7 +129,7 @@ describe('SendLikeUseCase', () => {
 
       const result = await useCase.run({
         sessionId: session.sessionId,
-        objectUri: 'https://remote.example.com/posts/1',
+        postId: crypto.randomUUID() as PostId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -156,11 +161,21 @@ describe('SendLikeUseCase', () => {
       };
       setupValidUserSession(deps, user, session, actor);
 
-      const objectUri = 'https://remote.example.com/posts/1';
+      const post: LocalPost = {
+        type: 'local',
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Test post',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      deps.postResolver.setPost(post);
+
       const existingLike: Like = {
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
-        objectUri,
+        postId: post.postId,
       };
       deps.likeResolver.setLike(existingLike);
 
@@ -169,7 +184,7 @@ describe('SendLikeUseCase', () => {
 
       const result = await useCase.run({
         sessionId: session.sessionId,
-        objectUri,
+        postId: post.postId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -189,7 +204,7 @@ describe('SendLikeUseCase', () => {
 
         const result = await useCase.run({
           sessionId,
-          objectUri: 'https://remote.example.com/posts/1',
+          postId: crypto.randomUUID() as PostId,
           request: new Request('https://example.com'),
           ctx,
         });
@@ -211,7 +226,7 @@ describe('SendLikeUseCase', () => {
 
       await useCase.run({
         sessionId: crypto.randomUUID() as Session['sessionId'],
-        objectUri: 'https://remote.example.com/posts/1',
+        postId: crypto.randomUUID() as PostId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -240,11 +255,21 @@ describe('SendLikeUseCase', () => {
       };
       setupValidUserSession(deps, user, session, actor);
 
-      const objectUri = 'https://remote.example.com/posts/1';
+      const post: LocalPost = {
+        type: 'local',
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Test post',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      deps.postResolver.setPost(post);
+
       const existingLike: Like = {
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
-        objectUri,
+        postId: post.postId,
       };
       deps.likeResolver.setLike(existingLike);
 
@@ -253,7 +278,7 @@ describe('SendLikeUseCase', () => {
 
       await useCase.run({
         sessionId: session.sessionId,
-        objectUri,
+        postId: post.postId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -263,7 +288,7 @@ describe('SendLikeUseCase', () => {
   });
 
   describe('冪等性の検証', () => {
-    it('同じオブジェクトに2回いいねすると AlreadyLikedError を返す', async () => {
+    it('同じ投稿に2回いいねすると AlreadyLikedError を返す', async () => {
       const deps = createDeps();
       const user: User = {
         id: crypto.randomUUID() as User['id'],
@@ -284,11 +309,21 @@ describe('SendLikeUseCase', () => {
       };
       setupValidUserSession(deps, user, session, actor);
 
-      const objectUri = 'https://remote.example.com/posts/1';
+      const post: LocalPost = {
+        type: 'local',
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Test post',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      deps.postResolver.setPost(post);
+
       const existingLike: Like = {
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
-        objectUri,
+        postId: post.postId,
       };
       deps.likeResolver.setLike(existingLike);
 
@@ -297,7 +332,7 @@ describe('SendLikeUseCase', () => {
 
       const result = await useCase.run({
         sessionId: session.sessionId,
-        objectUri,
+        postId: post.postId,
         request: new Request('https://example.com'),
         ctx,
       });
@@ -307,7 +342,7 @@ describe('SendLikeUseCase', () => {
         expect(result.err.type).toBe('AlreadyLikedError');
         const err = result.err as AlreadyLikedError;
         expect(err.detail.actorId).toBe(actor.id);
-        expect(err.detail.objectUri).toBe(objectUri);
+        expect(err.detail.postId).toBe(post.postId);
       }
     });
   });

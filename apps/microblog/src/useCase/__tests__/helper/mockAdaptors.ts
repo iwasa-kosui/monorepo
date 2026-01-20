@@ -75,7 +75,7 @@ import type {
   Repost,
   RepostDeleted,
   RepostDeletedStore,
-  RepostsResolverByOriginalPostId,
+  RepostsResolverByPostId,
 } from '../../../domain/repost/repost.ts';
 import type { Session, SessionResolver, SessionStartedStore } from '../../../domain/session/session.ts';
 import type { SessionId } from '../../../domain/session/sessionId.ts';
@@ -378,12 +378,12 @@ export const createMockLikeCreatedStore = (): LikeCreatedStore & InMemoryStore<L
 export const createMockLikeResolver = (
   likes: Map<string, Like> = new Map(),
 ): LikeResolver & { setLike: (like: Like) => void } => {
-  const key = (actorId: ActorId, objectUri: string) => `${actorId}:${objectUri}`;
+  const key = (actorId: ActorId, postId: PostId) => `${actorId}:${postId}`;
   return {
-    resolve: vi.fn(({ actorId, objectUri }: { actorId: ActorId; objectUri: string }) =>
-      RAImpl.ok(likes.get(key(actorId, objectUri)))
+    resolve: vi.fn(({ actorId, postId }: { actorId: ActorId; postId: PostId }) =>
+      RAImpl.ok(likes.get(key(actorId, postId)))
     ),
-    setLike: (like: Like) => likes.set(key(like.actorId, like.objectUri), like),
+    setLike: (like: Like) => likes.set(key(like.actorId, like.postId), like),
   };
 };
 
@@ -475,10 +475,10 @@ export const createMockRepostDeletedStore = (): RepostDeletedStore & InMemorySto
   };
 };
 
-export const createMockRepostsResolverByOriginalPostId = (
+export const createMockRepostsResolverByPostId = (
   reposts: Map<PostId, Repost[]> = new Map(),
-): RepostsResolverByOriginalPostId & { setReposts: (postId: PostId, r: Repost[]) => void } => ({
-  resolve: vi.fn(({ originalPostId }: { originalPostId: PostId }) => RAImpl.ok(reposts.get(originalPostId) ?? [])),
+): RepostsResolverByPostId & { setReposts: (postId: PostId, r: Repost[]) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(reposts.get(postId) ?? [])),
   setReposts: (postId: PostId, r: Repost[]) => reposts.set(postId, r),
 });
 

@@ -3,7 +3,6 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
-import { Env } from '../../../env.ts';
 import { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
 import { AddReceivedLikeUseCase } from '../../../useCase/addReceivedLike.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
@@ -186,9 +185,6 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   }
   const postId = postIdResult.val;
 
-  const env = Env.getInstance();
-  const objectUri = `${env.ORIGIN}/users/${parsed.values.identifier}/posts/${postId}`;
-
   // Check if this is an emoji reaction (Misskey-style)
   const emojiInfo = await extractEmojiFromLike(activity);
   if (emojiInfo) {
@@ -210,7 +206,6 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
         emojiReactActivityUri: activityUri,
         reactedPostId: postId,
         reactorIdentity: actorIdentity,
-        objectUri,
         emoji: emojiInfo.emoji,
         emojiImageUrl: emojiInfo.emojiImageUrl,
       }),
@@ -247,7 +242,6 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
       likeActivityUri: activityUri,
       likedPostId: postId,
       likerIdentity: actorIdentity,
-      objectUri,
     }),
     RA.match({
       ok: ({ actor: likerActor }) => {

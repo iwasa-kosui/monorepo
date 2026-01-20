@@ -10,14 +10,14 @@ import { DB } from '../db.ts';
 import { repostsTable } from '../schema.ts';
 
 const resolve = async (
-  { actorId, objectUri }: { actorId: ActorId; objectUri: string },
+  { actorId, postId }: { actorId: ActorId; postId: PostId },
 ): RA<Repost | undefined, never> => {
   const result = await DB.getInstance()
     .select()
     .from(repostsTable)
     .where(and(
       eq(repostsTable.actorId, actorId),
-      eq(repostsTable.objectUri, objectUri),
+      eq(repostsTable.postId, postId),
     ))
     .limit(1);
 
@@ -29,8 +29,7 @@ const resolve = async (
   return RA.ok({
     repostId: RepostId.orThrow(row.repostId),
     actorId: row.actorId as ActorId,
-    objectUri: row.objectUri,
-    originalPostId: row.originalPostId ? PostId.orThrow(row.originalPostId) : null,
+    postId: PostId.orThrow(row.postId),
     announceActivityUri: row.announceActivityUri,
   });
 };

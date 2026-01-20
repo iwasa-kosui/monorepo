@@ -16,7 +16,7 @@ import {
 } from '../domain/notification/notification.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
-import { Repost, type RepostDeletedStore, type RepostsResolverByOriginalPostId } from '../domain/repost/repost.ts';
+import { Repost, type RepostDeletedStore, type RepostsResolverByPostId } from '../domain/repost/repost.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
 import {
@@ -74,7 +74,7 @@ type Deps = Readonly<{
   replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
   replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
   repostDeletedStore: RepostDeletedStore;
-  repostsResolverByOriginalPostId: RepostsResolverByOriginalPostId;
+  repostsResolverByPostId: RepostsResolverByPostId;
 }>;
 
 const create = ({
@@ -93,7 +93,7 @@ const create = ({
   replyNotificationsResolverByReplyPostId,
   replyNotificationsResolverByOriginalPostId,
   repostDeletedStore,
-  repostsResolverByOriginalPostId,
+  repostsResolverByPostId,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -136,7 +136,7 @@ const create = ({
           emojiReactNotificationsResolverByPostId.resolve({ postId }),
           replyNotificationsResolverByReplyPostId.resolve({ replyPostId: postId }),
           replyNotificationsResolverByOriginalPostId.resolve({ originalPostId: postId }),
-          repostsResolverByOriginalPostId.resolve({ originalPostId: postId }),
+          repostsResolverByPostId.resolve({ postId }),
         ]);
 
         // Generate all delete events

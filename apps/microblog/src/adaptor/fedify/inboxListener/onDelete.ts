@@ -18,7 +18,7 @@ import { PgReplyNotificationsResolverByOriginalPostId } from '../../pg/notificat
 import { PgReplyNotificationsResolverByReplyPostId } from '../../pg/notification/replyNotificationsResolverByReplyPostId.ts';
 import { PgPostDeletedStore } from '../../pg/post/postDeletedStore.ts';
 import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
-import { PgRepostsResolverByOriginalPostId } from '../../pg/repost/repostsResolverByOriginalPostId.ts';
+import { PgRepostsResolverByPostId } from '../../pg/repost/repostsResolverByPostId.ts';
 import { remotePostsTable } from '../../pg/schema.ts';
 import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemsResolverByPostId } from '../../pg/timeline/timelineItemsResolverByPostId.ts';
@@ -68,7 +68,7 @@ export const onDelete = async (
     PgEmojiReactNotificationsResolverByPostId.getInstance().resolve({ postId }),
     PgReplyNotificationsResolverByReplyPostId.getInstance().resolve({ replyPostId: postId }),
     PgReplyNotificationsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
-    PgRepostsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
+    PgRepostsResolverByPostId.getInstance().resolve({ postId }),
   ]);
 
   // Generate all delete events

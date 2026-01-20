@@ -3,7 +3,6 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
-import { Env } from '../../../env.ts';
 import { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
@@ -128,9 +127,6 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
   }
   const reactedPostId = postIdResult.val;
 
-  const env = Env.getInstance();
-  const localObjectUri = `${env.ORIGIN}/users/${parsed.values.identifier}/posts/${reactedPostId}`;
-
   const useCase = AddReceivedEmojiReactUseCase.create({
     emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
     emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
@@ -148,7 +144,6 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
       emojiReactActivityUri,
       reactedPostId,
       reactorIdentity,
-      objectUri: localObjectUri,
       emoji,
       emojiImageUrl,
     }),

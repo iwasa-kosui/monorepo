@@ -3,6 +3,8 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import { Repost, type RepostDeletedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
@@ -12,13 +14,12 @@ import {
   type TimelineItemResolverByRepostId,
 } from '../domain/timeline/timelineItem.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
-  objectUri: string;
+  postId: PostId;
   request: Request;
   ctx: RequestContext<unknown>;
 }>;
@@ -29,15 +30,15 @@ export type RepostNotFoundForUndoError = Readonly<{
   type: 'RepostNotFoundForUndoError';
   message: string;
   detail: {
-    objectUri: string;
+    postId: PostId;
   };
 }>;
 
 export const RepostNotFoundForUndoError = {
-  create: (objectUri: string): RepostNotFoundForUndoError => ({
+  create: (postId: PostId): RepostNotFoundForUndoError => ({
     type: 'RepostNotFoundForUndoError',
-    message: `No repost found for object "${objectUri}"`,
-    detail: { objectUri },
+    message: `No repost found for post "${postId}"`,
+    detail: { postId },
   }),
 } as const;
 
@@ -61,6 +62,7 @@ export const RemoteNoteLookupError = {
 type Err =
   | SessionExpiredError
   | UserNotFoundError
+  | PostNotFoundError
   | RepostNotFoundForUndoError
   | RemoteNoteLookupError;
 
@@ -74,6 +76,7 @@ type Deps = Readonly<{
   repostDeletedStore: RepostDeletedStore;
   timelineItemResolverByRepostId: TimelineItemResolverByRepostId;
   timelineItemDeletedStore: TimelineItemDeletedStore;
+  postResolver: PostResolver;
 }>;
 
 const create = ({
@@ -84,11 +87,28 @@ const create = ({
   repostDeletedStore,
   timelineItemResolverByRepostId,
   timelineItemDeletedStore,
+  postResolver,
 }: Deps): UndoRepostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
   const resolveUser = resolveUserWith(userResolver);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+
+  const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
+    RA.flow(
+      postResolver.resolve(postId),
+      RA.andThen((post) =>
+        post === undefined
+          ? RA.err(
+            {
+              type: 'PostNotFoundError',
+              message: `Post not found: ${postId}`,
+              detail: { postId },
+            } as PostNotFoundError,
+          )
+          : RA.ok(post)
+      ),
+    );
 
   const run = async (input: Input) =>
     RA.flow(
@@ -96,65 +116,22 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      // Resolve the post
+      RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
       // Find the repost
-      RA.andBind('repost', async ({ actor, objectUri }) => {
+      RA.andBind('repost', async ({ actor, postId }) => {
         return RA.flow(
           repostResolver.resolve({
             actorId: actor.id,
-            objectUri,
+            postId,
           }),
           RA.andThen((repost) => {
             if (repost === undefined) {
-              return RA.err(RepostNotFoundForUndoError.create(objectUri));
+              return RA.err(RepostNotFoundForUndoError.create(postId));
             }
             return RA.ok(repost);
           }),
         );
-      }),
-      // Lookup the remote note for sending Undo
-      RA.andBind('note', async ({ user, request, objectUri }) => {
-        const ctx = Federation.getInstance().createContext(request, undefined);
-        const documentLoader = await ctx.getDocumentLoader({
-          identifier: user.username,
-        });
-        const result = await ctx.lookupObject(objectUri.trim(), {
-          documentLoader,
-        });
-
-        if (!(result instanceof Note)) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
-          );
-        }
-
-        if (!result.id) {
-          return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note ID',
-            ),
-          );
-        }
-
-        return RA.ok(result);
-      }),
-      // Get the note's author
-      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
-        const author = await note.getAttribution();
-        if (!author || !isActor(author)) {
-          return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note author',
-            ),
-          );
-        }
-        if (!author.id || !author.inboxId) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
-          );
-        }
-        return RA.ok(author);
       }),
       // Delete the timeline item if it exists
       RA.andThrough(async ({ repost }) => {
@@ -175,8 +152,45 @@ const create = ({
         const deletedEvent = Repost.deleteRepost(repost, now);
         return repostDeletedStore.store(deletedEvent);
       }),
-      // Send Undo Announce activity
-      RA.andThrough(async ({ ctx, user, repost, note, noteAuthor }) => {
+      // Send Undo Announce activity for remote posts
+      RA.andThrough(async ({ ctx, user, repost, post }) => {
+        // Local posts don't need ActivityPub delivery
+        if (post.type === 'local') {
+          return RA.ok(undefined);
+        }
+
+        const objectUri = post.uri;
+        const documentLoader = await ctx.getDocumentLoader({
+          identifier: user.username,
+        });
+        const result = await ctx.lookupObject(objectUri.trim(), {
+          documentLoader,
+        });
+
+        if (!(result instanceof Note)) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
+          );
+        }
+
+        if (!result.id) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
+          );
+        }
+
+        const author = await result.getAttribution();
+        if (!author || !isActor(author)) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
+          );
+        }
+        if (!author.id || !author.inboxId) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
+          );
+        }
+
         const actorUri = ctx.getActorUri(user.username);
         const followersUri = new URL(`${actorUri.href}/followers`);
 
@@ -186,14 +200,14 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          noteAuthor,
+          author,
           new Undo({
             id: new URL(`#undo-announces/${repost.repostId}`, actorUri),
             actor: actorUri,
             object: new Announce({
               id: announceId,
               actor: actorUri,
-              object: note.id,
+              object: result.id,
             }),
             to: new URL('https://www.w3.org/ns/activitystreams#Public'),
             cc: followersUri,

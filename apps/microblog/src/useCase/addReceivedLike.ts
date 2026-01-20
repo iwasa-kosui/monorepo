@@ -36,7 +36,6 @@ type Input = Readonly<{
   likeActivityUri: string;
   likedPostId: PostId;
   likerIdentity: ActorIdentity;
-  objectUri: string;
 }>;
 
 type Ok = Readonly<{
@@ -102,7 +101,7 @@ const create = ({
         if (existingLike) {
           return RA.err(AlreadyLikedV2Error.create({
             actorId: existingLike.actorId,
-            objectUri: existingLike.objectUri,
+            postId: existingLike.postId,
           }));
         }
         return RA.ok(rest);
@@ -121,12 +120,12 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(likerIdentity)),
-      RA.andBind('like', ({ actor, objectUri, likeActivityUri }) => {
+      RA.andBind('like', ({ actor, likedPostId, likeActivityUri }) => {
         const likeId = LikeId.generate();
         const like: LikeV2 = {
           likeId,
           actorId: actor.id,
-          objectUri,
+          postId: likedPostId,
           likeActivityUri,
         };
         const event = LikeV2.createLikeV2(like, now);

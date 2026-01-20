@@ -15,7 +15,15 @@ import {
   type ReplyNotificationCreatedStore,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
-import { type LocalPost, Post, type PostCreatedStore } from '../domain/post/post.ts';
+import {
+  type LocalPost,
+  Post,
+  type PostCreatedStore,
+  type PostNotFoundError,
+  type PostResolver,
+  type RemotePost,
+} from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
@@ -23,13 +31,12 @@ import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import { Env } from '../env.ts';
-import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
-  objectUri: string;
+  postId: PostId;
   content: string;
   imageUrls: string[];
   request: Request;
@@ -58,6 +65,7 @@ export const RemoteNoteLookupError = {
 type Err =
   | SessionExpiredError
   | UserNotFoundError
+  | PostNotFoundError
   | RemoteNoteLookupError;
 
 export type SendReplyUseCase = UseCase<Input, Ok, Err>;
@@ -73,6 +81,7 @@ type Deps = Readonly<{
   replyNotificationCreatedStore: ReplyNotificationCreatedStore;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  postResolver: PostResolver;
 }>;
 
 const create = ({
@@ -86,11 +95,30 @@ const create = ({
   replyNotificationCreatedStore,
   pushSubscriptionsResolver,
   webPushSender,
+  postResolver,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
   const resolveUser = resolveUserWith(userResolver);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+
+  type ResolvedPost = LocalPost | RemotePost;
+
+  const resolvePostOrErr = (postId: PostId): RA<ResolvedPost, PostNotFoundError> =>
+    RA.flow(
+      postResolver.resolve(postId),
+      RA.andThen((post) =>
+        post === undefined
+          ? RA.err(
+            {
+              type: 'PostNotFoundError',
+              message: `Post not found: ${postId}`,
+              detail: { postId },
+            } as PostNotFoundError,
+          )
+          : RA.ok(post)
+      ),
+    );
 
   const run = async (input: Input) =>
     RA.flow(
@@ -98,9 +126,98 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      // Lookup the remote note being replied to
-      RA.andBind('note', async ({ user, request, objectUri }) => {
-        const ctx = Federation.getInstance().createContext(request, undefined);
+      // Resolve the parent post
+      RA.andBind('parentPost', ({ postId }) => resolvePostOrErr(postId)),
+      // Get the inReplyToUri for the new post
+      RA.andBind('inReplyToUri', async ({ parentPost, ctx, user }) => {
+        if (parentPost.type === 'local') {
+          // For local posts, generate a URI
+          const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: parentPost.postId });
+          return RA.ok(noteUri.href);
+        }
+        // For remote posts, use the existing URI
+        return RA.ok(parentPost.uri);
+      }),
+      // Create the reply post
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri }) => {
+        const postEvent = Post.createPost(now)({
+          actorId: actor.id,
+          content,
+          userId: actor.userId,
+          inReplyToUri,
+        });
+        return RA.ok(postEvent);
+      }),
+      RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
+      RA.bind('replyPost', ({ postEvent }) => postEvent.aggregateState),
+      // Create timeline item
+      RA.andThrough(({ replyPost, actor }) => {
+        const timelineItemEvent = TimelineItem.createTimelineItem({
+          timelineItemId: TimelineItemId.generate(),
+          type: 'post',
+          actorId: actor.id,
+          postId: replyPost.postId,
+          repostId: null,
+          createdAt: now,
+        }, now);
+        return timelineItemCreatedStore.store(timelineItemEvent);
+      }),
+      // Store images
+      RA.andBind('images', async ({ replyPost, imageUrls }) => {
+        if (imageUrls.length > 0) {
+          const images: PostImage[] = imageUrls.map((url) => ({
+            imageId: ImageId.generate(),
+            postId: replyPost.postId,
+            url,
+            altText: null,
+            createdAt: now,
+          }));
+          await postImageCreatedStore.store(images);
+          return RA.ok(images);
+        }
+        return RA.ok([]);
+      }),
+      // Send ActivityPub Create activity (only for remote parent posts)
+      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri }) => {
+        // For local parent posts, no ActivityPub delivery to remote author needed
+        if (parentPost.type === 'local') {
+          // Still send to followers
+          const replyNote = new Note({
+            id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+            attribution: ctx.getActorUri(user.username),
+            to: PUBLIC_COLLECTION,
+            cc: ctx.getFollowersUri(user.username),
+            content: replyPost.content,
+            mediaType: 'text/html',
+            published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
+            url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+            replyTarget: new URL(inReplyToUri),
+            attachments: images.map(
+              (image) =>
+                new Document({
+                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                  mediaType: getMimeTypeFromUrl(image.url),
+                }),
+            ),
+          });
+
+          await ctx.sendActivity(
+            { identifier: user.username },
+            'followers',
+            new Create({
+              id: new URL('#activity', replyNote.id ?? undefined),
+              object: replyNote,
+              actors: replyNote.attributionIds,
+              tos: replyNote.toIds,
+              ccs: replyNote.ccIds,
+            }),
+          );
+
+          return RA.ok(undefined);
+        }
+
+        // For remote parent posts, lookup and send to the author
+        const objectUri = parentPost.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
         });
@@ -116,24 +233,14 @@ const create = ({
 
         if (!result.id) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note ID',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
           );
         }
 
-        return RA.ok(result);
-      }),
-      // Get the note's author
-      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
-        const author = await note.getAttribution();
+        const author = await result.getAttribution();
         if (!author || !isActor(author)) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note author',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
           );
         }
         if (!author.id || !author.inboxId) {
@@ -141,58 +248,16 @@ const create = ({
             RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
           );
         }
-        return RA.ok(author);
-      }),
-      // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, objectUri }) => {
-        const postEvent = Post.createPost(now)({
-          actorId: actor.id,
-          content,
-          userId: actor.userId,
-          inReplyToUri: objectUri,
-        });
-        return RA.ok(postEvent);
-      }),
-      RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
-      RA.bind('post', ({ postEvent }) => postEvent.aggregateState),
-      // Create timeline item
-      RA.andThrough(({ post, actor }) => {
-        const timelineItemEvent = TimelineItem.createTimelineItem({
-          timelineItemId: TimelineItemId.generate(),
-          type: 'post',
-          actorId: actor.id,
-          postId: post.postId,
-          repostId: null,
-          createdAt: now,
-        }, now);
-        return timelineItemCreatedStore.store(timelineItemEvent);
-      }),
-      // Store images
-      RA.andBind('images', async ({ post, imageUrls }) => {
-        if (imageUrls.length > 0) {
-          const images: PostImage[] = imageUrls.map((url) => ({
-            imageId: ImageId.generate(),
-            postId: post.postId,
-            url,
-            altText: null,
-            createdAt: now,
-          }));
-          await postImageCreatedStore.store(images);
-          return RA.ok(images);
-        }
-        return RA.ok([]);
-      }),
-      // Send the Create activity to the note's author and followers
-      RA.andThrough(async ({ user, note: _note, noteAuthor, post, images, ctx, objectUri }) => {
+
         const replyNote = new Note({
-          id: ctx.getObjectUri(Note, { identifier: user.username, id: post.postId }),
+          id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           attribution: ctx.getActorUri(user.username),
           to: PUBLIC_COLLECTION,
           cc: ctx.getFollowersUri(user.username),
-          content: post.content,
+          content: replyPost.content,
           mediaType: 'text/html',
-          published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
-          url: ctx.getObjectUri(Note, { identifier: user.username, id: post.postId }),
+          published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
+          url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           replyTarget: new URL(objectUri),
           attachments: images.map(
             (image) =>
@@ -206,7 +271,7 @@ const create = ({
         // Send to the note's author
         await ctx.sendActivity(
           { username: user.username },
-          noteAuthor,
+          author,
           new Create({
             id: new URL('#activity', replyNote.id ?? undefined),
             object: replyNote,
@@ -232,40 +297,80 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Create reply notification if replying to a local post (and not self-reply)
-      RA.andThrough(async ({ actor, post, objectUri }) => {
-        const originalPostResult = await localPostResolverByUri.resolve({ uri: objectUri });
-        if (!originalPostResult.ok || !originalPostResult.val) {
-          // Not a local post, skip notification
+      RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri }) => {
+        // Check if parent is a local post
+        if (parentPost.type !== 'local') {
+          // Also check via URI resolver for backwards compatibility
+          const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
+          if (!originalPostResult.ok || !originalPostResult.val) {
+            return RA.ok(undefined);
+          }
+          const originalPost: LocalPost = originalPostResult.val;
+          if (originalPost.userId === actor.userId) {
+            return RA.ok(undefined);
+          }
+          const notificationId = NotificationId.generate();
+          const notification: ReplyNotification = {
+            type: 'reply',
+            notificationId,
+            recipientUserId: originalPost.userId,
+            isRead: false,
+            replierActorId: actor.id,
+            replyPostId: replyPost.postId,
+            originalPostId: originalPost.postId,
+          };
+          const event = Notification.createReplyNotification(notification, now);
+          await replyNotificationCreatedStore.store(event);
           return RA.ok(undefined);
         }
-        const originalPost: LocalPost = originalPostResult.val;
-        // Skip notification if replying to own post
-        if (originalPost.userId === actor.userId) {
+
+        // Parent is local post
+        if (parentPost.userId === actor.userId) {
           return RA.ok(undefined);
         }
-        // Create reply notification
         const notificationId = NotificationId.generate();
         const notification: ReplyNotification = {
           type: 'reply',
           notificationId,
-          recipientUserId: originalPost.userId,
+          recipientUserId: parentPost.userId,
           isRead: false,
           replierActorId: actor.id,
-          replyPostId: post.postId,
-          originalPostId: originalPost.postId,
+          replyPostId: replyPost.postId,
+          originalPostId: parentPost.postId,
         };
         const event = Notification.createReplyNotification(notification, now);
         await replyNotificationCreatedStore.store(event);
         return RA.ok(undefined);
       }),
       // Send web push notification for reply
-      RA.andThrough(async ({ actor, user, objectUri }) => {
-        const originalPostResult = await localPostResolverByUri.resolve({ uri: objectUri });
-        if (!originalPostResult.ok || !originalPostResult.val) {
+      RA.andThrough(async ({ actor, user, parentPost, inReplyToUri }) => {
+        // Check if parent is local
+        if (parentPost.type !== 'local') {
+          const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
+          if (!originalPostResult.ok || !originalPostResult.val) {
+            return RA.ok(undefined);
+          }
+          const originalPost: LocalPost = originalPostResult.val;
+          if (originalPost.userId === actor.userId) {
+            return RA.ok(undefined);
+          }
+          const payload: PushPayload = {
+            title: 'New Reply',
+            body: `${user.username} replied to your post`,
+            url: '/notifications',
+          };
+          const subscriptionsResult = await pushSubscriptionsResolver.resolve(originalPost.userId);
+          if (!subscriptionsResult.ok) {
+            return RA.ok(undefined);
+          }
+          for (const subscription of subscriptionsResult.val) {
+            await webPushSender.send(subscription, payload);
+          }
           return RA.ok(undefined);
         }
-        const originalPost: LocalPost = originalPostResult.val;
-        if (originalPost.userId === actor.userId) {
+
+        // Parent is local
+        if (parentPost.userId === actor.userId) {
           return RA.ok(undefined);
         }
         const payload: PushPayload = {
@@ -273,7 +378,7 @@ const create = ({
           body: `${user.username} replied to your post`,
           url: '/notifications',
         };
-        const subscriptionsResult = await pushSubscriptionsResolver.resolve(originalPost.userId);
+        const subscriptionsResult = await pushSubscriptionsResolver.resolve(parentPost.userId);
         if (!subscriptionsResult.ok) {
           return RA.ok(undefined);
         }

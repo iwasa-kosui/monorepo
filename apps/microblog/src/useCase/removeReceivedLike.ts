@@ -12,20 +12,7 @@ import {
   type LikeNotificationResolverByActorIdAndPostId,
   Notification,
 } from '../domain/notification/notification.ts';
-import { PostId } from '../domain/post/postId.ts';
 import type { UseCase } from './useCase.ts';
-
-const extractPostIdFromObjectUri = (objectUri: string): PostId | undefined => {
-  const match = objectUri.match(/\/posts\/([a-f0-9-]+)$/);
-  if (!match) {
-    return undefined;
-  }
-  const result = PostId.parse(match[1]);
-  if (!result.ok) {
-    return undefined;
-  }
-  return result.val;
-};
 
 type Input = Readonly<{
   likeActivityUri: string;
@@ -72,14 +59,10 @@ const create = ({
         return likeV2DeletedStore.store(event);
       }),
       RA.andThrough(({ like }) => {
-        const likedPostId = extractPostIdFromObjectUri(like.objectUri);
-        if (!likedPostId) {
-          return RA.ok(undefined);
-        }
         return RA.flow(
           likeNotificationResolverByActorIdAndPostId.resolve({
             likerActorId: like.actorId,
-            likedPostId,
+            likedPostId: like.postId,
           }),
           RA.andThen((notification) => {
             if (!notification) {
