@@ -70,6 +70,10 @@ const generateOgpTags = (url: URL): string => {
 
   const ogUrl = url.origin + url.pathname + url.search;
 
+  // OGP画像のURL
+  const ogImagePath = nenType && isValidNenType(nenType) ? `/og/${nenType}.png` : '/og/default.png';
+  const ogImageUrl = url.origin + ogImagePath;
+
   return `
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${description}" />
@@ -77,9 +81,13 @@ const generateOgpTags = (url: URL): string => {
     <meta property="og:url" content="${ogUrl}" />
     <meta property="og:site_name" content="念系統診断" />
     <meta property="og:locale" content="ja_JP" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="${ogImageUrl}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${ogImageUrl}" />
   `;
 };
 
