@@ -917,12 +917,8 @@ const App = () => {
         currentPost: prev.currentPost?.postId === postId
           ? updater(prev.currentPost)
           : prev.currentPost,
-        ancestors: prev.ancestors.map((post) =>
-          post.postId === postId ? updater(post) : post
-        ),
-        descendants: prev.descendants.map((post) =>
-          post.postId === postId ? updater(post) : post
-        ),
+        ancestors: prev.ancestors.map((post) => post.postId === postId ? updater(post) : post),
+        descendants: prev.descendants.map((post) => post.postId === postId ? updater(post) : post),
       };
     });
   };

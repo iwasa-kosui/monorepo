@@ -3,12 +3,15 @@ import z from 'zod/v4';
 
 import { type ActorResolverById, PgActorResolverById } from '../adaptor/pg/actor/actorResolverById.ts';
 import { PgFollowResolver } from '../adaptor/pg/follow/followResolver.ts';
+import { PgMuteResolver } from '../adaptor/pg/mute/muteResolver.ts';
 import { PgPostsResolverByActorIdWithPagination } from '../adaptor/pg/post/postsResolverByActorIdWithPagination.ts';
 import { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { FollowResolver } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { MuteResolver } from '../domain/mute/mute.ts';
 import type { PostsResolverByActorIdWithPagination, PostWithAuthor } from '../domain/post/post.ts';
+import { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
 import { singleton } from '../helper/singleton.ts';
 import type { UseCase } from './useCase.ts';
@@ -17,6 +20,7 @@ const Input = Schema.create(
   z.object({
     actorId: ActorId.zodType,
     currentUserActorId: z.optional(ActorId.zodType),
+    currentUserId: z.optional(UserId.zodType),
     createdAt: z.optional(Instant.zodType),
   }),
 );
@@ -53,6 +57,7 @@ const NotRemoteActorError = {
 type Ok = Readonly<{
   remoteActor: RemoteActor;
   isFollowing: boolean;
+  isMuted: boolean;
   posts: ReadonlyArray<PostWithAuthor>;
 }>;
 
@@ -63,16 +68,18 @@ export type GetRemoteActorPostsUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   actorResolverById: ActorResolverById;
   followResolver: FollowResolver;
+  muteResolver: MuteResolver;
   postsResolverByActorIdWithPagination: PostsResolverByActorIdWithPagination;
 }>;
 
 const create = ({
   actorResolverById,
   followResolver,
+  muteResolver,
   postsResolverByActorIdWithPagination,
 }: Deps): GetRemoteActorPostsUseCase => {
   const run = async (input: Input): Promise<Result<Ok, Err>> => {
-    const { actorId, currentUserActorId, createdAt } = input;
+    const { actorId, currentUserActorId, currentUserId, createdAt } = input;
 
     const actorResult = await actorResolverById.resolve(actorId);
     if (!actorResult.ok) {
@@ -100,6 +107,17 @@ const create = ({
       }
     }
 
+    let isMuted = false;
+    if (currentUserId) {
+      const muteResult = await muteResolver.resolve({
+        userId: currentUserId,
+        mutedActorId: remoteActor.id,
+      });
+      if (muteResult.ok) {
+        isMuted = muteResult.val !== undefined;
+      }
+    }
+
     const postsResult = await postsResolverByActorIdWithPagination.resolve({
       actorId,
       currentActorId: currentUserActorId,
@@ -110,7 +128,7 @@ const create = ({
       return postsResult;
     }
 
-    return Result.ok({ remoteActor, isFollowing, posts: postsResult.val });
+    return Result.ok({ remoteActor, isFollowing, isMuted, posts: postsResult.val });
   };
 
   return {
@@ -124,6 +142,7 @@ export const GetRemoteActorPostsUseCase = {
     create({
       actorResolverById: PgActorResolverById.getInstance(),
       followResolver: PgFollowResolver.getInstance(),
+      muteResolver: PgMuteResolver.getInstance(),
       postsResolverByActorIdWithPagination: PgPostsResolverByActorIdWithPagination.getInstance(),
     })
   ),

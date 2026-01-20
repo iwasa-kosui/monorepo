@@ -16,20 +16,28 @@ type Props = Readonly<{
   remoteActor: RemoteActor;
   posts: ReadonlyArray<PostWithAuthor>;
   isFollowing: boolean;
+  isMuted: boolean;
   isLoggedIn: boolean;
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onLike: (postId: string) => Promise<void>;
+  onMute: () => Promise<void>;
+  onUnmute: () => Promise<void>;
   likingPostId: string | null;
+  isMuting: boolean;
 }>;
 
 export const RemoteUserPage = ({
   remoteActor,
   posts,
   isFollowing,
+  isMuted,
   isLoggedIn,
   fetchData,
   onLike,
+  onMute,
+  onUnmute,
   likingPostId,
+  isMuting,
 }: Props) => {
   const handle = RemoteActorDomain.getHandle(remoteActor) ?? remoteActor.uri;
   const displayName = remoteActor.username ?? handle;
@@ -95,33 +103,56 @@ export const RemoteUserPage = ({
           <div class='flex gap-2'>
             {isLoggedIn
               ? (
-                isFollowing
-                  ? (
-                    <form
-                      method='post'
-                      action={`/remote-users/${remoteActor.id}/unfollow`}
-                    >
-                      <button
-                        type='submit'
-                        class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
+                <>
+                  {isFollowing
+                    ? (
+                      <form
+                        method='post'
+                        action={`/remote-users/${remoteActor.id}/unfollow`}
                       >
-                        Unfollow
-                      </button>
-                    </form>
-                  )
-                  : (
-                    <form
-                      method='post'
-                      action={`/remote-users/${remoteActor.id}/follow`}
-                    >
-                      <button
-                        type='submit'
-                        class='px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-2xl transition-colors'
+                        <button
+                          type='submit'
+                          class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
+                        >
+                          Unfollow
+                        </button>
+                      </form>
+                    )
+                    : (
+                      <form
+                        method='post'
+                        action={`/remote-users/${remoteActor.id}/follow`}
                       >
-                        Follow
+                        <button
+                          type='submit'
+                          class='px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-2xl transition-colors'
+                        >
+                          Follow
+                        </button>
+                      </form>
+                    )}
+                  {isMuted
+                    ? (
+                      <button
+                        type='button'
+                        onClick={onUnmute}
+                        disabled={isMuting}
+                        class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50'
+                      >
+                        {isMuting ? 'Unmuting...' : 'Unmute'}
                       </button>
-                    </form>
-                  )
+                    )
+                    : (
+                      <button
+                        type='button'
+                        onClick={onMute}
+                        disabled={isMuting}
+                        class='px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-2xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50'
+                      >
+                        {isMuting ? 'Muting...' : 'Mute'}
+                      </button>
+                    )}
+                </>
               )
               : (
                 <p class='text-gray-500 dark:text-gray-400 text-sm'>
@@ -157,12 +188,14 @@ export const RemoteUserPage = ({
 const App = () => {
   const [init, setInit] = useState(false);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
+  const [isMuting, setIsMuting] = useState(false);
   const [data, setData] = useState<
     | { error: string }
     | {
       remoteActor: RemoteActor;
       posts: readonly PostWithAuthor[];
       isFollowing: boolean;
+      isMuted: boolean;
       isLoggedIn: boolean;
     }
     | null
@@ -223,6 +256,46 @@ const App = () => {
     }
   };
 
+  const handleMute = async () => {
+    if (!data || 'error' in data) return;
+    setIsMuting(true);
+    try {
+      const res = await client.v1.mute.$post({
+        json: { actorId: data.remoteActor.id },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        setData({ ...data, isMuted: true });
+      } else if ('error' in result) {
+        console.error('Failed to mute:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to mute:', error);
+    } finally {
+      setIsMuting(false);
+    }
+  };
+
+  const handleUnmute = async () => {
+    if (!data || 'error' in data) return;
+    setIsMuting(true);
+    try {
+      const res = await client.v1.mute.$delete({
+        json: { actorId: data.remoteActor.id },
+      });
+      const result = await res.json();
+      if ('success' in result && result.success) {
+        setData({ ...data, isMuted: false });
+      } else if ('error' in result) {
+        console.error('Failed to unmute:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to unmute:', error);
+    } finally {
+      setIsMuting(false);
+    }
+  };
+
   useEffect(() => {
     if (!init) {
       setInit(true);
@@ -243,10 +316,14 @@ const App = () => {
       remoteActor={data.remoteActor}
       posts={data.posts}
       isFollowing={data.isFollowing}
+      isMuted={data.isMuted}
       isLoggedIn={data.isLoggedIn}
       fetchData={fetchData}
       onLike={handleLike}
+      onMute={handleMute}
+      onUnmute={handleUnmute}
       likingPostId={likingPostId}
+      isMuting={isMuting}
     />
   );
 };
