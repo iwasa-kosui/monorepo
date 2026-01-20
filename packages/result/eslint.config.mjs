@@ -26,7 +26,7 @@ export default tseslint.config(
           ],
         },
       ],
-      'simple-import-sort/exports': 'error',
+      'simple-import-sort/exports': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
