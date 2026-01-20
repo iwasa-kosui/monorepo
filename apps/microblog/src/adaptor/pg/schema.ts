@@ -1,4 +1,4 @@
-import { integer, json, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, integer, json, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const usersTable = pgTable('users', {
   userId: uuid().primaryKey(),
@@ -207,3 +207,13 @@ export const notificationEmojiReactsTable = pgTable('notification_emoji_reacts',
   emoji: varchar({ length: 128 }).notNull(),
   emojiImageUrl: text(),
 });
+
+export const notificationRepliesTable = pgTable('notification_replies', {
+  notificationId: uuid().primaryKey().references(() => notificationsTable.notificationId),
+  replierActorId: uuid().notNull().references(() => actorsTable.actorId),
+  replyPostId: uuid().notNull(),
+  originalPostId: uuid().notNull(),
+}, (table) => [
+  index('notification_replies_reply_post_id_idx').on(table.replyPostId),
+  index('notification_replies_original_post_id_idx').on(table.originalPostId),
+]);

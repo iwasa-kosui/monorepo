@@ -54,10 +54,26 @@ const emojiReactNotificationZodType = z
 export type EmojiReactNotification = z.output<typeof emojiReactNotificationZodType>;
 export const EmojiReactNotification = Schema.create(emojiReactNotificationZodType);
 
+const replyNotificationZodType = z
+  .object({
+    type: z.literal('reply'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    replierActorId: ActorId.zodType,
+    replyPostId: PostId.zodType,
+    originalPostId: PostId.zodType,
+  })
+  .describe('ReplyNotification');
+
+export type ReplyNotification = z.output<typeof replyNotificationZodType>;
+export const ReplyNotification = Schema.create(replyNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
   emojiReactNotificationZodType,
+  replyNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -230,6 +246,77 @@ export type EmojiReactNotificationsResolverByPostId = Agg.Resolver<
   EmojiReactNotification[]
 >;
 
+// Reply通知作成イベント
+export type ReplyNotificationCreated = NotificationEvent<
+  ReplyNotification,
+  'notification.replyNotificationCreated',
+  ReplyNotification
+>;
+
+const createReplyNotification = (payload: ReplyNotification, now: Instant): ReplyNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.replyNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type ReplyNotificationCreatedStore = Agg.Store<ReplyNotificationCreated>;
+
+// Reply通知削除イベント
+export type ReplyNotificationDeletedPayload = Readonly<{
+  notificationId: NotificationId;
+  replierActorId: ActorId;
+  replyPostId: PostId;
+  originalPostId: PostId;
+}>;
+
+export type ReplyNotificationDeleted = NotificationEvent<
+  undefined,
+  'notification.replyNotificationDeleted',
+  ReplyNotificationDeletedPayload
+>;
+
+const deleteReplyNotification = (
+  notification: ReplyNotification,
+  now: Instant,
+): ReplyNotificationDeleted => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.replyNotificationDeleted',
+    {
+      notificationId: notification.notificationId,
+      replierActorId: notification.replierActorId,
+      replyPostId: notification.replyPostId,
+      originalPostId: notification.originalPostId,
+    },
+    now,
+  );
+};
+
+export type ReplyNotificationDeletedStore = Agg.Store<ReplyNotificationDeleted>;
+
+// Reply通知をActorIdとReplyPostIdで検索するリゾルバ（重複防止用）
+export type ReplyNotificationResolverByActorIdAndReplyPostId = Agg.Resolver<
+  { replierActorId: ActorId; replyPostId: PostId },
+  ReplyNotification | undefined
+>;
+
+// Reply通知をReplyPostIdで検索するリゾルバ（リプライ投稿削除時に使用）
+export type ReplyNotificationsResolverByReplyPostId = Agg.Resolver<
+  { replyPostId: PostId },
+  ReplyNotification[]
+>;
+
+// Reply通知をOriginalPostIdで検索するリゾルバ（元投稿削除時に使用）
+export type ReplyNotificationsResolverByOriginalPostId = Agg.Resolver<
+  { originalPostId: PostId },
+  ReplyNotification[]
+>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -269,6 +356,8 @@ export const Notification = {
   deleteLikeNotification,
   createEmojiReactNotification,
   deleteEmojiReactNotification,
+  createReplyNotification,
+  deleteReplyNotification,
   markAsRead,
   toAggregateId,
 } as const;
@@ -296,11 +385,21 @@ export type EmojiReactNotificationWithDetails = Readonly<{
   createdAt: Instant;
 }>;
 
+// Reply通知と関連情報を含む型
+export type ReplyNotificationWithDetails = Readonly<{
+  notification: ReplyNotification;
+  replierActor: Actor;
+  replyPost: Post;
+  originalPost: Post;
+  createdAt: Instant;
+}>;
+
 // 通知と関連情報を含む型
 export type NotificationWithDetails =
   | LikeNotificationWithDetails
   | FollowNotificationWithDetails
-  | EmojiReactNotificationWithDetails;
+  | EmojiReactNotificationWithDetails
+  | ReplyNotificationWithDetails;
 
 // ユーザーIDで通知一覧を取得するリゾルバ
 export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWithDetails[]>;

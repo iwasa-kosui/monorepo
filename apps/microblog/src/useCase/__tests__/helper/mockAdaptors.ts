@@ -4,6 +4,7 @@ import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
 
+import type { LocalPostResolverByUri } from '../../../adaptor/pg/post/localPostResolverByUri.ts';
 import type { WebPushSender } from '../../../adaptor/webPush/webPushSender.ts';
 import type {
   Actor,
@@ -31,12 +32,23 @@ import type {
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
 import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
 import type {
+  EmojiReactNotification,
+  EmojiReactNotificationDeleted,
+  EmojiReactNotificationDeletedStore,
+  EmojiReactNotificationsResolverByPostId,
   FollowNotificationCreated,
   FollowNotificationCreatedStore,
   LikeNotification,
   LikeNotificationDeleted,
   LikeNotificationDeletedStore,
   LikeNotificationsResolverByPostId,
+  ReplyNotification,
+  ReplyNotificationCreated,
+  ReplyNotificationCreatedStore,
+  ReplyNotificationDeleted,
+  ReplyNotificationDeletedStore,
+  ReplyNotificationsResolverByOriginalPostId,
+  ReplyNotificationsResolverByReplyPostId,
 } from '../../../domain/notification/notification.ts';
 import type { HashedPassword } from '../../../domain/password/password.ts';
 import type {
@@ -45,6 +57,7 @@ import type {
   UserPasswordSetStore,
 } from '../../../domain/password/userPassword.ts';
 import type {
+  LocalPost,
   Post,
   PostCreated,
   PostCreatedStore,
@@ -466,4 +479,79 @@ export const createMockRepostsResolverByOriginalPostId = (
 ): RepostsResolverByOriginalPostId & { setReposts: (postId: PostId, r: Repost[]) => void } => ({
   resolve: vi.fn(({ originalPostId }: { originalPostId: PostId }) => RAImpl.ok(reposts.get(originalPostId) ?? [])),
   setReposts: (postId: PostId, r: Repost[]) => reposts.set(postId, r),
+});
+
+export const createMockLocalPostResolverByUri = (
+  posts: Map<string, LocalPost> = new Map(),
+): LocalPostResolverByUri & { setPost: (uri: string, post: LocalPost) => void } => ({
+  resolve: vi.fn(({ uri }: { uri: string }) => RAImpl.ok(posts.get(uri))),
+  setPost: (uri: string, post: LocalPost) => posts.set(uri, post),
+});
+
+export const createMockReplyNotificationCreatedStore = ():
+  & ReplyNotificationCreatedStore
+  & InMemoryStore<ReplyNotificationCreated> =>
+{
+  const inMemoryStore = createInMemoryStore<ReplyNotificationCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & ReplyNotificationCreatedStore['store']
+      & InMemoryStore<ReplyNotificationCreated>['store'],
+  };
+};
+
+export const createMockReplyNotificationDeletedStore = ():
+  & ReplyNotificationDeletedStore
+  & InMemoryStore<ReplyNotificationDeleted> =>
+{
+  const inMemoryStore = createInMemoryStore<ReplyNotificationDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & ReplyNotificationDeletedStore['store']
+      & InMemoryStore<ReplyNotificationDeleted>['store'],
+  };
+};
+
+export const createMockReplyNotificationsResolverByReplyPostId = (
+  notifications: Map<PostId, ReplyNotification[]> = new Map(),
+): ReplyNotificationsResolverByReplyPostId & {
+  setNotifications: (postId: PostId, n: ReplyNotification[]) => void;
+} => ({
+  resolve: vi.fn(({ replyPostId }: { replyPostId: PostId }) => RAImpl.ok(notifications.get(replyPostId) ?? [])),
+  setNotifications: (postId: PostId, n: ReplyNotification[]) => notifications.set(postId, n),
+});
+
+export const createMockReplyNotificationsResolverByOriginalPostId = (
+  notifications: Map<PostId, ReplyNotification[]> = new Map(),
+): ReplyNotificationsResolverByOriginalPostId & {
+  setNotifications: (postId: PostId, n: ReplyNotification[]) => void;
+} => ({
+  resolve: vi.fn(({ originalPostId }: { originalPostId: PostId }) =>
+    RAImpl.ok(notifications.get(originalPostId) ?? [])
+  ),
+  setNotifications: (postId: PostId, n: ReplyNotification[]) => notifications.set(postId, n),
+});
+
+export const createMockEmojiReactNotificationDeletedStore = ():
+  & EmojiReactNotificationDeletedStore
+  & InMemoryStore<EmojiReactNotificationDeleted> =>
+{
+  const inMemoryStore = createInMemoryStore<EmojiReactNotificationDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & EmojiReactNotificationDeletedStore['store']
+      & InMemoryStore<EmojiReactNotificationDeleted>['store'],
+  };
+};
+
+export const createMockEmojiReactNotificationsResolverByPostId = (
+  notifications: Map<PostId, EmojiReactNotification[]> = new Map(),
+): EmojiReactNotificationsResolverByPostId & {
+  setNotifications: (postId: PostId, n: EmojiReactNotification[]) => void;
+} => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(notifications.get(postId) ?? [])),
+  setNotifications: (postId: PostId, n: EmojiReactNotification[]) => notifications.set(postId, n),
 });

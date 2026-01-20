@@ -5,11 +5,15 @@ import { AddRemotePostUseCase } from '../addRemotePost.ts';
 import { arbContent } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUri,
+  createMockLocalPostResolverByUri,
   createMockLogoUriUpdatedStore,
   createMockPostCreatedStore,
   createMockPostImageCreatedStore,
+  createMockPushSubscriptionsResolverByUserId,
   createMockRemoteActorCreatedStore,
+  createMockReplyNotificationCreatedStore,
   createMockTimelineItemCreatedStore,
+  createMockWebPushSender,
 } from './helper/mockAdaptors.ts';
 
 describe('AddRemotePostUseCase', () => {
@@ -20,6 +24,10 @@ describe('AddRemotePostUseCase', () => {
     const logoUriUpdatedStore = createMockLogoUriUpdatedStore();
     const actorResolverByUri = createMockActorResolverByUri();
     const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
+    const localPostResolverByUri = createMockLocalPostResolverByUri();
+    const replyNotificationCreatedStore = createMockReplyNotificationCreatedStore();
+    const pushSubscriptionsResolver = createMockPushSubscriptionsResolverByUserId();
+    const webPushSender = createMockWebPushSender();
     return {
       postCreatedStore,
       postImageCreatedStore,
@@ -27,6 +35,10 @@ describe('AddRemotePostUseCase', () => {
       logoUriUpdatedStore,
       actorResolverByUri,
       timelineItemCreatedStore,
+      localPostResolverByUri,
+      replyNotificationCreatedStore,
+      pushSubscriptionsResolver,
+      webPushSender,
     };
   };
 

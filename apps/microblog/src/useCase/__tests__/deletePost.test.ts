@@ -11,10 +11,15 @@ import { DeletePostUseCase } from '../deletePost.ts';
 import { arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
+  createMockEmojiReactNotificationDeletedStore,
+  createMockEmojiReactNotificationsResolverByPostId,
   createMockLikeNotificationDeletedStore,
   createMockLikeNotificationsResolverByPostId,
   createMockPostDeletedStore,
   createMockPostResolver,
+  createMockReplyNotificationDeletedStore,
+  createMockReplyNotificationsResolverByOriginalPostId,
+  createMockReplyNotificationsResolverByReplyPostId,
   createMockRepostDeletedStore,
   createMockRepostsResolverByOriginalPostId,
   createMockRequestContext,
@@ -43,6 +48,11 @@ describe('DeletePostUseCase', () => {
     const timelineItemResolverByPostId = createMockTimelineItemResolverByPostId();
     const likeNotificationDeletedStore = createMockLikeNotificationDeletedStore();
     const likeNotificationsResolverByPostId = createMockLikeNotificationsResolverByPostId();
+    const emojiReactNotificationDeletedStore = createMockEmojiReactNotificationDeletedStore();
+    const emojiReactNotificationsResolverByPostId = createMockEmojiReactNotificationsResolverByPostId();
+    const replyNotificationDeletedStore = createMockReplyNotificationDeletedStore();
+    const replyNotificationsResolverByReplyPostId = createMockReplyNotificationsResolverByReplyPostId();
+    const replyNotificationsResolverByOriginalPostId = createMockReplyNotificationsResolverByOriginalPostId();
     const repostDeletedStore = createMockRepostDeletedStore();
     const repostsResolverByOriginalPostId = createMockRepostsResolverByOriginalPostId();
     return {
@@ -55,6 +65,11 @@ describe('DeletePostUseCase', () => {
       timelineItemResolverByPostId,
       likeNotificationDeletedStore,
       likeNotificationsResolverByPostId,
+      emojiReactNotificationDeletedStore,
+      emojiReactNotificationsResolverByPostId,
+      replyNotificationDeletedStore,
+      replyNotificationsResolverByReplyPostId,
+      replyNotificationsResolverByOriginalPostId,
       repostDeletedStore,
       repostsResolverByOriginalPostId,
     };

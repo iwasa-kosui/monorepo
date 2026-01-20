@@ -1,12 +1,21 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Post, type PostCreatedStore, type RemotePostCreated } from '../domain/post/post.ts';
+import {
+  Notification,
+  type ReplyNotification,
+  type ReplyNotificationCreatedStore,
+} from '../domain/notification/notification.ts';
+import { NotificationId } from '../domain/notification/notificationId.ts';
+import { type LocalPost, Post, type PostCreatedStore, type RemotePostCreated } from '../domain/post/post.ts';
+import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
@@ -49,6 +58,10 @@ type Deps = Readonly<{
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  localPostResolverByUri: LocalPostResolverByUri;
+  replyNotificationCreatedStore: ReplyNotificationCreatedStore;
+  pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
+  webPushSender: WebPushSender;
 }>;
 
 const create = ({
@@ -58,6 +71,10 @@ const create = ({
   logoUriUpdatedStore,
   actorResolverByUri,
   timelineItemCreatedStore,
+  localPostResolverByUri,
+  replyNotificationCreatedStore,
+  pushSubscriptionsResolver,
+  webPushSender,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -103,6 +120,57 @@ const create = ({
           createdAt: now,
         }));
         await postImageCreatedStore.store(images);
+        return RA.ok(undefined);
+      }),
+      // Create reply notification if this is a reply to a local post
+      RA.andThrough(async ({ post, actor, inReplyToUri }) => {
+        if (!inReplyToUri) {
+          return RA.ok(undefined);
+        }
+        const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
+        if (!originalPostResult.ok || !originalPostResult.val) {
+          // Not a local post, skip notification
+          return RA.ok(undefined);
+        }
+        const originalPost: LocalPost = originalPostResult.val;
+        // Create reply notification
+        const notificationId = NotificationId.generate();
+        const notification: ReplyNotification = {
+          type: 'reply',
+          notificationId,
+          recipientUserId: originalPost.userId,
+          isRead: false,
+          replierActorId: actor.id,
+          replyPostId: post.aggregateState.postId,
+          originalPostId: originalPost.postId,
+        };
+        const event = Notification.createReplyNotification(notification, now);
+        await replyNotificationCreatedStore.store(event);
+        return RA.ok(undefined);
+      }),
+      // Send web push notification for reply
+      RA.andThrough(async ({ actor, inReplyToUri }) => {
+        if (!inReplyToUri) {
+          return RA.ok(undefined);
+        }
+        const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
+        if (!originalPostResult.ok || !originalPostResult.val) {
+          return RA.ok(undefined);
+        }
+        const originalPost: LocalPost = originalPostResult.val;
+        const replierName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
+        const payload: PushPayload = {
+          title: 'New Reply',
+          body: `${replierName} replied to your post`,
+          url: '/notifications',
+        };
+        const subscriptionsResult = await pushSubscriptionsResolver.resolve(originalPost.userId);
+        if (!subscriptionsResult.ok) {
+          return RA.ok(undefined);
+        }
+        for (const subscription of subscriptionsResult.val) {
+          await webPushSender.send(subscription, payload);
+        }
         return RA.ok(undefined);
       }),
       RA.map(({ post, actor }) => ({ post, actor })),

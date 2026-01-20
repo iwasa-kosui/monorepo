@@ -1,5 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 import { desc, eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import type { Actor } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
@@ -14,6 +15,8 @@ import {
   type LikeNotificationWithDetails,
   type NotificationsResolverByUserId,
   type NotificationWithDetails,
+  type ReplyNotification,
+  type ReplyNotificationWithDetails,
 } from '../../../domain/notification/notification.ts';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { LocalPost, type Post, RemotePost } from '../../../domain/post/post.ts';
@@ -28,6 +31,7 @@ import {
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
+  notificationRepliesTable,
   notificationsTable,
   postsTable,
   remoteActorsTable,
@@ -279,11 +283,91 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       };
     });
 
+    // Reply通知を取得（アクターと2つのポスト情報を含む）
+    const replyPostsAlias = alias(postsTable, 'reply_posts');
+    const replyLocalPostsAlias = alias(localPostsTable, 'reply_local_posts');
+    const replyRemotePostsAlias = alias(remotePostsTable, 'reply_remote_posts');
+    const originalPostsAlias = alias(postsTable, 'original_posts');
+    const originalLocalPostsAlias = alias(localPostsTable, 'original_local_posts');
+    const originalRemotePostsAlias = alias(remotePostsTable, 'original_remote_posts');
+
+    const replyRows = await db
+      .select({
+        notifications: notificationsTable,
+        notificationReplies: notificationRepliesTable,
+        replierActors: actorsTable,
+        replierRemoteActors: remoteActorsTable,
+        replierLocalActors: localActorsTable,
+        replyPosts: replyPostsAlias,
+        replyLocalPosts: replyLocalPostsAlias,
+        replyRemotePosts: replyRemotePostsAlias,
+        originalPosts: originalPostsAlias,
+        originalLocalPosts: originalLocalPostsAlias,
+        originalRemotePosts: originalRemotePostsAlias,
+      })
+      .from(notificationsTable)
+      .innerJoin(
+        notificationRepliesTable,
+        eq(notificationsTable.notificationId, notificationRepliesTable.notificationId),
+      )
+      .innerJoin(actorsTable, eq(notificationRepliesTable.replierActorId, actorsTable.actorId))
+      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .innerJoin(replyPostsAlias, eq(notificationRepliesTable.replyPostId, replyPostsAlias.postId))
+      .leftJoin(replyLocalPostsAlias, eq(replyPostsAlias.postId, replyLocalPostsAlias.postId))
+      .leftJoin(replyRemotePostsAlias, eq(replyPostsAlias.postId, replyRemotePostsAlias.postId))
+      .innerJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
+      .leftJoin(originalLocalPostsAlias, eq(originalPostsAlias.postId, originalLocalPostsAlias.postId))
+      .leftJoin(originalRemotePostsAlias, eq(originalPostsAlias.postId, originalRemotePostsAlias.postId))
+      .where(eq(notificationsTable.recipientUserId, userId))
+      .orderBy(desc(notificationsTable.createdAt))
+      .limit(50)
+      .execute();
+
+    const replyNotifications: ReplyNotificationWithDetails[] = replyRows.map((row) => {
+      const replyNotification: ReplyNotification = {
+        type: 'reply',
+        notificationId: NotificationId.orThrow(row.notifications.notificationId),
+        recipientUserId: row.notifications.recipientUserId as UserId,
+        isRead: row.notifications.isRead === 1,
+        replierActorId: ActorId.orThrow(row.notificationReplies.replierActorId),
+        replyPostId: PostId.orThrow(row.notificationReplies.replyPostId),
+        originalPostId: PostId.orThrow(row.notificationReplies.originalPostId),
+      };
+
+      const replierActor = reconstructActor({
+        actors: row.replierActors,
+        remote_actors: row.replierRemoteActors,
+        local_actors: row.replierLocalActors,
+      });
+
+      const replyPost = reconstructPost({
+        posts: row.replyPosts,
+        local_posts: row.replyLocalPosts,
+        remote_posts: row.replyRemotePosts,
+      });
+
+      const originalPost = reconstructPost({
+        posts: row.originalPosts,
+        local_posts: row.originalLocalPosts,
+        remote_posts: row.originalRemotePosts,
+      });
+
+      return {
+        notification: replyNotification,
+        replierActor,
+        replyPost,
+        originalPost,
+        createdAt: row.notifications.createdAt.getTime() as Instant,
+      };
+    });
+
     // すべての通知をマージして日時でソート
     const notifications: NotificationWithDetails[] = [
       ...likeNotifications,
       ...followNotifications,
       ...emojiReactNotifications,
+      ...replyNotifications,
     ].sort(
       (a, b) => b.createdAt - a.createdAt,
     ).slice(0, 50);
