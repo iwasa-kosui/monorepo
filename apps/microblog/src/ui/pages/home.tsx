@@ -703,7 +703,24 @@ export const HomePage = ({
                     <>
                       {threadData.ancestors.map((post) => (
                         <div key={post.postId} class='relative'>
-                          <PostView post={post} currentUserId={user.id} onReply={onReply} />
+                          <PostView
+                            post={post}
+                            currentUserId={user.id}
+                            onReply={onReply}
+                            onLike={onLike}
+                            isLiking={likingPostId === post.postId}
+                            onUndoLike={onUndoLike}
+                            isUndoingLike={undoingLikePostId === post.postId}
+                            onRepost={onRepost}
+                            isReposting={repostingPostId === post.postId}
+                            isUndoingRepost={undoingRepostPostId === post.postId}
+                            onDelete={onDelete}
+                            isDeleting={deletingPostId === post.postId}
+                            onEmojiReact={onEmojiReact}
+                            onUndoEmojiReact={onUndoEmojiReact}
+                            isEmojiReacting={emojiReactingPostId === post.postId}
+                            myReactions={myReactions.get(post.postId) ?? []}
+                          />
                         </div>
                       ))}
                     </>
@@ -715,6 +732,19 @@ export const HomePage = ({
                         post={threadData.currentPost}
                         currentUserId={user.id}
                         onReply={onReply}
+                        onLike={onLike}
+                        isLiking={likingPostId === threadData.currentPost.postId}
+                        onUndoLike={onUndoLike}
+                        isUndoingLike={undoingLikePostId === threadData.currentPost.postId}
+                        onRepost={onRepost}
+                        isReposting={repostingPostId === threadData.currentPost.postId}
+                        isUndoingRepost={undoingRepostPostId === threadData.currentPost.postId}
+                        onDelete={onDelete}
+                        isDeleting={deletingPostId === threadData.currentPost.postId}
+                        onEmojiReact={onEmojiReact}
+                        onUndoEmojiReact={onUndoEmojiReact}
+                        isEmojiReacting={emojiReactingPostId === threadData.currentPost.postId}
+                        myReactions={myReactions.get(threadData.currentPost.postId) ?? []}
                       />
                     </div>
                   )}
@@ -724,7 +754,24 @@ export const HomePage = ({
                       <>
                         {threadData.descendants.map((post) => (
                           <div key={post.postId} class='relative'>
-                            <PostView post={post} currentUserId={user.id} onReply={onReply} />
+                            <PostView
+                              post={post}
+                              currentUserId={user.id}
+                              onReply={onReply}
+                              onLike={onLike}
+                              isLiking={likingPostId === post.postId}
+                              onUndoLike={onUndoLike}
+                              isUndoingLike={undoingLikePostId === post.postId}
+                              onRepost={onRepost}
+                              isReposting={repostingPostId === post.postId}
+                              isUndoingRepost={undoingRepostPostId === post.postId}
+                              onDelete={onDelete}
+                              isDeleting={deletingPostId === post.postId}
+                              onEmojiReact={onEmojiReact}
+                              onUndoEmojiReact={onUndoEmojiReact}
+                              isEmojiReacting={emojiReactingPostId === post.postId}
+                              myReactions={myReactions.get(post.postId) ?? []}
+                            />
                           </div>
                         ))}
                       </>
@@ -859,6 +906,27 @@ const App = () => {
     }
   };
 
+  // Helper function to update a post in threadData
+  const updateThreadDataPost = (
+    postId: string,
+    updater: (post: PostWithAuthor) => PostWithAuthor,
+  ) => {
+    setThreadData((prev) => {
+      if (!prev) return prev;
+      return {
+        currentPost: prev.currentPost?.postId === postId
+          ? updater(prev.currentPost)
+          : prev.currentPost,
+        ancestors: prev.ancestors.map((post) =>
+          post.postId === postId ? updater(post) : post
+        ),
+        descendants: prev.descendants.map((post) =>
+          post.postId === postId ? updater(post) : post
+        ),
+      };
+    });
+  };
+
   const handleLike = async (postId: string) => {
     setLikingPostId(postId);
     try {
@@ -878,6 +946,8 @@ const App = () => {
             ),
           });
         }
+        // Also update threadData if open
+        updateThreadDataPost(postId, (post) => ({ ...post, liked: true }));
       } else if ('error' in result) {
         console.error('Failed to like:', result.error);
       }
@@ -907,6 +977,8 @@ const App = () => {
             ),
           });
         }
+        // Also update threadData if open
+        updateThreadDataPost(postId, (post) => ({ ...post, liked: false }));
       } else if ('error' in result) {
         console.error('Failed to undo like:', result.error);
         alert(`Failed to undo like: ${result.error}`);
@@ -929,6 +1001,8 @@ const App = () => {
       if ('success' in result && result.success) {
         // Refresh the timeline to show the repost
         fetchData(undefined);
+        // Also update threadData if open
+        updateThreadDataPost(postId, (post) => ({ ...post, reposted: true }));
       } else if ('error' in result) {
         console.error('Failed to repost:', result.error);
         alert(`Failed to repost: ${result.error}`);
@@ -954,6 +1028,8 @@ const App = () => {
       if ('success' in result && result.success) {
         // Refresh the timeline to remove the repost
         fetchData(undefined);
+        // Also update threadData if open
+        updateThreadDataPost(postId, (post) => ({ ...post, reposted: false }));
       } else if ('error' in result) {
         console.error('Failed to undo repost:', result.error);
         alert(`Failed to undo repost: ${result.error}`);
@@ -983,6 +1059,21 @@ const App = () => {
             ),
           });
         }
+        // Also update threadData if open
+        setThreadData((prev) => {
+          if (!prev) return prev;
+          // If current post is deleted, close the thread modal
+          if (prev.currentPost?.postId === postId) {
+            setThreadModalPostId(null);
+            return null;
+          }
+          // Otherwise, remove from ancestors/descendants
+          return {
+            currentPost: prev.currentPost,
+            ancestors: prev.ancestors.filter((post) => post.postId !== postId),
+            descendants: prev.descendants.filter((post) => post.postId !== postId),
+          };
+        });
       } else if ('error' in result) {
         console.error('Failed to delete:', result.error);
         alert(`Failed to delete: ${result.error}`);

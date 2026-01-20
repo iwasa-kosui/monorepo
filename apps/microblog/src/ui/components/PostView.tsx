@@ -82,7 +82,7 @@ export const PostView = (
     : undefined;
 
   const triggerLike = () => {
-    if (isRemotePost && onLike && !post.liked && !isLiking) {
+    if (onLike && !post.liked && !isLiking) {
       setShowHeartAnimation(true);
       setIsFloating(true);
       onLike(post.postId);
@@ -94,7 +94,6 @@ export const PostView = (
   };
 
   const handleLikeClick = () => {
-    if (!isRemotePost) return;
     if (isLiking || isUndoingLike) return;
 
     if (post.liked) {
@@ -121,7 +120,6 @@ export const PostView = (
   };
 
   const handleRepostClick = () => {
-    if (!isRemotePost) return;
     if (isReposting || isUndoingRepost) return;
 
     if (post.reposted) {
@@ -148,7 +146,7 @@ export const PostView = (
   };
 
   const handleTouchEnd = (e: TouchEvent) => {
-    if (!isRemotePost || post.liked || isLiking) return;
+    if (post.liked || isLiking) return;
     if (touchStartX.current === null || touchStartY.current === null) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -164,7 +162,7 @@ export const PostView = (
 
   // Double tap detection for like
   const handleClick = (e: MouseEvent) => {
-    if (!isRemotePost || post.liked || isLiking) return;
+    if (post.liked || isLiking) return;
     if (lastTapTime.current === null) return;
 
     const now = Date.now();
@@ -178,7 +176,7 @@ export const PostView = (
     lastTapTime.current = now;
   };
 
-  const canLike = isRemotePost && !post.liked && !isLiking;
+  const canLike = onLike && !post.liked && !isLiking;
 
   return (
     <article
@@ -470,10 +468,8 @@ export const PostView = (
                   isOpen={isEmojiPickerOpen ?? false}
                   onClose={() => onToggleEmojiPicker?.()}
                   onSelect={(emoji) => {
-                    if (isRemotePost) {
-                      onEmojiReact(post.postId, emoji);
-                      onToggleEmojiPicker?.();
-                    }
+                    onEmojiReact(post.postId, emoji);
+                    onToggleEmojiPicker?.();
                   }}
                   isLoading={isEmojiReacting}
                 />
@@ -517,7 +513,7 @@ export const PostView = (
                   type='button'
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (isRemotePost && onUndoEmojiReact) {
+                    if (onUndoEmojiReact) {
                       onUndoEmojiReact(post.postId, emoji);
                     }
                   }}

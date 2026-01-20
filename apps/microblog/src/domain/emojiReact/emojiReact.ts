@@ -42,7 +42,7 @@ export type EmojiReactCreated = EmojiReactEvent<EmojiReact, 'emojiReact.emojiRea
 export type EmojiReactDeleted = EmojiReactEvent<
   undefined,
   'emojiReact.emojiReactDeleted',
-  { emojiReactActivityUri: string }
+  { emojiReactId: EmojiReactId; emojiReactActivityUri: string | null }
 >;
 
 const createEmojiReact = (payload: EmojiReact, now: Instant): EmojiReactCreated => {
@@ -56,14 +56,11 @@ const createEmojiReact = (payload: EmojiReact, now: Instant): EmojiReactCreated 
 };
 
 const deleteEmojiReact = (emojiReact: EmojiReact, now: Instant): EmojiReactDeleted => {
-  if (!emojiReact.emojiReactActivityUri) {
-    throw new Error('Cannot delete an emoji react without emojiReactActivityUri');
-  }
   return EmojiReactEvent.create(
     toAggregateId(emojiReact),
     undefined,
     'emojiReact.emojiReactDeleted',
-    { emojiReactActivityUri: emojiReact.emojiReactActivityUri },
+    { emojiReactId: emojiReact.emojiReactId, emojiReactActivityUri: emojiReact.emojiReactActivityUri },
     now,
   );
 };

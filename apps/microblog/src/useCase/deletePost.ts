@@ -3,7 +3,13 @@ import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import {
+  EmojiReact,
+  type EmojiReactDeletedStore,
+  type EmojiReactsResolverByPostId,
+} from '../domain/emojiReact/emojiReact.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { Like, type LikeDeletedStore, type LikesResolverByPostId } from '../domain/like/like.ts';
 import {
   type EmojiReactNotificationDeletedStore,
   type EmojiReactNotificationsResolverByPostId,
@@ -75,6 +81,10 @@ type Deps = Readonly<{
   replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
   repostDeletedStore: RepostDeletedStore;
   repostsResolverByPostId: RepostsResolverByPostId;
+  likeDeletedStore: LikeDeletedStore;
+  likesResolverByPostId: LikesResolverByPostId;
+  emojiReactDeletedStore: EmojiReactDeletedStore;
+  emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
 }>;
 
 const create = ({
@@ -94,6 +104,10 @@ const create = ({
   replyNotificationsResolverByOriginalPostId,
   repostDeletedStore,
   repostsResolverByPostId,
+  likeDeletedStore,
+  likesResolverByPostId,
+  emojiReactDeletedStore,
+  emojiReactsResolverByPostId,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -130,6 +144,8 @@ const create = ({
           replyNotificationsByReplyPostResult,
           replyNotificationsByOriginalPostResult,
           repostsResult,
+          likesResult,
+          emojiReactsResult,
         ] = await Promise.all([
           timelineItemResolverByPostId.resolve({ postId }),
           likeNotificationsResolverByPostId.resolve({ postId }),
@@ -137,6 +153,8 @@ const create = ({
           replyNotificationsResolverByReplyPostId.resolve({ replyPostId: postId }),
           replyNotificationsResolverByOriginalPostId.resolve({ originalPostId: postId }),
           repostsResolverByPostId.resolve({ postId }),
+          likesResolverByPostId.resolve({ postId }),
+          emojiReactsResolverByPostId.resolve({ postId }),
         ]);
 
         // Generate all delete events
@@ -165,6 +183,14 @@ const create = ({
           ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
           : [];
 
+        const likeEvents = likesResult.ok
+          ? likesResult.val.map((l) => Like.deleteLike(l, now))
+          : [];
+
+        const emojiReactEvents = emojiReactsResult.ok
+          ? emojiReactsResult.val.map((e) => EmojiReact.deleteEmojiReact(e, now))
+          : [];
+
         // Store all events in batch (each store handles its own transaction)
         await Promise.all([
           timelineItemDeletedStore.store(...timelineItemEvents),
@@ -172,6 +198,8 @@ const create = ({
           emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
           replyNotificationDeletedStore.store(...replyNotificationEvents),
           repostDeletedStore.store(...repostEvents),
+          likeDeletedStore.store(...likeEvents),
+          emojiReactDeletedStore.store(...emojiReactEvents),
         ]);
 
         // Delete the post via event store

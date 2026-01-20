@@ -19,6 +19,12 @@ import type { LocalActorCreatedStore } from '../../../domain/actor/createLocalAc
 import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
 import type {
+  EmojiReact,
+  EmojiReactDeleted,
+  EmojiReactDeletedStore,
+  EmojiReactsResolverByPostId,
+} from '../../../domain/emojiReact/emojiReact.ts';
+import type {
   Follow,
   FollowAccepted,
   FollowAcceptedStore,
@@ -30,7 +36,15 @@ import type {
   UndoFollowingProcessedStore,
 } from '../../../domain/follow/follow.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
-import type { Like, LikeCreated, LikeCreatedStore, LikeResolver } from '../../../domain/like/like.ts';
+import type {
+  Like,
+  LikeCreated,
+  LikeCreatedStore,
+  LikeDeleted,
+  LikeDeletedStore,
+  LikeResolver,
+  LikesResolverByPostId,
+} from '../../../domain/like/like.ts';
 import type { MutedActorIdsResolverByUserId } from '../../../domain/mute/mute.ts';
 import type {
   EmojiReactNotification,
@@ -562,4 +576,38 @@ export const createMockMutedActorIdsResolverByUserId = (
 ): MutedActorIdsResolverByUserId & { setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => void } => ({
   resolve: vi.fn((userId: UserId) => RAImpl.ok(mutedActorIds.get(userId) ?? [])),
   setMutedActorIds: (userId: UserId, actorIds: ActorId[]) => mutedActorIds.set(userId, actorIds),
+});
+
+export const createMockLikeDeletedStore = (): LikeDeletedStore & InMemoryStore<LikeDeleted> => {
+  const inMemoryStore = createInMemoryStore<LikeDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & LikeDeletedStore['store']
+      & InMemoryStore<LikeDeleted>['store'],
+  };
+};
+
+export const createMockLikesResolverByPostId = (
+  likes: Map<PostId, Like[]> = new Map(),
+): LikesResolverByPostId & { setLikes: (postId: PostId, l: Like[]) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(likes.get(postId) ?? [])),
+  setLikes: (postId: PostId, l: Like[]) => likes.set(postId, l),
+});
+
+export const createMockEmojiReactDeletedStore = (): EmojiReactDeletedStore & InMemoryStore<EmojiReactDeleted> => {
+  const inMemoryStore = createInMemoryStore<EmojiReactDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & EmojiReactDeletedStore['store']
+      & InMemoryStore<EmojiReactDeleted>['store'],
+  };
+};
+
+export const createMockEmojiReactsResolverByPostId = (
+  emojiReacts: Map<PostId, EmojiReact[]> = new Map(),
+): EmojiReactsResolverByPostId & { setEmojiReacts: (postId: PostId, e: EmojiReact[]) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(emojiReacts.get(postId) ?? [])),
+  setEmojiReacts: (postId: PostId, e: EmojiReact[]) => emojiReacts.set(postId, e),
 });
