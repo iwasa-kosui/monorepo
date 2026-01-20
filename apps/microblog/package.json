@@ -44,6 +44,7 @@
     "eslint-plugin-simple-import-sort": "12.1.1",
     "eslint-plugin-unused-imports": "4.3.0",
     "fast-check": "3.23.2",
+    "source-map-support": "0.5.21",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.53.0",
@@ -52,7 +53,7 @@
   },
   "scripts": {
     "dev": "dotenvx run -- vite",
-    "prod": "cp .env dist/.env && cd dist && dotenvx run -- node ./index.js",
+    "prod": "cp .env dist/.env && cd dist && dotenvx run -- node  -r source-map-support/register ./index.js",
     "prebuild": "pnpm --filter result run build",
     "build": "dotenvx run -- vite build --mode client && vite build",
     "drizzle:push": "dotenvx run -- drizzle-kit push",
