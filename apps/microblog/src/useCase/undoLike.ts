@@ -3,12 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import {
-  Like as AppLike,
-  type LikeDeletedStore,
-  type LikeResolver,
-  NotLikedError,
-} from '../domain/like/like.ts';
+import { Like as AppLike, type LikeDeletedStore, type LikeResolver, NotLikedError } from '../domain/like/like.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';

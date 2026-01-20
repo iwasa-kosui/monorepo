@@ -175,6 +175,21 @@ export const HomePage = ({
     }
   };
 
+  // Clear timeline focus when post modal opens
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#post-modal') {
+        setSelectedIndex(-1);
+      }
+    };
+
+    // Check initial hash
+    handleHashChange();
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
