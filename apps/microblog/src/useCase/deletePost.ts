@@ -5,9 +5,14 @@ import z from 'zod/v4';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
+  type EmojiReactNotificationDeletedStore,
+  type EmojiReactNotificationsResolverByPostId,
   type LikeNotificationDeletedStore,
   type LikeNotificationsResolverByPostId,
   Notification,
+  type ReplyNotificationDeletedStore,
+  type ReplyNotificationsResolverByOriginalPostId,
+  type ReplyNotificationsResolverByReplyPostId,
 } from '../domain/notification/notification.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
@@ -63,6 +68,11 @@ type Deps = Readonly<{
   timelineItemResolverByPostId: TimelineItemResolverByPostId;
   likeNotificationDeletedStore: LikeNotificationDeletedStore;
   likeNotificationsResolverByPostId: LikeNotificationsResolverByPostId;
+  emojiReactNotificationDeletedStore: EmojiReactNotificationDeletedStore;
+  emojiReactNotificationsResolverByPostId: EmojiReactNotificationsResolverByPostId;
+  replyNotificationDeletedStore: ReplyNotificationDeletedStore;
+  replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
+  replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
   repostDeletedStore: RepostDeletedStore;
   repostsResolverByOriginalPostId: RepostsResolverByOriginalPostId;
 }>;
@@ -77,6 +87,11 @@ const create = ({
   timelineItemResolverByPostId,
   likeNotificationDeletedStore,
   likeNotificationsResolverByPostId,
+  emojiReactNotificationDeletedStore,
+  emojiReactNotificationsResolverByPostId,
+  replyNotificationDeletedStore,
+  replyNotificationsResolverByReplyPostId,
+  replyNotificationsResolverByOriginalPostId,
   repostDeletedStore,
   repostsResolverByOriginalPostId,
 }: Deps): DeletePostUseCase => {
@@ -108,9 +123,19 @@ const create = ({
         }
 
         // Resolve all related entities in parallel
-        const [timelineItemResult, notificationsResult, repostsResult] = await Promise.all([
+        const [
+          timelineItemResult,
+          likeNotificationsResult,
+          emojiReactNotificationsResult,
+          replyNotificationsByReplyPostResult,
+          replyNotificationsByOriginalPostResult,
+          repostsResult,
+        ] = await Promise.all([
           timelineItemResolverByPostId.resolve({ postId }),
           likeNotificationsResolverByPostId.resolve({ postId }),
+          emojiReactNotificationsResolverByPostId.resolve({ postId }),
+          replyNotificationsResolverByReplyPostId.resolve({ replyPostId: postId }),
+          replyNotificationsResolverByOriginalPostId.resolve({ originalPostId: postId }),
           repostsResolverByOriginalPostId.resolve({ originalPostId: postId }),
         ]);
 
@@ -119,9 +144,22 @@ const create = ({
           ? [TimelineItem.deleteTimelineItem(timelineItemResult.val.timelineItemId, now)]
           : [];
 
-        const notificationEvents = notificationsResult.ok
-          ? notificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
+        const likeNotificationEvents = likeNotificationsResult.ok
+          ? likeNotificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
           : [];
+
+        const emojiReactNotificationEvents = emojiReactNotificationsResult.ok
+          ? emojiReactNotificationsResult.val.map((n) => Notification.deleteEmojiReactNotification(n, now))
+          : [];
+
+        const replyNotificationEvents = [
+          ...(replyNotificationsByReplyPostResult.ok
+            ? replyNotificationsByReplyPostResult.val.map((n) => Notification.deleteReplyNotification(n, now))
+            : []),
+          ...(replyNotificationsByOriginalPostResult.ok
+            ? replyNotificationsByOriginalPostResult.val.map((n) => Notification.deleteReplyNotification(n, now))
+            : []),
+        ];
 
         const repostEvents = repostsResult.ok
           ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
@@ -130,7 +168,9 @@ const create = ({
         // Store all events in batch (each store handles its own transaction)
         await Promise.all([
           timelineItemDeletedStore.store(...timelineItemEvents),
-          likeNotificationDeletedStore.store(...notificationEvents),
+          likeNotificationDeletedStore.store(...likeNotificationEvents),
+          emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
+          replyNotificationDeletedStore.store(...replyNotificationEvents),
           repostDeletedStore.store(...repostEvents),
         ]);
 

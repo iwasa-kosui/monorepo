@@ -8,10 +8,14 @@ import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
+import { PgReplyNotificationCreatedStore } from '../../pg/notification/replyNotificationCreatedStore.ts';
+import { PgLocalPostResolverByUri } from '../../pg/post/localPostResolverByUri.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
 import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
 import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
+import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
+import { WebPushSender } from '../../webPush/webPushSender.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 
 type Attachment = Readonly<{
@@ -67,6 +71,10 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),
     timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+    localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
+    replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
+    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
+    webPushSender: WebPushSender.getInstance(),
   });
 
   const attachments = await extractAttachments(object, documentLoader);

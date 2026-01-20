@@ -7,6 +7,7 @@ import type {
   FollowNotificationWithDetails,
   LikeNotificationWithDetails,
   NotificationWithDetails,
+  ReplyNotificationWithDetails,
 } from '../../domain/notification/notification.ts';
 
 type Props = Readonly<{
@@ -258,6 +259,95 @@ const EmojiReactNotificationItem = ({
   );
 };
 
+const ReplyNotificationItem = ({
+  notification,
+  sanitizedContent,
+}: {
+  notification: ReplyNotificationWithDetails;
+  sanitizedContent: string;
+}) => {
+  const { replierActor, replyPost, createdAt } = notification;
+
+  const handle = Actor.match({
+    onLocal: LocalActor.getHandle,
+    onRemote: (x) => RemoteActor.getHandle(x) ?? replierActor.uri,
+  })(replierActor);
+
+  const actorUrl = Actor.match({
+    onLocal: (x) => x.uri,
+    onRemote: (x) => `/remote-users/${x.id}`,
+  })(replierActor);
+
+  const postUrl = `/posts/${replyPost.postId}`;
+
+  return (
+    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+      <div class='flex items-start gap-3'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900 flex items-center justify-center'>
+          <svg
+            class='w-4 h-4 text-green-500 dark:text-green-400'
+            fill='currentColor'
+            viewBox='0 0 20 20'
+          >
+            <path
+              fill-rule='evenodd'
+              d='M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z'
+              clip-rule='evenodd'
+            />
+          </svg>
+        </div>
+
+        <div class='flex-1 min-w-0'>
+          <div class='flex items-center gap-2 mb-2'>
+            <a
+              href={actorUrl}
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
+            >
+              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+                {replierActor.logoUri
+                  ? (
+                    <img
+                      src={replierActor.logoUri}
+                      alt='Actor Logo'
+                      class='w-6 h-6 rounded-full object-cover'
+                    />
+                  )
+                  : (
+                    handle.charAt(0).toUpperCase()
+                  )}
+              </div>
+              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+                {handle}
+              </span>
+            </a>
+            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
+              replied to your post
+            </span>
+          </div>
+
+          <div
+            role='button'
+            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+          >
+            <div
+              class='text-sm text-gray-800 dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_p]:text-gray-800 dark:[&_p]:text-gray-200 [&_p]:m-0'
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+            />
+          </div>
+          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
+            <time
+              dateTime={new Date(createdAt).toISOString()}
+              class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
+            >
+              {Instant.formatRelative(createdAt)}
+            </time>
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+};
+
 export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
   if (notification.notification.type === 'like') {
     return (
@@ -280,6 +370,15 @@ export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
     return (
       <EmojiReactNotificationItem
         notification={notification as EmojiReactNotificationWithDetails}
+        sanitizedContent={sanitizedContent}
+      />
+    );
+  }
+
+  if (notification.notification.type === 'reply') {
+    return (
+      <ReplyNotificationItem
+        notification={notification as ReplyNotificationWithDetails}
         sanitizedContent={sanitizedContent}
       />
     );

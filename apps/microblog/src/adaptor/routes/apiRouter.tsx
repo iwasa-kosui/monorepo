@@ -37,14 +37,22 @@ import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgEmojiReactNotificationDeletedStore } from '../pg/notification/emojiReactNotificationDeletedStore.ts';
+import { PgEmojiReactNotificationsResolverByPostId } from '../pg/notification/emojiReactNotificationsResolverByPostId.ts';
 import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
+import { PgReplyNotificationCreatedStore } from '../pg/notification/replyNotificationCreatedStore.ts';
+import { PgReplyNotificationDeletedStore } from '../pg/notification/replyNotificationDeletedStore.ts';
+import { PgReplyNotificationsResolverByOriginalPostId } from '../pg/notification/replyNotificationsResolverByOriginalPostId.ts';
+import { PgReplyNotificationsResolverByReplyPostId } from '../pg/notification/replyNotificationsResolverByReplyPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
+import { PgLocalPostResolverByUri } from '../pg/post/localPostResolverByUri.ts';
 import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
+import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
@@ -56,6 +64,7 @@ import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResol
 import { PgTimelineItemResolverByRepostId } from '../pg/timeline/timelineItemResolverByRepostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
+import { WebPushSender } from '../webPush/webPushSender.ts';
 import { sanitize } from './helper/sanitize.ts';
 
 const app = new Hono()
@@ -436,6 +445,10 @@ const app = new Hono()
         postCreatedStore: PgPostCreatedStore.getInstance(),
         postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
         timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+        localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
+        replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
+        pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
+        webPushSender: WebPushSender.getInstance(),
       });
 
       const result = await useCase.run({
@@ -537,6 +550,11 @@ const app = new Hono()
       timelineItemResolverByPostId: PgTimelineItemResolverByPostId.getInstance(),
       likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
       likeNotificationsResolverByPostId: PgLikeNotificationsResolverByPostId.getInstance(),
+      emojiReactNotificationDeletedStore: PgEmojiReactNotificationDeletedStore.getInstance(),
+      emojiReactNotificationsResolverByPostId: PgEmojiReactNotificationsResolverByPostId.getInstance(),
+      replyNotificationDeletedStore: PgReplyNotificationDeletedStore.getInstance(),
+      replyNotificationsResolverByReplyPostId: PgReplyNotificationsResolverByReplyPostId.getInstance(),
+      replyNotificationsResolverByOriginalPostId: PgReplyNotificationsResolverByOriginalPostId.getInstance(),
       repostDeletedStore: PgRepostDeletedStore.getInstance(),
       repostsResolverByOriginalPostId: PgRepostsResolverByOriginalPostId.getInstance(),
     });

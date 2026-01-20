@@ -9,8 +9,13 @@ import { PostId } from '../../../domain/post/postId.ts';
 import { Repost } from '../../../domain/repost/repost.ts';
 import { TimelineItem } from '../../../domain/timeline/timelineItem.ts';
 import { DB } from '../../pg/db.ts';
+import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
+import { PgEmojiReactNotificationsResolverByPostId } from '../../pg/notification/emojiReactNotificationsResolverByPostId.ts';
 import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
 import { PgLikeNotificationsResolverByPostId } from '../../pg/notification/likeNotificationsResolverByPostId.ts';
+import { PgReplyNotificationDeletedStore } from '../../pg/notification/replyNotificationDeletedStore.ts';
+import { PgReplyNotificationsResolverByOriginalPostId } from '../../pg/notification/replyNotificationsResolverByOriginalPostId.ts';
+import { PgReplyNotificationsResolverByReplyPostId } from '../../pg/notification/replyNotificationsResolverByReplyPostId.ts';
 import { PgPostDeletedStore } from '../../pg/post/postDeletedStore.ts';
 import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
 import { PgRepostsResolverByOriginalPostId } from '../../pg/repost/repostsResolverByOriginalPostId.ts';
@@ -50,9 +55,19 @@ export const onDelete = async (
   const now = Instant.now();
 
   // Resolve all related entities in parallel
-  const [timelineItemsResult, notificationsResult, repostsResult] = await Promise.all([
+  const [
+    timelineItemsResult,
+    likeNotificationsResult,
+    emojiReactNotificationsResult,
+    replyNotificationsByReplyPostResult,
+    replyNotificationsByOriginalPostResult,
+    repostsResult,
+  ] = await Promise.all([
     PgTimelineItemsResolverByPostId.getInstance().resolve({ postId }),
     PgLikeNotificationsResolverByPostId.getInstance().resolve({ postId }),
+    PgEmojiReactNotificationsResolverByPostId.getInstance().resolve({ postId }),
+    PgReplyNotificationsResolverByReplyPostId.getInstance().resolve({ replyPostId: postId }),
+    PgReplyNotificationsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
     PgRepostsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
   ]);
 
@@ -61,9 +76,22 @@ export const onDelete = async (
     ? timelineItemsResult.val.map((item) => TimelineItem.deleteTimelineItem(item.timelineItemId, now))
     : [];
 
-  const notificationEvents = notificationsResult.ok
-    ? notificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
+  const likeNotificationEvents = likeNotificationsResult.ok
+    ? likeNotificationsResult.val.map((n) => Notification.deleteLikeNotification(n, now))
     : [];
+
+  const emojiReactNotificationEvents = emojiReactNotificationsResult.ok
+    ? emojiReactNotificationsResult.val.map((n) => Notification.deleteEmojiReactNotification(n, now))
+    : [];
+
+  const replyNotificationEvents = [
+    ...(replyNotificationsByReplyPostResult.ok
+      ? replyNotificationsByReplyPostResult.val.map((n) => Notification.deleteReplyNotification(n, now))
+      : []),
+    ...(replyNotificationsByOriginalPostResult.ok
+      ? replyNotificationsByOriginalPostResult.val.map((n) => Notification.deleteReplyNotification(n, now))
+      : []),
+  ];
 
   const repostEvents = repostsResult.ok
     ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
@@ -72,7 +100,9 @@ export const onDelete = async (
   // Store all events in batch (each store handles its own transaction)
   await Promise.all([
     PgTimelineItemDeletedStore.getInstance().store(...timelineItemEvents),
-    PgLikeNotificationDeletedStore.getInstance().store(...notificationEvents),
+    PgLikeNotificationDeletedStore.getInstance().store(...likeNotificationEvents),
+    PgEmojiReactNotificationDeletedStore.getInstance().store(...emojiReactNotificationEvents),
+    PgReplyNotificationDeletedStore.getInstance().store(...replyNotificationEvents),
     PgRepostDeletedStore.getInstance().store(...repostEvents),
   ]);
 

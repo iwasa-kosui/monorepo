@@ -1,0 +1,2 @@
+CREATE INDEX "notification_replies_reply_post_id_idx" ON "notification_replies" USING btree ("replyPostId");--> statement-breakpoint
+CREATE INDEX "notification_replies_original_post_id_idx" ON "notification_replies" USING btree ("originalPostId");
