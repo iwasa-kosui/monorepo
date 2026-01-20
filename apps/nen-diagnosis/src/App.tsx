@@ -11,8 +11,7 @@ import { StartScreen } from './ui/components/StartScreen.tsx';
 
 type GameState = 'start' | 'playing' | 'result';
 
-const isValidNenType = (value: string): value is NenType =>
-  NEN_TYPES.includes(value as NenType);
+const isValidNenType = (value: string): value is NenType => NEN_TYPES.includes(value as NenType);
 
 const parseResultFromUrl = (): { primaryType: NenType; secondaryType: NenType | null } | null => {
   const params = new URLSearchParams(window.location.search);

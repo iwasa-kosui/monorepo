@@ -27,25 +27,13 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
     primaryInfo.personality.slice(0, 50)
   }...\n\n${shareUrl}`;
 
-  const handleShare = useCallback(async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: '念系統診断',
-          text: shareText,
-        });
-      } catch {
-        // ユーザーがキャンセルした場合など
-      }
-    } else {
-      // Web Share API非対応の場合はクリップボードにコピー
-      try {
-        await navigator.clipboard.writeText(shareText);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        // クリップボードAPIも使えない場合
-      }
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // クリップボードAPIが使えない場合
     }
   }, [shareText]);
 
@@ -54,11 +42,22 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
     window.open(twitterUrl, '_blank', 'noopener,noreferrer');
   }, [shareText]);
 
+  const handleMastodonShare = useCallback(() => {
+    const mastodonUrl = `https://mastodonshare.com/?text=${encodeURIComponent(shareText)}`;
+    window.open(mastodonUrl, '_blank', 'noopener,noreferrer');
+  }, [shareText]);
+
+  const handleMisskeyShare = useCallback(() => {
+    const misskeyUrl = `https://misskey-hub.net/share/?text=${encodeURIComponent(shareText)}`;
+    window.open(misskeyUrl, '_blank', 'noopener,noreferrer');
+  }, [shareText]);
+
   return (
-    <div className='flex gap-3 mb-4'>
+    <div className='space-y-3 mb-4'>
+      {/* コピーボタン */}
       <button
-        onClick={handleShare}
-        className='flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600
+        onClick={handleCopy}
+        className='w-full py-3 rounded-xl bg-slate-700 hover:bg-slate-600
           text-white font-medium transition-all duration-200
           flex items-center justify-center gap-2'
       >
@@ -78,24 +77,53 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
                   strokeLinecap='round'
                   strokeLinejoin='round'
                   strokeWidth={2}
-                  d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z'
+                  d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'
                 />
               </svg>
-              シェア
+              結果をコピー
             </>
           )}
       </button>
-      <button
-        onClick={handleTwitterShare}
-        className='py-3 px-4 rounded-xl bg-[#1DA1F2] hover:bg-[#1a8cd8]
-          text-white font-medium transition-all duration-200
-          flex items-center justify-center'
-        aria-label='Xでシェア'
-      >
-        <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 24 24'>
-          <path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' />
-        </svg>
-      </button>
+
+      {/* SNSシェアボタン */}
+      <div className='flex gap-3'>
+        <button
+          onClick={handleTwitterShare}
+          className='flex-1 py-3 px-4 rounded-xl bg-[#000000] hover:bg-[#333333]
+            text-white font-medium transition-all duration-200
+            flex items-center justify-center gap-2'
+          aria-label='Xでシェア'
+        >
+          <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 24 24'>
+            <path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' />
+          </svg>
+          <span className='hidden sm:inline'>X</span>
+        </button>
+        <button
+          onClick={handleMastodonShare}
+          className='flex-1 py-3 px-4 rounded-xl bg-[#6364FF] hover:bg-[#5253dd]
+            text-white font-medium transition-all duration-200
+            flex items-center justify-center gap-2'
+          aria-label='Mastodonでシェア'
+        >
+          <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 24 24'>
+            <path d='M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z' />
+          </svg>
+          <span className='hidden sm:inline'>Mastodon</span>
+        </button>
+        <button
+          onClick={handleMisskeyShare}
+          className='flex-1 py-3 px-4 rounded-xl bg-[#96d04a] hover:bg-[#7cb53d]
+            text-white font-medium transition-all duration-200
+            flex items-center justify-center gap-2'
+          aria-label='Misskeyでシェア'
+        >
+          <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 24 24'>
+            <path d='M11.518.96a2.39 2.39 0 0 1 .964 0c.238.053.413.142.564.234.292.178.527.408.79.671l9.12 9.545c.248.264.45.493.596.756.12.215.202.425.238.654a2.39 2.39 0 0 1 0 .964c-.054.238-.143.413-.234.564-.178.292-.408.527-.672.79l-9.544 9.12c-.264.248-.493.45-.756.596a1.981 1.981 0 0 1-.654.238 2.39 2.39 0 0 1-.964 0 1.981 1.981 0 0 1-.564-.234c-.292-.178-.527-.408-.79-.671l-9.12-9.545c-.248-.264-.45-.493-.596-.756a1.981 1.981 0 0 1-.238-.654 2.39 2.39 0 0 1 0-.964c.054-.238.143-.413.234-.564.178-.292.408-.527.672-.79l9.544-9.12c.264-.248.493-.45.756-.596.215-.12.425-.202.654-.238Z' />
+          </svg>
+          <span className='hidden sm:inline'>Misskey</span>
+        </button>
+      </div>
     </div>
   );
 };
