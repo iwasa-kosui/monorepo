@@ -1,4 +1,4 @@
-import { ResultAsync as Module } from "./module.js";
+import { ResultAsync as Module } from './module.js';
 
 type ResultAsync<T, E> = Module.ResultAsync<T, E>;
 const ResultAsync = Module;

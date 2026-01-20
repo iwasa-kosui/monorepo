@@ -10,17 +10,11 @@
 # ワークスペースパッケージのビルド（初回または依存変更時）
 pnpm --filter result run build
 
-# 型チェック（apps/microblogディレクトリで実行）
-cd apps/microblog && pnpm exec tsc --noEmit
-
-# Lintエラーの自動修正
-pnpm lint:fix
-
-# コードフォーマット
-pnpm format
-
-# テストの実行
-pnpm test
+pnpm --filter '*' build
+pnpm --filter '*' tsc --noEmit
+pnpm --filter '*' lint:fix
+pnpm --filter '*' format
+pnpm --filter '*' test:ci
 ```
 
 #### 実行ルール

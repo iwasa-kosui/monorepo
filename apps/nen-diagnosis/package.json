@@ -40,12 +40,13 @@
     "prebuild": "pnpm --filter result run build && pnpm generate:og",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest",
+    "test:ci": "vitest --run",
+    "typecheck": "tsc",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "dprint fmt",
     "format:check": "dprint check",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "deploy": "wrangler pages deploy dist"
   }
 }

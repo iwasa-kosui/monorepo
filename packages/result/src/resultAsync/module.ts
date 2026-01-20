@@ -1,2 +1,2 @@
-import * as ResultAsync from "./resultAsync.js";
+import * as ResultAsync from './resultAsync.js';
 export { ResultAsync };

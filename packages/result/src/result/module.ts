@@ -1,2 +1,2 @@
-import * as Result from "./result.js";
+import * as Result from './result.js';
 export { Result };
