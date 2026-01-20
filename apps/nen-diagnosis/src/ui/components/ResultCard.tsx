@@ -9,14 +9,23 @@ import {
 } from '../../domain/judgmentAxis/judgmentAxis.ts';
 import { NEN_TYPES, NenType } from '../../domain/nenType/nenType.ts';
 
+const createShareUrl = (result: DiagnosisResult): string => {
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set('type', result.primaryType);
+  if (result.secondaryType) {
+    url.searchParams.set('sub', result.secondaryType);
+  }
+  return url.toString();
+};
+
 const ShareButton = ({ result }: { result: DiagnosisResult }) => {
   const [copied, setCopied] = useState(false);
   const primaryInfo = NenType.getInfo(result.primaryType);
+  const shareUrl = createShareUrl(result);
 
   const shareText = `念系統診断の結果は「${primaryInfo.japaneseName}」でした！\n${
     primaryInfo.personality.slice(0, 50)
-  }...`;
-  const shareUrl = window.location.href;
+  }...\n\n${shareUrl}`;
 
   const handleShare = useCallback(async () => {
     if (navigator.share) {
@@ -24,7 +33,6 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
         await navigator.share({
           title: '念系統診断',
           text: shareText,
-          url: shareUrl,
         });
       } catch {
         // ユーザーがキャンセルした場合など
@@ -32,21 +40,19 @@ const ShareButton = ({ result }: { result: DiagnosisResult }) => {
     } else {
       // Web Share API非対応の場合はクリップボードにコピー
       try {
-        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        await navigator.clipboard.writeText(shareText);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch {
         // クリップボードAPIも使えない場合
       }
     }
-  }, [shareText, shareUrl]);
+  }, [shareText]);
 
   const handleTwitterShare = useCallback(() => {
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${
-      encodeURIComponent(shareUrl)
-    }`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
     window.open(twitterUrl, '_blank', 'noopener,noreferrer');
-  }, [shareText, shareUrl]);
+  }, [shareText]);
 
   return (
     <div className='flex gap-3 mb-4'>

@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { type AxisScore, Diagnosis, type DiagnosisResult } from './domain/diagnosis/diagnosis.ts';
+import { NEN_TYPES, type NenType } from './domain/nenType/nenType.ts';
 import type { Answer } from './domain/question/question.ts';
 import { Question } from './domain/question/question.ts';
 import { ProgressBar } from './ui/components/ProgressBar.tsx';
@@ -9,6 +10,66 @@ import { ResultCard } from './ui/components/ResultCard.tsx';
 import { StartScreen } from './ui/components/StartScreen.tsx';
 
 type GameState = 'start' | 'playing' | 'result';
+
+const isValidNenType = (value: string): value is NenType =>
+  NEN_TYPES.includes(value as NenType);
+
+const parseResultFromUrl = (): { primaryType: NenType; secondaryType: NenType | null } | null => {
+  const params = new URLSearchParams(window.location.search);
+  const primary = params.get('type');
+  const secondary = params.get('sub');
+
+  if (!primary || !isValidNenType(primary)) {
+    return null;
+  }
+
+  return {
+    primaryType: primary,
+    secondaryType: secondary && isValidNenType(secondary) ? secondary : null,
+  };
+};
+
+const createResultFromUrlParams = (
+  primaryType: NenType,
+  secondaryType: NenType | null,
+): DiagnosisResult => {
+  // URLパラメータから復元する場合は、簡易的なスコアを生成
+  const baseScore = 100;
+  const percentages = NEN_TYPES.reduce(
+    (acc, type) => {
+      if (type === primaryType) {
+        acc[type] = baseScore;
+      } else if (type === secondaryType) {
+        acc[type] = Math.round(baseScore * 0.8);
+      } else {
+        acc[type] = Math.round(baseScore * 0.4);
+      }
+      return acc;
+    },
+    {} as Record<NenType, number>,
+  );
+
+  // パーセンテージを正規化（合計100%に）
+  const total = Object.values(percentages).reduce((sum, v) => sum + v, 0);
+  const normalizedPercentages = Object.fromEntries(
+    Object.entries(percentages).map(([k, v]) => [k, Math.round((v / total) * 100)]),
+  ) as Record<NenType, number>;
+
+  return {
+    axisScores: Diagnosis.createEmptyAxisScore(),
+    nenTypeScores: NEN_TYPES.reduce(
+      (acc, type) => {
+        acc[type] = normalizedPercentages[type];
+        return acc;
+      },
+      {} as Record<NenType, number>,
+    ),
+    primaryType,
+    secondaryType,
+    percentages: normalizedPercentages,
+    judgmentBasis: [],
+  };
+};
 
 export const App = () => {
   const [gameState, setGameState] = useState<GameState>('start');
@@ -19,6 +80,16 @@ export const App = () => {
   const [isAnimating, setIsAnimating] = useState(false);
 
   const questions = Question.all();
+
+  // URLパラメータから結果を復元
+  useEffect(() => {
+    const urlResult = parseResultFromUrl();
+    if (urlResult) {
+      const restoredResult = createResultFromUrlParams(urlResult.primaryType, urlResult.secondaryType);
+      setResult(restoredResult);
+      setGameState('result');
+    }
+  }, []);
   const currentQuestion = questions[currentQuestionIndex];
 
   const handleStart = useCallback(() => {
