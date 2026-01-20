@@ -217,3 +217,14 @@ export const notificationRepliesTable = pgTable('notification_replies', {
   index('notification_replies_reply_post_id_idx').on(table.replyPostId),
   index('notification_replies_original_post_id_idx').on(table.originalPostId),
 ]);
+
+export const mutesTable = pgTable('mutes', {
+  muteId: uuid().primaryKey(),
+  userId: uuid().notNull().references(() => usersTable.userId),
+  mutedActorId: uuid().notNull().references(() => actorsTable.actorId),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  unique('mute_user_actor_unique').on(table.userId, table.mutedActorId),
+  index('mutes_user_id_idx').on(table.userId),
+  index('mutes_muted_actor_id_idx').on(table.mutedActorId),
+]);

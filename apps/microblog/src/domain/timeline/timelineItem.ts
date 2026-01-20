@@ -79,6 +79,7 @@ export type TimelineItemsResolverByActorIds = Agg.Resolver<
     actorIds: ActorId[];
     currentActorId: ActorId | undefined;
     createdAt: Instant | undefined;
+    mutedActorIds: ReadonlyArray<ActorId>;
   },
   TimelineItemWithPost[]
 >;
