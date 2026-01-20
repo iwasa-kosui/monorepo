@@ -5,13 +5,14 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import { PostId } from '../post/postId.ts';
 import { LikeId } from './likeId.ts';
 
 const zodType = z
   .object({
     likeId: LikeId.zodType,
     actorId: ActorId.zodType,
-    objectUri: z.string(),
+    postId: PostId.zodType,
     likeActivityUri: z.nullable(z.string()),
   })
   .describe('LikeV2');
@@ -83,18 +84,18 @@ export type AlreadyLikedV2Error = Readonly<{
   message: string;
   detail: {
     actorId: ActorId;
-    objectUri: string;
+    postId: PostId;
   };
 }>;
 
 export const AlreadyLikedV2Error = {
   create: ({
     actorId,
-    objectUri,
-  }: { actorId: ActorId; objectUri: string }): AlreadyLikedV2Error => ({
+    postId,
+  }: { actorId: ActorId; postId: PostId }): AlreadyLikedV2Error => ({
     type: 'AlreadyLikedV2Error',
-    message: `The actor with ID "${actorId}" has already liked the object "${objectUri}".`,
-    detail: { actorId, objectUri },
+    message: `The actor with ID "${actorId}" has already liked the post "${postId}".`,
+    detail: { actorId, postId },
   }),
 } as const;
 

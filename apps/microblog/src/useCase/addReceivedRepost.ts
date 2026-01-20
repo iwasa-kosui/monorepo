@@ -38,7 +38,6 @@ type LocalPostInput = Readonly<{
   announceActivityUri: string;
   repostedPostId: PostId;
   reposterIdentity: ActorIdentity;
-  objectUri: string;
 }>;
 
 type RemotePostInput = Readonly<{
@@ -109,7 +108,7 @@ const create = ({
         if (existingRepost) {
           return RA.err(AlreadyRepostedError.create({
             actorId: existingRepost.actorId,
-            objectUri: existingRepost.objectUri,
+            postId: existingRepost.postId,
           }));
         }
         return RA.ok(rest);
@@ -128,13 +127,12 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(reposterIdentity)),
-      RA.andBind('repost', ({ actor, objectUri, announceActivityUri, post }) => {
+      RA.andBind('repost', ({ actor, announceActivityUri, post }) => {
         const repostId = RepostId.generate();
         const repost: Repost = {
           repostId,
           actorId: actor.id,
-          objectUri,
-          originalPostId: post.postId,
+          postId: post.postId,
           announceActivityUri,
         };
         const event = Repost.createRepost(repost, now);
@@ -156,8 +154,6 @@ const create = ({
   };
 
   const runRemotePostRepost = async (input: RemotePostInput, now: Instant) => {
-    const objectUri = input.remotePostIdentity.uri;
-
     return RA.flow(
       RA.ok(input),
       RA.andBind(
@@ -168,7 +164,7 @@ const create = ({
         if (existingRepost) {
           return RA.err(AlreadyRepostedError.create({
             actorId: existingRepost.actorId,
-            objectUri,
+            postId: existingRepost.postId,
           }));
         }
         return RA.ok(rest);
@@ -189,8 +185,7 @@ const create = ({
         const repost: Repost = {
           repostId,
           actorId: actor.id,
-          objectUri,
-          originalPostId: post.postId,
+          postId: post.postId,
           announceActivityUri,
         };
         const event = Repost.createRepost(repost, now);

@@ -35,7 +35,7 @@ import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollow
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
-import { PgEmojiReactResolverByActorAndObjectAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndObjectAndEmoji.ts';
+import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
@@ -64,7 +64,7 @@ import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/push
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
-import { PgRepostsResolverByOriginalPostId } from '../pg/repost/repostsResolverByOriginalPostId.ts';
+import { PgRepostsResolverByPostId } from '../pg/repost/repostsResolverByPostId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
@@ -162,12 +162,12 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const objectUri = body.objectUri;
+      const { postId } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -185,11 +185,12 @@ const app = new Hono()
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         likeCreatedStore: PgLikeCreatedStore.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         request: c.req.raw,
         ctx,
       });
@@ -205,12 +206,12 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const objectUri = body.objectUri;
+      const { postId } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -228,11 +229,12 @@ const app = new Hono()
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
         likeDeletedStore: PgLikeDeletedStore.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         request: c.req.raw,
         ctx,
       });
@@ -248,12 +250,12 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const objectUri = body.objectUri;
+      const { postId } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -273,11 +275,12 @@ const app = new Hono()
         repostResolver: PgRepostResolver.getInstance(),
         remotePostUpserter: PgRemotePostUpserter.getInstance(),
         timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         request: c.req.raw,
         ctx,
       });
@@ -293,12 +296,12 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const objectUri = body.objectUri;
+      const { postId } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -318,11 +321,12 @@ const app = new Hono()
         repostDeletedStore: PgRepostDeletedStore.getInstance(),
         timelineItemResolverByRepostId: PgTimelineItemResolverByRepostId.getInstance(),
         timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         request: c.req.raw,
         ctx,
       });
@@ -338,13 +342,13 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
         emoji: z.string().min(1).max(128),
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const { objectUri, emoji } = body;
+      const { postId, emoji } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -361,12 +365,13 @@ const app = new Hono()
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
-        emojiReactResolverByActorAndObjectAndEmoji: PgEmojiReactResolverByActorAndObjectAndEmoji.getInstance(),
+        emojiReactResolverByActorAndPostAndEmoji: PgEmojiReactResolverByActorAndPostAndEmoji.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         emoji,
         request: c.req.raw,
         ctx,
@@ -383,13 +388,13 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
         emoji: z.string().min(1).max(128),
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const { objectUri, emoji } = body;
+      const { postId, emoji } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -406,12 +411,13 @@ const app = new Hono()
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
-        emojiReactResolverByActorAndObjectAndEmoji: PgEmojiReactResolverByActorAndObjectAndEmoji.getInstance(),
+        emojiReactResolverByActorAndPostAndEmoji: PgEmojiReactResolverByActorAndPostAndEmoji.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         emoji,
         request: c.req.raw,
         ctx,
@@ -428,14 +434,14 @@ const app = new Hono()
     sValidator(
       'json',
       z.object({
-        objectUri: z.string().min(1),
+        postId: PostId.zodType,
         content: z.string().min(1),
         imageUrls: z.optional(z.array(z.string())),
       }),
     ),
     async (c) => {
       const body = c.req.valid('json');
-      const { objectUri, content, imageUrls = [] } = body;
+      const { postId, content, imageUrls = [] } = body;
 
       const sessionIdResult = await RA.flow(
         RA.ok(getCookie(c, 'sessionId')),
@@ -458,11 +464,12 @@ const app = new Hono()
         replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
         pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
         webPushSender: WebPushSender.getInstance(),
+        postResolver: PgPostResolver.getInstance(),
       });
 
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
-        objectUri,
+        postId,
         content,
         imageUrls,
         request: c.req.raw,
@@ -565,7 +572,7 @@ const app = new Hono()
       replyNotificationsResolverByReplyPostId: PgReplyNotificationsResolverByReplyPostId.getInstance(),
       replyNotificationsResolverByOriginalPostId: PgReplyNotificationsResolverByOriginalPostId.getInstance(),
       repostDeletedStore: PgRepostDeletedStore.getInstance(),
-      repostsResolverByOriginalPostId: PgRepostsResolverByOriginalPostId.getInstance(),
+      repostsResolverByPostId: PgRepostsResolverByPostId.getInstance(),
     });
 
     const result = await useCase.run({
@@ -734,7 +741,7 @@ const app = new Hono()
     sValidator(
       'query',
       z.object({
-        objectUri: z.string(),
+        postId: PostId.zodType,
       }),
       (res, c) => {
         if (!res.success) {
@@ -746,10 +753,10 @@ const app = new Hono()
       },
     ),
     async (c) => {
-      const { objectUri } = c.req.valid('query');
+      const { postId } = c.req.valid('query');
 
       const threadResolver = PgThreadResolver.getInstance();
-      const result = await threadResolver.resolve({ objectUri });
+      const result = await threadResolver.resolve({ postId });
 
       if (!result.ok) {
         return c.json({ error: String(result.err) }, 400);

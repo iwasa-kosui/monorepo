@@ -7,21 +7,22 @@ import {
   AlreadyReactedError,
   EmojiReact,
   type EmojiReactCreatedStore,
-  type EmojiReactResolverByActorAndObjectAndEmoji,
+  type EmojiReactResolverByActorAndPostAndEmoji,
 } from '../domain/emojiReact/emojiReact.ts';
 import { EmojiReactId } from '../domain/emojiReact/emojiReactId.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
-  objectUri: string;
+  postId: PostId;
   emoji: string;
   request: Request;
   ctx: RequestContext<unknown>;
@@ -32,6 +33,7 @@ type Ok = void;
 type Err =
   | SessionExpiredError
   | UserNotFoundError
+  | PostNotFoundError
   | RemoteNoteLookupError
   | AlreadyReactedError;
 
@@ -42,7 +44,8 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   emojiReactCreatedStore: EmojiReactCreatedStore;
-  emojiReactResolverByActorAndObjectAndEmoji: EmojiReactResolverByActorAndObjectAndEmoji;
+  emojiReactResolverByActorAndPostAndEmoji: EmojiReactResolverByActorAndPostAndEmoji;
+  postResolver: PostResolver;
 }>;
 
 const create = ({
@@ -50,12 +53,29 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   emojiReactCreatedStore,
-  emojiReactResolverByActorAndObjectAndEmoji,
+  emojiReactResolverByActorAndPostAndEmoji,
+  postResolver,
 }: Deps): SendEmojiReactUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
   const resolveUser = resolveUserWith(userResolver);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+
+  const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
+    RA.flow(
+      postResolver.resolve(postId),
+      RA.andThen((post) =>
+        post === undefined
+          ? RA.err(
+            {
+              type: 'PostNotFoundError',
+              message: `Post not found: ${postId}`,
+              detail: { postId },
+            } as PostNotFoundError,
+          )
+          : RA.ok(post)
+      ),
+    );
 
   const run = async (input: Input) =>
     RA.flow(
@@ -63,27 +83,48 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      // Resolve the post
+      RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
       // Check if already reacted with same emoji
-      RA.andThrough(async ({ actor, objectUri, emoji }) => {
+      RA.andThrough(async ({ actor, postId, emoji }) => {
         return RA.flow(
-          emojiReactResolverByActorAndObjectAndEmoji.resolve({
+          emojiReactResolverByActorAndPostAndEmoji.resolve({
             actorId: actor.id,
-            objectUri,
+            postId,
             emoji,
           }),
           RA.andThen((existingReact) => {
             if (existingReact !== undefined) {
               return RA.err(
-                AlreadyReactedError.create({ actorId: actor.id, objectUri, emoji }),
+                AlreadyReactedError.create({ actorId: actor.id, postId, emoji }),
               );
             }
             return RA.ok(undefined);
           }),
         );
       }),
-      // Lookup the remote note
-      RA.andBind('note', async ({ user, request, objectUri }) => {
-        const ctx = Federation.getInstance().createContext(request, undefined);
+      // Create and store emoji react
+      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
+        EmojiReact.createEmojiReact(
+          {
+            emojiReactId: EmojiReactId.generate(),
+            actorId: actor.id,
+            postId,
+            emoji,
+            emojiReactActivityUri: null,
+            emojiImageUrl: null,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
+      // Send the EmojiReact activity to the remote server (only for remote posts)
+      RA.andThrough(async ({ user, post, ctx, emoji, emojiReactCreated }) => {
+        // Local posts don't need ActivityPub delivery
+        if (post.type === 'local') {
+          return RA.ok(undefined);
+        }
+
+        const objectUri = post.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
         });
@@ -99,24 +140,14 @@ const create = ({
 
         if (!result.id) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note ID',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
           );
         }
 
-        return RA.ok(result);
-      }),
-      // Get the note's author
-      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
-        const author = await note.getAttribution();
+        const author = await result.getAttribution();
         if (!author || !isActor(author)) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note author',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
           );
         }
         if (!author.id || !author.inboxId) {
@@ -124,23 +155,7 @@ const create = ({
             RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
           );
         }
-        return RA.ok(author);
-      }),
-      RA.bind('emojiReactCreated', ({ actor, objectUri, emoji }) =>
-        EmojiReact.createEmojiReact(
-          {
-            emojiReactId: EmojiReactId.generate(),
-            actorId: actor.id,
-            objectUri,
-            emoji,
-            emojiReactActivityUri: null, // Will be set after sending
-            emojiImageUrl: null, // Local emoji reacts use standard Unicode emoji
-          },
-          now,
-        )),
-      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
-      // Send the EmojiReact activity to the remote server
-      RA.andThrough(async ({ user, note, noteAuthor, ctx, emoji, emojiReactCreated }) => {
+
         const actorUri = ctx.getActorUri(user.username);
         const activityId = new URL(
           `#emoji-reacts/${emojiReactCreated.aggregateId.emojiReactId}`,
@@ -149,18 +164,18 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          noteAuthor,
+          author,
           new FedifyEmojiReact({
             id: activityId,
             actor: actorUri,
-            object: note.id,
+            object: result.id,
             content: emoji,
-            to: noteAuthor.id,
+            to: author.id,
           }),
         );
 
         getLogger().info(
-          `Sent EmojiReact: user=${user.username}, note=${note.id?.href}, emoji=${emoji}, activityId=${activityId.href}`,
+          `Sent EmojiReact: user=${user.username}, note=${result.id.href}, emoji=${emoji}, activityId=${activityId.href}`,
         );
         return RA.ok(undefined);
       }),

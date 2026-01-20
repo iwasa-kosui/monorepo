@@ -21,7 +21,7 @@ import {
   createMockReplyNotificationsResolverByOriginalPostId,
   createMockReplyNotificationsResolverByReplyPostId,
   createMockRepostDeletedStore,
-  createMockRepostsResolverByOriginalPostId,
+  createMockRepostsResolverByPostId,
   createMockRequestContext,
   createMockSessionResolver,
   createMockTimelineItemDeletedStore,
@@ -54,7 +54,7 @@ describe('DeletePostUseCase', () => {
     const replyNotificationsResolverByReplyPostId = createMockReplyNotificationsResolverByReplyPostId();
     const replyNotificationsResolverByOriginalPostId = createMockReplyNotificationsResolverByOriginalPostId();
     const repostDeletedStore = createMockRepostDeletedStore();
-    const repostsResolverByOriginalPostId = createMockRepostsResolverByOriginalPostId();
+    const repostsResolverByPostId = createMockRepostsResolverByPostId();
     return {
       sessionResolver,
       postDeletedStore,
@@ -71,7 +71,7 @@ describe('DeletePostUseCase', () => {
       replyNotificationsResolverByReplyPostId,
       replyNotificationsResolverByOriginalPostId,
       repostDeletedStore,
-      repostsResolverByOriginalPostId,
+      repostsResolverByPostId,
     };
   };
 

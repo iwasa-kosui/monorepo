@@ -103,20 +103,20 @@ export const localPostsTable = pgTable('local_posts', {
 export const likesTable = pgTable('likes', {
   likeId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
-  objectUri: text().notNull(),
+  postId: uuid().notNull().references(() => postsTable.postId),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
-  unique('actor_object_unique').on(table.actorId, table.objectUri),
+  unique('like_actor_post_unique').on(table.actorId, table.postId),
 ]);
 
 export const likesV2Table = pgTable('likes_v2', {
   likeId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
-  objectUri: text().notNull(),
+  postId: uuid().notNull().references(() => postsTable.postId),
   likeActivityUri: text().unique(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
-  unique('likes_v2_actor_object_unique').on(table.actorId, table.objectUri),
+  unique('likes_v2_actor_post_unique').on(table.actorId, table.postId),
 ]);
 
 export const postImagesTable = pgTable('post_images', {
@@ -158,12 +158,11 @@ export const pushSubscriptionsTable = pgTable('push_subscriptions', {
 export const repostsTable = pgTable('reposts', {
   repostId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
-  objectUri: text().notNull(),
-  originalPostId: uuid(),
+  postId: uuid().notNull().references(() => postsTable.postId),
   announceActivityUri: text().unique(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
-  unique('repost_actor_object_unique').on(table.actorId, table.objectUri),
+  unique('repost_actor_post_unique').on(table.actorId, table.postId),
 ]);
 
 export const timelineItemsTable = pgTable('timeline_items', {
@@ -191,13 +190,13 @@ export const instanceActorKeysTable = pgTable('instance_actor_keys', {
 export const emojiReactsTable = pgTable('emoji_reacts', {
   emojiReactId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
-  objectUri: text().notNull(),
+  postId: uuid().notNull().references(() => postsTable.postId),
   emoji: varchar({ length: 128 }).notNull(),
   emojiReactActivityUri: text().unique(),
   emojiImageUrl: text(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
-  unique('emoji_react_actor_object_emoji_unique').on(table.actorId, table.objectUri, table.emoji),
+  unique('emoji_react_actor_post_emoji_unique').on(table.actorId, table.postId, table.emoji),
 ]);
 
 export const notificationEmojiReactsTable = pgTable('notification_emoji_reacts', {

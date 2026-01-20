@@ -5,13 +5,14 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import { PostId } from '../post/postId.ts';
 import { LikeId } from './likeId.ts';
 
 const zodType = z
   .object({
     likeId: LikeId.zodType,
     actorId: ActorId.zodType,
-    objectUri: z.string(),
+    postId: PostId.zodType,
   })
   .describe('Like');
 const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
@@ -63,7 +64,7 @@ const deleteLike = (like: Like, now: Instant): LikeDeleted => {
 export type LikeCreatedStore = Agg.Store<LikeCreated>;
 export type LikeDeletedStore = Agg.Store<LikeDeleted>;
 export type LikeResolver = Agg.Resolver<
-  { actorId: ActorId; objectUri: string },
+  { actorId: ActorId; postId: PostId },
   Like | undefined
 >;
 export const Like = {
@@ -78,18 +79,18 @@ export type AlreadyLikedError = Readonly<{
   message: string;
   detail: {
     actorId: ActorId;
-    objectUri: string;
+    postId: PostId;
   };
 }>;
 
 export const AlreadyLikedError = {
   create: ({
     actorId,
-    objectUri,
-  }: { actorId: ActorId; objectUri: string }): AlreadyLikedError => ({
+    postId,
+  }: { actorId: ActorId; postId: PostId }): AlreadyLikedError => ({
     type: 'AlreadyLikedError',
-    message: `The actor with ID "${actorId}" has already liked the object "${objectUri}".`,
-    detail: { actorId, objectUri },
+    message: `The actor with ID "${actorId}" has already liked the post "${postId}".`,
+    detail: { actorId, postId },
   }),
 } as const;
 
@@ -97,14 +98,14 @@ export type NotLikedError = Readonly<{
   type: 'NotLikedError';
   message: string;
   detail: {
-    objectUri: string;
+    postId: PostId;
   };
 }>;
 
 export const NotLikedError = {
-  create: (objectUri: string): NotLikedError => ({
+  create: (postId: PostId): NotLikedError => ({
     type: 'NotLikedError',
-    message: `No like found for object "${objectUri}"`,
-    detail: { objectUri },
+    message: `No like found for post "${postId}"`,
+    detail: { postId },
   }),
 } as const;

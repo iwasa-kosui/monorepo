@@ -10,7 +10,7 @@ const store = async (event: EmojiReactCreated): RA<void, never> => {
     await tx.insert(emojiReactsTable).values({
       emojiReactId: event.aggregateState.emojiReactId,
       actorId: event.aggregateState.actorId,
-      objectUri: event.aggregateState.objectUri,
+      postId: event.aggregateState.postId,
       emoji: event.aggregateState.emoji,
       emojiReactActivityUri: event.aggregateState.emojiReactActivityUri,
       emojiImageUrl: event.aggregateState.emojiImageUrl,

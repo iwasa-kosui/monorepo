@@ -36,7 +36,6 @@ type Input = Readonly<{
   emojiReactActivityUri: string;
   reactedPostId: PostId;
   reactorIdentity: ActorIdentity;
-  objectUri: string;
   emoji: string;
   emojiImageUrl?: string | null;
 }>;
@@ -104,7 +103,7 @@ const create = ({
         if (existingReact) {
           return RA.err(AlreadyReactedError.create({
             actorId: existingReact.actorId,
-            objectUri: existingReact.objectUri,
+            postId: existingReact.postId,
             emoji: existingReact.emoji,
           }));
         }
@@ -124,12 +123,12 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(reactorIdentity)),
-      RA.andBind('emojiReact', ({ actor, objectUri, emojiReactActivityUri, emoji, emojiImageUrl }) => {
+      RA.andBind('emojiReact', ({ actor, reactedPostId, emojiReactActivityUri, emoji, emojiImageUrl }) => {
         const emojiReactId = EmojiReactId.generate();
         const emojiReact: EmojiReact = {
           emojiReactId,
           actorId: actor.id,
-          objectUri,
+          postId: reactedPostId,
           emoji,
           emojiReactActivityUri,
           emojiImageUrl: emojiImageUrl ?? null,

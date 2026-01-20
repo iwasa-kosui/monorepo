@@ -18,8 +18,8 @@ type Props = Readonly<{
   isFollowing: boolean;
   isLoggedIn: boolean;
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
-  onLike: (objectUri: string) => Promise<void>;
-  likingPostUri: string | null;
+  onLike: (postId: string) => Promise<void>;
+  likingPostId: string | null;
 }>;
 
 export const RemoteUserPage = ({
@@ -29,7 +29,7 @@ export const RemoteUserPage = ({
   isLoggedIn,
   fetchData,
   onLike,
-  likingPostUri,
+  likingPostId,
 }: Props) => {
   const handle = RemoteActorDomain.getHandle(remoteActor) ?? remoteActor.uri;
   const displayName = remoteActor.username ?? handle;
@@ -145,9 +145,7 @@ export const RemoteUserPage = ({
               key={post.postId}
               post={post}
               onLike={onLike}
-              isLiking={post.type === 'remote'
-                && 'uri' in post
-                && likingPostUri === post.uri}
+              isLiking={likingPostId === post.postId}
             />
           ))
         )}
@@ -158,7 +156,7 @@ export const RemoteUserPage = ({
 
 const App = () => {
   const [init, setInit] = useState(false);
-  const [likingPostUri, setLikingPostUri] = useState<string | null>(null);
+  const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -197,11 +195,11 @@ const App = () => {
     }
   };
 
-  const handleLike = async (objectUri: string) => {
-    setLikingPostUri(objectUri);
+  const handleLike = async (postId: string) => {
+    setLikingPostId(postId);
     try {
       const res = await client.v1.like.$post({
-        json: { objectUri },
+        json: { postId },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -209,7 +207,7 @@ const App = () => {
           setData({
             ...data,
             posts: data.posts.map((post) =>
-              post.type === 'remote' && 'uri' in post && post.uri === objectUri
+              post.postId === postId
                 ? { ...post, liked: true }
                 : post
             ),
@@ -221,7 +219,7 @@ const App = () => {
     } catch (error) {
       console.error('Failed to like:', error);
     } finally {
-      setLikingPostUri(null);
+      setLikingPostId(null);
     }
   };
 
@@ -248,7 +246,7 @@ const App = () => {
       isLoggedIn={data.isLoggedIn}
       fetchData={fetchData}
       onLike={handleLike}
-      likingPostUri={likingPostUri}
+      likingPostId={likingPostId}
     />
   );
 };

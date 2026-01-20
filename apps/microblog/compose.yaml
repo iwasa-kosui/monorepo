@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: microblog
       POSTGRES_DB: microblog
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - microblog-db-data:/var/lib/postgresql/data
 

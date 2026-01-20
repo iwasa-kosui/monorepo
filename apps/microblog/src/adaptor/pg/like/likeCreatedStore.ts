@@ -10,7 +10,7 @@ const store = async (event: LikeCreated): RA<void, never> => {
     await tx.insert(likesTable).values({
       likeId: event.aggregateState.likeId,
       actorId: event.aggregateState.actorId,
-      objectUri: event.aggregateState.objectUri,
+      postId: event.aggregateState.postId,
       createdAt: new Date(event.occurredAt),
     });
     await tx.insert(domainEventsTable).values({

@@ -12,8 +12,7 @@ const zodType = z
   .object({
     repostId: RepostId.zodType,
     actorId: ActorId.zodType,
-    objectUri: z.string(),
-    originalPostId: z.nullable(PostId.zodType),
+    postId: PostId.zodType,
     announceActivityUri: z.nullable(z.string()),
   })
   .describe('Repost');
@@ -70,11 +69,11 @@ export type RepostResolverByActivityUri = Agg.Resolver<
   Repost | undefined
 >;
 export type RepostResolver = Agg.Resolver<
-  { actorId: ActorId; objectUri: string },
+  { actorId: ActorId; postId: PostId },
   Repost | undefined
 >;
-export type RepostsResolverByOriginalPostId = Agg.Resolver<
-  { originalPostId: PostId },
+export type RepostsResolverByPostId = Agg.Resolver<
+  { postId: PostId },
   Repost[]
 >;
 
@@ -90,18 +89,18 @@ export type AlreadyRepostedError = Readonly<{
   message: string;
   detail: {
     actorId: ActorId;
-    objectUri: string;
+    postId: PostId;
   };
 }>;
 
 export const AlreadyRepostedError = {
   create: ({
     actorId,
-    objectUri,
-  }: { actorId: ActorId; objectUri: string }): AlreadyRepostedError => ({
+    postId,
+  }: { actorId: ActorId; postId: PostId }): AlreadyRepostedError => ({
     type: 'AlreadyRepostedError',
-    message: `The actor with ID "${actorId}" has already reposted the object "${objectUri}".`,
-    detail: { actorId, objectUri },
+    message: `The actor with ID "${actorId}" has already reposted the post "${postId}".`,
+    detail: { actorId, postId },
   }),
 } as const;
 

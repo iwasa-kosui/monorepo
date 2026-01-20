@@ -3,7 +3,6 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
-import { Env } from '../../../env.ts';
 import { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
@@ -58,16 +57,12 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     }
     const repostedPostId = postIdResult.val;
 
-    const env = Env.getInstance();
-    const objectUri = `${env.ORIGIN}/users/${parsed.values.identifier}/posts/${repostedPostId}`;
-
     return RA.flow(
       useCase.run({
         type: 'local',
         announceActivityUri,
         repostedPostId,
         reposterIdentity,
-        objectUri,
       }),
       RA.match({
         ok: ({ actor: reposterActor }) => {

@@ -56,17 +56,15 @@ const create = ({
       }),
       // Delete the timeline item if it exists
       RA.andThrough(async ({ repost }) => {
-        if (repost.originalPostId) {
-          const timelineItem = await timelineItemResolverByPostId.resolve({
-            postId: repost.originalPostId,
-          });
-          if (timelineItem.ok && timelineItem.val) {
-            const deletedEvent = TimelineItem.deleteTimelineItem(
-              timelineItem.val.timelineItemId,
-              now,
-            );
-            await timelineItemDeletedStore.store(deletedEvent);
-          }
+        const timelineItem = await timelineItemResolverByPostId.resolve({
+          postId: repost.postId,
+        });
+        if (timelineItem.ok && timelineItem.val) {
+          const deletedEvent = TimelineItem.deleteTimelineItem(
+            timelineItem.val.timelineItemId,
+            now,
+          );
+          await timelineItemDeletedStore.store(deletedEvent);
         }
         return RA.ok(undefined);
       }),

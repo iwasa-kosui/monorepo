@@ -7,7 +7,7 @@ export {
   type EmojiReactDeletedStore,
   EmojiReactNotFoundError,
   type EmojiReactResolverByActivityUri,
-  type EmojiReactResolverByActorAndObjectAndEmoji,
-  type EmojiReactsResolverByObjectUri,
+  type EmojiReactResolverByActorAndPostAndEmoji,
+  type EmojiReactsResolverByPostId,
 } from './emojiReact.ts';
 export { EmojiReactId } from './emojiReactId.ts';

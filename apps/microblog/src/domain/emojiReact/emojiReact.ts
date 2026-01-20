@@ -5,13 +5,14 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import { PostId } from '../post/postId.ts';
 import { EmojiReactId } from './emojiReactId.ts';
 
 const zodType = z
   .object({
     emojiReactId: EmojiReactId.zodType,
     actorId: ActorId.zodType,
-    objectUri: z.string(),
+    postId: PostId.zodType,
     emoji: z.string(),
     emojiReactActivityUri: z.nullable(z.string()),
     emojiImageUrl: z.nullable(z.string()),
@@ -73,12 +74,12 @@ export type EmojiReactResolverByActivityUri = Agg.Resolver<
   { emojiReactActivityUri: string },
   EmojiReact | undefined
 >;
-export type EmojiReactResolverByActorAndObjectAndEmoji = Agg.Resolver<
-  { actorId: ActorId; objectUri: string; emoji: string },
+export type EmojiReactResolverByActorAndPostAndEmoji = Agg.Resolver<
+  { actorId: ActorId; postId: PostId; emoji: string },
   EmojiReact | undefined
 >;
-export type EmojiReactsResolverByObjectUri = Agg.Resolver<
-  { objectUri: string },
+export type EmojiReactsResolverByPostId = Agg.Resolver<
+  { postId: PostId },
   ReadonlyArray<EmojiReact>
 >;
 
@@ -94,7 +95,7 @@ export type AlreadyReactedError = Readonly<{
   message: string;
   detail: {
     actorId: ActorId;
-    objectUri: string;
+    postId: PostId;
     emoji: string;
   };
 }>;
@@ -102,12 +103,12 @@ export type AlreadyReactedError = Readonly<{
 export const AlreadyReactedError = {
   create: ({
     actorId,
-    objectUri,
+    postId,
     emoji,
-  }: { actorId: ActorId; objectUri: string; emoji: string }): AlreadyReactedError => ({
+  }: { actorId: ActorId; postId: PostId; emoji: string }): AlreadyReactedError => ({
     type: 'AlreadyReactedError',
-    message: `The actor with ID "${actorId}" has already reacted with "${emoji}" to the object "${objectUri}".`,
-    detail: { actorId, objectUri, emoji },
+    message: `The actor with ID "${actorId}" has already reacted with "${emoji}" to the post "${postId}".`,
+    detail: { actorId, postId, emoji },
   }),
 } as const;
 

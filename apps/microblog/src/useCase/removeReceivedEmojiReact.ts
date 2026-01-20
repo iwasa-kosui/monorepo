@@ -12,20 +12,7 @@ import {
   type EmojiReactNotificationResolverByActorIdAndPostIdAndEmoji,
   Notification,
 } from '../domain/notification/notification.ts';
-import { PostId } from '../domain/post/postId.ts';
 import type { UseCase } from './useCase.ts';
-
-const extractPostIdFromObjectUri = (objectUri: string): PostId | undefined => {
-  const match = objectUri.match(/\/posts\/([a-f0-9-]+)$/);
-  if (!match) {
-    return undefined;
-  }
-  const result = PostId.parse(match[1]);
-  if (!result.ok) {
-    return undefined;
-  }
-  return result.val;
-};
 
 type Input = Readonly<{
   emojiReactActivityUri: string;
@@ -72,14 +59,10 @@ const create = ({
         return emojiReactDeletedStore.store(event);
       }),
       RA.andThrough(({ emojiReact }) => {
-        const reactedPostId = extractPostIdFromObjectUri(emojiReact.objectUri);
-        if (!reactedPostId) {
-          return RA.ok(undefined);
-        }
         return RA.flow(
           emojiReactNotificationResolverByActorIdAndPostIdAndEmoji.resolve({
             reactorActorId: emojiReact.actorId,
-            reactedPostId,
+            reactedPostId: emojiReact.postId,
             emoji: emojiReact.emoji,
           }),
           RA.andThen((notification) => {

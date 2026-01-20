@@ -4,6 +4,8 @@ import { RA } from '@iwasa-kosui/result';
 import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { Post, PostNotFoundError, PostResolver, RemotePost } from '../domain/post/post.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -11,13 +13,12 @@ import type { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Federation } from '../federation.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   sessionId: SessionId;
-  objectUri: string;
+  postId: PostId;
   request: Request;
   ctx: RequestContext<unknown>;
 }>;
@@ -44,6 +45,7 @@ export const RemoteNoteLookupError = {
 type Err =
   | SessionExpiredError
   | UserNotFoundError
+  | PostNotFoundError
   | RemoteNoteLookupError
   | AlreadyRepostedError;
 
@@ -57,6 +59,7 @@ type Deps = Readonly<{
   repostResolver: RepostResolver;
   remotePostUpserter: RemotePostUpserter;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  postResolver: PostResolver;
 }>;
 
 const create = ({
@@ -67,11 +70,28 @@ const create = ({
   repostResolver,
   remotePostUpserter,
   timelineItemCreatedStore,
+  postResolver,
 }: Deps): SendRepostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
   const resolveUser = resolveUserWith(userResolver);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+
+  const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
+    RA.flow(
+      postResolver.resolve(postId),
+      RA.andThen((post) =>
+        post === undefined
+          ? RA.err(
+            {
+              type: 'PostNotFoundError',
+              message: `Post not found: ${postId}`,
+              detail: { postId },
+            } as PostNotFoundError,
+          )
+          : RA.ok(post)
+      ),
+    );
 
   const run = async (input: Input) =>
     RA.flow(
@@ -79,26 +99,58 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      // Resolve the post
+      RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
       // Check if already reposted
-      RA.andThrough(async ({ actor, objectUri }) => {
+      RA.andThrough(async ({ actor, postId }) => {
         return RA.flow(
           repostResolver.resolve({
             actorId: actor.id,
-            objectUri,
+            postId,
           }),
           RA.andThen((repost) => {
             if (repost !== undefined) {
               return RA.err(
-                AlreadyRepostedError.create({ actorId: actor.id, objectUri }),
+                AlreadyRepostedError.create({ actorId: actor.id, postId }),
               );
             }
             return RA.ok(undefined);
           }),
         );
       }),
-      // Lookup the remote note
-      RA.andBind('note', async ({ user, request, objectUri }) => {
-        const ctx = Federation.getInstance().createContext(request, undefined);
+      // Create, store Repost and TimelineItem
+      RA.andThrough(async ({ actor, postId, post, ctx, user }) => {
+        const repostId = RepostId.generate();
+
+        // For local posts, no ActivityPub needed
+        if (post.type === 'local') {
+          const repostCreated = Repost.createRepost(
+            {
+              repostId,
+              actorId: actor.id,
+              postId,
+              announceActivityUri: null,
+            },
+            now,
+          );
+
+          await repostCreatedStore.store(repostCreated);
+
+          const timelineItemEvent = TimelineItem.createTimelineItem({
+            timelineItemId: TimelineItemId.generate(),
+            type: 'repost',
+            actorId: actor.id,
+            postId,
+            repostId: repostCreated.aggregateState.repostId,
+            createdAt: now,
+          }, now);
+          await timelineItemCreatedStore.store(timelineItemEvent);
+
+          return RA.ok(undefined);
+        }
+
+        // For remote posts, we need to lookup and send ActivityPub
+        const objectUri = post.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
         });
@@ -114,24 +166,14 @@ const create = ({
 
         if (!result.id) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note ID',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
           );
         }
 
-        return RA.ok(result);
-      }),
-      // Get the note's author
-      RA.andBind('noteAuthor', async ({ note, objectUri }) => {
-        const author = await note.getAttribution();
+        const author = await result.getAttribution();
         if (!author || !isActor(author)) {
           return RA.err(
-            RemoteNoteLookupError.create(
-              objectUri,
-              'Could not resolve Note author',
-            ),
+            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
           );
         }
         if (!author.id || !author.inboxId) {
@@ -139,48 +181,48 @@ const create = ({
             RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
           );
         }
-        return RA.ok(author);
-      }),
-      // Get or create the remote post for timeline display
-      RA.andBind('remotePost', async ({ note, noteAuthor, objectUri }) => {
-        const noteAuthorIcon = await noteAuthor.getIcon();
-        return remotePostUpserter.resolve({
+
+        // Ensure remote post exists for timeline display
+        const noteAuthorIcon = await author.getIcon();
+        const remotePostResult = await remotePostUpserter.resolve({
           uri: objectUri,
-          content: String(note.content ?? ''),
+          content: String(result.content ?? ''),
           authorIdentity: {
-            uri: noteAuthor.id!.href,
-            inboxUrl: noteAuthor.inboxId!.href,
-            url: noteAuthor.url instanceof URL ? noteAuthor.url.href : undefined,
-            username: typeof noteAuthor.preferredUsername === 'string'
-              ? noteAuthor.preferredUsername
-              : noteAuthor.preferredUsername?.toString(),
+            uri: author.id.href,
+            inboxUrl: author.inboxId.href,
+            url: author.url instanceof URL ? author.url.href : undefined,
+            username: typeof author.preferredUsername === 'string'
+              ? author.preferredUsername
+              : author.preferredUsername?.toString(),
             logoUri: noteAuthorIcon?.url instanceof URL ? noteAuthorIcon.url.href : undefined,
           },
         });
-      }),
-      // Create, store Repost, create TimelineItem, and send Announce
-      RA.andThrough(async ({ actor, objectUri, ctx, user, remotePost, note, noteAuthor }) => {
-        // Create repost
-        const repostId = RepostId.generate();
+
+        if (!remotePostResult.ok) {
+          return RA.err(
+            RemoteNoteLookupError.create(objectUri, 'Failed to upsert remote post'),
+          );
+        }
+
+        const remotePost: RemotePost = remotePostResult.val;
+
         const announceActivityUri = new URL(
           `#announces/${repostId}`,
           ctx.getActorUri(user.username),
         ).href;
+
         const repostCreated = Repost.createRepost(
           {
             repostId,
             actorId: actor.id,
-            objectUri,
-            originalPostId: remotePost.postId,
+            postId: remotePost.postId,
             announceActivityUri,
           },
           now,
         );
 
-        // Store repost
         await repostCreatedStore.store(repostCreated);
 
-        // Create TimelineItem
         const timelineItemEvent = TimelineItem.createTimelineItem({
           timelineItemId: TimelineItemId.generate(),
           type: 'repost',
@@ -197,14 +239,14 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          noteAuthor,
+          author,
           new Announce({
             id: new URL(
               `#announces/${repostCreated.aggregateState.repostId}`,
               actorUri,
             ),
             actor: actorUri,
-            object: note.id,
+            object: result.id,
             to: new URL('https://www.w3.org/ns/activitystreams#Public'),
             cc: followersUri,
           }),

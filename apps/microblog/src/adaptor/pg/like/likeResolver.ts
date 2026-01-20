@@ -4,19 +4,20 @@ import { and, eq } from 'drizzle-orm';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Like } from '../../../domain/like/like.ts';
 import { LikeId } from '../../../domain/like/likeId.ts';
+import { PostId } from '../../../domain/post/postId.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { likesTable } from '../schema.ts';
 
 const getInstance = singleton(() => ({
-  resolve: async (agg: { actorId: ActorId; objectUri: string }) => {
+  resolve: async (agg: { actorId: ActorId; postId: PostId }) => {
     const [row, ...rest] = await DB.getInstance()
       .select()
       .from(likesTable)
       .where(
         and(
           eq(likesTable.actorId, agg.actorId),
-          eq(likesTable.objectUri, agg.objectUri),
+          eq(likesTable.postId, agg.postId),
         ),
       )
       .execute();
@@ -30,7 +31,7 @@ const getInstance = singleton(() => ({
       Like.orThrow({
         likeId: LikeId.orThrow(row.likeId),
         actorId: row.actorId,
-        objectUri: row.objectUri,
+        postId: PostId.orThrow(row.postId),
       }),
     );
   },
