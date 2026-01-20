@@ -9,8 +9,7 @@ const NEN_TYPES = [
 
 type NenType = (typeof NEN_TYPES)[number];
 
-const isValidNenType = (value: string): value is NenType =>
-  NEN_TYPES.includes(value as NenType);
+const isValidNenType = (value: string): value is NenType => NEN_TYPES.includes(value as NenType);
 
 type NenTypeInfo = Readonly<{
   japaneseName: string;
@@ -102,8 +101,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // クローラー（bot）かどうかをUser-Agentで判定
   const userAgent = request.headers.get('user-agent') || '';
-  const isCrawler =
-    /bot|crawl|spider|slurp|facebookexternalhit|Twitterbot|LinkedInBot|Discordbot|WhatsApp|TelegramBot/i.test(
+  const isCrawler = /bot|crawl|spider|slurp|facebookexternalhit|Twitterbot|LinkedInBot|Discordbot|WhatsApp|TelegramBot/i
+    .test(
       userAgent,
     );
 
