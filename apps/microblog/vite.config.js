@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       build({
         entry: 'src/index.ts',
-        external: ['sharp'],
+        external: ['sharp', 'shiki'],
       }),
       devServer({
         entry: 'src/app.tsx',

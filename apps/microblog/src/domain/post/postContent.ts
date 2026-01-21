@@ -1,28 +1,25 @@
 import { Marked, Renderer } from 'marked';
-import { createHighlighter, type Highlighter } from 'shiki';
+import type { Highlighter } from 'shiki';
 
-const highlighterPromise = createHighlighter({
-  themes: ['github-light', 'github-dark'],
-  langs: [
-    'javascript',
-    'typescript',
-    'python',
-    'rust',
-    'go',
-    'java',
-    'c',
-    'cpp',
-    'json',
-    'yaml',
-    'html',
-    'css',
-    'sql',
-    'bash',
-    'shell',
-    'markdown',
-    'plaintext',
-  ],
-});
+let highlighterPromise: Promise<Highlighter> | null = null;
+
+const getHighlighter = async (): Promise<Highlighter> => {
+  if (!highlighterPromise) {
+    highlighterPromise = import('shiki').then(({ createHighlighter }) =>
+      createHighlighter({
+        themes: ['github-light', 'github-dark'],
+        langs: [
+          'javascript',
+          'typescript',
+          'json',
+          'bash',
+          'plaintext',
+        ],
+      })
+    );
+  }
+  return highlighterPromise;
+};
 
 const createRenderer = (highlighter: Highlighter): Renderer => {
   const renderer = new Renderer();
@@ -56,7 +53,7 @@ const createRenderer = (highlighter: Highlighter): Renderer => {
  */
 export const PostContent = {
   fromMarkdown: async (markdown: string): Promise<string> => {
-    const highlighter = await highlighterPromise;
+    const highlighter = await getHighlighter();
     const marked = new Marked({ renderer: createRenderer(highlighter) });
     return marked.parse(markdown, { async: false }) as string;
   },
