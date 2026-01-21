@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
             home: './src/ui/pages/home.tsx',
             remoteUser: './src/ui/pages/remoteUser.tsx',
             localUser: './src/ui/pages/localUser.tsx',
+            localPost: './src/ui/pages/localPost.tsx',
           },
           output: {
             entryFileNames: 'static/[name].js',
