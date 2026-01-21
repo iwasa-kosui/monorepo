@@ -22,10 +22,7 @@ app.post(
   sValidator(
     'form',
     z.object({
-      content: z
-        .string()
-        .min(1)
-        .transform((s) => PostContent.fromMarkdown(s)),
+      content: z.string().min(1),
       imageUrls: z.optional(z.string().transform((s) => s ? s.split(',').filter(Boolean) : [])),
     }),
   ),
@@ -50,7 +47,7 @@ app.post(
       );
     }
     const form = await c.req.valid('form');
-    const content = form.content;
+    const content = await PostContent.fromMarkdown(form.content);
     const imageUrls = form.imageUrls ?? [];
     return RA.flow(
       useCase.run({
