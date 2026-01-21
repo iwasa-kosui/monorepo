@@ -100,7 +100,7 @@ export const RemoteUserPage = ({
             </div>
           )}
 
-          <div class='flex gap-2'>
+          <div class='flex items-center gap-3'>
             {isLoggedIn
               ? (
                 <>
@@ -112,9 +112,28 @@ export const RemoteUserPage = ({
                       >
                         <button
                           type='submit'
-                          class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors'
+                          class='flex items-center justify-center p-2 rounded-xl text-blue-500 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                          title='フォロー解除'
                         >
-                          Unfollow
+                          <svg
+                            xmlns='http://www.w3.org/2000/svg'
+                            class='h-5 w-5'
+                            fill='none'
+                            viewBox='0 0 24 24'
+                            stroke='currentColor'
+                            stroke-width='2'
+                          >
+                            <path
+                              stroke-linecap='round'
+                              stroke-linejoin='round'
+                              d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+                            />
+                            <path
+                              stroke-linecap='round'
+                              stroke-linejoin='round'
+                              d='M15 11l2 2 4-4'
+                            />
+                          </svg>
                         </button>
                       </form>
                     )
@@ -125,9 +144,28 @@ export const RemoteUserPage = ({
                       >
                         <button
                           type='submit'
-                          class='px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-2xl transition-colors'
+                          class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                          title='フォロー'
                         >
-                          Follow
+                          <svg
+                            xmlns='http://www.w3.org/2000/svg'
+                            class='h-5 w-5'
+                            fill='none'
+                            viewBox='0 0 24 24'
+                            stroke='currentColor'
+                            stroke-width='2'
+                          >
+                            <path
+                              stroke-linecap='round'
+                              stroke-linejoin='round'
+                              d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+                            />
+                            <path
+                              stroke-linecap='round'
+                              stroke-linejoin='round'
+                              d='M19 10h-2m-2 0h2m0 0V8m0 2v2'
+                            />
+                          </svg>
                         </button>
                       </form>
                     )}
@@ -137,9 +175,28 @@ export const RemoteUserPage = ({
                         type='button'
                         onClick={onUnmute}
                         disabled={isMuting}
-                        class='px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50'
+                        class='flex items-center justify-center p-2 rounded-xl text-orange-500 dark:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ミュート解除'
                       >
-                        {isMuting ? 'Unmuting...' : 'Unmute'}
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z'
+                          />
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2'
+                          />
+                        </svg>
                       </button>
                     )
                     : (
@@ -147,9 +204,28 @@ export const RemoteUserPage = ({
                         type='button'
                         onClick={onMute}
                         disabled={isMuting}
-                        class='px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-2xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50'
+                        class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ミュート'
                       >
-                        {isMuting ? 'Muting...' : 'Mute'}
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z'
+                          />
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2'
+                          />
+                        </svg>
                       </button>
                     )}
                 </>
