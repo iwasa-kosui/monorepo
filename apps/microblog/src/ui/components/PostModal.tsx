@@ -1,14 +1,10 @@
 import { useRef, useState } from 'hono/jsx';
 
+import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { Modal } from './Modal.tsx';
-
-type TabMode = 'markdown' | 'preview';
 
 export const PostModal = () => {
   const [content, setContent] = useState('');
-  const [previewHtml, setPreviewHtml] = useState('');
-  const [activeTab, setActiveTab] = useState<TabMode>('markdown');
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -20,42 +16,6 @@ export const PostModal = () => {
     }
   };
 
-  const fetchPreview = async (markdown: string) => {
-    if (!markdown.trim()) {
-      setPreviewHtml('');
-      return;
-    }
-    setIsLoadingPreview(true);
-    try {
-      const res = await fetch('/api/v1/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markdown }),
-      });
-      const data = await res.json();
-      if (data.html) {
-        setPreviewHtml(data.html);
-      }
-    } catch (error) {
-      console.error('Failed to fetch preview:', error);
-    } finally {
-      setIsLoadingPreview(false);
-    }
-  };
-
-  const handleContentChange = (e: Event) => {
-    const target = e.target as HTMLTextAreaElement;
-    const value = target.value;
-    setContent(value);
-  };
-
-  const handleTabChange = (tab: TabMode) => {
-    setActiveTab(tab);
-    if (tab === 'preview') {
-      fetchPreview(content);
-    }
-  };
-
   return (
     <Modal
       id='post-modal'
@@ -63,71 +23,14 @@ export const PostModal = () => {
       fullScreen
     >
       <form method='post' action='/posts' ref={formRef} class='flex flex-col flex-1 min-h-0'>
-        {/* Tab Bar */}
-        <div class='flex gap-1 mb-3'>
-          <button
-            type='button'
-            onClick={() => handleTabChange('markdown')}
-            class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
-              activeTab === 'markdown'
-                ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            Markdown
-          </button>
-          <button
-            type='button'
-            onClick={() => handleTabChange('preview')}
-            class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
-              activeTab === 'preview'
-                ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            Preview
-          </button>
-        </div>
-
-        {/* Content Area */}
-        <div class='flex-1 min-h-0'>
-          {activeTab === 'markdown'
-            ? (
-              <textarea
-                name='content'
-                placeholder="What's on your mind? (⌘+Enter to post)"
-                required
-                value={content}
-                onInput={handleContentChange}
-                onKeyDown={handleKeyDown}
-                class='w-full h-full min-h-[200px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
-              />
-            )
-            : (
-              <div class='w-full h-full min-h-[200px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 overflow-y-auto'>
-                {isLoadingPreview
-                  ? (
-                    <p class='text-gray-400 dark:text-gray-500'>
-                      Loading preview...
-                    </p>
-                  )
-                  : previewHtml
-                  ? (
-                    <div
-                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
-                    />
-                  )
-                  : (
-                    <p class='text-gray-400 dark:text-gray-500'>
-                      Nothing to preview
-                    </p>
-                  )}
-              </div>
-            )}
-        </div>
-        {/* Hidden input for form submission when in preview mode */}
-        {activeTab === 'preview' && <input type='hidden' name='content' value={content} />}
+        <MarkdownEditor
+          value={content}
+          onChange={setContent}
+          onKeyDown={handleKeyDown}
+          placeholder="What's on your mind? (⌘+Enter to post)"
+          minHeight='200px'
+          name='content'
+        />
 
         <div class='mt-3 flex gap-2 justify-end'>
           <a href='#'>

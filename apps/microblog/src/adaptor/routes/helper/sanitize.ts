@@ -20,4 +20,16 @@ export const sanitize = (html: string) =>
       'li',
       'blockquote',
     ],
+    allowedClasses: {
+      'code': [
+        'language-javascript',
+        'language-typescript',
+        'language-python',
+        'language-ruby',
+        'language-java',
+        'language-cpp',
+        'language-html',
+        'language-css',
+      ],
+    },
   });

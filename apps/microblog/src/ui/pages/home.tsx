@@ -2,6 +2,7 @@ import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { ActorLink } from '../components/ActorLink.tsx';
+import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
@@ -86,8 +87,6 @@ const PullToRefreshIndicator = () => {
   );
 };
 
-type TabMode = 'markdown' | 'preview';
-
 const ThreadModal = () => {
   const { thread, actions, reply, data } = useTimelineContext();
   const {
@@ -104,8 +103,6 @@ const ThreadModal = () => {
   } = reply;
   const { actionState } = actions;
   const [threadEmojiPickerPostId, setThreadEmojiPickerPostId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabMode>('markdown');
-  const [previewHtml, setPreviewHtml] = useState('');
 
   if (!threadModalPostId) {
     return null;
@@ -114,22 +111,6 @@ const ThreadModal = () => {
   const currentUserId = data?.user.id;
   const toggleThreadEmojiPicker = (postId: string) => {
     setThreadEmojiPickerPostId((prev) => (prev === postId ? null : postId));
-  };
-
-  const handleContentChange = (e: Event) => {
-    const target = e.target as HTMLTextAreaElement;
-    const value = target.value;
-    setReplyContent(value);
-
-    if (
-      typeof window !== 'undefined'
-      && (window as unknown as { marked?: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-    ) {
-      const rawHtml =
-        (window as unknown as { marked: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-          .parse(value, { async: false });
-      setPreviewHtml(rawHtml);
-    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -308,61 +289,14 @@ const ThreadModal = () => {
 
         {/* Reply Form - Fixed at bottom */}
         <div class='flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4'>
-          {/* Tab Bar */}
-          <div class='flex gap-1 mb-3'>
-            <button
-              type='button'
-              onClick={() => setActiveTab('markdown')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
-                activeTab === 'markdown'
-                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Markdown
-            </button>
-            <button
-              type='button'
-              onClick={() => setActiveTab('preview')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
-                activeTab === 'preview'
-                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Preview
-            </button>
-          </div>
-
-          {/* Content Area */}
-          {activeTab === 'markdown'
-            ? (
-              <textarea
-                value={replyContent}
-                onInput={handleContentChange}
-                onKeyDown={handleKeyDown}
-                placeholder='返信を書く... (⌘+Enter to post)'
-                class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
-                rows={4}
-                disabled={isSendingReply}
-              />
-            )
-            : (
-              <div class='min-h-[100px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700'>
-                {previewHtml
-                  ? (
-                    <div
-                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
-                    />
-                  )
-                  : (
-                    <p class='text-gray-400 dark:text-gray-500'>
-                      Nothing to preview
-                    </p>
-                  )}
-              </div>
-            )}
+          <MarkdownEditor
+            value={replyContent}
+            onChange={setReplyContent}
+            onKeyDown={handleKeyDown}
+            placeholder='返信を書く... (⌘+Enter to post)'
+            minHeight='100px'
+            disabled={isSendingReply}
+          />
 
           {/* Action Buttons */}
           <div class='mt-3 flex gap-2 justify-end'>
