@@ -63,6 +63,24 @@ export const Layout: FC<LayoutProps> = (props) => {
         )}
 
         <script src='https://cdn.tailwindcss.com' />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            .shiki,
+            .shiki span {
+              color: var(--shiki-light);
+              background-color: var(--shiki-light-bg);
+            }
+            @media (prefers-color-scheme: dark) {
+              .shiki,
+              .shiki span {
+                color: var(--shiki-dark);
+                background-color: var(--shiki-dark-bg);
+              }
+            }
+          `,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -129,6 +147,24 @@ export const LayoutClient: FC<{
         <meta name='theme-color' content='#1a1918' />
         <title>blog.kosui.me</title>
         <script src='https://cdn.tailwindcss.com' />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            .shiki,
+            .shiki span {
+              color: var(--shiki-light);
+              background-color: var(--shiki-light-bg);
+            }
+            @media (prefers-color-scheme: dark) {
+              .shiki,
+              .shiki span {
+                color: var(--shiki-dark);
+                background-color: var(--shiki-dark-bg);
+              }
+            }
+          `,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
