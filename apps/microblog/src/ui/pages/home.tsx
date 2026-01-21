@@ -86,74 +86,7 @@ const PullToRefreshIndicator = () => {
   );
 };
 
-const ReplyModal = () => {
-  const { reply } = useTimelineContext();
-  const {
-    replyingToPostId,
-    replyContent,
-    isSendingReply,
-    closeReplyDialog,
-    setReplyContent,
-    sendReply,
-  } = reply;
-
-  if (!replyingToPostId) {
-    return null;
-  }
-
-  return (
-    <div
-      class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
-      onClick={closeReplyDialog}
-    >
-      <div
-        class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-lg w-full mx-4'
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
-          Reply
-        </h2>
-        <p class='text-gray-500 dark:text-gray-400 text-xs mb-3 truncate'>
-          Replying to post: {replyingToPostId}
-        </p>
-        <textarea
-          value={replyContent}
-          onInput={(e) => setReplyContent((e.target as HTMLTextAreaElement).value)}
-          placeholder='Write your reply...'
-          class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3 resize-none'
-          rows={4}
-          disabled={isSendingReply}
-        />
-        <div class='flex gap-2 justify-end'>
-          <button
-            type='button'
-            onClick={closeReplyDialog}
-            class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
-            disabled={isSendingReply}
-          >
-            Cancel
-          </button>
-          <button
-            type='button'
-            onClick={() => {
-              if (replyContent.trim()) {
-                sendReply(replyingToPostId, replyContent);
-              }
-            }}
-            class={`px-5 py-2 text-white text-sm font-medium rounded-2xl transition-colors ${
-              isSendingReply || !replyContent.trim()
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-500 hover:bg-blue-600'
-            }`}
-            disabled={isSendingReply || !replyContent.trim()}
-          >
-            {isSendingReply ? 'Sending...' : 'Send Reply'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+type TabMode = 'markdown' | 'preview';
 
 const ThreadModal = () => {
   const { thread, actions, reply, data } = useTimelineContext();
@@ -163,8 +96,16 @@ const ThreadModal = () => {
     isLoadingThread,
     closeThread,
   } = thread;
+  const {
+    replyContent,
+    isSendingReply,
+    setReplyContent,
+    sendReply,
+  } = reply;
   const { actionState } = actions;
   const [threadEmojiPickerPostId, setThreadEmojiPickerPostId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabMode>('markdown');
+  const [previewHtml, setPreviewHtml] = useState('');
 
   if (!threadModalPostId) {
     return null;
@@ -175,16 +116,42 @@ const ThreadModal = () => {
     setThreadEmojiPickerPostId((prev) => (prev === postId ? null : postId));
   };
 
+  const handleContentChange = (e: Event) => {
+    const target = e.target as HTMLTextAreaElement;
+    const value = target.value;
+    setReplyContent(value);
+
+    if (
+      typeof window !== 'undefined'
+      && (window as unknown as { marked?: { parse: (text: string, options?: { async: boolean }) => string } }).marked
+    ) {
+      const rawHtml =
+        (window as unknown as { marked: { parse: (text: string, options?: { async: boolean }) => string } }).marked
+          .parse(value, { async: false });
+      setPreviewHtml(rawHtml);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (replyContent.trim() && threadModalPostId) {
+        sendReply(threadModalPostId, replyContent);
+      }
+    }
+  };
+
   return (
     <div
       class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
       onClick={closeThread}
     >
       <div
-        class='bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto'
+        class='bg-white dark:bg-gray-800 md:rounded-3xl shadow-lg p-4 md:p-6 w-full h-full md:h-auto md:max-w-2xl md:max-h-[90vh] md:mx-4 flex flex-col'
         onClick={(e) => e.stopPropagation()}
       >
-        <div class='flex items-center justify-between mb-4'>
+        {/* Header */}
+        <div class='flex items-center justify-between mb-4 flex-shrink-0'>
           <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
             Thread
           </h2>
@@ -208,96 +175,44 @@ const ThreadModal = () => {
             </svg>
           </button>
         </div>
-        {isLoadingThread
-          ? (
-            <div class='flex items-center justify-center py-8'>
-              <svg
-                class='animate-spin h-8 w-8 text-blue-500'
-                viewBox='0 0 24 24'
-              >
-                <circle
-                  class='opacity-25'
-                  cx='12'
-                  cy='12'
-                  r='10'
-                  stroke='currentColor'
-                  stroke-width='4'
-                  fill='none'
-                />
-                <path
-                  class='opacity-75'
-                  fill='currentColor'
-                  d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                />
-              </svg>
-            </div>
-          )
-          : threadData
-          ? (
-            <div class='space-y-3'>
-              {threadData.ancestors.length > 0 && (
-                <>
-                  {threadData.ancestors.map((post) => (
-                    <div key={post.postId} class='relative'>
-                      <PostView
-                        post={post}
-                        currentUserId={currentUserId}
-                        onReply={reply.openReplyDialog}
-                        onLike={actions.like}
-                        isLiking={actionState.likingPostId === post.postId}
-                        onUndoLike={actions.undoLike}
-                        isUndoingLike={actionState.undoingLikePostId === post.postId}
-                        onRepost={actions.repost}
-                        isReposting={actionState.repostingPostId === post.postId}
-                        onUndoRepost={post.reposted ? actions.undoRepost : undefined}
-                        isUndoingRepost={actionState.undoingRepostPostId === post.postId}
-                        onDelete={actions.deletePost}
-                        isDeleting={actionState.deletingPostId === post.postId}
-                        onEmojiReact={actions.emojiReact}
-                        onUndoEmojiReact={actions.undoEmojiReact}
-                        isEmojiReacting={actionState.emojiReactingPostId === post.postId}
-                        myReactions={actionState.myReactions.get(post.postId) ?? []}
-                        isEmojiPickerOpen={threadEmojiPickerPostId === post.postId}
-                        onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.postId)}
-                      />
-                    </div>
-                  ))}
-                </>
-              )}
-              {threadData.currentPost && (
-                <div class='relative ring-2 ring-blue-500 dark:ring-blue-400 rounded-3xl'>
-                  <PostView
-                    post={threadData.currentPost}
-                    currentUserId={currentUserId}
-                    onReply={reply.openReplyDialog}
-                    onLike={actions.like}
-                    isLiking={actionState.likingPostId === threadData.currentPost.postId}
-                    onUndoLike={actions.undoLike}
-                    isUndoingLike={actionState.undoingLikePostId === threadData.currentPost.postId}
-                    onRepost={actions.repost}
-                    isReposting={actionState.repostingPostId === threadData.currentPost.postId}
-                    onUndoRepost={threadData.currentPost.reposted ? actions.undoRepost : undefined}
-                    isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.postId}
-                    onDelete={actions.deletePost}
-                    isDeleting={actionState.deletingPostId === threadData.currentPost.postId}
-                    onEmojiReact={actions.emojiReact}
-                    onUndoEmojiReact={actions.undoEmojiReact}
-                    isEmojiReacting={actionState.emojiReactingPostId === threadData.currentPost.postId}
-                    myReactions={actionState.myReactions.get(threadData.currentPost.postId) ?? []}
-                    isEmojiPickerOpen={threadEmojiPickerPostId === threadData.currentPost.postId}
-                    onToggleEmojiPicker={() => toggleThreadEmojiPicker(threadData.currentPost!.postId)}
+
+        {/* Thread Content - Scrollable */}
+        <div class='flex-1 overflow-y-auto min-h-0 mb-4'>
+          {isLoadingThread
+            ? (
+              <div class='flex items-center justify-center py-8'>
+                <svg
+                  class='animate-spin h-8 w-8 text-blue-500'
+                  viewBox='0 0 24 24'
+                >
+                  <circle
+                    class='opacity-25'
+                    cx='12'
+                    cy='12'
+                    r='10'
+                    stroke='currentColor'
+                    stroke-width='4'
+                    fill='none'
                   />
-                </div>
-              )}
-              {threadData.descendants.length > 0
-                ? (
+                  <path
+                    class='opacity-75'
+                    fill='currentColor'
+                    d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                  />
+                </svg>
+              </div>
+            )
+            : threadData
+            ? (
+              <div class='space-y-3'>
+                {threadData.ancestors.length > 0 && (
                   <>
-                    {threadData.descendants.map((post) => (
+                    {threadData.ancestors.map((post) => (
                       <div key={post.postId} class='relative'>
                         <PostView
                           post={post}
                           currentUserId={currentUserId}
-                          onReply={reply.openReplyDialog}
+                          onReply={() => {}}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.postId}
                           onUndoLike={actions.undoLike}
@@ -318,22 +233,165 @@ const ThreadModal = () => {
                       </div>
                     ))}
                   </>
-                )
-                : (
-                  threadData.ancestors.length === 0
-                  && !threadData.currentPost && (
-                    <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                      No replies in this thread yet
-                    </p>
-                  )
                 )}
-            </div>
-          )
-          : (
-            <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-              Failed to load thread
-            </p>
-          )}
+                {threadData.currentPost && (
+                  <div class='relative'>
+                    <PostView
+                      post={threadData.currentPost}
+                      currentUserId={currentUserId}
+                      onReply={() => {}}
+                      onLike={actions.like}
+                      isLiking={actionState.likingPostId === threadData.currentPost.postId}
+                      onUndoLike={actions.undoLike}
+                      isUndoingLike={actionState.undoingLikePostId === threadData.currentPost.postId}
+                      onRepost={actions.repost}
+                      isReposting={actionState.repostingPostId === threadData.currentPost.postId}
+                      onUndoRepost={threadData.currentPost.reposted ? actions.undoRepost : undefined}
+                      isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.postId}
+                      onDelete={actions.deletePost}
+                      isDeleting={actionState.deletingPostId === threadData.currentPost.postId}
+                      onEmojiReact={actions.emojiReact}
+                      onUndoEmojiReact={actions.undoEmojiReact}
+                      isEmojiReacting={actionState.emojiReactingPostId === threadData.currentPost.postId}
+                      myReactions={actionState.myReactions.get(threadData.currentPost.postId) ?? []}
+                      isEmojiPickerOpen={threadEmojiPickerPostId === threadData.currentPost.postId}
+                      onToggleEmojiPicker={() => toggleThreadEmojiPicker(threadData.currentPost!.postId)}
+                    />
+                  </div>
+                )}
+                {threadData.descendants.length > 0
+                  ? (
+                    <>
+                      {threadData.descendants.map((post) => (
+                        <div key={post.postId} class='relative'>
+                          <PostView
+                            post={post}
+                            currentUserId={currentUserId}
+                            onReply={() => {}}
+                            onLike={actions.like}
+                            isLiking={actionState.likingPostId === post.postId}
+                            onUndoLike={actions.undoLike}
+                            isUndoingLike={actionState.undoingLikePostId === post.postId}
+                            onRepost={actions.repost}
+                            isReposting={actionState.repostingPostId === post.postId}
+                            onUndoRepost={post.reposted ? actions.undoRepost : undefined}
+                            isUndoingRepost={actionState.undoingRepostPostId === post.postId}
+                            onDelete={actions.deletePost}
+                            isDeleting={actionState.deletingPostId === post.postId}
+                            onEmojiReact={actions.emojiReact}
+                            onUndoEmojiReact={actions.undoEmojiReact}
+                            isEmojiReacting={actionState.emojiReactingPostId === post.postId}
+                            myReactions={actionState.myReactions.get(post.postId) ?? []}
+                            isEmojiPickerOpen={threadEmojiPickerPostId === post.postId}
+                            onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.postId)}
+                          />
+                        </div>
+                      ))}
+                    </>
+                  )
+                  : (
+                    threadData.ancestors.length === 0
+                    && !threadData.currentPost && (
+                      <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
+                        No replies in this thread yet
+                      </p>
+                    )
+                  )}
+              </div>
+            )
+            : (
+              <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
+                Failed to load thread
+              </p>
+            )}
+        </div>
+
+        {/* Reply Form - Fixed at bottom */}
+        <div class='flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4'>
+          {/* Tab Bar */}
+          <div class='flex gap-1 mb-3'>
+            <button
+              type='button'
+              onClick={() => setActiveTab('markdown')}
+              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                activeTab === 'markdown'
+                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Markdown
+            </button>
+            <button
+              type='button'
+              onClick={() => setActiveTab('preview')}
+              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                activeTab === 'preview'
+                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Preview
+            </button>
+          </div>
+
+          {/* Content Area */}
+          {activeTab === 'markdown'
+            ? (
+              <textarea
+                value={replyContent}
+                onInput={handleContentChange}
+                onKeyDown={handleKeyDown}
+                placeholder='返信を書く... (⌘+Enter to post)'
+                class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
+                rows={4}
+                disabled={isSendingReply}
+              />
+            )
+            : (
+              <div class='min-h-[100px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700'>
+                {previewHtml
+                  ? (
+                    <div
+                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  )
+                  : (
+                    <p class='text-gray-400 dark:text-gray-500'>
+                      Nothing to preview
+                    </p>
+                  )}
+              </div>
+            )}
+
+          {/* Action Buttons */}
+          <div class='mt-3 flex gap-2 justify-end'>
+            <button
+              type='button'
+              onClick={closeThread}
+              class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
+              disabled={isSendingReply}
+            >
+              Cancel
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                if (replyContent.trim() && threadModalPostId) {
+                  sendReply(threadModalPostId, replyContent);
+                }
+              }}
+              class={`px-5 py-2 text-white text-sm font-medium rounded-2xl transition-colors ${
+                isSendingReply || !replyContent.trim()
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gray-700 hover:bg-gray-600'
+              }`}
+              disabled={isSendingReply || !replyContent.trim()}
+            >
+              {isSendingReply ? '送信中...' : '返信する'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -571,12 +629,11 @@ const HomePage = () => {
   return (
     <>
       <UserProfile />
-      <Modal id='post-modal' showCloseButton={false}>
+      <Modal id='post-modal' showCloseButton={false} fullScreen>
         <PostForm formId='post-modal-form' />
       </Modal>
       <UpdateBioModal />
       <PullToRefreshIndicator />
-      <ReplyModal />
       <ThreadModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>

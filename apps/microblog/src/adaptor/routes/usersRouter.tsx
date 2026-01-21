@@ -19,7 +19,6 @@ import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts'
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
-import { sanitize } from './helper/sanitize.ts';
 
 const app = new Hono();
 
@@ -160,6 +159,9 @@ app.get(
   ),
   async (c) => {
     const { username, postId } = c.req.valid('param');
+    const sessionId = getCookie(c, 'sessionId');
+    const isLoggedIn = !!sessionId;
+
     const useCase = GetPostUseCase.create({
       postResolver: PgPostResolver.getInstance(),
       postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
@@ -190,10 +192,12 @@ app.get(
           const url = new URL(c.req.url);
           const postUrl = `${url.origin}/users/${username}/posts/${post.postId}`;
           const description = extractDescription(post.content);
-          const sanitizedContent = sanitize(post.content);
 
           return c.html(
-            <Layout
+            <LayoutClient
+              client='/static/localPost.js'
+              server='/src/ui/pages/localPost.tsx'
+              isLoggedIn={isLoggedIn}
               ogp={{
                 title: `@${username}の投稿`,
                 description,
@@ -204,61 +208,8 @@ app.get(
                 image: postImages.length > 0 ? postImages[0].url : undefined,
               }}
             >
-              <section>
-                <h2>
-                  <a
-                    href={`/users/${username}`}
-                    class='text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
-                  >
-                    @{String(username)}
-                  </a>
-                </h2>
-                <article class='bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-4'>
-                  <div
-                    class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400'
-                    dangerouslySetInnerHTML={{
-                      __html: sanitizedContent,
-                    }}
-                  />
-                  {postImages.length > 0 && (
-                    <div
-                      class={`mt-4 grid gap-2 ${
-                        postImages.length === 1
-                          ? 'grid-cols-1'
-                          : postImages.length === 2
-                          ? 'grid-cols-2'
-                          : 'grid-cols-2 md:grid-cols-3'
-                      }`}
-                    >
-                      {postImages.map((image, index) => (
-                        <a
-                          key={index}
-                          href={image.url}
-                          target='_blank'
-                          rel='noopener noreferrer'
-                          class='block overflow-hidden rounded-lg'
-                        >
-                          <img
-                            src={image.url}
-                            alt={image.altText || 'Post image'}
-                            class='w-full h-auto max-h-96 object-cover hover:opacity-90 transition-opacity'
-                            loading='lazy'
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  <footer class='mt-4 pt-4 border-t border-gray-200 dark:border-gray-700'>
-                    <time
-                      dateTime={new Date(post.createdAt).toISOString()}
-                      class='text-sm text-gray-500 dark:text-gray-400'
-                    >
-                      {new Date(post.createdAt).toLocaleString()}
-                    </time>
-                  </footer>
-                </article>
-              </section>
-            </Layout>,
+              <div id='root' class='h-full flex flex-col' />
+            </LayoutClient>,
           );
         },
         err: (err) => {
