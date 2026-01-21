@@ -124,7 +124,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           ...post,
           username: Username.orThrow(row.users!.username),
           logoUri: row.actors!.logoUri ?? undefined,
-          liked: false,
+          liked: row.likes !== null,
           reposted,
           images,
         };

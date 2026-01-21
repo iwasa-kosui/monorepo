@@ -192,14 +192,21 @@ const create = ({
           : [];
 
         // Store all events in batch (each store handles its own transaction)
+        // Only call store if there are events to process
         await Promise.all([
-          timelineItemDeletedStore.store(...timelineItemEvents),
-          likeNotificationDeletedStore.store(...likeNotificationEvents),
-          emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
-          replyNotificationDeletedStore.store(...replyNotificationEvents),
-          repostDeletedStore.store(...repostEvents),
-          likeDeletedStore.store(...likeEvents),
-          emojiReactDeletedStore.store(...emojiReactEvents),
+          timelineItemEvents.length > 0 ? timelineItemDeletedStore.store(...timelineItemEvents) : Promise.resolve(),
+          likeNotificationEvents.length > 0
+            ? likeNotificationDeletedStore.store(...likeNotificationEvents)
+            : Promise.resolve(),
+          emojiReactNotificationEvents.length > 0
+            ? emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents)
+            : Promise.resolve(),
+          replyNotificationEvents.length > 0
+            ? replyNotificationDeletedStore.store(...replyNotificationEvents)
+            : Promise.resolve(),
+          repostEvents.length > 0 ? repostDeletedStore.store(...repostEvents) : Promise.resolve(),
+          likeEvents.length > 0 ? likeDeletedStore.store(...likeEvents) : Promise.resolve(),
+          emojiReactEvents.length > 0 ? emojiReactDeletedStore.store(...emojiReactEvents) : Promise.resolve(),
         ]);
 
         // Delete the post via event store
