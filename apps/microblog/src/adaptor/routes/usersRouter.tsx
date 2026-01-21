@@ -208,7 +208,7 @@ app.get(
                 image: postImages.length > 0 ? postImages[0].url : undefined,
               }}
             >
-              <div id='root' class='h-full flex flex-col' />
+              <div id='root' class='h-full flex flex-col' data-is-logged-in={String(isLoggedIn)} />
             </LayoutClient>,
           );
         },
