@@ -1,5 +1,5 @@
-import { Marked } from 'marked';
-import { createHighlighter } from 'shiki';
+import { Marked, Renderer } from 'marked';
+import { createHighlighter, type Highlighter } from 'shiki';
 
 const highlighterPromise = createHighlighter({
   themes: ['github-light', 'github-dark'],
@@ -24,7 +24,32 @@ const highlighterPromise = createHighlighter({
   ],
 });
 
-const markedInstance = new Marked();
+const createRenderer = (highlighter: Highlighter): Renderer => {
+  const renderer = new Renderer();
+
+  renderer.code = ({ text, lang }) => {
+    const language = lang || 'plaintext';
+    try {
+      return highlighter.codeToHtml(text, {
+        lang: language,
+        themes: {
+          light: 'github-light',
+          dark: 'github-dark',
+        },
+      });
+    } catch {
+      return highlighter.codeToHtml(text, {
+        lang: 'plaintext',
+        themes: {
+          light: 'github-light',
+          dark: 'github-dark',
+        },
+      });
+    }
+  };
+
+  return renderer;
+};
 
 /**
  * PostContent - Markdown to HTML conversion service
@@ -32,30 +57,7 @@ const markedInstance = new Marked();
 export const PostContent = {
   fromMarkdown: async (markdown: string): Promise<string> => {
     const highlighter = await highlighterPromise;
-    const renderer = new markedInstance.Renderer();
-
-    renderer.code = ({ text, lang }) => {
-      const language = lang || 'plaintext';
-      try {
-        return highlighter.codeToHtml(text, {
-          lang: language,
-          themes: {
-            light: 'github-light',
-            dark: 'github-dark',
-          },
-        });
-      } catch {
-        return highlighter.codeToHtml(text, {
-          lang: 'plaintext',
-          themes: {
-            light: 'github-light',
-            dark: 'github-dark',
-          },
-        });
-      }
-    };
-
-    markedInstance.setOptions({ renderer });
-    return markedInstance.parse(markdown, { async: false }) as string;
+    const marked = new Marked({ renderer: createRenderer(highlighter) });
+    return marked.parse(markdown, { async: false }) as string;
   },
 } as const;
