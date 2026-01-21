@@ -109,6 +109,7 @@ export const RemoteUserPage = ({
                       <form
                         method='post'
                         action={`/remote-users/${remoteActor.id}/unfollow`}
+                        class='m-0'
                       >
                         <button
                           type='submit'
@@ -141,6 +142,7 @@ export const RemoteUserPage = ({
                       <form
                         method='post'
                         action={`/remote-users/${remoteActor.id}/follow`}
+                        class='m-0'
                       >
                         <button
                           type='submit'

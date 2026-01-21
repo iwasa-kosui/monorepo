@@ -71,7 +71,7 @@ export const GetRemoteUserPage = ({
               ? (
                 isFollowing
                   ? (
-                    <form method='post' action={`/remote-users/${remoteActor.id}/unfollow`}>
+                    <form method='post' action={`/remote-users/${remoteActor.id}/unfollow`} class='m-0'>
                       <button
                         type='submit'
                         class='flex items-center justify-center p-2 rounded-xl text-blue-500 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
@@ -100,7 +100,7 @@ export const GetRemoteUserPage = ({
                     </form>
                   )
                   : (
-                    <form method='post' action={`/remote-users/${remoteActor.id}/follow`}>
+                    <form method='post' action={`/remote-users/${remoteActor.id}/follow`} class='m-0'>
                       <button
                         type='submit'
                         class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
