@@ -111,9 +111,13 @@ export const LayoutClient: FC<{
   client: string;
   server: string;
   isLoggedIn?: boolean;
+  ogp?: OGPMetadata;
   children: unknown;
 }> = (props) => {
-  const { isLoggedIn = true } = props;
+  const { isLoggedIn = true, ogp } = props;
+  const title = ogp?.title ? `${ogp.title} | blog.kosui.me` : 'blog.kosui.me';
+  const description = ogp?.description || 'A microblog by kosui';
+
   return (
     <html lang='en'>
       <head>
@@ -127,7 +131,29 @@ export const LayoutClient: FC<{
         <meta name='apple-mobile-web-app-title' content='Microblog' />
         <link rel='apple-touch-icon' href='/icon-192.png' />
         <meta name='theme-color' content='#1a1918' />
-        <title>blog.kosui.me</title>
+        <title>{title}</title>
+        <meta name='description' content={description} />
+
+        {/* OGP Meta Tags */}
+        <meta property='og:title' content={ogp?.title || 'blog.kosui.me'} />
+        <meta property='og:description' content={description} />
+        <meta property='og:type' content={ogp?.type || 'website'} />
+        <meta property='og:site_name' content={ogp?.siteName || 'blog.kosui.me'} />
+        {ogp?.url && <meta property='og:url' content={ogp.url} />}
+        {ogp?.image && <meta property='og:image' content={ogp.image} />}
+
+        {/* Twitter Card Meta Tags */}
+        <meta name='twitter:card' content='summary' />
+        <meta name='twitter:title' content={ogp?.title || 'blog.kosui.me'} />
+        <meta name='twitter:description' content={description} />
+        {ogp?.image && <meta name='twitter:image' content={ogp.image} />}
+
+        {/* Article specific meta tags */}
+        {ogp?.type === 'article' && ogp?.author && <meta property='article:author' content={ogp.author} />}
+        {ogp?.type === 'article' && ogp?.publishedTime && (
+          <meta property='article:published_time' content={ogp.publishedTime} />
+        )}
+
         <script src='https://cdn.tailwindcss.com' />
         <script
           dangerouslySetInnerHTML={{
