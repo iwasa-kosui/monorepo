@@ -456,6 +456,8 @@ const app = new Hono()
 
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
 
+      const htmlContent = await PostContent.fromMarkdown(content);
+
       const useCase = SendReplyUseCase.create({
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
@@ -473,7 +475,7 @@ const app = new Hono()
       const result = await useCase.run({
         sessionId: sessionIdResult.val,
         postId,
-        content,
+        content: htmlContent,
         imageUrls,
         request: c.req.raw,
         ctx,
