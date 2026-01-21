@@ -417,6 +417,65 @@ layout: section
 
 ---
 
+# 私たちの選択基準
+
+<div class="mt-6">
+
+<div class="p-6 bg-blue-50 rounded-lg mb-6">
+  <p class="text-xl font-bold text-center">
+    「流行っているから」ではなく<br>
+    「この課題を解決するために、このトレードオフを受け入れる」
+  </p>
+</div>
+
+<div class="grid grid-cols-3 gap-4">
+
+<div class="p-4 bg-gray-50 rounded-lg text-center">
+  <div class="text-3xl mb-2">1</div>
+  <h4 class="font-bold text-sm">なぜ選ぶか</h4>
+  <p class="text-xs text-gray-600 mt-1">
+    解決したい課題と<br>
+    受け入れるトレードオフを<br>
+    チームで言語化
+  </p>
+</div>
+
+<div class="p-4 bg-gray-50 rounded-lg text-center">
+  <div class="text-3xl mb-2">2</div>
+  <h4 class="font-bold text-sm">どう運用するか</h4>
+  <p class="text-xs text-gray-600 mt-1">
+    導入して終わりではなく<br>
+    監視・障害対応・改善の<br>
+    サイクルを回す
+  </p>
+</div>
+
+<div class="p-4 bg-gray-50 rounded-lg text-center">
+  <div class="text-3xl mb-2">3</div>
+  <h4 class="font-bold text-sm">どう育てるか</h4>
+  <p class="text-xs text-gray-600 mt-1">
+    運用で見つかった課題を<br>
+    設計にフィードバックし<br>
+    継続的に改善
+  </p>
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-yellow-50 rounded text-center">
+  <span class="font-bold">設計を「自分ごと」として運用し続ける</span> — これが私たちの信頼性向上の核心
+</div>
+
+</div>
+
+<!--
+私たちの選択基準についてお話しします。
+技術を選ぶとき、「なぜ選ぶか」「どう運用するか」「どう育てるか」の3つの観点で考えています。
+この後紹介する4つの方法論も、この基準に基づいて選択し、運用し、改善し続けてきました。
+-->
+
+---
+
 # 方法論の全体像
 
 <div class="grid grid-cols-2 gap-4 mt-6">
@@ -640,6 +699,69 @@ CREATE TABLE secure_event_attributes (
 -->
 
 ---
+
+# ドメインイベント: 運用と改善
+
+<div class="grid grid-cols-2 gap-6 mt-4">
+
+<div>
+
+### 運用で得た気づき
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">後付け導入の難しさ</h4>
+  <p class="text-xs text-gray-600">
+    既存データからイベントを生成する際、<br>
+    依存関係を考慮した順序制御が必要だった<br>
+    <span class="font-bold">→ 新規開発時に組み込むべき</span>
+  </p>
+</div>
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">イベント設計の見直し</h4>
+  <p class="text-xs text-gray-600">
+    運用中に「このイベントも必要だった」と気づく<br>
+    <span class="font-bold">→ スキーマ進化の仕組みを用意</span>
+  </p>
+</div>
+
+</div>
+
+<div>
+
+### 継続的な改善
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">障害調査での活用</h4>
+  <p class="text-xs text-gray-600">
+    「3ヶ月前のこのユーザーの状態は？」<br>
+    → イベントを辿って即座に回答可能に
+  </p>
+</div>
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">監査対応の効率化</h4>
+  <p class="text-xs text-gray-600">
+    変更履歴の完全な追跡が可能になり、<br>
+    監査対応の工数が大幅に削減
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
+<span class="font-bold">選んで終わりではない</span> — 運用しながら設計を育て続ける
+</div>
+
+<!--
+ドメインイベントの運用で得た気づきと改善です。
+後付け導入は難しく、新規開発時に組み込むべきだと学びました。
+また、運用中に必要なイベントが見つかることもあり、スキーマ進化の仕組みが重要です。
+-->
+
+---
 layout: section
 ---
 
@@ -753,6 +875,69 @@ df_v100 = spark.read.format("delta") \
 データ基盤にはDelta Lakeを採用しています。
 S3に保存することで高い耐久性を確保し、タイムトラベル機能により過去の任意の時点のデータにアクセスできます。
 これにより「3ヶ月前のデータがどうだったか」という問い合わせに即座に回答できます。
+-->
+
+---
+
+# データ連携: 運用と改善
+
+<div class="grid grid-cols-2 gap-6 mt-4">
+
+<div>
+
+### 運用で直面した課題
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">「即時性が必要」の誘惑</h4>
+  <p class="text-xs text-gray-600">
+    プロダクトチームから「リアルタイムで欲しい」<br>
+    → 本当に必要か？を一緒に検討<br>
+    <span class="font-bold">多くは「数分遅延OK」だった</span>
+  </p>
+</div>
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">CDC遅延の監視</h4>
+  <p class="text-xs text-gray-600">
+    データ基盤への反映遅延をアラート化<br>
+    <span class="font-bold">異常を早期に検知できる体制を構築</span>
+  </p>
+</div>
+
+</div>
+
+<div>
+
+### パターン選択の判断基準を育てる
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">ドキュメント化</h4>
+  <p class="text-xs text-gray-600">
+    「なぜこのパターンを選んだか」を記録<br>
+    新メンバーも同じ判断ができるように
+  </p>
+</div>
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">定期的な見直し</h4>
+  <p class="text-xs text-gray-600">
+    API連携で障害が波及した事例を振り返り<br>
+    <span class="font-bold">データ基盤経由に変更した例も</span>
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
+<span class="font-bold">選択基準をチームで共有し、運用しながら磨き続ける</span>
+</div>
+
+<!--
+データ連携パターンの運用と改善です。
+「即時性が必要」という要求に対して、本当に必要かを一緒に検討することが重要でした。
+また、選択基準をドキュメント化し、定期的に見直すことで、チーム全体の判断力を高めています。
 -->
 
 ---
@@ -941,6 +1126,69 @@ const org = await db.query(
 -->
 
 ---
+
+# サービスベース: 運用と改善
+
+<div class="grid grid-cols-2 gap-6 mt-4">
+
+<div>
+
+### 失敗から学んだこと
+
+<div class="p-4 bg-red-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">共通ライブラリの肥大化</h4>
+  <p class="text-xs text-gray-600">
+    型定義・バリデーションを共通化しすぎた結果、<br>
+    一つの変更が全サービスのリビルドを強制<br>
+    <span class="font-bold text-red-600">→「分散モノリス」の兆候</span>
+  </p>
+</div>
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">DNS解決の遅延問題</h4>
+  <p class="text-xs text-gray-600">
+    「一時的にAPI連携で」が常態化<br>
+    → 原則に立ち返り、DB経由に修正
+  </p>
+</div>
+
+</div>
+
+<div>
+
+### 原則を守るための工夫
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">ADR（Architecture Decision Record）</h4>
+  <p class="text-xs text-gray-600">
+    「なぜサービス間通信を禁止するか」を記録<br>
+    例外を認める際の判断基準を明文化
+  </p>
+</div>
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">コードレビューでの確認</h4>
+  <p class="text-xs text-gray-600">
+    サービス間API呼び出しを見つけたら<br>
+    「本当に必要？DB経由でできない？」と問う
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
+<span class="font-bold">原則を言語化し、逸脱を検知し、継続的に守り続ける</span>
+</div>
+
+<!--
+サービスベースアーキテクチャの運用と改善です。
+共通ライブラリの肥大化や、例外的なAPI連携の常態化など、失敗もありました。
+ADRで原則を記録し、コードレビューで逸脱を検知することで、原則を守り続けています。
+-->
+
+---
 layout: section
 ---
 
@@ -1063,6 +1311,127 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 -->
 
 ---
+
+# RLS: 運用と改善
+
+<div class="grid grid-cols-2 gap-6 mt-4">
+
+<div>
+
+### 慎重なマイグレーション
+
+<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">段階的な適用</h4>
+  <p class="text-xs text-gray-600">
+    1. まずPERMISSIVEモードで導入<br>
+    2. 全クエリをログに記録して影響確認<br>
+    3. 問題なければENFORCEモードに移行
+  </p>
+</div>
+
+<div class="p-4 bg-red-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">誤ったポリシーのリスク</h4>
+  <p class="text-xs text-gray-600">
+    データ漏洩 or 正当なアクセスの拒否<br>
+    <span class="font-bold">→ 十分なテストとモニタリングが必須</span>
+  </p>
+</div>
+
+</div>
+
+<div>
+
+### 継続的な監視と改善
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">パフォーマンス監視</h4>
+  <p class="text-xs text-gray-600">
+    RLSポリシーがクエリ性能に影響<br>
+    → tenant_idインデックスの最適化<br>
+    → スロークエリの定期的な分析
+  </p>
+</div>
+
+<div class="p-4 bg-green-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">新規テーブルへの適用</h4>
+  <p class="text-xs text-gray-600">
+    テーブル追加時のチェックリスト化<br>
+    <span class="font-bold">「RLS適用を忘れない」仕組み</span>
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
+<span class="font-bold">セキュリティは一度設定して終わりではない</span> — 継続的な監視と改善が不可欠
+</div>
+
+<!--
+RLSの運用と改善です。
+マイグレーションは段階的に行い、まずPERMISSIVEモードで影響を確認することが重要です。
+また、パフォーマンス監視や新規テーブルへの適用漏れ防止など、継続的な運用が必要です。
+-->
+
+---
+
+# 導入の現実
+
+<div class="mt-4">
+
+<div class="grid grid-cols-2 gap-6">
+
+<div>
+
+### 初期導入の工数感
+
+| 手法 | 新規開発 | 既存システム |
+|------|:--------:|:------------:|
+| ドメインイベント | 2〜3週間 | 1〜2ヶ月 |
+| データ連携基盤 | 1〜2週間 | 2〜4週間 |
+| サービスベース | 設計時に決定 | 移行困難 |
+| RLS | 1〜2週間 | 2〜4週間 |
+
+<div class="mt-2 text-xs text-gray-500">
+※ チーム規模・既存コードの複雑さにより変動
+</div>
+
+</div>
+
+<div>
+
+### 段階的導入のすすめ
+
+<div class="p-4 bg-blue-50 rounded-lg">
+  <h4 class="font-bold text-sm mb-2">Step 1: 最もクリティカルな領域から</h4>
+  <p class="text-xs text-gray-600">
+    全システムへの一斉導入は避ける<br>
+    例: まず認証基盤にRLSを導入
+  </p>
+</div>
+
+<div class="p-4 bg-blue-50 rounded-lg mt-2">
+  <h4 class="font-bold text-sm mb-2">Step 2: 効果を計測しながら拡大</h4>
+  <p class="text-xs text-gray-600">
+    障害調査時間・開発速度の変化を追跡<br>
+    数値で効果を示し、チームの納得感を得る
+  </p>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<!--
+導入工数の目安です。新規開発と既存システムへの後付けでは、工数が大きく異なります。
+特にドメインイベントは後付けが難しいため、新規開発時に検討することをお勧めします。
+段階的に導入し、効果を計測しながら拡大していくアプローチが現実的です。
+-->
+
+---
 layout: section
 ---
 
@@ -1082,7 +1451,7 @@ layout: section
 
 | 項目 | Before | After |
 |------|--------|-------|
-| 障害時の原因特定 | 数時間〜 | 大幅に短縮 |
+| 障害時の原因特定 | 2〜3時間 | 30分以内 |
 | 過去データの追跡 | 不可能 | 任意の時点で可能 |
 | テナント分離 | アプリ依存 | DB保証 |
 | 新規プロダクト認証 | 各チームで実装 | 共通基盤を利用 |
@@ -1122,44 +1491,66 @@ layout: section
 
 ---
 
-# 失敗から学んだこと
+# 運用し続けることで見えてきたこと
 
-<div class="mt-4 space-y-4">
+<div class="mt-4">
 
-<div class="p-4 bg-yellow-50 rounded-lg">
-  <h4 class="font-bold mb-2">RLSのマイグレーションは慎重に</h4>
+<div class="grid grid-cols-2 gap-6">
+
+<div class="space-y-3">
+
+<div class="p-4 bg-blue-50 rounded-lg">
+  <h4 class="font-bold mb-2">設計の意図がチームに浸透する</h4>
   <p class="text-sm text-gray-600">
-    まずPERMISSIVEモードで始め、全クエリをログに記録して影響を確認<br>
-    問題がないことを確認してからENFORCEモードに移行
+    「なぜこの設計か」を繰り返し説明するうちに、<br>
+    新メンバーも同じ判断ができるようになった
   </p>
-  <p class="text-xs text-red-600 mt-1">誤ったポリシーを適用するとデータ漏洩や欠損のリスク</p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg">
-  <h4 class="font-bold mb-2">共通ライブラリにビジネスロジックを入れすぎない</h4>
+<div class="p-4 bg-blue-50 rounded-lg">
+  <h4 class="font-bold mb-2">失敗が設計を強くする</h4>
   <p class="text-sm text-gray-600">
-    型定義やバリデーションスキーマは共通化OK<br>
-    ビジネスロジックを含む巨大な共通ライブラリは「分散モノリス」を招く
+    障害や問題が起きるたびに、<br>
+    「次は防げる」仕組みを設計に組み込んだ
   </p>
-  <p class="text-xs text-red-600 mt-1">一つのスキーマ変更が全サービスのリビルドを強制</p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg">
-  <h4 class="font-bold mb-2">イベント記録は最初から組み込むべき</h4>
+</div>
+
+<div class="space-y-3">
+
+<div class="p-4 bg-green-50 rounded-lg">
+  <h4 class="font-bold mb-2">「自分たちの責任」という意識</h4>
   <p class="text-sm text-gray-600">
-    後からの導入は工数がかかる（スナップショットからのイベント生成は複雑）<br>
-    依存関係を考慮したイベント生成順序の制御が必要
+    SRE専任がいないからこそ、<br>
+    「誰かがやってくれる」ではなく<br>
+    「自分たちで解決する」マインドが育った
   </p>
-  <p class="text-xs text-red-600 mt-1">理想的には設計初期から組み込む</p>
+</div>
+
+<div class="p-4 bg-green-50 rounded-lg">
+  <h4 class="font-bold mb-2">制約がチームの強みになった</h4>
+  <p class="text-sm text-gray-600">
+    小さなチームだからこそ、<br>
+    設計・運用・改善を一貫して担え、<br>
+    深い理解と迅速な改善が可能に
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-4 bg-yellow-50 rounded-lg text-center">
+  <p class="font-bold text-lg">設計パターンは「選ぶ」ものではなく「育てる」もの</p>
 </div>
 
 </div>
 
 <!--
-失敗から学んだことも共有します。
-RLSのマイグレーションは、まずPERMISSIVEモードで始め、影響を確認しながら進めるべきでした。
-共通ライブラリにビジネスロジックを入れすぎると、変更が困難になります。
-また、イベント記録は最初から組み込むべきでした。
+運用し続けることで見えてきたことをまとめます。
+設計の意図がチームに浸透し、失敗が設計を強くし、「自分たちの責任」という意識が育ちました。
+制約があったからこそ、チームの強みに変えることができました。
 -->
 
 ---
@@ -1288,6 +1679,68 @@ layout: section
 開発チームができることの振り返りです。
 これらの方法論は、段階的に導入可能です。
 クリティカルな領域から優先的に適用していくことをお勧めします。
+-->
+
+---
+
+# 自チームへの適用チェックリスト
+
+<div class="mt-4">
+
+<div class="grid grid-cols-2 gap-6">
+
+<div class="space-y-3">
+
+<div class="p-3 bg-gray-50 rounded-lg">
+  <h4 class="font-bold text-sm mb-1">トレーサビリティが必要か？</h4>
+  <p class="text-xs text-gray-600">
+    「過去の状態を説明できない」問題があるなら<br>
+    → <span class="font-bold">ドメインイベント</span>を検討
+  </p>
+</div>
+
+<div class="p-3 bg-gray-50 rounded-lg">
+  <h4 class="font-bold text-sm mb-1">基盤障害が全体に波及するか？</h4>
+  <p class="text-xs text-gray-600">
+    一つの障害で複数サービスが止まるなら<br>
+    → <span class="font-bold">データ連携パターン</span>を見直す
+  </p>
+</div>
+
+</div>
+
+<div class="space-y-3">
+
+<div class="p-3 bg-gray-50 rounded-lg">
+  <h4 class="font-bold text-sm mb-1">整合性と独立性のどちらが重要か？</h4>
+  <p class="text-xs text-gray-600">
+    密結合なドメインで強い整合性が必要なら<br>
+    → <span class="font-bold">サービスベースアーキテクチャ</span>を検討
+  </p>
+</div>
+
+<div class="p-3 bg-gray-50 rounded-lg">
+  <h4 class="font-bold text-sm mb-1">マルチテナントでデータ漏洩が致命的か？</h4>
+  <p class="text-xs text-gray-600">
+    テナント分離をアプリに依存しているなら<br>
+    → <span class="font-bold">RLS</span>を検討
+  </p>
+</div>
+
+</div>
+
+</div>
+
+<div class="mt-4 p-3 bg-yellow-50 rounded text-center text-sm">
+<span class="font-bold">すべてを導入する必要はない</span> — 自チームの課題に合った手法を選択
+</div>
+
+</div>
+
+<!--
+医療SaaSに限らず、どのチームでも適用できるチェックリストです。
+自チームの課題を特定し、それに合った手法を選択してください。
+すべてを一度に導入する必要はありません。
 -->
 
 ---
