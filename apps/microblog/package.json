@@ -56,7 +56,7 @@
     "dev": "dotenvx run -- vite",
     "prod": "cp .env dist/.env && cd dist && dotenvx run -- node  -r source-map-support/register ./index.js",
     "prebuild": "pnpm --filter result run build",
-    "build": "dotenvx run -- vite build --mode client && vite build",
+    "build": "dotenvx run -- vite build --mode client && NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "drizzle:push": "dotenvx run -- drizzle-kit push",
     "drizzle:generate": "dotenvx run -- drizzle-kit generate",
     "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
