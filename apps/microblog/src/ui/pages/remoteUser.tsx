@@ -87,19 +87,6 @@ export const RemoteUserPage = ({
             </div>
           </div>
 
-          {remoteActor.url && (
-            <div class='mb-4'>
-              <a
-                href={remoteActor.url}
-                target='_blank'
-                rel='noopener noreferrer'
-                class='text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm'
-              >
-                View original profile →
-              </a>
-            </div>
-          )}
-
           <div class='flex items-center gap-3'>
             {isLoggedIn
               ? (
@@ -240,6 +227,30 @@ export const RemoteUserPage = ({
                   to follow this user
                 </p>
               )}
+            {remoteActor.url && (
+              <a
+                href={remoteActor.url}
+                target='_blank'
+                rel='noopener noreferrer'
+                class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                title='元のプロフィールを表示'
+              >
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  class='h-5 w-5'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                  stroke-width='2'
+                >
+                  <path
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                    d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14'
+                  />
+                </svg>
+              </a>
+            )}
           </div>
         </div>
       </section>
