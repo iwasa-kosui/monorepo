@@ -10,6 +10,7 @@ import { z } from 'zod/v4';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
@@ -889,6 +890,20 @@ const app = new Hono()
         ok: () => c.json({ success: true }),
         err: (err) => c.json({ error: `Failed to unmute: ${JSON.stringify(err)}` }, 400),
       })(result);
+    },
+  )
+  .post(
+    '/v1/preview',
+    sValidator(
+      'json',
+      z.object({
+        markdown: z.string(),
+      }),
+    ),
+    async (c) => {
+      const { markdown } = c.req.valid('json');
+      const html = await PostContent.fromMarkdown(markdown);
+      return c.json({ html: sanitize(html) });
     },
   );
 

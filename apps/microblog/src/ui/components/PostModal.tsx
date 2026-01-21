@@ -8,6 +8,7 @@ export const PostModal = () => {
   const [content, setContent] = useState('');
   const [previewHtml, setPreviewHtml] = useState('');
   const [activeTab, setActiveTab] = useState<TabMode>('markdown');
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -19,19 +20,39 @@ export const PostModal = () => {
     }
   };
 
+  const fetchPreview = async (markdown: string) => {
+    if (!markdown.trim()) {
+      setPreviewHtml('');
+      return;
+    }
+    setIsLoadingPreview(true);
+    try {
+      const res = await fetch('/api/v1/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown }),
+      });
+      const data = await res.json();
+      if (data.html) {
+        setPreviewHtml(data.html);
+      }
+    } catch (error) {
+      console.error('Failed to fetch preview:', error);
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
   const handleContentChange = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     const value = target.value;
     setContent(value);
+  };
 
-    if (
-      typeof window !== 'undefined'
-      && (window as unknown as { marked?: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-    ) {
-      const rawHtml =
-        (window as unknown as { marked: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-          .parse(value, { async: false });
-      setPreviewHtml(rawHtml);
+  const handleTabChange = (tab: TabMode) => {
+    setActiveTab(tab);
+    if (tab === 'preview') {
+      fetchPreview(content);
     }
   };
 
@@ -46,7 +67,7 @@ export const PostModal = () => {
         <div class='flex gap-1 mb-3'>
           <button
             type='button'
-            onClick={() => setActiveTab('markdown')}
+            onClick={() => handleTabChange('markdown')}
             class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
               activeTab === 'markdown'
                 ? 'bg-gray-700 dark:bg-gray-600 text-white'
@@ -57,7 +78,7 @@ export const PostModal = () => {
           </button>
           <button
             type='button'
-            onClick={() => setActiveTab('preview')}
+            onClick={() => handleTabChange('preview')}
             class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
               activeTab === 'preview'
                 ? 'bg-gray-700 dark:bg-gray-600 text-white'
@@ -84,10 +105,16 @@ export const PostModal = () => {
             )
             : (
               <div class='w-full h-full min-h-[200px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 overflow-y-auto'>
-                {previewHtml
+                {isLoadingPreview
+                  ? (
+                    <p class='text-gray-400 dark:text-gray-500'>
+                      Loading preview...
+                    </p>
+                  )
+                  : previewHtml
                   ? (
                     <div
-                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
+                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
                       dangerouslySetInnerHTML={{ __html: previewHtml }}
                     />
                   )
