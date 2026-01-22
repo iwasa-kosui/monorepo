@@ -7,7 +7,17 @@ import { LocalPost, type PostImage, type PostQuery } from '../../../domain/post/
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { actorsTable, localActorsTable, localPostsTable, postImagesTable, postsTable, usersTable } from '../schema.ts';
+import {
+  actorsTable,
+  emojiReactsTable,
+  likesTable,
+  localActorsTable,
+  localPostsTable,
+  postImagesTable,
+  postsTable,
+  repostsTable,
+  usersTable,
+} from '../schema.ts';
 
 export type LocalPostsResolver = Agg.Resolver<
   { createdAt: Instant | undefined; limit?: number },
@@ -50,9 +60,59 @@ const getInstance = singleton((): LocalPostsResolver => {
       imagesByPostId.set(imageRow.postId, existing);
     }
 
+    // Fetch like counts for all posts
+    const likeCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const likeRows = await DB.getInstance()
+        .select({ postId: likesTable.postId })
+        .from(likesTable)
+        .where(inArray(likesTable.postId, postIds))
+        .execute();
+      for (const row of likeRows) {
+        const count = likeCountsByPostId.get(row.postId) ?? 0;
+        likeCountsByPostId.set(row.postId, count + 1);
+      }
+    }
+
+    // Fetch repost counts for all posts
+    const repostCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const repostRows = await DB.getInstance()
+        .select({ postId: repostsTable.postId })
+        .from(repostsTable)
+        .where(inArray(repostsTable.postId, postIds))
+        .execute();
+      for (const row of repostRows) {
+        const count = repostCountsByPostId.get(row.postId) ?? 0;
+        repostCountsByPostId.set(row.postId, count + 1);
+      }
+    }
+
+    // Fetch emoji reaction counts for all posts
+    const reactionCountsByPostId = new Map<string, Map<string, number>>();
+    if (postIds.length > 0) {
+      const emojiRows = await DB.getInstance()
+        .select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji })
+        .from(emojiReactsTable)
+        .where(inArray(emojiReactsTable.postId, postIds))
+        .execute();
+      for (const row of emojiRows) {
+        const postReactions = reactionCountsByPostId.get(row.postId) ?? new Map<string, number>();
+        const count = postReactions.get(row.emoji) ?? 0;
+        postReactions.set(row.emoji, count + 1);
+        reactionCountsByPostId.set(row.postId, postReactions);
+      }
+    }
+
     return RA.ok(
       rows.map((row) => {
         const images = imagesByPostId.get(row.posts.postId) ?? [];
+        const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
+        const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
+        const postReactions = reactionCountsByPostId.get(row.posts.postId);
+        const reactionCounts = postReactions
+          ? Array.from(postReactions.entries()).map(([emoji, count]) => ({ emoji, count }))
+          : [];
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
           actorId: row.posts.actorId,
@@ -69,9 +129,9 @@ const getInstance = singleton((): LocalPostsResolver => {
           liked: false,
           reposted: false,
           images,
-          likeCount: 0,
-          repostCount: 0,
-          reactionCounts: [],
+          likeCount,
+          repostCount,
+          reactionCounts,
         };
       }),
     );

@@ -1,8 +1,8 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import type { Agg } from '../../../domain/aggregate/index.ts';
-import { LocalPost, type PostImage, type PostQuery, RemotePost } from '../../../domain/post/post.ts';
+import { LocalPost, type PostImage, type PostQuery, type ReactionCount, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { Env } from '../../../env.ts';
@@ -10,12 +10,15 @@ import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import {
   actorsTable,
+  emojiReactsTable,
+  likesTable,
   localActorsTable,
   localPostsTable,
   postImagesTable,
   postsTable,
   remoteActorsTable,
   remotePostsTable,
+  repostsTable,
   usersTable,
 } from '../schema.ts';
 
@@ -119,12 +122,20 @@ const getInstance = singleton((): ThreadResolver => {
         )
         .execute();
 
-      // Fetch images for replies
+      // Fetch images and engagement counts for replies
       const replyPostIds = localReplyRows.map((row) => row.posts.postId);
-      const replyImagesByPostId = await getPostImagesByIds(replyPostIds);
+      const [replyImagesByPostId, replyEngagementCounts] = await Promise.all([
+        getPostImagesByIds(replyPostIds),
+        getEngagementCountsForPosts(replyPostIds),
+      ]);
 
       for (const row of localReplyRows) {
         const images = replyImagesByPostId.get(row.posts.postId) ?? [];
+        const engagementCounts = replyEngagementCounts.get(row.posts.postId) ?? {
+          likeCount: 0,
+          repostCount: 0,
+          reactionCounts: [],
+        };
         const post: PostQuery = {
           ...LocalPost.orThrow({
             postId: row.posts.postId,
@@ -140,9 +151,7 @@ const getInstance = singleton((): ThreadResolver => {
           liked: false,
           reposted: false,
           images,
-          likeCount: 0,
-          repostCount: 0,
-          reactionCounts: [],
+          ...engagementCounts,
         };
         descendants.push(post);
       }
@@ -174,7 +183,10 @@ async function getPostById(postId: PostId): Promise<PostQuery | null> {
 
   if (localRow.length > 0) {
     const row = localRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, engagementCounts] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getEngagementCountsForPost(row.posts.postId),
+    ]);
     return {
       ...LocalPost.orThrow({
         postId: row.posts.postId,
@@ -190,9 +202,7 @@ async function getPostById(postId: PostId): Promise<PostQuery | null> {
       liked: false,
       reposted: false,
       images,
-      likeCount: 0,
-      repostCount: 0,
-      reactionCounts: [],
+      ...engagementCounts,
     };
   }
 
@@ -214,7 +224,10 @@ async function getPostById(postId: PostId): Promise<PostQuery | null> {
 
   if (remoteRow.length > 0) {
     const row = remoteRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, engagementCounts] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getEngagementCountsForPost(row.posts.postId),
+    ]);
     return {
       ...RemotePost.orThrow({
         postId: row.posts.postId,
@@ -230,9 +243,7 @@ async function getPostById(postId: PostId): Promise<PostQuery | null> {
       liked: false,
       reposted: false,
       images,
-      likeCount: 0,
-      repostCount: 0,
-      reactionCounts: [],
+      ...engagementCounts,
     };
   }
 
@@ -258,7 +269,10 @@ async function getPostByUri(uri: string): Promise<PostQuery | null> {
 
   if (remoteRow.length > 0) {
     const row = remoteRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, engagementCounts] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getEngagementCountsForPost(row.posts.postId),
+    ]);
     return {
       ...RemotePost.orThrow({
         postId: row.posts.postId,
@@ -274,9 +288,7 @@ async function getPostByUri(uri: string): Promise<PostQuery | null> {
       liked: false,
       reposted: false,
       images,
-      likeCount: 0,
-      repostCount: 0,
-      reactionCounts: [],
+      ...engagementCounts,
     };
   }
 
@@ -303,7 +315,10 @@ async function getPostByUri(uri: string): Promise<PostQuery | null> {
 
     if (localRow.length > 0) {
       const row = localRow[0];
-      const images = await getPostImages(row.posts.postId);
+      const [images, engagementCounts] = await Promise.all([
+        getPostImages(row.posts.postId),
+        getEngagementCountsForPost(row.posts.postId),
+      ]);
       return {
         ...LocalPost.orThrow({
           postId: row.posts.postId,
@@ -319,9 +334,7 @@ async function getPostByUri(uri: string): Promise<PostQuery | null> {
         liked: false,
         reposted: false,
         images,
-        likeCount: 0,
-        repostCount: 0,
-        reactionCounts: [],
+        ...engagementCounts,
       };
     }
   }
@@ -362,6 +375,102 @@ async function getPostImagesByIds(postIds: string[]): Promise<Map<string, PostIm
   }
 
   return imagesByPostId;
+}
+
+type EngagementCounts = {
+  likeCount: number;
+  repostCount: number;
+  reactionCounts: ReactionCount[];
+};
+
+async function getEngagementCountsForPost(postId: string): Promise<EngagementCounts> {
+  const [likeRows, repostRows, emojiRows] = await Promise.all([
+    DB.getInstance()
+      .select({ postId: likesTable.postId })
+      .from(likesTable)
+      .where(eq(likesTable.postId, postId))
+      .execute(),
+    DB.getInstance()
+      .select({ postId: repostsTable.postId })
+      .from(repostsTable)
+      .where(eq(repostsTable.postId, postId))
+      .execute(),
+    DB.getInstance()
+      .select({ emoji: emojiReactsTable.emoji })
+      .from(emojiReactsTable)
+      .where(eq(emojiReactsTable.postId, postId))
+      .execute(),
+  ]);
+
+  const emojiCountMap = new Map<string, number>();
+  for (const row of emojiRows) {
+    const count = emojiCountMap.get(row.emoji) ?? 0;
+    emojiCountMap.set(row.emoji, count + 1);
+  }
+
+  return {
+    likeCount: likeRows.length,
+    repostCount: repostRows.length,
+    reactionCounts: Array.from(emojiCountMap.entries()).map(([emoji, count]) => ({ emoji, count })),
+  };
+}
+
+async function getEngagementCountsForPosts(postIds: string[]): Promise<Map<string, EngagementCounts>> {
+  if (postIds.length === 0) {
+    return new Map();
+  }
+
+  const [likeRows, repostRows, emojiRows] = await Promise.all([
+    DB.getInstance()
+      .select({ postId: likesTable.postId })
+      .from(likesTable)
+      .where(inArray(likesTable.postId, postIds))
+      .execute(),
+    DB.getInstance()
+      .select({ postId: repostsTable.postId })
+      .from(repostsTable)
+      .where(inArray(repostsTable.postId, postIds))
+      .execute(),
+    DB.getInstance()
+      .select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji })
+      .from(emojiReactsTable)
+      .where(inArray(emojiReactsTable.postId, postIds))
+      .execute(),
+  ]);
+
+  const likeCountsByPostId = new Map<string, number>();
+  for (const row of likeRows) {
+    const count = likeCountsByPostId.get(row.postId) ?? 0;
+    likeCountsByPostId.set(row.postId, count + 1);
+  }
+
+  const repostCountsByPostId = new Map<string, number>();
+  for (const row of repostRows) {
+    const count = repostCountsByPostId.get(row.postId) ?? 0;
+    repostCountsByPostId.set(row.postId, count + 1);
+  }
+
+  const emojiCountsByPostId = new Map<string, Map<string, number>>();
+  for (const row of emojiRows) {
+    const postReactions = emojiCountsByPostId.get(row.postId) ?? new Map<string, number>();
+    const count = postReactions.get(row.emoji) ?? 0;
+    postReactions.set(row.emoji, count + 1);
+    emojiCountsByPostId.set(row.postId, postReactions);
+  }
+
+  const result = new Map<string, EngagementCounts>();
+  for (const postId of postIds) {
+    const postReactions = emojiCountsByPostId.get(postId);
+    result.set(postId, {
+      likeCount: likeCountsByPostId.get(postId) ?? 0,
+      repostCount: repostCountsByPostId.get(postId) ?? 0,
+      reactionCounts: postReactions
+        ? Array.from(postReactions.entries()).map(([emoji, count]) => ({ emoji, count }))
+        : [],
+    });
+  }
+
+  return result;
 }
 
 export const PgThreadResolver = {
