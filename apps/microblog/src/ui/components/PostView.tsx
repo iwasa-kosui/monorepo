@@ -394,6 +394,9 @@ export const PostView = (
                     d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
                   />
                 </svg>
+                {post.repostCount > 0 && (
+                  <span class='text-sm'>{post.repostCount}</span>
+                )}
               </button>
             }
             {
@@ -430,6 +433,9 @@ export const PostView = (
                     d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
                   />
                 </svg>
+                {post.likeCount > 0 && (
+                  <span class='text-sm'>{post.likeCount}</span>
+                )}
               </button>
             }
             {/* Emoji reaction button */}
@@ -504,25 +510,35 @@ export const PostView = (
               </button>
             )}
           </div>
-          {/* My reactions display */}
-          {myReactions.length > 0 && (
+          {/* Reactions display */}
+          {(post.reactionCounts.length > 0 || myReactions.length > 0) && (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
-              {myReactions.map((emoji) => (
-                <button
-                  key={emoji}
-                  type='button'
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onUndoEmojiReact) {
-                      onUndoEmojiReact(post.postId, emoji);
-                    }
-                  }}
-                  class='inline-flex items-center px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
-                  title='Click to remove reaction'
-                >
-                  {emoji}
-                </button>
-              ))}
+              {post.reactionCounts.map(({ emoji, count }) => {
+                const isMyReaction = myReactions.includes(emoji);
+                return (
+                  <button
+                    key={emoji}
+                    type='button'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isMyReaction && onUndoEmojiReact) {
+                        onUndoEmojiReact(post.postId, emoji);
+                      } else if (!isMyReaction && onEmojiReact) {
+                        onEmojiReact(post.postId, emoji);
+                      }
+                    }}
+                    class={`inline-flex items-center gap-1 px-2 py-0.5 text-sm rounded-full transition-colors ${
+                      isMyReaction
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900'
+                    }`}
+                    title={isMyReaction ? 'Click to remove reaction' : 'Click to add reaction'}
+                  >
+                    <span>{emoji}</span>
+                    <span class='text-xs'>{count}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

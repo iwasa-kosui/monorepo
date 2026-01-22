@@ -11,6 +11,7 @@ import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import {
   actorsTable,
+  emojiReactsTable,
   likesTable,
   localActorsTable,
   localPostsTable,
@@ -107,9 +108,59 @@ const getInstance = singleton((): PostsResolverByActorIds => {
       }
     }
 
+    // Fetch like counts for all posts
+    const likeCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const likeRows = await DB.getInstance()
+        .select({ postId: likesTable.postId })
+        .from(likesTable)
+        .where(inArray(likesTable.postId, postIds))
+        .execute();
+      for (const row of likeRows) {
+        const count = likeCountsByPostId.get(row.postId) ?? 0;
+        likeCountsByPostId.set(row.postId, count + 1);
+      }
+    }
+
+    // Fetch repost counts for all posts
+    const repostCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const allRepostRows = await DB.getInstance()
+        .select({ postId: repostsTable.postId })
+        .from(repostsTable)
+        .where(inArray(repostsTable.postId, postIds))
+        .execute();
+      for (const row of allRepostRows) {
+        const count = repostCountsByPostId.get(row.postId) ?? 0;
+        repostCountsByPostId.set(row.postId, count + 1);
+      }
+    }
+
+    // Fetch emoji reaction counts for all posts
+    const reactionCountsByPostId = new Map<string, Map<string, number>>();
+    if (postIds.length > 0) {
+      const emojiRows = await DB.getInstance()
+        .select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji })
+        .from(emojiReactsTable)
+        .where(inArray(emojiReactsTable.postId, postIds))
+        .execute();
+      for (const row of emojiRows) {
+        const postReactions = reactionCountsByPostId.get(row.postId) ?? new Map<string, number>();
+        const count = postReactions.get(row.emoji) ?? 0;
+        postReactions.set(row.emoji, count + 1);
+        reactionCountsByPostId.set(row.postId, postReactions);
+      }
+    }
+
     return RA.ok(rows.map(row => {
       const images = imagesByPostId.get(row.posts.postId) ?? [];
       const reposted = repostedPostIds.has(row.posts.postId);
+      const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
+      const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
+      const postReactions = reactionCountsByPostId.get(row.posts.postId);
+      const reactionCounts = postReactions
+        ? Array.from(postReactions.entries()).map(([emoji, count]) => ({ emoji, count }))
+        : [];
       if (row.local_posts) {
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
@@ -127,6 +178,9 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           liked: row.likes !== null,
           reposted,
           images,
+          likeCount,
+          repostCount,
+          reactionCounts,
         };
       }
       if (row.remote_posts) {
@@ -152,6 +206,9 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           liked: row.likes !== null,
           reposted,
           images,
+          likeCount,
+          repostCount,
+          reactionCounts,
         };
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

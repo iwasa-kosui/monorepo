@@ -86,6 +86,9 @@ describe('GetRemoteActorPostsUseCase', () => {
           liked: false,
           reposted: false,
           images: [],
+          likeCount: 0,
+          repostCount: 0,
+          reactionCounts: [],
         },
       ];
       deps.postsResolverByActorIdWithPagination.setPosts(posts);

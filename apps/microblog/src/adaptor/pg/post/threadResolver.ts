@@ -140,6 +140,9 @@ const getInstance = singleton((): ThreadResolver => {
           liked: false,
           reposted: false,
           images,
+          likeCount: 0,
+          repostCount: 0,
+          reactionCounts: [],
         };
         descendants.push(post);
       }
@@ -187,6 +190,9 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: 0,
+      repostCount: 0,
+      reactionCounts: [],
     };
   }
 
@@ -224,6 +230,9 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: 0,
+      repostCount: 0,
+      reactionCounts: [],
     };
   }
 
@@ -265,6 +274,9 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: 0,
+      repostCount: 0,
+      reactionCounts: [],
     };
   }
 
@@ -307,6 +319,9 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         liked: false,
         reposted: false,
         images,
+        likeCount: 0,
+        repostCount: 0,
+        reactionCounts: [],
       };
     }
   }

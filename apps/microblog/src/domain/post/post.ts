@@ -34,12 +34,16 @@ export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
 export type PostImage = { url: string; altText: string | null };
+export type ReactionCount = { emoji: string; count: number };
 export type PostWithAuthor = Post & {
   username: Username;
   logoUri: string | undefined;
   liked: boolean;
   reposted: boolean;
   images: PostImage[];
+  likeCount: number;
+  repostCount: number;
+  reactionCounts: ReactionCount[];
 };
 
 const zodType = z.union([localPostZodType, remotePostZodType]);
