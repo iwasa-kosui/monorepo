@@ -1,5 +1,5 @@
 import { Actor } from '../../domain/actor/actor.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { User } from '../../domain/user/user.ts';
 import { Layout } from '../../layout.tsx';
 import { ActorLink } from '../components/ActorLink.tsx';
@@ -11,7 +11,7 @@ type Props = Readonly<{
   handle: string;
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
   isLoggedIn?: boolean;
 }>;
 

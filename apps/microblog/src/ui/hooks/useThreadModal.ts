@@ -2,14 +2,14 @@ import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 
 const client = hc<APIRouterType>('/api');
 
 export type ThreadData = Readonly<{
-  currentPost: PostWithAuthor | null;
-  ancestors: PostWithAuthor[];
-  descendants: PostWithAuthor[];
+  currentPost: PostQuery | null;
+  ancestors: PostQuery[];
+  descendants: PostQuery[];
 }>;
 
 export type UseThreadModalReturn = Readonly<{
@@ -20,7 +20,7 @@ export type UseThreadModalReturn = Readonly<{
   closeThread: () => void;
   updateThreadPost: (
     postId: string,
-    updater: (post: PostWithAuthor) => PostWithAuthor,
+    updater: (post: PostQuery) => PostQuery,
   ) => void;
   removeFromThread: (postId: string) => void;
 }>;
@@ -44,9 +44,9 @@ export const useThreadModal = (): UseThreadModalReturn => {
       ) {
         setThreadData(
           result as {
-            currentPost: PostWithAuthor | null;
-            ancestors: PostWithAuthor[];
-            descendants: PostWithAuthor[];
+            currentPost: PostQuery | null;
+            ancestors: PostQuery[];
+            descendants: PostQuery[];
           },
         );
       } else if ('error' in result) {
@@ -65,7 +65,7 @@ export const useThreadModal = (): UseThreadModalReturn => {
   }, []);
 
   const updateThreadPost = useCallback(
-    (postId: string, updater: (post: PostWithAuthor) => PostWithAuthor) => {
+    (postId: string, updater: (post: PostQuery) => PostQuery) => {
       setThreadData((prev) => {
         if (!prev) return prev;
         return {

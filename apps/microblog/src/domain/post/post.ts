@@ -35,7 +35,7 @@ export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
 export type PostImage = { url: string; altText: string | null };
 export type ReactionCount = { emoji: string; count: number };
-export type PostWithAuthor = Post & {
+export type PostQuery = Post & {
   username: Username;
   logoUri: string | undefined;
   liked: boolean;
@@ -127,11 +127,11 @@ export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<
   { actorIds: ActorId[]; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
-  (PostWithAuthor)[]
+  (PostQuery)[]
 >;
 export type PostsResolverByActorIdWithPagination = Agg.Resolver<
   { actorId: ActorId; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
-  (PostWithAuthor)[]
+  (PostQuery)[]
 >;
 export type PostNotFoundError = Readonly<{
   type: 'PostNotFoundError';

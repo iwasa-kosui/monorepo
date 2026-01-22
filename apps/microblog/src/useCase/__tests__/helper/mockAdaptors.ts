@@ -78,10 +78,10 @@ import type {
   PostCreatedStore,
   PostDeleted,
   PostDeletedStore,
+  PostQuery,
   PostResolver,
   PostsResolverByActorIds,
   PostsResolverByActorIdWithPagination,
-  PostWithAuthor,
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
@@ -320,20 +320,20 @@ export const createMockActorsResolverByFollowingId = (
 });
 
 export const createMockPostsResolverByActorIds = (
-  posts: PostWithAuthor[] = [],
-): PostsResolverByActorIds & { setPosts: (p: PostWithAuthor[]) => void } => ({
+  posts: PostQuery[] = [],
+): PostsResolverByActorIds & { setPosts: (p: PostQuery[]) => void } => ({
   resolve: vi.fn(() => RAImpl.ok(posts)),
-  setPosts: (p: PostWithAuthor[]) => {
+  setPosts: (p: PostQuery[]) => {
     posts.length = 0;
     posts.push(...p);
   },
 });
 
 export const createMockPostsResolverByActorIdWithPagination = (
-  posts: PostWithAuthor[] = [],
-): PostsResolverByActorIdWithPagination & { setPosts: (p: PostWithAuthor[]) => void } => ({
+  posts: PostQuery[] = [],
+): PostsResolverByActorIdWithPagination & { setPosts: (p: PostQuery[]) => void } => ({
   resolve: vi.fn(() => RAImpl.ok(posts)),
-  setPosts: (p: PostWithAuthor[]) => {
+  setPosts: (p: PostQuery[]) => {
     posts.length = 0;
     posts.push(...p);
   },

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { GetRemoteActorPostsUseCase } from '../getRemoteActorPosts.ts';
@@ -72,13 +72,13 @@ describe('GetRemoteActorPostsUseCase', () => {
       };
       deps.actorResolverById.setActor(remoteActor);
 
-      const posts: PostWithAuthor[] = [
+      const posts: PostQuery[] = [
         {
           type: 'remote',
           postId: crypto.randomUUID() as PostId,
           actorId: remoteActor.id,
           content: 'Remote post content',
-          createdAt: Date.now() as PostWithAuthor['createdAt'],
+          createdAt: Date.now() as PostQuery['createdAt'],
           uri: 'https://remote.example.com/posts/1',
           inReplyToUri: null,
           username: 'remote' as Username,

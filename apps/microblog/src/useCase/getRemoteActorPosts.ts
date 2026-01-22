@@ -10,7 +10,7 @@ import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { FollowResolver } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { MuteResolver } from '../domain/mute/mute.ts';
-import type { PostsResolverByActorIdWithPagination, PostWithAuthor } from '../domain/post/post.ts';
+import type { PostQuery,PostsResolverByActorIdWithPagination } from '../domain/post/post.ts';
 import { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
 import { singleton } from '../helper/singleton.ts';
@@ -58,7 +58,7 @@ type Ok = Readonly<{
   remoteActor: RemoteActor;
   isFollowing: boolean;
   isMuted: boolean;
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
 }>;
 
 type Err = RemoteActorNotFoundError | NotRemoteActorError;

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import { PostView } from '../components/PostView.tsx';
 
 const client = hc<APIRouterType>('/api');
@@ -11,9 +11,9 @@ const client = hc<APIRouterType>('/api');
 type TabMode = 'markdown' | 'preview';
 
 type ThreadData = {
-  ancestors: PostWithAuthor[];
-  currentPost: PostWithAuthor | null;
-  descendants: PostWithAuthor[];
+  ancestors: PostQuery[];
+  currentPost: PostQuery | null;
+  descendants: PostQuery[];
 };
 
 const getIsLoggedIn = (): boolean => {

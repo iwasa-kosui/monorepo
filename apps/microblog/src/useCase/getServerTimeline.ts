@@ -2,7 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import { type LocalPostsResolver, PgLocalPostsResolver } from '../adaptor/pg/post/localPostsResolver.ts';
 import type { Instant } from '../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../domain/post/post.ts';
+import type { PostQuery } from '../domain/post/post.ts';
 import { singleton } from '../helper/singleton.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -12,7 +12,7 @@ type Input = Readonly<{
 }>;
 
 type Ok = Readonly<{
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
 }>;
 
 type Err = never;

@@ -13,7 +13,7 @@ import {
   type ActorsResolverByFollowingId,
 } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { PostsResolverByActorIds, PostWithAuthor } from '../domain/post/post.ts';
+import type { PostQuery,PostsResolverByActorIds } from '../domain/post/post.ts';
 import { User, UserNotFoundError, type UserResolverByUsername } from '../domain/user/user.ts';
 import { Username } from '../domain/user/username.ts';
 import { Schema } from '../helper/schema.ts';
@@ -34,7 +34,7 @@ type Ok = Readonly<{
   actor: Actor;
   following: ReadonlyArray<Actor>;
   followers: ReadonlyArray<Actor>;
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
 }>;
 
 type Err = UserNotFoundError;

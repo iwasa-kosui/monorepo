@@ -2,7 +2,7 @@ import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 
 const client = hc<APIRouterType>('/api');
@@ -14,7 +14,7 @@ type PostUpdater = (
 
 type ThreadPostUpdater = (
   postId: string,
-  updater: (post: PostWithAuthor) => PostWithAuthor,
+  updater: (post: PostQuery) => PostQuery,
 ) => void;
 
 export type ActionState = Readonly<{

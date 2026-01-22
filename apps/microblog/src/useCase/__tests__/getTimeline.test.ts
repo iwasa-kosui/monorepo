@@ -2,7 +2,7 @@ import { test as fcTest } from '@fast-check/vitest';
 import { describe, expect, it } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
@@ -120,12 +120,12 @@ describe('GetTimelineUseCase', () => {
       };
       setupValidUserSession(deps, user, session, actor);
 
-      const post: PostWithAuthor = {
+      const post: PostQuery = {
         type: 'local',
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Hello, timeline!',
-        createdAt: Date.now() as PostWithAuthor['createdAt'],
+        createdAt: Date.now() as PostQuery['createdAt'],
         userId: user.id,
         username: user.username,
         logoUri: undefined,

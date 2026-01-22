@@ -2,7 +2,7 @@ import { test as fcTest } from '@fast-check/vitest';
 import { describe, expect, it } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -87,13 +87,13 @@ describe('GetUserProfileUseCase', () => {
       };
       setupUser(deps, user, actor);
 
-      const posts: PostWithAuthor[] = [
+      const posts: PostQuery[] = [
         {
           type: 'local',
           postId: crypto.randomUUID() as PostId,
           actorId: actor.id,
           content: 'Hello from profile!',
-          createdAt: Date.now() as PostWithAuthor['createdAt'],
+          createdAt: Date.now() as PostQuery['createdAt'],
           userId: user.id,
           username: user.username,
           logoUri: undefined,

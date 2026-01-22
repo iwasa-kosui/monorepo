@@ -6,7 +6,7 @@ import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import { debounce } from '../../helper/debounce.ts';
 import { PostView } from '../components/PostView.tsx';
 
@@ -14,7 +14,7 @@ const client = hc<APIRouterType>('/api');
 
 type Props = Readonly<{
   remoteActor: RemoteActor;
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
   isFollowing: boolean;
   isMuted: boolean;
   isLoggedIn: boolean;
@@ -282,7 +282,7 @@ const App = () => {
     | { error: string }
     | {
       remoteActor: RemoteActor;
-      posts: readonly PostWithAuthor[];
+      posts: readonly PostQuery[];
       isFollowing: boolean;
       isMuted: boolean;
       isLoggedIn: boolean;

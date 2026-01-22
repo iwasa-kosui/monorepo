@@ -5,7 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
-import type { PostWithAuthor } from '../post/post.ts';
+import type { PostQuery } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
 import { RepostId } from '../repost/repostId.ts';
 import { TimelineItemId } from './timelineItemId.ts';
@@ -99,14 +99,14 @@ export type TimelineItemResolverByRepostId = Agg.Resolver<
 export type PostTimelineItem = {
   type: 'post';
   timelineItemId: TimelineItemId;
-  post: PostWithAuthor;
+  post: PostQuery;
   createdAt: Instant;
 };
 
 export type RepostTimelineItem = {
   type: 'repost';
   timelineItemId: TimelineItemId;
-  post: PostWithAuthor;
+  post: PostQuery;
   repostedBy: {
     actorId: ActorId;
     username: string;

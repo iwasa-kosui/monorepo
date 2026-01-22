@@ -1,11 +1,11 @@
 import type { FC } from 'hono/jsx';
 
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import { Layout } from '../../layout.tsx';
 import { PostView } from '../components/PostView.tsx';
 
 type Props = Readonly<{
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
 }>;
 
 export const ServerTimelinePage: FC<Props> = ({ posts }) => (

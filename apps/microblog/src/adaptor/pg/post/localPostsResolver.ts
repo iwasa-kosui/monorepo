@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 
 import type { Agg } from '../../../domain/aggregate/index.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import { LocalPost, type PostImage, type PostWithAuthor } from '../../../domain/post/post.ts';
+import { LocalPost, type PostImage, type PostQuery } from '../../../domain/post/post.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
@@ -11,7 +11,7 @@ import { actorsTable, localActorsTable, localPostsTable, postImagesTable, postsT
 
 export type LocalPostsResolver = Agg.Resolver<
   { createdAt: Instant | undefined; limit?: number },
-  PostWithAuthor[]
+  PostQuery[]
 >;
 
 const getInstance = singleton((): LocalPostsResolver => {

@@ -1,13 +1,13 @@
 import { useRef, useState } from 'hono/jsx';
 
 import { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 
 type Props = Readonly<{
-  post: PostWithAuthor;
+  post: PostQuery;
   repostedBy?: {
     username: string;
     logoUri?: string;

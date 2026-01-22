@@ -5,7 +5,7 @@ import { render } from 'hono/jsx/dom';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { Actor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { PostQuery } from '../../domain/post/post.ts';
 import type { User } from '../../domain/user/user.ts';
 import { debounce } from '../../helper/debounce.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
@@ -19,7 +19,7 @@ type Props = Readonly<{
   handle: string;
   followers: ReadonlyArray<Actor>;
   following: ReadonlyArray<Actor>;
-  posts: ReadonlyArray<PostWithAuthor>;
+  posts: ReadonlyArray<PostQuery>;
   fetchData: (createdAt: Instant | undefined) => Promise<void>;
 }>;
 
@@ -278,7 +278,7 @@ const App = () => {
       handle: string;
       following: readonly Actor[];
       followers: readonly Actor[];
-      posts: readonly PostWithAuthor[];
+      posts: readonly PostQuery[];
     }
     | null
   >(null);

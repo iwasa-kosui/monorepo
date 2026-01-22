@@ -2,7 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, isNull, or } from 'drizzle-orm';
 
 import type { Agg } from '../../../domain/aggregate/index.ts';
-import { LocalPost, type PostImage, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
+import { LocalPost, type PostImage, type PostQuery, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { Env } from '../../../env.ts';
@@ -21,15 +21,15 @@ import {
 
 export type ThreadResolver = Agg.Resolver<
   { postId: PostId },
-  { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
+  { currentPost: PostQuery | null; ancestors: PostQuery[]; descendants: PostQuery[] }
 >;
 
 const getInstance = singleton((): ThreadResolver => {
   const resolve = async ({ postId }: { postId: PostId }) => {
     // Find the current post by postId
     const currentPost = await getPostById(postId);
-    const ancestors: PostWithAuthor[] = [];
-    const descendants: PostWithAuthor[] = [];
+    const ancestors: PostQuery[] = [];
+    const descendants: PostQuery[] = [];
 
     // Get ancestor posts (follow inReplyToUri chain)
     let currentInReplyToUri: string | null = null;
@@ -125,7 +125,7 @@ const getInstance = singleton((): ThreadResolver => {
 
       for (const row of localReplyRows) {
         const images = replyImagesByPostId.get(row.posts.postId) ?? [];
-        const post: PostWithAuthor = {
+        const post: PostQuery = {
           ...LocalPost.orThrow({
             postId: row.posts.postId,
             actorId: row.posts.actorId,
@@ -154,7 +154,7 @@ const getInstance = singleton((): ThreadResolver => {
   return { resolve };
 });
 
-async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
+async function getPostById(postId: PostId): Promise<PostQuery | null> {
   // Try to find as local post
   const localRow = await DB.getInstance()
     .select()
@@ -239,7 +239,7 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
   return null;
 }
 
-async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
+async function getPostByUri(uri: string): Promise<PostQuery | null> {
   // Try to find as remote post first
   const remoteRow = await DB.getInstance()
     .select()
