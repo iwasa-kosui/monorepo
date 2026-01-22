@@ -129,6 +129,23 @@ const LocalPostPage = () => {
 
   const username = getUsernameFromUrl();
 
+  const handleReply = (postId: string) => {
+    if (threadData?.currentPost?.postId === postId) {
+      // If replying to the current post, focus on the reply form
+      const textarea = document.querySelector('textarea');
+      if (textarea) {
+        textarea.focus();
+        textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      // If replying to another post in the thread, navigate to that post's page
+      const pathParts = window.location.pathname.split('/');
+      const usersIndex = pathParts.indexOf('users');
+      const postUsername = pathParts[usersIndex + 1];
+      window.location.href = `/users/${postUsername}/posts/${postId}`;
+    }
+  };
+
   if (isLoading) {
     return (
       <div class='flex items-center justify-center py-8'>
@@ -209,21 +226,21 @@ const LocalPostPage = () => {
             <>
               {threadData.ancestors.map((post) => (
                 <div key={post.postId} class='relative'>
-                  <PostView post={post} />
+                  <PostView post={post} onReply={isLoggedIn ? handleReply : undefined} />
                 </div>
               ))}
             </>
           )}
           {threadData.currentPost && (
             <div class='relative'>
-              <PostView post={threadData.currentPost} />
+              <PostView post={threadData.currentPost} onReply={isLoggedIn ? handleReply : undefined} />
             </div>
           )}
           {threadData.descendants.length > 0 && (
             <>
               {threadData.descendants.map((post) => (
                 <div key={post.postId} class='relative'>
-                  <PostView post={post} />
+                  <PostView post={post} onReply={isLoggedIn ? handleReply : undefined} />
                 </div>
               ))}
             </>
