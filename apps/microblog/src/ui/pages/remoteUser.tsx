@@ -221,7 +221,10 @@ export const RemoteUserPage = ({
               )
               : (
                 <p class='text-charcoal-light dark:text-gray-400 text-sm'>
-                  <a href='/sign-in' class='text-charcoal dark:text-gray-300 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
+                  <a
+                    href='/sign-in'
+                    class='text-charcoal dark:text-gray-300 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  >
                     Sign in
                   </a>{' '}
                   to follow this user
