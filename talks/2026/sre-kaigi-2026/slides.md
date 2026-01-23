@@ -147,7 +147,7 @@ layout: section
 
 <div class="mt-6">
 
-<div class="p-6 bg-amber-50 rounded-lg mb-6">
+<div class="p-6 bg-slate-100 rounded-lg mb-6">
   <h3 class="font-bold text-lg mb-2">私たちの現実</h3>
   <p class="text-slate-700">
     2025年4月時点では<span class="font-bold">正社員1名、業務委託2-3名</span>という小規模なチーム
@@ -168,7 +168,7 @@ layout: section
   </ul>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold mb-2">選択肢B: 開発チームが担う</h4>
   <ul class="text-sm text-slate-600 space-y-1">
     <li>設計・実装・運用を一貫して担う</li>
@@ -307,7 +307,7 @@ layout: section
 
 <div class="mt-6">
 
-<div class="p-6 bg-amber-50 rounded-lg mb-6">
+<div class="p-6 bg-slate-100 rounded-lg mb-6">
   <p class="text-lg">
     <span class="font-bold">認証基盤</span>では高い稼働率とセキュリティ要件を満たす必要がある一方で、<br>
     <span class="font-bold">ディレクトリサービス</span>では稼働率に加えデータの整合性・一貫性が求められる
@@ -326,7 +326,7 @@ layout: section
   <p class="text-xs text-slate-500 mt-2">→ DynamoDB等の高可用性ストレージが有効</p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold mb-2">ディレクトリサービスに求められること</h4>
   <ul class="text-sm space-y-1">
     <li>強い整合性</li>
@@ -373,7 +373,7 @@ layout: section
   </ul>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg">
+<div class="p-4 bg-slate-100 rounded-lg">
   <h4 class="font-bold mb-2">医療分野での重要性</h4>
   <p class="text-slate-600">
     過去のデータ状態を説明できることは、<span class="font-bold">法的にもビジネス的にも極めて重要</span><br>
@@ -469,25 +469,25 @@ layout: section
   <p class="text-sm text-slate-600">「いつ・誰が・何を変更したか」を完全に記録</p>
 </div>
 
-<div class="p-5 bg-emerald-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">2</div>
     <h3 class="font-bold">データ連携パターンの選択</h3>
   </div>
   <p class="text-sm text-slate-600">基盤障害がプロダクト全体に波及しない設計</p>
 </div>
 
-<div class="p-5 bg-amber-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold">3</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">3</div>
     <h3 class="font-bold">サービスベースアーキテクチャ</h3>
   </div>
   <p class="text-sm text-slate-600">強い整合性を保ちながら独立したデプロイを実現</p>
 </div>
 
-<div class="p-5 bg-purple-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold">4</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">4</div>
     <h3 class="font-bold">RLSによるマルチテナント分離</h3>
   </div>
   <p class="text-sm text-slate-600">DBレベルで強制的にテナントを分離</p>
@@ -659,7 +659,7 @@ CREATE TABLE secure_event_attributes (
   </p>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <p class="text-sm font-bold">設計判断</p>
   <p class="text-xs text-slate-600">
     セキュリティ要件とトレーサビリティ要件を<br>
@@ -687,7 +687,7 @@ CREATE TABLE secure_event_attributes (
 
 ### 運用で得た気づき
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">後付け導入の難しさ</h4>
   <p class="text-xs text-slate-600">
     既存データからイベントを生成する際、<br>
@@ -696,7 +696,7 @@ CREATE TABLE secure_event_attributes (
   </p>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">イベント設計の見直し</h4>
   <p class="text-xs text-slate-600">
     運用中に「このイベントも必要だった」と気づく<br>
@@ -710,7 +710,7 @@ CREATE TABLE secure_event_attributes (
 
 ### 継続的な改善
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">障害調査での活用</h4>
   <p class="text-xs text-slate-600">
     「3ヶ月前のこのユーザーの状態は？」<br>
@@ -718,7 +718,7 @@ CREATE TABLE secure_event_attributes (
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">監査対応の効率化</h4>
   <p class="text-xs text-slate-600">
     変更履歴の完全な追跡が可能になり、<br>
@@ -841,7 +841,7 @@ df_v100 = spark.read.format("delta") \
     .load("s3://bucket/users")
 ```
 
-<div class="mt-2 p-2 bg-emerald-50 rounded text-sm">
+<div class="mt-2 p-2 bg-brand-50 rounded text-sm">
 「3ヶ月前のデータ」に即座にアクセス可能
 </div>
 
@@ -865,7 +865,7 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 ### 運用で直面した課題
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">「即時性が必要」の誘惑</h4>
   <p class="text-xs text-slate-600">
     プロダクトチームから「リアルタイムで欲しい」<br>
@@ -874,7 +874,7 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
   </p>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">CDC遅延の監視</h4>
   <p class="text-xs text-slate-600">
     データ基盤への反映遅延をアラート化<br>
@@ -888,7 +888,7 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 ### パターン選択の判断基準を育てる
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">ドキュメント化</h4>
   <p class="text-xs text-slate-600">
     「なぜこのパターンを選んだか」を記録<br>
@@ -896,7 +896,7 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">定期的な見直し</h4>
   <p class="text-xs text-slate-600">
     API連携で障害が波及した事例を振り返り<br>
@@ -947,11 +947,11 @@ layout: section
   <p class="text-xs text-red-600 mt-2">✗ 不採用</p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold mb-2">サービスベース</h4>
   <p class="text-xs text-slate-600">単一DB共有</p>
   <p class="text-xs text-slate-600">独立したデプロイ</p>
-  <p class="text-xs text-emerald-600 mt-2 font-bold">✓ 採用</p>
+  <p class="text-xs text-brand-600 mt-2 font-bold">✓ 採用</p>
 </div>
 
 </div>
@@ -1020,7 +1020,7 @@ GRANT SELECT ON auth.*, asset.*
   TO directory_service;
 ```
 
-<div class="mt-4 p-3 bg-amber-50 rounded text-sm">
+<div class="mt-4 p-3 bg-slate-100 rounded text-sm">
   <span class="font-bold">原則:</span><br>
   自分のスキーマにのみ書き込み権限<br>
   他のスキーマは読み取りのみ
@@ -1081,8 +1081,8 @@ const org = await db.query(
 );
 ```
 
-<div class="p-3 bg-emerald-50 rounded mt-2">
-  <p class="text-sm font-bold text-emerald-600">メリット</p>
+<div class="p-3 bg-brand-50 rounded mt-2">
+  <p class="text-sm font-bold text-brand-600">メリット</p>
   <ul class="text-xs text-slate-600 mt-1">
     <li>ネットワーク障害の影響なし</li>
     <li>トランザクションで整合性保証</li>
@@ -1121,7 +1121,7 @@ const org = await db.query(
   </p>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">DNS解決の遅延問題</h4>
   <p class="text-xs text-slate-600">
     「一時的にAPI連携で」が常態化<br>
@@ -1135,7 +1135,7 @@ const org = await db.query(
 
 ### 原則を守るための工夫
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">ADR（Architecture Decision Record）</h4>
   <p class="text-xs text-slate-600">
     「なぜサービス間通信を禁止するか」を記録<br>
@@ -1143,7 +1143,7 @@ const org = await db.query(
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">コードレビューでの確認</h4>
   <p class="text-xs text-slate-600">
     サービス間API呼び出しを見つけたら<br>
@@ -1202,11 +1202,11 @@ DBレベルでの強制的なセキュリティ
   </div>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg border-2 border-emerald-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold text-sm mb-2">RLS（行レベルセキュリティ）</h4>
   <p class="text-xs text-slate-600">DBレベルで強制保護</p>
-  <div class="mt-2 p-2 bg-emerald-100 rounded">
-    <p class="text-xs text-emerald-600 font-bold">✓ 採用</p>
+  <div class="mt-2 p-2 bg-brand-100 rounded">
+    <p class="text-xs text-brand-600 font-bold">✓ 採用</p>
     <p class="text-xs text-slate-600">バグがあっても漏洩しない</p>
   </div>
 </div>
@@ -1295,7 +1295,7 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 ### 慎重なマイグレーション
 
-<div class="p-4 bg-amber-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">段階的な適用</h4>
   <p class="text-xs text-slate-600">
     1. まずPERMISSIVEモードで導入<br>
@@ -1318,7 +1318,7 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 ### 継続的な監視と改善
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">パフォーマンス監視</h4>
   <p class="text-xs text-slate-600">
     RLSポリシーがクエリ性能に影響<br>
@@ -1327,7 +1327,7 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">新規テーブルへの適用</h4>
   <p class="text-xs text-slate-600">
     テーブル追加時のチェックリスト化<br>
@@ -1436,7 +1436,7 @@ layout: section
 
 ### プロダクトチームの声
 
-<div class="p-4 bg-emerald-50 rounded-lg">
+<div class="p-4 bg-slate-100 rounded-lg">
   <p class="text-sm italic">
     「認証・認可基盤が共通化されたことで、3省2ガイドラインを個別に解釈する必要がなくなり、本来のビジネスロジックに集中できるようになった」
   </p>
@@ -1493,7 +1493,7 @@ layout: section
 
 <div class="space-y-3">
 
-<div class="p-4 bg-emerald-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">「自分たちの責任」という意識</h4>
   <p class="text-sm text-slate-600">
     SRE専任がいないからこそ、<br>
@@ -1502,7 +1502,7 @@ layout: section
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">制約がチームの強みになった</h4>
   <p class="text-sm text-slate-600">
     小さなチームだからこそ、<br>
@@ -1557,7 +1557,7 @@ graph LR
   </p>
 </div>
 
-<div class="p-4 bg-emerald-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">2. 運用</h4>
   <p class="text-xs text-slate-600">
     本番環境で動かし続ける<br>
@@ -1565,7 +1565,7 @@ graph LR
   </p>
 </div>
 
-<div class="p-4 bg-amber-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">3. 監視</h4>
   <p class="text-xs text-slate-600">
     メトリクス・ログ・アラート<br>
@@ -1573,7 +1573,7 @@ graph LR
   </p>
 </div>
 
-<div class="p-4 bg-pink-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">4. 改善</h4>
   <p class="text-xs text-slate-600">
     問題を発見したら修正<br>
@@ -1614,27 +1614,27 @@ layout: section
   <p class="text-xs text-slate-500 mt-1">障害調査・監査対応・データ復旧</p>
 </div>
 
-<div class="p-5 bg-emerald-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
     <h3 class="font-bold">データ連携パターン</h3>
   </div>
   <p class="text-sm text-slate-600">基盤障害を波及させない設計</p>
   <p class="text-xs text-slate-500 mt-1">デフォルトはデータ基盤経由</p>
 </div>
 
-<div class="p-5 bg-amber-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
     <h3 class="font-bold">サービスベースアーキテクチャ</h3>
   </div>
   <p class="text-sm text-slate-600">強い整合性と独立デプロイの両立</p>
   <p class="text-xs text-slate-500 mt-1">サービス間通信を原則禁止</p>
 </div>
 
-<div class="p-5 bg-purple-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
     <h3 class="font-bold">RLS</h3>
   </div>
   <p class="text-sm text-slate-600">DBレベルでテナントを強制分離</p>
@@ -1725,13 +1725,13 @@ layout: section
   <p class="text-sm text-slate-500 mt-1">なぜその設計を選んだのかを言語化し、トレードオフをチームで共有する</p>
 </div>
 
-<div class="p-5 bg-emerald-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <h3 class="font-bold text-lg mb-2">「誰かの仕事」ではなく「自分たちの責任」</h3>
   <p class="text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
   <p class="text-sm text-slate-500 mt-1">制約があったからこそ、チームの強みに変えることができた</p>
 </div>
 
-<div class="p-5 bg-amber-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <h3 class="font-bold text-lg mb-2">SREイネイブラーへ</h3>
   <p class="text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
   <p class="text-sm text-slate-500 mt-1">開発チームが自走できる状態 = Enabling完了の目標状態</p>
