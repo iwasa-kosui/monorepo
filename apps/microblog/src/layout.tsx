@@ -66,23 +66,24 @@ export const Layout: FC<LayoutProps> = (props) => {
         <style
           dangerouslySetInnerHTML={{
             __html: `
-            .shiki,
-            .shiki span {
-              color: var(--shiki-light);
-              background-color: var(--shiki-light-bg);
-            }
             .shiki {
+              background-color: var(--shiki-light-bg) !important;
               padding: 1rem;
               border-radius: 12px;
               overflow-x: auto;
               font-size: 0.875rem;
               line-height: 1.6;
             }
+            .shiki span {
+              color: var(--shiki-light);
+              background-color: transparent !important;
+            }
             @media (prefers-color-scheme: dark) {
-              .shiki,
+              .shiki {
+                background-color: var(--shiki-dark-bg) !important;
+              }
               .shiki span {
                 color: var(--shiki-dark);
-                background-color: var(--shiki-dark-bg);
               }
             }
             /* Clay UI hover effects */
@@ -353,23 +354,24 @@ export const LayoutClient: FC<{
         <style
           dangerouslySetInnerHTML={{
             __html: `
-            .shiki,
-            .shiki span {
-              color: var(--shiki-light);
-              background-color: var(--shiki-light-bg);
-            }
             .shiki {
+              background-color: var(--shiki-light-bg) !important;
               padding: 1rem;
               border-radius: 12px;
               overflow-x: auto;
               font-size: 0.875rem;
               line-height: 1.6;
             }
+            .shiki span {
+              color: var(--shiki-light);
+              background-color: transparent !important;
+            }
             @media (prefers-color-scheme: dark) {
-              .shiki,
+              .shiki {
+                background-color: var(--shiki-dark-bg) !important;
+              }
               .shiki span {
                 color: var(--shiki-dark);
-                background-color: var(--shiki-dark-bg);
               }
             }
             /* Clay UI hover effects */
