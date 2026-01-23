@@ -560,100 +560,72 @@ flowchart LR
 
 # ドメインイベントの設計
 
-```typescript {all|1-7|9-15|17-19}
-// イベントの型定義
-type DomainEvent<TAggregateKind, TAggregateId, TAggregate, TEventName, TPayload> = {
-  aggregateKind: TAggregateKind;  // 集約の種類（User, Org等）
-  aggregateId: TAggregateId;       // 集約のID
-  aggregate: TAggregate;           // 変更後の状態（スナップショット）
-  eventName: TEventName;           // 何が起きたか（UserCreated等）
-  eventPayload: TPayload;          // イベント固有のデータ
-  eventAt: UnixTime;
-};
+<div class="mt-4">
 
-// イベント発行（純粋関数）
-const createUser = (props: CreateUserProps): UserCreated => ({
-  aggregateKind: 'User',
-  aggregateId: UserId.generate(),
-  aggregate: { ...props, status: 'active' },
-  eventName: 'UserCreated',
-  eventPayload: { createdBy: props.createdBy },
-  eventAt: UnixTime.now(),
+```typescript
+const createUser = (name: string): UserCreatedEvent => ({
+  aggregate: { id: uuid(), name, status: "active" },  // 変更後の状態
+  eventAt:   Date.now(),                              // いつ
+  createdBy: "admin",                                 // 誰が
 });
 ```
 
+</div>
+
+<div class="mt-4 p-4 bg-brand-50 rounded-lg">
+  <p class="font-bold mb-2">記録する内容</p>
+  <p class="text-sm">いつ・誰が・何を・どう変更したか + <span class="font-bold">変更後の状態</span></p>
+</div>
+
 > [!TIP]
-> **ポイント:** `aggregate`フィールドに変更後の状態を持つことで、リプレイなしでも過去の状態を即座に参照可能
+> **ポイント:** 変更後の状態も一緒に保存することで、リプレイなしでも過去の状態を即座に参照可能
 
 <!--
-こちらが実際の型定義です。
-集約の種類、ID、変更後の状態、イベント名、ペイロード、発生日時を持ちます。
-aggregateフィールドに変更後の状態を持つことで、過去の状態を即座に参照できます。
+ドメインイベントの設計です。
+Userに対してCreateを実行すると、UserCreatedEventが生成されます。
+変更後の状態も一緒に保存することで、過去の状態を即座に参照できます。
 -->
 
 ---
 
 # イベントストアの設計
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<div class="mt-2 text-sm mb-2">例: UserCreated イベント</div>
+
+<div class="grid grid-cols-2 gap-4">
 
 <div>
 
-```sql
-CREATE TABLE domain_events (
-  event_id UUID PRIMARY KEY,
-  aggregate_kind TEXT NOT NULL,
-  aggregate_id UUID NOT NULL,
-  event_name TEXT NOT NULL,
-  event_at TIMESTAMPTZ NOT NULL,
-  security_class TEXT NOT NULL  -- 追加
-) PARTITION BY RANGE (event_at);
+### 通常テーブル
 
--- 属性テーブル（分離）
-CREATE TABLE domain_event_attributes (
-  event_id UUID PRIMARY KEY,
-  event_payload JSONB NOT NULL,
-  aggregate_snapshot JSONB NOT NULL
-);
+| カラム | 値 |
+|--------|-----|
+| event | `UserCreated` |
+| user_id | `uuid-123` |
+| name | `田中` |
+| status | `active` |
 
--- セキュア属性テーブル
-CREATE TABLE secure_event_attributes (
-  event_id UUID PRIMARY KEY,
-  event_payload JSONB NOT NULL,
-  aggregate_snapshot JSONB NOT NULL
-);
-```
+<p class="text-xs text-slate-500">→ 他チームもトレース可能</p>
 
 </div>
 
 <div>
 
-### セキュリティ区分による分離
+### 秘匿テーブル
 
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <p class="text-sm">
-    パスワードハッシュなど秘匿性の高い情報は<br>
-    <span class="font-bold">セキュア属性テーブル</span>に分離
-  </p>
-</div>
+| カラム | 値 |
+|--------|-----|
+| event_id | `evt-456` |
+| password_hash | `$2b$...` |
 
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <p class="text-sm">
-    イベント発生の<span class="font-bold">事実</span>は通常テーブルに記録<br>
-    → 他チームもトレース可能
-  </p>
-</div>
+<p class="text-xs text-slate-500">→ アクセス制限あり</p>
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <p class="text-sm font-bold">設計判断</p>
-  <p class="text-xs text-slate-600">
-    セキュリティ要件とトレーサビリティ要件を<br>
-    両立するための現実的な選択
-  </p>
 </div>
 
 </div>
 
+<div class="mt-4 p-3 bg-brand-50 rounded-lg text-center">
+  <p class="text-sm"><span class="font-bold">設計判断:</span> 「ユーザーが作成された」事実は共有、パスワードは分離</p>
 </div>
 
 <!--
@@ -1419,11 +1391,12 @@ layout: section
 
 <div>
 
-### プロダクトチームの声
+### プロダクトチームへの貢献
 
 <div class="p-4 bg-slate-100 rounded-lg">
-  <p class="text-sm italic">
-    「認証・認可基盤が共通化されたことで、3省2ガイドラインを個別に解釈する必要がなくなり、本来のビジネスロジックに集中できるようになった」
+  <p class="text-sm">
+    認証・認可基盤の共通化により、<br>
+    <span class="font-bold">3省2ガイドラインを各チームが個別に解釈する必要がなくなった</span>
   </p>
 </div>
 
@@ -1445,7 +1418,7 @@ layout: section
 <!--
 導入による成果です。
 障害発生時の原因特定時間が大幅に短縮され、過去データの追跡も任意の時点で可能になりました。
-プロダクトチームからは「本来のビジネスロジックに集中できるようになった」という声をいただいています。
+また、認証・認可基盤の共通化により、プロダクトチームがガイドラインを個別に解釈する負担を軽減できました。
 -->
 
 ---
@@ -1702,24 +1675,21 @@ layout: section
 
 # Enablingの観点から
 
-<div class="mt-6 space-y-4">
+<div class="mt-1 space-y-2">
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">設計を選ぶだけでなく、責任を果たす</h3>
-  <p class="text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
-  <p class="text-sm text-slate-500 mt-1">なぜその設計を選んだのかを言語化し、トレードオフをチームで共有する</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">設計を選ぶだけでなく、責任を果たす</h3>
+  <p class="text-xs text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
 </div>
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">「誰かの仕事」ではなく「自分たちの責任」</h3>
-  <p class="text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
-  <p class="text-sm text-slate-500 mt-1">制約があったからこそ、チームの強みに変えることができた</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">「誰かの仕事」ではなく「自分たちの責任」</h3>
+  <p class="text-xs text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
 </div>
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">SREイネイブラーへ</h3>
-  <p class="text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
-  <p class="text-sm text-slate-500 mt-1">開発チームが自走できる状態 = Enabling完了の目標状態</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">SREイネイブラーへ</h3>
+  <p class="text-xs text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
 </div>
 
 </div>
@@ -1757,32 +1727,4 @@ class: text-center
 最後に、本日のキーメッセージを再掲します。
 設計パターンは導入して終わりではありません。
 チームで意図を共有し、継続的に改善する。それが開発チームによる信頼性向上の本質です。
--->
-
----
-layout: center
-class: text-center
----
-
-# ご清聴ありがとうございました
-
-<div class="mt-8 text-xl">
-質問があればぜひ！
-</div>
-
-<div class="mt-8 text-slate-500">
-岩佐 幸翠 / [@kosui_me](https://x.com/kosui_me)
-</div>
-
-<div class="mt-8 text-sm text-slate-400">
-
-関連資料:
-- [カケハシ開発者ブログ: アーキテクチャの進化はドメインイベントが起点になる](https://kakehashi-dev.hatenablog.com/entry/2023/12/24/091000)
-- [Findy Tools インタビュー](https://findy-tools.io/companies/kakehashi/91/97)
-
-</div>
-
-<!--
-以上で発表を終わります。
-ご質問があればお気軽にどうぞ。
 -->
