@@ -63,14 +63,14 @@ export const MarkdownEditor = ({
   return (
     <div class='flex flex-col flex-1 min-h-0'>
       {/* Tab Bar */}
-      <div class='flex gap-1 mb-3 flex-shrink-0'>
+      <div class='flex gap-1 mb-3 flex-shrink-0 bg-warm-gray dark:bg-gray-700 p-1 rounded-xl w-fit'>
         <button
           type='button'
           onClick={() => handleTabChange('markdown')}
-          class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+          class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
             activeTab === 'markdown'
-              ? 'bg-gray-700 dark:bg-gray-600 text-white'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
+              : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
           }`}
         >
           Markdown
@@ -78,10 +78,10 @@ export const MarkdownEditor = ({
         <button
           type='button'
           onClick={() => handleTabChange('preview')}
-          class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+          class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
             activeTab === 'preview'
-              ? 'bg-gray-700 dark:bg-gray-600 text-white'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
+              : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
           }`}
         >
           Preview
@@ -100,30 +100,30 @@ export const MarkdownEditor = ({
               onInput={handleInput}
               onKeyDown={onKeyDown}
               disabled={disabled}
-              class='w-full h-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
+              class='w-full h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
               style={{ minHeight }}
             />
           )
           : (
             <div
-              class='h-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 overflow-y-auto'
+              class='h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset overflow-y-auto'
               style={{ minHeight }}
             >
               {isLoadingPreview
                 ? (
-                  <p class='text-gray-400 dark:text-gray-500'>
+                  <p class='text-charcoal-light dark:text-gray-500'>
                     Loading preview...
                   </p>
                 )
                 : previewHtml
                 ? (
                   <div
-                    class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
+                    class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
                 )
                 : (
-                  <p class='text-gray-400 dark:text-gray-500'>
+                  <p class='text-charcoal-light dark:text-gray-500'>
                     Nothing to preview
                   </p>
                 )}

@@ -47,12 +47,12 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
   return (
     <div
       ref={containerRef}
-      class='absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-2 z-50'
+      class='absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-700 p-2 z-50'
     >
       {isLoading
         ? (
           <div class='flex items-center justify-center w-48 h-20'>
-            <div class='animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500' />
+            <div class='animate-spin rounded-full h-6 w-6 border-b-2 border-terracotta' />
           </div>
         )
         : (
@@ -62,12 +62,12 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
                 key={emoji}
                 type='button'
                 onClick={() => onSelect(emoji)}
-                class='w-10 h-10 flex items-center justify-center text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
+                class='w-10 h-10 flex items-center justify-center text-xl hover:bg-sand-light dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
                 title={`${emoji} (${index + 1})`}
               >
                 {emoji}
                 {index < 9 && (
-                  <span class='absolute bottom-0 right-0.5 text-[10px] text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100'>
+                  <span class='absolute bottom-0 right-0.5 text-[10px] text-charcoal-light dark:text-gray-500 opacity-0 group-hover:opacity-100'>
                     {index + 1}
                   </span>
                 )}

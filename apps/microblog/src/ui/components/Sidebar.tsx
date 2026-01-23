@@ -9,7 +9,7 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
     <nav class='flex-1 items-center content-center space-y-2'>
       <a
         href='/'
-        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
       >
         <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
@@ -22,7 +22,7 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
       </a>
       <a
         href={isLoggedIn ? '#post-modal' : '/sign-in'}
-        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
       >
         <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 4v16m8-8H4' />
@@ -30,7 +30,7 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
       </a>
       <a
         href='/notifications'
-        class='flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
       >
         <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
@@ -41,6 +41,21 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
           />
         </svg>
       </a>
+      {isLoggedIn && (
+        <a
+          href='/articles'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
+          </svg>
+        </a>
+      )}
     </nav>
   </aside>
 );

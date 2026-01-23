@@ -75,11 +75,11 @@ export const PostForm = ({ id, formId }: Props) => {
         <div class='mt-3 flex flex-wrap gap-2 flex-shrink-0'>
           {uploadedUrls.map((url, index) => (
             <div key={url} class='relative group'>
-              <img src={url} alt='Preview' class='w-16 h-16 object-cover rounded-xl' />
+              <img src={url} alt='Preview' class='w-16 h-16 object-cover rounded-xl shadow-clay-sm' />
               <button
                 type='button'
                 onClick={() => handleRemoveImage(index)}
-                class='absolute -top-1 -right-1 w-5 h-5 bg-red-400 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity'
+                class='absolute -top-1 -right-1 w-5 h-5 bg-terracotta text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-clay-sm'
               >
                 &times;
               </button>
@@ -88,7 +88,7 @@ export const PostForm = ({ id, formId }: Props) => {
         </div>
       )}
       <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
-        <label class='cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors'>
+        <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>
             : (
@@ -112,7 +112,7 @@ export const PostForm = ({ id, formId }: Props) => {
         </label>
         <button
           type='submit'
-          class='px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-2xl transition-colors'
+          class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
         >
           投稿する
         </button>

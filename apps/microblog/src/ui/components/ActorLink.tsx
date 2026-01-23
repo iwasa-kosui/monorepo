@@ -14,9 +14,9 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
         onLocal: (x) => x.uri,
         onRemote: (x) => `/remote-users/${x.id}`,
       })(actor)}
-      class='flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+      class='flex items-center gap-2 p-2 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
     >
-      <div class='w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+      <div class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
         {actor.logoUri
           ? (
             <img
@@ -29,7 +29,7 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
             handle.charAt(0).toUpperCase()
           )}
       </div>
-      <span class='text-sm text-gray-700 dark:text-gray-300 truncate'>
+      <span class='text-sm text-charcoal dark:text-gray-300 truncate'>
         {handle}
       </span>
     </a>

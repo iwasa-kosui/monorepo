@@ -19,6 +19,12 @@ import type { LocalActorCreatedStore } from '../../../domain/actor/createLocalAc
 import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
 import type {
+  Article,
+  ArticleDeleted,
+  ArticleDeletedStore,
+  ArticleResolverByRootPostId,
+} from '../../../domain/article/article.ts';
+import type {
   EmojiReact,
   EmojiReactDeleted,
   EmojiReactDeletedStore,
@@ -623,3 +629,20 @@ export const createMockEmojiReactsResolverByPostId = (
   resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(emojiReacts.get(postId) ?? [])),
   setEmojiReacts: (postId: PostId, e: EmojiReact[]) => emojiReacts.set(postId, e),
 });
+
+export const createMockArticleResolverByRootPostId = (
+  articles: Map<PostId, Article> = new Map(),
+): ArticleResolverByRootPostId & { setArticle: (article: Article) => void } => ({
+  resolve: vi.fn(({ rootPostId }: { rootPostId: PostId }) => RAImpl.ok(articles.get(rootPostId))),
+  setArticle: (article: Article) => articles.set(article.rootPostId, article),
+});
+
+export const createMockArticleDeletedStore = (): ArticleDeletedStore & InMemoryStore<ArticleDeleted> => {
+  const inMemoryStore = createInMemoryStore<ArticleDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & ArticleDeletedStore['store']
+      & InMemoryStore<ArticleDeleted>['store'],
+  };
+};

@@ -7,7 +7,7 @@ const getHighlighter = async (): Promise<Highlighter> => {
   if (!highlighterPromise) {
     highlighterPromise = import('shiki').then(({ createHighlighter }) =>
       createHighlighter({
-        themes: ['github-light', 'github-dark'],
+        themes: ['rose-pine-dawn', 'rose-pine'],
         langs: [
           'javascript',
           'typescript',
@@ -30,16 +30,16 @@ const createRenderer = (highlighter: Highlighter): Renderer => {
       return highlighter.codeToHtml(text, {
         lang: language,
         themes: {
-          light: 'github-light',
-          dark: 'github-dark',
+          light: 'rose-pine-dawn',
+          dark: 'rose-pine',
         },
       });
     } catch {
       return highlighter.codeToHtml(text, {
         lang: 'plaintext',
         themes: {
-          light: 'github-light',
-          dark: 'github-dark',
+          light: 'rose-pine-dawn',
+          dark: 'rose-pine',
         },
       });
     }

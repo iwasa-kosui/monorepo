@@ -5,11 +5,11 @@ type Props = {
 };
 
 export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
-  <nav class='md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom'>
+  <nav class='md:hidden fixed bottom-0 left-0 right-0 bg-cream/80 dark:bg-gray-900/80 backdrop-blur-lg border-t border-warm-gray-dark dark:border-gray-700 safe-area-inset-bottom shadow-clay dark:shadow-clay-dark'>
     <div class='flex justify-around items-center h-14'>
       <a
         href='/'
-        class='flex flex-col items-center justify-center flex-1 h-full text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors'
+        class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
       >
         <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
@@ -22,7 +22,7 @@ export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
       </a>
       <a
         href={isLoggedIn ? '#post-modal' : '/sign-in'}
-        class='flex flex-col items-center justify-center flex-1 h-full text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors'
+        class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
       >
         <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 4v16m8-8H4' />
@@ -30,7 +30,7 @@ export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
       </a>
       <a
         href='/notifications'
-        class='flex flex-col items-center justify-center flex-1 h-full text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors'
+        class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
       >
         <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
           <path
@@ -41,6 +41,21 @@ export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
           />
         </svg>
       </a>
+      {isLoggedIn && (
+        <a
+          href='/articles'
+          class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+        >
+          <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
+          </svg>
+        </a>
+      )}
     </div>
   </nav>
 );
