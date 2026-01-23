@@ -258,39 +258,28 @@ layout: section
 
 # 全体アーキテクチャ
 
-```mermaid {scale: 0.7}
-graph TD
-  subgraph プロダクトチーム
-    Product[各プロダクト]
-  end
-  subgraph "認証権限基盤チーム"
-    Auth[認証ポータル] -->|OIDC連携| Product
-    subgraph ディレクトリサービス
-      Structure[組織・薬局・ユーザー管理]
-    end
-    subgraph アセットサービス
-      License[ライセンス管理]
-      Device[端末管理]
-    end
-  end
-  subgraph データ基盤
-    DeltaLake[Delta Lake / S3]
-  end
-  Structure -->|データ基盤経由| Product
-  License -->|API連携| Product
-  Structure --> DeltaLake
-  License --> DeltaLake
-  Auth --> DeltaLake
-```
+<div class="mt-2">
 
-<div class="mt-2 text-sm text-slate-500 text-center">
-認証ポータル・ディレクトリサービス・アセットサービスの3つの基盤システムを開発・運用
+| 基盤 | 提供する価値 | 利用者 | 連携方式 |
+|------|-------------|--------|----------|
+| **認証ポータル** | セキュアな認証（MFA, SSO） | プロダクトチーム | OIDC連携 |
+| **ディレクトリサービス** | 組織・薬局・ユーザー情報 | プロダクトチーム | データ基盤経由 |
+| **アセットサービス** | ライセンス・端末の管理 | プロダクトチーム | API連携 |
+
+</div>
+
+<div class="mt-4 p-4 bg-brand-50 rounded-lg">
+  <p class="text-sm">
+    <span class="font-bold">共通の目的:</span> プロダクトチームが3省2ガイドラインを個別に解釈する必要をなくし、<br>
+    本来のビジネスロジックに集中できるようにする
+  </p>
 </div>
 
 <!--
-私たちが担当するシステムの全体像です。
-認証ポータル、ディレクトリサービス、アセットサービスの3つの基盤システムがあり、
-各プロダクトに対してOIDC連携やデータ連携を提供しています。
+私たちが担当する3つの基盤システムです。
+認証ポータルはセキュアな認証をOIDCで提供し、ディレクトリサービスは組織・薬局・ユーザー情報をデータ基盤経由で提供します。
+アセットサービスはライセンスと端末の管理をAPIで提供しています。
+共通の目的は、プロダクトチームが3省2ガイドラインを個別に解釈する必要をなくし、本来のビジネスロジックに集中できるようにすることです。
 -->
 
 ---
@@ -305,13 +294,11 @@ layout: section
 
 # 品質要求の相反
 
-<div class="mt-6">
+<div class="mt-4">
 
-<div class="p-6 bg-slate-100 rounded-lg mb-6">
-  <p class="text-lg">
-    <span class="font-bold">認証基盤</span>では高い稼働率とセキュリティ要件を満たす必要がある一方で、<br>
-    <span class="font-bold">ディレクトリサービス</span>では稼働率に加えデータの整合性・一貫性が求められる
-  </p>
+<div class="p-4 bg-red-50 rounded-lg mb-4">
+  <p class="font-bold">要件: 認証時にユーザー・組織情報を参照する必要がある</p>
+  <p class="text-sm text-slate-600 mt-1">認証基盤 → ディレクトリサービスへの依存が発生</p>
 </div>
 
 <div class="grid grid-cols-2 gap-6">
@@ -323,7 +310,6 @@ layout: section
     <li>低レイテンシー</li>
     <li>障害時の復旧容易性</li>
   </ul>
-  <p class="text-xs text-slate-500 mt-2">→ DynamoDB等の高可用性ストレージが有効</p>
 </div>
 
 <div class="p-4 bg-slate-50 rounded-lg">
@@ -333,20 +319,19 @@ layout: section
     <li>ACIDトランザクション</li>
     <li>完全なトレーサビリティ</li>
   </ul>
-  <p class="text-xs text-slate-500 mt-2">→ PostgreSQL等のRDBMSが有効</p>
 </div>
 
 </div>
 
 > [!CAUTION]
-> これらを両立するために、インフラとアプリの両面で工夫が必要
+> **依存関係があるのに、品質要求が異なる** — これをどう両立するか？
 
 </div>
 
 <!--
-認証基盤の刷新プロジェクトでは高い稼働率とセキュリティ要件を満たす必要がある一方で、
-ディレクトリサービスでは稼働率に加えデータの整合性・一貫性が求められます。
-これらを両立するために、インフラとアプリの両面で工夫が必要でした。
+認証時にユーザー・組織情報を参照する必要があるため、認証基盤はディレクトリサービスに依存します。
+しかし、認証基盤には高可用性と低レイテンシーが求められる一方、ディレクトリサービスには強い整合性とトレーサビリティが求められます。
+依存関係があるのに品質要求が異なる。これをどう両立するかが課題でした。
 -->
 
 ---
@@ -368,7 +353,7 @@ layout: section
     </li>
     <li class="flex items-start gap-2">
       <span class="text-red-500 mt-1">✗</span>
-      <span><span class="font-bold">「3ヶ月前のこの患者のデータがどうだったか」</span>を説明できない</span>
+      <span><span class="font-bold">「3ヶ月前のこのユーザーの所属・権限は?」</span>を説明できない</span>
     </li>
   </ul>
 </div>
@@ -399,14 +384,14 @@ layout: section
 
 ---
 
-# 私たちの選択基準
+# 設計を育てる3つの観点
 
 <div class="mt-6">
 
-<div class="p-6 bg-brand-50 rounded-lg mb-6">
+<div class="p-4 bg-brand-50 rounded-lg mb-4">
   <p class="text-xl font-bold text-center">
-    「流行っているから」ではなく<br>
-    「この課題を解決するために、このトレードオフを受け入れる」
+    設計パターンは「選んで終わり」ではない<br>
+    運用しながらチームで育て続ける
   </p>
 </div>
 
@@ -450,9 +435,9 @@ layout: section
 </div>
 
 <!--
-私たちの選択基準についてお話しします。
-技術を選ぶとき、「なぜ選ぶか」「どう運用するか」「どう育てるか」の3つの観点で考えています。
-この後紹介する4つの方法論も、この基準に基づいて選択し、運用し、改善し続けてきました。
+設計を育てる3つの観点についてお話しします。
+設計パターンは選んで終わりではなく、「なぜ選ぶか」「どう運用するか」「どう育てるか」の観点で継続的に向き合います。
+この後紹介する4つの方法論も、この観点に基づいて選択し、運用し、改善し続けてきました。
 -->
 
 ---
@@ -496,7 +481,7 @@ layout: section
 </div>
 
 > [!NOTE]
-> **特別なツールや大規模な組織変更は不要**
+> **特別なツールや大規模な組織変更は不要**  
 > 既存の技術を組み合わせて段階的に導入可能
 
 <!--

@@ -111,14 +111,14 @@
   color: var(--brand-600);
 }
 
-/* TIP - ヒント (emerald) */
+/* TIP - ヒント (gray) */
 .markdown-alert-tip {
-  background-color: #ecfdf5;
-  border-color: #10b981;
+  background-color: #f8fafc; /* slate-50 */
+  border-color: #94a3b8; /* slate-400 */
 }
 
 .markdown-alert-tip .markdown-alert-title {
-  color: #059669;
+  color: #64748b; /* slate-500 */
 }
 
 /* IMPORTANT - 重要 (purple) */
