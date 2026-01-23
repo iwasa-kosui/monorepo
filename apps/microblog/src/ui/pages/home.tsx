@@ -193,7 +193,7 @@ const ThreadModal = () => {
                         <PostView
                           post={post}
                           currentUserId={currentUserId}
-                          onReply={() => {}}
+                          onReply={reply.openReplyDialog}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.postId}
                           onUndoLike={actions.undoLike}
@@ -220,7 +220,7 @@ const ThreadModal = () => {
                     <PostView
                       post={threadData.currentPost}
                       currentUserId={currentUserId}
-                      onReply={() => {}}
+                      onReply={reply.openReplyDialog}
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.postId}
                       onUndoLike={actions.undoLike}
@@ -248,7 +248,7 @@ const ThreadModal = () => {
                           <PostView
                             post={post}
                             currentUserId={currentUserId}
-                            onReply={() => {}}
+                            onReply={reply.openReplyDialog}
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.postId}
                             onUndoLike={actions.undoLike}
