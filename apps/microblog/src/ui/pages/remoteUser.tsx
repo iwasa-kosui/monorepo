@@ -64,15 +64,15 @@ export const RemoteUserPage = ({
   return (
     <>
       <section class='mb-8'>
-        <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
-          <div class='flex items-center gap-4 mb-4'>
-            <div class='w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
+        <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
+          <div class='flex items-center gap-4 mb-4 relative z-10'>
+            <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
               {remoteActor.logoUri
                 ? (
                   <img
                     src={remoteActor.logoUri}
                     alt='User Logo'
-                    class='w-16 h-16 rounded-2xl object-cover'
+                    class='w-16 h-16 blob-avatar object-cover'
                   />
                 )
                 : (
@@ -80,10 +80,10 @@ export const RemoteUserPage = ({
                 )}
             </div>
             <div class='flex-1 min-w-0'>
-              <h1 class='text-2xl font-bold text-gray-900 dark:text-white truncate'>
+              <h1 class='text-2xl font-bold text-charcoal dark:text-white truncate'>
                 {displayName}
               </h1>
-              <p class='text-gray-500 dark:text-gray-400 truncate'>@{handle}</p>
+              <p class='text-charcoal-light dark:text-gray-400 truncate'>@{handle}</p>
             </div>
           </div>
 
@@ -100,7 +100,7 @@ export const RemoteUserPage = ({
                       >
                         <button
                           type='submit'
-                          class='flex items-center justify-center p-2 rounded-xl text-blue-500 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                          class='flex items-center justify-center p-2 rounded-xl text-sage-dark dark:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
                           title='フォロー解除'
                         >
                           <svg
@@ -133,7 +133,7 @@ export const RemoteUserPage = ({
                       >
                         <button
                           type='submit'
-                          class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                          class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-sage-dark dark:hover:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
                           title='フォロー'
                         >
                           <svg
@@ -164,7 +164,7 @@ export const RemoteUserPage = ({
                         type='button'
                         onClick={onUnmute}
                         disabled={isMuting}
-                        class='flex items-center justify-center p-2 rounded-xl text-orange-500 dark:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        class='flex items-center justify-center p-2 rounded-xl text-terracotta dark:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
                         title='ミュート解除'
                       >
                         <svg
@@ -193,7 +193,7 @@ export const RemoteUserPage = ({
                         type='button'
                         onClick={onMute}
                         disabled={isMuting}
-                        class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
                         title='ミュート'
                       >
                         <svg
@@ -220,8 +220,8 @@ export const RemoteUserPage = ({
                 </>
               )
               : (
-                <p class='text-gray-500 dark:text-gray-400 text-sm'>
-                  <a href='/sign-in' class='text-gray-700 dark:text-gray-300 hover:underline'>
+                <p class='text-charcoal-light dark:text-gray-400 text-sm'>
+                  <a href='/sign-in' class='text-charcoal dark:text-gray-300 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
                     Sign in
                   </a>{' '}
                   to follow this user
@@ -232,7 +232,7 @@ export const RemoteUserPage = ({
                 href={remoteActor.url}
                 target='_blank'
                 rel='noopener noreferrer'
-                class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+                class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
                 title='元のプロフィールを表示'
               >
                 <svg
@@ -255,11 +255,11 @@ export const RemoteUserPage = ({
         </div>
       </section>
 
-      <section class='space-y-4'>
-        <h2 class='text-xl font-bold text-gray-900 dark:text-white mb-4'>
+      <section class='space-y-6 py-2'>
+        <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>
           Posts
         </h2>
-        {posts.length === 0 ? <p class='text-gray-500 dark:text-gray-400'>No posts yet.</p> : (
+        {posts.length === 0 ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p> : (
           posts.map((post) => (
             <PostView
               key={post.postId}
@@ -393,7 +393,7 @@ const App = () => {
   }, [init]);
 
   if (data === null) {
-    return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
+    return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
 
   if ('error' in data) {

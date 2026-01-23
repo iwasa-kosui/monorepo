@@ -137,24 +137,24 @@ if (document.readyState === 'loading') {
 export const NotificationsPage = ({ user: _user, notifications }: Props) => (
   <Layout isLoggedIn={true}>
     <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-gray-900 dark:text-white mb-6'>
+      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>
         Notifications
       </h1>
 
-      <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 mb-6'>
+      <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 mb-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover'>
         <div class='flex items-center justify-between'>
           <div>
-            <h2 class='text-sm font-medium text-gray-900 dark:text-white'>
+            <h2 class='text-sm font-medium text-charcoal dark:text-white'>
               Push Notifications
             </h2>
-            <p id='push-status' class='text-sm text-gray-500 dark:text-gray-400'>
+            <p id='push-status' class='text-sm text-charcoal-light dark:text-gray-400'>
               Get notified when someone likes your posts
             </p>
           </div>
           <button
             id='push-subscribe-btn'
             type='button'
-            class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+            class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
             title='プッシュ通知を有効にする'
           >
             <svg
@@ -176,9 +176,9 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
 
         <div id='ios-install-guide' class='hidden mt-4 pt-4'>
           <div class='flex items-start gap-3'>
-            <div class='flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
+            <div class='flex-shrink-0 w-10 h-10 rounded-full bg-sand-light dark:bg-gray-700 flex items-center justify-center shadow-clay-sm'>
               <svg
-                class='w-5 h-5 text-blue-600 dark:text-blue-400'
+                class='w-5 h-5 text-terracotta dark:text-terracotta-light'
                 fill='none'
                 stroke='currentColor'
                 viewBox='0 0 24 24'
@@ -192,15 +192,15 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
               </svg>
             </div>
             <div class='flex-1'>
-              <h3 class='text-sm font-medium text-gray-900 dark:text-white mb-2'>
+              <h3 class='text-sm font-medium text-charcoal dark:text-white mb-2'>
                 Install this app to enable notifications
               </h3>
-              <p class='text-sm text-gray-600 dark:text-gray-400 mb-3'>
+              <p class='text-sm text-charcoal-light dark:text-gray-400 mb-3'>
                 iOS requires this app to be installed on your home screen to receive push notifications.
               </p>
-              <ol class='text-sm text-gray-600 dark:text-gray-400 space-y-2'>
+              <ol class='text-sm text-charcoal-light dark:text-gray-400 space-y-2'>
                 <li class='flex items-start gap-2'>
-                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-warm-gray dark:bg-gray-700 flex items-center justify-center text-xs font-medium shadow-clay-sm'>
                     1
                   </span>
                   <span>
@@ -217,7 +217,7 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
-                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-warm-gray dark:bg-gray-700 flex items-center justify-center text-xs font-medium shadow-clay-sm'>
                     2
                   </span>
                   <span>
@@ -225,7 +225,7 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
-                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-warm-gray dark:bg-gray-700 flex items-center justify-center text-xs font-medium shadow-clay-sm'>
                     3
                   </span>
                   <span>
@@ -233,13 +233,13 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
-                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium'>
+                  <span class='flex-shrink-0 w-5 h-5 rounded-full bg-warm-gray dark:bg-gray-700 flex items-center justify-center text-xs font-medium shadow-clay-sm'>
                     4
                   </span>
                   <span>Open the app from your home screen and return here</span>
                 </li>
               </ol>
-              <p class='text-xs text-gray-500 dark:text-gray-500 mt-3'>
+              <p class='text-xs text-charcoal-light dark:text-gray-500 mt-3'>
                 Requires iOS 16.4 or later
               </p>
             </div>
@@ -249,7 +249,7 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
 
       {raw(`<script>${pushSubscriptionScript}</script>`)}
 
-      <div class='space-y-4'>
+      <div class='space-y-6 py-2'>
         {notifications.length > 0
           ? (
             notifications.map(({ notification, sanitizedContent }) => (
@@ -261,10 +261,10 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
             ))
           )
           : (
-            <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-8 text-center'>
-              <div class='w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center'>
+            <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
+              <div class='w-16 h-16 mx-auto mb-4 rounded-clay bg-sand-light dark:bg-gray-700 flex items-center justify-center shadow-clay-sm'>
                 <svg
-                  class='w-8 h-8 text-gray-400 dark:text-gray-500'
+                  class='w-8 h-8 text-charcoal-light dark:text-gray-500'
                   fill='none'
                   stroke='currentColor'
                   viewBox='0 0 24 24'
@@ -277,10 +277,10 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
                   />
                 </svg>
               </div>
-              <p class='text-gray-500 dark:text-gray-400'>
+              <p class='text-charcoal-light dark:text-gray-400'>
                 No notifications yet
               </p>
-              <p class='text-sm text-gray-400 dark:text-gray-500 mt-1'>
+              <p class='text-sm text-warm-gray-dark dark:text-gray-500 mt-1'>
                 When someone likes your posts, you'll see it here.
               </p>
             </div>

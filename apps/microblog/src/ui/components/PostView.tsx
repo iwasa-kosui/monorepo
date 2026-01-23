@@ -181,18 +181,18 @@ export const PostView = (
   return (
     <article
       data-post-index={dataIndex}
-      class={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 transition-all duration-300 relative ${
+      class={`bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 transition-all duration-300 relative clay-hover-lift ${
         isFloating
-          ? 'shadow-puffy dark:shadow-puffy-dark scale-[1.02] -translate-y-1'
-          : 'hover:shadow-puffy dark:hover:shadow-puffy-dark'
-      } ${canLike ? 'cursor-pointer' : ''} ${isSelected ? 'shadow-focus-ring dark:shadow-focus-ring-dark' : ''}`}
+          ? 'shadow-clay-hover dark:shadow-clay-dark-hover scale-[1.02] -translate-y-1'
+          : 'hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover'
+      } ${canLike ? 'cursor-pointer' : ''} ${isSelected ? 'ring-2 ring-terracotta/30 dark:ring-terracotta-light/30' : ''}`}
       onTouchStart={canLike ? handleTouchStart : undefined}
       onTouchEnd={canLike ? handleTouchEnd : undefined}
       onClick={canLike ? handleClick : undefined}
     >
       {/* Repost header */}
       {repostedBy && (
-        <div class='flex items-center text-sm text-gray-500 dark:text-gray-400 mb-3 pb-2 border-b border-gray-100 dark:border-gray-700'>
+        <div class='flex items-center text-sm text-charcoal-light dark:text-gray-400 mb-3 pb-2 border-b border-warm-gray dark:border-gray-700'>
           <div class='flex items-center gap-2'>
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -235,14 +235,14 @@ export const PostView = (
                 : isRemotePost
                 ? `/remote-users/${post.actorId}`
                 : undefined}
-              class='w-8 h-8 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold text-sm flex-shrink-0'
+              class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm'
             >
               {post.logoUri
                 ? (
                   <img
                     src={post.logoUri}
                     alt='Author Logo'
-                    class='w-8 h-8 rounded-2xl object-cover'
+                    class='w-8 h-8 blob-avatar object-cover'
                   />
                 )
                 : (
@@ -255,16 +255,16 @@ export const PostView = (
                 : isRemotePost
                 ? `/remote-users/${post.actorId}`
                 : undefined}
-              class='font-semibold text-gray-900 dark:text-white hover:underline'
+              class='font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
               @{post.username}
             </a>
-            <span class='text-gray-400 dark:text-gray-500'>·</span>
+            <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
               href={postDetailLink}
               target={isRemotePost ? '_blank' : undefined}
               rel={isRemotePost ? 'noopener noreferrer' : undefined}
-              class='text-sm text-gray-500 dark:text-gray-400 hover:underline'
+              class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
               title={new Date(post.createdAt).toLocaleString()}
             >
               <time dateTime={new Date(post.createdAt).toISOString()}>
@@ -275,7 +275,7 @@ export const PostView = (
         </div>
         <div>
           <div
-            class='mt-2 text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
+            class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
           {post.images && post.images.length > 0 && (
@@ -315,7 +315,7 @@ export const PostView = (
                   e.stopPropagation();
                   onShowThread(post.postId);
                 }}
-                class='flex items-center gap-1 text-sm transition-colors text-gray-500 hover:text-orange-500 dark:text-gray-400 dark:hover:text-orange-400'
+                class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
@@ -341,7 +341,7 @@ export const PostView = (
               <button
                 type='button'
                 onClick={() => onReply(post.postId)}
-                class='flex items-center gap-1 transition-colors text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400'
+                class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='Reply (p)'
               >
                 <svg
@@ -366,10 +366,10 @@ export const PostView = (
                 onClick={handleRepostClick}
                 class={`flex items-center gap-1 transition-colors ${
                   post.reposted
-                    ? 'text-green-500 dark:text-green-400'
+                    ? 'text-sage dark:text-sage'
                     : isReposting || isUndoingRepost
-                    ? 'text-green-300 dark:text-green-600 cursor-wait'
-                    : 'text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400'
+                    ? 'text-sage/50 dark:text-sage-dark cursor-wait'
+                    : 'text-charcoal-light hover:text-sage dark:text-gray-400 dark:hover:text-sage'
                 }`}
                 title={isReposting
                   ? 'リポスト中...'
@@ -402,10 +402,10 @@ export const PostView = (
                 onClick={handleLikeClick}
                 class={`flex items-center gap-1 transition-colors ${
                   post.liked
-                    ? 'text-red-500 dark:text-red-400'
+                    ? 'text-terracotta dark:text-terracotta-light'
                     : isLiking || isUndoingLike
-                    ? 'text-pink-300 dark:text-pink-600 cursor-wait'
-                    : 'text-gray-500 hover:text-pink-500 dark:text-gray-400 dark:hover:text-pink-400'
+                    ? 'text-terracotta-light/50 dark:text-terracotta-dark cursor-wait'
+                    : 'text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 }`}
                 title={isLiking
                   ? 'いいね中...'
@@ -443,8 +443,8 @@ export const PostView = (
                   }}
                   class={`flex items-center gap-1 transition-colors ${
                     isEmojiReacting
-                      ? 'text-yellow-300 dark:text-yellow-600 cursor-wait'
-                      : 'text-gray-500 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400'
+                      ? 'text-sand/50 dark:text-sand-light cursor-wait'
+                      : 'text-charcoal-light hover:text-sand dark:text-gray-400 dark:hover:text-sand-light'
                   }`}
                   title={isEmojiReacting ? 'Reacting...' : 'Add emoji reaction (e)'}
                   disabled={isEmojiReacting}
@@ -481,8 +481,8 @@ export const PostView = (
                 onClick={handleDeleteClick}
                 class={`flex items-center gap-1 transition-colors ${
                   isDeleting
-                    ? 'text-gray-300 dark:text-gray-600 cursor-wait'
-                    : 'text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400'
+                    ? 'text-warm-gray-dark dark:text-gray-600 cursor-wait'
+                    : 'text-charcoal-light hover:text-terracotta-dark dark:text-gray-400 dark:hover:text-terracotta'
                 }`}
                 title={isDeleting ? 'Deleting...' : 'Delete this post'}
                 disabled={isDeleting}
@@ -517,7 +517,7 @@ export const PostView = (
                       onUndoEmojiReact(post.postId, emoji);
                     }
                   }}
-                  class='inline-flex items-center px-2 py-0.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-800 dark:hover:text-red-200 transition-colors'
+                  class='inline-flex items-center px-2 py-0.5 text-sm bg-sand-light dark:bg-gray-700 text-charcoal dark:text-gray-200 rounded-full hover:bg-terracotta-light/30 dark:hover:bg-terracotta-dark/30 hover:text-terracotta-dark dark:hover:text-terracotta-light transition-colors shadow-clay-sm'
                   title='Click to remove reaction'
                 >
                   {emoji}

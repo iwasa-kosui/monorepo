@@ -150,7 +150,7 @@ const LocalPostPage = () => {
     return (
       <div class='flex items-center justify-center py-8'>
         <svg
-          class='animate-spin h-8 w-8 text-blue-500'
+          class='animate-spin h-8 w-8 text-terracotta'
           viewBox='0 0 24 24'
         >
           <circle
@@ -182,7 +182,7 @@ const LocalPostPage = () => {
 
   if (!threadData) {
     return (
-      <div class='text-gray-500 dark:text-gray-400 text-center py-8'>
+      <div class='text-charcoal-light dark:text-gray-400 text-center py-8'>
         Post not found
       </div>
     );
@@ -194,7 +194,7 @@ const LocalPostPage = () => {
       <div class='flex items-center justify-between mb-4 flex-shrink-0'>
         <a
           href={`/users/${username}`}
-          class='text-lg font-semibold text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2'
+          class='text-lg font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light flex items-center gap-2 transition-colors'
         >
           <svg
             class='w-5 h-5'
@@ -213,15 +213,15 @@ const LocalPostPage = () => {
         </a>
         <a
           href='/'
-          class='text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
+          class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
         >
           ホーム
         </a>
       </div>
 
-      {/* Thread Content - Scrollable */}
-      <div class='flex-1 overflow-y-auto min-h-0 mb-4'>
-        <div class='space-y-3'>
+      {/* Thread Content */}
+      <div class='flex-1 min-h-0 mb-4'>
+        <div class='space-y-6 py-2'>
           {threadData.ancestors.length > 0 && (
             <>
               {threadData.ancestors.map((post) => (
@@ -250,16 +250,16 @@ const LocalPostPage = () => {
 
       {/* Reply Form - Fixed at bottom (only shown for logged-in users) */}
       {isLoggedIn && (
-        <div class='flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4'>
+        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-4'>
           {/* Tab Bar */}
-          <div class='flex gap-1 mb-3'>
+          <div class='flex gap-1 mb-3 bg-warm-gray dark:bg-gray-700 p-1 rounded-xl w-fit'>
             <button
               type='button'
               onClick={() => setActiveTab('markdown')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+              class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'markdown'
-                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
+                  : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
               }`}
             >
               Markdown
@@ -267,10 +267,10 @@ const LocalPostPage = () => {
             <button
               type='button'
               onClick={() => setActiveTab('preview')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+              class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'preview'
-                  ? 'bg-gray-700 dark:bg-gray-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
+                  : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
               }`}
             >
               Preview
@@ -285,22 +285,22 @@ const LocalPostPage = () => {
                 onInput={handleContentChange}
                 onKeyDown={handleKeyDown}
                 placeholder='返信を書く... (⌘+Enter to post)'
-                class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none'
+                class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
                 rows={4}
                 disabled={isSendingReply}
               />
             )
             : (
-              <div class='min-h-[100px] px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700'>
+              <div class='min-h-[100px] px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset'>
                 {previewHtml
                   ? (
                     <div
-                      class='text-gray-800 dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
+                      class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
                       dangerouslySetInnerHTML={{ __html: previewHtml }}
                     />
                   )
                   : (
-                    <p class='text-gray-400 dark:text-gray-500'>
+                    <p class='text-charcoal-light dark:text-gray-500'>
                       Nothing to preview
                     </p>
                   )}
@@ -312,10 +312,10 @@ const LocalPostPage = () => {
             <button
               type='button'
               onClick={sendReply}
-              class={`px-5 py-2 text-white text-sm font-medium rounded-2xl transition-colors ${
+              class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
                 isSendingReply || !replyContent.trim()
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gray-700 hover:bg-gray-600'
+                  ? 'bg-warm-gray-dark cursor-not-allowed'
+                  : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
               }`}
               disabled={isSendingReply || !replyContent.trim()}
             >

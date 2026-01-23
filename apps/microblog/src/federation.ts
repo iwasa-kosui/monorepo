@@ -1,6 +1,7 @@
 import {
   Activity,
   Announce,
+  Article,
   Create,
   createFederation,
   Delete,
@@ -120,6 +121,12 @@ const create = () => {
     Note,
     '/users/{identifier}/posts/{id}',
     ObjectDispatcher.ofNote,
+  );
+
+  federation.setObjectDispatcher(
+    Article,
+    '/users/{identifier}/articles/{id}',
+    ObjectDispatcher.ofArticle,
   );
 
   const followersDispatcher = FollowersDispatcher.getInstance();

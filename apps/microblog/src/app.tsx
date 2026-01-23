@@ -6,6 +6,8 @@ import * as path from 'node:path';
 
 import { AboutRouter } from './adaptor/routes/aboutRouter.tsx';
 import { APIRouter } from './adaptor/routes/apiRouter.tsx';
+import { ArticlesApiRouter } from './adaptor/routes/articlesApiRouter.tsx';
+import { ArticlesRouter } from './adaptor/routes/articlesRouter.tsx';
 import { FollowRouter } from './adaptor/routes/followRouter.tsx';
 import { HomeRouter } from './adaptor/routes/homeRouter.tsx';
 import { LikeRouter } from './adaptor/routes/likeRouter.tsx';
@@ -66,6 +68,7 @@ app.get('/authorize_interaction', (c) => {
 app.get('/health', (c) => c.text('OK'));
 app.route('/', HomeRouter);
 app.route('/api', APIRouter);
+app.route('/api/v1', ArticlesApiRouter);
 app.route('/api', PushSubscriptionRouter);
 app.route('/users', UsersRouter);
 app.route('/remote-users', RemoteUsersRouter);
@@ -75,5 +78,6 @@ app.route('/sign-in', SignInRouter);
 app.route('/follow', FollowRouter);
 app.route('/like', LikeRouter);
 app.route('/notifications', NotificationRouter);
+app.route('/articles', ArticlesRouter);
 app.route('/about', AboutRouter);
 export default app;

@@ -37,11 +37,11 @@ const LikeNotificationItem = ({
   const postUrl = `/posts/${likedPost.postId}`;
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-terracotta-light/30 dark:bg-terracotta-dark/30 flex items-center justify-center shadow-clay-sm'>
           <svg
-            class='w-4 h-4 text-pink-500 dark:text-pink-400'
+            class='w-4 h-4 text-terracotta dark:text-terracotta-light'
             fill='currentColor'
             viewBox='0 0 20 20'
           >
@@ -59,7 +59,7 @@ const LikeNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
-              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
                 {likerActor.logoUri
                   ? (
                     <img
@@ -72,28 +72,28 @@ const LikeNotificationItem = ({
                     handle.charAt(0).toUpperCase()
                   )}
               </div>
-              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+              <span class='text-sm font-medium text-charcoal dark:text-white truncate'>
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
+            <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
               liked your post
             </span>
           </div>
 
           <div
             role='button'
-            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
           >
             <div
-              class='text-sm text-gray-800 dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_p]:text-gray-800 dark:[&_p]:text-gray-200 [&_p]:m-0'
+              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
           <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
             <time
               dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
+              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
               {Instant.formatRelative(createdAt)}
             </time>
@@ -122,11 +122,11 @@ const FollowNotificationItem = ({
   })(followerActor);
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-sage/30 dark:bg-sage-dark/30 flex items-center justify-center shadow-clay-sm'>
           <svg
-            class='w-4 h-4 text-blue-500 dark:text-blue-400'
+            class='w-4 h-4 text-sage-dark dark:text-sage'
             fill='currentColor'
             viewBox='0 0 20 20'
           >
@@ -140,7 +140,7 @@ const FollowNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
-              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
                 {followerActor.logoUri
                   ? (
                     <img
@@ -153,18 +153,18 @@ const FollowNotificationItem = ({
                     handle.charAt(0).toUpperCase()
                   )}
               </div>
-              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+              <span class='text-sm font-medium text-charcoal dark:text-white truncate'>
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
+            <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
               started following you
             </span>
           </div>
 
           <time
             dateTime={new Date(createdAt).toISOString()}
-            class='block mt-2 text-xs text-gray-400 dark:text-gray-500'
+            class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             title={new Date(createdAt).toLocaleString()}
           >
             {Instant.formatRelative(createdAt)}
@@ -202,9 +202,9 @@ const EmojiReactNotificationItem = ({
     : <span class='text-lg'>{emoji}</span>;
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-sand-light dark:bg-sand/30 flex items-center justify-center shadow-clay-sm'>
           {emojiDisplay}
         </div>
 
@@ -214,7 +214,7 @@ const EmojiReactNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
-              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 blob-avatar bg-sand dark:bg-gray-600 flex items-center justify-center text-charcoal text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
                 {reactorActor.logoUri
                   ? (
                     <img
@@ -227,28 +227,28 @@ const EmojiReactNotificationItem = ({
                     handle.charAt(0).toUpperCase()
                   )}
               </div>
-              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+              <span class='text-sm font-medium text-charcoal dark:text-white truncate'>
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 flex-shrink-0'>
+            <span class='text-sm text-charcoal-light dark:text-gray-400 flex items-center gap-1 flex-shrink-0'>
               reacted with {emojiDisplay}
             </span>
           </div>
 
           <div
             role='button'
-            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
           >
             <div
-              class='text-sm text-gray-800 dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_p]:text-gray-800 dark:[&_p]:text-gray-200 [&_p]:m-0'
+              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
           <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
             <time
               dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
+              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
               {Instant.formatRelative(createdAt)}
             </time>
@@ -281,11 +281,11 @@ const ReplyNotificationItem = ({
   const postUrl = `/posts/${replyPost.postId}`;
 
   return (
-    <article class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-5 hover:shadow-puffy dark:hover:shadow-puffy-dark transition-shadow'>
+    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
-        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900 flex items-center justify-center'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-sage/30 dark:bg-sage-dark/30 flex items-center justify-center shadow-clay-sm'>
           <svg
-            class='w-4 h-4 text-green-500 dark:text-green-400'
+            class='w-4 h-4 text-sage-dark dark:text-sage'
             fill='currentColor'
             viewBox='0 0 20 20'
           >
@@ -303,7 +303,7 @@ const ReplyNotificationItem = ({
               href={actorUrl}
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
-              <div class='w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-xs font-semibold flex-shrink-0'>
+              <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
                 {replierActor.logoUri
                   ? (
                     <img
@@ -316,28 +316,28 @@ const ReplyNotificationItem = ({
                     handle.charAt(0).toUpperCase()
                   )}
               </div>
-              <span class='text-sm font-medium text-gray-900 dark:text-white truncate'>
+              <span class='text-sm font-medium text-charcoal dark:text-white truncate'>
                 {handle}
               </span>
             </a>
-            <span class='text-sm text-gray-500 dark:text-gray-400 flex-shrink-0'>
+            <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
               replied to your post
             </span>
           </div>
 
           <div
             role='button'
-            class='block p-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
           >
             <div
-              class='text-sm text-gray-800 dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_p]:text-gray-800 dark:[&_p]:text-gray-200 [&_p]:m-0'
+              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
           <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
             <time
               dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer'
+              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
               {Instant.formatRelative(createdAt)}
             </time>

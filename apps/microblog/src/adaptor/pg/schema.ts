@@ -227,3 +227,19 @@ export const mutesTable = pgTable('mutes', {
   index('mutes_user_id_idx').on(table.userId),
   index('mutes_muted_actor_id_idx').on(table.mutedActorId),
 ]);
+
+export const articlesTable = pgTable('articles', {
+  articleId: uuid().primaryKey(),
+  authorActorId: uuid().notNull().references(() => actorsTable.actorId),
+  authorUserId: uuid().notNull().references(() => usersTable.userId),
+  rootPostId: uuid().notNull().references(() => postsTable.postId),
+  title: varchar({ length: 200 }).notNull(),
+  status: varchar({ length: 16 }).notNull(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+  publishedAt: timestamp({ mode: 'date' }),
+  unpublishedAt: timestamp({ mode: 'date' }),
+}, (table) => [
+  index('articles_author_actor_id_idx').on(table.authorActorId),
+  index('articles_root_post_id_idx').on(table.rootPostId),
+  unique('article_root_post_unique').on(table.rootPostId),
+]);

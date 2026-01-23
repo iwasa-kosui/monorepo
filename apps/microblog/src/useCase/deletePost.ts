@@ -1,8 +1,9 @@
-import { Delete, Note, type RequestContext, Tombstone } from '@fedify/fedify';
+import { Article as FedifyArticle, Delete, Note, type RequestContext, Tombstone } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import {
   EmojiReact,
   type EmojiReactDeletedStore,
@@ -85,6 +86,8 @@ type Deps = Readonly<{
   likesResolverByPostId: LikesResolverByPostId;
   emojiReactDeletedStore: EmojiReactDeletedStore;
   emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
+  articleResolverByRootPostId: ArticleResolverByRootPostId;
+  articleDeletedStore: ArticleDeletedStore;
 }>;
 
 const create = ({
@@ -108,6 +111,8 @@ const create = ({
   likesResolverByPostId,
   emojiReactDeletedStore,
   emojiReactsResolverByPostId,
+  articleResolverByRootPostId,
+  articleDeletedStore,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -146,6 +151,7 @@ const create = ({
           repostsResult,
           likesResult,
           emojiReactsResult,
+          articleResult,
         ] = await Promise.all([
           timelineItemResolverByPostId.resolve({ postId }),
           likeNotificationsResolverByPostId.resolve({ postId }),
@@ -155,6 +161,7 @@ const create = ({
           repostsResolverByPostId.resolve({ postId }),
           likesResolverByPostId.resolve({ postId }),
           emojiReactsResolverByPostId.resolve({ postId }),
+          articleResolverByRootPostId.resolve({ rootPostId: postId }),
         ]);
 
         // Generate all delete events
@@ -191,6 +198,11 @@ const create = ({
           ? emojiReactsResult.val.map((e) => EmojiReact.deleteEmojiReact(e, now))
           : [];
 
+        const articleToDelete = articleResult.ok ? articleResult.val : undefined;
+        const articleDeleteEvent = articleToDelete
+          ? Article.deleteArticle(now)(articleToDelete.articleId)
+          : undefined;
+
         // Store all events in batch (each store handles its own transaction)
         // Only call store if there are events to process
         await Promise.all([
@@ -207,6 +219,7 @@ const create = ({
           repostEvents.length > 0 ? repostDeletedStore.store(...repostEvents) : Promise.resolve(),
           likeEvents.length > 0 ? likeDeletedStore.store(...likeEvents) : Promise.resolve(),
           emojiReactEvents.length > 0 ? emojiReactDeletedStore.store(...emojiReactEvents) : Promise.resolve(),
+          articleDeleteEvent ? articleDeletedStore.store(articleDeleteEvent) : Promise.resolve(),
         ]);
 
         // Delete the post via event store
@@ -228,6 +241,25 @@ const create = ({
             }),
           }),
         );
+
+        // If there was a published article, send Delete activity for it too
+        if (articleToDelete && articleToDelete.status === 'published') {
+          const articleUri = ctx.getObjectUri(FedifyArticle, {
+            identifier: user.username,
+            id: articleToDelete.articleId,
+          });
+          await ctx.sendActivity(
+            { identifier: user.username },
+            'followers',
+            new Delete({
+              id: new URL(`#delete-${articleToDelete.articleId}`, articleUri),
+              actor: ctx.getActorUri(user.username),
+              object: new Tombstone({
+                id: articleUri,
+              }),
+            }),
+          );
+        }
 
         return RA.ok({ success: true });
       }),

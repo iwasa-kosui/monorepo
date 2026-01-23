@@ -124,22 +124,22 @@ const ThreadModal = () => {
 
   return (
     <div
-      class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
+      class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
       onClick={closeThread}
     >
       <div
-        class='bg-white dark:bg-gray-800 md:rounded-3xl shadow-lg p-4 md:p-6 w-full h-full md:h-auto md:max-w-2xl md:max-h-[90vh] md:mx-4 flex flex-col'
+        class='bg-cream dark:bg-gray-800 md:rounded-clay shadow-clay dark:shadow-clay-dark p-4 md:p-6 w-full h-full md:h-auto md:max-w-2xl md:max-h-[90vh] md:mx-4 flex flex-col'
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div class='flex items-center justify-between mb-4 flex-shrink-0'>
-          <h2 class='text-lg font-semibold text-gray-900 dark:text-white'>
+          <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
             Thread
           </h2>
           <button
             type='button'
             onClick={closeThread}
-            class='text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+            class='text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light transition-colors'
           >
             <svg
               class='w-5 h-5'
@@ -157,13 +157,13 @@ const ThreadModal = () => {
           </button>
         </div>
 
-        {/* Thread Content - Scrollable */}
-        <div class='flex-1 overflow-y-auto min-h-0 mb-4'>
+        {/* Thread Content */}
+        <div class='flex-1 min-h-0 mb-4'>
           {isLoadingThread
             ? (
               <div class='flex items-center justify-center py-8'>
                 <svg
-                  class='animate-spin h-8 w-8 text-blue-500'
+                  class='animate-spin h-8 w-8 text-terracotta'
                   viewBox='0 0 24 24'
                 >
                   <circle
@@ -288,7 +288,7 @@ const ThreadModal = () => {
         </div>
 
         {/* Reply Form - Fixed at bottom */}
-        <div class='flex-shrink-0 border-t border-gray-200 dark:border-gray-700 pt-4'>
+        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-4'>
           <MarkdownEditor
             value={replyContent}
             onChange={setReplyContent}
@@ -303,7 +303,7 @@ const ThreadModal = () => {
             <button
               type='button'
               onClick={closeThread}
-              class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
+              class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
               disabled={isSendingReply}
             >
               Cancel
@@ -315,10 +315,10 @@ const ThreadModal = () => {
                   sendReply(threadModalPostId, replyContent);
                 }
               }}
-              class={`px-5 py-2 text-white text-sm font-medium rounded-2xl transition-colors ${
+              class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
                 isSendingReply || !replyContent.trim()
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gray-700 hover:bg-gray-600'
+                  ? 'bg-warm-gray-dark cursor-not-allowed'
+                  : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
               }`}
               disabled={isSendingReply || !replyContent.trim()}
             >
@@ -343,28 +343,28 @@ const UserProfile = () => {
   return (
     <section class='hidden md:block mb-8'>
       <header class='mb-4'>
-        <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
           Hi, {String(user.username)}
         </h1>
       </header>
       <section class='mb-8'>
-        <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
-          <div class='flex items-center gap-4 mb-4'>
+        <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
+          <div class='flex items-center gap-4 mb-4 relative z-10'>
             <a href='#update-bio' class='relative group flex-shrink-0'>
-              <div class='w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold'>
+              <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
                 {actor.logoUri
                   ? (
                     <img
                       src={actor.logoUri}
                       alt='User Logo'
-                      class='w-16 h-16 rounded-full object-cover'
+                      class='w-16 h-16 blob-avatar object-cover'
                     />
                   )
                   : (
                     String(user.username).charAt(0).toUpperCase()
                   )}
               </div>
-              <div class='absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
+              <div class='absolute inset-0 rounded-full bg-charcoal/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
                 <svg
                   class='w-5 h-5 text-white'
                   fill='none'
@@ -381,48 +381,48 @@ const UserProfile = () => {
               </div>
             </a>
             <div>
-              <h1 class='text-2xl font-bold text-gray-900 dark:text-white'>
+              <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
                 {String(user.username)}
               </h1>
-              <p class='text-gray-500 dark:text-gray-400'>{handle}</p>
+              <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
             </div>
           </div>
 
           <div class='flex gap-6 text-sm'>
             <div>
-              <span class='font-semibold text-gray-900 dark:text-white'>
+              <span class='font-semibold text-charcoal dark:text-white'>
                 {followers.length}
               </span>
               <a
-                class='text-gray-500 dark:text-gray-400 ml-1'
+                class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
                 href='#followers'
               >
                 Followers
               </a>
             </div>
             <div>
-              <span class='font-semibold text-gray-900 dark:text-white'>
+              <span class='font-semibold text-charcoal dark:text-white'>
                 {following.length}
               </span>
               <a
-                class='text-gray-500 dark:text-gray-400 ml-1'
+                class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
                 href='#following'
               >
                 Following
               </a>
             </div>
             <div>
-              <span class='font-semibold text-gray-900 dark:text-white'>
+              <span class='font-semibold text-charcoal dark:text-white'>
                 {timelineItems.length}
               </span>
-              <span class='text-gray-500 dark:text-gray-400 ml-1'>Posts</span>
+              <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
             </div>
           </div>
         </div>
 
         <div>
           <Modal id='followers'>
-            <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
+            <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
               Followers
             </h2>
             {followers.length > 0
@@ -432,14 +432,14 @@ const UserProfile = () => {
                 </div>
               )
               : (
-                <p class='text-gray-500 dark:text-gray-400 text-sm'>
+                <p class='text-charcoal-light dark:text-gray-400 text-sm'>
                   No followers yet
                 </p>
               )}
           </Modal>
 
           <Modal id='following'>
-            <h2 class='text-lg font-semibold text-gray-900 dark:text-white mb-3'>
+            <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
               Following
             </h2>
             {following.length > 0
@@ -449,7 +449,7 @@ const UserProfile = () => {
                 </div>
               )
               : (
-                <p class='text-gray-500 dark:text-gray-400 text-sm'>
+                <p class='text-charcoal-light dark:text-gray-400 text-sm'>
                   Not following anyone yet
                 </p>
               )}
@@ -472,27 +472,27 @@ const UpdateBioModal = () => {
   return (
     <Modal id='update-bio' showCloseButton={false}>
       <form method='post' action={`/users/${user.username}`}>
-        <p class='text-gray-600 dark:text-gray-400 text-sm mb-3'>
+        <p class='text-charcoal-light dark:text-gray-400 text-sm mb-3'>
           Enter a URL for your profile image
         </p>
         <input
           type='url'
           name='logoUri'
           placeholder='https://example.com/image.png'
-          class='w-full px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3'
+          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
         />
         <div class='flex gap-2 justify-end'>
           <a href='#'>
             <button
               type='button'
-              class='px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors'
+              class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
             >
               Cancel
             </button>
           </a>
           <button
             type='submit'
-            class='px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-2xl transition-colors'
+            class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
           >
             Update
           </button>
@@ -512,7 +512,7 @@ const TimelineList = () => {
   const { selectedIndex, emojiPickerOpenForIndex, toggleEmojiPicker } = ui;
 
   return (
-    <section class='space-y-4'>
+    <section class='space-y-6 py-2'>
       {timelineItems.map((item, index) => {
         const postId = item.post.postId;
         const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;

@@ -34,6 +34,8 @@ import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
+import { PgArticleDeletedStore } from '../pg/article/articleDeletedStore.ts';
+import { PgArticleResolverByRootPostId } from '../pg/article/articleResolverByRootPostId.ts';
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
@@ -582,6 +584,8 @@ const app = new Hono()
       likesResolverByPostId: PgLikesResolverByPostId.getInstance(),
       emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
       emojiReactsResolverByPostId: PgEmojiReactsResolverByPostId.getInstance(),
+      articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
+      articleDeletedStore: PgArticleDeletedStore.getInstance(),
     });
 
     const result = await useCase.run({
