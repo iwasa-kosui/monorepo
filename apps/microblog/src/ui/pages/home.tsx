@@ -87,6 +87,94 @@ const PullToRefreshIndicator = () => {
   );
 };
 
+const ReplyModal = () => {
+  const { reply } = useTimelineContext();
+  const {
+    replyingToPostId,
+    replyContent,
+    isSendingReply,
+    closeReplyDialog,
+    setReplyContent,
+    sendReply,
+  } = reply;
+
+  if (!replyingToPostId) {
+    return null;
+  }
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (replyContent.trim() && replyingToPostId) {
+        sendReply(replyingToPostId, replyContent);
+      }
+    }
+  };
+
+  return (
+    <div
+      class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
+      onClick={closeReplyDialog}
+    >
+      <div
+        class='bg-cream dark:bg-gray-800 md:rounded-clay shadow-clay dark:shadow-clay-dark p-4 md:p-6 w-full h-full md:h-auto md:max-w-lg md:mx-4 flex flex-col'
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div class='flex items-center justify-between mb-4'>
+          <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
+            返信
+          </h2>
+          <button
+            type='button'
+            onClick={closeReplyDialog}
+            class='p-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 transition-colors rounded-xl hover:bg-sand-light dark:hover:bg-gray-700'
+          >
+            <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+              <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
+            </svg>
+          </button>
+        </div>
+
+        <MarkdownEditor
+          value={replyContent}
+          onChange={setReplyContent}
+          onKeyDown={handleKeyDown}
+          placeholder='返信を書く... (⌘+Enter to post)'
+          minHeight='150px'
+          disabled={isSendingReply}
+        />
+
+        <div class='mt-3 flex gap-2 justify-end'>
+          <button
+            type='button'
+            onClick={closeReplyDialog}
+            class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
+            disabled={isSendingReply}
+          >
+            キャンセル
+          </button>
+          <button
+            type='button'
+            onClick={() => {
+              if (replyContent.trim() && replyingToPostId) {
+                sendReply(replyingToPostId, replyContent);
+              }
+            }}
+            class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
+              isSendingReply || !replyContent.trim()
+                ? 'bg-warm-gray-dark cursor-not-allowed'
+                : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
+            }`}
+            disabled={isSendingReply || !replyContent.trim()}
+          >
+            {isSendingReply ? '送信中...' : '返信する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ThreadModal = () => {
   const { thread, actions, reply, data } = useTimelineContext();
   const {
@@ -568,6 +656,7 @@ const HomePage = () => {
       </Modal>
       <UpdateBioModal />
       <PullToRefreshIndicator />
+      <ReplyModal />
       <ThreadModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
