@@ -1,5 +1,5 @@
 ---
-theme: default
+theme: kkhs
 title: 開発チームが信頼性向上のためにできること
 info: |
   SRE Kaigi 2026 登壇資料
@@ -10,16 +10,20 @@ transition: slide-left
 mdc: true
 ---
 
-# 開発チームが信頼性向上のためにできること
+<div class="text-sm opacity-80 mb-16">SRE Kaigi 2026</div>
 
-<div class="text-2xl text-slate-500 mt-4">
+# 開発チームが<br/>信頼性向上のためにできること
+
 医療SaaS企業を支える共通基盤の挑戦
+
+<div class="mt-16">
+  <div class="text-lg">2026年1月23日</div>
+  <div class="text-lg">岩佐 幸翠</div>
 </div>
 
-<div class="absolute bottom-10">
-  <p class="text-slate-500">SRE Kaigi 2026</p>
-  <p class="font-bold">kosui (岩佐 幸翠) / 株式会社カケハシ</p>
-</div>
+<div class="absolute bottom-6 left-14 text-xs opacity-60">©KAKEHASHI inc.</div>
+
+
 
 <!--
 本日は「開発チームが信頼性向上のためにできること」というテーマでお話しします。
@@ -386,53 +390,39 @@ layout: section
 
 # 設計を育てる3つの観点
 
-<div class="mt-6">
+<MessageBox>
 
-<div class="p-4 bg-brand-50 rounded-lg mb-4">
-  <p class="text-xl font-bold text-center">
-    設計パターンは「選んで終わり」ではない<br>
-    運用しながらチームで育て続ける
-  </p>
-</div>
+設計パターンは「選んで終わり」ではない
+運用しながらチームで育て続ける
 
-<div class="grid grid-cols-3 gap-4">
+</MessageBox>
 
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">1</div>
-  <h4 class="font-bold text-sm">なぜ選ぶか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    解決したい課題と<br>
-    受け入れるトレードオフを<br>
-    チームで言語化
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">2</div>
-  <h4 class="font-bold text-sm">どう運用するか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    導入して終わりではなく<br>
-    監視・障害対応・改善の<br>
-    サイクルを回す
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">3</div>
-  <h4 class="font-bold text-sm">どう育てるか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    運用で見つかった課題を<br>
-    設計にフィードバックし<br>
-    継続的に改善
-  </p>
-</div>
-
-</div>
+<CardGrid :cols="3">
+  <NumberCard
+    :number="1"
+    title="なぜ選んだか"
+    description="解決したい課題と
+受け入れるトレードオフを
+チームで言語化"
+  />
+  <NumberCard
+    :number="2"
+    title="どう運用するか"
+    description="導入して終わりではなく
+監視・障害対応・改善の
+サイクルを回す"
+  />
+  <NumberCard
+    :number="3"
+    title="どう育てるか"
+    description="運用で見つかった課題を
+設計にフィードバックし
+継続的に改善"
+  />
+</CardGrid>
 
 > [!IMPORTANT]
 > **設計を「自分ごと」として運用し続ける** — これが私たちの信頼性向上の核心
-
-</div>
 
 <!--
 設計を育てる3つの観点についてお話しします。
@@ -504,7 +494,7 @@ layout: section
 
 <div class="mt-4">
 
-```mermaid {scale: 0.8}
+```mermaid {scale: 0.6}
 flowchart LR
   subgraph アプリケーション
     Command[コマンド実行]
@@ -532,24 +522,24 @@ flowchart LR
 
 </div>
 
-<div class="grid grid-cols-3 gap-4 mt-4">
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">障害調査</h4>
-  <p class="text-xs text-slate-600">過去の状態を再現して<br>原因を特定</p>
-</div>
+<CardGrid :cols="3">
+  <ListCard
+    title="障害調査"
+    description="過去の状態を再現し原因を特定"
+  />
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">監査対応</h4>
-  <p class="text-xs text-slate-600">変更履歴を<br>完全に追跡</p>
-</div>
+  <ListCard
+    title="監査対応"
+    description="変更履歴を完全に追跡"
+  />
+  
+  <ListCard
+    title="データ復旧"
+    description="イベントリプレイで任意の時点に復元"
+  />
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">データ復旧</h4>
-  <p class="text-xs text-slate-600">イベントリプレイで<br>任意の時点に復元</p>
-</div>
-
-</div>
+</CardGrid>
 
 <!--
 ドメインイベントとは、「システムで何が起きたか」をすべて記録する設計パターンです。
@@ -633,6 +623,15 @@ Userに対してCreateを実行すると、UserCreatedEventが生成されます
 パスワードハッシュなど秘匿性の高い情報は別テーブルに分離し、
 イベント発生の事実は通常テーブルに記録することで、トレーサビリティを確保しています。
 -->
+
+<style>
+table {
+  font-size: 14px !important;
+}
+td, th {
+  padding: 8px !important;
+}
+</style>
 
 ---
 
