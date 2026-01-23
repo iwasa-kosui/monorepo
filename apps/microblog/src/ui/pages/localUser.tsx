@@ -54,7 +54,10 @@ export const LocalUserPage = ({
   return (
     <>
       <div class='flex items-center justify-between mb-6'>
-        <a href='/' class='text-2xl font-bold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
+        <a
+          href='/'
+          class='text-2xl font-bold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+        >
           blog.kosui.me
         </a>
         <a
@@ -94,7 +97,10 @@ export const LocalUserPage = ({
                 <span class='font-semibold text-charcoal dark:text-white'>
                   {followers.length}
                 </span>
-                <a class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors' href='#followers'>
+                <a
+                  class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  href='#followers'
+                >
                   Followers
                 </a>
               </div>
@@ -102,7 +108,10 @@ export const LocalUserPage = ({
                 <span class='font-semibold text-charcoal dark:text-white'>
                   {following.length}
                 </span>
-                <a class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors' href='#following'>
+                <a
+                  class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  href='#following'
+                >
                   Following
                 </a>
               </div>

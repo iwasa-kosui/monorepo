@@ -111,29 +111,6 @@ const ArticleDetailPage = () => {
     });
   };
 
-  const getStatusBadge = (status: Article['status']) => {
-    switch (status) {
-      case 'draft':
-        return (
-          <span class='px-2 py-1 text-xs font-medium rounded-full bg-warm-gray dark:bg-gray-700 text-charcoal-light dark:text-gray-400'>
-            下書き
-          </span>
-        );
-      case 'published':
-        return (
-          <span class='px-2 py-1 text-xs font-medium rounded-full bg-sage/30 dark:bg-sage-dark/30 text-sage-dark dark:text-sage'>
-            公開中
-          </span>
-        );
-      case 'unpublished':
-        return (
-          <span class='px-2 py-1 text-xs font-medium rounded-full bg-sand dark:bg-sand/30 text-rust dark:text-sand'>
-            非公開
-          </span>
-        );
-    }
-  };
-
   if (isLoading) {
     return (
       <div class='flex items-center justify-center py-8'>
@@ -252,9 +229,7 @@ const ArticleDetailPage = () => {
           )
           : (
             <div class='space-y-6 py-2'>
-              {thread.map((post) => (
-                <PostView key={post.postId} post={post} />
-              ))}
+              {thread.map((post) => <PostView key={post.postId} post={post} />)}
             </div>
           )}
       </div>

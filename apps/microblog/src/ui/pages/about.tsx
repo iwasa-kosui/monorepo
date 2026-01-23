@@ -149,7 +149,9 @@ export const AboutPage = ({ lang }: Props) => {
             {t.features.map((feature, index) => (
               <div
                 key={feature.title}
-                class={`bg-sand-light/50 dark:bg-gray-700/50 p-4 shadow-clay-inset clay-hover-lift hover:bg-sand-light dark:hover:bg-gray-700 transition-all ${index % 3 === 0 ? 'blob' : index % 3 === 1 ? 'blob-2' : 'blob-3'}`}
+                class={`bg-sand-light/50 dark:bg-gray-700/50 p-4 shadow-clay-inset clay-hover-lift hover:bg-sand-light dark:hover:bg-gray-700 transition-all ${
+                  index % 3 === 0 ? 'blob' : index % 3 === 1 ? 'blob-2' : 'blob-3'
+                }`}
               >
                 <h3 class='font-medium text-charcoal dark:text-white mb-1'>
                   {feature.title}
