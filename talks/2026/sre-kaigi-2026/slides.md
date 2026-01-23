@@ -1,5 +1,5 @@
 ---
-theme: default
+theme: kkhs
 title: 開発チームが信頼性向上のためにできること
 info: |
   SRE Kaigi 2026 登壇資料
@@ -10,16 +10,20 @@ transition: slide-left
 mdc: true
 ---
 
-# 開発チームが信頼性向上のためにできること
+<div class="text-sm opacity-80 mb-16">SRE Kaigi 2026</div>
 
-<div class="text-2xl text-slate-500 mt-4">
+# 開発チームが<br/>信頼性向上のためにできること
+
 医療SaaS企業を支える共通基盤の挑戦
+
+<div class="mt-16">
+  <div class="text-lg">2026年1月23日</div>
+  <div class="text-lg">岩佐 幸翠</div>
 </div>
 
-<div class="absolute bottom-10">
-  <p class="text-slate-500">SRE Kaigi 2026</p>
-  <p class="font-bold">kosui (岩佐 幸翠) / 株式会社カケハシ</p>
-</div>
+<div class="absolute bottom-6 left-14 text-xs opacity-60">©KAKEHASHI inc.</div>
+
+
 
 <!--
 本日は「開発チームが信頼性向上のためにできること」というテーマでお話しします。
@@ -258,39 +262,28 @@ layout: section
 
 # 全体アーキテクチャ
 
-```mermaid {scale: 0.7}
-graph TD
-  subgraph プロダクトチーム
-    Product[各プロダクト]
-  end
-  subgraph "認証権限基盤チーム"
-    Auth[認証ポータル] -->|OIDC連携| Product
-    subgraph ディレクトリサービス
-      Structure[組織・薬局・ユーザー管理]
-    end
-    subgraph アセットサービス
-      License[ライセンス管理]
-      Device[端末管理]
-    end
-  end
-  subgraph データ基盤
-    DeltaLake[Delta Lake / S3]
-  end
-  Structure -->|データ基盤経由| Product
-  License -->|API連携| Product
-  Structure --> DeltaLake
-  License --> DeltaLake
-  Auth --> DeltaLake
-```
+<div class="mt-2">
 
-<div class="mt-2 text-sm text-slate-500 text-center">
-認証ポータル・ディレクトリサービス・アセットサービスの3つの基盤システムを開発・運用
+| 基盤 | 提供する価値 | 利用者 | 連携方式 |
+|------|-------------|--------|----------|
+| **認証ポータル** | セキュアな認証（MFA, SSO） | プロダクトチーム | OIDC連携 |
+| **ディレクトリサービス** | 組織・薬局・ユーザー情報 | プロダクトチーム | データ基盤経由 |
+| **アセットサービス** | ライセンス・端末の管理 | プロダクトチーム | API連携 |
+
+</div>
+
+<div class="mt-4 p-4 bg-brand-50 rounded-lg">
+  <p class="text-sm">
+    <span class="font-bold">共通の目的:</span> プロダクトチームが3省2ガイドラインを個別に解釈する必要をなくし、<br>
+    本来のビジネスロジックに集中できるようにする
+  </p>
 </div>
 
 <!--
-私たちが担当するシステムの全体像です。
-認証ポータル、ディレクトリサービス、アセットサービスの3つの基盤システムがあり、
-各プロダクトに対してOIDC連携やデータ連携を提供しています。
+私たちが担当する3つの基盤システムです。
+認証ポータルはセキュアな認証をOIDCで提供し、ディレクトリサービスは組織・薬局・ユーザー情報をデータ基盤経由で提供します。
+アセットサービスはライセンスと端末の管理をAPIで提供しています。
+共通の目的は、プロダクトチームが3省2ガイドラインを個別に解釈する必要をなくし、本来のビジネスロジックに集中できるようにすることです。
 -->
 
 ---
@@ -305,13 +298,11 @@ layout: section
 
 # 品質要求の相反
 
-<div class="mt-6">
+<div class="mt-4">
 
-<div class="p-6 bg-slate-100 rounded-lg mb-6">
-  <p class="text-lg">
-    <span class="font-bold">認証基盤</span>では高い稼働率とセキュリティ要件を満たす必要がある一方で、<br>
-    <span class="font-bold">ディレクトリサービス</span>では稼働率に加えデータの整合性・一貫性が求められる
-  </p>
+<div class="p-4 bg-red-50 rounded-lg mb-4">
+  <p class="font-bold">要件: 認証時にユーザー・組織情報を参照する必要がある</p>
+  <p class="text-sm text-slate-600 mt-1">認証基盤 → ディレクトリサービスへの依存が発生</p>
 </div>
 
 <div class="grid grid-cols-2 gap-6">
@@ -323,7 +314,6 @@ layout: section
     <li>低レイテンシー</li>
     <li>障害時の復旧容易性</li>
   </ul>
-  <p class="text-xs text-slate-500 mt-2">→ DynamoDB等の高可用性ストレージが有効</p>
 </div>
 
 <div class="p-4 bg-slate-50 rounded-lg">
@@ -333,20 +323,19 @@ layout: section
     <li>ACIDトランザクション</li>
     <li>完全なトレーサビリティ</li>
   </ul>
-  <p class="text-xs text-slate-500 mt-2">→ PostgreSQL等のRDBMSが有効</p>
 </div>
 
 </div>
 
 > [!CAUTION]
-> これらを両立するために、インフラとアプリの両面で工夫が必要
+> **依存関係があるのに、品質要求が異なる** — これをどう両立するか？
 
 </div>
 
 <!--
-認証基盤の刷新プロジェクトでは高い稼働率とセキュリティ要件を満たす必要がある一方で、
-ディレクトリサービスでは稼働率に加えデータの整合性・一貫性が求められます。
-これらを両立するために、インフラとアプリの両面で工夫が必要でした。
+認証時にユーザー・組織情報を参照する必要があるため、認証基盤はディレクトリサービスに依存します。
+しかし、認証基盤には高可用性と低レイテンシーが求められる一方、ディレクトリサービスには強い整合性とトレーサビリティが求められます。
+依存関係があるのに品質要求が異なる。これをどう両立するかが課題でした。
 -->
 
 ---
@@ -368,7 +357,7 @@ layout: section
     </li>
     <li class="flex items-start gap-2">
       <span class="text-red-500 mt-1">✗</span>
-      <span><span class="font-bold">「3ヶ月前のこの患者のデータがどうだったか」</span>を説明できない</span>
+      <span><span class="font-bold">「3ヶ月前のこのユーザーの所属・権限は?」</span>を説明できない</span>
     </li>
   </ul>
 </div>
@@ -399,60 +388,46 @@ layout: section
 
 ---
 
-# 私たちの選択基準
+# 設計を育てる3つの観点
 
-<div class="mt-6">
+<MessageBox>
 
-<div class="p-6 bg-brand-50 rounded-lg mb-6">
-  <p class="text-xl font-bold text-center">
-    「流行っているから」ではなく<br>
-    「この課題を解決するために、このトレードオフを受け入れる」
-  </p>
-</div>
+設計パターンは「選んで終わり」ではない
+運用しながらチームで育て続ける
 
-<div class="grid grid-cols-3 gap-4">
+</MessageBox>
 
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">1</div>
-  <h4 class="font-bold text-sm">なぜ選ぶか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    解決したい課題と<br>
-    受け入れるトレードオフを<br>
-    チームで言語化
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">2</div>
-  <h4 class="font-bold text-sm">どう運用するか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    導入して終わりではなく<br>
-    監視・障害対応・改善の<br>
-    サイクルを回す
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg text-center">
-  <div class="text-3xl mb-2">3</div>
-  <h4 class="font-bold text-sm">どう育てるか</h4>
-  <p class="text-xs text-slate-600 mt-1">
-    運用で見つかった課題を<br>
-    設計にフィードバックし<br>
-    継続的に改善
-  </p>
-</div>
-
-</div>
+<CardGrid :cols="3">
+  <NumberCard
+    :number="1"
+    title="なぜ選んだか"
+    description="解決したい課題と
+受け入れるトレードオフを
+チームで言語化"
+  />
+  <NumberCard
+    :number="2"
+    title="どう運用するか"
+    description="導入して終わりではなく
+監視・障害対応・改善の
+サイクルを回す"
+  />
+  <NumberCard
+    :number="3"
+    title="どう育てるか"
+    description="運用で見つかった課題を
+設計にフィードバックし
+継続的に改善"
+  />
+</CardGrid>
 
 > [!IMPORTANT]
 > **設計を「自分ごと」として運用し続ける** — これが私たちの信頼性向上の核心
 
-</div>
-
 <!--
-私たちの選択基準についてお話しします。
-技術を選ぶとき、「なぜ選ぶか」「どう運用するか」「どう育てるか」の3つの観点で考えています。
-この後紹介する4つの方法論も、この基準に基づいて選択し、運用し、改善し続けてきました。
+設計を育てる3つの観点についてお話しします。
+設計パターンは選んで終わりではなく、「なぜ選ぶか」「どう運用するか」「どう育てるか」の観点で継続的に向き合います。
+この後紹介する4つの方法論も、この観点に基づいて選択し、運用し、改善し続けてきました。
 -->
 
 ---
@@ -496,7 +471,7 @@ layout: section
 </div>
 
 > [!NOTE]
-> **特別なツールや大規模な組織変更は不要**
+> **特別なツールや大規模な組織変更は不要**  
 > 既存の技術を組み合わせて段階的に導入可能
 
 <!--
@@ -519,7 +494,7 @@ layout: section
 
 <div class="mt-4">
 
-```mermaid {scale: 0.8}
+```mermaid {scale: 0.6}
 flowchart LR
   subgraph アプリケーション
     Command[コマンド実行]
@@ -547,24 +522,24 @@ flowchart LR
 
 </div>
 
-<div class="grid grid-cols-3 gap-4 mt-4">
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">障害調査</h4>
-  <p class="text-xs text-slate-600">過去の状態を再現して<br>原因を特定</p>
-</div>
+<CardGrid :cols="3">
+  <ListCard
+    title="障害調査"
+    description="過去の状態を再現し原因を特定"
+  />
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">監査対応</h4>
-  <p class="text-xs text-slate-600">変更履歴を<br>完全に追跡</p>
-</div>
+  <ListCard
+    title="監査対応"
+    description="変更履歴を完全に追跡"
+  />
+  
+  <ListCard
+    title="データ復旧"
+    description="イベントリプレイで任意の時点に復元"
+  />
 
-<div class="p-3 bg-brand-50 rounded-lg text-center">
-  <h4 class="font-bold text-sm">データ復旧</h4>
-  <p class="text-xs text-slate-600">イベントリプレイで<br>任意の時点に復元</p>
-</div>
-
-</div>
+</CardGrid>
 
 <!--
 ドメインイベントとは、「システムで何が起きたか」をすべて記録する設計パターンです。
@@ -575,100 +550,72 @@ flowchart LR
 
 # ドメインイベントの設計
 
-```typescript {all|1-7|9-15|17-19}
-// イベントの型定義
-type DomainEvent<TAggregateKind, TAggregateId, TAggregate, TEventName, TPayload> = {
-  aggregateKind: TAggregateKind;  // 集約の種類（User, Org等）
-  aggregateId: TAggregateId;       // 集約のID
-  aggregate: TAggregate;           // 変更後の状態（スナップショット）
-  eventName: TEventName;           // 何が起きたか（UserCreated等）
-  eventPayload: TPayload;          // イベント固有のデータ
-  eventAt: UnixTime;
-};
+<div class="mt-4">
 
-// イベント発行（純粋関数）
-const createUser = (props: CreateUserProps): UserCreated => ({
-  aggregateKind: 'User',
-  aggregateId: UserId.generate(),
-  aggregate: { ...props, status: 'active' },
-  eventName: 'UserCreated',
-  eventPayload: { createdBy: props.createdBy },
-  eventAt: UnixTime.now(),
+```typescript
+const createUser = (name: string): UserCreatedEvent => ({
+  aggregate: { id: uuid(), name, status: "active" },  // 変更後の状態
+  eventAt:   Date.now(),                              // いつ
+  createdBy: "admin",                                 // 誰が
 });
 ```
 
+</div>
+
+<div class="mt-4 p-4 bg-brand-50 rounded-lg">
+  <p class="font-bold mb-2">記録する内容</p>
+  <p class="text-sm">いつ・誰が・何を・どう変更したか + <span class="font-bold">変更後の状態</span></p>
+</div>
+
 > [!TIP]
-> **ポイント:** `aggregate`フィールドに変更後の状態を持つことで、リプレイなしでも過去の状態を即座に参照可能
+> **ポイント:** 変更後の状態も一緒に保存することで、リプレイなしでも過去の状態を即座に参照可能
 
 <!--
-こちらが実際の型定義です。
-集約の種類、ID、変更後の状態、イベント名、ペイロード、発生日時を持ちます。
-aggregateフィールドに変更後の状態を持つことで、過去の状態を即座に参照できます。
+ドメインイベントの設計です。
+Userに対してCreateを実行すると、UserCreatedEventが生成されます。
+変更後の状態も一緒に保存することで、過去の状態を即座に参照できます。
 -->
 
 ---
 
 # イベントストアの設計
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<div class="mt-2 text-sm mb-2">例: UserCreated イベント</div>
+
+<div class="grid grid-cols-2 gap-4">
 
 <div>
 
-```sql
-CREATE TABLE domain_events (
-  event_id UUID PRIMARY KEY,
-  aggregate_kind TEXT NOT NULL,
-  aggregate_id UUID NOT NULL,
-  event_name TEXT NOT NULL,
-  event_at TIMESTAMPTZ NOT NULL,
-  security_class TEXT NOT NULL  -- 追加
-) PARTITION BY RANGE (event_at);
+### 通常テーブル
 
--- 属性テーブル（分離）
-CREATE TABLE domain_event_attributes (
-  event_id UUID PRIMARY KEY,
-  event_payload JSONB NOT NULL,
-  aggregate_snapshot JSONB NOT NULL
-);
+| カラム | 値 |
+|--------|-----|
+| event | `UserCreated` |
+| user_id | `uuid-123` |
+| name | `田中` |
+| status | `active` |
 
--- セキュア属性テーブル
-CREATE TABLE secure_event_attributes (
-  event_id UUID PRIMARY KEY,
-  event_payload JSONB NOT NULL,
-  aggregate_snapshot JSONB NOT NULL
-);
-```
+<p class="text-xs text-slate-500">→ 他チームもトレース可能</p>
 
 </div>
 
 <div>
 
-### セキュリティ区分による分離
+### 秘匿テーブル
 
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <p class="text-sm">
-    パスワードハッシュなど秘匿性の高い情報は<br>
-    <span class="font-bold">セキュア属性テーブル</span>に分離
-  </p>
-</div>
+| カラム | 値 |
+|--------|-----|
+| event_id | `evt-456` |
+| password_hash | `$2b$...` |
 
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <p class="text-sm">
-    イベント発生の<span class="font-bold">事実</span>は通常テーブルに記録<br>
-    → 他チームもトレース可能
-  </p>
-</div>
+<p class="text-xs text-slate-500">→ アクセス制限あり</p>
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <p class="text-sm font-bold">設計判断</p>
-  <p class="text-xs text-slate-600">
-    セキュリティ要件とトレーサビリティ要件を<br>
-    両立するための現実的な選択
-  </p>
 </div>
 
 </div>
 
+<div class="mt-4 p-3 bg-brand-50 rounded-lg text-center">
+  <p class="text-sm"><span class="font-bold">設計判断:</span> 「ユーザーが作成された」事実は共有、パスワードは分離</p>
 </div>
 
 <!--
@@ -676,6 +623,15 @@ CREATE TABLE secure_event_attributes (
 パスワードハッシュなど秘匿性の高い情報は別テーブルに分離し、
 イベント発生の事実は通常テーブルに記録することで、トレーサビリティを確保しています。
 -->
+
+<style>
+table {
+  font-size: 14px !important;
+}
+td, th {
+  padding: 8px !important;
+}
+</style>
 
 ---
 
@@ -1434,11 +1390,12 @@ layout: section
 
 <div>
 
-### プロダクトチームの声
+### プロダクトチームへの貢献
 
 <div class="p-4 bg-slate-100 rounded-lg">
-  <p class="text-sm italic">
-    「認証・認可基盤が共通化されたことで、3省2ガイドラインを個別に解釈する必要がなくなり、本来のビジネスロジックに集中できるようになった」
+  <p class="text-sm">
+    認証・認可基盤の共通化により、<br>
+    <span class="font-bold">3省2ガイドラインを各チームが個別に解釈する必要がなくなった</span>
   </p>
 </div>
 
@@ -1460,7 +1417,7 @@ layout: section
 <!--
 導入による成果です。
 障害発生時の原因特定時間が大幅に短縮され、過去データの追跡も任意の時点で可能になりました。
-プロダクトチームからは「本来のビジネスロジックに集中できるようになった」という声をいただいています。
+また、認証・認可基盤の共通化により、プロダクトチームがガイドラインを個別に解釈する負担を軽減できました。
 -->
 
 ---
@@ -1717,24 +1674,21 @@ layout: section
 
 # Enablingの観点から
 
-<div class="mt-6 space-y-4">
+<div class="mt-1 space-y-2">
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">設計を選ぶだけでなく、責任を果たす</h3>
-  <p class="text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
-  <p class="text-sm text-slate-500 mt-1">なぜその設計を選んだのかを言語化し、トレードオフをチームで共有する</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">設計を選ぶだけでなく、責任を果たす</h3>
+  <p class="text-xs text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
 </div>
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">「誰かの仕事」ではなく「自分たちの責任」</h3>
-  <p class="text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
-  <p class="text-sm text-slate-500 mt-1">制約があったからこそ、チームの強みに変えることができた</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">「誰かの仕事」ではなく「自分たちの責任」</h3>
+  <p class="text-xs text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
 </div>
 
-<div class="p-5 bg-brand-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">SREイネイブラーへ</h3>
-  <p class="text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
-  <p class="text-sm text-slate-500 mt-1">開発チームが自走できる状態 = Enabling完了の目標状態</p>
+<div class="p-2 bg-brand-50 rounded-lg">
+  <h3 class="text-sm font-bold">SREイネイブラーへ</h3>
+  <p class="text-xs text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
 </div>
 
 </div>
@@ -1772,32 +1726,4 @@ class: text-center
 最後に、本日のキーメッセージを再掲します。
 設計パターンは導入して終わりではありません。
 チームで意図を共有し、継続的に改善する。それが開発チームによる信頼性向上の本質です。
--->
-
----
-layout: center
-class: text-center
----
-
-# ご清聴ありがとうございました
-
-<div class="mt-8 text-xl">
-質問があればぜひ！
-</div>
-
-<div class="mt-8 text-slate-500">
-岩佐 幸翠 / [@kosui_me](https://x.com/kosui_me)
-</div>
-
-<div class="mt-8 text-sm text-slate-400">
-
-関連資料:
-- [カケハシ開発者ブログ: アーキテクチャの進化はドメインイベントが起点になる](https://kakehashi-dev.hatenablog.com/entry/2023/12/24/091000)
-- [Findy Tools インタビュー](https://findy-tools.io/companies/kakehashi/91/97)
-
-</div>
-
-<!--
-以上で発表を終わります。
-ご質問があればお気軽にどうぞ。
 -->

@@ -1,0 +1,422 @@
+/* ===========================================
+   KKHS Slidev Theme
+   Primary Color: #1e74bb (Trustworthy Blue)
+   A logical and professional presentation theme
+   =========================================== */
+
+:root {
+  /* Primary color palette based on #1e74bb */
+  --slidev-theme-primary: #1e74bb;
+  --slidev-theme-primary-light: #4a9dd9;
+  --slidev-theme-primary-lighter: #a3d0f0;
+  --slidev-theme-primary-dark: #155a91;
+  --slidev-theme-primary-darker: #0d3d63;
+
+  /* Neutral colors for text and backgrounds */
+  --slidev-theme-text: #1a1a2e;
+  --slidev-theme-text-secondary: #4a4a68;
+  --slidev-theme-text-muted: #7a7a98;
+  --slidev-theme-background: #ffffff;
+  --slidev-theme-background-soft: #f5f8fb;
+  --slidev-theme-border: #e1e8ef;
+
+  /* Accent colors for emphasis */
+  --slidev-theme-accent: #2ecc71;
+  --slidev-theme-accent-secondary: #f39c12;
+  --slidev-theme-error: #e74c3c;
+
+  /* Code block colors */
+  --slidev-theme-code-background: #f8fafc;
+  --slidev-theme-code-border: #e2e8f0;
+
+  /* Shadows and effects */
+  --slidev-theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --slidev-theme-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --slidev-theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+/* Dark mode support */
+html.dark {
+  --slidev-theme-primary: #4a9dd9;
+  --slidev-theme-primary-light: #7bbce8;
+  --slidev-theme-primary-lighter: #a3d0f0;
+  --slidev-theme-primary-dark: #1e74bb;
+  --slidev-theme-primary-darker: #155a91;
+
+  --slidev-theme-text: #e8e8f0;
+  --slidev-theme-text-secondary: #b8b8d0;
+  --slidev-theme-text-muted: #8888a8;
+  --slidev-theme-background: #0f0f1a;
+  --slidev-theme-background-soft: #1a1a2e;
+  --slidev-theme-border: #2a2a48;
+
+  --slidev-theme-code-background: #1a1a2e;
+  --slidev-theme-code-border: #2a2a48;
+}
+
+/* ===========================================
+   Base Layout Styles
+   =========================================== */
+
+.slidev-layout {
+  @apply px-14 py-10;
+  background-color: var(--slidev-theme-background);
+  color: var(--slidev-theme-text);
+}
+
+/* ===========================================
+   Cover & Intro Layouts
+   =========================================== */
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+  @apply h-full grid px-14 py-12;
+  background-color: var(--slidev-theme-primary);
+  color: #ffffff;
+  position: relative;
+
+  h1 {
+    @apply text-5xl leading-tight font-bold;
+    border: none;
+  }
+
+  h1 + p {
+    @apply -mt-2 mb-6 text-lg;
+    opacity: 0.9;
+    font-weight: 400;
+  }
+
+  p + h2,
+  ul + h2,
+  table + h2 {
+    @apply mt-10;
+  }
+
+  a {
+    color: #ffffff;
+    opacity: 0.9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+
+    &:hover {
+      opacity: 1;
+      border-bottom-color: #ffffff;
+    }
+  }
+}
+
+/* ===========================================
+   Section Layout
+   =========================================== */
+
+.slidev-layout.section {
+  @apply h-full flex flex-col items-center justify-center px-14 py-12;
+  background-color: var(--slidev-theme-primary);
+  color: #ffffff;
+
+  h1 {
+    @apply text-4xl leading-tight font-bold text-center;
+    color: #ffffff;
+    border: none;
+  }
+
+  h2 {
+    @apply text-2xl text-center;
+    color: #ffffff;
+    opacity: 0.9;
+  }
+
+  p {
+    @apply text-center;
+    color: #ffffff;
+    opacity: 0.9;
+  }
+}
+
+/* Ensure section text stays white (override typography) */
+.slidev-layout.section h1,
+.slidev-layout.section h2,
+.slidev-layout.section h3,
+.slidev-layout.section p {
+  color: #ffffff !important;
+}
+
+/* ===========================================
+   Typography
+   =========================================== */
+
+.slidev-layout {
+  h1 {
+    @apply text-4xl font-bold mb-4;
+    color: var(--slidev-theme-primary-dark);
+    border-bottom: 3px solid var(--slidev-theme-primary);
+    padding-bottom: 0.5rem;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold mb-3;
+    color: var(--slidev-theme-primary);
+  }
+
+  h3 {
+    @apply text-xl font-medium mb-2;
+    color: var(--slidev-theme-text);
+  }
+
+  p {
+    @apply mb-4 leading-relaxed;
+    color: var(--slidev-theme-text);
+  }
+
+  strong {
+    color: var(--slidev-theme-text);
+    font-weight: 600;
+  }
+
+  em {
+    color: var(--slidev-theme-primary);
+    font-style: italic;
+  }
+}
+
+/* Override for cover/intro - keep white text */
+.slidev-layout.cover,
+.slidev-layout.intro {
+  h1, h2, h3, p, strong, em {
+    color: #ffffff;
+  }
+
+  h1 {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  h2 {
+    opacity: 0.9;
+  }
+}
+
+/* ===========================================
+   Lists
+   =========================================== */
+
+.slidev-layout {
+  ul, ol {
+    @apply my-4 pl-6;
+  }
+
+  ul {
+    list-style: none;
+
+    li {
+      @apply mb-2 relative pl-6;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.6em;
+        width: 8px;
+        height: 8px;
+        background-color: var(--slidev-theme-primary);
+        border-radius: 2px;
+        transform: rotate(45deg);
+      }
+    }
+
+    ul li::before {
+      background-color: var(--slidev-theme-primary-light);
+      width: 6px;
+      height: 6px;
+    }
+  }
+
+  ol {
+    list-style: none;
+    counter-reset: item;
+
+    li {
+      @apply mb-2 relative pl-8;
+      counter-increment: item;
+
+      &::before {
+        content: counter(item);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 24px;
+        height: 24px;
+        background-color: var(--slidev-theme-primary);
+        color: #ffffff;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+  }
+}
+
+/* ===========================================
+   Code Blocks
+   =========================================== */
+
+.slidev-layout {
+  code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded text-sm;
+    background-color: var(--slidev-theme-code-background);
+    border: 1px solid var(--slidev-theme-code-border);
+    color: var(--slidev-theme-primary-dark);
+    font-family: 'Fira Code', monospace;
+  }
+
+  pre {
+    @apply rounded-lg my-4 overflow-hidden;
+    background-color: var(--slidev-theme-code-background);
+    border: 1px solid var(--slidev-theme-code-border);
+    box-shadow: var(--slidev-theme-shadow);
+
+    code {
+      @apply block p-4 text-sm;
+      font-family: 'Fira Code', monospace;
+    }
+  }
+}
+
+/* ===========================================
+   Blockquotes
+   =========================================== */
+
+.slidev-layout {
+  blockquote {
+    @apply my-4 pl-4 py-2 italic;
+    border-left: 4px solid var(--slidev-theme-primary);
+    background-color: var(--slidev-theme-background-soft);
+    border-radius: 0 8px 8px 0;
+    color: var(--slidev-theme-text);
+
+    p {
+      @apply mb-0;
+    }
+  }
+}
+
+/* ===========================================
+   Tables
+   =========================================== */
+
+.slidev-layout {
+  table {
+    @apply w-full my-4;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--slidev-theme-shadow-sm);
+    border: 1px solid var(--slidev-theme-border);
+
+    th {
+      @apply px-4 py-3 text-left font-semibold;
+      background-color: var(--slidev-theme-primary);
+      color: #ffffff;
+    }
+
+    td {
+      @apply px-4 py-3;
+      border-bottom: 1px solid var(--slidev-theme-border);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--slidev-theme-background-soft);
+    }
+  }
+}
+
+/* ===========================================
+   Links
+   =========================================== */
+
+.slidev-layout {
+  a {
+    color: var(--slidev-theme-primary);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+
+    &:hover {
+      border-bottom-color: var(--slidev-theme-primary);
+    }
+  }
+}
+
+/* ===========================================
+   Images
+   =========================================== */
+
+.slidev-layout {
+  img {
+    @apply rounded-lg;
+    box-shadow: var(--slidev-theme-shadow);
+  }
+}
+
+/* ===========================================
+   Utility Classes
+   =========================================== */
+
+.slidev-layout {
+  .highlight {
+    background: linear-gradient(
+      120deg,
+      var(--slidev-theme-primary-lighter) 0%,
+      var(--slidev-theme-primary-lighter) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 40%;
+    background-position: 0 90%;
+  }
+
+  .card {
+    @apply p-6 rounded-xl;
+    background-color: var(--slidev-theme-background);
+    border: 1px solid var(--slidev-theme-border);
+    box-shadow: var(--slidev-theme-shadow);
+  }
+
+  .badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
+    background-color: var(--slidev-theme-primary);
+    color: #ffffff;
+  }
+
+  .badge-outline {
+    @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
+    background-color: transparent;
+    border: 2px solid var(--slidev-theme-primary);
+    color: var(--slidev-theme-primary);
+  }
+}
+
+/* ===========================================
+   Slide Number & Navigation
+   =========================================== */
+
+.slidev-page-number {
+  color: var(--slidev-theme-text-muted);
+  font-weight: 500;
+}
+
+/* ===========================================
+   Transitions
+   =========================================== */
+
+.slidev-layout {
+  * {
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+}

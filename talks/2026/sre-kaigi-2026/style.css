@@ -3,76 +3,6 @@
  * カケハシブランドカラー (#1e74bb) を基調としたテーマ
  */
 
-:root {
-  /* ============================================
-   * Brand Colors (カケハシブランドカラー)
-   * ============================================ */
-  --brand-50: #e8f2fa;
-  --brand-100: #c5def2;
-  --brand-200: #9dc8e9;
-  --brand-300: #6daede;
-  --brand-400: #4595d0;
-  --brand-500: #1e74bb;
-  --brand-600: #1a65a3;
-  --brand-700: #155285;
-  --brand-800: #103f67;
-  --brand-900: #0b2c4a;
-
-  /* ============================================
-   * Semantic Colors
-   * ============================================ */
-
-  /* Primary: キーメッセージ、情報（ブランドカラー） */
-  --color-primary-bg: #e8f2fa;
-  --color-primary-bg-emphasis: #c5def2;
-  --color-primary-text: #1e74bb;
-  --color-primary-badge: #1e74bb;
-
-  /* Success: 採用、推奨、成功 (emerald) */
-  --color-success-bg: #ecfdf5;
-  --color-success-bg-emphasis: #d1fae5;
-  --color-success-text: #059669;
-  --color-success-badge: #10b981;
-  --color-success-border: #34d399;
-
-  /* Warning: 注意、コンテキスト (amber) */
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #d97706;
-  --color-warning-badge: #f59e0b;
-
-  /* Danger: 問題、課題、不採用 (red) */
-  --color-danger-bg: #fef2f2;
-  --color-danger-bg-emphasis: #fee2e2;
-  --color-danger-text: #dc2626;
-
-  /* Neutral: 中立、一般情報 (slate) */
-  --color-neutral-bg: #f8fafc;
-  --color-neutral-bg-emphasis: #f1f5f9;
-  --color-neutral-text: #475569;
-  --color-neutral-text-muted: #64748b;
-
-  /* ============================================
-   * Typography
-   * ============================================ */
-  --text-body: #475569;
-  --text-muted: #64748b;
-  --text-heading: #1e293b;
-}
-
-/* ============================================
- * Slide Layouts
- * ============================================ */
-
-/* セクションタイトルの強調 */
-.slidev-layout.section h1 {
-  color: var(--brand-500);
-}
-
-/* キーメッセージの強調 */
-.slidev-layout.center h1 {
-  color: var(--brand-600);
-}
-
 /* ============================================
  * GitHub Alerts (markdown-it-github-alerts)
  * ============================================ */
@@ -111,14 +41,14 @@
   color: var(--brand-600);
 }
 
-/* TIP - ヒント (emerald) */
+/* TIP - ヒント (gray) */
 .markdown-alert-tip {
-  background-color: #ecfdf5;
-  border-color: #10b981;
+  background-color: #f8fafc; /* slate-50 */
+  border-color: #94a3b8; /* slate-400 */
 }
 
 .markdown-alert-tip .markdown-alert-title {
-  color: #059669;
+  color: #64748b; /* slate-500 */
 }
 
 /* IMPORTANT - 重要 (purple) */

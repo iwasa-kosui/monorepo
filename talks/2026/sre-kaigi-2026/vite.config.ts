@@ -10,7 +10,7 @@ export default {
             tip: 'ヒント',
             important: '重要',
             warning: '注意',
-            caution: '警告',
+            caution: '課題',
           },
         })
       },
