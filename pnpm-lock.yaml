@@ -273,6 +273,9 @@ importers:
       '@slidev/theme-seriph':
         specifier: latest
         version: 0.25.0
+      markdown-it-github-alerts:
+        specifier: 1.0.1
+        version: 1.0.1(markdown-it@14.1.0)
       vue:
         specifier: ^3.5.26
         version: 3.5.27(typescript@5.9.3)
@@ -4670,6 +4673,11 @@ packages:
 
   markdown-it-footnote@4.0.0:
     resolution: {integrity: sha512-WYJ7urf+khJYl3DqofQpYfEYkZKbmXmwxQV8c8mO/hGIhgZ1wOe7R4HLFNwqx7TjILbnC98fuyeSsin19JdFcQ==}
+
+  markdown-it-github-alerts@1.0.1:
+    resolution: {integrity: sha512-NNATF4QdoGI07hyCitoB2YqJ1YcNVCKT89ut2VtfFY9rkeFCXe/V2lOonKQLpJiq5DjiZZepf97BJx5xOjFIAw==}
+    peerDependencies:
+      markdown-it: '>= 13.0.0'
 
   markdown-it-mdc@0.2.6:
     resolution: {integrity: sha512-HxbEZoEmftdm/krWzwI3JcCWoeXTkAufme1gQt8MTN6nY7y2w/I0LI8U9TEERNPjBNtMOLaNaQsM1H+5K15UJQ==}
@@ -11085,6 +11093,10 @@ snapshots:
       markdown-it: 14.1.0
 
   markdown-it-footnote@4.0.0: {}
+
+  markdown-it-github-alerts@1.0.1(markdown-it@14.1.0):
+    dependencies:
+      markdown-it: 14.1.0
 
   markdown-it-mdc@0.2.6(@types/markdown-it@14.1.2)(markdown-it@14.1.0):
     dependencies:
