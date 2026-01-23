@@ -12,12 +12,12 @@ mdc: true
 
 # 開発チームが信頼性向上のためにできること
 
-<div class="text-2xl text-gray-500 mt-4">
+<div class="text-2xl text-slate-500 mt-4">
 医療SaaS企業を支える共通基盤の挑戦
 </div>
 
 <div class="absolute bottom-10">
-  <p class="text-gray-500">SRE Kaigi 2026</p>
+  <p class="text-slate-500">SRE Kaigi 2026</p>
   <p class="font-bold">kosui (岩佐 幸翠) / 株式会社カケハシ</p>
 </div>
 
@@ -53,31 +53,14 @@ mdc: true
 -->
 
 ---
-layout: center
-class: text-center
----
 
 # 本セッションの対象者
 
-<div class="grid grid-cols-2 gap-8 mt-8 text-left max-w-4xl mx-auto">
-
-<div class="p-6 bg-blue-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">フルスタック開発チームのリード</h3>
-  <p class="text-gray-600 text-sm">
-    チーム規模的にSRE専任を置いても十分な協働が難しい状況で、<br>
-    「信頼性は誰かの仕事」ではなく「自分たちの責任」と考え始めている方
-  </p>
-</div>
-
-<div class="p-6 bg-green-50 rounded-lg">
-  <h3 class="font-bold text-lg mb-2">SREイネイブラー</h3>
-  <p class="text-gray-600 text-sm">
-    開発チームが「自分事として信頼性を担う」状態を目指しているが、<br>
-    Enablingのゴールを具体的に示したい方
-  </p>
-</div>
-
-</div>
+- 開発チームのリード  
+  
+- SREイネイブラー  
+  開発チームが「自分事として信頼性を担う」状態を目指しているが、<br>
+  Enablingのゴールを具体的に示したい方
 
 <!--
 本セッションは主に2つのペルソナを想定しています。
@@ -92,11 +75,11 @@ class: text-center
 
 # 本日のキーメッセージ
 
-<div class="text-3xl font-bold mt-8 p-8 bg-blue-100 rounded-lg max-w-4xl">
+<div class="text-3xl font-bold mt-8 p-8 bg-brand-100 rounded-lg max-w-4xl">
 開発チームが設計を"自分ごと"として<br>運用し続けることで、<br>SRE専任なしでも信頼性は向上できる
 </div>
 
-<div class="mt-8 text-xl text-gray-600">
+<div class="mt-8 text-xl text-slate-600">
 設計パターンを「選ぶ」だけでなく「育てる」ことが重要
 </div>
 
@@ -112,34 +95,34 @@ SRE専任チームがいない環境でも、開発チーム自身が設計を�
 
 <div class="grid grid-cols-5 gap-4 mt-8">
 
-<div class="text-center p-4 bg-gray-50 rounded-lg">
+<div class="text-center p-4 bg-slate-50 rounded-lg">
   <div class="text-3xl mb-2">1</div>
   <div class="font-bold">背景</div>
-  <div class="text-xs text-gray-500 mt-1">チーム規模の制約と<br>選択</div>
+  <div class="text-xs text-slate-500 mt-1">チーム規模の制約と<br>選択</div>
 </div>
 
-<div class="text-center p-4 bg-gray-50 rounded-lg">
+<div class="text-center p-4 bg-slate-50 rounded-lg">
   <div class="text-3xl mb-2">2</div>
   <div class="font-bold">課題</div>
-  <div class="text-xs text-gray-500 mt-1">トレーサビリティと<br>品質要求の相反</div>
+  <div class="text-xs text-slate-500 mt-1">トレーサビリティと<br>品質要求の相反</div>
 </div>
 
-<div class="text-center p-4 bg-gray-50 rounded-lg">
+<div class="text-center p-4 bg-slate-50 rounded-lg">
   <div class="text-3xl mb-2">3</div>
   <div class="font-bold">方法論</div>
-  <div class="text-xs text-gray-500 mt-1">4つのアプローチ</div>
+  <div class="text-xs text-slate-500 mt-1">4つのアプローチ</div>
 </div>
 
-<div class="text-center p-4 bg-gray-50 rounded-lg">
+<div class="text-center p-4 bg-slate-50 rounded-lg">
   <div class="text-3xl mb-2">4</div>
   <div class="font-bold">結果と教訓</div>
-  <div class="text-xs text-gray-500 mt-1">責任を果たすとは</div>
+  <div class="text-xs text-slate-500 mt-1">責任を果たすとは</div>
 </div>
 
-<div class="text-center p-4 bg-gray-50 rounded-lg">
+<div class="text-center p-4 bg-slate-50 rounded-lg">
   <div class="text-3xl mb-2">5</div>
   <div class="font-bold">まとめ</div>
-  <div class="text-xs text-gray-500 mt-1">持ち帰りポイント</div>
+  <div class="text-xs text-slate-500 mt-1">持ち帰りポイント</div>
 </div>
 
 </div>
@@ -164,12 +147,12 @@ layout: section
 
 <div class="mt-6">
 
-<div class="p-6 bg-yellow-50 rounded-lg mb-6">
+<div class="p-6 bg-slate-100 rounded-lg mb-6">
   <h3 class="font-bold text-lg mb-2">私たちの現実</h3>
-  <p class="text-gray-700">
+  <p class="text-slate-700">
     2025年4月時点では<span class="font-bold">正社員1名、業務委託2-3名</span>という小規模なチーム
   </p>
-  <p class="text-gray-600 mt-2">
+  <p class="text-slate-600 mt-2">
     SRE専任メンバーの増員はかえって<span class="font-bold">共有すべきコンテキストの分散</span>を招く恐れがあった
   </p>
 </div>
@@ -178,16 +161,16 @@ layout: section
 
 <div class="p-4 bg-red-50 rounded-lg">
   <h4 class="font-bold mb-2">選択肢A: SRE専任を採用</h4>
-  <ul class="text-sm text-gray-600 space-y-1">
+  <ul class="text-sm text-slate-600 space-y-1">
     <li>チーム規模に対して十分な協働が難しい</li>
     <li>コンテキスト共有の負担増</li>
     <li>「SREの仕事」になりがち</li>
   </ul>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg border-2 border-green-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold mb-2">選択肢B: 開発チームが担う</h4>
-  <ul class="text-sm text-gray-600 space-y-1">
+  <ul class="text-sm text-slate-600 space-y-1">
     <li>設計・実装・運用を一貫して担う</li>
     <li>深い理解と迅速な改善が可能</li>
     <li class="font-bold">「自分たちの責任」として捉える</li>
@@ -220,18 +203,18 @@ layout: section
 
 ### 厳格なセキュリティ要件
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">3省2ガイドライン</h4>
-  <ul class="text-sm text-gray-600 space-y-1">
+  <ul class="text-sm text-slate-600 space-y-1">
     <li>多要素認証の必須化（2026年度〜）</li>
     <li>監査ログの長期保存</li>
     <li>厳格なパスワードポリシー</li>
   </ul>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">堅牢なテナント分離</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     薬局グループの統廃合が頻繁に発生するため、<br>
     テナント分離と柔軟な組織管理の両立が必要
   </p>
@@ -243,17 +226,17 @@ layout: section
 
 ### 高い可用性要件
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">24時間365日稼働</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     医療機関は常に稼働しており、<br>
     システム停止は患者の安全に直結
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">データ整合性</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     患者情報・処方データは<br>
     一瞬たりとも不整合が許されない
   </p>
@@ -300,7 +283,7 @@ graph TD
   Auth --> DeltaLake
 ```
 
-<div class="mt-2 text-sm text-gray-500 text-center">
+<div class="mt-2 text-sm text-slate-500 text-center">
 認証ポータル・ディレクトリサービス・アセットサービスの3つの基盤システムを開発・運用
 </div>
 
@@ -324,7 +307,7 @@ layout: section
 
 <div class="mt-6">
 
-<div class="p-6 bg-yellow-50 rounded-lg mb-6">
+<div class="p-6 bg-slate-100 rounded-lg mb-6">
   <p class="text-lg">
     <span class="font-bold">認証基盤</span>では高い稼働率とセキュリティ要件を満たす必要がある一方で、<br>
     <span class="font-bold">ディレクトリサービス</span>では稼働率に加えデータの整合性・一貫性が求められる
@@ -333,31 +316,30 @@ layout: section
 
 <div class="grid grid-cols-2 gap-6">
 
-<div class="p-4 bg-blue-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">認証基盤に求められること</h4>
   <ul class="text-sm space-y-1">
     <li>高い可用性（99.9%+）</li>
     <li>低レイテンシー</li>
     <li>障害時の復旧容易性</li>
   </ul>
-  <p class="text-xs text-gray-500 mt-2">→ DynamoDB等の高可用性ストレージが有効</p>
+  <p class="text-xs text-slate-500 mt-2">→ DynamoDB等の高可用性ストレージが有効</p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold mb-2">ディレクトリサービスに求められること</h4>
   <ul class="text-sm space-y-1">
     <li>強い整合性</li>
     <li>ACIDトランザクション</li>
     <li>完全なトレーサビリティ</li>
   </ul>
-  <p class="text-xs text-gray-500 mt-2">→ PostgreSQL等のRDBMSが有効</p>
+  <p class="text-xs text-slate-500 mt-2">→ PostgreSQL等のRDBMSが有効</p>
 </div>
 
 </div>
 
-<div class="mt-4 p-3 bg-red-50 rounded text-center">
-<span class="font-bold">これらを両立するために、インフラとアプリの両面で工夫が必要</span>
-</div>
+> [!CAUTION]
+> これらを両立するために、インフラとアプリの両面で工夫が必要
 
 </div>
 
@@ -391,9 +373,9 @@ layout: section
   </ul>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg">
+<div class="p-4 bg-slate-100 rounded-lg">
   <h4 class="font-bold mb-2">医療分野での重要性</h4>
-  <p class="text-gray-600">
+  <p class="text-slate-600">
     過去のデータ状態を説明できることは、<span class="font-bold">法的にもビジネス的にも極めて重要</span><br>
     監査対応、コンプライアンス要件への対応が困難
   </p>
@@ -421,7 +403,7 @@ layout: section
 
 <div class="mt-6">
 
-<div class="p-6 bg-blue-50 rounded-lg mb-6">
+<div class="p-6 bg-brand-50 rounded-lg mb-6">
   <p class="text-xl font-bold text-center">
     「流行っているから」ではなく<br>
     「この課題を解決するために、このトレードオフを受け入れる」
@@ -430,30 +412,30 @@ layout: section
 
 <div class="grid grid-cols-3 gap-4">
 
-<div class="p-4 bg-gray-50 rounded-lg text-center">
+<div class="p-4 bg-slate-50 rounded-lg text-center">
   <div class="text-3xl mb-2">1</div>
   <h4 class="font-bold text-sm">なぜ選ぶか</h4>
-  <p class="text-xs text-gray-600 mt-1">
+  <p class="text-xs text-slate-600 mt-1">
     解決したい課題と<br>
     受け入れるトレードオフを<br>
     チームで言語化
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg text-center">
+<div class="p-4 bg-slate-50 rounded-lg text-center">
   <div class="text-3xl mb-2">2</div>
   <h4 class="font-bold text-sm">どう運用するか</h4>
-  <p class="text-xs text-gray-600 mt-1">
+  <p class="text-xs text-slate-600 mt-1">
     導入して終わりではなく<br>
     監視・障害対応・改善の<br>
     サイクルを回す
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg text-center">
+<div class="p-4 bg-slate-50 rounded-lg text-center">
   <div class="text-3xl mb-2">3</div>
   <h4 class="font-bold text-sm">どう育てるか</h4>
-  <p class="text-xs text-gray-600 mt-1">
+  <p class="text-xs text-slate-600 mt-1">
     運用で見つかった課題を<br>
     設計にフィードバックし<br>
     継続的に改善
@@ -462,9 +444,8 @@ layout: section
 
 </div>
 
-<div class="mt-4 p-3 bg-yellow-50 rounded text-center">
-  <span class="font-bold">設計を「自分ごと」として運用し続ける</span> — これが私たちの信頼性向上の核心
-</div>
+> [!IMPORTANT]
+> **設計を「自分ごと」として運用し続ける** — これが私たちの信頼性向上の核心
 
 </div>
 
@@ -480,44 +461,43 @@ layout: section
 
 <div class="grid grid-cols-2 gap-4 mt-6">
 
-<div class="p-5 bg-blue-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
+    <div class="w-8 h-8 bg-brand-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
     <h3 class="font-bold">ドメインイベントの永続化</h3>
   </div>
-  <p class="text-sm text-gray-600">「いつ・誰が・何を変更したか」を完全に記録</p>
+  <p class="text-sm text-slate-600">「いつ・誰が・何を変更したか」を完全に記録</p>
 </div>
 
-<div class="p-5 bg-green-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">2</div>
     <h3 class="font-bold">データ連携パターンの選択</h3>
   </div>
-  <p class="text-sm text-gray-600">基盤障害がプロダクト全体に波及しない設計</p>
+  <p class="text-sm text-slate-600">基盤障害がプロダクト全体に波及しない設計</p>
 </div>
 
-<div class="p-5 bg-yellow-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-yellow-500 text-white rounded-full flex items-center justify-center font-bold">3</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">3</div>
     <h3 class="font-bold">サービスベースアーキテクチャ</h3>
   </div>
-  <p class="text-sm text-gray-600">強い整合性を保ちながら独立したデプロイを実現</p>
+  <p class="text-sm text-slate-600">強い整合性を保ちながら独立したデプロイを実現</p>
 </div>
 
-<div class="p-5 bg-purple-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold">4</div>
+    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">4</div>
     <h3 class="font-bold">RLSによるマルチテナント分離</h3>
   </div>
-  <p class="text-sm text-gray-600">DBレベルで強制的にテナントを分離</p>
+  <p class="text-sm text-slate-600">DBレベルで強制的にテナントを分離</p>
 </div>
 
 </div>
 
-<div class="mt-4 p-4 bg-gray-100 rounded-lg text-center">
-  <p class="font-bold">特別なツールや大規模な組織変更は不要</p>
-  <p class="text-sm text-gray-600">既存の技術を組み合わせて段階的に導入可能</p>
-</div>
+> [!NOTE]
+> **特別なツールや大規模な組織変更は不要**
+> 既存の技術を組み合わせて段階的に導入可能
 
 <!--
 方法論は4つあります。
@@ -569,19 +549,19 @@ flowchart LR
 
 <div class="grid grid-cols-3 gap-4 mt-4">
 
-<div class="p-3 bg-blue-50 rounded-lg text-center">
+<div class="p-3 bg-brand-50 rounded-lg text-center">
   <h4 class="font-bold text-sm">障害調査</h4>
-  <p class="text-xs text-gray-600">過去の状態を再現して<br>原因を特定</p>
+  <p class="text-xs text-slate-600">過去の状態を再現して<br>原因を特定</p>
 </div>
 
-<div class="p-3 bg-blue-50 rounded-lg text-center">
+<div class="p-3 bg-brand-50 rounded-lg text-center">
   <h4 class="font-bold text-sm">監査対応</h4>
-  <p class="text-xs text-gray-600">変更履歴を<br>完全に追跡</p>
+  <p class="text-xs text-slate-600">変更履歴を<br>完全に追跡</p>
 </div>
 
-<div class="p-3 bg-blue-50 rounded-lg text-center">
+<div class="p-3 bg-brand-50 rounded-lg text-center">
   <h4 class="font-bold text-sm">データ復旧</h4>
-  <p class="text-xs text-gray-600">イベントリプレイで<br>任意の時点に復元</p>
+  <p class="text-xs text-slate-600">イベントリプレイで<br>任意の時点に復元</p>
 </div>
 
 </div>
@@ -617,9 +597,8 @@ const createUser = (props: CreateUserProps): UserCreated => ({
 });
 ```
 
-<div class="mt-2 p-3 bg-yellow-50 rounded text-sm">
-<span class="font-bold">ポイント:</span> <code>aggregate</code>フィールドに変更後の状態を持つことで、リプレイなしでも過去の状態を即座に参照可能
-</div>
+> [!TIP]
+> **ポイント:** `aggregate`フィールドに変更後の状態を持つことで、リプレイなしでも過去の状態を即座に参照可能
 
 <!--
 こちらが実際の型定義です。
@@ -666,23 +645,23 @@ CREATE TABLE secure_event_attributes (
 
 ### セキュリティ区分による分離
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <p class="text-sm">
     パスワードハッシュなど秘匿性の高い情報は<br>
     <span class="font-bold">セキュア属性テーブル</span>に分離
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-50 rounded-lg mt-2">
   <p class="text-sm">
     イベント発生の<span class="font-bold">事実</span>は通常テーブルに記録<br>
     → 他チームもトレース可能
   </p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <p class="text-sm font-bold">設計判断</p>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     セキュリティ要件とトレーサビリティ要件を<br>
     両立するための現実的な選択
   </p>
@@ -708,18 +687,18 @@ CREATE TABLE secure_event_attributes (
 
 ### 運用で得た気づき
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">後付け導入の難しさ</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     既存データからイベントを生成する際、<br>
     依存関係を考慮した順序制御が必要だった<br>
     <span class="font-bold">→ 新規開発時に組み込むべき</span>
   </p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">イベント設計の見直し</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     運用中に「このイベントも必要だった」と気づく<br>
     <span class="font-bold">→ スキーマ進化の仕組みを用意</span>
   </p>
@@ -731,17 +710,17 @@ CREATE TABLE secure_event_attributes (
 
 ### 継続的な改善
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">障害調査での活用</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     「3ヶ月前のこのユーザーの状態は？」<br>
     → イベントを辿って即座に回答可能に
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">監査対応の効率化</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     変更履歴の完全な追跡が可能になり、<br>
     監査対応の工数が大幅に削減
   </p>
@@ -751,9 +730,8 @@ CREATE TABLE secure_event_attributes (
 
 </div>
 
-<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
-<span class="font-bold">選んで終わりではない</span> — 運用しながら設計を育て続ける
-</div>
+> [!IMPORTANT]
+> **選んで終わりではない** — 運用しながら設計を育て続ける
 
 <!--
 ドメインイベントの運用で得た気づきと改善です。
@@ -785,27 +763,27 @@ layout: section
 
 <div class="grid grid-cols-3 gap-4 mt-4">
 
-<div class="p-4 bg-blue-50 rounded-lg border-2 border-blue-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold text-sm mb-2">デフォルト: データ基盤</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     Delta Lake形式でS3に蓄積<br>
     99.999999999%の耐久性<br>
     <span class="font-bold">基盤障害が波及しない</span>
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">即時性が必要な場合</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     API連携を選択<br>
     例: ライセンス確認<br>
     ただし障害の影響を受ける
   </p>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">非同期処理の場合</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     イベント連携を選択<br>
     例: ログイン履歴の配信<br>
     Outboxパターンで信頼性確保
@@ -863,7 +841,7 @@ df_v100 = spark.read.format("delta") \
     .load("s3://bucket/users")
 ```
 
-<div class="mt-2 p-2 bg-green-50 rounded text-sm">
+<div class="mt-2 p-2 bg-brand-50 rounded text-sm">
 「3ヶ月前のデータ」に即座にアクセス可能
 </div>
 
@@ -887,18 +865,18 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 ### 運用で直面した課題
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">「即時性が必要」の誘惑</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     プロダクトチームから「リアルタイムで欲しい」<br>
     → 本当に必要か？を一緒に検討<br>
     <span class="font-bold">多くは「数分遅延OK」だった</span>
   </p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">CDC遅延の監視</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     データ基盤への反映遅延をアラート化<br>
     <span class="font-bold">異常を早期に検知できる体制を構築</span>
   </p>
@@ -910,17 +888,17 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 ### パターン選択の判断基準を育てる
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">ドキュメント化</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     「なぜこのパターンを選んだか」を記録<br>
     新メンバーも同じ判断ができるように
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">定期的な見直し</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     API連携で障害が波及した事例を振り返り<br>
     <span class="font-bold">データ基盤経由に変更した例も</span>
   </p>
@@ -930,9 +908,8 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 </div>
 
-<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
-<span class="font-bold">選択基準をチームで共有し、運用しながら磨き続ける</span>
-</div>
+> [!IMPORTANT]
+> **選択基準をチームで共有し、運用しながら磨き続ける**
 
 <!--
 データ連携パターンの運用と改善です。
@@ -958,30 +935,30 @@ layout: section
 
 <div class="p-4 bg-red-50 rounded-lg">
   <h4 class="font-bold mb-2">モノリス</h4>
-  <p class="text-xs text-gray-600">変更容易性が低い</p>
-  <p class="text-xs text-gray-600">一度に全体を更新</p>
+  <p class="text-xs text-slate-600">変更容易性が低い</p>
+  <p class="text-xs text-slate-600">一度に全体を更新</p>
   <p class="text-xs text-red-600 mt-2">✗ 不採用</p>
 </div>
 
 <div class="p-4 bg-red-50 rounded-lg">
   <h4 class="font-bold mb-2">マイクロサービス</h4>
-  <p class="text-xs text-gray-600">分散トランザクション</p>
-  <p class="text-xs text-gray-600">結果整合性の複雑さ</p>
+  <p class="text-xs text-slate-600">分散トランザクション</p>
+  <p class="text-xs text-slate-600">結果整合性の複雑さ</p>
   <p class="text-xs text-red-600 mt-2">✗ 不採用</p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg border-2 border-green-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold mb-2">サービスベース</h4>
-  <p class="text-xs text-gray-600">単一DB共有</p>
-  <p class="text-xs text-gray-600">独立したデプロイ</p>
-  <p class="text-xs text-green-600 mt-2 font-bold">✓ 採用</p>
+  <p class="text-xs text-slate-600">単一DB共有</p>
+  <p class="text-xs text-slate-600">独立したデプロイ</p>
+  <p class="text-xs text-brand-600 mt-2 font-bold">✓ 採用</p>
 </div>
 
 </div>
 
 </div>
 
-<div class="mt-4 p-4 bg-blue-50 rounded-lg">
+<div class="mt-4 p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">採用理由</h4>
   <ul class="text-sm space-y-1">
     <li>組織・薬局・ユーザー・ライセンス・端末は<span class="font-bold">密接に関連</span></li>
@@ -1043,7 +1020,7 @@ GRANT SELECT ON auth.*, asset.*
   TO directory_service;
 ```
 
-<div class="mt-4 p-3 bg-yellow-50 rounded text-sm">
+<div class="mt-4 p-3 bg-slate-100 rounded text-sm">
   <span class="font-bold">原則:</span><br>
   自分のスキーマにのみ書き込み権限<br>
   他のスキーマは読み取りのみ
@@ -1079,7 +1056,7 @@ const org = await orgService.getOrg(user.orgId);
 
 <div class="p-3 bg-red-50 rounded mt-2">
   <p class="text-sm font-bold text-red-600">問題点</p>
-  <ul class="text-xs text-gray-600 mt-1">
+  <ul class="text-xs text-slate-600 mt-1">
     <li>DNS解決の遅延（実際に発生）</li>
     <li>障害の連鎖</li>
     <li>レイテンシーの増加</li>
@@ -1104,9 +1081,9 @@ const org = await db.query(
 );
 ```
 
-<div class="p-3 bg-green-50 rounded mt-2">
-  <p class="text-sm font-bold text-green-600">メリット</p>
-  <ul class="text-xs text-gray-600 mt-1">
+<div class="p-3 bg-brand-50 rounded mt-2">
+  <p class="text-sm font-bold text-brand-600">メリット</p>
+  <ul class="text-xs text-slate-600 mt-1">
     <li>ネットワーク障害の影響なし</li>
     <li>トランザクションで整合性保証</li>
     <li>低レイテンシー</li>
@@ -1137,16 +1114,16 @@ const org = await db.query(
 
 <div class="p-4 bg-red-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">共通ライブラリの肥大化</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     型定義・バリデーションを共通化しすぎた結果、<br>
     一つの変更が全サービスのリビルドを強制<br>
     <span class="font-bold text-red-600">→「分散モノリス」の兆候</span>
   </p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">DNS解決の遅延問題</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     「一時的にAPI連携で」が常態化<br>
     → 原則に立ち返り、DB経由に修正
   </p>
@@ -1158,17 +1135,17 @@ const org = await db.query(
 
 ### 原則を守るための工夫
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">ADR（Architecture Decision Record）</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     「なぜサービス間通信を禁止するか」を記録<br>
     例外を認める際の判断基準を明文化
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">コードレビューでの確認</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     サービス間API呼び出しを見つけたら<br>
     「本当に必要？DB経由でできない？」と問う
   </p>
@@ -1178,9 +1155,8 @@ const org = await db.query(
 
 </div>
 
-<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
-<span class="font-bold">原則を言語化し、逸脱を検知し、継続的に守り続ける</span>
-</div>
+> [!IMPORTANT]
+> **原則を言語化し、逸脱を検知し、継続的に守り続ける**
 
 <!--
 サービスベースアーキテクチャの運用と改善です。
@@ -1208,30 +1184,30 @@ DBレベルでの強制的なセキュリティ
 
 <div class="grid grid-cols-3 gap-4">
 
-<div class="p-4 bg-gray-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">アプリレベル</h4>
-  <p class="text-xs text-gray-600">WHERE句でフィルタリング</p>
+  <p class="text-xs text-slate-600">WHERE句でフィルタリング</p>
   <div class="mt-2 p-2 bg-red-100 rounded">
     <p class="text-xs text-red-600 font-bold">✗ 実装ミスのリスク</p>
-    <p class="text-xs text-gray-600">SQLインジェクション、バグで漏洩</p>
+    <p class="text-xs text-slate-600">SQLインジェクション、バグで漏洩</p>
   </div>
 </div>
 
-<div class="p-4 bg-gray-50 rounded-lg">
+<div class="p-4 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">スキーマ分離</h4>
-  <p class="text-xs text-gray-600">テナントごとにスキーマ</p>
+  <p class="text-xs text-slate-600">テナントごとにスキーマ</p>
   <div class="mt-2 p-2 bg-red-100 rounded">
     <p class="text-xs text-red-600 font-bold">✗ 管理コストが膨大</p>
-    <p class="text-xs text-gray-600">統廃合時の対応が困難</p>
+    <p class="text-xs text-slate-600">統廃合時の対応が困難</p>
   </div>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg border-2 border-green-400">
+<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
   <h4 class="font-bold text-sm mb-2">RLS（行レベルセキュリティ）</h4>
-  <p class="text-xs text-gray-600">DBレベルで強制保護</p>
-  <div class="mt-2 p-2 bg-green-100 rounded">
-    <p class="text-xs text-green-600 font-bold">✓ 採用</p>
-    <p class="text-xs text-gray-600">バグがあっても漏洩しない</p>
+  <p class="text-xs text-slate-600">DBレベルで強制保護</p>
+  <div class="mt-2 p-2 bg-brand-100 rounded">
+    <p class="text-xs text-brand-600 font-bold">✓ 採用</p>
+    <p class="text-xs text-slate-600">バグがあっても漏洩しない</p>
   </div>
 </div>
 
@@ -1300,9 +1276,8 @@ const users = await db.query(
 
 </div>
 
-<div class="mt-4 p-3 bg-green-50 rounded">
-<span class="font-bold">メリット:</span> SQLインジェクションやアプリバグがあっても、他テナントのデータには<span class="font-bold">絶対に</span>アクセスできない
-</div>
+> [!TIP]
+> **メリット:** SQLインジェクションやアプリバグがあっても、他テナントのデータには**絶対に**アクセスできない
 
 <!--
 RLSの実装では、PostgreSQLのセッション変数を使ってテナントIDを設定します。
@@ -1320,9 +1295,9 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 ### 慎重なマイグレーション
 
-<div class="p-4 bg-yellow-50 rounded-lg mt-2">
+<div class="p-4 bg-slate-100 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">段階的な適用</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     1. まずPERMISSIVEモードで導入<br>
     2. 全クエリをログに記録して影響確認<br>
     3. 問題なければENFORCEモードに移行
@@ -1331,7 +1306,7 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 <div class="p-4 bg-red-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">誤ったポリシーのリスク</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     データ漏洩 or 正当なアクセスの拒否<br>
     <span class="font-bold">→ 十分なテストとモニタリングが必須</span>
   </p>
@@ -1343,18 +1318,18 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 ### 継続的な監視と改善
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">パフォーマンス監視</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     RLSポリシーがクエリ性能に影響<br>
     → tenant_idインデックスの最適化<br>
     → スロークエリの定期的な分析
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">新規テーブルへの適用</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     テーブル追加時のチェックリスト化<br>
     <span class="font-bold">「RLS適用を忘れない」仕組み</span>
   </p>
@@ -1364,9 +1339,8 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 </div>
 
-<div class="mt-4 p-3 bg-blue-50 rounded text-center text-sm">
-<span class="font-bold">セキュリティは一度設定して終わりではない</span> — 継続的な監視と改善が不可欠
-</div>
+> [!IMPORTANT]
+> **セキュリティは一度設定して終わりではない** — 継続的な監視と改善が不可欠
 
 <!--
 RLSの運用と改善です。
@@ -1393,7 +1367,7 @@ RLSの運用と改善です。
 | サービスベース | 設計時に決定 | 移行困難 |
 | RLS | 1〜2週間 | 2〜4週間 |
 
-<div class="mt-2 text-xs text-gray-500">
+<div class="mt-2 text-xs text-slate-500">
 ※ チーム規模・既存コードの複雑さにより変動
 </div>
 
@@ -1403,17 +1377,17 @@ RLSの運用と改善です。
 
 ### 段階的導入のすすめ
 
-<div class="p-4 bg-blue-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">Step 1: 最もクリティカルな領域から</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     全システムへの一斉導入は避ける<br>
     例: まず認証基盤にRLSを導入
   </p>
 </div>
 
-<div class="p-4 bg-blue-50 rounded-lg mt-2">
+<div class="p-4 bg-brand-50 rounded-lg mt-2">
   <h4 class="font-bold text-sm mb-2">Step 2: 効果を計測しながら拡大</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     障害調査時間・開発速度の変化を追跡<br>
     数値で効果を示し、チームの納得感を得る
   </p>
@@ -1462,7 +1436,7 @@ layout: section
 
 ### プロダクトチームの声
 
-<div class="p-4 bg-green-50 rounded-lg">
+<div class="p-4 bg-slate-100 rounded-lg">
   <p class="text-sm italic">
     「認証・認可基盤が共通化されたことで、3省2ガイドラインを個別に解釈する必要がなくなり、本来のビジネスロジックに集中できるようになった」
   </p>
@@ -1470,7 +1444,7 @@ layout: section
 
 ### SREイネイブラーの観点
 
-<div class="p-4 bg-blue-50 rounded-lg mt-4">
+<div class="p-4 bg-brand-50 rounded-lg mt-4">
   <p class="text-sm">
     開発チームが「自分事として信頼性を担う」状態を実現<br>
     → <span class="font-bold">Enablingの目標状態</span>の一つの形
@@ -1499,17 +1473,17 @@ layout: section
 
 <div class="space-y-3">
 
-<div class="p-4 bg-blue-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">設計の意図がチームに浸透する</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     「なぜこの設計か」を繰り返し説明するうちに、<br>
     新メンバーも同じ判断ができるようになった
   </p>
 </div>
 
-<div class="p-4 bg-blue-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">失敗が設計を強くする</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     障害や問題が起きるたびに、<br>
     「次は防げる」仕組みを設計に組み込んだ
   </p>
@@ -1519,18 +1493,18 @@ layout: section
 
 <div class="space-y-3">
 
-<div class="p-4 bg-green-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">「自分たちの責任」という意識</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     SRE専任がいないからこそ、<br>
     「誰かがやってくれる」ではなく<br>
     「自分たちで解決する」マインドが育った
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">制約がチームの強みになった</h4>
-  <p class="text-sm text-gray-600">
+  <p class="text-sm text-slate-600">
     小さなチームだからこそ、<br>
     設計・運用・改善を一貫して担え、<br>
     深い理解と迅速な改善が可能に
@@ -1541,9 +1515,8 @@ layout: section
 
 </div>
 
-<div class="mt-4 p-4 bg-yellow-50 rounded-lg text-center">
-  <p class="font-bold text-lg">設計パターンは「選ぶ」ものではなく「育てる」もの</p>
-</div>
+> [!IMPORTANT]
+> 設計パターンは「選ぶ」ものではなく「育てる」もの
 
 </div>
 
@@ -1576,33 +1549,33 @@ graph LR
 
 <div class="grid grid-cols-4 gap-4 mt-4">
 
-<div class="p-4 bg-blue-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">1. 設計</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     原則に基づいて技術を選択<br>
     <span class="font-bold">なぜ選んだかを言語化</span>
   </p>
 </div>
 
-<div class="p-4 bg-green-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">2. 運用</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     本番環境で動かし続ける<br>
     <span class="font-bold">設計の意図を理解</span>
   </p>
 </div>
 
-<div class="p-4 bg-yellow-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">3. 監視</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     メトリクス・ログ・アラート<br>
     <span class="font-bold">状態を把握</span>
   </p>
 </div>
 
-<div class="p-4 bg-pink-50 rounded-lg">
+<div class="p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold text-sm mb-2">4. 改善</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     問題を発見したら修正<br>
     <span class="font-bold">設計にフィードバック</span>
   </p>
@@ -1610,9 +1583,8 @@ graph LR
 
 </div>
 
-<div class="mt-4 p-4 bg-gray-100 rounded-lg text-center">
-  <p class="font-bold text-lg">このサイクルを開発チームが自走できる状態 = 責任を果たしている状態</p>
-</div>
+> [!NOTE]
+> このサイクルを開発チームが自走できる状態 = 責任を果たしている状態
 
 <!--
 「責任を果たす」とは、設計・運用・監視・改善のサイクルを回し続けることです。
@@ -1633,47 +1605,46 @@ layout: section
 
 <div class="grid grid-cols-2 gap-4 mt-6">
 
-<div class="p-5 bg-blue-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+    <div class="w-6 h-6 bg-brand-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
     <h3 class="font-bold">ドメインイベント</h3>
   </div>
-  <p class="text-sm text-gray-600">「何が起きたか」を完全に記録</p>
-  <p class="text-xs text-gray-500 mt-1">障害調査・監査対応・データ復旧</p>
+  <p class="text-sm text-slate-600">「何が起きたか」を完全に記録</p>
+  <p class="text-xs text-slate-500 mt-1">障害調査・監査対応・データ復旧</p>
 </div>
 
-<div class="p-5 bg-green-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
     <h3 class="font-bold">データ連携パターン</h3>
   </div>
-  <p class="text-sm text-gray-600">基盤障害を波及させない設計</p>
-  <p class="text-xs text-gray-500 mt-1">デフォルトはデータ基盤経由</p>
+  <p class="text-sm text-slate-600">基盤障害を波及させない設計</p>
+  <p class="text-xs text-slate-500 mt-1">デフォルトはデータ基盤経由</p>
 </div>
 
-<div class="p-5 bg-yellow-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
     <h3 class="font-bold">サービスベースアーキテクチャ</h3>
   </div>
-  <p class="text-sm text-gray-600">強い整合性と独立デプロイの両立</p>
-  <p class="text-xs text-gray-500 mt-1">サービス間通信を原則禁止</p>
+  <p class="text-sm text-slate-600">強い整合性と独立デプロイの両立</p>
+  <p class="text-xs text-slate-500 mt-1">サービス間通信を原則禁止</p>
 </div>
 
-<div class="p-5 bg-purple-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
+    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
     <h3 class="font-bold">RLS</h3>
   </div>
-  <p class="text-sm text-gray-600">DBレベルでテナントを強制分離</p>
-  <p class="text-xs text-gray-500 mt-1">バグがあっても漏洩しない</p>
+  <p class="text-sm text-slate-600">DBレベルでテナントを強制分離</p>
+  <p class="text-xs text-slate-500 mt-1">バグがあっても漏洩しない</p>
 </div>
 
 </div>
 
-<div class="mt-4 p-4 bg-gray-100 rounded-lg text-center">
-  <p class="font-bold">段階的に導入可能 — クリティカルな領域から優先的に適用</p>
-</div>
+> [!NOTE]
+> **段階的に導入可能** — クリティカルな領域から優先的に適用
 
 <!--
 開発チームができることの振り返りです。
@@ -1691,17 +1662,17 @@ layout: section
 
 <div class="space-y-3">
 
-<div class="p-3 bg-gray-50 rounded-lg">
+<div class="p-3 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-1">トレーサビリティが必要か？</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     「過去の状態を説明できない」問題があるなら<br>
     → <span class="font-bold">ドメインイベント</span>を検討
   </p>
 </div>
 
-<div class="p-3 bg-gray-50 rounded-lg">
+<div class="p-3 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-1">基盤障害が全体に波及するか？</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     一つの障害で複数サービスが止まるなら<br>
     → <span class="font-bold">データ連携パターン</span>を見直す
   </p>
@@ -1711,17 +1682,17 @@ layout: section
 
 <div class="space-y-3">
 
-<div class="p-3 bg-gray-50 rounded-lg">
+<div class="p-3 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-1">整合性と独立性のどちらが重要か？</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     密結合なドメインで強い整合性が必要なら<br>
     → <span class="font-bold">サービスベースアーキテクチャ</span>を検討
   </p>
 </div>
 
-<div class="p-3 bg-gray-50 rounded-lg">
+<div class="p-3 bg-slate-50 rounded-lg">
   <h4 class="font-bold text-sm mb-1">マルチテナントでデータ漏洩が致命的か？</h4>
-  <p class="text-xs text-gray-600">
+  <p class="text-xs text-slate-600">
     テナント分離をアプリに依存しているなら<br>
     → <span class="font-bold">RLS</span>を検討
   </p>
@@ -1731,9 +1702,8 @@ layout: section
 
 </div>
 
-<div class="mt-4 p-3 bg-yellow-50 rounded text-center text-sm">
-<span class="font-bold">すべてを導入する必要はない</span> — 自チームの課題に合った手法を選択
-</div>
+> [!WARNING]
+> **すべてを導入する必要はない** — 自チームの課題に合った手法を選択
 
 </div>
 
@@ -1749,22 +1719,22 @@ layout: section
 
 <div class="mt-6 space-y-4">
 
-<div class="p-5 bg-blue-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <h3 class="font-bold text-lg mb-2">設計を選ぶだけでなく、責任を果たす</h3>
-  <p class="text-gray-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
-  <p class="text-sm text-gray-500 mt-1">なぜその設計を選んだのかを言語化し、トレードオフをチームで共有する</p>
+  <p class="text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
+  <p class="text-sm text-slate-500 mt-1">なぜその設計を選んだのかを言語化し、トレードオフをチームで共有する</p>
 </div>
 
-<div class="p-5 bg-green-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <h3 class="font-bold text-lg mb-2">「誰かの仕事」ではなく「自分たちの責任」</h3>
-  <p class="text-gray-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
-  <p class="text-sm text-gray-500 mt-1">制約があったからこそ、チームの強みに変えることができた</p>
+  <p class="text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
+  <p class="text-sm text-slate-500 mt-1">制約があったからこそ、チームの強みに変えることができた</p>
 </div>
 
-<div class="p-5 bg-yellow-50 rounded-lg">
+<div class="p-5 bg-brand-50 rounded-lg">
   <h3 class="font-bold text-lg mb-2">SREイネイブラーへ</h3>
-  <p class="text-gray-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
-  <p class="text-sm text-gray-500 mt-1">開発チームが自走できる状態 = Enabling完了の目標状態</p>
+  <p class="text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
+  <p class="text-sm text-slate-500 mt-1">開発チームが自走できる状態 = Enabling完了の目標状態</p>
 </div>
 
 </div>
@@ -1784,7 +1754,7 @@ class: text-center
 
 <div class="mt-8 space-y-6 max-w-3xl mx-auto">
 
-<div class="text-2xl p-6 bg-blue-100 rounded-lg">
+<div class="text-2xl p-6 bg-brand-100 rounded-lg">
 設計パターンは「導入して終わり」ではない
 </div>
 
@@ -1792,7 +1762,7 @@ class: text-center
 チームで意図を共有し、継続的に改善する
 </div>
 
-<div class="text-2xl font-bold text-blue-600">
+<div class="text-2xl font-bold text-brand-500">
 それが開発チームによる信頼性向上の本質
 </div>
 
@@ -1815,11 +1785,11 @@ class: text-center
 質問があればぜひ！
 </div>
 
-<div class="mt-8 text-gray-500">
+<div class="mt-8 text-slate-500">
 岩佐 幸翠 / [@kosui_me](https://x.com/kosui_me)
 </div>
 
-<div class="mt-8 text-sm text-gray-400">
+<div class="mt-8 text-sm text-slate-400">
 
 関連資料:
 - [カケハシ開発者ブログ: アーキテクチャの進化はドメインイベントが起点になる](https://kakehashi-dev.hatenablog.com/entry/2023/12/24/091000)
