@@ -295,7 +295,9 @@ const ArticlesPage = () => {
               {displayArticles.map((article) => (
                 <a
                   key={article.articleId}
-                  href={authorUsername ? `/users/${authorUsername}/articles/${article.articleId}` : `/articles/${article.articleId}`}
+                  href={authorUsername
+                    ? `/users/${authorUsername}/articles/${article.articleId}`
+                    : `/articles/${article.articleId}`}
                   class='block bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all'
                 >
                   <h2 class='text-xl font-semibold text-charcoal dark:text-white mb-2'>
@@ -329,7 +331,9 @@ const ArticlesPage = () => {
                       )}
                     </div>
                     <a
-                      href={authorUsername ? `/users/${authorUsername}/articles/${article.articleId}` : `/articles/${article.articleId}`}
+                      href={authorUsername
+                        ? `/users/${authorUsername}/articles/${article.articleId}`
+                        : `/articles/${article.articleId}`}
                       class='text-lg font-medium text-charcoal dark:text-white truncate hover:text-terracotta dark:hover:text-terracotta-light transition-colors block'
                     >
                       {article.title}
