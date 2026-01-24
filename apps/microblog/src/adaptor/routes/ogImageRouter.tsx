@@ -24,20 +24,22 @@ const loadFont = async (): Promise<ArrayBuffer> => {
 
   // Fetch Noto Sans JP from Google Fonts API
   // First, get the CSS to extract the actual font URL
+  // Use an old browser User-Agent to get TTF format (satori doesn't support woff2)
   const cssResponse = await fetch(
     'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700',
     {
       headers: {
-        // Use a user-agent that requests woff2 format
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        // Use Safari 5 User-Agent to get TTF format instead of woff2
+        'User-Agent': 'Safari/534.30',
       },
     },
   );
   const css = await cssResponse.text();
 
   // Extract font URL from CSS (format: url(https://...))
-  const fontUrlMatch = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
+  // Look for .ttf or .otf URLs
+  const fontUrlMatch = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.(?:ttf|otf)[^)]*)\)/)
+    || css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
   if (!fontUrlMatch) {
     throw new Error('Failed to extract font URL from Google Fonts CSS');
   }
