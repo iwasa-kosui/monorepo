@@ -5,13 +5,14 @@ import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { LikeId } from '../domain/like/likeId.ts';
 import {
-  AlreadyLikedV2Error,
-  LikeV2,
-  type LikeV2CreatedStore,
-  type LikeV2ResolverByActivityUri,
-} from '../domain/like/likeV2.ts';
+  AlreadyLikedError,
+  Like,
+  type RemoteLike,
+  type RemoteLikeCreatedStore,
+  type RemoteLikeResolverByActivityUri,
+} from '../domain/like/like.ts';
+import { LikeId } from '../domain/like/likeId.ts';
 import {
   type LikeNotification,
   type LikeNotificationCreatedStore,
@@ -39,11 +40,11 @@ type Input = Readonly<{
 }>;
 
 type Ok = Readonly<{
-  like: LikeV2;
+  like: RemoteLike;
   actor: Actor;
 }>;
 
-type Err = AlreadyLikedV2Error | PostNotLocalError;
+type Err = AlreadyLikedError | PostNotLocalError;
 
 export type PostNotLocalError = Readonly<{
   type: 'PostNotLocalError';
@@ -64,8 +65,8 @@ export const PostNotLocalError = {
 export type AddReceivedLikeUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
-  likeV2CreatedStore: LikeV2CreatedStore;
-  likeV2ResolverByActivityUri: LikeV2ResolverByActivityUri;
+  remoteLikeCreatedStore: RemoteLikeCreatedStore;
+  remoteLikeResolverByActivityUri: RemoteLikeResolverByActivityUri;
   likeNotificationCreatedStore: LikeNotificationCreatedStore;
   postResolver: PostResolver;
   remoteActorCreatedStore: RemoteActorCreatedStore;
@@ -78,8 +79,8 @@ type Deps = Readonly<{
 const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
 
 const create = ({
-  likeV2CreatedStore,
-  likeV2ResolverByActivityUri,
+  remoteLikeCreatedStore,
+  remoteLikeResolverByActivityUri,
   likeNotificationCreatedStore,
   postResolver,
   remoteActorCreatedStore,
@@ -95,11 +96,11 @@ const create = ({
       RA.ok(input),
       RA.andBind(
         'existingLike',
-        ({ likeActivityUri }) => likeV2ResolverByActivityUri.resolve({ likeActivityUri }),
+        ({ likeActivityUri }) => remoteLikeResolverByActivityUri.resolve({ likeActivityUri }),
       ),
       RA.andThen(({ existingLike, ...rest }) => {
         if (existingLike) {
-          return RA.err(AlreadyLikedV2Error.create({
+          return RA.err(AlreadyLikedError.create({
             actorId: existingLike.actorId,
             postId: existingLike.postId,
           }));
@@ -122,14 +123,16 @@ const create = ({
         })(likerIdentity)),
       RA.andBind('like', ({ actor, likedPostId, likeActivityUri }) => {
         const likeId = LikeId.generate();
-        const like: LikeV2 = {
-          likeId,
-          actorId: actor.id,
-          postId: likedPostId,
-          likeActivityUri,
-        };
-        const event = LikeV2.createLikeV2(like, now);
-        return likeV2CreatedStore.store(event).then(() => RA.ok(like));
+        const event = Like.createRemoteLike(
+          {
+            likeId,
+            actorId: actor.id,
+            postId: likedPostId,
+            likeActivityUri,
+          },
+          now,
+        );
+        return remoteLikeCreatedStore.store(event).then(() => RA.ok(event.aggregateState));
       }),
       RA.andThrough(({ post, actor }) => {
         const notificationId = NotificationId.generate();

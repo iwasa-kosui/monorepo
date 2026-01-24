@@ -9,8 +9,8 @@ import { SessionId } from '../../domain/session/sessionId.ts';
 import { Federation } from '../../federation.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
-import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
+import { PgLocalLikeCreatedStore } from '../pg/like/localLikeCreatedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
@@ -43,7 +43,7 @@ app.post(
       sessionResolver: PgSessionResolver.getInstance(),
       userResolver: PgUserResolver.getInstance(),
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-      likeCreatedStore: PgLikeCreatedStore.getInstance(),
+      localLikeCreatedStore: PgLocalLikeCreatedStore.getInstance(),
       likeResolver: PgLikeResolver.getInstance(),
       postResolver: PgPostResolver.getInstance(),
     });

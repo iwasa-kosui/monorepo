@@ -13,8 +13,8 @@ import { PgEmojiReactDeletedStore } from '../../pg/emojiReact/emojiReactDeletedS
 import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
-import { PgLikeV2DeletedStore } from '../../pg/likeV2/likeV2DeletedStore.ts';
-import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
+import { PgRemoteLikeDeletedStore } from '../../pg/like/remoteLikeDeletedStore.ts';
+import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
 import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
 import { PgEmojiReactNotificationResolverByActorIdAndPostIdAndEmoji } from '../../pg/notification/emojiReactNotificationResolverByActorIdAndPostIdAndEmoji.ts';
 import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
@@ -74,8 +74,8 @@ const handleUndoLike = async (like: Like) => {
   const likeActivityUri = like.id.href;
 
   const useCase = RemoveReceivedLikeUseCase.create({
-    likeV2DeletedStore: PgLikeV2DeletedStore.getInstance(),
-    likeV2ResolverByActivityUri: PgLikeV2ResolverByActivityUri.getInstance(),
+    remoteLikeDeletedStore: PgRemoteLikeDeletedStore.getInstance(),
+    remoteLikeResolverByActivityUri: PgRemoteLikeResolverByActivityUri.getInstance(),
     likeNotificationResolverByActorIdAndPostId: PgLikeNotificationResolverByActorIdAndPostId.getInstance(),
     likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
   });

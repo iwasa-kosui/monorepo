@@ -1,17 +1,21 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { LikeCreated, LikeCreatedStore } from '../../../domain/like/like.ts';
+import type { LocalLikeCreated, LocalLikeCreatedStore } from '../../../domain/like/like.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { domainEventsTable, likesTable } from '../schema.ts';
+import { domainEventsTable, likesTable, localLikesTable } from '../schema.ts';
 
-const store = async (event: LikeCreated): RA<void, never> => {
+const store = async (event: LocalLikeCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     await tx.insert(likesTable).values({
       likeId: event.aggregateState.likeId,
       actorId: event.aggregateState.actorId,
       postId: event.aggregateState.postId,
+      type: 'local',
       createdAt: new Date(event.occurredAt),
+    });
+    await tx.insert(localLikesTable).values({
+      likeId: event.aggregateState.likeId,
     });
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
@@ -27,11 +31,11 @@ const store = async (event: LikeCreated): RA<void, never> => {
 };
 
 const getInstance = singleton(
-  (): LikeCreatedStore => ({
+  (): LocalLikeCreatedStore => ({
     store,
   }),
 );
 
-export const PgLikeCreatedStore = {
+export const PgLocalLikeCreatedStore = {
   getInstance,
 } as const;

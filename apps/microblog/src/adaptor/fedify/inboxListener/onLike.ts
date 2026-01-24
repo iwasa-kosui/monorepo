@@ -10,8 +10,8 @@ import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgEmojiReactCreatedStore } from '../../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
-import { PgLikeV2CreatedStore } from '../../pg/likeV2/likeV2CreatedStore.ts';
-import { PgLikeV2ResolverByActivityUri } from '../../pg/likeV2/likeV2ResolverByActivityUri.ts';
+import { PgRemoteLikeCreatedStore } from '../../pg/like/remoteLikeCreatedStore.ts';
+import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
 import { PgEmojiReactNotificationCreatedStore } from '../../pg/notification/emojiReactNotificationCreatedStore.ts';
 import { PgLikeNotificationCreatedStore } from '../../pg/notification/notificationCreatedStore.ts';
 import { PgPostResolver } from '../../pg/post/postResolver.ts';
@@ -226,8 +226,8 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
 
   // Process as regular Like
   const useCase = AddReceivedLikeUseCase.create({
-    likeV2CreatedStore: PgLikeV2CreatedStore.getInstance(),
-    likeV2ResolverByActivityUri: PgLikeV2ResolverByActivityUri.getInstance(),
+    remoteLikeCreatedStore: PgRemoteLikeCreatedStore.getInstance(),
+    remoteLikeResolverByActivityUri: PgRemoteLikeResolverByActivityUri.getInstance(),
     likeNotificationCreatedStore: PgLikeNotificationCreatedStore.getInstance(),
     postResolver: PgPostResolver.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),

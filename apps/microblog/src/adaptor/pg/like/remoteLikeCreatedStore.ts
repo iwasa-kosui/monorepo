@@ -1,18 +1,22 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { LikeV2Created, LikeV2CreatedStore } from '../../../domain/like/likeV2.ts';
+import type { RemoteLikeCreated, RemoteLikeCreatedStore } from '../../../domain/like/like.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { domainEventsTable, likesV2Table } from '../schema.ts';
+import { domainEventsTable, likesTable, remoteLikesTable } from '../schema.ts';
 
-const store = async (event: LikeV2Created): RA<void, never> => {
+const store = async (event: RemoteLikeCreated): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
-    await tx.insert(likesV2Table).values({
+    await tx.insert(likesTable).values({
       likeId: event.aggregateState.likeId,
       actorId: event.aggregateState.actorId,
       postId: event.aggregateState.postId,
-      likeActivityUri: event.aggregateState.likeActivityUri,
+      type: 'remote',
       createdAt: new Date(event.occurredAt),
+    });
+    await tx.insert(remoteLikesTable).values({
+      likeId: event.aggregateState.likeId,
+      likeActivityUri: event.aggregateState.likeActivityUri,
     });
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
@@ -28,11 +32,11 @@ const store = async (event: LikeV2Created): RA<void, never> => {
 };
 
 const getInstance = singleton(
-  (): LikeV2CreatedStore => ({
+  (): RemoteLikeCreatedStore => ({
     store,
   }),
 );
 
-export const PgLikeV2CreatedStore = {
+export const PgRemoteLikeCreatedStore = {
   getInstance,
 } as const;

@@ -17,12 +17,13 @@ import {
   createMockEmojiReactNotificationDeletedStore,
   createMockEmojiReactNotificationsResolverByPostId,
   createMockEmojiReactsResolverByPostId,
-  createMockLikeDeletedStore,
   createMockLikeNotificationDeletedStore,
   createMockLikeNotificationsResolverByPostId,
   createMockLikesResolverByPostId,
+  createMockLocalLikeDeletedStore,
   createMockPostDeletedStore,
   createMockPostResolver,
+  createMockRemoteLikeDeletedStore,
   createMockReplyNotificationDeletedStore,
   createMockReplyNotificationsResolverByOriginalPostId,
   createMockReplyNotificationsResolverByReplyPostId,
@@ -61,7 +62,8 @@ describe('DeletePostUseCase', () => {
     const replyNotificationsResolverByOriginalPostId = createMockReplyNotificationsResolverByOriginalPostId();
     const repostDeletedStore = createMockRepostDeletedStore();
     const repostsResolverByPostId = createMockRepostsResolverByPostId();
-    const likeDeletedStore = createMockLikeDeletedStore();
+    const localLikeDeletedStore = createMockLocalLikeDeletedStore();
+    const remoteLikeDeletedStore = createMockRemoteLikeDeletedStore();
     const likesResolverByPostId = createMockLikesResolverByPostId();
     const emojiReactDeletedStore = createMockEmojiReactDeletedStore();
     const emojiReactsResolverByPostId = createMockEmojiReactsResolverByPostId();
@@ -84,7 +86,8 @@ describe('DeletePostUseCase', () => {
       replyNotificationsResolverByOriginalPostId,
       repostDeletedStore,
       repostsResolverByPostId,
-      likeDeletedStore,
+      localLikeDeletedStore,
+      remoteLikeDeletedStore,
       likesResolverByPostId,
       emojiReactDeletedStore,
       emojiReactsResolverByPostId,

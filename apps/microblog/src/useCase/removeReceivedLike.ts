@@ -2,11 +2,12 @@ import { RA } from '@iwasa-kosui/result';
 
 import { Instant } from '../domain/instant/instant.ts';
 import {
-  LikeV2,
-  type LikeV2DeletedStore,
-  LikeV2NotFoundError,
-  type LikeV2ResolverByActivityUri,
-} from '../domain/like/likeV2.ts';
+  Like,
+  LikeNotFoundError,
+  type RemoteLike,
+  type RemoteLikeDeletedStore,
+  type RemoteLikeResolverByActivityUri,
+} from '../domain/like/like.ts';
 import {
   type LikeNotificationDeletedStore,
   type LikeNotificationResolverByActorIdAndPostId,
@@ -19,23 +20,23 @@ type Input = Readonly<{
 }>;
 
 type Ok = Readonly<{
-  like: LikeV2;
+  like: RemoteLike;
 }>;
 
-type Err = LikeV2NotFoundError;
+type Err = LikeNotFoundError;
 
 export type RemoveReceivedLikeUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
-  likeV2DeletedStore: LikeV2DeletedStore;
-  likeV2ResolverByActivityUri: LikeV2ResolverByActivityUri;
+  remoteLikeDeletedStore: RemoteLikeDeletedStore;
+  remoteLikeResolverByActivityUri: RemoteLikeResolverByActivityUri;
   likeNotificationResolverByActorIdAndPostId: LikeNotificationResolverByActorIdAndPostId;
   likeNotificationDeletedStore: LikeNotificationDeletedStore;
 }>;
 
 const create = ({
-  likeV2DeletedStore,
-  likeV2ResolverByActivityUri,
+  remoteLikeDeletedStore,
+  remoteLikeResolverByActivityUri,
   likeNotificationResolverByActorIdAndPostId,
   likeNotificationDeletedStore,
 }: Deps): RemoveReceivedLikeUseCase => {
@@ -46,17 +47,17 @@ const create = ({
       RA.ok(input),
       RA.andBind(
         'like',
-        ({ likeActivityUri }) => likeV2ResolverByActivityUri.resolve({ likeActivityUri }),
+        ({ likeActivityUri }) => remoteLikeResolverByActivityUri.resolve({ likeActivityUri }),
       ),
       RA.andThen(({ like, likeActivityUri }) => {
         if (!like) {
-          return RA.err(LikeV2NotFoundError.create({ likeActivityUri }));
+          return RA.err(LikeNotFoundError.create({ likeActivityUri }));
         }
         return RA.ok({ like });
       }),
       RA.andThrough(({ like }) => {
-        const event = LikeV2.deleteLikeV2(like, now);
-        return likeV2DeletedStore.store(event);
+        const event = Like.deleteRemoteLike(like, now);
+        return remoteLikeDeletedStore.store(event);
       }),
       RA.andThrough(({ like }) => {
         return RA.flow(

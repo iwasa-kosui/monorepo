@@ -8,21 +8,39 @@ import type { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { LikeId } from './likeId.ts';
 
-const zodType = z
-  .object({
-    likeId: LikeId.zodType,
-    actorId: ActorId.zodType,
-    postId: PostId.zodType,
-  })
-  .describe('Like');
-const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
-  zodType,
-);
-export type Like = z.output<typeof zodType>;
+// LocalLike: ローカルユーザーが作成したいいね
+const localLikeZodType = z.object({
+  type: z.literal('local'),
+  likeId: LikeId.zodType,
+  actorId: ActorId.zodType,
+  postId: PostId.zodType,
+});
+
+// RemoteLike: リモートサーバーから受信したいいね
+const remoteLikeZodType = z.object({
+  type: z.literal('remote'),
+  likeId: LikeId.zodType,
+  actorId: ActorId.zodType,
+  postId: PostId.zodType,
+  likeActivityUri: z.string(),
+});
+
+export type LocalLike = z.infer<typeof localLikeZodType>;
+export const LocalLike = Schema.create(localLikeZodType);
+
+export type RemoteLike = z.infer<typeof remoteLikeZodType>;
+export const RemoteLike = Schema.create(remoteLikeZodType);
+
+export type Like = LocalLike | RemoteLike;
+
+const zodType = z.union([localLikeZodType, remoteLikeZodType]);
+const schema = Schema.create(zodType);
+
 export type LikeAggregateId = Readonly<{
   likeId: LikeId;
 }>;
 export type LikeAggregate = Agg.Aggregate<LikeAggregateId, 'like', Like>;
+
 const toAggregateId = (like: Like): LikeAggregateId => ({
   likeId: like.likeId,
 });
@@ -32,49 +50,92 @@ type LikeEvent<
   TEventName extends string,
   TEventPayload extends Record<string, unknown>,
 > = DomainEvent<LikeAggregate, TAggregateState, TEventName, TEventPayload>;
-const LikeEvent = AggregateEvent.createFactory<LikeAggregate>('like');
 
-export type LikeCreated = LikeEvent<Like, 'like.likeCreated', Like>;
-export type LikeDeleted = LikeEvent<
+export const LikeEvent = AggregateEvent.createFactory<LikeAggregate>('like');
+
+// LocalLike events
+export type LocalLikeCreated = LikeEvent<LocalLike, 'like.localLikeCreated', LocalLike>;
+export type LocalLikeDeleted = LikeEvent<
   undefined,
-  'like.likeDeleted',
+  'like.localLikeDeleted',
   { likeId: LikeId }
 >;
 
-const createLike = (payload: Like, now: Instant): LikeCreated => {
+// RemoteLike events
+export type RemoteLikeCreated = LikeEvent<RemoteLike, 'like.remoteLikeCreated', RemoteLike>;
+export type RemoteLikeDeleted = LikeEvent<
+  undefined,
+  'like.remoteLikeDeleted',
+  { likeId: LikeId; likeActivityUri: string }
+>;
+
+const createLocalLike = (payload: Omit<LocalLike, 'type'>, now: Instant): LocalLikeCreated => {
+  const like: LocalLike = { ...payload, type: 'local' };
   return LikeEvent.create(
-    toAggregateId(payload),
-    payload,
-    'like.likeCreated',
-    payload,
+    toAggregateId(like),
+    like,
+    'like.localLikeCreated',
+    like,
     now,
   );
 };
 
-const deleteLike = (like: Like, now: Instant): LikeDeleted => {
+const deleteLocalLike = (like: LocalLike, now: Instant): LocalLikeDeleted => {
   return LikeEvent.create(
     toAggregateId(like),
     undefined,
-    'like.likeDeleted',
+    'like.localLikeDeleted',
     { likeId: like.likeId },
     now,
   );
 };
 
-export type LikeCreatedStore = Agg.Store<LikeCreated>;
-export type LikeDeletedStore = Agg.Store<LikeDeleted>;
+const createRemoteLike = (payload: Omit<RemoteLike, 'type'>, now: Instant): RemoteLikeCreated => {
+  const like: RemoteLike = { ...payload, type: 'remote' };
+  return LikeEvent.create(
+    toAggregateId(like),
+    like,
+    'like.remoteLikeCreated',
+    like,
+    now,
+  );
+};
+
+const deleteRemoteLike = (like: RemoteLike, now: Instant): RemoteLikeDeleted => {
+  return LikeEvent.create(
+    toAggregateId(like),
+    undefined,
+    'like.remoteLikeDeleted',
+    { likeId: like.likeId, likeActivityUri: like.likeActivityUri },
+    now,
+  );
+};
+
+export type LocalLikeCreatedStore = Agg.Store<LocalLikeCreated>;
+export type LocalLikeDeletedStore = Agg.Store<LocalLikeDeleted>;
+export type RemoteLikeCreatedStore = Agg.Store<RemoteLikeCreated>;
+export type RemoteLikeDeletedStore = Agg.Store<RemoteLikeDeleted>;
+
 export type LikeResolver = Agg.Resolver<
   { actorId: ActorId; postId: PostId },
   Like | undefined
 >;
 export type LikesResolverByPostId = Agg.Resolver<{ postId: PostId }, Like[]>;
+export type RemoteLikeResolverByActivityUri = Agg.Resolver<
+  { likeActivityUri: string },
+  RemoteLike | undefined
+>;
+
 export const Like = {
   ...schema,
-  createLike,
-  deleteLike,
+  createLocalLike,
+  deleteLocalLike,
+  createRemoteLike,
+  deleteRemoteLike,
   toAggregateId,
 } as const;
 
+// Error types
 export type AlreadyLikedError = Readonly<{
   type: 'AlreadyLikedError';
   message: string;
@@ -108,5 +169,21 @@ export const NotLikedError = {
     type: 'NotLikedError',
     message: `No like found for post "${postId}"`,
     detail: { postId },
+  }),
+} as const;
+
+export type LikeNotFoundError = Readonly<{
+  type: 'LikeNotFoundError';
+  message: string;
+  detail: {
+    likeActivityUri: string;
+  };
+}>;
+
+export const LikeNotFoundError = {
+  create: ({ likeActivityUri }: { likeActivityUri: string }): LikeNotFoundError => ({
+    type: 'LikeNotFoundError',
+    message: `The like activity "${likeActivityUri}" was not found.`,
+    detail: { likeActivityUri },
   }),
 } as const;
