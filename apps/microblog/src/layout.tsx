@@ -288,7 +288,9 @@ export const Layout: FC<LayoutProps> = (props) => {
         />
       </head>
       <body
-        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${isLoggedIn ? 'pb-16 md:pb-0 md:px-24' : ''}`}
+        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
+          isLoggedIn ? 'pb-16 md:pb-0 md:px-24' : ''
+        }`}
       >
         {/* Background decoration blobs */}
         <div class='bg-decoration' aria-hidden='true'>
@@ -581,7 +583,9 @@ export const LayoutClient: FC<{
           : <script type='module' src={props.server} />}
       </head>
       <body
-        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''}`}
+        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
+          isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''
+        }`}
       >
         {/* Background decoration blobs */}
         <div class='bg-decoration' aria-hidden='true'>
