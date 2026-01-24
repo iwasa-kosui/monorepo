@@ -113,9 +113,15 @@ app.get(
       .png()
       .toBuffer();
 
-    return c.body(png, 200, {
-      'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400, immutable',
+    // Convert Buffer to ArrayBuffer for Response compatibility
+    const arrayBuffer = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
+
+    return c.newResponse(arrayBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=86400, immutable',
+      },
     });
   },
 );
