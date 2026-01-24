@@ -3,7 +3,13 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Like as AppLike, type LikeDeletedStore, type LikeResolver, NotLikedError } from '../domain/like/like.ts';
+import {
+  Like as AppLike,
+  type LikeResolver,
+  type LocalLike,
+  type LocalLikeDeletedStore,
+  NotLikedError,
+} from '../domain/like/like.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -52,7 +58,7 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   likeResolver: LikeResolver;
-  likeDeletedStore: LikeDeletedStore;
+  localLikeDeletedStore: LocalLikeDeletedStore;
   postResolver: PostResolver;
 }>;
 
@@ -61,7 +67,7 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   likeResolver,
-  likeDeletedStore,
+  localLikeDeletedStore,
   postResolver,
 }: Deps): UndoLikeUseCase => {
   const now = Instant.now();
@@ -93,15 +99,15 @@ const create = ({
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the post
       RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
-      // Find the like
-      RA.andBind('like', async ({ actor, postId }) => {
+      // Find the like (must be a local like)
+      RA.andBind('like', async ({ actor, postId }): RA<LocalLike, NotLikedError> => {
         return RA.flow(
           likeResolver.resolve({
             actorId: actor.id,
             postId,
           }),
           RA.andThen((like) => {
-            if (like === undefined) {
+            if (like === undefined || like.type !== 'local') {
               return RA.err(NotLikedError.create(postId));
             }
             return RA.ok(like);
@@ -110,8 +116,8 @@ const create = ({
       }),
       // Delete the like
       RA.andThrough(async ({ like }) => {
-        const deletedEvent = AppLike.deleteLike(like, now);
-        return likeDeletedStore.store(deletedEvent);
+        const deletedEvent = AppLike.deleteLocalLike(like, now);
+        return localLikeDeletedStore.store(deletedEvent);
       }),
       // Send Undo Like activity for remote posts
       RA.andThrough(async ({ ctx, user, like, post }) => {

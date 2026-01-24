@@ -10,7 +10,12 @@ import {
   type EmojiReactsResolverByPostId,
 } from '../domain/emojiReact/emojiReact.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Like, type LikeDeletedStore, type LikesResolverByPostId } from '../domain/like/like.ts';
+import {
+  Like,
+  type LikesResolverByPostId,
+  type LocalLikeDeletedStore,
+  type RemoteLikeDeletedStore,
+} from '../domain/like/like.ts';
 import {
   type EmojiReactNotificationDeletedStore,
   type EmojiReactNotificationsResolverByPostId,
@@ -82,7 +87,8 @@ type Deps = Readonly<{
   replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
   repostDeletedStore: RepostDeletedStore;
   repostsResolverByPostId: RepostsResolverByPostId;
-  likeDeletedStore: LikeDeletedStore;
+  localLikeDeletedStore: LocalLikeDeletedStore;
+  remoteLikeDeletedStore: RemoteLikeDeletedStore;
   likesResolverByPostId: LikesResolverByPostId;
   emojiReactDeletedStore: EmojiReactDeletedStore;
   emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
@@ -107,7 +113,8 @@ const create = ({
   replyNotificationsResolverByOriginalPostId,
   repostDeletedStore,
   repostsResolverByPostId,
-  likeDeletedStore,
+  localLikeDeletedStore,
+  remoteLikeDeletedStore,
   likesResolverByPostId,
   emojiReactDeletedStore,
   emojiReactsResolverByPostId,
@@ -190,8 +197,12 @@ const create = ({
           ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
           : [];
 
-        const likeEvents = likesResult.ok
-          ? likesResult.val.map((l) => Like.deleteLike(l, now))
+        const localLikeEvents = likesResult.ok
+          ? likesResult.val.filter((l) => l.type === 'local').map((l) => Like.deleteLocalLike(l, now))
+          : [];
+
+        const remoteLikeEvents = likesResult.ok
+          ? likesResult.val.filter((l) => l.type === 'remote').map((l) => Like.deleteRemoteLike(l, now))
           : [];
 
         const emojiReactEvents = emojiReactsResult.ok
@@ -217,7 +228,8 @@ const create = ({
             ? replyNotificationDeletedStore.store(...replyNotificationEvents)
             : Promise.resolve(),
           repostEvents.length > 0 ? repostDeletedStore.store(...repostEvents) : Promise.resolve(),
-          likeEvents.length > 0 ? likeDeletedStore.store(...likeEvents) : Promise.resolve(),
+          localLikeEvents.length > 0 ? localLikeDeletedStore.store(...localLikeEvents) : Promise.resolve(),
+          remoteLikeEvents.length > 0 ? remoteLikeDeletedStore.store(...remoteLikeEvents) : Promise.resolve(),
           emojiReactEvents.length > 0 ? emojiReactDeletedStore.store(...emojiReactEvents) : Promise.resolve(),
           articleDeleteEvent ? articleDeletedStore.store(articleDeleteEvent) : Promise.resolve(),
         ]);

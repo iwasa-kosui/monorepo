@@ -104,20 +104,20 @@ export const likesTable = pgTable('likes', {
   likeId: uuid().primaryKey(),
   actorId: uuid().notNull().references(() => actorsTable.actorId),
   postId: uuid().notNull().references(() => postsTable.postId),
+  type: varchar({ length: 32 }).notNull(),
   createdAt: timestamp({ mode: 'date' }).notNull(),
 }, (table) => [
   unique('like_actor_post_unique').on(table.actorId, table.postId),
 ]);
 
-export const likesV2Table = pgTable('likes_v2', {
-  likeId: uuid().primaryKey(),
-  actorId: uuid().notNull().references(() => actorsTable.actorId),
-  postId: uuid().notNull().references(() => postsTable.postId),
-  likeActivityUri: text().unique(),
-  createdAt: timestamp({ mode: 'date' }).notNull(),
-}, (table) => [
-  unique('likes_v2_actor_post_unique').on(table.actorId, table.postId),
-]);
+export const localLikesTable = pgTable('local_likes', {
+  likeId: uuid().primaryKey().references(() => likesTable.likeId),
+});
+
+export const remoteLikesTable = pgTable('remote_likes', {
+  likeId: uuid().primaryKey().references(() => likesTable.likeId),
+  likeActivityUri: text().notNull().unique(),
+});
 
 export const postImagesTable = pgTable('post_images', {
   imageId: uuid().primaryKey(),

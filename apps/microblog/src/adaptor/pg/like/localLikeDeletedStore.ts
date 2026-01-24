@@ -1,17 +1,19 @@
 import { RA } from '@iwasa-kosui/result';
 import { eq } from 'drizzle-orm';
 
-import type { LikeDeleted, LikeDeletedStore } from '../../../domain/like/like.ts';
+import type { LocalLikeDeleted, LocalLikeDeletedStore } from '../../../domain/like/like.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { domainEventsTable, likesTable } from '../schema.ts';
+import { domainEventsTable, likesTable, localLikesTable } from '../schema.ts';
 
-const store = async (...events: readonly LikeDeleted[]): RA<void, never> => {
+const store = async (...events: readonly LocalLikeDeleted[]): RA<void, never> => {
   if (events.length === 0) {
     return RA.ok(undefined);
   }
   await DB.getInstance().transaction(async (tx) => {
     for (const event of events) {
+      await tx.delete(localLikesTable)
+        .where(eq(localLikesTable.likeId, event.eventPayload.likeId));
       await tx.delete(likesTable)
         .where(eq(likesTable.likeId, event.eventPayload.likeId));
       await tx.insert(domainEventsTable).values({
@@ -29,11 +31,11 @@ const store = async (...events: readonly LikeDeleted[]): RA<void, never> => {
 };
 
 const getInstance = singleton(
-  (): LikeDeletedStore => ({
+  (): LocalLikeDeletedStore => ({
     store,
   }),
 );
 
-export const PgLikeDeletedStore = {
+export const PgLocalLikeDeletedStore = {
   getInstance,
 } as const;

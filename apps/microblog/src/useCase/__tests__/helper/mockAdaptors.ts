@@ -45,12 +45,14 @@ import type {
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../../../domain/image/image.ts';
 import type {
   Like,
-  LikeCreated,
-  LikeCreatedStore,
-  LikeDeleted,
-  LikeDeletedStore,
   LikeResolver,
   LikesResolverByPostId,
+  LocalLikeCreated,
+  LocalLikeCreatedStore,
+  LocalLikeDeleted,
+  LocalLikeDeletedStore,
+  RemoteLikeDeleted,
+  RemoteLikeDeletedStore,
 } from '../../../domain/like/like.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../../../domain/linkPreview/linkPreview.ts';
 import type { Mute, MutedActorIdsResolverByUserId, MuteResolver } from '../../../domain/mute/mute.ts';
@@ -407,13 +409,13 @@ export const createMockFollowRequestedStore = (): FollowRequestedStore & InMemor
   };
 };
 
-export const createMockLikeCreatedStore = (): LikeCreatedStore & InMemoryStore<LikeCreated> => {
-  const inMemoryStore = createInMemoryStore<LikeCreated>();
+export const createMockLocalLikeCreatedStore = (): LocalLikeCreatedStore & InMemoryStore<LocalLikeCreated> => {
+  const inMemoryStore = createInMemoryStore<LocalLikeCreated>();
   return {
     ...inMemoryStore,
     store: vi.fn(inMemoryStore.store) as unknown as
-      & LikeCreatedStore['store']
-      & InMemoryStore<LikeCreated>['store'],
+      & LocalLikeCreatedStore['store']
+      & InMemoryStore<LocalLikeCreated>['store'],
   };
 };
 
@@ -618,13 +620,23 @@ export const createMockMuteResolver = (
   removeMute: (userId: UserId, mutedActorId: ActorId) => mutes.delete(muteKey(userId, mutedActorId)),
 });
 
-export const createMockLikeDeletedStore = (): LikeDeletedStore & InMemoryStore<LikeDeleted> => {
-  const inMemoryStore = createInMemoryStore<LikeDeleted>();
+export const createMockLocalLikeDeletedStore = (): LocalLikeDeletedStore & InMemoryStore<LocalLikeDeleted> => {
+  const inMemoryStore = createInMemoryStore<LocalLikeDeleted>();
   return {
     ...inMemoryStore,
     store: vi.fn(inMemoryStore.store) as unknown as
-      & LikeDeletedStore['store']
-      & InMemoryStore<LikeDeleted>['store'],
+      & LocalLikeDeletedStore['store']
+      & InMemoryStore<LocalLikeDeleted>['store'],
+  };
+};
+
+export const createMockRemoteLikeDeletedStore = (): RemoteLikeDeletedStore & InMemoryStore<RemoteLikeDeleted> => {
+  const inMemoryStore = createInMemoryStore<RemoteLikeDeleted>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & RemoteLikeDeletedStore['store']
+      & InMemoryStore<RemoteLikeDeleted>['store'],
   };
 };
 

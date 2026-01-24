@@ -3,7 +3,12 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { AlreadyLikedError, Like as AppLike, type LikeCreatedStore, type LikeResolver } from '../domain/like/like.ts';
+import {
+  AlreadyLikedError,
+  Like as AppLike,
+  type LikeResolver,
+  type LocalLikeCreatedStore,
+} from '../domain/like/like.ts';
 import { LikeId } from '../domain/like/likeId.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -52,7 +57,7 @@ type Deps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
-  likeCreatedStore: LikeCreatedStore;
+  localLikeCreatedStore: LocalLikeCreatedStore;
   likeResolver: LikeResolver;
   postResolver: PostResolver;
 }>;
@@ -61,7 +66,7 @@ const create = ({
   sessionResolver,
   userResolver,
   actorResolverByUserId,
-  likeCreatedStore,
+  localLikeCreatedStore,
   likeResolver,
   postResolver,
 }: Deps): SendLikeUseCase => {
@@ -113,7 +118,7 @@ const create = ({
       }),
       // Create and store like
       RA.bind('likeCreated', ({ actor, postId }) =>
-        AppLike.createLike(
+        AppLike.createLocalLike(
           {
             likeId: LikeId.generate(),
             actorId: actor.id,
@@ -121,7 +126,7 @@ const create = ({
           },
           now,
         )),
-      RA.andThrough(async ({ likeCreated }) => likeCreatedStore.store(likeCreated)),
+      RA.andThrough(async ({ likeCreated }) => localLikeCreatedStore.store(likeCreated)),
       // Send ActivityPub Like if remote post
       RA.andThrough(async ({ user, post, ctx, likeCreated }) => {
         // Local posts don't need ActivityPub delivery

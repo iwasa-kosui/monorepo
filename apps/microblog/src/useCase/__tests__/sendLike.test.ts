@@ -2,7 +2,7 @@ import { test as fcTest } from '@fast-check/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { AlreadyLikedError, Like } from '../../domain/like/like.ts';
+import type { AlreadyLikedError, LocalLike } from '../../domain/like/like.ts';
 import type { LikeId } from '../../domain/like/likeId.ts';
 import type { LocalPost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
@@ -13,8 +13,8 @@ import { SendLikeUseCase } from '../sendLike.ts';
 import { arbSessionId } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
-  createMockLikeCreatedStore,
   createMockLikeResolver,
+  createMockLocalLikeCreatedStore,
   createMockPostResolver,
   createMockRequestContext,
   createMockSessionResolver,
@@ -37,14 +37,14 @@ describe('SendLikeUseCase', () => {
     const sessionResolver = createMockSessionResolver();
     const userResolver = createMockUserResolver();
     const actorResolverByUserId = createMockActorResolverByUserId();
-    const likeCreatedStore = createMockLikeCreatedStore();
+    const localLikeCreatedStore = createMockLocalLikeCreatedStore();
     const likeResolver = createMockLikeResolver();
     const postResolver = createMockPostResolver();
     return {
       sessionResolver,
       userResolver,
       actorResolverByUserId,
-      likeCreatedStore,
+      localLikeCreatedStore,
       likeResolver,
       postResolver,
     };
@@ -172,7 +172,8 @@ describe('SendLikeUseCase', () => {
       };
       deps.postResolver.setPost(post);
 
-      const existingLike: Like = {
+      const existingLike: LocalLike = {
+        type: 'local',
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
         postId: post.postId,
@@ -231,7 +232,7 @@ describe('SendLikeUseCase', () => {
         ctx,
       });
 
-      expect(deps.likeCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.localLikeCreatedStore.store).not.toHaveBeenCalled();
     });
 
     it('AlreadyLikedError の場合 likeCreatedStore が呼ばれない', async () => {
@@ -266,7 +267,8 @@ describe('SendLikeUseCase', () => {
       };
       deps.postResolver.setPost(post);
 
-      const existingLike: Like = {
+      const existingLike: LocalLike = {
+        type: 'local',
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
         postId: post.postId,
@@ -283,7 +285,7 @@ describe('SendLikeUseCase', () => {
         ctx,
       });
 
-      expect(deps.likeCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.localLikeCreatedStore.store).not.toHaveBeenCalled();
     });
   });
 
@@ -320,7 +322,8 @@ describe('SendLikeUseCase', () => {
       };
       deps.postResolver.setPost(post);
 
-      const existingLike: Like = {
+      const existingLike: LocalLike = {
+        type: 'local',
         likeId: crypto.randomUUID() as LikeId,
         actorId: actor.id,
         postId: post.postId,

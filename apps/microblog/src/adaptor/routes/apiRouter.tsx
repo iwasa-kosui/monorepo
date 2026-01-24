@@ -41,10 +41,11 @@ import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStor
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { PgEmojiReactsResolverByPostId } from '../pg/emojiReact/emojiReactsResolverByPostId.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
-import { PgLikeCreatedStore } from '../pg/like/likeCreatedStore.ts';
-import { PgLikeDeletedStore } from '../pg/like/likeDeletedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLikesResolverByPostId } from '../pg/like/likesResolverByPostId.ts';
+import { PgLocalLikeCreatedStore } from '../pg/like/localLikeCreatedStore.ts';
+import { PgLocalLikeDeletedStore } from '../pg/like/localLikeDeletedStore.ts';
+import { PgRemoteLikeDeletedStore } from '../pg/like/remoteLikeDeletedStore.ts';
 import { PgMuteCreatedStore } from '../pg/mute/muteCreatedStore.ts';
 import { PgMutedActorIdsResolverByUserId } from '../pg/mute/mutedActorIdsResolverByUserId.ts';
 import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
@@ -188,7 +189,7 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-        likeCreatedStore: PgLikeCreatedStore.getInstance(),
+        localLikeCreatedStore: PgLocalLikeCreatedStore.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
         postResolver: PgPostResolver.getInstance(),
       });
@@ -233,7 +234,7 @@ const app = new Hono()
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
-        likeDeletedStore: PgLikeDeletedStore.getInstance(),
+        localLikeDeletedStore: PgLocalLikeDeletedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
       });
 
@@ -580,7 +581,8 @@ const app = new Hono()
       replyNotificationsResolverByOriginalPostId: PgReplyNotificationsResolverByOriginalPostId.getInstance(),
       repostDeletedStore: PgRepostDeletedStore.getInstance(),
       repostsResolverByPostId: PgRepostsResolverByPostId.getInstance(),
-      likeDeletedStore: PgLikeDeletedStore.getInstance(),
+      localLikeDeletedStore: PgLocalLikeDeletedStore.getInstance(),
+      remoteLikeDeletedStore: PgRemoteLikeDeletedStore.getInstance(),
       likesResolverByPostId: PgLikesResolverByPostId.getInstance(),
       emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
       emojiReactsResolverByPostId: PgEmojiReactsResolverByPostId.getInstance(),
