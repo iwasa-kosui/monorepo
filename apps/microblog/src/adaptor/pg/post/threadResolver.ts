@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { Agg } from '../../../domain/aggregate/index.ts';
 import { LocalPost, type PostImage, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
@@ -10,12 +10,15 @@ import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import {
   actorsTable,
+  emojiReactsTable,
+  likesTable,
   localActorsTable,
   localPostsTable,
   postImagesTable,
   postsTable,
   remoteActorsTable,
   remotePostsTable,
+  repostsTable,
   usersTable,
 } from '../schema.ts';
 
@@ -119,12 +122,16 @@ const getInstance = singleton((): ThreadResolver => {
         )
         .execute();
 
-      // Fetch images for replies
+      // Fetch images and stats for replies
       const replyPostIds = localReplyRows.map((row) => row.posts.postId);
-      const replyImagesByPostId = await getPostImagesByIds(replyPostIds);
+      const [replyImagesByPostId, replyStatsByPostId] = await Promise.all([
+        getPostImagesByIds(replyPostIds),
+        getPostStatsBatch(replyPostIds),
+      ]);
 
       for (const row of localReplyRows) {
         const images = replyImagesByPostId.get(row.posts.postId) ?? [];
+        const stats = replyStatsByPostId.get(row.posts.postId) ?? { likeCount: 0, repostCount: 0, reactions: [] };
         const post: PostWithAuthor = {
           ...LocalPost.orThrow({
             postId: row.posts.postId,
@@ -140,6 +147,9 @@ const getInstance = singleton((): ThreadResolver => {
           liked: false,
           reposted: false,
           images,
+          likeCount: stats.likeCount,
+          repostCount: stats.repostCount,
+          reactions: stats.reactions,
         };
         descendants.push(post);
       }
@@ -171,7 +181,10 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
 
   if (localRow.length > 0) {
     const row = localRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, stats] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getPostStats(row.posts.postId),
+    ]);
     return {
       ...LocalPost.orThrow({
         postId: row.posts.postId,
@@ -187,6 +200,9 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: stats.likeCount,
+      repostCount: stats.repostCount,
+      reactions: stats.reactions,
     };
   }
 
@@ -208,7 +224,10 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
 
   if (remoteRow.length > 0) {
     const row = remoteRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, stats] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getPostStats(row.posts.postId),
+    ]);
     return {
       ...RemotePost.orThrow({
         postId: row.posts.postId,
@@ -224,6 +243,9 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: stats.likeCount,
+      repostCount: stats.repostCount,
+      reactions: stats.reactions,
     };
   }
 
@@ -249,7 +271,10 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
 
   if (remoteRow.length > 0) {
     const row = remoteRow[0];
-    const images = await getPostImages(row.posts.postId);
+    const [images, stats] = await Promise.all([
+      getPostImages(row.posts.postId),
+      getPostStats(row.posts.postId),
+    ]);
     return {
       ...RemotePost.orThrow({
         postId: row.posts.postId,
@@ -265,6 +290,9 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
       liked: false,
       reposted: false,
       images,
+      likeCount: stats.likeCount,
+      repostCount: stats.repostCount,
+      reactions: stats.reactions,
     };
   }
 
@@ -291,7 +319,10 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
 
     if (localRow.length > 0) {
       const row = localRow[0];
-      const images = await getPostImages(row.posts.postId);
+      const [images, stats] = await Promise.all([
+        getPostImages(row.posts.postId),
+        getPostStats(row.posts.postId),
+      ]);
       return {
         ...LocalPost.orThrow({
           postId: row.posts.postId,
@@ -307,6 +338,9 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         liked: false,
         reposted: false,
         images,
+        likeCount: stats.likeCount,
+        repostCount: stats.repostCount,
+        reactions: stats.reactions,
       };
     }
   }
@@ -347,6 +381,132 @@ async function getPostImagesByIds(postIds: string[]): Promise<Map<string, PostIm
   }
 
   return imagesByPostId;
+}
+
+async function getPostStats(postId: string): Promise<{
+  likeCount: number;
+  repostCount: number;
+  reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+}> {
+  const [likeCountResult, repostCountResult, reactionRows] = await Promise.all([
+    DB.getInstance()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(likesTable)
+      .where(eq(likesTable.postId, postId))
+      .execute(),
+    DB.getInstance()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(repostsTable)
+      .where(eq(repostsTable.postId, postId))
+      .execute(),
+    DB.getInstance()
+      .select({
+        emoji: emojiReactsTable.emoji,
+        emojiImageUrl: emojiReactsTable.emojiImageUrl,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(emojiReactsTable)
+      .where(eq(emojiReactsTable.postId, postId))
+      .groupBy(emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)
+      .execute(),
+  ]);
+
+  return {
+    likeCount: likeCountResult[0]?.count ?? 0,
+    repostCount: repostCountResult[0]?.count ?? 0,
+    reactions: reactionRows.map((row) => ({
+      emoji: row.emoji,
+      count: row.count,
+      emojiImageUrl: row.emojiImageUrl,
+    })),
+  };
+}
+
+async function getPostStatsBatch(postIds: string[]): Promise<
+  Map<
+    string,
+    {
+      likeCount: number;
+      repostCount: number;
+      reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+    }
+  >
+> {
+  if (postIds.length === 0) {
+    return new Map();
+  }
+
+  const [likeCountRows, repostCountRows, reactionRows] = await Promise.all([
+    DB.getInstance()
+      .select({
+        postId: likesTable.postId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(likesTable)
+      .where(inArray(likesTable.postId, postIds))
+      .groupBy(likesTable.postId)
+      .execute(),
+    DB.getInstance()
+      .select({
+        postId: repostsTable.postId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(repostsTable)
+      .where(inArray(repostsTable.postId, postIds))
+      .groupBy(repostsTable.postId)
+      .execute(),
+    DB.getInstance()
+      .select({
+        postId: emojiReactsTable.postId,
+        emoji: emojiReactsTable.emoji,
+        emojiImageUrl: emojiReactsTable.emojiImageUrl,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(emojiReactsTable)
+      .where(inArray(emojiReactsTable.postId, postIds))
+      .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)
+      .execute(),
+  ]);
+
+  const result = new Map<
+    string,
+    {
+      likeCount: number;
+      repostCount: number;
+      reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+    }
+  >();
+
+  for (const postId of postIds) {
+    result.set(postId, { likeCount: 0, repostCount: 0, reactions: [] });
+  }
+
+  for (const row of likeCountRows) {
+    const existing = result.get(row.postId);
+    if (existing) {
+      existing.likeCount = row.count;
+    }
+  }
+
+  for (const row of repostCountRows) {
+    const existing = result.get(row.postId);
+    if (existing) {
+      existing.repostCount = row.count;
+    }
+  }
+
+  for (const row of reactionRows) {
+    const existing = result.get(row.postId);
+    if (existing) {
+      existing.reactions.push({
+        emoji: row.emoji,
+        count: row.count,
+        emojiImageUrl: row.emojiImageUrl,
+      });
+    }
+  }
+
+  return result;
 }
 
 export const PgThreadResolver = {

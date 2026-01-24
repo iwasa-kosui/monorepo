@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 import { randomUUID } from 'crypto';
-import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
@@ -11,6 +11,7 @@ import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import {
   actorsTable,
+  emojiReactsTable,
   likesTable,
   localActorsTable,
   localPostsTable,
@@ -107,9 +108,67 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
       }
     }
 
+    // Fetch like counts for all posts
+    const likeCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const likeCountRows = await DB.getInstance()
+        .select({
+          postId: likesTable.postId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(likesTable)
+        .where(inArray(likesTable.postId, postIds))
+        .groupBy(likesTable.postId)
+        .execute();
+      for (const row of likeCountRows) {
+        likeCountsByPostId.set(row.postId, row.count);
+      }
+    }
+
+    // Fetch repost counts for all posts
+    const repostCountsByPostId = new Map<string, number>();
+    if (postIds.length > 0) {
+      const repostCountRows = await DB.getInstance()
+        .select({
+          postId: repostsTable.postId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(repostsTable)
+        .where(inArray(repostsTable.postId, postIds))
+        .groupBy(repostsTable.postId)
+        .execute();
+      for (const row of repostCountRows) {
+        repostCountsByPostId.set(row.postId, row.count);
+      }
+    }
+
+    // Fetch emoji reactions for all posts
+    const reactionsByPostId = new Map<string, { emoji: string; count: number; emojiImageUrl: string | null }[]>();
+    if (postIds.length > 0) {
+      const reactionRows = await DB.getInstance()
+        .select({
+          postId: emojiReactsTable.postId,
+          emoji: emojiReactsTable.emoji,
+          emojiImageUrl: emojiReactsTable.emojiImageUrl,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(emojiReactsTable)
+        .where(inArray(emojiReactsTable.postId, postIds))
+        .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)
+        .execute();
+      for (const row of reactionRows) {
+        const existing = reactionsByPostId.get(row.postId) ?? [];
+        existing.push({ emoji: row.emoji, count: row.count, emojiImageUrl: row.emojiImageUrl });
+        reactionsByPostId.set(row.postId, existing);
+      }
+    }
+
     return RA.ok(rows.map(row => {
       const images = imagesByPostId.get(row.posts.postId) ?? [];
       const reposted = repostedPostIds.has(row.posts.postId);
+      const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
+      const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
+      const reactions = reactionsByPostId.get(row.posts.postId) ?? [];
       if (row.local_posts) {
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
@@ -127,6 +186,9 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           liked: row.likes !== null,
           reposted,
           images,
+          likeCount,
+          repostCount,
+          reactions,
         };
       }
       if (row.remote_posts) {
@@ -146,6 +208,9 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           liked: row.likes !== null,
           reposted,
           images,
+          likeCount,
+          repostCount,
+          reactions,
         };
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

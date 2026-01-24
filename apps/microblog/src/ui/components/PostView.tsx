@@ -396,6 +396,7 @@ export const PostView = (
                     d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
                   />
                 </svg>
+                {post.repostCount > 0 && <span class='text-sm'>{post.repostCount}</span>}
               </button>
             }
             {
@@ -432,6 +433,7 @@ export const PostView = (
                     d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
                   />
                 </svg>
+                {post.likeCount > 0 && <span class='text-sm'>{post.likeCount}</span>}
               </button>
             }
             {/* Emoji reaction button */}
@@ -506,25 +508,43 @@ export const PostView = (
               </button>
             )}
           </div>
-          {/* My reactions display */}
-          {myReactions.length > 0 && (
+          {/* Reactions display */}
+          {(post.reactions.length > 0 || myReactions.length > 0) && (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
-              {myReactions.map((emoji) => (
-                <button
-                  key={emoji}
-                  type='button'
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onUndoEmojiReact) {
-                      onUndoEmojiReact(post.postId, emoji);
-                    }
-                  }}
-                  class='inline-flex items-center px-2 py-0.5 text-sm bg-sand-light dark:bg-gray-700 text-charcoal dark:text-gray-200 rounded-full hover:bg-terracotta-light/30 dark:hover:bg-terracotta-dark/30 hover:text-terracotta-dark dark:hover:text-terracotta-light transition-colors shadow-clay-sm'
-                  title='Click to remove reaction'
-                >
-                  {emoji}
-                </button>
-              ))}
+              {post.reactions.map((reaction) => {
+                const isMyReaction = myReactions.includes(reaction.emoji);
+                return (
+                  <button
+                    key={reaction.emoji}
+                    type='button'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isMyReaction && onUndoEmojiReact) {
+                        onUndoEmojiReact(post.postId, reaction.emoji);
+                      } else if (!isMyReaction && onEmojiReact) {
+                        onEmojiReact(post.postId, reaction.emoji);
+                      }
+                    }}
+                    class={`inline-flex items-center gap-1 px-2 py-0.5 text-sm rounded-full transition-colors shadow-clay-sm ${
+                      isMyReaction
+                        ? 'bg-terracotta-light/30 dark:bg-terracotta-dark/30 text-terracotta-dark dark:text-terracotta-light'
+                        : 'bg-sand-light dark:bg-gray-700 text-charcoal dark:text-gray-200 hover:bg-terracotta-light/20 dark:hover:bg-terracotta-dark/20'
+                    }`}
+                    title={isMyReaction ? 'クリックで取り消す' : 'クリックでリアクション'}
+                  >
+                    {reaction.emojiImageUrl
+                      ? (
+                        <img
+                          src={reaction.emojiImageUrl}
+                          alt={reaction.emoji}
+                          class='w-4 h-4 object-contain'
+                        />
+                      )
+                      : reaction.emoji}
+                    <span class='text-xs'>{reaction.count}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
