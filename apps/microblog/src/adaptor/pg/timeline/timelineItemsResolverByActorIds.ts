@@ -4,7 +4,10 @@ import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
+import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { LocalPost, RemotePost } from '../../../domain/post/post.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
 import type {
   PostTimelineItem,
   RepostTimelineItem,
@@ -19,6 +22,7 @@ import {
   actorsTable,
   emojiReactsTable,
   likesTable,
+  linkPreviewsTable,
   localActorsTable,
   localPostsTable,
   postImagesTable,
@@ -181,6 +185,31 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       }
     }
 
+    // Fetch link previews for all posts
+    const linkPreviewsByPostId = new Map<string, LinkPreview[]>();
+    if (postIds.length > 0) {
+      const linkPreviewRows = await DB.getInstance()
+        .select()
+        .from(linkPreviewsTable)
+        .where(inArray(linkPreviewsTable.postId, postIds))
+        .execute();
+      for (const row of linkPreviewRows) {
+        const existing = linkPreviewsByPostId.get(row.postId) ?? [];
+        existing.push(LinkPreview.orThrow({
+          linkPreviewId: LinkPreviewId.orThrow(row.linkPreviewId),
+          postId: row.postId as PostId,
+          url: row.url,
+          title: row.title,
+          description: row.description,
+          imageUrl: row.imageUrl,
+          faviconUrl: row.faviconUrl,
+          siteName: row.siteName,
+          createdAt: row.createdAt.getTime(),
+        }));
+        linkPreviewsByPostId.set(row.postId, existing);
+      }
+    }
+
     // Fetch reposter info for reposts
     const reposterActorIds = rows
       .filter(row => row.timeline_items.type === 'repost')
@@ -216,6 +245,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
       const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
       const reactions = reactionsByPostId.get(row.posts.postId) ?? [];
+      const linkPreviews = linkPreviewsByPostId.get(row.posts.postId) ?? [];
 
       // Build post with author
       const reposted = repostedPostIds.has(row.posts.postId);
@@ -240,6 +270,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           likeCount,
           repostCount,
           reactions,
+          linkPreviews,
         };
       } else if (row.remote_posts) {
         const remotePost = RemotePost.orThrow({
@@ -261,6 +292,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           likeCount,
           repostCount,
           reactions,
+          linkPreviews,
         };
       } else {
         throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

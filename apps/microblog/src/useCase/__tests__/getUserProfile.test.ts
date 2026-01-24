@@ -104,6 +104,7 @@ describe('GetUserProfileUseCase', () => {
           likeCount: 0,
           repostCount: 0,
           reactions: [],
+          linkPreviews: [],
         },
       ];
       deps.postsResolverByActorIds.setPosts(posts);

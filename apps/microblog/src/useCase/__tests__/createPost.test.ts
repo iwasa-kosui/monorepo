@@ -9,6 +9,8 @@ import { CreatePostUseCase } from '../createPost.ts';
 import { arbContent, arbImageUrls, arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
+  createMockLinkPreviewCreatedStore,
+  createMockOgpFetcher,
   createMockPostCreatedStore,
   createMockPostImageCreatedStore,
   createMockRequestContext,
@@ -33,6 +35,8 @@ describe('CreatePostUseCase', () => {
     const actorResolverByUserId = createMockActorResolverByUserId();
     const postImageCreatedStore = createMockPostImageCreatedStore();
     const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
+    const linkPreviewCreatedStore = createMockLinkPreviewCreatedStore();
+    const ogpFetcher = createMockOgpFetcher();
     return {
       sessionResolver,
       postCreatedStore,
@@ -40,6 +44,8 @@ describe('CreatePostUseCase', () => {
       actorResolverByUserId,
       postImageCreatedStore,
       timelineItemCreatedStore,
+      linkPreviewCreatedStore,
+      ogpFetcher,
     };
   };
 

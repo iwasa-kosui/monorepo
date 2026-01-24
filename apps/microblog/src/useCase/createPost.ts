@@ -2,11 +2,15 @@ import { Create, Document, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
+import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
+import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
+import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
@@ -44,6 +48,8 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   postImageCreatedStore: PostImageCreatedStore;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  linkPreviewCreatedStore: LinkPreviewCreatedStore;
+  ogpFetcher: OgpFetcher;
 }>;
 
 const create = ({
@@ -53,6 +59,8 @@ const create = ({
   actorResolverByUserId,
   postImageCreatedStore,
   timelineItemCreatedStore,
+  linkPreviewCreatedStore,
+  ogpFetcher,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -99,6 +107,50 @@ const create = ({
           return RA.ok(images);
         }
         return RA.ok([]);
+      }),
+      RA.andThrough(async ({ post, content }) => {
+        // URLを抽出してOGP情報を取得
+        const env = Env.getInstance();
+        const excludeHost = new URL(env.ORIGIN).host;
+        const urls = extractUrlsFromHtml(content, excludeHost);
+
+        if (urls.length === 0) {
+          return RA.ok(undefined);
+        }
+
+        // 並列でOGP情報を取得
+        const ogpResults = await Promise.allSettled(
+          urls.map((url) => ogpFetcher.fetch(url)),
+        );
+
+        // 成功したOGP情報をLinkPreviewに変換
+        const linkPreviews: LinkPreview[] = [];
+        for (let i = 0; i < ogpResults.length; i++) {
+          const result = ogpResults[i];
+          if (result.status === 'fulfilled') {
+            const ogp = result.value;
+            // 少なくともタイトルか説明がある場合のみ保存
+            if (ogp.title ?? ogp.description) {
+              linkPreviews.push({
+                linkPreviewId: LinkPreviewId.generate(),
+                postId: post.postId,
+                url: urls[i],
+                title: ogp.title,
+                description: ogp.description,
+                imageUrl: ogp.imageUrl,
+                faviconUrl: ogp.faviconUrl,
+                siteName: ogp.siteName,
+                createdAt: now,
+              });
+            }
+          }
+        }
+
+        if (linkPreviews.length > 0) {
+          await linkPreviewCreatedStore.store(linkPreviews);
+        }
+
+        return RA.ok(undefined);
       }),
       RA.andThrough(async ({ post, user, ctx, images }) => {
         const noteArgs = { identifier: user.username, id: post.postId };

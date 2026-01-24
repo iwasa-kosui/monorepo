@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { Agg } from '../../../domain/aggregate/index.ts';
+import type { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LocalPost, type PostImage, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
@@ -131,7 +132,8 @@ const getInstance = singleton((): ThreadResolver => {
 
       for (const row of localReplyRows) {
         const images = replyImagesByPostId.get(row.posts.postId) ?? [];
-        const stats = replyStatsByPostId.get(row.posts.postId) ?? { likeCount: 0, repostCount: 0, reactions: [] };
+        const stats = replyStatsByPostId.get(row.posts.postId)
+          ?? { likeCount: 0, repostCount: 0, reactions: [], linkPreviews: [] };
         const post: PostWithAuthor = {
           ...LocalPost.orThrow({
             postId: row.posts.postId,
@@ -150,6 +152,7 @@ const getInstance = singleton((): ThreadResolver => {
           likeCount: stats.likeCount,
           repostCount: stats.repostCount,
           reactions: stats.reactions,
+          linkPreviews: stats.linkPreviews,
         };
         descendants.push(post);
       }
@@ -203,6 +206,7 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       likeCount: stats.likeCount,
       repostCount: stats.repostCount,
       reactions: stats.reactions,
+      linkPreviews: stats.linkPreviews,
     };
   }
 
@@ -246,6 +250,7 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
       likeCount: stats.likeCount,
       repostCount: stats.repostCount,
       reactions: stats.reactions,
+      linkPreviews: stats.linkPreviews,
     };
   }
 
@@ -293,6 +298,7 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
       likeCount: stats.likeCount,
       repostCount: stats.repostCount,
       reactions: stats.reactions,
+      linkPreviews: stats.linkPreviews,
     };
   }
 
@@ -341,6 +347,7 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         likeCount: stats.likeCount,
         repostCount: stats.repostCount,
         reactions: stats.reactions,
+        linkPreviews: stats.linkPreviews,
       };
     }
   }
@@ -387,6 +394,7 @@ async function getPostStats(postId: string): Promise<{
   likeCount: number;
   repostCount: number;
   reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+  linkPreviews: LinkPreview[];
 }> {
   const [likeCountResult, repostCountResult, reactionRows] = await Promise.all([
     DB.getInstance()
@@ -419,6 +427,7 @@ async function getPostStats(postId: string): Promise<{
       count: row.count,
       emojiImageUrl: row.emojiImageUrl,
     })),
+    linkPreviews: [],
   };
 }
 
@@ -429,6 +438,7 @@ async function getPostStatsBatch(postIds: string[]): Promise<
       likeCount: number;
       repostCount: number;
       reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+      linkPreviews: LinkPreview[];
     }
   >
 > {
@@ -474,11 +484,12 @@ async function getPostStatsBatch(postIds: string[]): Promise<
       likeCount: number;
       repostCount: number;
       reactions: { emoji: string; count: number; emojiImageUrl: string | null }[];
+      linkPreviews: LinkPreview[];
     }
   >();
 
   for (const postId of postIds) {
-    result.set(postId, { likeCount: 0, repostCount: 0, reactions: [] });
+    result.set(postId, { likeCount: 0, repostCount: 0, reactions: [], linkPreviews: [] });
   }
 
   for (const row of likeCountRows) {

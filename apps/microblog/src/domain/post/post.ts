@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
+import type { LinkPreview } from '../linkPreview/linkPreview.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
 import { PostId } from './postId.ts';
@@ -44,6 +45,7 @@ export type PostWithAuthor = Post & {
   likeCount: number;
   repostCount: number;
   reactions: PostReaction[];
+  linkPreviews: LinkPreview[];
 };
 
 const zodType = z.union([localPostZodType, remotePostZodType]);

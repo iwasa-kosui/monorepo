@@ -243,3 +243,17 @@ export const articlesTable = pgTable('articles', {
   index('articles_root_post_id_idx').on(table.rootPostId),
   unique('article_root_post_unique').on(table.rootPostId),
 ]);
+
+export const linkPreviewsTable = pgTable('link_previews', {
+  linkPreviewId: uuid().primaryKey(),
+  postId: uuid().notNull().references(() => postsTable.postId, { onDelete: 'cascade' }),
+  url: text().notNull(),
+  title: text(),
+  description: text(),
+  imageUrl: text(),
+  faviconUrl: text(),
+  siteName: text(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  index('link_previews_post_id_idx').on(table.postId),
+]);

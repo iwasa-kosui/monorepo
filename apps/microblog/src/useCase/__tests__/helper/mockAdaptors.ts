@@ -4,6 +4,7 @@ import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
 
+import type { OgpFetcher } from '../../../adaptor/ogp/ogpFetcher.ts';
 import type { LocalPostResolverByUri } from '../../../adaptor/pg/post/localPostResolverByUri.ts';
 import type { WebPushSender } from '../../../adaptor/webPush/webPushSender.ts';
 import type {
@@ -51,6 +52,7 @@ import type {
   LikeResolver,
   LikesResolverByPostId,
 } from '../../../domain/like/like.ts';
+import type { LinkPreview, LinkPreviewCreatedStore } from '../../../domain/linkPreview/linkPreview.ts';
 import type { Mute, MutedActorIdsResolverByUserId, MuteResolver } from '../../../domain/mute/mute.ts';
 import type {
   EmojiReactNotification,
@@ -211,6 +213,26 @@ export const createMockPostImageCreatedStore = (): PostImageCreatedStore & InMem
       & InMemoryStore<PostImage[]>['store'],
   };
 };
+
+export const createMockLinkPreviewCreatedStore = (): LinkPreviewCreatedStore & InMemoryStore<LinkPreview[]> => {
+  const inMemoryStore = createInMemoryStore<LinkPreview[]>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & LinkPreviewCreatedStore['store']
+      & InMemoryStore<LinkPreview[]>['store'],
+  };
+};
+
+export const createMockOgpFetcher = (): OgpFetcher => ({
+  fetch: vi.fn(async () => ({
+    title: null,
+    description: null,
+    imageUrl: null,
+    faviconUrl: null,
+    siteName: null,
+  })),
+});
 
 export const createMockActorResolverByUserId = (
   actors: Map<UserId, LocalActor> = new Map(),

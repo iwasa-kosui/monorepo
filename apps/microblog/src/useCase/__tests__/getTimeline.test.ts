@@ -136,6 +136,7 @@ describe('GetTimelineUseCase', () => {
         likeCount: 0,
         repostCount: 0,
         reactions: [],
+        linkPreviews: [],
       };
       const timelineItems: TimelineItemWithPost[] = [
         {
