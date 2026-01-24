@@ -5,10 +5,9 @@ import { render } from 'hono/jsx/dom';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { PostView } from '../components/PostView.tsx';
+import { ReplyModal } from '../components/ReplyModal.tsx';
 
 const client = hc<APIRouterType>('/api');
-
-type TabMode = 'markdown' | 'preview';
 
 type ThreadData = {
   ancestors: PostWithAuthor[];
@@ -27,9 +26,7 @@ const LocalPostPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
 
-  const [activeTab, setActiveTab] = useState<TabMode>('markdown');
-  const [replyContent, setReplyContent] = useState('');
-  const [previewHtml, setPreviewHtml] = useState('');
+  const [replyToPostId, setReplyToPostId] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
 
   const getPostIdFromUrl = () => {
@@ -74,40 +71,35 @@ const LocalPostPage = () => {
     fetchThread();
   }, []);
 
-  const handleContentChange = (e: Event) => {
-    const target = e.target as HTMLTextAreaElement;
-    const value = target.value;
-    setReplyContent(value);
+  const username = getUsernameFromUrl();
 
-    if (
-      typeof window !== 'undefined'
-      && (window as unknown as { marked?: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-    ) {
-      const rawHtml =
-        (window as unknown as { marked: { parse: (text: string, options?: { async: boolean }) => string } }).marked
-          .parse(value, { async: false });
-      setPreviewHtml(rawHtml);
-    }
+  const handleReply = (postId: string) => {
+    setReplyToPostId(postId);
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      if (replyContent.trim() && threadData?.currentPost?.postId) {
-        sendReply();
-      }
-    }
+  const handleCloseReplyModal = () => {
+    setReplyToPostId(null);
   };
 
-  const sendReply = async () => {
-    if (!threadData?.currentPost?.postId || !replyContent.trim()) return;
+  const getReplyToPost = (): PostWithAuthor | undefined => {
+    if (!replyToPostId || !threadData) return undefined;
+    if (threadData.currentPost?.postId === replyToPostId) {
+      return threadData.currentPost;
+    }
+    const ancestor = threadData.ancestors.find((p) => p.postId === replyToPostId);
+    if (ancestor) return ancestor;
+    return threadData.descendants.find((p) => p.postId === replyToPostId);
+  };
+
+  const handleSubmitReply = async (content: string) => {
+    if (!replyToPostId || !content.trim()) return;
 
     setIsSendingReply(true);
     try {
       const res = await client.v1.reply.$post({
         json: {
-          postId: threadData.currentPost.postId,
-          content: replyContent,
+          postId: replyToPostId,
+          content,
           imageUrls: [],
         },
       });
@@ -116,8 +108,7 @@ const LocalPostPage = () => {
       if ('error' in data) {
         alert(data.error);
       } else {
-        setReplyContent('');
-        setPreviewHtml('');
+        setReplyToPostId(null);
         fetchThread();
       }
     } catch (err) {
@@ -127,24 +118,7 @@ const LocalPostPage = () => {
     }
   };
 
-  const username = getUsernameFromUrl();
-
-  const handleReply = (postId: string) => {
-    if (threadData?.currentPost?.postId === postId) {
-      // If replying to the current post, focus on the reply form
-      const textarea = document.querySelector('textarea');
-      if (textarea) {
-        textarea.focus();
-        textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    } else {
-      // If replying to another post in the thread, navigate to that post's page
-      const pathParts = window.location.pathname.split('/');
-      const usersIndex = pathParts.indexOf('users');
-      const postUsername = pathParts[usersIndex + 1];
-      window.location.href = `/users/${postUsername}/posts/${postId}`;
-    }
-  };
+  const replyToPost = getReplyToPost();
 
   if (isLoading) {
     return (
@@ -220,7 +194,7 @@ const LocalPostPage = () => {
       </div>
 
       {/* Thread Content */}
-      <div class='flex-1 min-h-0 mb-4'>
+      <div class='flex-1 min-h-0'>
         <div class='space-y-6 py-2'>
           {threadData.ancestors.length > 0 && (
             <>
@@ -248,81 +222,15 @@ const LocalPostPage = () => {
         </div>
       </div>
 
-      {/* Reply Form - Fixed at bottom (only shown for logged-in users) */}
+      {/* Reply Modal */}
       {isLoggedIn && (
-        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-4'>
-          {/* Tab Bar */}
-          <div class='flex gap-1 mb-3 bg-warm-gray dark:bg-gray-700 p-1 rounded-xl w-fit'>
-            <button
-              type='button'
-              onClick={() => setActiveTab('markdown')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                activeTab === 'markdown'
-                  ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
-                  : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
-              }`}
-            >
-              Markdown
-            </button>
-            <button
-              type='button'
-              onClick={() => setActiveTab('preview')}
-              class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                activeTab === 'preview'
-                  ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
-                  : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
-              }`}
-            >
-              Preview
-            </button>
-          </div>
-
-          {/* Content Area */}
-          {activeTab === 'markdown'
-            ? (
-              <textarea
-                value={replyContent}
-                onInput={handleContentChange}
-                onKeyDown={handleKeyDown}
-                placeholder='返信を書く... (⌘+Enter to post)'
-                class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
-                rows={4}
-                disabled={isSendingReply}
-              />
-            )
-            : (
-              <div class='min-h-[100px] px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset'>
-                {previewHtml
-                  ? (
-                    <div
-                      class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5'
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
-                    />
-                  )
-                  : (
-                    <p class='text-charcoal-light dark:text-gray-500'>
-                      Nothing to preview
-                    </p>
-                  )}
-              </div>
-            )}
-
-          {/* Action Button */}
-          <div class='mt-3 flex justify-end'>
-            <button
-              type='button'
-              onClick={sendReply}
-              class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
-                isSendingReply || !replyContent.trim()
-                  ? 'bg-warm-gray-dark cursor-not-allowed'
-                  : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-              }`}
-              disabled={isSendingReply || !replyContent.trim()}
-            >
-              {isSendingReply ? '送信中...' : '返信する'}
-            </button>
-          </div>
-        </div>
+        <ReplyModal
+          isOpen={replyToPostId !== null}
+          onClose={handleCloseReplyModal}
+          onSubmit={handleSubmitReply}
+          replyToUsername={replyToPost?.username}
+          isSubmitting={isSendingReply}
+        />
       )}
 
       {isLoggedIn && <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>}
