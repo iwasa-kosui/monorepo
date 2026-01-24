@@ -4,10 +4,12 @@ import { getLogger } from '@logtape/logtape';
 
 import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
+import { PgLinkPreviewCreatedStore } from '../../pg/linkPreview/linkPreviewCreatedStore.ts';
 import { PgReplyNotificationCreatedStore } from '../../pg/notification/replyNotificationCreatedStore.ts';
 import { PgLocalPostResolverByUri } from '../../pg/post/localPostResolverByUri.ts';
 import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
@@ -75,6 +77,8 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
     replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
     pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
     webPushSender: WebPushSender.getInstance(),
+    linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
+    ogpFetcher: createOgpFetcher(),
   });
 
   const attachments = await extractAttachments(object, documentLoader);

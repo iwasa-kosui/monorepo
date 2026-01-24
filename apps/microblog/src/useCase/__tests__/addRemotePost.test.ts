@@ -1,12 +1,22 @@
 import { test as fcTest } from '@fast-check/vitest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { AddRemotePostUseCase } from '../addRemotePost.ts';
+
+vi.mock('../../env.ts', () => ({
+  Env: {
+    getInstance: () => ({
+      ORIGIN: 'https://example.com',
+    }),
+  },
+}));
 import { arbContent } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUri,
+  createMockLinkPreviewCreatedStore,
   createMockLocalPostResolverByUri,
   createMockLogoUriUpdatedStore,
+  createMockOgpFetcher,
   createMockPostCreatedStore,
   createMockPostImageCreatedStore,
   createMockPushSubscriptionsResolverByUserId,
@@ -28,6 +38,8 @@ describe('AddRemotePostUseCase', () => {
     const replyNotificationCreatedStore = createMockReplyNotificationCreatedStore();
     const pushSubscriptionsResolver = createMockPushSubscriptionsResolverByUserId();
     const webPushSender = createMockWebPushSender();
+    const linkPreviewCreatedStore = createMockLinkPreviewCreatedStore();
+    const ogpFetcher = createMockOgpFetcher();
     return {
       postCreatedStore,
       postImageCreatedStore,
@@ -39,6 +51,8 @@ describe('AddRemotePostUseCase', () => {
       replyNotificationCreatedStore,
       pushSubscriptionsResolver,
       webPushSender,
+      linkPreviewCreatedStore,
+      ogpFetcher,
     };
   };
 
