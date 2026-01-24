@@ -4,6 +4,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { UserId } from '../../domain/user/userId.ts';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
 
@@ -20,14 +21,22 @@ const getIsLoggedIn = (): boolean => {
   return root?.dataset.isLoggedIn === 'true';
 };
 
+const getCurrentUserId = (): UserId | undefined => {
+  const root = document.getElementById('root');
+  const userId = root?.dataset.userId;
+  return userId ? (userId as UserId) : undefined;
+};
+
 const LocalPostPage = () => {
   const [threadData, setThreadData] = useState<ThreadData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
+  const [currentUserId] = useState(() => getCurrentUserId());
 
   const [replyToPostId, setReplyToPostId] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
 
   const getPostIdFromUrl = () => {
     const pathParts = window.location.pathname.split('/');
@@ -120,6 +129,34 @@ const LocalPostPage = () => {
 
   const replyToPost = getReplyToPost();
 
+  const handleDelete = async (postId: string) => {
+    if (!confirm('この投稿を削除しますか？')) return;
+
+    setDeletingPostId(postId);
+    try {
+      const res = await client.v1.posts[':postId'].$delete({
+        param: { postId },
+      });
+      const data = await res.json();
+
+      if ('error' in data) {
+        alert(data.error);
+      } else {
+        // If the deleted post is the current post, navigate back to user page
+        if (threadData?.currentPost?.postId === postId) {
+          window.location.href = `/users/${username}`;
+        } else {
+          // Otherwise, refresh the thread
+          fetchThread();
+        }
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div class='flex items-center justify-center py-8'>
@@ -200,21 +237,39 @@ const LocalPostPage = () => {
             <>
               {threadData.ancestors.map((post) => (
                 <div key={post.postId} class='relative'>
-                  <PostView post={post} onReply={isLoggedIn ? handleReply : undefined} />
+                  <PostView
+                    post={post}
+                    onReply={isLoggedIn ? handleReply : undefined}
+                    onDelete={isLoggedIn ? handleDelete : undefined}
+                    isDeleting={deletingPostId === post.postId}
+                    currentUserId={currentUserId}
+                  />
                 </div>
               ))}
             </>
           )}
           {threadData.currentPost && (
             <div class='relative'>
-              <PostView post={threadData.currentPost} onReply={isLoggedIn ? handleReply : undefined} />
+              <PostView
+                post={threadData.currentPost}
+                onReply={isLoggedIn ? handleReply : undefined}
+                onDelete={isLoggedIn ? handleDelete : undefined}
+                isDeleting={deletingPostId === threadData.currentPost.postId}
+                currentUserId={currentUserId}
+              />
             </div>
           )}
           {threadData.descendants.length > 0 && (
             <>
               {threadData.descendants.map((post) => (
                 <div key={post.postId} class='relative'>
-                  <PostView post={post} onReply={isLoggedIn ? handleReply : undefined} />
+                  <PostView
+                    post={post}
+                    onReply={isLoggedIn ? handleReply : undefined}
+                    onDelete={isLoggedIn ? handleDelete : undefined}
+                    isDeleting={deletingPostId === post.postId}
+                    currentUserId={currentUserId}
+                  />
                 </div>
               ))}
             </>
