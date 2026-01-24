@@ -6,6 +6,7 @@ import { getCookie } from 'hono/cookie';
 import z from 'zod/v4';
 
 import { Actor } from '../../domain/actor/actor.ts';
+import { ArticleId } from '../../domain/article/articleId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
@@ -223,6 +224,31 @@ app.get(
           );
         },
       }),
+    );
+  },
+);
+
+app.get(
+  '/:username/articles/:articleId',
+  sValidator(
+    'param',
+    z.object({
+      username: Username.zodType,
+      articleId: ArticleId.zodType,
+    }),
+  ),
+  async (c) => {
+    const sessionId = getCookie(c, 'sessionId');
+    const isLoggedIn = !!sessionId;
+
+    return c.html(
+      <LayoutClient
+        client='/static/articleDetail.js'
+        server='/src/ui/pages/articleDetail.tsx'
+        isLoggedIn={isLoggedIn}
+      >
+        <div id='root' class='h-full flex flex-col' data-is-logged-in={String(isLoggedIn)} />
+      </LayoutClient>,
     );
   },
 );

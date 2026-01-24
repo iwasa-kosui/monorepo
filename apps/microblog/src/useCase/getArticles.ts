@@ -18,6 +18,7 @@ type Input = Readonly<{
 const Ok = Schema.create(
   z.object({
     articles: z.array(Article.zodType),
+    authorUsername: z.string(),
   }),
 );
 type Ok = z.infer<typeof Ok.zodType>;
@@ -50,7 +51,7 @@ const create = ({
       RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
       RA.andBind('user', ({ session }) => resolveUser(session.userId)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andThen(async ({ actor }): Promise<Result<Ok, Err>> => {
+      RA.andThen(async ({ actor, user }): Promise<Result<Ok, Err>> => {
         const articlesResult = await articlesResolverByAuthorActorId.resolve({ actorId: actor.id });
         if (!articlesResult.ok) {
           return articlesResult;
@@ -59,7 +60,7 @@ const create = ({
         const sortedArticles = articlesResult.val.sort(
           (a, b) => b.createdAt - a.createdAt,
         );
-        return RA.ok({ articles: sortedArticles });
+        return RA.ok({ articles: sortedArticles, authorUsername: user.username });
       }),
     );
 
