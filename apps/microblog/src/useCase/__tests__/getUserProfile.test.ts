@@ -101,6 +101,9 @@ describe('GetUserProfileUseCase', () => {
           reposted: false,
           images: [],
           inReplyToUri: null,
+          likeCount: 0,
+          repostCount: 0,
+          reactions: [],
         },
       ];
       deps.postsResolverByActorIds.setPosts(posts);
