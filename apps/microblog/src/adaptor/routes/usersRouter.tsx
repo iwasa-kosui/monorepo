@@ -163,6 +163,18 @@ app.get(
     const sessionId = getCookie(c, 'sessionId');
     const isLoggedIn = !!sessionId;
 
+    // Get current user's userId from session
+    let currentUserId: string | undefined;
+    if (sessionId) {
+      const parsedSessionId = SessionId.parse(sessionId);
+      if (parsedSessionId.ok) {
+        const sessionResult = await PgSessionResolver.getInstance().resolve(parsedSessionId.val);
+        if (sessionResult.ok && sessionResult.val) {
+          currentUserId = sessionResult.val.userId;
+        }
+      }
+    }
+
     const useCase = GetPostUseCase.create({
       postResolver: PgPostResolver.getInstance(),
       postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
@@ -209,7 +221,12 @@ app.get(
                 image: postImages.length > 0 ? postImages[0].url : undefined,
               }}
             >
-              <div id='root' class='h-full flex flex-col' data-is-logged-in={String(isLoggedIn)} />
+              <div
+                id='root'
+                class='h-full flex flex-col'
+                data-is-logged-in={String(isLoggedIn)}
+                data-user-id={currentUserId ?? ''}
+              />
             </LayoutClient>,
           );
         },
