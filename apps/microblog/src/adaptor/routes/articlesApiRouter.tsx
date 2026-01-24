@@ -8,6 +8,7 @@ import { z } from 'zod/v4';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { Federation } from '../../federation.ts';
 import { CreateArticleUseCase } from '../../useCase/createArticle.ts';
 import { DeleteArticleUseCase } from '../../useCase/deleteArticle.ts';
@@ -27,7 +28,7 @@ import { PgArticleUnpublishedStore } from '../pg/article/articleUnpublishedStore
 import { DB } from '../pg/db.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
-import { articlesTable } from '../pg/schema.ts';
+import { articlesTable, usersTable } from '../pg/schema.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 import { sanitize } from './helper/sanitize.ts';
@@ -72,14 +73,19 @@ app.get('/articles', async (c) => {
 
   // Non-authenticated users: return only published articles
   if (!sessionId) {
-    const rows = await DB.getInstance().select()
+    const rows = await DB.getInstance().select({
+      article: articlesTable,
+      username: usersTable.username,
+    })
       .from(articlesTable)
+      .innerJoin(usersTable, eq(articlesTable.authorUserId, usersTable.userId))
       .where(eq(articlesTable.status, 'published'))
       .orderBy(desc(articlesTable.publishedAt))
       .execute();
 
-    const articles = rows.map(PgArticleResolver.reconstructArticle);
-    return c.json({ articles });
+    const articles = rows.map((row) => PgArticleResolver.reconstructArticle(row.article));
+    const authorUsername = rows.length > 0 ? Username.orThrow(rows[0].username) : null;
+    return c.json({ articles, authorUsername });
   }
 
   const sessionIdResult = SessionId.parse(sessionId);
@@ -101,7 +107,7 @@ app.get('/articles', async (c) => {
   if (!result.ok) {
     return c.json({ error: `Failed to get articles: ${JSON.stringify(result.err)}` }, 400);
   }
-  return c.json({ articles: result.val.articles });
+  return c.json({ articles: result.val.articles, authorUsername: result.val.authorUsername });
 });
 
 app.post(

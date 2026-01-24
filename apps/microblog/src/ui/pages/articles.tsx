@@ -9,6 +9,11 @@ type ArticleWithStatus = Article & {
   isDeleting?: boolean;
 };
 
+type ArticlesResponse = {
+  articles: ArticleWithStatus[];
+  authorUsername: string | null;
+};
+
 const getIsLoggedIn = (): boolean => {
   const root = document.getElementById('root');
   return root?.dataset.isLoggedIn === 'true';
@@ -16,6 +21,7 @@ const getIsLoggedIn = (): boolean => {
 
 const ArticlesPage = () => {
   const [articles, setArticles] = useState<ArticleWithStatus[]>([]);
+  const [authorUsername, setAuthorUsername] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
@@ -28,12 +34,13 @@ const ArticlesPage = () => {
   const fetchArticles = async () => {
     try {
       const res = await fetch('/api/v1/articles');
-      const data = await res.json();
+      const data = (await res.json()) as ArticlesResponse | { error: string };
 
       if ('error' in data) {
         setError(data.error);
       } else {
-        setArticles(data.articles as ArticleWithStatus[]);
+        setArticles(data.articles);
+        setAuthorUsername(data.authorUsername);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -288,7 +295,7 @@ const ArticlesPage = () => {
               {displayArticles.map((article) => (
                 <a
                   key={article.articleId}
-                  href={`/articles/${article.articleId}`}
+                  href={authorUsername ? `/users/${authorUsername}/articles/${article.articleId}` : `/articles/${article.articleId}`}
                   class='block bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all'
                 >
                   <h2 class='text-xl font-semibold text-charcoal dark:text-white mb-2'>
@@ -322,7 +329,7 @@ const ArticlesPage = () => {
                       )}
                     </div>
                     <a
-                      href={`/articles/${article.articleId}`}
+                      href={authorUsername ? `/users/${authorUsername}/articles/${article.articleId}` : `/articles/${article.articleId}`}
                       class='text-lg font-medium text-charcoal dark:text-white truncate hover:text-terracotta dark:hover:text-terracotta-light transition-colors block'
                     >
                       {article.title}
