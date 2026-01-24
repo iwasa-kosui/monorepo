@@ -1,5 +1,6 @@
 import { sValidator } from '@hono/standard-validator';
 import { Hono } from 'hono';
+import satori from 'satori';
 import sharp from 'sharp';
 import z from 'zod/v4';
 
@@ -13,75 +14,149 @@ const app = new Hono();
 const WIDTH = 1200;
 const HEIGHT = 630;
 
-const escapeXml = (str: string): string => {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-};
+// Cache font data to avoid repeated downloads
+let fontDataCache: ArrayBuffer | null = null;
 
-const wrapText = (text: string, maxCharsPerLine: number): string[] => {
-  const lines: string[] = [];
-  let currentLine = '';
-
-  for (const char of text) {
-    currentLine += char;
-    if (currentLine.length >= maxCharsPerLine) {
-      lines.push(currentLine);
-      currentLine = '';
-    }
+const loadFont = async (): Promise<ArrayBuffer> => {
+  if (fontDataCache) {
+    return fontDataCache;
   }
 
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines.slice(0, 3);
+  // Fetch Noto Sans JP from Google Fonts
+  const response = await fetch(
+    'https://fonts.gstatic.com/s/notosansjp/v53/-F62fjtqLzI2JPCgQBnw7HFow2EiZ2tKcw.ttf',
+  );
+  fontDataCache = await response.arrayBuffer();
+  return fontDataCache;
 };
 
-const generateOgSvg = (title: string): string => {
-  const lines = wrapText(title, 20);
-  const lineHeight = 72;
-  const startY = HEIGHT / 2 - ((lines.length - 1) * lineHeight) / 2;
+const generateOgImage = async (title: string): Promise<Buffer> => {
+  const fontData = await loadFont();
 
-  const titleLines = lines
-    .map((line, index) => {
-      const y = startY + index * lineHeight;
-      return `<text x="${
-        WIDTH / 2
-      }" y="${y}" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="700" fill="#5A5450">${
-        escapeXml(line)
-      }</text>`;
-    })
-    .join('\n');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const element: any = {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #F8F6F1 0%, #F0EEE9 100%)',
+        position: 'relative',
+      },
+      children: [
+        // Decorative blobs
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              top: -50,
+              right: -50,
+              width: 400,
+              height: 360,
+              borderRadius: '50%',
+              background: '#D49A82',
+              opacity: 0.15,
+            },
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              bottom: -30,
+              left: -50,
+              width: 300,
+              height: 280,
+              borderRadius: '50%',
+              background: '#D4C4A8',
+              opacity: 0.2,
+            },
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              bottom: 100,
+              right: 100,
+              width: 200,
+              height: 180,
+              borderRadius: '50%',
+              background: '#8FA88B',
+              opacity: 0.12,
+            },
+          },
+        },
+        // Title
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 80px',
+              textAlign: 'center',
+            },
+            children: {
+              type: 'div',
+              props: {
+                style: {
+                  fontSize: 56,
+                  fontWeight: 700,
+                  color: '#5A5450',
+                  lineHeight: 1.3,
+                  maxWidth: 1000,
+                  wordBreak: 'break-word',
+                },
+                children: title,
+              },
+            },
+          },
+        },
+        // Site name
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              bottom: 50,
+              fontSize: 24,
+              color: '#7A746E',
+            },
+            children: 'blog.kosui.me',
+          },
+        },
+      ],
+    },
+  };
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#F8F6F1"/>
-      <stop offset="100%" style="stop-color:#F0EEE9"/>
-    </linearGradient>
-  </defs>
+  const svg = await satori(element, {
+    width: WIDTH,
+    height: HEIGHT,
+    fonts: [
+      {
+        name: 'Noto Sans JP',
+        data: fontData,
+        weight: 700,
+        style: 'normal',
+      },
+    ],
+  });
 
-  <!-- Background -->
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)"/>
+  const png = await sharp(Buffer.from(svg))
+    .png()
+    .toBuffer();
 
-  <!-- Decorative blobs -->
-  <ellipse cx="1100" cy="100" rx="200" ry="180" fill="#D49A82" opacity="0.15"/>
-  <ellipse cx="100" cy="530" rx="150" ry="140" fill="#D4C4A8" opacity="0.2"/>
-  <ellipse cx="900" cy="500" rx="100" ry="90" fill="#8FA88B" opacity="0.12"/>
-
-  <!-- Title -->
-  ${titleLines}
-
-  <!-- Site name -->
-  <text x="${WIDTH / 2}" y="${
-    HEIGHT - 50
-  }" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="#7A746E">blog.kosui.me</text>
-</svg>`;
+  return png;
 };
 
 app.get(
@@ -107,11 +182,7 @@ app.get(
     }
 
     const { article } = result.val;
-    const svg = generateOgSvg(article.title);
-
-    const png = await sharp(Buffer.from(svg))
-      .png()
-      .toBuffer();
+    const png = await generateOgImage(article.title);
 
     // Convert Buffer to ArrayBuffer for Response compatibility
     const arrayBuffer = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;

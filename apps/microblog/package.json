@@ -22,6 +22,7 @@
     "pg": "8.16.3",
     "postgres": "3.4.7",
     "sanitize-html": "2.17.0",
+    "satori": "0.19.1",
     "sharp": "0.34.5",
     "shiki": "3.21.0",
     "web-push": "3.6.7",
