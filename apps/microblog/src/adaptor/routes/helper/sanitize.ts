@@ -19,6 +19,9 @@ export const sanitize = (html: string) => {
       'ol',
       'li',
       'blockquote',
+      'h1',
+      'h2',
+      'h3',
     ],
     allowedClasses: {
       'pre': ['shiki', 'shiki-themes', 'shiki-dark', 'shiki-light', 'github-light', 'github-dark'],
