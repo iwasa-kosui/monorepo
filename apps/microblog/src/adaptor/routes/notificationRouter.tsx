@@ -46,6 +46,10 @@ app.get('/', async (c) => {
             sanitizedContent = sanitize(
               (n as { reactedPost: { content: string } }).reactedPost.content,
             );
+          } else if (n.notification.type === 'reply') {
+            sanitizedContent = sanitize(
+              (n as { replyPost: { content: string } }).replyPost.content,
+            );
           }
           return { notification: n, sanitizedContent };
         });
