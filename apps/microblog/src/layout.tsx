@@ -287,16 +287,18 @@ export const Layout: FC<LayoutProps> = (props) => {
           }}
         />
       </head>
-      <body class='bg-clay-bg dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-24 text-charcoal dark:text-gray-100'>
+      <body
+        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${isLoggedIn ? 'pb-16 md:pb-0 md:px-24' : ''}`}
+      >
         {/* Background decoration blobs */}
         <div class='bg-decoration' aria-hidden='true'>
           <div class='bg-blob bg-blob-1' />
           <div class='bg-blob bg-blob-2' />
           <div class='bg-blob bg-blob-3' />
         </div>
-        <Sidebar isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <Sidebar isLoggedIn={isLoggedIn} />}
         <main class='max-w-2xl mx-auto px-6 py-8 relative'>{props.children}</main>
-        <BottomNav isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <BottomNav isLoggedIn={isLoggedIn} />}
         {isLoggedIn && <PostModal />}
       </body>
     </html>
@@ -578,16 +580,18 @@ export const LayoutClient: FC<{
           ? <script type='module' src={props.client} />
           : <script type='module' src={props.server} />}
       </head>
-      <body class='bg-clay-bg dark:bg-gray-900 min-h-screen pb-16 md:pb-0 md:px-16 text-charcoal dark:text-gray-100'>
+      <body
+        class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''}`}
+      >
         {/* Background decoration blobs */}
         <div class='bg-decoration' aria-hidden='true'>
           <div class='bg-blob bg-blob-1' />
           <div class='bg-blob bg-blob-2' />
           <div class='bg-blob bg-blob-3' />
         </div>
-        <Sidebar isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <Sidebar isLoggedIn={isLoggedIn} />}
         <main class='max-w-2xl mx-auto px-6 py-8 relative'>{props.children}</main>
-        <BottomNav isLoggedIn={isLoggedIn} />
+        {isLoggedIn && <BottomNav isLoggedIn={isLoggedIn} />}
         {isLoggedIn && <PostModal />}
       </body>
     </html>
