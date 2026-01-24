@@ -51,7 +51,7 @@ export const Layout: FC<LayoutProps> = (props) => {
         {ogp?.image && <meta property='og:image' content={ogp.image} />}
 
         {/* Twitter Card Meta Tags */}
-        <meta name='twitter:card' content='summary' />
+        <meta name='twitter:card' content={ogp?.image ? 'summary_large_image' : 'summary'} />
         <meta name='twitter:title' content={ogp?.title || 'blog.kosui.me'} />
         <meta name='twitter:description' content={description} />
         {ogp?.image && <meta name='twitter:image' content={ogp.image} />}
@@ -339,7 +339,7 @@ export const LayoutClient: FC<{
         {ogp?.image && <meta property='og:image' content={ogp.image} />}
 
         {/* Twitter Card Meta Tags */}
-        <meta name='twitter:card' content='summary' />
+        <meta name='twitter:card' content={ogp?.image ? 'summary_large_image' : 'summary'} />
         <meta name='twitter:title' content={ogp?.title || 'blog.kosui.me'} />
         <meta name='twitter:description' content={description} />
         {ogp?.image && <meta name='twitter:image' content={ogp.image} />}

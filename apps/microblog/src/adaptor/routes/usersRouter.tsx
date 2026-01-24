@@ -12,12 +12,15 @@ import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import { Layout, LayoutClient } from '../../layout.tsx';
+import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
+import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
+import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
 
@@ -238,14 +241,50 @@ app.get(
     }),
   ),
   async (c) => {
+    const { username, articleId } = c.req.valid('param');
     const sessionId = getCookie(c, 'sessionId');
     const isLoggedIn = !!sessionId;
+
+    const useCase = GetArticleWithThreadUseCase.create({
+      articleResolver: PgArticleResolver.getInstance(),
+      threadResolver: PgThreadResolver.getInstance(),
+    });
+
+    const result = await useCase.run({ articleId });
+
+    if (!result.ok) {
+      return c.html(
+        <Layout>
+          <section>
+            <h1>Error</h1>
+            <p>記事が見つかりませんでした</p>
+          </section>
+        </Layout>,
+        404,
+      );
+    }
+
+    const { article } = result.val;
+    const url = new URL(c.req.url);
+    const articleUrl = `${url.origin}/users/${username}/articles/${articleId}`;
+    const ogImageUrl = `${url.origin}/api/og/articles/${articleId}`;
 
     return c.html(
       <LayoutClient
         client='/static/articleDetail.js'
         server='/src/ui/pages/articleDetail.tsx'
         isLoggedIn={isLoggedIn}
+        ogp={{
+          title: article.title,
+          description: `${article.title} - blog.kosui.me`,
+          url: articleUrl,
+          image: ogImageUrl,
+          type: 'article',
+          author: String(username),
+          publishedTime: article.publishedAt
+            ? new Date(article.publishedAt).toISOString()
+            : new Date(article.createdAt).toISOString(),
+        }}
       >
         <div id='root' class='h-full flex flex-col' data-is-logged-in={String(isLoggedIn)} />
       </LayoutClient>,
