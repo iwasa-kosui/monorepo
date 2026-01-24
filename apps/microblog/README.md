@@ -1,64 +1,99 @@
-# iori (庵)
+# iori
 
-A lightweight, self-hosted microblogging platform for individuals or small groups, with full ActivityPub federation support.
+A personal knowledge management platform connected to the Fediverse
 
-> **庵 (iori)** - A small, cozy retreat. Your personal space on the Fediverse.
+> **Iori (庵)** — A small hermitage for quiet contemplation, weaving knowledge, and connecting with the world
 
-## Features
+[日本語版 README](README.ja.md)
 
-- **ActivityPub Federation** - Connect with Mastodon, Misskey, and other Fediverse platforms
-- **Single/Small Group Focus** - Designed for personal blogs or small communities
-- **Remote Follow** - Allow users from other servers to follow you easily
-- **Timeline** - Home timeline with posts from people you follow
-- **Notifications** - Follow notifications with Web Push support
-- **Markdown Support** - Write posts with rich formatting
-- **Image Attachments** - Share images with your posts
-- **Dark Mode** - Automatic dark/light theme based on system preference
+## Concept
+
+iori provides a "**second brain connected to collective intelligence**" — not just recording and organizing your daily thoughts, but also **collecting knowledge from others** through the Fediverse and **sharing your own knowledge**.
+
+### Why Build This?
+
+- Own your **personal knowledge base** without depending on large platforms
+- **Accumulate, organize, and systematize** thoughts instead of letting them slip away
+- **Collect knowledge from others** via the Fediverse and merge it with your own
+- **Share and publish** accumulated knowledge when needed
+
+## Key Features
+
+### Knowledge Collection
+
+| Feature  | Description                                                         | Status      |
+| -------- | ------------------------------------------------------------------- | ----------- |
+| Follow   | Subscribe to interesting users and receive their notes continuously | Implemented |
+| Bookmark | Save useful notes for later reference and organization              | Not yet     |
+| Quote    | Incorporate others' notes with your own thoughts added              | Not yet     |
+
+### Knowledge Accumulation & Organization
+
+| Feature          | Description                                     | Status      |
+| ---------------- | ----------------------------------------------- | ----------- |
+| Notes            | Record fleeting thoughts and memos (short-form) | Implemented |
+| Threads          | Develop thinking through replies to notes       | Implemented |
+| Articles         | Long-form content that compiles threads         | Implemented |
+| Full-text Search | Search through accumulated knowledge            | Not yet     |
+| Tags             | Categorize notes and articles with tags         | Not yet     |
+
+### Knowledge Sharing
+
+| Feature         | Description                                                 | Status      |
+| --------------- | ----------------------------------------------------------- | ----------- |
+| ActivityPub     | Interoperate with Mastodon, Misskey, and others             | Implemented |
+| Like & Repost   | React to others' notes                                      | Implemented |
+| Emoji Reactions | React with custom emojis                                    | Implemented |
+| Notifications   | Follow, like, and reply notifications with Web Push support | Implemented |
 
 ## Tech Stack
 
-- **Runtime**: Node.js
-- **Framework**: [Hono](https://hono.dev/) - Fast, lightweight web framework
-- **Federation**: [Fedify](https://fedify.dev/) - ActivityPub server framework
-- **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
-- **Validation**: [Zod](https://zod.dev/) - Schema-driven validation
-- **Build**: [Vite](https://vite.dev/)
+| Category   | Technology                                            |
+| ---------- | ----------------------------------------------------- |
+| Runtime    | Node.js                                               |
+| Framework  | [Hono](https://hono.dev/)                             |
+| Federation | [Fedify](https://fedify.dev/)                         |
+| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/) |
+| Validation | [Zod](https://zod.dev/)                               |
+| Build      | [Vite](https://vite.dev/)                             |
 
-## Getting Started
+## Setup
 
-### Prerequisites
+### Requirements
 
 - Node.js 24.x
 - pnpm
 - PostgreSQL 15+
 
-### Setup
+### Installation
 
-1. Start the database:
+1. Start the database
 
 ```bash
 pnpm compose:up
 ```
 
-2. Set up environment variables:
+2. Configure environment variables
 
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env
 ```
 
 Required environment variables:
 
-- `DATABASE_URL` - PostgreSQL connection string
-- `ORIGIN` - Your server's origin URL (e.g., `https://example.com`)
+| Variable       | Description                                     |
+| -------------- | ----------------------------------------------- |
+| `DATABASE_URL` | PostgreSQL connection string                    |
+| `ORIGIN`       | Server origin URL (e.g., `https://example.com`) |
 
-3. Run database migrations:
+3. Run database migrations
 
 ```bash
 pnpm drizzle:push
 ```
 
-4. Start the development server:
+4. Start development server
 
 ```bash
 pnpm dev
@@ -67,53 +102,61 @@ pnpm dev
 ## Development
 
 ```bash
-# Start dev server
+# Start development server
 pnpm dev
 
 # Run tests
 pnpm test
 
-# Lint and format
+# Lint & Format
 pnpm lint:fix
 pnpm format
 
 # Type check
 pnpm exec tsc --noEmit
 
-# Build for production
+# Production build
 pnpm build
 ```
-
-## Documentation
-
-詳細なドキュメントは `docs/` ディレクトリを参照してください。
-
-### RDRA（要件定義）
-
-| ドキュメント                                          | 内容                                     |
-| ----------------------------------------------------- | ---------------------------------------- |
-| [System Value](docs/rdra/system-value.md)             | プロダクトビジョン、アクター、要求・要件 |
-| [System Environment](docs/rdra/system-environment.md) | 利用シーン、ビジネスユースケース         |
-| [Information Model](docs/rdra/information-model.md)   | ドメインモデル、集約、イベント           |
-| [State Model](docs/rdra/state-model.md)               | 状態遷移、ビジネスルール                 |
-
-### 開発者向けリソース
-
-| ドキュメント     | 内容                   |
-| ---------------- | ---------------------- |
-| [ADR](docs/adr/) | アーキテクチャ決定記録 |
 
 ## Architecture
 
 ```
 src/
-├── adaptor/       # Infrastructure layer (routes, database, federation)
-├── domain/        # Domain models and business logic
+├── adaptor/       # Infrastructure layer (routing, DB, federation)
+├── domain/        # Domain models, business logic
 ├── useCase/       # Application use cases
-├── ui/            # UI components and pages
-├── federation.ts  # ActivityPub federation setup
-└── app.tsx        # Application entry point
+├── ui/            # UI components, pages
+├── federation.ts  # ActivityPub configuration
+└── app.tsx        # Entry point
 ```
+
+## Documentation
+
+See the `docs/` directory for detailed documentation.
+
+### RDRA (Requirements Definition)
+
+| Document                                              | Contents                             |
+| ----------------------------------------------------- | ------------------------------------ |
+| [System Value](docs/rdra/system-value.md)             | Product vision, actors, requirements |
+| [System Environment](docs/rdra/system-environment.md) | Usage scenarios, business use cases  |
+| [Information Model](docs/rdra/information-model.md)   | Domain model, aggregates, events     |
+| [State Model](docs/rdra/state-model.md)               | State transitions, business rules    |
+
+### For Developers
+
+| Document         | Contents                      |
+| ---------------- | ----------------------------- |
+| [ADR](docs/adr/) | Architecture Decision Records |
+
+## Glossary
+
+| Term        | Definition                                           |
+| ----------- | ---------------------------------------------------- |
+| **Note**    | Short text for recording daily thoughts              |
+| **Thread**  | A chain of replies to notes; developing thoughts     |
+| **Article** | A compilation of threads; the trajectory of thinking |
 
 ## License
 
