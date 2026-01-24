@@ -13,14 +13,17 @@ import type {
 type Props = Readonly<{
   notification: NotificationWithDetails;
   sanitizedContent: string;
+  recipientUsername: string;
 }>;
 
 const LikeNotificationItem = ({
   notification,
   sanitizedContent,
+  recipientUsername,
 }: {
   notification: LikeNotificationWithDetails;
   sanitizedContent: string;
+  recipientUsername: string;
 }) => {
   const { likerActor, likedPost, createdAt } = notification;
 
@@ -34,7 +37,7 @@ const LikeNotificationItem = ({
     onRemote: (x) => `/remote-users/${x.id}`,
   })(likerActor);
 
-  const postUrl = `/posts/${likedPost.postId}`;
+  const postUrl = `/users/${recipientUsername}/posts/${likedPost.postId}`;
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -178,9 +181,11 @@ const FollowNotificationItem = ({
 const EmojiReactNotificationItem = ({
   notification,
   sanitizedContent,
+  recipientUsername,
 }: {
   notification: EmojiReactNotificationWithDetails;
   sanitizedContent: string;
+  recipientUsername: string;
 }) => {
   const { reactorActor, reactedPost, createdAt } = notification;
   const { emoji, emojiImageUrl } = notification.notification;
@@ -195,7 +200,7 @@ const EmojiReactNotificationItem = ({
     onRemote: (x) => `/remote-users/${x.id}`,
   })(reactorActor);
 
-  const postUrl = `/posts/${reactedPost.postId}`;
+  const postUrl = `/users/${recipientUsername}/posts/${reactedPost.postId}`;
 
   const emojiDisplay = emojiImageUrl
     ? <img src={emojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
@@ -266,7 +271,7 @@ const ReplyNotificationItem = ({
   notification: ReplyNotificationWithDetails;
   sanitizedContent: string;
 }) => {
-  const { replierActor, replyPost, createdAt } = notification;
+  const { replierActor, replyPost, replyPostAuthorUsername, createdAt } = notification;
 
   const handle = Actor.match({
     onLocal: LocalActor.getHandle,
@@ -278,7 +283,11 @@ const ReplyNotificationItem = ({
     onRemote: (x) => `/remote-users/${x.id}`,
   })(replierActor);
 
-  const postUrl = `/posts/${replyPost.postId}`;
+  const postUrl = replyPostAuthorUsername
+    ? `/users/${replyPostAuthorUsername}/posts/${replyPost.postId}`
+    : replyPost.type === 'remote'
+    ? replyPost.uri
+    : `/posts/${replyPost.postId}`;
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -348,12 +357,13 @@ const ReplyNotificationItem = ({
   );
 };
 
-export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
+export const NotificationItem = ({ notification, sanitizedContent, recipientUsername }: Props) => {
   if (notification.notification.type === 'like') {
     return (
       <LikeNotificationItem
         notification={notification as LikeNotificationWithDetails}
         sanitizedContent={sanitizedContent}
+        recipientUsername={recipientUsername}
       />
     );
   }
@@ -371,6 +381,7 @@ export const NotificationItem = ({ notification, sanitizedContent }: Props) => {
       <EmojiReactNotificationItem
         notification={notification as EmojiReactNotificationWithDetails}
         sanitizedContent={sanitizedContent}
+        recipientUsername={recipientUsername}
       />
     );
   }

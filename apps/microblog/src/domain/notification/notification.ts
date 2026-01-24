@@ -390,6 +390,7 @@ export type ReplyNotificationWithDetails = Readonly<{
   notification: ReplyNotification;
   replierActor: Actor;
   replyPost: Post;
+  replyPostAuthorUsername: string | undefined;
   originalPost: Post;
   createdAt: Instant;
 }>;

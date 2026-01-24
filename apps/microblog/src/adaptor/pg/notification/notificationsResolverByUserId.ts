@@ -287,6 +287,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
     const replyPostsAlias = alias(postsTable, 'reply_posts');
     const replyLocalPostsAlias = alias(localPostsTable, 'reply_local_posts');
     const replyRemotePostsAlias = alias(remotePostsTable, 'reply_remote_posts');
+    const replyPostAuthorUsersAlias = alias(usersTable, 'reply_post_author_users');
     const originalPostsAlias = alias(postsTable, 'original_posts');
     const originalLocalPostsAlias = alias(localPostsTable, 'original_local_posts');
     const originalRemotePostsAlias = alias(remotePostsTable, 'original_remote_posts');
@@ -301,6 +302,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         replyPosts: replyPostsAlias,
         replyLocalPosts: replyLocalPostsAlias,
         replyRemotePosts: replyRemotePostsAlias,
+        replyPostAuthorUsers: replyPostAuthorUsersAlias,
         originalPosts: originalPostsAlias,
         originalLocalPosts: originalLocalPostsAlias,
         originalRemotePosts: originalRemotePostsAlias,
@@ -316,6 +318,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(replyPostsAlias, eq(notificationRepliesTable.replyPostId, replyPostsAlias.postId))
       .leftJoin(replyLocalPostsAlias, eq(replyPostsAlias.postId, replyLocalPostsAlias.postId))
       .leftJoin(replyRemotePostsAlias, eq(replyPostsAlias.postId, replyRemotePostsAlias.postId))
+      .leftJoin(replyPostAuthorUsersAlias, eq(replyLocalPostsAlias.userId, replyPostAuthorUsersAlias.userId))
       .innerJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
       .leftJoin(originalLocalPostsAlias, eq(originalPostsAlias.postId, originalLocalPostsAlias.postId))
       .leftJoin(originalRemotePostsAlias, eq(originalPostsAlias.postId, originalRemotePostsAlias.postId))
@@ -357,6 +360,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         notification: replyNotification,
         replierActor,
         replyPost,
+        replyPostAuthorUsername: row.replyPostAuthorUsers?.username,
         originalPost,
         createdAt: row.notifications.createdAt.getTime() as Instant,
       };

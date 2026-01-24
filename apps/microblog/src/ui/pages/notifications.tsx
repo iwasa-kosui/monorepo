@@ -134,7 +134,7 @@ if (document.readyState === 'loading') {
 }
 `;
 
-export const NotificationsPage = ({ user: _user, notifications }: Props) => (
+export const NotificationsPage = ({ user, notifications }: Props) => (
   <Layout isLoggedIn={true}>
     <section class='mb-8'>
       <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>
@@ -257,6 +257,7 @@ export const NotificationsPage = ({ user: _user, notifications }: Props) => (
                 key={notification.notification.notificationId}
                 notification={notification}
                 sanitizedContent={sanitizedContent}
+                recipientUsername={user.username}
               />
             ))
           )
