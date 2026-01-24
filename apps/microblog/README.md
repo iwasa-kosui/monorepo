@@ -90,17 +90,17 @@ pnpm build
 
 ### RDRA（要件定義）
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [System Value](docs/rdra/system-value.md) | プロダクトビジョン、アクター、要求・要件 |
-| [System Environment](docs/rdra/system-environment.md) | 利用シーン、ビジネスユースケース |
-| [Information Model](docs/rdra/information-model.md) | ドメインモデル、集約、イベント |
-| [State Model](docs/rdra/state-model.md) | 状態遷移、ビジネスルール |
+| ドキュメント                                          | 内容                                     |
+| ----------------------------------------------------- | ---------------------------------------- |
+| [System Value](docs/rdra/system-value.md)             | プロダクトビジョン、アクター、要求・要件 |
+| [System Environment](docs/rdra/system-environment.md) | 利用シーン、ビジネスユースケース         |
+| [Information Model](docs/rdra/information-model.md)   | ドメインモデル、集約、イベント           |
+| [State Model](docs/rdra/state-model.md)               | 状態遷移、ビジネスルール                 |
 
 ### 開発者向けリソース
 
-| ドキュメント | 内容 |
-|-------------|------|
+| ドキュメント     | 内容                   |
+| ---------------- | ---------------------- |
 | [ADR](docs/adr/) | アーキテクチャ決定記録 |
 
 ## Architecture
