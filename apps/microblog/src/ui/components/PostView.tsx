@@ -5,6 +5,7 @@ import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
+import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
 type Props = Readonly<{
   post: PostWithAuthor;
@@ -306,6 +307,12 @@ export const PostView = (
                   />
                 </a>
               ))}
+            </div>
+          )}
+          {/* Link previews */}
+          {post.linkPreviews && post.linkPreviews.length > 0 && (
+            <div class='mt-3 space-y-2'>
+              {post.linkPreviews.map((preview) => <LinkPreviewCard key={preview.linkPreviewId} preview={preview} />)}
             </div>
           )}
           {/* Show thread link */}

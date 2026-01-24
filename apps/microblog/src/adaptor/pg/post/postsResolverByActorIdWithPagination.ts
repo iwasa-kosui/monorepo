@@ -4,8 +4,11 @@ import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
+import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { LocalPost, type PostsResolverByActorIdWithPagination, RemotePost } from '../../../domain/post/post.ts';
 import { Post } from '../../../domain/post/post.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
@@ -13,6 +16,7 @@ import {
   actorsTable,
   emojiReactsTable,
   likesTable,
+  linkPreviewsTable,
   localActorsTable,
   localPostsTable,
   postImagesTable,
@@ -163,12 +167,38 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
       }
     }
 
+    // Fetch link previews for all posts
+    const linkPreviewsByPostId = new Map<string, LinkPreview[]>();
+    if (postIds.length > 0) {
+      const linkPreviewRows = await DB.getInstance()
+        .select()
+        .from(linkPreviewsTable)
+        .where(inArray(linkPreviewsTable.postId, postIds))
+        .execute();
+      for (const row of linkPreviewRows) {
+        const existing = linkPreviewsByPostId.get(row.postId) ?? [];
+        existing.push(LinkPreview.orThrow({
+          linkPreviewId: LinkPreviewId.orThrow(row.linkPreviewId),
+          postId: row.postId as PostId,
+          url: row.url,
+          title: row.title,
+          description: row.description,
+          imageUrl: row.imageUrl,
+          faviconUrl: row.faviconUrl,
+          siteName: row.siteName,
+          createdAt: row.createdAt.getTime(),
+        }));
+        linkPreviewsByPostId.set(row.postId, existing);
+      }
+    }
+
     return RA.ok(rows.map(row => {
       const images = imagesByPostId.get(row.posts.postId) ?? [];
       const reposted = repostedPostIds.has(row.posts.postId);
       const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
       const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
       const reactions = reactionsByPostId.get(row.posts.postId) ?? [];
+      const linkPreviews = linkPreviewsByPostId.get(row.posts.postId) ?? [];
       if (row.local_posts) {
         const post: LocalPost = LocalPost.orThrow({
           postId: row.posts.postId,
@@ -189,6 +219,7 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           likeCount,
           repostCount,
           reactions,
+          linkPreviews,
         };
       }
       if (row.remote_posts) {
@@ -211,6 +242,7 @@ const getInstance = singleton((): PostsResolverByActorIdWithPagination => {
           likeCount,
           repostCount,
           reactions,
+          linkPreviews,
         };
       }
       throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);

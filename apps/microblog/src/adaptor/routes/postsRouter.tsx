@@ -9,8 +9,10 @@ import { SessionId } from '../../domain/session/sessionId.ts';
 import { Federation } from '../../federation.ts';
 import { Layout } from '../../layout.tsx';
 import { CreatePostUseCase } from '../../useCase/createPost.ts';
+import { createOgpFetcher } from '../ogp/ogpFetcher.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
+import { PgLinkPreviewCreatedStore } from '../pg/linkPreview/linkPreviewCreatedStore.ts';
 import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
@@ -34,6 +36,8 @@ app.post(
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
       timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+      linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
+      ogpFetcher: createOgpFetcher(),
     });
     const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {
