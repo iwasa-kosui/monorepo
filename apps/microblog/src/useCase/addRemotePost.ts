@@ -1,5 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
+import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
@@ -8,6 +10,8 @@ import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
+import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import {
   Notification,
   type ReplyNotification,
@@ -18,6 +22,7 @@ import { type LocalPost, Post, type PostCreatedStore, type RemotePostCreated } f
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
+import { Env } from '../env.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -62,6 +67,8 @@ type Deps = Readonly<{
   replyNotificationCreatedStore: ReplyNotificationCreatedStore;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  linkPreviewCreatedStore: LinkPreviewCreatedStore;
+  ogpFetcher: OgpFetcher;
 }>;
 
 const create = ({
@@ -75,6 +82,8 @@ const create = ({
   replyNotificationCreatedStore,
   pushSubscriptionsResolver,
   webPushSender,
+  linkPreviewCreatedStore,
+  ogpFetcher,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -120,6 +129,47 @@ const create = ({
           createdAt: now,
         }));
         await postImageCreatedStore.store(images);
+        return RA.ok(undefined);
+      }),
+      // Fetch and store link previews
+      RA.andThrough(async ({ post, content }) => {
+        const env = Env.getInstance();
+        const excludeHost = new URL(env.ORIGIN).host;
+        const urls = extractUrlsFromHtml(content, excludeHost);
+
+        if (urls.length === 0) {
+          return RA.ok(undefined);
+        }
+
+        const ogpResults = await Promise.allSettled(
+          urls.map((url) => ogpFetcher.fetch(url)),
+        );
+
+        const linkPreviews: LinkPreview[] = [];
+        for (let i = 0; i < ogpResults.length; i++) {
+          const result = ogpResults[i];
+          if (result.status === 'fulfilled') {
+            const ogp = result.value;
+            if (ogp.title ?? ogp.description) {
+              linkPreviews.push({
+                linkPreviewId: LinkPreviewId.generate(),
+                postId: post.aggregateState.postId,
+                url: urls[i],
+                title: ogp.title,
+                description: ogp.description,
+                imageUrl: ogp.imageUrl,
+                faviconUrl: ogp.faviconUrl,
+                siteName: ogp.siteName,
+                createdAt: now,
+              });
+            }
+          }
+        }
+
+        if (linkPreviews.length > 0) {
+          await linkPreviewCreatedStore.store(linkPreviews);
+        }
+
         return RA.ok(undefined);
       }),
       // Create reply notification if this is a reply to a local post
