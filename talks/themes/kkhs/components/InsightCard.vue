@@ -18,7 +18,7 @@ const cardVariant = computed(() => {
 
 <template>
   <CardBase :variant="cardVariant" padding="md" class="insight-card">
-    <CardContent :title="title" titleSize="sm">
+    <CardContent :title="title" titleSize="lg">
       <slot />
     </CardContent>
   </CardBase>
@@ -31,5 +31,33 @@ const cardVariant = computed(() => {
 
 .insight-card :deep(.title) {
   @apply mb-2;
+}
+
+.insight-card .error {
+
+  ul {
+    list-style: none;
+
+    li {
+      @apply mb-2 relative pl-6;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.7em;
+        width: 8px;
+        height: 8px;
+        background-color: var(--slidev-theme-error);
+        border-radius: 4px;
+      }
+    }
+
+    ul li::before {
+      background-color: var(--slidev-theme-error);
+      width: 6px;
+      height: 6px;
+    }
+  }
 }
 </style>

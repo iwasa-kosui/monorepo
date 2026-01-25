@@ -40,17 +40,17 @@ defineProps<{
 }
 
 .description {
-  @apply text-sm text-slate-600 my-0;
+  @apply text-base text-slate-600 my-0;
   white-space: pre-line;
 }
 
 .subdescription {
-  @apply text-xs text-slate-500 mt-1 mb-0;
+  @apply text-sm text-slate-500 mt-1 mb-0;
   white-space: pre-line;
 }
 
 .slot-content {
-  @apply text-xs text-slate-600;
+  @apply text-base text-slate-600;
 }
 
 .slot-content :deep(p) {

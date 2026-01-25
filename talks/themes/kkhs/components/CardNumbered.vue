@@ -13,7 +13,7 @@ defineProps<{
 <template>
   <CardBase variant="neutral" padding="md" align="center">
     <CardBadge :value="number" size="xl" />
-    <CardContent :title="title" :description="description" titleSize="sm">
+    <CardContent :title="title" :description="description" titleSize="lg">
       <slot />
     </CardContent>
   </CardBase>
@@ -29,6 +29,6 @@ defineProps<{
 }
 
 :deep(.description) {
-  @apply text-xs mt-1;
+  @apply text-base mt-1;
 }
 </style>
