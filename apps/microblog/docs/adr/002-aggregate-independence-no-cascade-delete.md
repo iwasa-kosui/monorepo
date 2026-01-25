@@ -14,12 +14,12 @@
 
 `apps/microblog` では、1つのユースケースで複数の集約を操作する設計になっていた。
 
-| ユースケース | 操作集約数 | 問題点 |
-|-------------|----------|--------|
-| `deletePost.ts` | 9 | 投稿削除時に関連する通知・タイムラインアイテム等をカスケード削除 |
-| `removeReceivedLike.ts` | 2 | Like削除時にLikeNotificationも削除 |
-| `removeReceivedRepost.ts` | 2 | Repost削除時にTimelineItemも削除 |
-| `removeReceivedEmojiReact.ts` | 2 | EmojiReact削除時にEmojiReactNotificationも削除 |
+| ユースケース                  | 操作集約数 | 問題点                                                           |
+| ----------------------------- | ---------- | ---------------------------------------------------------------- |
+| `deletePost.ts`               | 9          | 投稿削除時に関連する通知・タイムラインアイテム等をカスケード削除 |
+| `removeReceivedLike.ts`       | 2          | Like削除時にLikeNotificationも削除                               |
+| `removeReceivedRepost.ts`     | 2          | Repost削除時にTimelineItemも削除                                 |
+| `removeReceivedEmojiReact.ts` | 2          | EmojiReact削除時にEmojiReactNotificationも削除                   |
 
 ### DDDにおける原則
 
@@ -37,19 +37,21 @@ CLAUDE.mdに記載の通り、集約間の操作は以下の原則に従うべ�
 
 ### 方針
 
-**カスケード削除を廃止し、参照時のフィルタリングで対応する。**
+**カスケード削除を廃止し、物理削除 + `innerJoin` による自動フィルタリングで対応する。**
 
 具体的には：
 
-1. 投稿が削除されても、その投稿を参照する通知・タイムラインアイテムは削除しない
-2. リゾルバー（読み取り処理）で `innerJoin` + `deletedAt IS NULL` を使用し、削除済み投稿を参照するアイテムを結果から除外する
-3. ユーザーには削除された投稿を参照するアイテムは単純に表示しない（「削除されました」の表示も不要）
+1. 投稿は物理削除（DELETEクエリ）で完全に削除する
+2. 投稿を参照する通知・タイムラインアイテムは削除しない
+3. リゾルバー（読み取り処理）は `innerJoin` で投稿を結合するため、削除済み投稿を参照するアイテムは自動的に結果から除外される
+4. 返信通知については、返信先（元投稿）が削除されても通知を表示する（`leftJoin` を使用）
 
 ### 変更内容
 
 #### 1. ユースケースの簡素化
 
 **Before（deletePost.ts - 9集約を操作）:**
+
 ```typescript
 // 関連エンティティを並列で取得して削除
 const [timelineItemResult, likeNotificationsResult, ...] = await Promise.all([...]);
@@ -61,34 +63,58 @@ await Promise.all([
 ```
 
 **After（deletePost.ts - 2集約のみ）:**
+
 ```typescript
 // Post と Article（子集約）のみを削除
 await postDeletedStore.store(Post.deletePost(now)(postId));
 if (article) {
-  await articleDeletedStore.store(Article.deleteArticle(now)(article.articleId));
+  await articleDeletedStore.store(
+    Article.deleteArticle(now)(article.articleId),
+  );
 }
 ```
 
-#### 2. リゾルバーでのフィルタリング
+#### 2. 物理削除の実装
 
-**通知リゾルバー:**
+投稿は `deletedAt` による論理削除ではなく、物理削除（DELETE）を使用する。
+
 ```typescript
-// innerJoin で投稿を結合し、deletedAt IS NULL でフィルタ
+// postDeletedStore.ts
+await tx.delete(postImagesTable).where(eq(postImagesTable.postId, postId));
+await tx.delete(localPostsTable).where(eq(localPostsTable.postId, postId));
+await tx.delete(remotePostsTable).where(eq(remotePostsTable.postId, postId));
+await tx.delete(postsTable).where(eq(postsTable.postId, postId));
+```
+
+#### 3. リゾルバーでの自動フィルタリング
+
+`innerJoin` を使用することで、削除済み投稿を参照するアイテムは自動的に除外される。
+
+**通知リゾルバー（Like/EmojiReact）:**
+
+```typescript
+// innerJoin により、削除済み投稿を参照する通知は自動的に除外
 .innerJoin(postsTable, eq(notificationLikesTable.likedPostId, postsTable.postId))
-.where(and(
-  eq(notificationsTable.recipientUserId, userId),
-  isNull(postsTable.deletedAt)
-))
+.where(eq(notificationsTable.recipientUserId, userId))
+```
+
+**通知リゾルバー（Reply）:**
+
+```typescript
+// 返信投稿は innerJoin（削除されていれば除外）
+.innerJoin(replyPostsAlias, eq(notificationRepliesTable.replyPostId, replyPostsAlias.postId))
+// 返信先投稿は leftJoin（削除されていても通知を表示）
+.leftJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
 ```
 
 **タイムラインリゾルバー:**
+
 ```typescript
-// innerJoin で投稿を結合し、deletedAt IS NULL でフィルタ
+// innerJoin により、削除済み投稿を参照するタイムラインアイテムは自動的に除外
 .innerJoin(postsTable, eq(timelineItemsTable.postId, postsTable.postId))
 .where(and(
   inArray(timelineItemsTable.actorId, actorIds),
   isNull(timelineItemsTable.deletedAt),
-  isNull(postsTable.deletedAt)
 ))
 ```
 
@@ -112,50 +138,53 @@ if (article) {
    - カスケード削除中の障害でデータ不整合が起きるリスクがない
    - トランザクション境界を狭く保てる
 
-4. **データの追跡可能性が向上**
-   - 削除された投稿への参照履歴が残る
-   - 監査やデバッグ時に有用
+4. **クエリがシンプル**
+   - `deletedAt IS NULL` のフィルタが不要
+   - `innerJoin` による自然な除外
 
 ### デメリット
 
-1. **データ増加**
-   - 削除済み投稿を参照するデータは残り続ける
+1. **孤児レコードの発生**
+   - 削除済み投稿を参照する通知・タイムラインアイテムは残り続ける
    - 必要に応じて定期クリーンアップジョブを検討（別タスク）
-
-2. **クエリのオーバーヘッド**
-   - JOINと `deletedAt IS NULL` のフィルタが必要
-   - ただし、インデックスを適切に設定すればパフォーマンス影響は軽微
 
 ---
 
 ## 影響を受けるファイル
 
 ### リゾルバー
+
 - `src/adaptor/pg/notification/notificationsResolverByUserId.ts`
 - `src/adaptor/pg/timeline/timelineItemsResolverByActorIds.ts`
 
 ### ドメインモデル
-- `src/domain/notification/notification.ts`
-- `src/domain/timeline/timelineItem.ts`
+
+- `src/domain/notification/notification.ts`（`originalPost` を optional に変更）
 
 ### ユースケース
+
 - `src/useCase/deletePost.ts`
 - `src/useCase/removeReceivedLike.ts`
 - `src/useCase/removeReceivedRepost.ts`
 - `src/useCase/removeReceivedEmojiReact.ts`
 
-### UI
-- `src/ui/pages/home.tsx`
-- `src/ui/hooks/useKeyboardNavigation.ts`
-- `src/adaptor/routes/apiRouter.tsx`
-
 ---
 
 ## 代替案
 
-### 案1: 結果整合性によるカスケード削除
+### 案1: 論理削除 + deletedAt フィルタ
 
-イベント駆動設計でカスケード削除を実装する案も検討した。
+`deletedAt` カラムを使用した論理削除で、クエリ時に `deletedAt IS NULL` でフィルタする案。
+
+**却下理由:**
+
+- 物理削除の方がストレージ効率が良い
+- `innerJoin` による自動フィルタの方がシンプル
+- クエリ時の明示的なフィルタが不要
+
+### 案2: 結果整合性によるカスケード削除
+
+イベント駆動設計でカスケード削除を実装する案。
 
 ```
 Post削除 → PostDeleted イベント発行
@@ -165,18 +194,10 @@ Post削除 → PostDeleted イベント発行
 ```
 
 **却下理由:**
+
 - 複雑性が増す
 - そもそも削除する必要がない
-- 参照時のフィルタリングの方がシンプル
-
-### 案2: 削除済み表示
-
-`leftJoin` を使用し、削除された投稿を参照するアイテムには「この投稿は削除されました」と表示する案。
-
-**却下理由:**
-- ユーザーにとって削除されたことを知らせる必要がない
-- UIが複雑になる
-- `innerJoin` でフィルタする方がシンプル
+- `innerJoin` による自動フィルタの方がシンプル
 
 ---
 

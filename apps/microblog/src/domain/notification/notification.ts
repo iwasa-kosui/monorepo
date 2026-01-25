@@ -391,7 +391,8 @@ export type ReplyNotificationWithDetails = Readonly<{
   replierActor: Actor;
   replyPost: Post;
   replyPostAuthorUsername: string | undefined;
-  originalPost: Post;
+  /** 返信先の投稿（削除済みの場合はundefined） */
+  originalPost: Post | undefined;
   createdAt: Instant;
 }>;
 

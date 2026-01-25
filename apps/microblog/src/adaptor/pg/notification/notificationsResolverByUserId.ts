@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import type { Actor } from '../../../domain/actor/actor.ts';
@@ -142,7 +142,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(postsTable, eq(notificationLikesTable.likedPostId, postsTable.postId))
       .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
       .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(and(eq(notificationsTable.recipientUserId, userId), isNull(postsTable.deletedAt)))
+      .where(eq(notificationsTable.recipientUserId, userId))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();
@@ -246,7 +246,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(postsTable, eq(notificationEmojiReactsTable.reactedPostId, postsTable.postId))
       .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
       .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(and(eq(notificationsTable.recipientUserId, userId), isNull(postsTable.deletedAt)))
+      .where(eq(notificationsTable.recipientUserId, userId))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();
@@ -319,14 +319,10 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .leftJoin(replyLocalPostsAlias, eq(replyPostsAlias.postId, replyLocalPostsAlias.postId))
       .leftJoin(replyRemotePostsAlias, eq(replyPostsAlias.postId, replyRemotePostsAlias.postId))
       .leftJoin(replyPostAuthorUsersAlias, eq(replyLocalPostsAlias.userId, replyPostAuthorUsersAlias.userId))
-      .innerJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
+      .leftJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
       .leftJoin(originalLocalPostsAlias, eq(originalPostsAlias.postId, originalLocalPostsAlias.postId))
       .leftJoin(originalRemotePostsAlias, eq(originalPostsAlias.postId, originalRemotePostsAlias.postId))
-      .where(and(
-        eq(notificationsTable.recipientUserId, userId),
-        isNull(replyPostsAlias.deletedAt),
-        isNull(originalPostsAlias.deletedAt),
-      ))
+      .where(eq(notificationsTable.recipientUserId, userId))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();
@@ -354,11 +350,14 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         remote_posts: row.replyRemotePosts,
       });
 
-      const originalPost = reconstructPost({
-        posts: row.originalPosts,
-        local_posts: row.originalLocalPosts,
-        remote_posts: row.originalRemotePosts,
-      });
+      // 返信先の投稿が削除されている場合はundefined
+      const originalPost = row.originalPosts
+        ? reconstructPost({
+          posts: row.originalPosts,
+          local_posts: row.originalLocalPosts,
+          remote_posts: row.originalRemotePosts,
+        })
+        : undefined;
 
       return {
         notification: replyNotification,

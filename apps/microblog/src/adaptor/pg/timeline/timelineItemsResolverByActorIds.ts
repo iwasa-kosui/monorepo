@@ -88,7 +88,6 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       .where(and(
         inArray(timelineItemsTable.actorId, actorIds),
         isNull(timelineItemsTable.deletedAt),
-        isNull(postsTable.deletedAt),
         createdAt ? lt(timelineItemsTable.createdAt, Instant.toDate(createdAt)) : undefined,
       ))
       .limit(10)
