@@ -50,21 +50,21 @@ iori（庵）は、**Fediverseに接続された個人向けナレッジ管理�
 
 ```mermaid
 graph TB
-    subgraph "アクター"
-        A["ナレッジワーカー（主要ユーザー）"]
-        B["リモートユーザー（Fediverse）"]
-        C["閲覧者（未登録）"]
-        D["サーバー管理者"]
-    end
+    A["ナレッジワーカー（主要ユーザー）"]
+    B["リモートユーザー（Fediverse）"]
+    C["閲覧者（未登録）"]
+    D["サーバー管理者"]
 
     subgraph "iori"
         I["iori"]
     end
 
     A -->|"記録・整理・発信"| I
-    B -->|"閲覧・反応"| I
-    C -->|"閲覧"| I
+    B -->|"発信・閲覧・反応"| I
     D -->|"運用・監視"| I
+
+    I ~~~ C
+    C -->|"閲覧"| I
 ```
 
 ### 2.2 アクター詳細
@@ -173,25 +173,29 @@ graph TB
 
 ```mermaid
 flowchart TD
-    subgraph "インプット"
-        A["収集"] -->|"Fediverseから他者の知識を収集"| B["取り込み"]
-        B -->|"ブックマーク・引用で自分のナレッジベースに"| C["記録"]
+
+    subgraph Organize ["蓄積・整理"]
+        direction LR
+        D["展開"]
+        D -->|"スレッドで<br>思考を深める"| E["整理"]
+        E -->|"手記としてまとめ<br>タグで分類"| F["検索"]
     end
 
-    subgraph "蓄積・整理"
-        C -->|"自分の思考もノートとして記録"| D["展開"]
-        D -->|"スレッドで思考を深める"| E["整理"]
-        E -->|"手記としてまとめ、タグで分類"| F["検索"]
-    end
-
-    subgraph "アウトプット"
-        F -->|"蓄積した知識を検索・参照"| G{"発信?"}
-        G -->|"Yes"| H["発信"]
-        G -->|"No"| F
+    subgraph Output ["アウトプット"]
+        direction LR
+        H["執筆"]
         H -->|"Fediverseに公開"| I["対話"]
     end
 
-    I -->|"フィードバック・新たな知識"| A
+    subgraph Input ["インプット"]
+        direction LR
+        A["収集"] -->|"Fediverseから<br>他者の知識を収集"| B["取り込み"]
+        B -->|"ブックマーク・引用で<br>自分のナレッジベースに"| C["記録"]
+    end
+
+    Input -->|"自分の思考も<br>ノートとして記録"| Organize
+    Organize -->|"蓄積した知識を<br>検索・参照"| Output
+    Output -->|"フィードバック<br>新たな知識"| Input
 ```
 
 ---
