@@ -88,8 +88,8 @@ const create = ({
           },
           new Follow({
             actor: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
-            object: new URL(relay.actorUri),
-            to: new URL(relay.actorUri),
+            object: new URL('https://www.w3.org/ns/activitystreams#Public'),
+            to: new URL('https://www.w3.org/ns/activitystreams#Public'),
           }),
         );
         return RA.ok(undefined);
