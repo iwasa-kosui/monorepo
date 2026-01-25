@@ -58,7 +58,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
         remotePostsTable,
         eq(postsTable.postId, remotePostsTable.postId),
       )
-      .leftJoin(
+      .innerJoin(
         actorsTable,
         eq(postsTable.actorId, actorsTable.actorId),
       )
@@ -236,12 +236,15 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       }
     }
 
-    // Filter out posts from muted actors (covers repost case where original post author is muted)
-    const filteredRows = rows.filter(row => !mutedActorIdSet.has(row.posts.actorId as ActorId));
+    // Filter out posts from muted actors
+    const filteredRows = rows.filter(row => {
+      return !mutedActorIdSet.has(row.posts.actorId as ActorId);
+    });
 
     const result: TimelineItemWithPost[] = filteredRows.map(row => {
-      const images = imagesByPostId.get(row.posts.postId) ?? [];
       const isRepost = row.timeline_items.type === 'repost';
+
+      const images = imagesByPostId.get(row.posts.postId) ?? [];
       const likeCount = likeCountsByPostId.get(row.posts.postId) ?? 0;
       const repostCount = repostCountsByPostId.get(row.posts.postId) ?? 0;
       const reactions = reactionsByPostId.get(row.posts.postId) ?? [];
@@ -263,7 +266,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
         post = {
           ...localPost,
           username: Username.orThrow(row.users!.username),
-          logoUri: row.actors!.logoUri ?? undefined,
+          logoUri: row.actors.logoUri ?? undefined,
           liked: row.likes !== null,
           reposted,
           images,
@@ -285,7 +288,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
         post = {
           ...remotePost,
           username: Username.orThrow(row.remote_actors!.username!),
-          logoUri: row.actors!.logoUri ?? undefined,
+          logoUri: row.actors.logoUri ?? undefined,
           liked: row.likes !== null,
           reposted,
           images,
@@ -295,7 +298,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           linkPreviews,
         };
       } else {
-        throw new Error(`Post type could not be determined for postId: ${row.posts.postId}, type: ${row.posts.type}`);
+        throw new Error(`Post type could not be determined for postId: ${row.posts.postId}`);
       }
 
       const timelineItemId = TimelineItemId.orThrow(row.timeline_items.timelineItemId);

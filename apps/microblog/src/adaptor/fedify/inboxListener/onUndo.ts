@@ -15,14 +15,8 @@ import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgRemoteLikeDeletedStore } from '../../pg/like/remoteLikeDeletedStore.ts';
 import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
-import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
-import { PgEmojiReactNotificationResolverByActorIdAndPostIdAndEmoji } from '../../pg/notification/emojiReactNotificationResolverByActorIdAndPostIdAndEmoji.ts';
-import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
-import { PgLikeNotificationResolverByActorIdAndPostId } from '../../pg/notification/likeNotificationResolverByActorIdAndPostId.ts';
 import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
-import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDeletedStore.ts';
-import { PgTimelineItemResolverByPostId } from '../../pg/timeline/timelineItemResolverByPostId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
@@ -76,8 +70,6 @@ const handleUndoLike = async (like: Like) => {
   const useCase = RemoveReceivedLikeUseCase.create({
     remoteLikeDeletedStore: PgRemoteLikeDeletedStore.getInstance(),
     remoteLikeResolverByActivityUri: PgRemoteLikeResolverByActivityUri.getInstance(),
-    likeNotificationResolverByActorIdAndPostId: PgLikeNotificationResolverByActorIdAndPostId.getInstance(),
-    likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
   });
 
   return RA.flow(
@@ -104,8 +96,6 @@ const handleUndoAnnounce = async (announce: Announce) => {
   const useCase = RemoveReceivedRepostUseCase.create({
     repostDeletedStore: PgRepostDeletedStore.getInstance(),
     repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
-    timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
-    timelineItemResolverByPostId: PgTimelineItemResolverByPostId.getInstance(),
   });
 
   return RA.flow(
@@ -148,9 +138,6 @@ const handleUndoEmojiReact = async (object: Activity) => {
   const useCase = RemoveReceivedEmojiReactUseCase.create({
     emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
     emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
-    emojiReactNotificationResolverByActorIdAndPostIdAndEmoji: PgEmojiReactNotificationResolverByActorIdAndPostIdAndEmoji
-      .getInstance(),
-    emojiReactNotificationDeletedStore: PgEmojiReactNotificationDeletedStore.getInstance(),
   });
 
   await RA.flow(

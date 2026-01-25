@@ -41,27 +41,17 @@ import { PgArticleResolverByRootPostId } from '../pg/article/articleResolverByRo
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
-import { PgEmojiReactsResolverByPostId } from '../pg/emojiReact/emojiReactsResolverByPostId.ts';
 import { PgFederatedTimelineItemsResolver } from '../pg/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
-import { PgLikesResolverByPostId } from '../pg/like/likesResolverByPostId.ts';
 import { PgLocalLikeCreatedStore } from '../pg/like/localLikeCreatedStore.ts';
 import { PgLocalLikeDeletedStore } from '../pg/like/localLikeDeletedStore.ts';
-import { PgRemoteLikeDeletedStore } from '../pg/like/remoteLikeDeletedStore.ts';
 import { PgMuteCreatedStore } from '../pg/mute/muteCreatedStore.ts';
 import { PgMutedActorIdsResolverByUserId } from '../pg/mute/mutedActorIdsResolverByUserId.ts';
 import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
 import { PgMuteResolver } from '../pg/mute/muteResolver.ts';
 import { PgMutesResolverByUserId } from '../pg/mute/mutesResolverByUserId.ts';
-import { PgEmojiReactNotificationDeletedStore } from '../pg/notification/emojiReactNotificationDeletedStore.ts';
-import { PgEmojiReactNotificationsResolverByPostId } from '../pg/notification/emojiReactNotificationsResolverByPostId.ts';
-import { PgLikeNotificationDeletedStore } from '../pg/notification/likeNotificationDeletedStore.ts';
-import { PgLikeNotificationsResolverByPostId } from '../pg/notification/likeNotificationsResolverByPostId.ts';
 import { PgReplyNotificationCreatedStore } from '../pg/notification/replyNotificationCreatedStore.ts';
-import { PgReplyNotificationDeletedStore } from '../pg/notification/replyNotificationDeletedStore.ts';
-import { PgReplyNotificationsResolverByOriginalPostId } from '../pg/notification/replyNotificationsResolverByOriginalPostId.ts';
-import { PgReplyNotificationsResolverByReplyPostId } from '../pg/notification/replyNotificationsResolverByReplyPostId.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgLocalPostResolverByUri } from '../pg/post/localPostResolverByUri.ts';
 import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
@@ -75,11 +65,9 @@ import { PgRelaySubscriptionRequestedStore } from '../pg/relay/relaySubscription
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
-import { PgRepostsResolverByPostId } from '../pg/repost/repostsResolverByPostId.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
-import { PgTimelineItemResolverByPostId } from '../pg/timeline/timelineItemResolverByPostId.ts';
 import { PgTimelineItemResolverByRepostId } from '../pg/timeline/timelineItemResolverByRepostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
@@ -628,22 +616,6 @@ const app = new Hono()
       actorResolverByUserId: PgActorResolverByUserId.getInstance(),
       postDeletedStore: PgPostDeletedStore.getInstance(),
       postResolver: PgPostResolver.getInstance(),
-      timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
-      timelineItemResolverByPostId: PgTimelineItemResolverByPostId.getInstance(),
-      likeNotificationDeletedStore: PgLikeNotificationDeletedStore.getInstance(),
-      likeNotificationsResolverByPostId: PgLikeNotificationsResolverByPostId.getInstance(),
-      emojiReactNotificationDeletedStore: PgEmojiReactNotificationDeletedStore.getInstance(),
-      emojiReactNotificationsResolverByPostId: PgEmojiReactNotificationsResolverByPostId.getInstance(),
-      replyNotificationDeletedStore: PgReplyNotificationDeletedStore.getInstance(),
-      replyNotificationsResolverByReplyPostId: PgReplyNotificationsResolverByReplyPostId.getInstance(),
-      replyNotificationsResolverByOriginalPostId: PgReplyNotificationsResolverByOriginalPostId.getInstance(),
-      repostDeletedStore: PgRepostDeletedStore.getInstance(),
-      repostsResolverByPostId: PgRepostsResolverByPostId.getInstance(),
-      localLikeDeletedStore: PgLocalLikeDeletedStore.getInstance(),
-      remoteLikeDeletedStore: PgRemoteLikeDeletedStore.getInstance(),
-      likesResolverByPostId: PgLikesResolverByPostId.getInstance(),
-      emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
-      emojiReactsResolverByPostId: PgEmojiReactsResolverByPostId.getInstance(),
       articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
       articleDeletedStore: PgArticleDeletedStore.getInstance(),
     });

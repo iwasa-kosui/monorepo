@@ -7,11 +7,6 @@ import {
   RepostNotFoundError,
   type RepostResolverByActivityUri,
 } from '../domain/repost/repost.ts';
-import {
-  TimelineItem,
-  type TimelineItemDeletedStore,
-  type TimelineItemResolverByPostId,
-} from '../domain/timeline/timelineItem.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -27,15 +22,11 @@ export type RemoveReceivedRepostUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   repostDeletedStore: RepostDeletedStore;
   repostResolverByActivityUri: RepostResolverByActivityUri;
-  timelineItemDeletedStore: TimelineItemDeletedStore;
-  timelineItemResolverByPostId: TimelineItemResolverByPostId;
 }>;
 
 const create = ({
   repostDeletedStore,
   repostResolverByActivityUri,
-  timelineItemDeletedStore,
-  timelineItemResolverByPostId,
 }: Deps): RemoveReceivedRepostUseCase => {
   const now = Instant.now();
 
@@ -53,20 +44,6 @@ const create = ({
             return RA.ok(repost);
           }),
         );
-      }),
-      // Delete the timeline item if it exists
-      RA.andThrough(async ({ repost }) => {
-        const timelineItem = await timelineItemResolverByPostId.resolve({
-          postId: repost.postId,
-        });
-        if (timelineItem.ok && timelineItem.val) {
-          const deletedEvent = TimelineItem.deleteTimelineItem(
-            timelineItem.val.timelineItemId,
-            now,
-          );
-          await timelineItemDeletedStore.store(deletedEvent);
-        }
-        return RA.ok(undefined);
       }),
       // Delete the repost
       RA.andThrough(async ({ repost }) => {

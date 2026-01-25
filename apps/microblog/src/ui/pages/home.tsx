@@ -604,6 +604,7 @@ const TimelineList = () => {
       {timelineItems.map((item, index) => {
         const postId = item.post.postId;
         const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;
+
         return (
           <PostView
             key={item.timelineItemId}

@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import type { Actor } from '../../../domain/actor/actor.ts';
@@ -142,7 +142,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(postsTable, eq(notificationLikesTable.likedPostId, postsTable.postId))
       .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
       .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
+      .where(and(eq(notificationsTable.recipientUserId, userId), isNull(postsTable.deletedAt)))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();
@@ -246,7 +246,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(postsTable, eq(notificationEmojiReactsTable.reactedPostId, postsTable.postId))
       .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
       .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
+      .where(and(eq(notificationsTable.recipientUserId, userId), isNull(postsTable.deletedAt)))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();
@@ -322,7 +322,11 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
       .leftJoin(originalLocalPostsAlias, eq(originalPostsAlias.postId, originalLocalPostsAlias.postId))
       .leftJoin(originalRemotePostsAlias, eq(originalPostsAlias.postId, originalRemotePostsAlias.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
+      .where(and(
+        eq(notificationsTable.recipientUserId, userId),
+        isNull(replyPostsAlias.deletedAt),
+        isNull(originalPostsAlias.deletedAt),
+      ))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
       .execute();

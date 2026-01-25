@@ -7,11 +7,6 @@ import {
   type EmojiReactResolverByActivityUri,
 } from '../domain/emojiReact/emojiReact.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import {
-  type EmojiReactNotificationDeletedStore,
-  type EmojiReactNotificationResolverByActorIdAndPostIdAndEmoji,
-  Notification,
-} from '../domain/notification/notification.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -29,15 +24,11 @@ export type RemoveReceivedEmojiReactUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   emojiReactDeletedStore: EmojiReactDeletedStore;
   emojiReactResolverByActivityUri: EmojiReactResolverByActivityUri;
-  emojiReactNotificationResolverByActorIdAndPostIdAndEmoji: EmojiReactNotificationResolverByActorIdAndPostIdAndEmoji;
-  emojiReactNotificationDeletedStore: EmojiReactNotificationDeletedStore;
 }>;
 
 const create = ({
   emojiReactDeletedStore,
   emojiReactResolverByActivityUri,
-  emojiReactNotificationResolverByActorIdAndPostIdAndEmoji,
-  emojiReactNotificationDeletedStore,
 }: Deps): RemoveReceivedEmojiReactUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -57,22 +48,6 @@ const create = ({
       RA.andThrough(({ emojiReact }) => {
         const event = EmojiReact.deleteEmojiReact(emojiReact, now);
         return emojiReactDeletedStore.store(event);
-      }),
-      RA.andThrough(({ emojiReact }) => {
-        return RA.flow(
-          emojiReactNotificationResolverByActorIdAndPostIdAndEmoji.resolve({
-            reactorActorId: emojiReact.actorId,
-            reactedPostId: emojiReact.postId,
-            emoji: emojiReact.emoji,
-          }),
-          RA.andThen((notification) => {
-            if (!notification) {
-              return RA.ok(undefined);
-            }
-            const event = Notification.deleteEmojiReactNotification(notification, now);
-            return emojiReactNotificationDeletedStore.store(event);
-          }),
-        );
       }),
       RA.map(({ emojiReact }) => ({ emojiReact })),
     );
