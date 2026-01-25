@@ -319,7 +319,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .leftJoin(replyLocalPostsAlias, eq(replyPostsAlias.postId, replyLocalPostsAlias.postId))
       .leftJoin(replyRemotePostsAlias, eq(replyPostsAlias.postId, replyRemotePostsAlias.postId))
       .leftJoin(replyPostAuthorUsersAlias, eq(replyLocalPostsAlias.userId, replyPostAuthorUsersAlias.userId))
-      .innerJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
+      .leftJoin(originalPostsAlias, eq(notificationRepliesTable.originalPostId, originalPostsAlias.postId))
       .leftJoin(originalLocalPostsAlias, eq(originalPostsAlias.postId, originalLocalPostsAlias.postId))
       .leftJoin(originalRemotePostsAlias, eq(originalPostsAlias.postId, originalRemotePostsAlias.postId))
       .where(eq(notificationsTable.recipientUserId, userId))
@@ -350,11 +350,14 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         remote_posts: row.replyRemotePosts,
       });
 
-      const originalPost = reconstructPost({
-        posts: row.originalPosts,
-        local_posts: row.originalLocalPosts,
-        remote_posts: row.originalRemotePosts,
-      });
+      // 返信先の投稿が削除されている場合はundefined
+      const originalPost = row.originalPosts
+        ? reconstructPost({
+          posts: row.originalPosts,
+          local_posts: row.originalLocalPosts,
+          remote_posts: row.originalRemotePosts,
+        })
+        : undefined;
 
       return {
         notification: replyNotification,

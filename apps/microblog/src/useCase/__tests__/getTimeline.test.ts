@@ -158,7 +158,8 @@ describe('GetTimelineUseCase', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.val.timelineItems).toHaveLength(1);
-        expect(result.val.timelineItems[0].post.content).toBe('Hello, timeline!');
+        const post = result.val.timelineItems[0].post;
+        expect(post.content).toBe('Hello, timeline!');
       }
     });
 
