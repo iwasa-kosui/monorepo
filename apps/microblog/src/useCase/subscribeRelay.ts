@@ -32,8 +32,10 @@ const sendFollowActivity = async (
   ctx: RequestContext<unknown>,
   relay: Relay,
 ): Promise<void> => {
+  // Get key pairs directly to ensure proper signing
+  const keys = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
   await ctx.sendActivity(
-    { identifier: INSTANCE_ACTOR_IDENTIFIER },
+    keys,
     {
       id: new URL(relay.actorUri),
       inboxId: new URL(relay.inboxUrl),
