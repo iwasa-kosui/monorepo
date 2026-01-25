@@ -8,6 +8,7 @@ import type { Username } from '../../domain/user/username.ts';
 import { CreatePostUseCase } from '../createPost.ts';
 import { arbContent, arbImageUrls, arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
+  createMockAcceptedRelaysResolver,
   createMockActorResolverByUserId,
   createMockLinkPreviewCreatedStore,
   createMockOgpFetcher,
@@ -37,6 +38,7 @@ describe('CreatePostUseCase', () => {
     const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
     const linkPreviewCreatedStore = createMockLinkPreviewCreatedStore();
     const ogpFetcher = createMockOgpFetcher();
+    const acceptedRelaysResolver = createMockAcceptedRelaysResolver();
     return {
       sessionResolver,
       postCreatedStore,
@@ -46,6 +48,7 @@ describe('CreatePostUseCase', () => {
       timelineItemCreatedStore,
       linkPreviewCreatedStore,
       ogpFetcher,
+      acceptedRelaysResolver,
     };
   };
 

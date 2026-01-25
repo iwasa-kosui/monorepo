@@ -257,3 +257,22 @@ export const linkPreviewsTable = pgTable('link_previews', {
 }, (table) => [
   index('link_previews_post_id_idx').on(table.postId),
 ]);
+
+export const relaysTable = pgTable('relays', {
+  relayId: uuid().primaryKey(),
+  inboxUrl: text().notNull().unique(),
+  actorUri: text().notNull().unique(),
+  status: varchar({ length: 16 }).notNull(),
+  createdAt: timestamp({ mode: 'date' }).notNull(),
+  acceptedAt: timestamp({ mode: 'date' }),
+});
+
+export const federatedTimelineItemsTable = pgTable('federated_timeline_items', {
+  federatedTimelineItemId: uuid().primaryKey(),
+  postId: uuid().notNull().references(() => postsTable.postId),
+  relayId: uuid().notNull().references(() => relaysTable.relayId),
+  receivedAt: timestamp({ mode: 'date' }).notNull(),
+}, (table) => [
+  index('federated_timeline_items_received_at_idx').on(table.receivedAt),
+  index('federated_timeline_items_post_id_idx').on(table.postId),
+]);

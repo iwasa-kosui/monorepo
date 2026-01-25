@@ -1,4 +1,5 @@
 import {
+  Accept,
   Activity,
   Announce,
   Article,
@@ -109,6 +110,7 @@ const create = () => {
   federation
     .setInboxListeners('/users/{identifier}/inbox', '/inbox')
     .setSharedKeyDispatcher(sharedKeyDispatcher.dispatch)
+    .on(Accept, inboxListener.onAccept)
     .on(Follow, inboxListener.onFollow)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)

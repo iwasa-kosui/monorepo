@@ -127,6 +127,13 @@
       "when": 1737737000000,
       "tag": "0017_like_v2_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1769305839208,
+      "tag": "0018_public_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }
