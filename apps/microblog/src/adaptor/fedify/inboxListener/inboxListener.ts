@@ -1,4 +1,5 @@
 import { singleton } from '../../../helper/singleton.ts';
+import { onAccept } from './onAccept.ts';
 import { onActivity } from './onActivity.ts';
 import { onAnnounce } from './onAnnounce.ts';
 import { onCreate } from './onCreate.ts';
@@ -9,6 +10,7 @@ import { onUndo } from './onUndo.ts';
 
 export const InboxListener = {
   getInstance: singleton(() => ({
+    onAccept,
     onActivity,
     onAnnounce,
     onCreate,

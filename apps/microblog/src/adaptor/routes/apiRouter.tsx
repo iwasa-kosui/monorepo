@@ -18,6 +18,7 @@ import { Federation } from '../../federation.ts';
 import { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
+import { GetFederatedTimelineUseCase } from '../../useCase/getFederatedTimeline.ts';
 import { GetMutesUseCase } from '../../useCase/getMutes.ts';
 import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts';
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
@@ -27,6 +28,7 @@ import { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
+import { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
@@ -40,6 +42,7 @@ import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStor
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { PgEmojiReactsResolverByPostId } from '../pg/emojiReact/emojiReactsResolverByPostId.ts';
+import { PgFederatedTimelineItemsResolver } from '../pg/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLikesResolverByPostId } from '../pg/like/likesResolverByPostId.ts';
@@ -67,6 +70,8 @@ import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { PgRelayResolverByActorUri } from '../pg/relay/relayResolverByActorUri.ts';
+import { PgRelaySubscriptionRequestedStore } from '../pg/relay/relaySubscriptionRequestedStore.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
@@ -130,6 +135,59 @@ const app = new Hono()
               actor,
               followers,
               following,
+            });
+          },
+          err: (err) => {
+            deleteCookie(c, 'sessionId');
+            return c.json({ error: String(JSON.stringify(err)) }, 400);
+          },
+        }),
+      );
+    },
+  )
+  .get(
+    '/v1/federated',
+    sValidator(
+      'query',
+      z.object({
+        receivedAt: z.optional(z.coerce.number().pipe(Instant.zodType)),
+      }),
+      (res, c) => {
+        if (!res.success) {
+          return c.json(
+            { error: res.error.flatMap((e) => e.message).join(',') },
+            400,
+          );
+        }
+      },
+    ),
+    async (c) => {
+      const useCase = GetFederatedTimelineUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        federatedTimelineItemsResolver: PgFederatedTimelineItemsResolver.getInstance(),
+        mutedActorIdsResolverByUserId: PgMutedActorIdsResolverByUserId.getInstance(),
+      });
+      const sessionId = getCookie(c, 'sessionId');
+      if (!sessionId) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+      const receivedAt = c.req.valid('query').receivedAt;
+      return RA.flow(
+        RA.ok(sessionId),
+        RA.andThen((sessionId) => useCase.run({ sessionId: SessionId.orThrow(sessionId), receivedAt })),
+        RA.match({
+          ok: ({ items, nextCursor }) => {
+            return c.json({
+              items: items.map((item) => ({
+                ...item,
+                post: {
+                  ...item.post,
+                  content: sanitize(item.post.content),
+                },
+              })),
+              nextCursor,
             });
           },
           err: (err) => {
@@ -912,6 +970,44 @@ const app = new Hono()
       const { markdown } = c.req.valid('json');
       const html = await PostContent.fromMarkdown(markdown);
       return c.json({ html: sanitize(html) });
+    },
+  )
+  .post(
+    '/v1/relay',
+    sValidator(
+      'json',
+      z.object({
+        actorUri: z.string().url(),
+      }),
+    ),
+    async (c) => {
+      const body = c.req.valid('json');
+      const { actorUri } = body;
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = SubscribeRelayUseCase.create({
+        relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
+        relaySubscriptionRequestedStore: PgRelaySubscriptionRequestedStore.getInstance(),
+      });
+
+      const result = await useCase.run({
+        relayActorUri: actorUri,
+        ctx,
+      });
+
+      return RA.match({
+        ok: (relay) => c.json({ success: true, relay }),
+        err: (err) => c.json({ error: `Failed to subscribe to relay: ${JSON.stringify(err)}` }, 400),
+      })(result);
     },
   );
 

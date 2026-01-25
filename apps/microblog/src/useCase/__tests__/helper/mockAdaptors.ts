@@ -95,6 +95,7 @@ import type {
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
+import type { AcceptedRelaysResolver, Relay } from '../../../domain/relay/relay.ts';
 import type {
   Repost,
   RepostDeleted,
@@ -680,3 +681,13 @@ export const createMockArticleDeletedStore = (): ArticleDeletedStore & InMemoryS
       & InMemoryStore<ArticleDeleted>['store'],
   };
 };
+
+export const createMockAcceptedRelaysResolver = (
+  relays: Relay[] = [],
+): AcceptedRelaysResolver & { setRelays: (r: Relay[]) => void } => ({
+  resolve: vi.fn(() => RAImpl.ok(relays)),
+  setRelays: (r: Relay[]) => {
+    relays.length = 0;
+    relays.push(...r);
+  },
+});

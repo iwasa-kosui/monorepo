@@ -1,5 +1,6 @@
 import { Create, Document, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
 
 import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
@@ -12,6 +13,7 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
+import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
@@ -50,6 +52,7 @@ type Deps = Readonly<{
   timelineItemCreatedStore: TimelineItemCreatedStore;
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
+  acceptedRelaysResolver: AcceptedRelaysResolver;
 }>;
 
 const create = ({
@@ -61,6 +64,7 @@ const create = ({
   timelineItemCreatedStore,
   linkPreviewCreatedStore,
   ogpFetcher,
+  acceptedRelaysResolver,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -173,6 +177,56 @@ const create = ({
             ),
           }),
         );
+        return RA.ok(undefined);
+      }),
+      // Send to accepted relays
+      RA.andThrough(async ({ post, user, ctx, images }) => {
+        const relaysResult = await acceptedRelaysResolver.resolve();
+        if (!relaysResult.ok || relaysResult.val.length === 0) {
+          return RA.ok(undefined);
+        }
+
+        const relays = relaysResult.val;
+        const noteArgs = { identifier: user.username, id: post.postId };
+        const note = await ctx.getObject(Note, noteArgs);
+
+        if (!note) {
+          getLogger().warn(`Failed to get Note object for relay distribution: ${post.postId}`);
+          return RA.ok(undefined);
+        }
+
+        const createActivity = new Create({
+          id: new URL('#activity', note.id ?? undefined),
+          object: note,
+          actors: note.attributionIds,
+          tos: note.toIds,
+          ccs: note.ccIds,
+          attachments: images.map(
+            (image) =>
+              new Document({
+                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                mediaType: getMimeTypeFromUrl(image.url),
+              }),
+          ),
+        });
+
+        // Send to each relay's inbox
+        for (const relay of relays) {
+          try {
+            await ctx.sendActivity(
+              { identifier: user.username },
+              {
+                id: new URL(relay.actorUri),
+                inboxId: new URL(relay.inboxUrl),
+              },
+              createActivity,
+            );
+            getLogger().info(`Sent post to relay: ${relay.actorUri}`);
+          } catch (err) {
+            getLogger().warn(`Failed to send post to relay ${relay.actorUri}: ${err}`);
+          }
+        }
+
         return RA.ok(undefined);
       }),
       RA.map(({ post, user }) => ({ post, user })),

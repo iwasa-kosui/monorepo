@@ -14,6 +14,7 @@ import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLinkPreviewCreatedStore } from '../pg/linkPreview/linkPreviewCreatedStore.ts';
 import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
+import { PgAcceptedRelaysResolver } from '../pg/relay/acceptedRelaysResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
@@ -38,6 +39,7 @@ app.post(
       timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
       linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
       ogpFetcher: createOgpFetcher(),
+      acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
     });
     const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {
