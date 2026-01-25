@@ -7,6 +7,7 @@ info: |
 author: 岩佐 幸翠
 keywords: SRE, Architecture, Domain Events, RLS, Service-Based Architecture
 transition: slide-left
+duration: 30min
 mdc: true
 ---
 
@@ -27,7 +28,7 @@ mdc: true
 
 <!--
 本日は「開発チームが信頼性向上のためにできること」というテーマでお話しします。
-私たちカケハシで、SRE専任を持たない開発チームがどのように信頼性向上に取り組んできたかを共有します。
+Embedded SREを持たない開発チームがどのように信頼性向上に取り組んできたかを共有します。
 -->
 
 ---
@@ -46,7 +47,7 @@ mdc: true
 </div>
 <div class="flex items-center justify-center">
 
-<img src="/kakehashi.png" class="w-48 rounded" alt="カケハシ" />
+<img src="https://icon.kosui.me/" class="w-48 rounded-lg!" alt="kosuiのアイコン。ドット絵のエビが描かれている。" />
 
 </div>
 </div>
@@ -58,13 +59,21 @@ mdc: true
 
 ---
 
-# 本セッションの対象者
+# 本セッションのゴール
 
-- 開発チームのリード  
-  
-- SREイネイブラー  
-  開発チームが「自分事として信頼性を担う」状態を目指しているが、<br>
-  Enablingのゴールを具体的に示したい方
+<CardGrid :cols="1">
+  <Card
+    title="開発チームのリード"
+    description="信頼性を自分事として担えるようになる"
+  />
+
+  <Card
+    title="SREイネイブラー"
+    description="Enablingのゴールを具体的に示せるようになる"
+  />
+
+</CardGrid>
+
 
 <!--
 本セッションは主に2つのペルソナを想定しています。
@@ -80,7 +89,7 @@ class: text-center
 # 本日のキーメッセージ
 
 <div class="text-3xl font-bold mt-8 p-8 bg-brand-100 rounded-lg max-w-4xl">
-開発チームが設計を"自分ごと"として<br>運用し続けることで、<br>SRE専任なしでも信頼性は向上できる
+開発チームが設計を"自分ごと"として<br>運用し続けることで、<br>Embedded SRE不在でも信頼性は向上できる
 </div>
 
 <div class="mt-8 text-xl text-slate-600">
@@ -89,7 +98,7 @@ class: text-center
 
 <!--
 本日お伝えしたいキーメッセージはこちらです。
-SRE専任チームがいない環境でも、開発チーム自身が設計を理解し、運用し続けることで信頼性は向上できます。
+チームにEmbedded SREがいない環境でも、開発チーム自身が設計を理解し、運用し続けることで信頼性は向上できます。
 重要なのは、設計パターンを選んで終わりではなく、チームで育て続けることです。
 -->
 
@@ -97,39 +106,16 @@ SRE専任チームがいない環境でも、開発チーム自身が設計を�
 
 # アジェンダ
 
-<div class="grid grid-cols-5 gap-4 mt-8">
-
-<div class="text-center p-4 bg-slate-50 rounded-lg">
-  <div class="text-3xl mb-2">1</div>
-  <div class="font-bold">背景</div>
-  <div class="text-xs text-slate-500 mt-1">チーム規模の制約と<br>選択</div>
-</div>
-
-<div class="text-center p-4 bg-slate-50 rounded-lg">
-  <div class="text-3xl mb-2">2</div>
-  <div class="font-bold">課題</div>
-  <div class="text-xs text-slate-500 mt-1">トレーサビリティと<br>品質要求の相反</div>
-</div>
-
-<div class="text-center p-4 bg-slate-50 rounded-lg">
-  <div class="text-3xl mb-2">3</div>
-  <div class="font-bold">方法論</div>
-  <div class="text-xs text-slate-500 mt-1">4つのアプローチ</div>
-</div>
-
-<div class="text-center p-4 bg-slate-50 rounded-lg">
-  <div class="text-3xl mb-2">4</div>
-  <div class="font-bold">結果と教訓</div>
-  <div class="text-xs text-slate-500 mt-1">責任を果たすとは</div>
-</div>
-
-<div class="text-center p-4 bg-slate-50 rounded-lg">
-  <div class="text-3xl mb-2">5</div>
-  <div class="font-bold">まとめ</div>
-  <div class="text-xs text-slate-500 mt-1">持ち帰りポイント</div>
-</div>
-
-</div>
+1. 背景  
+   チーム規模の制約と選択
+2. 課題  
+   トレーサビリティと品質要求の相反
+3. 方法論  
+   4つのアプローチ
+4. 結果と教訓  
+   責任を果たすとは
+5. まとめ  
+   持ち帰りポイント
 
 <!--
 本日のアジェンダです。
@@ -149,41 +135,30 @@ layout: section
 
 # チーム規模の制約
 
-<div class="mt-6">
+## 私たちの現実
 
-<div class="p-6 bg-slate-100 rounded-lg mb-6">
-  <h3 class="font-bold text-lg mb-2">私たちの現実</h3>
-  <p class="text-slate-700">
-    2025年4月時点では<span class="font-bold">正社員1名、業務委託2-3名</span>という小規模なチーム
-  </p>
-  <p class="text-slate-600 mt-2">
-    SRE専任メンバーの増員はかえって<span class="font-bold">共有すべきコンテキストの分散</span>を招く恐れがあった
-  </p>
-</div>
+2025年4月時点ではごく小規模なチーム  
+Embedded SREメンバーの増員はかえって**共有すべきコンテキストの分散**を招く恐れがあった
 
-<div class="grid grid-cols-2 gap-6">
+<CardGrid :cols="2">
+  <Card
+    title="選択肢A: Embedded SREを採用"
+  >
+    <ul class='text-left'>
+      <li class='ml-0!'>チーム規模に対して十分な協働が難しい</li>
+      <li class='ml-0!'>コンテキスト共有の負担増</li>
+    </ul>
+  </Card>
+  <Card
+    title="選択肢B: 開発チームが担う"
+    >
+    <ul class='text-left'>
+      <li class='ml-0!'>設計・実装・運用を一貫して担う</li>
+      <li class='ml-0!'>深い理解と迅速な改善が可能</li>
+    </ul>
+  </Card>
+</CardGrid>
 
-<div class="p-4 bg-red-50 rounded-lg">
-  <h4 class="font-bold mb-2">選択肢A: SRE専任を採用</h4>
-  <ul class="text-sm text-slate-600 space-y-1">
-    <li>チーム規模に対して十分な協働が難しい</li>
-    <li>コンテキスト共有の負担増</li>
-    <li>「SREの仕事」になりがち</li>
-  </ul>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
-  <h4 class="font-bold mb-2">選択肢B: 開発チームが担う</h4>
-  <ul class="text-sm text-slate-600 space-y-1">
-    <li>設計・実装・運用を一貫して担う</li>
-    <li>深い理解と迅速な改善が可能</li>
-    <li class="font-bold">「自分たちの責任」として捉える</li>
-  </ul>
-</div>
-
-</div>
-
-</div>
 
 <!--
 私たちのチームでは、2025年4月時点では正社員1名、業務委託2-3名という小規模なチームでした。
@@ -195,62 +170,31 @@ layout: section
 
 # 医療SaaSの特殊性
 
-<div class="mt-4">
+> [!CAUTION]
+> 4つ以上のプロダクトが患者情報を扱う
 
-<div class="p-4 bg-red-50 rounded-lg mb-4">
-  <p class="font-bold">薬局向けSaaSを4つ以上開発・運用 / すべてが患者情報を扱う医療情報システム</p>
-</div>
+<CardGrid :cols="2">
+  <Card
+    title="3省2ガイドライン準拠"
+    description="医療情報システムとしての厳格なセキュリティ要件"
+  />
 
-<div class="grid grid-cols-2 gap-6">
+  <Card
+    title="高可用性とデータ整合性"
+    description="24時間365日稼働と一瞬たりとも許されない不整合"
+  />
 
-<div>
+  <Card
+    title="頻繁な組織変更対応"
+    description="薬局グループの統廃合に伴う柔軟な組織管理"
+  />
 
-### 厳格なセキュリティ要件
+  <Card
+    title="法的要件への対応"
+    description="過去のデータ状態を説明できることの重要性"
+  />
 
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">3省2ガイドライン</h4>
-  <ul class="text-sm text-slate-600 space-y-1">
-    <li>多要素認証の必須化（2026年度〜）</li>
-    <li>監査ログの長期保存</li>
-    <li>厳格なパスワードポリシー</li>
-  </ul>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">堅牢なテナント分離</h4>
-  <p class="text-sm text-slate-600">
-    薬局グループの統廃合が頻繁に発生するため、<br>
-    テナント分離と柔軟な組織管理の両立が必要
-  </p>
-</div>
-
-</div>
-
-<div>
-
-### 高い可用性要件
-
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">24時間365日稼働</h4>
-  <p class="text-sm text-slate-600">
-    医療機関は常に稼働しており、<br>
-    システム停止は患者の安全に直結
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">データ整合性</h4>
-  <p class="text-sm text-slate-600">
-    患者情報・処方データは<br>
-    一瞬たりとも不整合が許されない
-  </p>
-</div>
-
-</div>
-
-</div>
-
-</div>
+</CardGrid>
 
 <!--
 カケハシでは薬局向けSaaSを4つ以上開発・運用しています。
@@ -398,21 +342,21 @@ layout: section
 </MessageBox>
 
 <CardGrid :cols="3">
-  <NumberCard
+  <CardNumbered
     :number="1"
     title="なぜ選んだか"
     description="解決したい課題と
 受け入れるトレードオフを
 チームで言語化"
   />
-  <NumberCard
+  <CardNumbered
     :number="2"
     title="どう運用するか"
     description="導入して終わりではなく
 監視・障害対応・改善の
 サイクルを回す"
   />
-  <NumberCard
+  <CardNumbered
     :number="3"
     title="どう育てるか"
     description="運用で見つかった課題を
@@ -434,41 +378,12 @@ layout: section
 
 # 方法論の全体像
 
-<div class="grid grid-cols-2 gap-4 mt-6">
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-brand-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
-    <h3 class="font-bold">ドメインイベントの永続化</h3>
-  </div>
-  <p class="text-sm text-slate-600">「いつ・誰が・何を変更したか」を完全に記録</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">2</div>
-    <h3 class="font-bold">データ連携パターンの選択</h3>
-  </div>
-  <p class="text-sm text-slate-600">基盤障害がプロダクト全体に波及しない設計</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">3</div>
-    <h3 class="font-bold">サービスベースアーキテクチャ</h3>
-  </div>
-  <p class="text-sm text-slate-600">強い整合性を保ちながら独立したデプロイを実現</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-3 mb-2">
-    <div class="w-8 h-8 bg-brand-400 text-white rounded-full flex items-center justify-center font-bold">4</div>
-    <h3 class="font-bold">RLSによるマルチテナント分離</h3>
-  </div>
-  <p class="text-sm text-slate-600">DBレベルで強制的にテナントを分離</p>
-</div>
-
-</div>
+<CardGrid :cols="2">
+  <MethodCard :number="1" title="ドメインイベントの永続化" description="「いつ・誰が・何を変更したか」を完全に記録" />
+  <MethodCard :number="2" title="データ連携パターンの選択" description="基盤障害がプロダクト全体に波及しない設計" variant="secondary" />
+  <MethodCard :number="3" title="サービスベースアーキテクチャ" description="強い整合性を保ちながら独立したデプロイを実現" variant="secondary" />
+  <MethodCard :number="4" title="RLSによるマルチテナント分離" description="DBレベルで強制的にテナントを分離" variant="secondary" />
+</CardGrid>
 
 > [!NOTE]
 > **特別なツールや大規模な組織変更は不要**  
@@ -524,17 +439,17 @@ flowchart LR
 
 
 <CardGrid :cols="3">
-  <ListCard
+  <Card
     title="障害調査"
     description="過去の状態を再現し原因を特定"
   />
 
-  <ListCard
+  <Card
     title="監査対応"
     description="変更履歴を完全に追跡"
   />
   
-  <ListCard
+  <Card
     title="データ復旧"
     description="イベントリプレイで任意の時点に復元"
   />
@@ -637,28 +552,19 @@ td, th {
 
 # ドメインイベント: 運用と改善
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<CardGrid :cols="2">
 
 <div>
 
 ### 運用で得た気づき
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">後付け導入の難しさ</h4>
-  <p class="text-xs text-slate-600">
-    既存データからイベントを生成する際、<br>
-    依存関係を考慮した順序制御が必要だった<br>
-    <span class="font-bold">→ 新規開発時に組み込むべき</span>
-  </p>
-</div>
+<InsightCard title="後付け導入の難しさ">
+  <p>既存データからイベントを生成する際、依存関係を考慮した順序制御が必要だった<br><span class="highlight">→ 新規開発時に組み込むべき</span></p>
+</InsightCard>
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">イベント設計の見直し</h4>
-  <p class="text-xs text-slate-600">
-    運用中に「このイベントも必要だった」と気づく<br>
-    <span class="font-bold">→ スキーマ進化の仕組みを用意</span>
-  </p>
-</div>
+<InsightCard title="イベント設計の見直し">
+  <p>運用中に「このイベントも必要だった」と気づく<br><span class="highlight">→ スキーマ進化の仕組みを用意</span></p>
+</InsightCard>
 
 </div>
 
@@ -666,25 +572,17 @@ td, th {
 
 ### 継続的な改善
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">障害調査での活用</h4>
-  <p class="text-xs text-slate-600">
-    「3ヶ月前のこのユーザーの状態は？」<br>
-    → イベントを辿って即座に回答可能に
-  </p>
-</div>
+<InsightCard title="障害調査での活用" variant="positive">
+  <p>「3ヶ月前のこのユーザーの状態は？」<br>→ イベントを辿って即座に回答可能に</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">監査対応の効率化</h4>
-  <p class="text-xs text-slate-600">
-    変更履歴の完全な追跡が可能になり、<br>
-    監査対応の工数が大幅に削減
-  </p>
-</div>
+<InsightCard title="監査対応の効率化" variant="positive">
+  <p>変更履歴の完全な追跡が可能になり、監査対応の工数が大幅に削減</p>
+</InsightCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!IMPORTANT]
 > **選んで終わりではない** — 運用しながら設計を育て続ける
@@ -717,36 +615,17 @@ layout: section
 
 </div>
 
-<div class="grid grid-cols-3 gap-4 mt-4">
-
-<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
-  <h4 class="font-bold text-sm mb-2">デフォルト: データ基盤</h4>
-  <p class="text-xs text-slate-600">
-    Delta Lake形式でS3に蓄積<br>
-    99.999999999%の耐久性<br>
-    <span class="font-bold">基盤障害が波及しない</span>
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">即時性が必要な場合</h4>
-  <p class="text-xs text-slate-600">
-    API連携を選択<br>
-    例: ライセンス確認<br>
-    ただし障害の影響を受ける
-  </p>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">非同期処理の場合</h4>
-  <p class="text-xs text-slate-600">
-    イベント連携を選択<br>
-    例: ログイン履歴の配信<br>
-    Outboxパターンで信頼性確保
-  </p>
-</div>
-
-</div>
+<CardGrid :cols="3">
+  <OptionCard title="デフォルト: データ基盤" status="selected">
+    <p>Delta Lake形式でS3に蓄積<br>99.999999999%の耐久性<br><span class="font-bold">基盤障害が波及しない</span></p>
+  </OptionCard>
+  <OptionCard title="即時性が必要な場合">
+    <p>API連携を選択<br>例: ライセンス確認<br>ただし障害の影響を受ける</p>
+  </OptionCard>
+  <OptionCard title="非同期処理の場合">
+    <p>イベント連携を選択<br>例: ログイン履歴の配信<br>Outboxパターンで信頼性確保</p>
+  </OptionCard>
+</CardGrid>
 
 <!--
 データ連携パターンは3つあります。
@@ -815,28 +694,19 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 # データ連携: 運用と改善
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<CardGrid :cols="2">
 
 <div>
 
 ### 運用で直面した課題
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">「即時性が必要」の誘惑</h4>
-  <p class="text-xs text-slate-600">
-    プロダクトチームから「リアルタイムで欲しい」<br>
-    → 本当に必要か？を一緒に検討<br>
-    <span class="font-bold">多くは「数分遅延OK」だった</span>
-  </p>
-</div>
+<InsightCard title="「即時性が必要」の誘惑">
+  <p>プロダクトチームから「リアルタイムで欲しい」<br>→ 本当に必要か？を一緒に検討<br><span class="highlight">多くは「数分遅延OK」だった</span></p>
+</InsightCard>
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">CDC遅延の監視</h4>
-  <p class="text-xs text-slate-600">
-    データ基盤への反映遅延をアラート化<br>
-    <span class="font-bold">異常を早期に検知できる体制を構築</span>
-  </p>
-</div>
+<InsightCard title="CDC遅延の監視">
+  <p>データ基盤への反映遅延をアラート化<br><span class="highlight">異常を早期に検知できる体制を構築</span></p>
+</InsightCard>
 
 </div>
 
@@ -844,25 +714,17 @@ S3に保存することで高い耐久性を確保し、タイムトラベル機
 
 ### パターン選択の判断基準を育てる
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">ドキュメント化</h4>
-  <p class="text-xs text-slate-600">
-    「なぜこのパターンを選んだか」を記録<br>
-    新メンバーも同じ判断ができるように
-  </p>
-</div>
+<InsightCard title="ドキュメント化" variant="positive">
+  <p>「なぜこのパターンを選んだか」を記録<br>新メンバーも同じ判断ができるように</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">定期的な見直し</h4>
-  <p class="text-xs text-slate-600">
-    API連携で障害が波及した事例を振り返り<br>
-    <span class="font-bold">データ基盤経由に変更した例も</span>
-  </p>
-</div>
+<InsightCard title="定期的な見直し" variant="positive">
+  <p>API連携で障害が波及した事例を振り返り<br><span class="highlight">データ基盤経由に変更した例も</span></p>
+</InsightCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!IMPORTANT]
 > **選択基準をチームで共有し、運用しながら磨き続ける**
@@ -885,34 +747,20 @@ layout: section
 
 # なぜサービスベースアーキテクチャか
 
-<div class="mt-4">
-
-<div class="grid grid-cols-3 gap-4">
-
-<div class="p-4 bg-red-50 rounded-lg">
-  <h4 class="font-bold mb-2">モノリス</h4>
-  <p class="text-xs text-slate-600">変更容易性が低い</p>
-  <p class="text-xs text-slate-600">一度に全体を更新</p>
-  <p class="text-xs text-red-600 mt-2">✗ 不採用</p>
-</div>
-
-<div class="p-4 bg-red-50 rounded-lg">
-  <h4 class="font-bold mb-2">マイクロサービス</h4>
-  <p class="text-xs text-slate-600">分散トランザクション</p>
-  <p class="text-xs text-slate-600">結果整合性の複雑さ</p>
-  <p class="text-xs text-red-600 mt-2">✗ 不採用</p>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
-  <h4 class="font-bold mb-2">サービスベース</h4>
-  <p class="text-xs text-slate-600">単一DB共有</p>
-  <p class="text-xs text-slate-600">独立したデプロイ</p>
-  <p class="text-xs text-brand-600 mt-2 font-bold">✓ 採用</p>
-</div>
-
-</div>
-
-</div>
+<CardGrid :cols="3">
+  <OptionCard title="モノリス" status="rejected" statusText="✗ 不採用">
+    <p>変更容易性が低い</p>
+    <p>一度に全体を更新</p>
+  </OptionCard>
+  <OptionCard title="マイクロサービス" status="rejected" statusText="✗ 不採用">
+    <p>分散トランザクション</p>
+    <p>結果整合性の複雑さ</p>
+  </OptionCard>
+  <OptionCard title="サービスベース" status="selected" statusText="✓ 採用">
+    <p>単一DB共有</p>
+    <p>独立したデプロイ</p>
+  </OptionCard>
+</CardGrid>
 
 <div class="mt-4 p-4 bg-brand-50 rounded-lg">
   <h4 class="font-bold mb-2">採用理由</h4>
@@ -1062,28 +910,19 @@ const org = await db.query(
 
 # サービスベース: 運用と改善
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<CardGrid :cols="2">
 
 <div>
 
 ### 失敗から学んだこと
 
-<div class="p-4 bg-red-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">共通ライブラリの肥大化</h4>
-  <p class="text-xs text-slate-600">
-    型定義・バリデーションを共通化しすぎた結果、<br>
-    一つの変更が全サービスのリビルドを強制<br>
-    <span class="font-bold text-red-600">→「分散モノリス」の兆候</span>
-  </p>
-</div>
+<InsightCard title="共通ライブラリの肥大化" variant="negative">
+  <p>型定義・バリデーションを共通化しすぎた結果、一つの変更が全サービスのリビルドを強制<br><span class="highlight" style="color: var(--slidev-code-error)">→「分散モノリス」の兆候</span></p>
+</InsightCard>
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">DNS解決の遅延問題</h4>
-  <p class="text-xs text-slate-600">
-    「一時的にAPI連携で」が常態化<br>
-    → 原則に立ち返り、DB経由に修正
-  </p>
-</div>
+<InsightCard title="DNS解決の遅延問題">
+  <p>「一時的にAPI連携で」が常態化<br>→ 原則に立ち返り、DB経由に修正</p>
+</InsightCard>
 
 </div>
 
@@ -1091,25 +930,17 @@ const org = await db.query(
 
 ### 原則を守るための工夫
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">ADR（Architecture Decision Record）</h4>
-  <p class="text-xs text-slate-600">
-    「なぜサービス間通信を禁止するか」を記録<br>
-    例外を認める際の判断基準を明文化
-  </p>
-</div>
+<InsightCard title="ADR（Architecture Decision Record）" variant="positive">
+  <p>「なぜサービス間通信を禁止するか」を記録<br>例外を認める際の判断基準を明文化</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">コードレビューでの確認</h4>
-  <p class="text-xs text-slate-600">
-    サービス間API呼び出しを見つけたら<br>
-    「本当に必要？DB経由でできない？」と問う
-  </p>
-</div>
+<InsightCard title="コードレビューでの確認" variant="positive">
+  <p>サービス間API呼び出しを見つけたら<br>「本当に必要？DB経由でできない？」と問う</p>
+</InsightCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!IMPORTANT]
 > **原則を言語化し、逸脱を検知し、継続的に守り続ける**
@@ -1138,36 +969,20 @@ DBレベルでの強制的なセキュリティ
   <h3 class="font-bold text-lg">課題: 顧客Aのデータを顧客Bが絶対に参照できないようにする</h3>
 </div>
 
-<div class="grid grid-cols-3 gap-4">
-
-<div class="p-4 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">アプリレベル</h4>
-  <p class="text-xs text-slate-600">WHERE句でフィルタリング</p>
-  <div class="mt-2 p-2 bg-red-100 rounded">
-    <p class="text-xs text-red-600 font-bold">✗ 実装ミスのリスク</p>
-    <p class="text-xs text-slate-600">SQLインジェクション、バグで漏洩</p>
-  </div>
-</div>
-
-<div class="p-4 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">スキーマ分離</h4>
-  <p class="text-xs text-slate-600">テナントごとにスキーマ</p>
-  <div class="mt-2 p-2 bg-red-100 rounded">
-    <p class="text-xs text-red-600 font-bold">✗ 管理コストが膨大</p>
-    <p class="text-xs text-slate-600">統廃合時の対応が困難</p>
-  </div>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg border-2 border-brand-400">
-  <h4 class="font-bold text-sm mb-2">RLS（行レベルセキュリティ）</h4>
-  <p class="text-xs text-slate-600">DBレベルで強制保護</p>
-  <div class="mt-2 p-2 bg-brand-100 rounded">
-    <p class="text-xs text-brand-600 font-bold">✓ 採用</p>
-    <p class="text-xs text-slate-600">バグがあっても漏洩しない</p>
-  </div>
-</div>
-
-</div>
+<CardGrid :cols="3">
+  <OptionCard title="アプリレベル" status="rejected" statusText="✗ 実装ミスのリスク">
+    <p>WHERE句でフィルタリング</p>
+    <p class="mt-2">SQLインジェクション、バグで漏洩</p>
+  </OptionCard>
+  <OptionCard title="スキーマ分離" status="rejected" statusText="✗ 管理コストが膨大">
+    <p>テナントごとにスキーマ</p>
+    <p class="mt-2">統廃合時の対応が困難</p>
+  </OptionCard>
+  <OptionCard title="RLS（行レベルセキュリティ）" status="selected" statusText="✓ 採用">
+    <p>DBレベルで強制保護</p>
+    <p class="mt-2">バグがあっても漏洩しない</p>
+  </OptionCard>
+</CardGrid>
 
 </div>
 
@@ -1245,28 +1060,19 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 # RLS: 運用と改善
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<CardGrid :cols="2">
 
 <div>
 
 ### 慎重なマイグレーション
 
-<div class="p-4 bg-slate-100 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">段階的な適用</h4>
-  <p class="text-xs text-slate-600">
-    1. まずPERMISSIVEモードで導入<br>
-    2. 全クエリをログに記録して影響確認<br>
-    3. 問題なければENFORCEモードに移行
-  </p>
-</div>
+<InsightCard title="段階的な適用">
+  <p>1. まずPERMISSIVEモードで導入<br>2. 全クエリをログに記録して影響確認<br>3. 問題なければENFORCEモードに移行</p>
+</InsightCard>
 
-<div class="p-4 bg-red-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">誤ったポリシーのリスク</h4>
-  <p class="text-xs text-slate-600">
-    データ漏洩 or 正当なアクセスの拒否<br>
-    <span class="font-bold">→ 十分なテストとモニタリングが必須</span>
-  </p>
-</div>
+<InsightCard title="誤ったポリシーのリスク" variant="negative">
+  <p>データ漏洩 or 正当なアクセスの拒否<br><span class="highlight">→ 十分なテストとモニタリングが必須</span></p>
+</InsightCard>
 
 </div>
 
@@ -1274,26 +1080,17 @@ RLSの実装では、PostgreSQLのセッション変数を使ってテナントI
 
 ### 継続的な監視と改善
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">パフォーマンス監視</h4>
-  <p class="text-xs text-slate-600">
-    RLSポリシーがクエリ性能に影響<br>
-    → tenant_idインデックスの最適化<br>
-    → スロークエリの定期的な分析
-  </p>
-</div>
+<InsightCard title="パフォーマンス監視" variant="positive">
+  <p>RLSポリシーがクエリ性能に影響<br>→ tenant_idインデックスの最適化<br>→ スロークエリの定期的な分析</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">新規テーブルへの適用</h4>
-  <p class="text-xs text-slate-600">
-    テーブル追加時のチェックリスト化<br>
-    <span class="font-bold">「RLS適用を忘れない」仕組み</span>
-  </p>
-</div>
+<InsightCard title="新規テーブルへの適用" variant="positive">
+  <p>テーブル追加時のチェックリスト化<br><span class="highlight">「RLS適用を忘れない」仕組み</span></p>
+</InsightCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!IMPORTANT]
 > **セキュリティは一度設定して終わりではない** — 継続的な監視と改善が不可欠
@@ -1333,21 +1130,13 @@ RLSの運用と改善です。
 
 ### 段階的導入のすすめ
 
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">Step 1: 最もクリティカルな領域から</h4>
-  <p class="text-xs text-slate-600">
-    全システムへの一斉導入は避ける<br>
-    例: まず認証基盤にRLSを導入
-  </p>
-</div>
+<InsightCard title="Step 1: 最もクリティカルな領域から" variant="positive">
+  <p>全システムへの一斉導入は避ける<br>例: まず認証基盤にRLSを導入</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg mt-2">
-  <h4 class="font-bold text-sm mb-2">Step 2: 効果を計測しながら拡大</h4>
-  <p class="text-xs text-slate-600">
-    障害調査時間・開発速度の変化を追跡<br>
-    数値で効果を示し、チームの納得感を得る
-  </p>
-</div>
+<InsightCard title="Step 2: 効果を計測しながら拡大" variant="positive">
+  <p>障害調査時間・開発速度の変化を追跡<br>数値で効果を示し、チームの納得感を得る</p>
+</InsightCard>
 
 </div>
 
@@ -1424,58 +1213,36 @@ layout: section
 
 # 運用し続けることで見えてきたこと
 
-<div class="mt-4">
-
-<div class="grid grid-cols-2 gap-6">
+<CardGrid :cols="2">
 
 <div class="space-y-3">
 
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold mb-2">設計の意図がチームに浸透する</h4>
-  <p class="text-sm text-slate-600">
-    「なぜこの設計か」を繰り返し説明するうちに、<br>
-    新メンバーも同じ判断ができるようになった
-  </p>
-</div>
+<InsightCard title="設計の意図がチームに浸透する" variant="positive">
+  <p>「なぜこの設計か」を繰り返し説明するうちに、新メンバーも同じ判断ができるようになった</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold mb-2">失敗が設計を強くする</h4>
-  <p class="text-sm text-slate-600">
-    障害や問題が起きるたびに、<br>
-    「次は防げる」仕組みを設計に組み込んだ
-  </p>
-</div>
+<InsightCard title="失敗が設計を強くする" variant="positive">
+  <p>障害や問題が起きるたびに、「次は防げる」仕組みを設計に組み込んだ</p>
+</InsightCard>
 
 </div>
 
 <div class="space-y-3">
 
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold mb-2">「自分たちの責任」という意識</h4>
-  <p class="text-sm text-slate-600">
-    SRE専任がいないからこそ、<br>
-    「誰かがやってくれる」ではなく<br>
-    「自分たちで解決する」マインドが育った
-  </p>
-</div>
+<InsightCard title="「自分たちの責任」という意識" variant="positive">
+  <p>SRE専任がいないからこそ、「誰かがやってくれる」ではなく「自分たちで解決する」マインドが育った</p>
+</InsightCard>
 
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold mb-2">制約がチームの強みになった</h4>
-  <p class="text-sm text-slate-600">
-    小さなチームだからこそ、<br>
-    設計・運用・改善を一貫して担え、<br>
-    深い理解と迅速な改善が可能に
-  </p>
-</div>
+<InsightCard title="制約がチームの強みになった" variant="positive">
+  <p>小さなチームだからこそ、設計・運用・改善を一貫して担え、深い理解と迅速な改善が可能に</p>
+</InsightCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!IMPORTANT]
 > 設計パターンは「選ぶ」ものではなく「育てる」もの
-
-</div>
 
 <!--
 運用し続けることで見えてきたことをまとめます。
@@ -1504,41 +1271,20 @@ graph LR
 
 </div>
 
-<div class="grid grid-cols-4 gap-4 mt-4">
-
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">1. 設計</h4>
-  <p class="text-xs text-slate-600">
-    原則に基づいて技術を選択<br>
-    <span class="font-bold">なぜ選んだかを言語化</span>
-  </p>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">2. 運用</h4>
-  <p class="text-xs text-slate-600">
-    本番環境で動かし続ける<br>
-    <span class="font-bold">設計の意図を理解</span>
-  </p>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">3. 監視</h4>
-  <p class="text-xs text-slate-600">
-    メトリクス・ログ・アラート<br>
-    <span class="font-bold">状態を把握</span>
-  </p>
-</div>
-
-<div class="p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-2">4. 改善</h4>
-  <p class="text-xs text-slate-600">
-    問題を発見したら修正<br>
-    <span class="font-bold">設計にフィードバック</span>
-  </p>
-</div>
-
-</div>
+<CardGrid :cols="4">
+  <InsightCard title="1. 設計" variant="positive">
+    <p>原則に基づいて技術を選択<br><span class="highlight">なぜ選んだかを言語化</span></p>
+  </InsightCard>
+  <InsightCard title="2. 運用" variant="positive">
+    <p>本番環境で動かし続ける<br><span class="highlight">設計の意図を理解</span></p>
+  </InsightCard>
+  <InsightCard title="3. 監視" variant="positive">
+    <p>メトリクス・ログ・アラート<br><span class="highlight">状態を把握</span></p>
+  </InsightCard>
+  <InsightCard title="4. 改善" variant="positive">
+    <p>問題を発見したら修正<br><span class="highlight">設計にフィードバック</span></p>
+  </InsightCard>
+</CardGrid>
 
 > [!NOTE]
 > このサイクルを開発チームが自走できる状態 = 責任を果たしている状態
@@ -1560,45 +1306,12 @@ layout: section
 
 # 開発チームができること
 
-<div class="grid grid-cols-2 gap-4 mt-6">
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-brand-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
-    <h3 class="font-bold">ドメインイベント</h3>
-  </div>
-  <p class="text-sm text-slate-600">「何が起きたか」を完全に記録</p>
-  <p class="text-xs text-slate-500 mt-1">障害調査・監査対応・データ復旧</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
-    <h3 class="font-bold">データ連携パターン</h3>
-  </div>
-  <p class="text-sm text-slate-600">基盤障害を波及させない設計</p>
-  <p class="text-xs text-slate-500 mt-1">デフォルトはデータ基盤経由</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
-    <h3 class="font-bold">サービスベースアーキテクチャ</h3>
-  </div>
-  <p class="text-sm text-slate-600">強い整合性と独立デプロイの両立</p>
-  <p class="text-xs text-slate-500 mt-1">サービス間通信を原則禁止</p>
-</div>
-
-<div class="p-5 bg-brand-50 rounded-lg">
-  <div class="flex items-center gap-2 mb-2">
-    <div class="w-6 h-6 bg-brand-400 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
-    <h3 class="font-bold">RLS</h3>
-  </div>
-  <p class="text-sm text-slate-600">DBレベルでテナントを強制分離</p>
-  <p class="text-xs text-slate-500 mt-1">バグがあっても漏洩しない</p>
-</div>
-
-</div>
+<CardGrid :cols="2">
+  <SummaryCard :number="1" title="ドメインイベント" description="「何が起きたか」を完全に記録" subdescription="障害調査・監査対応・データ復旧" />
+  <SummaryCard :number="2" title="データ連携パターン" description="基盤障害を波及させない設計" subdescription="デフォルトはデータ基盤経由" variant="secondary" />
+  <SummaryCard :number="3" title="サービスベースアーキテクチャ" description="強い整合性と独立デプロイの両立" subdescription="サービス間通信を原則禁止" variant="secondary" />
+  <SummaryCard :number="4" title="RLS" description="DBレベルでテナントを強制分離" subdescription="バグがあっても漏洩しない" variant="secondary" />
+</CardGrid>
 
 > [!NOTE]
 > **段階的に導入可能** — クリティカルな領域から優先的に適用
@@ -1613,56 +1326,36 @@ layout: section
 
 # 自チームへの適用チェックリスト
 
-<div class="mt-4">
-
-<div class="grid grid-cols-2 gap-6">
+<CardGrid :cols="2">
 
 <div class="space-y-3">
 
-<div class="p-3 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-1">トレーサビリティが必要か？</h4>
-  <p class="text-xs text-slate-600">
-    「過去の状態を説明できない」問題があるなら<br>
-    → <span class="font-bold">ドメインイベント</span>を検討
-  </p>
-</div>
+<ChecklistCard title="トレーサビリティが必要か？">
+  <p>「過去の状態を説明できない」問題があるなら<br>→ <span class="highlight">ドメインイベント</span>を検討</p>
+</ChecklistCard>
 
-<div class="p-3 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-1">基盤障害が全体に波及するか？</h4>
-  <p class="text-xs text-slate-600">
-    一つの障害で複数サービスが止まるなら<br>
-    → <span class="font-bold">データ連携パターン</span>を見直す
-  </p>
-</div>
+<ChecklistCard title="基盤障害が全体に波及するか？">
+  <p>一つの障害で複数サービスが止まるなら<br>→ <span class="highlight">データ連携パターン</span>を見直す</p>
+</ChecklistCard>
 
 </div>
 
 <div class="space-y-3">
 
-<div class="p-3 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-1">整合性と独立性のどちらが重要か？</h4>
-  <p class="text-xs text-slate-600">
-    密結合なドメインで強い整合性が必要なら<br>
-    → <span class="font-bold">サービスベースアーキテクチャ</span>を検討
-  </p>
-</div>
+<ChecklistCard title="整合性と独立性のどちらが重要か？">
+  <p>密結合なドメインで強い整合性が必要なら<br>→ <span class="highlight">サービスベースアーキテクチャ</span>を検討</p>
+</ChecklistCard>
 
-<div class="p-3 bg-slate-50 rounded-lg">
-  <h4 class="font-bold text-sm mb-1">マルチテナントでデータ漏洩が致命的か？</h4>
-  <p class="text-xs text-slate-600">
-    テナント分離をアプリに依存しているなら<br>
-    → <span class="font-bold">RLS</span>を検討
-  </p>
-</div>
+<ChecklistCard title="マルチテナントでデータ漏洩が致命的か？">
+  <p>テナント分離をアプリに依存しているなら<br>→ <span class="highlight">RLS</span>を検討</p>
+</ChecklistCard>
 
 </div>
 
-</div>
+</CardGrid>
 
 > [!WARNING]
 > **すべてを導入する必要はない** — 自チームの課題に合った手法を選択
-
-</div>
 
 <!--
 医療SaaSに限らず、どのチームでも適用できるチェックリストです。
@@ -1676,20 +1369,17 @@ layout: section
 
 <div class="mt-1 space-y-2">
 
-<div class="p-2 bg-brand-50 rounded-lg">
-  <h3 class="text-sm font-bold">設計を選ぶだけでなく、責任を果たす</h3>
-  <p class="text-xs text-slate-600">技術選定で終わりではなく、<span class="font-bold">運用・監視・改善を継続</span>する</p>
-</div>
+<InsightCard title="設計を選ぶだけでなく、責任を果たす" variant="positive">
+  <p>技術選定で終わりではなく、<span class="highlight">運用・監視・改善を継続</span>する</p>
+</InsightCard>
 
-<div class="p-2 bg-brand-50 rounded-lg">
-  <h3 class="text-sm font-bold">「誰かの仕事」ではなく「自分たちの責任」</h3>
-  <p class="text-xs text-slate-600">開発チームが<span class="font-bold">自分事として信頼性を担う</span>状態を目指す</p>
-</div>
+<InsightCard title="「誰かの仕事」ではなく「自分たちの責任」" variant="positive">
+  <p>開発チームが<span class="highlight">自分事として信頼性を担う</span>状態を目指す</p>
+</InsightCard>
 
-<div class="p-2 bg-brand-50 rounded-lg">
-  <h3 class="text-sm font-bold">SREイネイブラーへ</h3>
-  <p class="text-xs text-slate-600">本セッションの事例は、<span class="font-bold">Enablingのゴールの一つの形</span></p>
-</div>
+<InsightCard title="SREイネイブラーへ" variant="positive">
+  <p>本セッションの事例は、<span class="highlight">Enablingのゴールの一つの形</span></p>
+</InsightCard>
 
 </div>
 

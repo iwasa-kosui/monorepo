@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  cols?: 2 | 3 | 4
+  cols?: 1 | 2 | 3 | 4 | 5
 }>()
 </script>
 
@@ -12,7 +12,11 @@ defineProps<{
 
 <style scoped>
 .card-grid {
-  @apply grid gap-4;
+  @apply grid gap-4 mt-4;
+}
+
+.card-grid.cols-1 {
+  @apply grid-cols-1;
 }
 
 .card-grid.cols-2 {
@@ -25,5 +29,9 @@ defineProps<{
 
 .card-grid.cols-4 {
   @apply grid-cols-4;
+}
+
+.card-grid.cols-5 {
+  @apply grid-cols-5;
 }
 </style>
