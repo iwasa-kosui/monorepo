@@ -1,0 +1,13 @@
+{
+  "name": "talks",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev dist --port 8788",
+    "build": "node scripts/build.mjs",
+    "deploy": "wrangler pages deploy dist"
+  },
+  "devDependencies": {
+    "wrangler": "^4.20.0"
+  }
+}
