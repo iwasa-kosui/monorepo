@@ -1,0 +1,16 @@
+{
+  "name": "talks-2023-document",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "slidev build --base /2023/document/",
+    "dev": "slidev --open",
+    "export": "slidev export"
+  },
+  "dependencies": {
+    "slidev-theme-kosui": "workspace:*",
+    "@slidev/cli": "^52.11.3",
+    "@slidev/theme-default": "latest",
+    "vue": "^3.5.14"
+  }
+}

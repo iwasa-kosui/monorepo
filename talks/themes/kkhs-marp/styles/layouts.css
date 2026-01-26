@@ -1,0 +1,47 @@
+:root {
+  --kkhs-primary: #2171c1;
+}
+
+.slidev-layout {
+  @apply text-xl;
+
+  h1, h2 {
+    color: var(--kkhs-primary);
+  }
+
+  h1 {
+    @apply text-3xl font-600 mb-2;
+  }
+
+  h2 {
+    @apply text-2xl font-600 mb-2;
+  }
+
+  h3 {
+    @apply text-xl font-bold mb-1;
+  }
+
+  h4 {
+    @apply text-lg font-600;
+  }
+
+  p {
+    margin: 0 0 1rem;
+    line-height: 1.5rem;
+  }
+}
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+  @apply h-full grid;
+  justify-content: center;
+}
+
+.slidev-layout.section {
+  @apply h-full grid;
+  justify-content: center;
+
+  h1 {
+    @apply text-5xl;
+  }
+}

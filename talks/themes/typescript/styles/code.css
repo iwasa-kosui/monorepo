@@ -1,0 +1,17 @@
+:root {
+  --slidev-code-font-size: 18px;
+  --slidev-code-line-height: 27px;
+}
+
+/* GitHub Dark theme for code blocks */
+.slidev-code {
+  color: #c9d1d9;
+  background: #0d1117;
+}
+
+.slidev-layout :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.3em;
+  background-color: #0d1117;
+  color: #c9d1d9;
+}

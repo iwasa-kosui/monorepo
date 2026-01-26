@@ -9,6 +9,18 @@ keywords: SRE, Architecture, Domain Events, RLS, Service-Based Architecture
 transition: slide-left
 duration: 30min
 mdc: true
+
+talk:
+  date: "2026-01-23"
+  event: "SRE KAIGI 2026"
+  description: |
+    Embedded SRE不在でも開発チームが信頼性に責任を持ち、改善を続けるための具体的な方法論と、運用を通じて学んだ教訓を紹介します。
+  tags:
+    - SRE
+    - Architecture
+    - Platform
+  duration: "30min"
+  speaker: "岩佐 幸翠"
 ---
 
 <div class="text-sm opacity-80 mb-16">SRE Kaigi 2026</div>

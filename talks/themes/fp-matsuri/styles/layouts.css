@@ -1,0 +1,249 @@
+.bg-main {
+    background: #424242;
+}
+
+#slide-container {
+    background: #ddd;
+}
+
+pre,
+code {
+    border: 1px solid #ccc;
+}
+
+pre code {
+    border: none;
+}
+
+.slidev-layout {
+    @apply text-s;
+    color: #333333;
+
+    p {
+        line-height: 1.5em;
+    }
+
+    p + h2,
+    ul + h2,
+    table + h2 {
+        @apply mt-8;
+    }
+
+    h2 + p,
+    h3 + p {
+        @apply mt-0;
+    }
+
+    h3:has(+ h1) {
+        font-weight: normal;
+        color: #636363;
+    }
+
+    .slidev-code-wrapper + h2,
+    .slidev-code-wrapper + h3,
+    img + h2,
+    img + h3 {
+        @apply mt-8;
+    }
+
+    img + p {
+        @apply mt-8;
+    }
+
+    h1 {
+        @apply text-3xl font-600 mb-4 -ml-[0.05em];
+    }
+
+    h2 {
+        @apply text-2xl text-neutral-800 font-600 mb-3;
+    }
+
+    h3 {
+        @apply text-xl text-neutral-700 font-600 mb-2 mt-1;
+    }
+
+    h4 {
+        @apply text-lg font-600;
+    }
+
+    h5 {
+        @apply text-lg;
+    }
+
+    h6 {
+        @apply text-sm pt-1 uppercase tracking-widest font-500 -ml-[0.05em];
+    }
+
+    h6:not(.opacity-100) {
+        @apply opacity-40;
+    }
+
+    /**
+  * Instead of applying an italic style,
+  * draw a marker over the text.
+  */
+    em {
+        font-style: normal;
+        background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            transparent 70%,
+            #e05e52a0 75%,
+            #e05e52a0 85%,
+            transparent 90%,
+            transparent 100%
+        );
+        background-repeat: no-repeat;
+        background-position: left bottom;
+        background-size: 100% 100%;
+    }
+}
+
+.dark .slidev-layout {
+    img {
+        filter: invert(100%);
+    }
+
+    h2 {
+        @apply text-neutral-200;
+    }
+
+    h3 {
+        @apply text-neutral-100;
+    }
+
+    em {
+        background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            transparent 80%,
+            #e05e524d 80%,
+            #e05e524d 100%,
+            transparent 100%
+        );
+    }
+}
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+    @apply h-full grid text-left text-white;
+    background: #1e75bc;
+    h1 {
+        @apply text-6xl leading-20 text-white;
+    }
+    h2 {
+        @apply text-5xl leading-10 font-700 text-white;
+    }
+    h3 {
+        @apply text-2xl leading-8 font-400 text-white;
+    }
+}
+
+.slidev-layout.fact {
+    @apply text-center grid h-full;
+    h1 {
+        @apply text-5xl font-700 line-height-[1.5em];
+    }
+    h1 + p {
+        @apply text-2xl font-700;
+    }
+    h2 {
+        @apply text-3xl font-700;
+    }
+}
+
+.slidev-layout.statement {
+    @apply text-center grid h-full;
+
+    h1 {
+        @apply text-6xl font-700;
+    }
+}
+
+.slidev-layout.quote {
+    @apply grid h-full;
+
+    h1 + p {
+        @apply mt-2;
+    }
+}
+
+.slidev-layout.section {
+    h1 {
+        @apply text-6xl font-500 leading-20;
+    }
+}
+
+rt {
+    font-size: 0.7em;
+}
+
+.slidev-layout blockquote {
+    font-size: 20px;
+    margin-bottom: 32px;
+    border-left: 8px solid #ccc;
+    background: #f9f9f9;
+}
+
+.immediate-fade-enter-active,
+.immediate-fade-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.immediate-fade-enter-from,
+.immediate-fade-leave-to {
+    opacity: 0;
+}
+
+.default,
+.two-cols,
+.two-cols-header {
+    h1 {
+        font-size: 1rem;
+    }
+}
+
+.mini-form {
+    @apply flex flex-col gap-1 w-60 border-1 border-gray-900 rounded-md p-2 text-sm;
+
+    p {
+        @apply m-0;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    textarea,
+    select,
+    button {
+        @apply py-0 px-2 rounded-md;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    textarea {
+        @apply bg-white text-black border border-gray-300 w-full;
+    }
+
+    select {
+        @apply bg-white text-black border border-gray-300 w-full;
+    }
+
+    button {
+        @apply bg-blue-500 text-white font-bold break-keep border-0;
+    }
+
+    button.abort {
+        @apply bg-red-500;
+    }
+
+    ul {
+        @apply list-disc pl-4;
+    }
+    li {
+        @apply mb-1;
+    }
+}

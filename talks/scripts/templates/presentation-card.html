@@ -1,6 +1,9 @@
 <a href="{{BASE_PATH}}" class="block bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg">
   <div class="relative z-10">
-    <span class="text-xs font-medium text-terracotta dark:text-terracotta-light">{{YEAR}}</span>
-    <h2 class="mt-1 text-lg font-semibold text-charcoal dark:text-gray-100">{{NAME}}</h2>
+    {{DATE_EVENT_LINE}}
+    <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100">{{TITLE}}</h3>
+    {{DESCRIPTION_HTML}}
+    {{TAGS_HTML}}
+    {{DURATION_HTML}}
   </div>
 </a>
