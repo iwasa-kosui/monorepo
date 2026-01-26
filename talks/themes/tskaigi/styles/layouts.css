@@ -1,0 +1,168 @@
+.bg-main {
+  background: #424242;
+}
+
+#slide-container {
+  background: #ddd;
+}
+
+.slidev-layout {
+  @apply text-xl;
+
+  p {
+    line-height: 1.5em;
+  }
+
+  p + h2,
+  ul + h2,
+  table + h2 {
+    @apply mt-8;
+  }
+
+  h2 + p,
+  h3 + p {
+    @apply mt-0;
+  }
+
+  h3:has(+ h1) {
+    font-weight: normal;
+    color: #636363;
+  }
+
+  .slidev-code-wrapper + h2,
+  .slidev-code-wrapper + h3,
+  img + h2,
+  img + h3 {
+    @apply mt-8;
+  }
+
+  img + p {
+    @apply mt-8;
+  }
+
+  h1 {
+    @apply text-3xl font-600 mb-4 -ml-[0.05em];
+  }
+
+  h2 {
+    @apply text-2xl text-neutral-800 font-600 mb-3;
+  }
+
+  h3 {
+    @apply text-xl text-neutral-700 font-600 mb-2 mt-1;
+  }
+
+  h4 {
+    @apply text-lg font-600;
+  }
+
+  h5 {
+    @apply text-lg;
+  }
+
+  h6 {
+    @apply text-sm pt-1 uppercase tracking-widest font-500 -ml-[0.05em];
+  }
+
+  h6:not(.opacity-100) {
+    @apply opacity-40;
+  }
+
+  /**
+  * Instead of applying an italic style,
+  * draw a marker over the text.
+  */
+  em {
+    font-style: normal;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 60%,
+      #f2e059 60%,
+      #f2e059 90%,
+      transparent 90%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: 100% 100%;
+  }
+}
+
+.dark .slidev-layout {
+  img {
+    filter: invert(100%);
+  }
+
+  h2 {
+    @apply text-neutral-200;
+  }
+
+  h3 {
+    @apply text-neutral-100;
+  }
+
+  em {
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 80%,
+      #f2e05999 80%,
+      #f2e05999 100%,
+      transparent 100%
+    );
+  }
+}
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+  @apply h-full grid text-left;
+  h1 {
+    @apply text-6xl leading-20;
+  }
+  h2 {
+    @apply text-5xl leading-10 text-neutral-600 font-700;
+  }
+}
+
+.slidev-layout.fact {
+  @apply text-center grid h-full;
+  h1 {
+    @apply text-8xl font-700;
+  }
+  h1 + p {
+    @apply text-2xl font-700;
+  }
+}
+
+.slidev-layout.statement {
+  @apply text-center grid h-full;
+
+  h1 {
+    @apply text-6xl font-700;
+  }
+}
+
+.slidev-layout.quote {
+  @apply grid h-full;
+
+  h1 + p {
+    @apply mt-2;
+  }
+}
+
+.slidev-layout.section {
+  h1 {
+    @apply text-6xl font-500 leading-20;
+  }
+}
+
+rt {
+  font-size: 0.7em;
+}
+
+.slidev-layout blockquote {
+  font-size: 20px;
+  margin-bottom: 32px;
+  border: none !important;
+}

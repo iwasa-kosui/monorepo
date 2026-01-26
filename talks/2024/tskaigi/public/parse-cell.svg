@@ -1,0 +1,24 @@
+<svg width="192" height="97" viewBox="0 0 192 97" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="192" height="97" fill="white"/>
+<g opacity="0.3" clip-path="url(#clip0_30_874)">
+<rect width="192" height="96" fill="white"/>
+<rect width="192" height="24" fill="#4F60C6"/>
+<rect x="62" width="1" height="24" fill="#B3B3B3"/>
+<rect x="129" width="1" height="24" fill="#B3B3B3"/>
+<rect width="192" height="24" transform="translate(0 24)" fill="white"/>
+<rect x="62" y="24" width="1" height="24" fill="#B3B3B3"/>
+<rect x="129" y="24" width="1" height="24" fill="#B3B3B3"/>
+<rect width="192" height="24" transform="translate(0 48)" fill="#DFE2F4"/>
+<rect x="62" y="48" width="1" height="24" fill="#B3B3B3"/>
+<rect x="129" y="48" width="1" height="24" fill="#B3B3B3"/>
+<rect width="192" height="24" transform="translate(0 72)" fill="white"/>
+<rect x="62" y="72" width="1" height="24" fill="#B3B3B3"/>
+<rect x="129" y="72" width="1" height="24" fill="#B3B3B3"/>
+</g>
+<rect x="3" y="27" width="56" height="18" rx="3" stroke="#424242" stroke-width="2" stroke-linecap="square" stroke-dasharray="0.5 8"/>
+<defs>
+<clipPath id="clip0_30_874">
+<rect width="192" height="96" fill="white"/>
+</clipPath>
+</defs>
+</svg>

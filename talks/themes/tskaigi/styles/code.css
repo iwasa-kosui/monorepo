@@ -1,0 +1,22 @@
+:root {
+  --slidev-code-font-size: 16px;
+  --slidev-code-line-height: 24px;
+  --slidev-code-font-family: 'Moralerspace Neon', 'Moralerspace';
+  --slidev-code-background: hsl(0, 0%, 93%);
+  --slidev-code-color: #424242;
+}
+
+.slidev-code {
+  background-color: var(--shiki-dark-bg);
+}
+
+.slidev-layout code {
+  font-family: var(--slidev-code-font-family) !important;
+}
+
+.slidev-layout :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.3em;
+  background-color: var(--slidev-code-background);
+  color: var(--slidev-code-color);
+}
