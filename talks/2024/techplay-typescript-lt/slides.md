@@ -8,8 +8,8 @@ drawings:
 mdc: true
 
 talk:
-  date: "2024-11-27"
-  event: "TECH PLAY TypeScript LT会"
+  date: "2024-03-26"
+  event: "Findy様 TypeScript 開発言語を統一 〜フロントからバックまで活用〜 Lunch LT" 
   description: |
     TypeScriptの柔軟な型システムをバックエンドで活用し、品質とスピードを両立させるための実践的なテクニックを紹介します。
   tags:

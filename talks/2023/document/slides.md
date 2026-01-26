@@ -8,8 +8,8 @@ drawings:
 mdc: true
 
 talk:
-  date: "2023-10-26"
-  event: "社内勉強会"
+  date: "2023-12-06"
+  event: "Findy様 ドキュメント管理を制する 陳腐化を防ぐための実践事例 Lunch LT"
   description: |
     ドキュメントを更新し続ける代わりに、意思決定を記録する「イミュータブルドキュメントモデル」の実運用について紹介します。
   tags:
