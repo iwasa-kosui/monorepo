@@ -1,5 +1,5 @@
 ---
-theme: kkhs-marp
+theme: ../../themes/kkhs-marp
 title: 大規模SaaSにおけるプラットフォームシステム開発の進め方
 class: text-center
 highlighter: shiki

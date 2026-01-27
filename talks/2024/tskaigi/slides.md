@@ -1,5 +1,5 @@
 ---
-theme: tskaigi
+theme: ../../themes/tskaigi
 background: "#ffffff"
 title: 複雑なビジネスルールに挑む：正確性と効率性を両立するfp-tsのチーム活用術
 info: |

@@ -1,5 +1,5 @@
 ---
-theme: typescript
+theme: ../../themes/typescript
 title: "品質とスピードを両立: TypeScript の柔軟な型システムをバックエンドで活用する"
 class: text-center
 highlighter: shiki

@@ -1,5 +1,12 @@
 import { execSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -7,7 +14,7 @@ import yaml from "js-yaml";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const talksRoot = dirname(__dirname);
 const distDir = join(talksRoot, "dist");
-const templatesDir = join(__dirname, "templates");
+const distAstroDir = join(talksRoot, "dist-astro");
 
 /**
  * Parse YAML frontmatter from markdown content
@@ -45,36 +52,6 @@ function extractTalkMetadata(talkPath) {
 }
 
 /**
- * Escape HTML special characters
- * @param {string} text - Text to escape
- * @returns {string} Escaped text
- */
-function escapeHtml(text) {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-/**
- * Format date for display
- * @param {string} dateStr - ISO 8601 date string
- * @returns {string} Formatted date
- */
-function formatDate(dateStr) {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-/**
  * Find all presentation directories (YYYY/name pattern)
  */
 function findPresentations() {
@@ -91,9 +68,9 @@ function findPresentations() {
       if (!talk.isDirectory()) continue;
 
       const talkDir = join(yearDir, talk.name);
-      const packageJsonPath = join(talkDir, "package.json");
+      const slidesPath = join(talkDir, "slides.md");
 
-      if (existsSync(packageJsonPath)) {
+      if (existsSync(slidesPath)) {
         const metadata = extractTalkMetadata(talkDir);
         presentations.push({
           year: entry.name,
@@ -134,12 +111,18 @@ function findPresentations() {
 function buildPresentation(presentation) {
   console.log(`Building ${presentation.year}/${presentation.name}...`);
 
-  execSync("pnpm run build", {
-    cwd: presentation.path,
-    stdio: "inherit",
-  });
+  const slidesPath = `${presentation.year}/${presentation.name}/slides.md`;
+  const outPath = `${presentation.year}/${presentation.name}/dist`;
 
-  const srcDist = join(presentation.path, "dist");
+  execSync(
+    `pnpm exec slidev build ${slidesPath} --base ${presentation.basePath} --out ${outPath}`,
+    {
+      cwd: talksRoot,
+      stdio: "inherit",
+    }
+  );
+
+  const srcDist = join(talksRoot, outPath);
   const destDir = join(distDir, presentation.year, presentation.name);
 
   if (!existsSync(srcDist)) {
@@ -154,83 +137,29 @@ function buildPresentation(presentation) {
 }
 
 /**
- * Generate HTML for a single presentation card
- * @param {object} presentation - Presentation data
- * @param {string} cardTemplate - Card HTML template
- * @returns {string} Generated HTML
+ * Build Astro index page
  */
-function generatePresentationCard(presentation, cardTemplate) {
-  const talk = presentation.talk || {};
+function buildAstroIndex() {
+  console.log("Building Astro index page...");
 
-  // Date and event line
-  let dateEventLine = "";
-  if (talk.date || talk.event) {
-    const dateStr = talk.date ? formatDate(talk.date) : "";
-    const eventStr = talk.event ? escapeHtml(talk.event) : "";
-    if (dateStr && eventStr) {
-      dateEventLine = `<div class="text-xs text-terracotta dark:text-terracotta-light mb-1">${dateStr} / ${eventStr}</div>`;
-    } else if (dateStr) {
-      dateEventLine = `<div class="text-xs text-terracotta dark:text-terracotta-light mb-1">${dateStr}</div>`;
-    } else if (eventStr) {
-      dateEventLine = `<div class="text-xs text-terracotta dark:text-terracotta-light mb-1">${eventStr}</div>`;
-    }
-  } else {
-    dateEventLine = `<div class="text-xs text-terracotta dark:text-terracotta-light mb-1">${presentation.year}</div>`;
+  execSync("pnpm exec astro build", {
+    cwd: talksRoot,
+    stdio: "inherit",
+  });
+
+  if (!existsSync(distAstroDir)) {
+    console.error(`Astro build output not found: ${distAstroDir}`);
+    process.exit(1);
   }
 
-  // Description
-  let descriptionHtml = "";
-  if (talk.description) {
-    descriptionHtml = `<p class="text-sm text-charcoal-light dark:text-gray-400 mt-2 line-clamp-2">${escapeHtml(talk.description.trim())}</p>`;
-  }
+  // Copy Astro output to dist
+  cpSync(distAstroDir, distDir, { recursive: true });
+  console.log(`Copied Astro output to ${distDir}`);
 
-  // Tags
-  let tagsHtml = "";
-  if (talk.tags && Array.isArray(talk.tags) && talk.tags.length > 0) {
-    const tagItems = talk.tags
-      .map(
-        (tag) =>
-          `<span class="inline-block px-2 py-0.5 text-xs rounded-full bg-sand dark:bg-gray-700 text-charcoal dark:text-gray-300">${escapeHtml(tag)}</span>`
-      )
-      .join("");
-    tagsHtml = `<div class="flex flex-wrap gap-1.5 mt-3">${tagItems}</div>`;
-  }
-
-  // Duration
-  let durationHtml = "";
-  if (talk.duration) {
-    durationHtml = `<div class="flex items-center gap-1 mt-2 text-xs text-charcoal-light dark:text-gray-400">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-      ${escapeHtml(talk.duration)}
-    </div>`;
-  }
-
-  return cardTemplate
-    .replace("{{BASE_PATH}}", presentation.basePath)
-    .replace("{{DATE_EVENT_LINE}}", dateEventLine)
-    .replace("{{TITLE}}", escapeHtml(presentation.title))
-    .replace("{{DESCRIPTION_HTML}}", descriptionHtml)
-    .replace("{{TAGS_HTML}}", tagsHtml)
-    .replace("{{DURATION_HTML}}", durationHtml);
+  // Clean up intermediate Astro output
+  rmSync(distAstroDir, { recursive: true });
+  console.log(`Cleaned up ${distAstroDir}`);
 }
-
-/**
- * Generate index.html listing all presentations
- */
-function generateIndexPage(presentations) {
-  const indexTemplate = readFileSync(join(templatesDir, "index.html"), "utf-8");
-  const cardTemplate = readFileSync(join(templatesDir, "presentation-card.html"), "utf-8");
-
-  const listItems = presentations
-    .map((p) => generatePresentationCard(p, cardTemplate))
-    .join("\n");
-
-  const html = indexTemplate.replace("{{PRESENTATION_LIST}}", listItems);
-
-  writeFileSync(join(distDir, "index.html"), html);
-  console.log("Generated index.html");
-}
-
 
 // Main
 console.log("Starting talks build...\n");
@@ -240,6 +169,10 @@ if (existsSync(distDir)) {
   rmSync(distDir, { recursive: true });
 }
 mkdirSync(distDir, { recursive: true });
+
+// Build Astro index page first
+buildAstroIndex();
+console.log("");
 
 const presentations = findPresentations();
 console.log(`Found ${presentations.length} presentation(s):\n`);
@@ -251,8 +184,5 @@ for (const presentation of presentations) {
   buildPresentation(presentation);
   console.log("");
 }
-
-// Generate index page
-generateIndexPage(presentations);
 
 console.log("\nBuild complete!");

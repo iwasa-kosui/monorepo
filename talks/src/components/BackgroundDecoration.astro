@@ -1,0 +1,64 @@
+---
+// Background decoration with blurred blobs
+---
+
+<div class="bg-decoration" aria-hidden="true">
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+</div>
+
+<style>
+  .bg-decoration {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    overflow: hidden;
+  }
+
+  .bg-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.35;
+  }
+
+  .bg-blob-1 {
+    width: 400px;
+    height: 400px;
+    background: #d49a82;
+    top: -100px;
+    right: -100px;
+  }
+
+  .bg-blob-2 {
+    width: 300px;
+    height: 300px;
+    background: #d4c4a8;
+    bottom: 10%;
+    left: -50px;
+  }
+
+  .bg-blob-3 {
+    width: 200px;
+    height: 200px;
+    background: #8fa88b;
+    bottom: 30%;
+    right: 10%;
+    opacity: 0.2;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .bg-blob {
+      opacity: 0.15;
+    }
+
+    .bg-blob-3 {
+      opacity: 0.1;
+    }
+  }
+</style>
