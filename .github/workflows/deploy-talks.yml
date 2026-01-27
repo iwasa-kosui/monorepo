@@ -37,5 +37,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy talks/dist --project-name=talks
+          command: pages deploy talks/dist --project-name=talks --commit-message="${{ github.sha }}"
           packageManager: npm
