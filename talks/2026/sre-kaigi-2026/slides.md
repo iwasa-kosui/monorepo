@@ -911,7 +911,7 @@ API連携は即時性に優れますが、基盤が落ちるとプロダクト�
 
 ### アーキテクチャ
 
-```mermaid {scale: 0.7}
+```mermaid {scale: 0.55}
 flowchart TD
   RDS[(PostgreSQL)] --> CDC[CDC]
   CDC --> Lambda[Lambda/Glue]
@@ -1019,6 +1019,17 @@ layout: section
 
 # なぜサービスベースアーキテクチャか
 
+<div class="text-sm mb-4">
+
+| 特性 | マイクロサービス | イベント駆動 | サービスベース |
+|:--|:--:|:--:|:--:|
+| DB構成 | サービスごと | サービスごと | **単一共有** |
+| 整合性 | 結果整合性 | 結果整合性 | **強い整合性** |
+| デプロイ | 独立 | 独立 | **独立** |
+| サービス間通信 | API/メッセージ | 非同期イベント | **DB経由** |
+
+</div>
+
 <CardGrid :cols="3">
   <OptionCard title="マイクロサービス" status="rejected" statusText="✗ 不採用">
     <p>分散トランザクション</p>
@@ -1062,7 +1073,7 @@ layout: section
 
 ### 共有DBと論理的分離
 
-```mermaid {scale: 0.7}
+```mermaid {scale: 0.55}
 graph TD
   subgraph "単一PostgreSQL"
     subgraph auth[authスキーマ]
