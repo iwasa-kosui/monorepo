@@ -1,5 +1,5 @@
 ---
-theme: kosui
+theme: ../../themes/kosui
 title: 更新"しない"ドキュメント管理 「イミュータブルドキュメントモデル」の実運用
 class: text-center
 highlighter: shiki

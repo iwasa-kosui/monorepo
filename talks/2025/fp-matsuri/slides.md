@@ -1,5 +1,5 @@
 ---
-theme: fp-matsuri
+theme: ../../themes/fp-matsuri
 title: 堅牢な認証基盤の実現:TypeScriptで代数的データ型を活用する
 info: |
     ## Slidev Starter Template

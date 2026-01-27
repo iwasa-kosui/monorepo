@@ -1,0 +1,86 @@
+---
+import type { Presentation } from "@/utils/presentations";
+
+interface Props {
+  presentation: Presentation;
+}
+
+const { presentation } = Astro.props;
+const talk = presentation.talk;
+
+// Format date for display
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// Build date/event line
+let dateEventLine: string;
+if (talk?.date || talk?.event) {
+  const dateStr = talk.date ? formatDate(talk.date) : "";
+  const eventStr = talk.event ?? "";
+  if (dateStr && eventStr) {
+    dateEventLine = `${dateStr} / ${eventStr}`;
+  } else {
+    dateEventLine = dateStr || eventStr;
+  }
+} else {
+  dateEventLine = presentation.year;
+}
+---
+
+<a
+  href={presentation.basePath}
+  class="block bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg"
+>
+  <div class="relative z-10">
+    <div class="text-xs text-terracotta dark:text-terracotta-light mb-1">
+      {dateEventLine}
+    </div>
+    <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100">
+      {presentation.title}
+    </h3>
+    {
+      talk?.description && (
+        <p class="text-sm text-charcoal-light dark:text-gray-400 mt-2 line-clamp-2">
+          {talk.description.trim()}
+        </p>
+      )
+    }
+    {
+      talk?.tags && talk.tags.length > 0 && (
+        <div class="flex flex-wrap gap-1.5 mt-3">
+          {talk.tags.map((tag) => (
+            <span class="inline-block px-2 py-0.5 text-xs rounded-full bg-sand dark:bg-gray-700 text-charcoal dark:text-gray-300">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )
+    }
+    {
+      talk?.duration && (
+        <div class="flex items-center gap-1 mt-2 text-xs text-charcoal-light dark:text-gray-400">
+          <svg
+            class="w-3.5 h-3.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          {talk.duration}
+        </div>
+      )
+    }
+  </div>
+</a>

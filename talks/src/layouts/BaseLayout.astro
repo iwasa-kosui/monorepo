@@ -1,0 +1,26 @@
+---
+import "@/styles/clay.css";
+import BackgroundDecoration from "@/components/BackgroundDecoration.astro";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{title}</title>
+  </head>
+  <body
+    class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100"
+  >
+    <BackgroundDecoration />
+    <slot />
+  </body>
+</html>

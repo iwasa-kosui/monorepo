@@ -1,5 +1,5 @@
 ---
-theme: kkhs
+theme: ../../themes/kkhs
 title: 開発チームが信頼性向上のためにできること
 info: |
   SRE Kaigi 2026 登壇資料
