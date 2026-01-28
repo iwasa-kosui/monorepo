@@ -1,20 +1,13 @@
-import { execSync } from "node:child_process";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import yaml from "js-yaml";
+import yaml from 'js-yaml';
+import { execSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const talksRoot = dirname(__dirname);
-const distDir = join(talksRoot, "dist");
-const distAstroDir = join(talksRoot, "dist-astro");
+const distDir = join(talksRoot, 'dist');
+const distAstroDir = join(talksRoot, 'dist-astro');
 
 /**
  * Parse YAML frontmatter from markdown content
@@ -38,10 +31,10 @@ function parseFrontmatter(content) {
  * @returns {object | null} Talk metadata or null
  */
 function extractTalkMetadata(talkPath) {
-  const slidesPath = join(talkPath, "slides.md");
+  const slidesPath = join(talkPath, 'slides.md');
   if (!existsSync(slidesPath)) return null;
 
-  const content = readFileSync(slidesPath, "utf-8");
+  const content = readFileSync(slidesPath, 'utf-8');
   const frontmatter = parseFrontmatter(content);
   if (!frontmatter) return null;
 
@@ -49,6 +42,50 @@ function extractTalkMetadata(talkPath) {
     title: frontmatter.title || null,
     talk: frontmatter.talk || null,
   };
+}
+
+const VALID_EXTERNAL_TYPES = [
+  'speakerdeck',
+  'slideshare',
+  'google-slides',
+  'docswell',
+];
+
+/**
+ * Parse metadata.yaml for external slides
+ * @param {string} talkPath - Path to the talk directory
+ * @returns {object | null} External slide metadata or null
+ */
+function parseMetadataYaml(talkPath) {
+  const metadataPath = join(talkPath, 'metadata.yaml');
+  if (!existsSync(metadataPath)) return null;
+
+  try {
+    const content = readFileSync(metadataPath, 'utf-8');
+    const metadata = yaml.load(content);
+    if (!metadata) return null;
+
+    if (
+      !metadata.external?.type
+      || !metadata.external?.url
+      || !metadata.external?.embedUrl
+      || !VALID_EXTERNAL_TYPES.includes(metadata.external.type)
+    ) {
+      return null;
+    }
+
+    return {
+      title: metadata.title || null,
+      talk: metadata.talk || null,
+      external: {
+        type: metadata.external.type,
+        url: metadata.external.url,
+        embedUrl: metadata.external.embedUrl,
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -68,9 +105,11 @@ function findPresentations() {
       if (!talk.isDirectory()) continue;
 
       const talkDir = join(yearDir, talk.name);
-      const slidesPath = join(talkDir, "slides.md");
+      const slidesPath = join(talkDir, 'slides.md');
+      const metadataPath = join(talkDir, 'metadata.yaml');
 
       if (existsSync(slidesPath)) {
+        // Local slide (slides.md exists)
         const metadata = extractTalkMetadata(talkDir);
         presentations.push({
           year: entry.name,
@@ -79,7 +118,26 @@ function findPresentations() {
           basePath: `/${entry.name}/${talk.name}/`,
           title: metadata?.title || talk.name,
           talk: metadata?.talk || null,
+          slideType: 'local',
         });
+      } else if (existsSync(metadataPath)) {
+        // External slide (metadata.yaml exists without slides.md)
+        const metadata = parseMetadataYaml(talkDir);
+        if (metadata) {
+          presentations.push({
+            year: entry.name,
+            name: talk.name,
+            path: talkDir,
+            basePath: `/${entry.name}/${talk.name}/`,
+            title: metadata.title || talk.name,
+            talk: metadata.talk || null,
+            slideType: metadata.external.type,
+            external: {
+              url: metadata.external.url,
+              embedUrl: metadata.external.embedUrl,
+            },
+          });
+        }
       }
     }
   }
@@ -117,11 +175,11 @@ function buildPresentation(presentation) {
     `pnpm exec slidev build ${slidesPath} --base ${presentation.basePath} --out dist`,
     {
       cwd: talksRoot,
-      stdio: "inherit",
-    }
+      stdio: 'inherit',
+    },
   );
 
-  const srcDist = join(talksRoot, presentation.year, presentation.name, "dist");
+  const srcDist = join(talksRoot, presentation.year, presentation.name, 'dist');
   const destDir = join(distDir, presentation.year, presentation.name);
 
   if (!existsSync(srcDist)) {
@@ -139,11 +197,11 @@ function buildPresentation(presentation) {
  * Build Astro index page
  */
 function buildAstroIndex() {
-  console.log("Building Astro index page...");
+  console.log('Building Astro index page...');
 
-  execSync("pnpm exec astro build", {
+  execSync('pnpm exec astro build', {
     cwd: talksRoot,
-    stdio: "inherit",
+    stdio: 'inherit',
   });
 
   if (!existsSync(distAstroDir)) {
@@ -160,8 +218,20 @@ function buildAstroIndex() {
   console.log(`Cleaned up ${distAstroDir}`);
 }
 
+/**
+ * Fetch OGP data for event URLs
+ */
+function fetchOgpData() {
+  console.log('Fetching OGP data...');
+
+  execSync('node scripts/fetch-ogp.mjs', {
+    cwd: talksRoot,
+    stdio: 'inherit',
+  });
+}
+
 // Main
-console.log("Starting talks build...\n");
+console.log('Starting talks build...\n');
 
 // Clean dist
 if (existsSync(distDir)) {
@@ -169,19 +239,33 @@ if (existsSync(distDir)) {
 }
 mkdirSync(distDir, { recursive: true });
 
+// Fetch OGP data first
+fetchOgpData();
+console.log('');
+
 // Build Astro index page first
 buildAstroIndex();
-console.log("");
+console.log('');
 
 const presentations = findPresentations();
-console.log(`Found ${presentations.length} presentation(s):\n`);
-presentations.forEach((p) => console.log(`  - ${p.year}/${p.name}`));
-console.log("");
+const localPresentations = presentations.filter((p) => p.slideType === 'local');
+const externalPresentations = presentations.filter(
+  (p) => p.slideType !== 'local',
+);
 
-// Build each presentation
-for (const presentation of presentations) {
+console.log(`Found ${presentations.length} presentation(s):\n`);
+console.log('Local slides:');
+localPresentations.forEach((p) => console.log(`  - ${p.year}/${p.name}`));
+if (externalPresentations.length > 0) {
+  console.log('\nExternal slides (will be skipped in Slidev build):');
+  externalPresentations.forEach((p) => console.log(`  - ${p.year}/${p.name} (${p.slideType})`));
+}
+console.log('');
+
+// Build each local presentation (skip external slides)
+for (const presentation of localPresentations) {
   buildPresentation(presentation);
-  console.log("");
+  console.log('');
 }
 
-console.log("\nBuild complete!");
+console.log('\nBuild complete!');

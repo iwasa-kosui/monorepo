@@ -1,4 +1,4 @@
-import MarkdownItGitHubAlerts from 'markdown-it-github-alerts'
+import MarkdownItGitHubAlerts from 'markdown-it-github-alerts';
 
 export default {
   slidev: {
@@ -12,8 +12,8 @@ export default {
             warning: '注意',
             caution: '課題',
           },
-        })
+        });
       },
     },
   },
-}
+};

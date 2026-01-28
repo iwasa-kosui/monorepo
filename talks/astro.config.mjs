@@ -1,13 +1,13 @@
-import tailwind from "@astrojs/tailwind";
-import { defineConfig } from "astro/config";
+import tailwind from '@astrojs/tailwind';
+import { defineConfig } from 'astro/config';
 
 export default defineConfig({
   integrations: [
     tailwind({
-      configFile: "./tailwind.config.mjs",
+      configFile: './tailwind.config.mjs',
     }),
   ],
-  output: "static",
-  outDir: "./dist-astro",
-  srcDir: "./src",
+  output: 'static',
+  outDir: './dist-astro',
+  srcDir: './src',
 });
