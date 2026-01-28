@@ -1,0 +1,19 @@
+title: "プロダクト成長に対応するプラットフォーム戦略: Authleteによる共通認証基盤の移行事例"
+talk:
+  date: "2024-10-30"
+  event: "OAuth & OpenID Connect 勉強会 ー 認可サーバーの作りかた（AWS編）"
+  eventUrl: "https://authlete.connpass.com/event/333513/"
+  description: |
+    医療SaaS企業カケハシが、複数プロダクト向けに統一認証基盤を構築した事例。
+    Authleteを活用したアーキテクチャと、プロダクトチームとの移行戦略を紹介。
+  tags:
+    - OAuth
+    - OpenID Connect
+    - Authlete
+    - AWS
+  duration: "20min"
+  speaker: "岩佐 幸翠, すてにゃん"
+external:
+  type: speakerdeck
+  url: "https://speakerdeck.com/kakehashi/building-an-authentication-platform-using-authlete-and-aws"
+  embedUrl: "https://speakerdeck.com/player/f2a1ed6df59e47eba70d6b521a45a00a"

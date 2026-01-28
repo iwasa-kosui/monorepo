@@ -1,0 +1,15 @@
+title: "PdMのためのソフトウェアエンジニアリング入門"
+talk:
+  date: "2024-12-08"
+  event: "社内LT"
+  description: |
+    プロダクトマネージャー向けに、ソフトウェアエンジニアリングの基礎と、
+    PdMとエンジニアが協働するためのアプローチを解説する。
+  tags:
+    - Software Engineering
+    - Product Management
+  duration: "10min"
+external:
+  type: speakerdeck
+  url: "https://speakerdeck.com/kosui/introduction-of-software-engineering-for-pdm"
+  embedUrl: "https://speakerdeck.com/player/858a54d4131d4e378aa7577fda2e53d5"
