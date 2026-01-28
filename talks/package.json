@@ -11,28 +11,24 @@
     "build": "node scripts/build.mjs",
     "build:astro": "astro build",
     "deploy:prod": "wrangler pages deploy dist",
-
     "dev:2023-document": "slidev 2023/document/slides.md --open",
     "dev:2023-techplay": "slidev 2023/techplay/slides.md --open",
     "dev:2024-techplay-typescript-lt": "slidev 2024/techplay-typescript-lt/slides.md --open",
     "dev:2024-tskaigi": "slidev 2024/tskaigi/slides.md --open",
     "dev:2025-fp-matsuri": "slidev 2025/fp-matsuri/slides.md --open",
     "dev:2026-sre-kaigi-2026": "slidev 2026/sre-kaigi-2026/slides.md --open",
-
     "build:2023-document": "slidev build 2023/document/slides.md --base /2023/document/ --out 2023/document/dist",
     "build:2023-techplay": "slidev build 2023/techplay/slides.md --base /2023/techplay/ --out 2023/techplay/dist",
     "build:2024-techplay-typescript-lt": "slidev build 2024/techplay-typescript-lt/slides.md --base /2024/techplay-typescript-lt/ --out 2024/techplay-typescript-lt/dist",
     "build:2024-tskaigi": "slidev build 2024/tskaigi/slides.md --base /2024/tskaigi/ --out 2024/tskaigi/dist",
     "build:2025-fp-matsuri": "slidev build 2025/fp-matsuri/slides.md --base /2025/fp-matsuri/ --out 2025/fp-matsuri/dist",
     "build:2026-sre-kaigi-2026": "slidev build 2026/sre-kaigi-2026/slides.md --base /2026/sre-kaigi-2026/ --out 2026/sre-kaigi-2026/dist",
-
     "export:2023-document": "slidev export 2023/document/slides.md",
     "export:2023-techplay": "slidev export 2023/techplay/slides.md",
     "export:2024-techplay-typescript-lt": "slidev export 2024/techplay-typescript-lt/slides.md",
     "export:2024-tskaigi": "slidev export 2024/tskaigi/slides.md",
     "export:2025-fp-matsuri": "slidev export 2025/fp-matsuri/slides.md",
     "export:2026-sre-kaigi-2026": "slidev export 2026/sre-kaigi-2026/slides.md",
-
     "dev:theme-kosui": "slidev themes/kosui/example.md --open",
     "dev:theme-kkhs-marp": "slidev themes/kkhs-marp/example.md --open",
     "dev:theme-typescript": "slidev themes/typescript/example.md --open",
@@ -54,6 +50,7 @@
     "fp-ts": "2.16.5",
     "markdown-it-github-alerts": "1.0.1",
     "newtype-ts": "0.3.5",
+    "open-graph-scraper": "6.11.0",
     "tailwindcss": "^3.4.17",
     "vue": "^3.5.26"
   },

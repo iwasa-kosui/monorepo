@@ -1,16 +1,22 @@
 ---
+import type { Presentation } from '@/utils/presentations';
+
 interface Props {
-  src: string;
-  title: string;
+  presentation: Presentation;
 }
 
-const { src, title } = Astro.props;
+const { presentation } = Astro.props;
+
+// Determine the embed URL based on slide type using discriminated union
+const embedUrl = presentation.slideType === 'local'
+  ? presentation.basePath
+  : presentation.external.embedUrl;
 ---
 
 <div class="aspect-video w-full rounded-clay overflow-hidden shadow-clay dark:shadow-clay-dark">
   <iframe
-    src={src}
-    title={title}
+    src={embedUrl}
+    title={presentation.title}
     class="w-full h-full border-0"
     loading="lazy"
     allowfullscreen

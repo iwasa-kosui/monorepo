@@ -1,7 +1,8 @@
 ---
-import BaseLayout from "@/layouts/BaseLayout.astro";
-import SlideEmbed from "@/components/SlideEmbed.astro";
-import { findPresentations, type Presentation } from "@/utils/presentations";
+import EventLinkCard from '@/components/EventLinkCard.astro';
+import SlideEmbed from '@/components/SlideEmbed.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { findPresentations, type Presentation } from '@/utils/presentations';
 
 export function getStaticPaths() {
   const presentations = findPresentations();
@@ -20,10 +21,10 @@ const talk = presentation.talk;
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 }
 ---
@@ -59,10 +60,82 @@ function formatDate(dateStr: string): string {
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-charcoal-light dark:text-gray-400">
         {talk?.date && <span>{formatDate(talk.date)}</span>}
         {talk?.event && <span>{talk.event}</span>}
-        {talk?.duration && (
-          <span class="inline-flex items-center gap-1">
+        {
+          talk?.duration && (
+            <span class="inline-flex items-center gap-1">
+              <svg
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              {talk.duration}
+            </span>
+          )
+        }
+      </div>
+    </header>
+
+    {
+      talk?.description && (
+        <p class="text-charcoal-light dark:text-gray-400 mb-6">
+          {talk.description.trim()}
+        </p>
+      )
+    }
+
+    {
+      talk?.tags && talk.tags.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-6">
+          {
+            talk.tags.map((tag) => (
+              <span
+                class="inline-block px-3 py-1 text-sm rounded-full bg-sand dark:bg-gray-700 text-charcoal dark:text-gray-300"
+              >
+                {tag}
+              </span>
+            ))
+          }
+        </div>
+      )
+    }
+
+    <section class="mb-6">
+      <SlideEmbed presentation={presentation} />
+    </section>
+
+    {
+      presentation.ogpData && (
+        <section class="mb-6">
+          <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-2">
+            Event Page
+          </h3>
+          <EventLinkCard ogpData={presentation.ogpData} />
+        </section>
+      )
+    }
+
+    {
+      !presentation.ogpData && talk?.eventUrl && (
+        <section class="mb-6">
+          <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-2">
+            Event Page
+          </h3>
+          <a
+            href={talk.eventUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-sm text-terracotta dark:text-terracotta-light hover:underline"
+          >
             <svg
-              class="w-3.5 h-3.5"
+              class="w-4 h-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -71,38 +144,20 @@ function formatDate(dateStr: string): string {
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
               />
             </svg>
-            {talk.duration}
-          </span>
-        )}
-      </div>
-    </header>
-
-    {talk?.description && (
-      <p class="text-charcoal-light dark:text-gray-400 mb-6">
-        {talk.description.trim()}
-      </p>
-    )}
-
-    {talk?.tags && talk.tags.length > 0 && (
-      <div class="flex flex-wrap gap-2 mb-6">
-        {talk.tags.map((tag) => (
-          <span class="inline-block px-3 py-1 text-sm rounded-full bg-sand dark:bg-gray-700 text-charcoal dark:text-gray-300">
-            {tag}
-          </span>
-        ))}
-      </div>
-    )}
-
-    <section class="mb-6">
-      <SlideEmbed src={presentation.basePath} title={presentation.title} />
-    </section>
+            {talk.eventUrl}
+          </a>
+        </section>
+      )
+    }
 
     <div class="flex justify-center">
       <a
-        href={presentation.basePath}
+        href={presentation.slideType === 'local'
+        ? presentation.basePath
+        : presentation.external.url}
         target="_blank"
         rel="noopener noreferrer"
         class="inline-flex items-center gap-2 px-4 py-2 text-sm bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover text-charcoal dark:text-gray-100"

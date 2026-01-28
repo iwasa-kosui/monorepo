@@ -1,0 +1,17 @@
+title: "User-Agent 文字列削減によるサービス影響とその対策"
+talk:
+  date: "2021-12-27"
+  event: "DeNA TechCon 2021 Winter"
+  eventUrl: "https://techcon2021.dena.dev/winter/session-win11"
+  description: |
+    Chrome の User-Agent 文字列削減がウェブサービスに与える影響と、
+    User-Agent Client Hints を使った対策について解説するライトニングトーク。
+  tags:
+    - Browser
+    - User-Agent
+    - Chrome
+  duration: "5min"
+external:
+  type: speakerdeck
+  url: "https://speakerdeck.com/dena_tech/techcon2021-winter-lt8"
+  embedUrl: "https://speakerdeck.com/player/f39cbbf7c1b540edb9be4d18e7fdae09"

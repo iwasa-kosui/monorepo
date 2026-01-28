@@ -1,1 +1,1 @@
-import './layout.css'
+import './layout.css';

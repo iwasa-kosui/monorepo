@@ -1,6 +1,6 @@
 ---
-import "@/styles/clay.css";
-import BackgroundDecoration from "@/components/BackgroundDecoration.astro";
+import '@/styles/clay.css';
+import BackgroundDecoration from '@/components/BackgroundDecoration.astro';
 
 interface Props {
   title: string;
@@ -9,7 +9,7 @@ interface Props {
 const { title } = Astro.props;
 ---
 
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
@@ -17,9 +17,7 @@ const { title } = Astro.props;
     <meta name="color-scheme" content="light dark" />
     <title>{title}</title>
   </head>
-  <body
-    class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100"
-  >
+  <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100">
     <BackgroundDecoration />
     <slot />
   </body>

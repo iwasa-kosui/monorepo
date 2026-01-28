@@ -1,4 +1,4 @@
-import { defineConfig } from 'unocss'
+import { defineConfig } from 'unocss';
 
 export default defineConfig({
   theme: {
@@ -17,4 +17,4 @@ export default defineConfig({
       },
     },
   },
-})
+});
