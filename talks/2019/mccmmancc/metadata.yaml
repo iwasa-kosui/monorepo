@@ -1,0 +1,15 @@
+title: "Goのコンパイラをみてみよう 〜iotaを通じて〜"
+talk:
+  date: "2019-12-22"
+  event: "MCCMMANCC 2019"
+  description: |
+    Go言語の「iota」という言語機能に焦点を当て、
+    Goコンパイラのソースコードを読み解きながら内部実装を探索する。
+  tags:
+    - Go
+    - Compiler
+  duration: "15min"
+external:
+  type: speakerdeck
+  url: "https://speakerdeck.com/kosui/dive-into-go-complier-with-iota"
+  embedUrl: "https://speakerdeck.com/player/c62c6673bc284638958ea340b831a106"

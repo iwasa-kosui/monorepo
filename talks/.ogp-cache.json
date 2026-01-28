@@ -7,5 +7,14 @@
       "url": "https://techcon2021.dena.dev/winter/session-win11"
     },
     "fetchedAt": 1769572217383
+  },
+  "https://authlete.connpass.com/event/333513/": {
+    "data": {
+      "title": "OAuth & OpenID Connect 勉強会 ー 認可サーバーの作りかた（AWS編） (2024/10/30 18:30〜)",
+      "description": "# 注意事項（はじめにご確認ください）  ※ オンライン参加の URL は、開催日の前日に【参加者への情報】でお知らせします。   ※ オンサイト（現地参加）の方は、当日の会場の受付で【受付票】と【名刺】をご提示ください。   ※ ハイブリッド開催のため、現地の様子を撮影・公開いたします。予めご了承ください。  # この勉強会について  OAuth と OpenID Connect (OIDC) に関する話題を幅広く扱う勉強会です。また、あらゆるサービスの OAuth/OIDC 実装を最速で実現する API「Authlete」の活用方法・事例などを各回のテーマに合わせて紹介します。過去の...",
+      "imageUrl": "https://media.connpass.com/thumbs/8e/db/8edb5259cbffd1e49d86272a25fdcc0a.png",
+      "url": "https://authlete.connpass.com/event/333513/"
+    },
+    "fetchedAt": 1769573728119
   }
 }
