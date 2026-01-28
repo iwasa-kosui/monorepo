@@ -112,17 +112,16 @@ function buildPresentation(presentation) {
   console.log(`Building ${presentation.year}/${presentation.name}...`);
 
   const slidesPath = `${presentation.year}/${presentation.name}/slides.md`;
-  const outPath = `${presentation.year}/${presentation.name}/dist`;
 
   execSync(
-    `pnpm exec slidev build ${slidesPath} --base ${presentation.basePath} --out ${outPath}`,
+    `pnpm exec slidev build ${slidesPath} --base ${presentation.basePath} --out dist`,
     {
       cwd: talksRoot,
       stdio: "inherit",
     }
   );
 
-  const srcDist = join(talksRoot, outPath);
+  const srcDist = join(talksRoot, presentation.year, presentation.name, "dist");
   const destDir = join(distDir, presentation.year, presentation.name);
 
   if (!existsSync(srcDist)) {
