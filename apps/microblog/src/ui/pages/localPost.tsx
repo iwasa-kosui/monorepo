@@ -231,7 +231,7 @@ const LocalPostPage = () => {
       </div>
 
       {/* Thread Content */}
-      <div class='flex-1 min-h-0'>
+      <div class='flex-1 min-h-0 overflow-y-auto'>
         <div class='space-y-6 py-2'>
           {threadData.ancestors.length > 0 && (
             <>
