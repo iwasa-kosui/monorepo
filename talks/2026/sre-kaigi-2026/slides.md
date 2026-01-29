@@ -261,7 +261,7 @@ flowchart LR
 
 # システム間の依存関係
 
-認証時にユーザーや組織の情報を参照するため、認証基盤 → ディレクトリサービスへの依存が発生
+認証時にユーザーや組織の情報を参照するため、<span class="text-red-500 font-bold">認証基盤 → ディレクトリサービスへの依存</span>が発生
 
 ```mermaid {scale: 0.7}
 flowchart LR
@@ -278,7 +278,14 @@ flowchart LR
   Dir -->|"CDC<br/>(Change Data Capture)"| DeltaLake
   DeltaLake -->|参照| Products
   Auth -->|参照| Dir
+
+  style Auth fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+  style Dir fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+  linkStyle 3 stroke:#ef4444,stroke-width:3px
 ```
+
+> [!CAUTION]
+> **依存関係があるのに、それぞれに求められる品質要求が異なる** — 次のスライドで詳しく説明
 
 <!--
 最初の課題は、品質要求の相反です。
