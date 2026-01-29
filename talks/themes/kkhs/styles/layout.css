@@ -4,7 +4,7 @@
    A logical and professional presentation theme
    =========================================== */
 
-:root, html.light {
+:root {
   /* Primary color palette based on #1e74bb */
   --slidev-theme-primary: #1e74bb;
   --slidev-theme-primary-light: #4a9dd9;
@@ -46,30 +46,6 @@
   --card-padding-lg: 1.25rem;
 }
 
-/* Dark mode support */
-html.dark {
-  --slidev-theme-primary: #4a9dd9;
-  --slidev-theme-primary-light: #7bbce8;
-  --slidev-theme-primary-lighter: #a3d0f0;
-  --slidev-theme-primary-dark: #1e74bb;
-  --slidev-theme-primary-darker: #155a91;
-
-  --slidev-theme-text: #e8e8f0;
-  --slidev-theme-text-secondary: #b8b8d0;
-  --slidev-theme-text-muted: #8888a8;
-  --slidev-theme-background: #0f0f1a;
-  --slidev-theme-background-soft: #1a1a2e;
-  --slidev-theme-border: #2a2a48;
-
-  --slidev-theme-code-background: #1a1a2e;
-  --slidev-theme-code-border: #2a2a48;
-
-  /* Card component colors for dark mode */
-  --card-bg-neutral: #1a1a2e;
-  --card-bg-primary: #1a2a3e;
-  --card-bg-error: #2a1a1a;
-  --card-border-selected: color-mix(in srgb, var(--slidev-theme-primary) 90%, black);
-}
 
 /* ===========================================
    Base Layout Styles
