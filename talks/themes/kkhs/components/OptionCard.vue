@@ -43,7 +43,7 @@ const isBordered = computed(() => props.status === 'selected')
 
 .status.selected {
   @apply font-bold;
-  color: var(--slidev-theme-primary);
+  color: var(--theme-primary);
 }
 
 .status.neutral {

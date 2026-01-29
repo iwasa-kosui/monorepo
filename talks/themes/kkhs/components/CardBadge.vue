@@ -15,13 +15,13 @@ defineProps<{
 <style scoped>
 .card-badge {
   @apply flex items-center justify-center font-bold rounded-full;
-  background-color: var(--slidev-theme-primary);
+  background-color: var(--theme-primary);
   color: white;
 }
 
 /* Variant styles */
 .card-badge.secondary {
-  background-color: color-mix(in srgb, var(--slidev-theme-primary) 60%, white);
+  background-color: color-mix(in srgb, var(--theme-primary) 60%, white);
 }
 
 /* Size styles */
@@ -42,6 +42,6 @@ defineProps<{
   width: auto;
   height: auto;
   background-color: transparent;
-  color: var(--slidev-theme-primary);
+  color: var(--theme-primary);
 }
 </style>

@@ -16,7 +16,7 @@ defineProps<{
 }
 
 .message-box.primary {
-  background-color: color-mix(in srgb, var(--slidev-theme-primary) 10%, white);
+  background-color: color-mix(in srgb, var(--theme-primary) 10%, white);
 }
 
 .message-box.neutral {

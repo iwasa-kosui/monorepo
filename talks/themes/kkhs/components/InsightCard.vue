@@ -48,13 +48,13 @@ const cardVariant = computed(() => {
         top: 0.7em;
         width: 8px;
         height: 8px;
-        background-color: var(--slidev-theme-error);
+        background-color: var(--theme-negative);
         border-radius: 4px;
       }
     }
 
     ul li::before {
-      background-color: var(--slidev-theme-error);
+      background-color: var(--theme-negative);
       width: 6px;
       height: 6px;
     }
