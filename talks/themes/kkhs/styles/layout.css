@@ -5,40 +5,18 @@
    =========================================== */
 
 :root {
-  /* Primary color palette based on #1e74bb */
-  --slidev-theme-primary: #1e74bb;
-  --slidev-theme-primary-light: #4a9dd9;
-  --slidev-theme-primary-lighter: #a3d0f0;
-  --slidev-theme-primary-dark: #155a91;
-  --slidev-theme-primary-darker: #0d3d63;
-
-  /* Neutral colors for text and backgrounds */
-  --slidev-theme-text: #1a1a2e;
-  --slidev-theme-text-secondary: #4a4a68;
-  --slidev-theme-text-muted: #7a7a98;
-  --slidev-theme-background: #ffffff;
-  --slidev-theme-background-soft: #f5f8fb;
-  --slidev-theme-border: #e1e8ef;
-
-  /* Accent colors for emphasis */
-  --slidev-theme-accent: #2ecc71;
-  --slidev-theme-accent-secondary: #f39c12;
-  --slidev-theme-error: #e74c3c;
-
-  /* Code block colors */
-  --slidev-theme-code-background: #f8fafc;
-  --slidev-theme-code-border: #e2e8f0;
+  /* Core palette (6 colors) */
+  --theme-text: #1a1a2e;
+  --theme-bg: #f9f9f9;
+  --theme-primary: #1e74bb;
+  --theme-accent: #2ecc71;
+  --theme-accent-bg: #eef2f7;
+  --theme-negative: #e74c3c;
 
   /* Shadows and effects */
-  --slidev-theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --slidev-theme-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --slidev-theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-
-  /* Card component colors (based on corporate color #1e74bb) */
-  --card-bg-neutral: #f8fafc;
-  --card-bg-primary: #e7eaf1;
-  --card-bg-error: #fef2f2;
-  --card-border-selected: color-mix(in srgb, var(--slidev-theme-primary) 90%, white);
+  --theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --theme-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
 
   /* Card component padding */
   --card-padding-sm: 0.75rem;
@@ -51,10 +29,13 @@
    Base Layout Styles
    =========================================== */
 
+.slidev-page {
+  background-color: var(--theme-bg);
+}
+
 .slidev-layout {
   @apply px-14 py-10;
-  background-color: var(--slidev-theme-background);
-  color: var(--slidev-theme-text);
+  color: var(--theme-text);
 }
 
 /* ===========================================
@@ -64,7 +45,7 @@
 .slidev-layout.cover,
 .slidev-layout.intro {
   @apply h-full grid px-14 py-12;
-  background-color: var(--slidev-theme-primary);
+  background-color: var(--theme-primary);
   color: #ffffff;
   position: relative;
 
@@ -103,7 +84,7 @@
 
 .slidev-layout.section {
   @apply h-full flex flex-col items-center justify-center px-14 py-12;
-  background-color: var(--slidev-theme-primary);
+  background-color: var(--theme-primary);
   color: #ffffff;
 
   h1 {
@@ -140,33 +121,33 @@
 .slidev-layout {
   h1 {
     @apply text-4xl font-bold mb-4;
-    color: var(--slidev-theme-primary);
-    border-bottom: 3px solid var(--slidev-theme-primary);
+    color: var(--theme-primary);
+    border-bottom: 3px solid var(--theme-primary);
     padding-bottom: 0.5rem;
   }
 
   h2 {
     @apply text-2xl font-semibold mb-3;
-    color: var(--slidev-theme-primary);
+    color: var(--theme-primary);
   }
 
   h3 {
     @apply text-xl font-medium mb-2;
-    color: var(--slidev-theme-text);
+    color: var(--theme-text);
   }
 
   p {
     @apply mb-4 leading-relaxed;
-    color: var(--slidev-theme-text);
+    color: var(--theme-text);
   }
 
   strong {
-    color: var(--slidev-theme-text);
+    color: var(--theme-text);
     font-weight: 600;
   }
 
   em {
-    color: var(--slidev-theme-primary);
+    color: var(--theme-primary);
     font-style: italic;
   }
 }
@@ -210,13 +191,13 @@
         top: 0.7em;
         width: 8px;
         height: 8px;
-        background-color: var(--slidev-theme-primary);
+        background-color: var(--theme-primary);
         border-radius: 4px;
       }
     }
 
     ul li::before {
-      background-color: var(--slidev-theme-primary-light);
+      background-color: color-mix(in srgb, var(--theme-primary) 60%, white);
       width: 6px;
       height: 6px;
     }
@@ -237,7 +218,7 @@
         top: 0.4em;
         width: 24px;
         height: 24px;
-        background-color: var(--slidev-theme-primary);
+        background-color: var(--theme-primary);
         color: #ffffff;
         border-radius: 50%;
         font-size: 0.75rem;
@@ -257,17 +238,17 @@
 .slidev-layout {
   code:not(pre code) {
     @apply px-1.5 py-0.5 rounded text-sm;
-    background-color: var(--slidev-theme-code-background);
-    border: 1px solid var(--slidev-theme-code-border);
-    color: var(--slidev-theme-primary);
+    background-color: var(--theme-accent-bg);
+    border: 1px solid color-mix(in srgb, var(--theme-primary) 15%, var(--theme-bg));
+    color: var(--theme-primary);
     font-family: 'Fira Code', monospace;
   }
 
   pre {
     @apply rounded-lg my-4 overflow-hidden;
-    background-color: var(--slidev-theme-code-background);
-    border: 1px solid var(--slidev-theme-code-border);
-    box-shadow: var(--slidev-theme-shadow);
+    background-color: var(--theme-accent-bg);
+    border: 1px solid color-mix(in srgb, var(--theme-primary) 15%, var(--theme-bg));
+    box-shadow: var(--theme-shadow);
 
     code {
       @apply block p-4 text-sm;
@@ -283,10 +264,10 @@
 .slidev-layout {
   blockquote {
     @apply my-4 pl-4 py-2 italic;
-    border-left: 4px solid var(--slidev-theme-primary);
-    background-color: var(--slidev-theme-background-soft);
+    border-left: 4px solid var(--theme-primary);
+    background-color: color-mix(in srgb, var(--theme-primary) 5%, var(--theme-bg));
     border-radius: 0 8px 8px 0;
-    color: var(--slidev-theme-text);
+    color: var(--theme-text);
 
     p {
       @apply mb-0;
@@ -305,18 +286,18 @@
     border-spacing: 0;
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: var(--slidev-theme-shadow-sm);
-    border: 1px solid var(--slidev-theme-border);
+    box-shadow: var(--theme-shadow-sm);
+    border: 1px solid color-mix(in srgb, var(--theme-primary) 12%, var(--theme-bg));
 
     th {
       @apply px-4 py-3 text-left font-semibold;
-      background-color: var(--slidev-theme-primary);
+      background-color: var(--theme-primary);
       color: #ffffff;
     }
 
     td {
       @apply px-4 py-3;
-      border-bottom: 1px solid var(--slidev-theme-border);
+      border-bottom: 1px solid color-mix(in srgb, var(--theme-primary) 12%, var(--theme-bg));
     }
 
     tr:last-child td {
@@ -324,7 +305,7 @@
     }
 
     tr:nth-child(even) {
-      background-color: var(--slidev-theme-background-soft);
+      background-color: color-mix(in srgb, var(--theme-primary) 5%, var(--theme-bg));
     }
   }
 }
@@ -335,13 +316,13 @@
 
 .slidev-layout {
   a {
-    color: var(--slidev-theme-primary);
+    color: var(--theme-primary);
     text-decoration: none;
     border-bottom: 1px solid transparent;
     transition: border-color 0.2s ease;
 
     &:hover {
-      border-bottom-color: var(--slidev-theme-primary);
+      border-bottom-color: var(--theme-primary);
     }
   }
 }
@@ -353,7 +334,7 @@
 .slidev-layout {
   img {
     @apply rounded-lg;
-    box-shadow: var(--slidev-theme-shadow);
+    box-shadow: var(--theme-shadow);
   }
 }
 
@@ -365,8 +346,8 @@
   .highlight {
     background: linear-gradient(
       120deg,
-      var(--slidev-theme-primary-lighter) 0%,
-      var(--slidev-theme-primary-lighter) 100%
+      color-mix(in srgb, var(--theme-primary) 30%, white) 0%,
+      color-mix(in srgb, var(--theme-primary) 30%, white) 100%
     );
     background-repeat: no-repeat;
     background-size: 100% 40%;
@@ -375,22 +356,22 @@
 
   .card {
     @apply p-6 rounded-xl;
-    background-color: var(--slidev-theme-background);
-    border: 1px solid var(--slidev-theme-border);
-    box-shadow: var(--slidev-theme-shadow);
+    background-color: var(--theme-bg);
+    border: 1px solid color-mix(in srgb, var(--theme-primary) 12%, var(--theme-bg));
+    box-shadow: var(--theme-shadow);
   }
 
   .badge {
     @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
-    background-color: var(--slidev-theme-primary);
+    background-color: var(--theme-primary);
     color: #ffffff;
   }
 
   .badge-outline {
     @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
     background-color: transparent;
-    border: 2px solid var(--slidev-theme-primary);
-    color: var(--slidev-theme-primary);
+    border: 2px solid var(--theme-primary);
+    color: var(--theme-primary);
   }
 }
 
@@ -399,7 +380,7 @@
    =========================================== */
 
 .slidev-page-number {
-  color: var(--slidev-theme-text-muted);
+  color: color-mix(in srgb, var(--theme-text) 50%, var(--theme-bg));
   font-weight: 500;
 }
 

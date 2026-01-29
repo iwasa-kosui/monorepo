@@ -27,21 +27,21 @@ defineProps<{
 
 /* Variant styles */
 .card-base.neutral {
-  background-color: var(--card-bg-neutral);
+  background-color: var(--theme-accent-bg);
 }
 
 .card-base.primary {
-  background-color: var(--card-bg-primary);
+  background-color: color-mix(in srgb, var(--theme-primary) 8%, var(--theme-bg));
 }
 
 .card-base.error {
-  background-color: var(--card-bg-error);
+  background-color: color-mix(in srgb, var(--theme-negative) 6%, var(--theme-bg));
 }
 
 /* Bordered style (for selected state) */
 .card-base.bordered {
   @apply border-2;
-  border-color: var(--card-border-selected);
+  border-color: color-mix(in srgb, var(--theme-primary) 90%, white);
 }
 
 /* Padding styles */
