@@ -246,7 +246,7 @@ const ThreadModal = () => {
         </div>
 
         {/* Thread Content */}
-        <div class='flex-1 min-h-0 mb-4'>
+        <div class='flex-1 min-h-0 mb-4 overflow-y-auto'>
           {isLoadingThread
             ? (
               <div class='flex items-center justify-center py-8'>
