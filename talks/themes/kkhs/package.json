@@ -1,7 +1,7 @@
 {
   "name": "slidev-theme-kkhs",
   "slidev": {
-    "colorSchema": "both",
+    "colorSchema": "light",
     "defaults": {
       "fonts": {
         "sans": "Noto Sans JP",
