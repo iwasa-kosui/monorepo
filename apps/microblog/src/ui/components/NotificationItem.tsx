@@ -267,11 +267,13 @@ const EmojiReactNotificationItem = ({
 const ReplyNotificationItem = ({
   notification,
   sanitizedContent,
+  recipientUsername,
 }: {
   notification: ReplyNotificationWithDetails;
   sanitizedContent: string;
+  recipientUsername: string;
 }) => {
-  const { replierActor, replyPost, replyPostAuthorUsername, createdAt } = notification;
+  const { replierActor, createdAt, notification: { originalPostId } } = notification;
 
   const handle = Actor.match({
     onLocal: LocalActor.getHandle,
@@ -283,11 +285,7 @@ const ReplyNotificationItem = ({
     onRemote: (x) => `/remote-users/${x.id}`,
   })(replierActor);
 
-  const postUrl = replyPostAuthorUsername
-    ? `/users/${replyPostAuthorUsername}/posts/${replyPost.postId}`
-    : replyPost.type === 'remote'
-    ? replyPost.uri
-    : `/posts/${replyPost.postId}`;
+  const postUrl = `/users/${recipientUsername}/posts/${originalPostId}`;
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -391,6 +389,7 @@ export const NotificationItem = ({ notification, sanitizedContent, recipientUser
       <ReplyNotificationItem
         notification={notification as ReplyNotificationWithDetails}
         sanitizedContent={sanitizedContent}
+        recipientUsername={recipientUsername}
       />
     );
   }
