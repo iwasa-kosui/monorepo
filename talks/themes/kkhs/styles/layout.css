@@ -7,6 +7,7 @@
 :root {
   /* Core palette (6 colors) */
   --theme-text: #1a1a2e;
+  --theme-text-secondary: #4a4a6a;
   --theme-bg: #f9f9f9;
   --theme-primary: #1e74bb;
   --theme-accent: #2ecc71;
@@ -22,6 +23,8 @@
   --card-padding-sm: 0.75rem;
   --card-padding-md: 1rem;
   --card-padding-lg: 1.25rem;
+
+  font-size: 18px;
 }
 
 
@@ -50,7 +53,7 @@
   position: relative;
 
   h1 {
-    @apply text-5xl leading-tight font-bold;
+    @apply text-3xl leading-tight font-bold;
     border: none;
   }
 
@@ -120,20 +123,20 @@
 
 .slidev-layout {
   h1 {
-    @apply text-4xl font-bold mb-4;
+    @apply text-2xl font-bold mb-4;
     color: var(--theme-primary);
     border-bottom: 3px solid var(--theme-primary);
     padding-bottom: 0.5rem;
   }
 
   h2 {
-    @apply text-2xl font-semibold mb-3;
-    color: var(--theme-primary);
+    @apply text-xl font-semibold mb-3;
+    color: var(--theme-text);
   }
 
   h3 {
-    @apply text-xl font-medium mb-2;
-    color: var(--theme-text);
+    @apply text-lg font-semibold mb-2;
+    color: var(--theme-text-secondary);
   }
 
   p {
@@ -238,17 +241,14 @@
 .slidev-layout {
   code:not(pre code) {
     @apply px-1.5 py-0.5 rounded text-sm;
-    background-color: var(--theme-accent-bg);
-    border: 1px solid color-mix(in srgb, var(--theme-primary) 15%, var(--theme-bg));
-    color: var(--theme-primary);
     font-family: 'Fira Code', monospace;
+    background-color: #4b6eaf;
+    color: #e1e8ef;
   }
 
   pre {
     @apply rounded-lg my-4 overflow-hidden;
-    background-color: var(--theme-accent-bg);
-    border: 1px solid color-mix(in srgb, var(--theme-primary) 15%, var(--theme-bg));
-    box-shadow: var(--theme-shadow);
+    background-color: #111e29;
 
     code {
       @apply block p-4 text-sm;

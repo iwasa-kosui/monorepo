@@ -1,0 +1,53 @@
+<svg viewBox="0 0 600 280" width="600" height="280" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1a1a2e"/>
+    </marker>
+    <marker id="arw-w" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1e74bb"/>
+    </marker>
+  </defs>
+  <!-- === 上段: プロダクト群・データ基盤 === -->
+  <rect x="30" y="10" width="160" height="50" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="110" y="42" text-anchor="middle" fill="#1a1a2e" style="font-size:15px;font-weight:700">プロダクト群</text>
+  <rect x="430" y="10" width="140" height="50" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="500" y="42" text-anchor="middle" fill="#1a1a2e" style="font-size:15px;font-weight:700">データ基盤</text>
+  <!-- データ基盤→プロダクト群 (参照) -->
+  <line x1="430" y1="28" x2="192" y2="28" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="296" y="22" fill="#1a1a2e" style="font-size:13px;font-weight:600">参照</text>
+  <!-- === プロダクト群→基盤への接続 === -->
+  <!-- プロダクト→認証 (OIDC): 真下へ -->
+  <line x1="80" y1="60" x2="80" y2="148" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="52" y="108" fill="#1a1a2e" style="font-size:13px;font-weight:600">OIDC</text>
+  <!-- プロダクト→ライセンス (API): 右下へ -->
+  <line x1="160" y1="60" x2="255" y2="148" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="222" y="92" fill="#1a1a2e" style="font-size:13px;font-weight:600">API</text>
+  <!-- ID基盤→データ基盤 (反映): 真上へ -->
+  <line x1="500" y1="155" x2="500" y2="62" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="506" y="112" fill="#1a1a2e" style="font-size:13px;font-weight:600">反映</text>
+  <!-- === プラットフォーム枠 === -->
+  <rect x="10" y="120" width="570" height="150" rx="10" fill="none" stroke="#1e74bb" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="30" y="142" fill="#1e74bb" style="font-size:14px;font-weight:700">プラットフォーム</text>
+  <!-- 認証基盤 -->
+  <rect x="25" y="155" width="110" height="45" rx="8" fill="#1e74bb"/>
+  <text x="80" y="183" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">認証基盤</text>
+  <!-- ライセンス基盤 -->
+  <rect x="160" y="155" width="120" height="45" rx="8" fill="#1e74bb"/>
+  <text x="220" y="183" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">ライセンス基盤</text>
+  <!-- 端末・証明書基盤 -->
+  <rect x="305" y="155" width="110" height="45" rx="8" fill="#1e74bb"/>
+  <text x="360" y="173" text-anchor="middle" fill="#fff" style="font-size:13px;font-weight:700">端末・</text>
+  <text x="360" y="189" text-anchor="middle" fill="#fff" style="font-size:13px;font-weight:700">証明書基盤</text>
+  <!-- ID基盤 (右端) -->
+  <rect x="440" y="155" width="110" height="45" rx="8" fill="#1e74bb"/>
+  <text x="495" y="183" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">ID基盤</text>
+  <!-- 基盤間: 認証→ID (参照) -->
+  <path d="M80,200 L80,240 L495,240 L495,200" fill="none" stroke="#1e74bb" stroke-width="1.5" marker-end="url(#arw-w)"/>
+  <text x="274" y="254" fill="#1a1a2e" style="font-size:12px;font-weight:600">参照</text>
+  <!-- 基盤間: ライセンス→端末 (参照) -->
+  <line x1="280" y1="177" x2="303" y2="177" stroke="#1e74bb" stroke-width="1.5" marker-end="url(#arw-w)"/>
+  <text x="274" y="170" fill="#1a1a2e" style="font-size:12px;font-weight:600">参照</text>
+  <!-- 基盤間: 端末→ID (参照) -->
+  <line x1="415" y1="177" x2="438" y2="177" stroke="#1e74bb" stroke-width="1.5" marker-end="url(#arw-w)"/>
+  <text x="410" y="170" fill="#1a1a2e" style="font-size:12px;font-weight:600">参照</text>
+</svg>

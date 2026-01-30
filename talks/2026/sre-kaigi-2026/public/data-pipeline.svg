@@ -1,0 +1,37 @@
+<svg viewBox="0 0 340 400" width="340" height="400" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw-dp" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1a1a2e"/>
+    </marker>
+  </defs>
+  <!-- PostgreSQL -->
+  <rect x="105" y="10" width="130" height="45" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="170" y="38" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">PostgreSQL</text>
+  <!-- 矢印: PostgreSQL → S3 (生データ) -->
+  <line x1="170" y1="55" x2="170" y2="80" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-dp)"/>
+  <text x="250" y="72" fill="#1a1a2e" style="font-size:12px;font-weight:600">RDS Export</text>
+  <!-- S3 (生データ) -->
+  <rect x="95" y="82" width="150" height="45" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="170" y="110" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">S3 (生データ)</text>
+  <!-- 矢印: S3 (生データ) ← Spark -->
+  <line x1="170" y1="172" x2="170" y2="129" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-dp)"/>
+  <!-- Spark -->
+  <rect x="120" y="174" width="100" height="40" rx="8" fill="#1e74bb"/>
+  <text x="170" y="199" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">Spark</text>
+  <!-- 矢印: Spark → S3 (正規化データ) -->
+  <line x1="170" y1="214" x2="170" y2="239" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-dp)"/>
+  <!-- S3 (正規化データ) -->
+  <rect x="65" y="241" width="210" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="170" y="264" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">S3 (正規化データ)</text>
+  <text x="170" y="282" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:600">可用性 99.99%</text>
+  <!-- 矢印: S3 → Databricks (左下) -->
+  <line x1="120" y1="296" x2="75" y2="335" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-dp)"/>
+  <!-- 矢印: S3 → 各プロダクト (右下) -->
+  <line x1="220" y1="296" x2="265" y2="335" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-dp)"/>
+  <!-- Databricks -->
+  <rect x="10" y="337" width="130" height="40" rx="8" fill="#1e74bb"/>
+  <text x="75" y="362" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">Databricks</text>
+  <!-- 各プロダクト -->
+  <rect x="200" y="337" width="130" height="40" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="265" y="362" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">各プロダクト</text>
+</svg>
