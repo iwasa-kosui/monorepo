@@ -1,0 +1,61 @@
+<svg viewBox="0 0 400 450" width="400" height="450" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw-se" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1a1a2e"/>
+    </marker>
+    <marker id="arw-se-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1e74bb"/>
+    </marker>
+    <marker id="arw-se-up" markerWidth="6" markerHeight="8" refX="3" refY="0" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,8 L3,0 L6,8" fill="#1a1a2e"/>
+    </marker>
+  </defs>
+
+  <!-- ID基盤 -->
+  <rect x="115" y="10" width="150" height="45" rx="8" fill="#1e74bb"/>
+  <text x="190" y="38" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">ID基盤</text>
+
+  <!-- 矢印: ID基盤 → 状態テーブル -->
+  <line x1="155" y1="55" x2="155" y2="92" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
+  <text x="95" y="78" fill="#1a1a2e" style="font-size:11px">書き込み</text>
+
+  <!-- データベース グループ -->
+  <rect x="70" y="82" width="260" height="95" rx="10" fill="none" stroke="#1a1a2e" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="80" y="98" fill="#1a1a2e" style="font-size:11px;font-weight:600">データベース</text>
+
+  <!-- 状態テーブル -->
+  <rect x="85" y="104" width="110" height="40" rx="6" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="140" y="129" text-anchor="middle" fill="#1a1a2e" style="font-size:13px;font-weight:700">状態テーブル</text>
+
+  <!-- イベントテーブル -->
+  <rect x="205" y="104" width="115" height="40" rx="6" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="262" y="122" text-anchor="middle" fill="#1a1a2e" style="font-size:12px;font-weight:700">イベント</text>
+  <text x="262" y="138" text-anchor="middle" fill="#1a1a2e" style="font-size:12px;font-weight:700">テーブル</text>
+
+  <!-- 矢印: 状態テーブル → Delta Lake (CDC) -->
+  <line x1="140" y1="144" x2="140" y2="198" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
+  <text x="80" y="176" fill="#1a1a2e" style="font-size:11px;font-weight:600">CDC</text>
+
+  <!-- Delta Lake -->
+  <rect x="65" y="200" width="200" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="165" y="224" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">Delta Lake</text>
+  <text x="165" y="242" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:600">タイムトラベル対応</text>
+
+  <!-- 矢印: Delta Lake → 差分検出 -->
+  <line x1="165" y1="255" x2="165" y2="288" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
+  <text x="190" y="277" fill="#1a1a2e" style="font-size:11px">スナップショット比較</text>
+
+  <!-- 差分検出 -->
+  <rect x="90" y="290" width="150" height="40" rx="8" fill="#1e74bb"/>
+  <text x="165" y="315" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">差分検出</text>
+
+  <!-- 矢印: 差分検出 → イベントテーブル (右に出て上へ) -->
+  <path d="M240,310 L350,310 L350,148 L262,148" stroke="#1a1a2e" stroke-width="1.5" fill="none"/>
+  <polygon points="262,142 256,152 268,152" fill="#1a1a2e"/>
+  <text x="362" y="235" fill="#1a1a2e" style="font-size:11px;font-weight:600" transform="rotate(90,362,235)">イベント生成</text>
+
+  <!-- ステップ3: ID基盤から直接イベントテーブルへ (点線) -->
+  <line x1="265" y1="40" x2="262" y2="40" stroke="#1e74bb" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <line x1="262" y1="55" x2="262" y2="102" stroke="#1e74bb" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arw-se-blue)"/>
+  <text x="282" y="78" fill="#1e74bb" style="font-size:10px;font-weight:600">将来</text>
+</svg>
