@@ -756,183 +756,120 @@ layout: section
 
 # アーキテクチャパターンの選定
 
----
-
-# なぜアーキテクチャを選定するのか
-
-<div class="grid grid-cols-2 gap-8">
-<div>
-
-### 解決したい課題
-
-- **品質要件が相反する**システム同士の独立性を高めたい  
-  例: 高可用性が求められる認証基盤と、  
-  強い整合性が求められるID基盤
-- それぞれのシステムが互いに影響を与えず、独立して進化できる構造が必要
-
-</div>
-<div>
-
-### 制約条件
-
-- 基盤システムは**発展途上**であり、適切なコンテキスト・ドメインの分割が不明瞭
-- **誤った分割**は障害点を増やし、変更容易性を下げるリスクがある
-- 将来の分割を見据えつつ、**今の段階では過度に分割しない**判断が必要
-
-</div>
-</div>
-
-<!--
-なぜアーキテクチャの選定が必要だったのかを説明します。
-解決したい課題は、品質要件が相反するシステム同士の独立性を高めることでした。例えば、高可用性が求められるシステムと、強い整合性が求められるシステムが混在しており、それぞれが独立して進化できる構造が必要でした。
-一方で、基盤システムはまだ発展途上であり、どのようなコンテキストやドメインの分割がふさわしいかは不明瞭な部分も多くありました。誤った分割によって障害点を増やし、変更容易性を下げることは避けたい。将来の分割を見据えつつも、今の段階では過度に分割しないという判断が求められていました。
--->
+品質要求が相反するシステムをどう構成するか
 
 ---
 
-# アーキテクチャパターンの選定
+# 品質要求が相反するシステムをどう構成するか
 
-<div class="text-sm mb-4">
+品質要求が異なるシステム（認証基盤・ID基盤）の<span class="font-bold">独立性を高めたい</span>
 
-| 特性 | マイクロサービス | イベント駆動 | サービスベース |
-|:--|:--:|:--:|:--:|
-| DB構成 | サービスごと | サービスごと | **単一共有** |
-| 整合性 | 結果整合性 | 結果整合性 | **強い整合性** |
-| デプロイ | 独立 | 独立 | **独立** |
-| サービス間通信 | API/メッセージ | 非同期イベント | **DB経由** |
-
-</div>
-
-<CardGrid :cols="3">
-  <OptionCard title="マイクロサービス" status="rejected" statusText="✗ 不採用">
-    <p>分散トランザクション</p>
-    <p>結果整合性の複雑さ</p>
-  </OptionCard>
-  <OptionCard title="イベント駆動" status="rejected" statusText="✗ 不採用">
-    <p>結果整合性が前提</p>
-    <p>状態追跡の難しさ</p>
-  </OptionCard>
-  <OptionCard title="サービスベース" status="selected" statusText="✓ 採用">
-    <p>単一DB共有</p>
-    <p>独立したデプロイ</p>
-  </OptionCard>
-</CardGrid>
-
-<div class="mt-4 p-4 bg-brand-50 rounded-lg">
-  <h4 class="font-bold mb-2">採用理由</h4>
+<div class="mt-6 p-4 bg-brand-50 rounded-lg">
+  <h4 class="font-bold mb-2">求められる要件</h4>
   <ul class="text-sm space-y-1">
-    <li>組織・薬局・ユーザー・ライセンス・端末は<span class="font-bold">密接に関連</span></li>
-    <li>ドメインを横断した<span class="font-bold">強い一貫性</span>が必要</li>
-    <li>分散トランザクションの複雑さを<span class="font-bold">回避</span></li>
+    <li>基盤システムは<span class="font-bold">発展途上</span>であり、誤った分割は障害点を増やすリスクがある</li>
+    <li>データの<span class="font-bold">強い整合性・一貫性</span>を保ちたい</li>
+    <li>サービスごとの<span class="font-bold">独立したデプロイ</span>を実現したい</li>
   </ul>
 </div>
 
+
+<CardGrid :cols="3">
+  <OptionCard title="マイクロサービス" status="rejected" statusText="✗ 不採用">
+    <p>誤った分割のリスクが大きい</p>
+    <p>分散トランザクションの複雑さ</p>
+  </OptionCard>
+  <OptionCard title="イベント駆動" status="rejected" statusText="✗ 不採用">
+    <p>誤った分割のリスクが大きい</p>
+    <p>結果整合性・状態追跡の難しさ</p>
+  </OptionCard>
+  <OptionCard title="モジュラモノリス" status="rejected" statusText="✗ 不採用">
+    <p>認証基盤だけのデプロイなど</p>
+    <p>影響を最小化したデプロイが困難</p>
+  </OptionCard>
+</CardGrid>
+
 <!--
-3つ目の方法論、サービスベースアーキテクチャについて説明します。
-アーキテクチャの選択では、3つの選択肢を検討しました。
-マイクロサービスは独立性が高いですが、分散トランザクションや結果整合性の複雑さが課題です。私たちのドメインでは強い整合性が必要なので、この複雑さは受け入れられませんでした。
-イベント駆動アーキテクチャは、サービス間を非同期イベントで連携させるパターンです。スケーラビリティは高いですが、結果整合性が前提となり、状態の追跡やデバッグが難しくなります。
-そこで選んだのがサービスベースアーキテクチャです。単一のデータベースを共有しながら、サービスは独立してデプロイできる。
-なぜこれを選んだか。組織・薬局・ユーザー・ライセンス・端末は密接に関連しており、これらを横断した強い一貫性が必要だからです。例えば「ユーザーを組織に追加すると同時にライセンスを付与する」といった処理を、単一のトランザクションで実行できます。
+課題②で触れた通り、認証基盤とID基盤では求められる品質特性が異なります。この相反する要求を満たすために、アーキテクチャパターンの選定が重要になりました。
+アーキテクチャの選択では、いくつかの選択肢を検討しました。
+マイクロサービスやイベント駆動アーキテクチャは、誤った分割をしたときのリスクが大きいです。基盤システムはまだ発展途上であり、適切なドメイン分割が不明瞭な段階で分散トランザクションや結果整合性の複雑さを抱えるのは避けたいと考えました。
+モジュラモノリスも検討しましたが、認証基盤だけをデプロイするなど、影響を最小化したデプロイが難しいという課題がありました。
+私たちが求めていたのは、強い整合性を保ちつつ、サービスごとに独立してデプロイできるアーキテクチャです。
 -->
 
 ---
 
-# サービスベースアーキテクチャの実装
+# サービスベースアーキテクチャとは
 
-<div class="grid grid-cols-2 gap-6 mt-4">
+<div class="flex gap-4 mb-2">
 
-<div>
+<img src="/service-based-architecture.svg" class="w-[500px] mt-2" />
 
-### 共有DBと論理的分離
+<div class="mt-3 text-sm">
 
-```mermaid {scale: 0.55}
-graph TD
-  subgraph "単一PostgreSQL"
-    subgraph auth[authスキーマ]
-      sessions[sessions]
-      tokens[tokens]
-    end
-    subgraph directory[directoryスキーマ]
-      users[users]
-      orgs[orgs]
-    end
-    subgraph asset[assetスキーマ]
-      licenses[licenses]
-      devices[devices]
-    end
-  end
-```
+単一の**共有DB**を持ちながら、  
+サービスは**独立してデプロイ**できる  
+アーキテクチャ
 
-</div>
-
-<div>
-
-### DBユーザーによる権限制御
-
-```sql
--- 認証サービス用
-CREATE ROLE auth_service;
-GRANT ALL ON auth.* TO auth_service;
-GRANT SELECT ON directory.* TO auth_service;
-
--- ディレクトリサービス用
-CREATE ROLE directory_service;
-GRANT ALL ON directory.* TO directory_service;
-GRANT SELECT ON auth.*, asset.*
-  TO directory_service;
-```
-
-<div class="mt-4 p-3 bg-slate-100 rounded text-sm">
-  <span class="font-bold">原則:</span><br>
-  自分のスキーマにのみ書き込み権限<br>
-  他のスキーマは読み取りのみ
-</div>
+- システム間でのAPI通信は禁止
+- システム間でDBの読み取りを許可
+- ただし各テーブルは  
+  特定のサービスが所有し  
+  他のサービスによる書込は禁止
 
 </div>
 
 </div>
+
+> 参考
+> Mark Richards『ソフトウェアアーキテクチャの基礎』）
 
 <!--
-具体的な実装を見てみましょう。
-左側の図を見てください。単一のPostgreSQLの中に、authスキーマ、directoryスキーマ、assetスキーマが存在します。物理的には1つのデータベースですが、論理的にはスキーマで分離されています。
-右側のSQLが重要です。各サービスには専用のDBユーザーを作成し、権限を制御しています。
-auth_serviceは、authスキーマにはフルアクセス権限を持ちますが、directoryスキーマは読み取り専用です。directory_serviceは、directoryスキーマにはフルアクセス、他は読み取り専用。
-この原則——「自分のスキーマにのみ書き込み権限、他は読み取りのみ」——により、サービス間の境界を技術的に強制しています。間違えて他のスキーマに書き込もうとしても、データベースレベルで拒否されます。
+そこで検討したのが、サービスベースアーキテクチャです。
+これはMark Richardsらが『Fundamentals of Software Architecture』で体系化したパターンで、単一の共有データベースを持ちながら、サービスは独立してデプロイできるアーキテクチャです。
+図をご覧ください。上段にある各サービスは独立してデプロイ可能ですが、サービス間のAPI通信は禁止しています。バツ印がついている部分です。
+代わりに、すべてのサービスが下段の単一PostgreSQLに接続します。各スキーマにはサービスごとの所有権があり、自分のスキーマには読み書きできますが、他のスキーマは読み取りのみです。点線の矢印がSELECTのみの参照を表しています。
+マイクロサービスとモノリスの中間に位置するパターンで、分散トランザクションの複雑さを避けつつ、デプロイの独立性を得ることができます。
 -->
 
 ---
 
-# サービス間通信を原則禁止
+# サービスベースアーキテクチャの採用
 
-<div class="mt-4">
-
-<div class="grid grid-cols-2 gap-6">
+<div class="grid grid-cols-2 gap-8 mt-4">
 
 <div>
 
-### 禁止パターン
+### 共有DBアンチパターンとの違い
+
+<div class="p-3 bg-red-50 rounded mb-3">
+  <p class="text-sm font-bold text-red-600">共有DBアンチパターン</p>
+  <ul class="text-xs text-slate-600 mt-1">
+    <li>どのサービスもどのテーブルも自由に読み書き</li>
+    <li>変更の影響範囲が不明</li>
+    <li>サービス間の結合度が極めて高い</li>
+  </ul>
+</div>
+
+<div class="p-3 bg-brand-50 rounded">
+  <p class="text-sm font-bold text-brand-600">サービスベースアーキテクチャ</p>
+  <ul class="text-xs text-slate-600 mt-1">
+    <li>テーブル/スキーマはサービスごとに<span class="font-bold">所有権</span>を持つ</li>
+    <li>他サービスは<span class="font-bold">読み取りのみ</span>、変更は許されない</li>
+    <li>サービス間はAPIで通信せず、<span class="font-bold">DBから直接参照</span></li>
+  </ul>
+</div>
+
+</div>
+
+<div>
+
+### なぜAPI通信しないのか
 
 ```typescript
 // ❌ サービス間API呼び出し
 const user = await userService.getUser(userId);
-const org = await orgService.getOrg(user.orgId);
 ```
-
-<div class="p-3 bg-red-50 rounded mt-2">
-  <p class="text-sm font-bold text-red-600">問題点</p>
-  <ul class="text-xs text-slate-600 mt-1">
-    <li>DNS解決の遅延（実際に発生）</li>
-    <li>障害の連鎖</li>
-    <li>レイテンシーの増加</li>
-  </ul>
-</div>
-
-</div>
-
-<div>
-
-### 推奨パターン
 
 ```typescript
 // ✓ 共有DBから直接読み取り
@@ -940,16 +877,12 @@ const user = await db.query(
   'SELECT * FROM directory.users WHERE id = $1',
   [userId]
 );
-const org = await db.query(
-  'SELECT * FROM directory.orgs WHERE id = $1',
-  [user.orgId]
-);
 ```
 
-<div class="p-3 bg-brand-50 rounded mt-2">
-  <p class="text-sm font-bold text-brand-600">メリット</p>
-  <ul class="text-xs text-slate-600 mt-1">
-    <li>ネットワーク障害の影響なし</li>
+<div class="mt-3 p-3 bg-slate-100 rounded text-sm">
+  <span class="font-bold">DB直接参照のメリット:</span>
+  <ul class="text-xs mt-1">
+    <li>ネットワーク障害・DNS遅延の影響なし</li>
     <li>トランザクションで整合性保証</li>
     <li>低レイテンシー</li>
   </ul>
@@ -959,64 +892,12 @@ const org = await db.query(
 
 </div>
 
-</div>
-
 <!--
-サービスベースアーキテクチャで重要な原則があります。サービス間のAPI通信を原則禁止としています。
-左側が禁止パターンです。userServiceからgetUserを呼び、その結果を使ってorgServiceからgetOrgを呼ぶ。一見よくあるパターンに見えますが、私たちはこれを禁止しています。
-なぜか。実際に問題が発生したからです。ある時、DNS解決の遅延が発生し、サービス間の呼び出しがタイムアウト。結果として、ユーザー体験に深刻な影響が出ました。
-右側が推奨パターンです。共有DBから直接読み取ります。directoryスキーマのusersテーブル、orgsテーブルに直接クエリを投げる。
-これにより、ネットワーク障害の影響を受けず、トランザクションで整合性も保証され、レイテンシーも低い。
-「サービスを分けたのにDB直接アクセス？」と思われるかもしれません。しかし、私たちの目的は「独立したデプロイ」であり、「ネットワーク分離」ではないのです。
--->
-
----
-
-# サービスベース: 運用と改善
-
-<CardGrid :cols="2">
-
-<div>
-
-### 失敗から学んだこと
-
-<InsightCard title="共通ライブラリの肥大化" variant="negative">
-  <p>型定義・バリデーションを共通化しすぎた結果、一つの変更が全サービスのリビルドを強制<br><span class="highlight" style="color: var(--slidev-code-error)">→「分散モノリス」の兆候</span></p>
-</InsightCard>
-
-<InsightCard title="DNS解決の遅延問題">
-  <p>「一時的にAPI連携で」が常態化<br>→ 原則に立ち返り、DB経由に修正</p>
-</InsightCard>
-
-</div>
-
-<div>
-
-### 原則を守るための工夫
-
-<InsightCard title="ADR（Architecture Decision Record）" variant="positive">
-  <p>「なぜサービス間通信を禁止するか」を記録<br>例外を認める際の判断基準を明文化</p>
-</InsightCard>
-
-<InsightCard title="コードレビューでの確認" variant="positive">
-  <p>サービス間API呼び出しを見つけたら<br>「本当に必要？DB経由でできない？」と問う</p>
-</InsightCard>
-
-</div>
-
-</CardGrid>
-
-> [!IMPORTANT]
-> **原則を言語化し、逸脱を検知し、継続的に守り続ける**
-
-<!--
-サービスベースアーキテクチャの運用で、私たちも失敗を経験しました。
-一つ目は、共通ライブラリの肥大化です。型定義やバリデーションを共通化しすぎた結果、一つの変更が全サービスのリビルドを強制する状態になりました。これは「分散モノリス」の兆候です。共通化は便利ですが、やりすぎると独立性が失われます。
-二つ目は、DNS解決の遅延問題。先ほど説明した事例です。「一時的にAPI連携で」というつもりが常態化し、障害を招きました。
-これらの失敗から、原則を守るための工夫を導入しました。
-ADR——Architecture Decision Recordで「なぜサービス間通信を禁止するか」を記録し、例外を認める際の判断基準を明文化しています。
-また、コードレビューでサービス間API呼び出しを見つけたら、「本当に必要？DB経由でできない？」と問うようにしています。
-原則を言語化し、逸脱を検知し、継続的に守り続ける。これが「設計を育てる」ということです。では最後に、RLSについて説明します。
+そこで検討したのがサービスベースアーキテクチャです。DBを共有するため、いわゆる「共有DBアンチパターン」と非常に似ています。正直、危険に見えます。
+しかし、サービスベースアーキテクチャでは結合度を下げるための工夫を行います。
+まず、テーブルやスキーマはサービスごとに所有権を持ちます。他のサービスがそのテーブルを変更することは許されません。読み取りのみです。
+次に、サービス間はAPIで通信しません。他サービスのデータが必要な場合は、共有DBから直接参照します。API呼び出しでは、DNS解決の遅延やネットワーク障害による連鎖障害のリスクがあります。実際にそうした問題も発生しました。DB直接参照であれば、ネットワーク障害の影響を受けず、トランザクションで整合性も保証されます。
+私たちの目的は「独立したデプロイ」であり、「ネットワーク分離」ではないのです。
 -->
 
 ---
@@ -1078,6 +959,113 @@ graph TD
 非同期処理が必要になったら、イベント駆動パターンを部分的に導入できます。
 そして重要なのは、境界が不明確なうちは「まだ分割しない」という選択ができること。早すぎる分離は、間違った境界での分割を招きます。
 サービスベースアーキテクチャは、「今は分からないことを認め、将来の選択肢を残す」設計なのです。
+-->
+
+---
+
+# サービスベースアーキテクチャの実装
+
+<div class="grid grid-cols-2 gap-6 mt-4">
+
+<div>
+
+### 共有DBと論理的分離
+
+<img src="/shared-db-schemas.svg" class="w-full" />
+
+</div>
+
+<div>
+
+### DBユーザーによる権限制御
+
+```sql
+-- 認証サービス用
+CREATE ROLE auth_service;
+GRANT ALL ON auth.* TO auth_service;
+GRANT SELECT ON directory.* TO auth_service;
+
+-- ディレクトリサービス用
+CREATE ROLE directory_service;
+GRANT ALL ON directory.* TO directory_service;
+GRANT SELECT ON auth.*, asset.*
+  TO directory_service;
+```
+
+<div class="mt-4 p-3 bg-slate-100 rounded text-sm">
+  <span class="font-bold">原則:</span><br>
+  自分のスキーマにのみ書き込み権限<br>
+  他のスキーマは読み取りのみ
+</div>
+
+</div>
+
+</div>
+
+<!--
+具体的な実装を見てみましょう。
+単一のPostgreSQLの中に、authスキーマ、directoryスキーマ、assetスキーマが存在します。物理的には1つのデータベースですが、論理的にはスキーマで分離されています。
+各サービスには専用のDBユーザーを作成し、権限を制御しています。auth_serviceはauthスキーマにはフルアクセス、directoryスキーマは読み取り専用。この「自分のスキーマにのみ書き込み権限、他は読み取りのみ」という原則を、データベースレベルで強制しています。
+-->
+
+---
+
+# サービスベースアーキテクチャの課題
+
+<div class="grid grid-cols-2 gap-8 mt-4">
+
+<div>
+
+### 参照可否の区別
+
+サービスが拡大するにつれ、テーブルの区別が困難に
+
+<div class="p-3 bg-red-50 rounded mt-2 mb-3">
+  <ul class="text-sm space-y-1">
+    <li>他サービスから参照して<span class="font-bold">良い</span>テーブル</li>
+    <li>他サービスから参照<span class="font-bold">しないでほしい</span>テーブル</li>
+  </ul>
+</div>
+
+<div class="p-3 bg-brand-50 rounded">
+  <p class="text-sm font-bold mb-1">対策</p>
+  <ul class="text-sm space-y-1">
+    <li>命名規則やスキーマで<span class="font-bold">公開/非公開</span>を区別</li>
+    <li>チーム間でルールを明文化</li>
+  </ul>
+</div>
+
+</div>
+
+<div>
+
+### スキーマ変更の制約
+
+他サービスが参照するテーブルは容易に変更できない
+
+<div class="p-3 bg-red-50 rounded mt-2 mb-3">
+  <ul class="text-sm space-y-1">
+    <li>カラム追加・変更時に<span class="font-bold">影響範囲</span>の調査が必要</li>
+    <li>参照元サービスとの<span class="font-bold">デプロイ順序</span>の調整</li>
+  </ul>
+</div>
+
+<div class="p-3 bg-brand-50 rounded">
+  <p class="text-sm font-bold mb-1">対策</p>
+  <ul class="text-sm space-y-1">
+    <li>公開テーブルは<span class="font-bold">慎重に設計</span></li>
+    <li>デプロイの柔軟性については<span class="font-bold">課題が残る</span></li>
+  </ul>
+</div>
+
+</div>
+
+</div>
+
+<!--
+一方で、サービスベースアーキテクチャには課題もあります。
+まず、サービスが拡大するにつれて「他サービスから参照して良いテーブル」と「参照しないでほしいテーブル」の区別が難しくなりました。これに対しては、命名規則やスキーマで公開・非公開を区別するルールを設けて対応しています。
+もう一つの課題は、他サービスが参照する可能性のあるテーブルのスキーマを容易に変更できないことです。カラムの追加や変更時には影響範囲の調査が必要ですし、参照元サービスとのデプロイ順序の調整も求められます。公開テーブルは慎重に設計するようにしていますが、デプロイの柔軟性については課題が残っています。
 -->
 
 ---
