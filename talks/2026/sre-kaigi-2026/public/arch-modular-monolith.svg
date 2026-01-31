@@ -1,0 +1,42 @@
+<svg viewBox="0 0 340 220" width="340" height="220" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,2.5 L0,5" fill="#1a1a2e"/>
+    </marker>
+  </defs>
+
+  <!-- 単一デプロイユニット -->
+  <rect x="10" y="5" width="320" height="120" rx="10" fill="#f8fafc" stroke="#1a1a2e" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="170" y="22" text-anchor="middle" fill="#1a1a2e" style="font-size:10px;font-weight:700">単一デプロイユニット</text>
+
+  <!-- モジュールA -->
+  <rect x="22" y="32" width="90" height="50" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="67" y="52" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">モジュールA</text>
+  <text x="67" y="70" text-anchor="middle" fill="#64748b" style="font-size:8px">認証</text>
+
+  <!-- モジュールB -->
+  <rect x="125" y="32" width="90" height="50" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="170" y="52" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">モジュールB</text>
+  <text x="170" y="70" text-anchor="middle" fill="#64748b" style="font-size:8px">ライセンス</text>
+
+  <!-- モジュールC -->
+  <rect x="228" y="32" width="90" height="50" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="273" y="52" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">モジュールC</text>
+  <text x="273" y="70" text-anchor="middle" fill="#64748b" style="font-size:8px">ID管理</text>
+
+  <!-- モジュール間境界 -->
+  <line x1="112" y1="95" x2="125" y2="95" stroke="#1a1a2e" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="215" y1="95" x2="228" y2="95" stroke="#1a1a2e" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="170" y="108" text-anchor="middle" fill="#64748b" style="font-size:8px">インターフェースで分離</text>
+
+  <!-- 単一DB -->
+  <rect x="60" y="145" width="220" height="40" rx="6" fill="#dbeafe" stroke="#1e74bb" stroke-width="1.2"/>
+  <text x="170" y="170" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">単一データベース</text>
+
+  <!-- デプロイユニット→DB -->
+  <line x1="170" y1="125" x2="170" y2="145" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+
+  <!-- 特徴ラベル -->
+  <text x="170" y="203" text-anchor="middle" fill="#1a1a2e" style="font-size:10px;font-weight:700">モジュール分離しつつ強い整合性を確保</text>
+  <text x="170" y="216" text-anchor="middle" fill="#64748b" style="font-size:9px">デプロイは全モジュール一括になる</text>
+</svg>

@@ -333,8 +333,6 @@
 
 .slidev-layout {
   img {
-    @apply rounded-lg;
-    box-shadow: var(--theme-shadow);
   }
 }
 
