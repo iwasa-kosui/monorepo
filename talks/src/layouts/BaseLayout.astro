@@ -4,9 +4,14 @@ import BackgroundDecoration from '@/components/BackgroundDecoration.astro';
 
 interface Props {
   title: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogUrl?: string;
+  ogType?: string;
 }
 
-const { title } = Astro.props;
+const { title, ogTitle, ogDescription, ogImage, ogUrl, ogType } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -16,6 +21,15 @@ const { title } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>{title}</title>
+    {ogTitle && <meta property="og:title" content={ogTitle} />}
+    {ogDescription && <meta property="og:description" content={ogDescription} />}
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogUrl && <meta property="og:url" content={ogUrl} />}
+    {ogType && <meta property="og:type" content={ogType} />}
+    {ogImage && <meta name="twitter:card" content="summary_large_image" />}
+    {ogTitle && <meta name="twitter:title" content={ogTitle} />}
+    {ogDescription && <meta name="twitter:description" content={ogDescription} />}
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100">
     <BackgroundDecoration />

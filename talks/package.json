@@ -51,6 +51,8 @@
     "markdown-it-github-alerts": "1.0.1",
     "newtype-ts": "0.3.5",
     "open-graph-scraper": "6.11.0",
+    "satori": "0.19.1",
+    "sharp": "0.34.5",
     "tailwindcss": "^3.4.17",
     "vue": "^3.5.26"
   },
