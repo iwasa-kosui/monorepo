@@ -268,4 +268,12 @@ for (const presentation of localPresentations) {
   console.log('');
 }
 
+// Generate OGP images
+console.log('Generating OGP images...');
+execSync('node scripts/generate-og-images.mjs', {
+  cwd: talksRoot,
+  stdio: 'inherit',
+});
+console.log('');
+
 console.log('\nBuild complete!');
