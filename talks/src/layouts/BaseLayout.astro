@@ -9,9 +9,10 @@ interface Props {
   ogImage?: string;
   ogUrl?: string;
   ogType?: string;
+  oembedUrl?: string;
 }
 
-const { title, ogTitle, ogDescription, ogImage, ogUrl, ogType } = Astro.props;
+const { title, ogTitle, ogDescription, ogImage, ogUrl, ogType, oembedUrl } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -30,6 +31,7 @@ const { title, ogTitle, ogDescription, ogImage, ogUrl, ogType } = Astro.props;
     {ogTitle && <meta name="twitter:title" content={ogTitle} />}
     {ogDescription && <meta name="twitter:description" content={ogDescription} />}
     {ogImage && <meta name="twitter:image" content={ogImage} />}
+    {oembedUrl && <link rel="alternate" type="application/json+oembed" href={oembedUrl} title={ogTitle ?? title} />}
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100">
     <BackgroundDecoration />
