@@ -1,13 +1,10 @@
-<svg viewBox="0 0 400 450" width="400" height="450" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+<svg viewBox="0 0 400 350" width="400" height="350" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
   <defs>
     <marker id="arw-se" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0 L8,3 L0,6" fill="#1a1a2e"/>
     </marker>
     <marker id="arw-se-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0 L8,3 L0,6" fill="#1e74bb"/>
-    </marker>
-    <marker id="arw-se-up" markerWidth="6" markerHeight="8" refX="3" refY="0" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,8 L3,0 L6,8" fill="#1a1a2e"/>
     </marker>
   </defs>
 
@@ -34,25 +31,33 @@
 
   <!-- 矢印: 状態テーブル → Delta Lake (CDC) -->
   <line x1="140" y1="144" x2="140" y2="198" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
-  <text x="80" y="176" fill="#1a1a2e" style="font-size:11px;font-weight:600">CDC</text>
+  <text x="83" y="176" fill="#1a1a2e" style="font-size:11px;font-weight:600">CDC</text>
 
-  <!-- Delta Lake -->
-  <rect x="65" y="200" width="200" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
-  <text x="165" y="224" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">Delta Lake</text>
-  <text x="165" y="242" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:600">タイムトラベル対応</text>
+  <!-- 矢印: イベントテーブル → Delta Lake (イベント) -->
+  <line x1="262" y1="144" x2="262" y2="198" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
+  <text x="280" y="176" fill="#1a1a2e" style="font-size:11px;font-weight:600">CDC</text>
 
-  <!-- 矢印: Delta Lake → 差分検出 -->
-  <line x1="165" y1="255" x2="165" y2="288" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
-  <text x="190" y="277" fill="#1a1a2e" style="font-size:11px">スナップショット比較</text>
+  <!-- Delta Lake (CDC) -->
+  <rect x="55" y="200" width="125" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="117" y="224" text-anchor="middle" fill="#1a1a2e" style="font-size:12px;font-weight:700">Delta Lake</text>
+  <text x="117" y="242" text-anchor="middle" fill="#1e74bb" style="font-size:10px;font-weight:600">CDCログ</text>
+
+  <!-- Delta Lake (イベント) -->
+  <rect x="200" y="200" width="135" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="267" y="224" text-anchor="middle" fill="#1a1a2e" style="font-size:12px;font-weight:700">Delta Lake</text>
+  <text x="267" y="242" text-anchor="middle" fill="#1e74bb" style="font-size:10px;font-weight:600">ドメインイベント</text>
+
+  <!-- 矢印: Delta Lake (CDC) → 差分検出 -->
+  <line x1="117" y1="255" x2="117" y2="288" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw-se)"/>
+  <text x="5" y="277" fill="#1a1a2e" style="font-size:10px">スナップショット比較</text>
 
   <!-- 差分検出 -->
-  <rect x="90" y="290" width="150" height="40" rx="8" fill="#1e74bb"/>
-  <text x="165" y="315" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">差分検出</text>
+  <rect x="42" y="290" width="150" height="40" rx="8" fill="#1e74bb"/>
+  <text x="117" y="315" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:700">差分検出</text>
 
-  <!-- 矢印: 差分検出 → イベントテーブル (右に出て上へ) -->
-  <path d="M240,310 L350,310 L350,148 L262,148" stroke="#1a1a2e" stroke-width="1.5" fill="none"/>
-  <polygon points="262,142 256,152 268,152" fill="#1a1a2e"/>
-  <text x="362" y="235" fill="#1a1a2e" style="font-size:11px;font-weight:600" transform="rotate(90,362,235)">イベント生成</text>
+  <!-- 矢印: 差分検出 → Delta Lake (ドメインイベント) に直接書き込み -->
+  <path d="M192,310 L267,310 L267,257" stroke="#1a1a2e" stroke-width="1.5" fill="none" marker-end="url(#arw-se)"/>
+  <text x="220" y="300" fill="#1a1a2e" style="font-size:10px">既存イベント</text>
 
   <!-- ステップ3: ID基盤から直接イベントテーブルへ (点線) -->
   <line x1="265" y1="40" x2="262" y2="40" stroke="#1e74bb" stroke-width="1.5" stroke-dasharray="5,3"/>
