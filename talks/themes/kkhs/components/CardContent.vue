@@ -51,6 +51,10 @@ defineProps<{
 
 .slot-content {
   @apply text-base text-slate-600;
+
+  ul {
+    margin-bottom: 0;
+  }
 }
 
 .slot-content :deep(p) {

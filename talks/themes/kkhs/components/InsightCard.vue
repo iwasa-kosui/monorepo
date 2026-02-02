@@ -17,7 +17,7 @@ const cardVariant = computed(() => {
 </script>
 
 <template>
-  <CardBase :variant="cardVariant" padding="md" class="insight-card">
+  <CardBase :variant="cardVariant" padding="sm" class="insight-card">
     <CardContent :title="title" titleSize="lg">
       <slot />
     </CardContent>
@@ -39,7 +39,7 @@ const cardVariant = computed(() => {
     list-style: none;
 
     li {
-      @apply mb-2 relative pl-6;
+      @apply relative pl-6;
 
       &::before {
         content: '';
