@@ -531,7 +531,7 @@ RLSの運用で学んだポイントを3つ共有します。まず複数ポリ�
 
 ### アーキテクチャ
 
-<img src="/data-pipeline.svg?3" class="mx-auto" />
+<img src="/data-pipeline.svg?3" class="mx-auto h-[350px]" />
 
 </div>
 
@@ -593,10 +593,6 @@ DBバックアップを復元せずに
   **データパイプライン上で** 重点的に **データバリデーション** する
 
 </InsightCard>
-
-</div>
-
-<div>
 
 </div>
 
@@ -716,9 +712,9 @@ SELECT * FROM domain_event
 
 </div>
 
+<br/>
 
-> [!TIP]
-> **ポイント:** **イベントのリプレイなし**でも過去の状態を即座に参照可能
+### **イベントのリプレイなし**でも過去の状態を即座に参照可能
 
 <!--
 具体的な実装を見てみましょう。上のコード例がイベントの保存です。ユーザー作成時にUserCreatedイベントを生成し、集約のID、変更後の状態、イベント名、イベント詳細を一緒に記録します。
@@ -818,10 +814,6 @@ SELECT * FROM domain_event
 
 </InsightCard>
 
-<InsightCard title="過去データのイベント情報欠損問題">
-  <p>既存データには操作者情報がない<br><span class="highlight">→ 「システム移行」として記録</span></p>
-</InsightCard>
-
 </div>
 
 <div>
@@ -840,8 +832,6 @@ SELECT * FROM domain_event
 
 </CardGrid>
 
-> [!IMPORTANT]
-> **選んで終わりではない** — 運用しながら設計を育て続ける
 
 <!--
 ドメインイベントの運用で得た気づきと成果を共有します。

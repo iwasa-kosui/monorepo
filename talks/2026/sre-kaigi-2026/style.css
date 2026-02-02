@@ -3,6 +3,12 @@
  * カケハシブランドカラー (#1e74bb) を基調としたテーマ
  */
 
+.card-content .slot-content ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+
 /* ============================================
  * GitHub Alerts (markdown-it-github-alerts)
  * ============================================ */
