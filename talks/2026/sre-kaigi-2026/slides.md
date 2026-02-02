@@ -11,7 +11,7 @@ duration: 30min
 mdc: true
 
 talk:
-  date: "2026-01-23"
+  date: "2026-01-31"
   event: "SRE KAIGI 2026"
   description: |
     Embedded SRE不在でも開発チームが信頼性に責任を持ち、改善を続けるための具体的な方法論と、運用を通じて学んだ教訓を紹介します。
@@ -30,7 +30,7 @@ talk:
 医療SaaS企業を支える共通基盤の挑戦
 
 <div class="mt-16">
-  <div class="text-lg">2026年1月23日</div>
+  <div class="text-lg">2026年1月31日</div>
   <div class="text-lg">岩佐 幸翠</div>
 </div>
 
