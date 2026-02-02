@@ -16,7 +16,7 @@ export const GET: APIRoute = ({ props }) => {
 
   const embedUrl =
     presentation.slideType === 'local'
-      ? `${SITE_URL}${presentation.basePath}`
+      ? `${SITE_URL}${presentation.basePath}?embedded=true&controls=true`
       : presentation.external.embedUrl;
 
   const pageUrl = `${SITE_URL}/talks/${presentation.year}/${presentation.name}/`;
