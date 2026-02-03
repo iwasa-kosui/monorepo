@@ -8,8 +8,9 @@ interface Props {
 const { presentation } = Astro.props;
 
 // Determine the embed URL based on slide type using discriminated union
+// For local Slidev presentations, add embed controls parameter
 const embedUrl = presentation.slideType === 'local'
-  ? presentation.basePath
+  ? `${presentation.basePath}?embedded=true&controls=true`
   : presentation.external.embedUrl;
 ---
 
