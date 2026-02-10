@@ -1,0 +1,66 @@
+/* ===== Design Tokens: Coral & Ocean ===== */
+
+:root {
+  /* Light Mode (default) */
+  --kosui-bg-main: #fbf8f6;
+  --kosui-bg-secondary: #f3eceb;
+  --kosui-bg-tertiary: #ebe4e2;
+  --kosui-text-main: #2a2525;
+  --kosui-text-secondary: #6d6462;
+  --kosui-text-tertiary: #7d7370;
+  --kosui-accent: #d03526;
+  --kosui-accent-hover: #b82e20;
+  --kosui-accent-light: #e06858;
+  --kosui-accent-subtle: rgba(208, 53, 38, 0.08);
+  --kosui-accent-subtle-text: #b82e20;
+  --kosui-secondary: #4a6fa5;
+  --kosui-secondary-hover: #3a5f95;
+  --kosui-secondary-light: #6a92c5;
+  --kosui-secondary-subtle: rgba(74, 111, 165, 0.08);
+  --kosui-secondary-subtle-text: #3a5f95;
+  --kosui-success: #3d7a5c;
+  --kosui-success-subtle: rgba(61, 122, 92, 0.10);
+  --kosui-error: #c44838;
+  --kosui-error-subtle: rgba(196, 72, 56, 0.08);
+  --kosui-border: #dbcec8;
+  --kosui-border-strong: #c4b4ac;
+  --kosui-code-bg: #262020;
+  --kosui-code-text: #d4c4b8;
+  --kosui-code-kw: #e89888;
+  --kosui-code-fn: #6a92c5;
+  --kosui-ring: rgba(208, 53, 38, 0.35);
+  --kosui-shadow: rgba(42, 37, 37, 0.06);
+  --kosui-shadow-md: rgba(42, 37, 37, 0.10);
+}
+
+[data-theme="dark"] {
+  --kosui-bg-main: #1c1918;
+  --kosui-bg-secondary: #282222;
+  --kosui-bg-tertiary: #332b2b;
+  --kosui-text-main: #ebe3dc;
+  --kosui-text-secondary: #8a807a;
+  --kosui-text-tertiary: #6a6260;
+  --kosui-accent: #e89888;
+  --kosui-accent-hover: #f0a898;
+  --kosui-accent-light: #d88070;
+  --kosui-accent-subtle: rgba(232, 152, 136, 0.10);
+  --kosui-accent-subtle-text: #e89888;
+  --kosui-secondary: #6a92c5;
+  --kosui-secondary-hover: #7aa2d5;
+  --kosui-secondary-light: #5a82b5;
+  --kosui-secondary-subtle: rgba(106, 146, 197, 0.12);
+  --kosui-secondary-subtle-text: #6a92c5;
+  --kosui-success: #6aaa8a;
+  --kosui-success-subtle: rgba(106, 170, 138, 0.12);
+  --kosui-error: #e06858;
+  --kosui-error-subtle: rgba(224, 104, 88, 0.12);
+  --kosui-border: #3c3232;
+  --kosui-border-strong: #504444;
+  --kosui-code-bg: #141010;
+  --kosui-code-text: #d4c4b8;
+  --kosui-code-kw: #e89888;
+  --kosui-code-fn: #6a92c5;
+  --kosui-ring: rgba(232, 152, 136, 0.30);
+  --kosui-shadow: rgba(0, 0, 0, 0.20);
+  --kosui-shadow-md: rgba(0, 0, 0, 0.30);
+}

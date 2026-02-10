@@ -1,0 +1,151 @@
+/* ===== Showcase layout ===== */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  background: var(--kosui-bg-main);
+  color: var(--kosui-text-main);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  transition: background 0.3s, color 0.3s;
+}
+
+.showcase-header {
+  text-align: center;
+  padding: 2.5rem 1rem 1rem;
+  border-bottom: 1px solid var(--kosui-border);
+}
+
+.showcase-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.25rem;
+}
+
+.showcase-header p {
+  color: var(--kosui-text-secondary);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.showcase-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--kosui-bg-main);
+  border-bottom: 1px solid var(--kosui-border);
+  transition: background 0.3s;
+}
+
+.showcase-toolbar button {
+  padding: 0.4rem 1.2rem;
+  border: 1px solid var(--kosui-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--kosui-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.showcase-toolbar button[data-active="true"] {
+  background: var(--kosui-accent);
+  color: #fff;
+  border-color: var(--kosui-accent);
+}
+
+.showcase-toolbar button:not([data-active="true"]):hover {
+  border-color: var(--kosui-accent);
+  color: var(--kosui-accent);
+}
+
+.showcase-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3.5rem;
+}
+
+.showcase-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--kosui-text-tertiary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--kosui-border);
+}
+
+.showcase-sub-label {
+  font-size: 0.8rem;
+  color: var(--kosui-text-tertiary);
+  margin-bottom: 0.5rem;
+}
+
+.showcase-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.showcase-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.showcase-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.showcase-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.showcase-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--kosui-border);
+}
+
+.showcase-palette {
+  display: flex;
+  gap: 3px;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 40px;
+}
+
+.showcase-palette-item {
+  flex: 1;
+  position: relative;
+}
+
+.showcase-palette-item span {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-family: "SF Mono", monospace;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}

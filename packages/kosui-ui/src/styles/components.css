@@ -1,0 +1,480 @@
+/* ===== Typography: H1, H2, H3 ===== */
+
+.kosui-h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--kosui-text-main);
+  margin-bottom: 0.75rem;
+}
+
+.kosui-h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--kosui-text-main);
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--kosui-accent);
+  display: inline-block;
+}
+
+.kosui-h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--kosui-text-main);
+  margin-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--kosui-accent);
+}
+
+/* ===== Article ===== */
+
+.kosui-article {
+  line-height: 1.85;
+  font-size: 0.95rem;
+  color: var(--kosui-text-main);
+}
+
+.kosui-article p {
+  margin-bottom: 1.25rem;
+}
+
+.kosui-article a {
+  color: var(--kosui-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(208, 53, 38, 0.3);
+  transition: text-decoration-color 0.2s;
+}
+
+.kosui-article a:hover {
+  text-decoration-color: var(--kosui-accent);
+}
+
+.kosui-article strong {
+  font-weight: 700;
+  color: var(--kosui-text-main);
+}
+
+.kosui-article code {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 0.85em;
+  background: var(--kosui-accent-subtle);
+  color: var(--kosui-accent-subtle-text);
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+}
+
+.kosui-article blockquote {
+  border-left: 3px solid var(--kosui-secondary);
+  padding: 0.75rem 1rem;
+  margin: 1.25rem 0;
+  background: var(--kosui-secondary-subtle);
+  border-radius: 0 8px 8px 0;
+  color: var(--kosui-text-secondary);
+  font-size: 0.9rem;
+}
+
+.kosui-article ul,
+.kosui-article ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.kosui-article li {
+  margin-bottom: 0.35rem;
+}
+
+.kosui-article li::marker {
+  color: var(--kosui-accent);
+}
+
+.kosui-article pre {
+  background: var(--kosui-code-bg);
+  color: var(--kosui-code-text);
+  padding: 1.25rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  margin-bottom: 1.25rem;
+}
+
+.kosui-article h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid var(--kosui-accent);
+}
+
+.kosui-article h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.6rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--kosui-accent);
+}
+
+/* ===== Button ===== */
+
+.kosui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.3rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  text-decoration: none;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.kosui-btn:active {
+  transform: scale(0.97);
+}
+
+.kosui-btn-primary {
+  background: var(--kosui-accent);
+  color: #fff;
+  border-color: var(--kosui-accent);
+}
+
+.kosui-btn-primary:hover {
+  background: var(--kosui-accent-hover);
+  border-color: var(--kosui-accent-hover);
+}
+
+.kosui-btn-secondary {
+  background: var(--kosui-secondary);
+  color: #fff;
+  border-color: var(--kosui-secondary);
+}
+
+.kosui-btn-secondary:hover {
+  background: var(--kosui-secondary-hover);
+  border-color: var(--kosui-secondary-hover);
+}
+
+.kosui-btn-outline {
+  background: transparent;
+  color: var(--kosui-accent);
+  border-color: var(--kosui-accent);
+}
+
+.kosui-btn-outline:hover {
+  background: var(--kosui-accent-subtle);
+}
+
+.kosui-btn-outlineSecondary {
+  background: transparent;
+  color: var(--kosui-secondary);
+  border-color: var(--kosui-secondary);
+}
+
+.kosui-btn-outlineSecondary:hover {
+  background: var(--kosui-secondary-subtle);
+}
+
+.kosui-btn-ghost {
+  background: transparent;
+  color: var(--kosui-text-secondary);
+  border-color: transparent;
+}
+
+.kosui-btn-ghost:hover {
+  background: var(--kosui-bg-secondary);
+  color: var(--kosui-text-main);
+}
+
+.kosui-btn-danger {
+  background: var(--kosui-error);
+  color: #fff;
+  border-color: var(--kosui-error);
+}
+
+.kosui-btn-danger:hover {
+  opacity: 0.88;
+}
+
+.kosui-btn-sm {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+
+.kosui-btn-lg {
+  padding: 0.7rem 1.8rem;
+  font-size: 1rem;
+  border-radius: 10px;
+}
+
+.kosui-btn:disabled,
+.kosui-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ===== Badge ===== */
+
+.kosui-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.kosui-badge-coral {
+  background: var(--kosui-accent);
+  color: #fff;
+}
+
+.kosui-badge-coralSubtle {
+  background: var(--kosui-accent-subtle);
+  color: var(--kosui-accent-subtle-text);
+}
+
+.kosui-badge-ocean {
+  background: var(--kosui-secondary);
+  color: #fff;
+}
+
+.kosui-badge-oceanSubtle {
+  background: var(--kosui-secondary-subtle);
+  color: var(--kosui-secondary-subtle-text);
+}
+
+.kosui-badge-success {
+  background: var(--kosui-success-subtle);
+  color: var(--kosui-success);
+}
+
+.kosui-badge-error {
+  background: var(--kosui-error-subtle);
+  color: var(--kosui-error);
+}
+
+.kosui-badge-outline {
+  background: transparent;
+  border: 1px solid var(--kosui-border-strong);
+  color: var(--kosui-text-secondary);
+}
+
+.kosui-badge-lg {
+  padding: 0.3rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+/* ===== Card ===== */
+
+.kosui-card {
+  background: var(--kosui-bg-secondary);
+  border: 1px solid var(--kosui-border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.kosui-card:hover {
+  box-shadow: 0 4px 20px var(--kosui-shadow-md);
+  transform: translateY(-2px);
+}
+
+.kosui-card-image {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: #fff;
+}
+
+.kosui-card-body {
+  padding: 1.1rem 1.25rem;
+}
+
+.kosui-card-body h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  color: var(--kosui-text-main);
+}
+
+.kosui-card-body p {
+  font-size: 0.83rem;
+  color: var(--kosui-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+}
+
+.kosui-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--kosui-border);
+}
+
+.kosui-card-footer span {
+  font-size: 0.75rem;
+  color: var(--kosui-text-tertiary);
+}
+
+/* ===== Input ===== */
+
+.kosui-input {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--kosui-border);
+  border-radius: 8px;
+  background: var(--kosui-bg-main);
+  color: var(--kosui-text-main);
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+
+.kosui-input::placeholder {
+  color: var(--kosui-text-tertiary);
+}
+
+.kosui-input:hover {
+  border-color: var(--kosui-border-strong);
+}
+
+.kosui-input:focus {
+  border-color: var(--kosui-accent);
+  box-shadow: 0 0 0 3px var(--kosui-ring);
+}
+
+.kosui-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--kosui-bg-secondary);
+}
+
+.kosui-input-error {
+  border-color: var(--kosui-error);
+}
+
+.kosui-input-error:focus {
+  border-color: var(--kosui-error);
+  box-shadow: 0 0 0 3px rgba(196, 72, 56, 0.18);
+}
+
+.kosui-input-success {
+  border-color: var(--kosui-success);
+}
+
+.kosui-input-success:focus {
+  border-color: var(--kosui-success);
+  box-shadow: 0 0 0 3px rgba(74, 138, 106, 0.18);
+}
+
+/* ===== Textarea ===== */
+
+.kosui-textarea {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--kosui-border);
+  border-radius: 8px;
+  background: var(--kosui-bg-main);
+  color: var(--kosui-text-main);
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.kosui-textarea::placeholder {
+  color: var(--kosui-text-tertiary);
+}
+
+.kosui-textarea:hover {
+  border-color: var(--kosui-border-strong);
+}
+
+.kosui-textarea:focus {
+  border-color: var(--kosui-accent);
+  box-shadow: 0 0 0 3px var(--kosui-ring);
+}
+
+.kosui-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--kosui-bg-secondary);
+}
+
+.kosui-textarea-error {
+  border-color: var(--kosui-error);
+}
+
+.kosui-textarea-error:focus {
+  border-color: var(--kosui-error);
+  box-shadow: 0 0 0 3px rgba(196, 72, 56, 0.18);
+}
+
+.kosui-textarea-success {
+  border-color: var(--kosui-success);
+}
+
+.kosui-textarea-success:focus {
+  border-color: var(--kosui-success);
+  box-shadow: 0 0 0 3px rgba(74, 138, 106, 0.18);
+}
+
+/* ===== Form ===== */
+
+.kosui-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kosui-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--kosui-text-main);
+}
+
+.kosui-form-hint {
+  font-size: 0.75rem;
+  color: var(--kosui-text-tertiary);
+}
+
+.kosui-form-error {
+  font-size: 0.75rem;
+  color: var(--kosui-error);
+}
+
+.kosui-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 600px) {
+  .kosui-form-row {
+    grid-template-columns: 1fr;
+  }
+}
