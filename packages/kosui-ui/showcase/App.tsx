@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useReducer, useState } from 'react';
 
 import {
   Article,
@@ -15,6 +15,10 @@ import {
   FormRow,
   Heading,
   Input,
+  LikeButton,
+  ReplyButton,
+  RepostButton,
+  ShareButton,
   Textarea,
 } from '../src/index.js';
 
@@ -84,11 +88,9 @@ export const App: React.FC = () => {
                 style={{ background: item.color }}
               >
                 <span
-                  style={
-                    item.dark
-                      ? { color: 'var(--kosui-text-tertiary)' }
-                      : undefined
-                  }
+                  style={item.dark
+                    ? { color: 'var(--kosui-text-tertiary)' }
+                    : undefined}
                 >
                   {item.label}
                 </span>
@@ -149,8 +151,8 @@ export const App: React.FC = () => {
               構文では、エラーの型情報が失われてしまいます。
             </p>
             <blockquote>
-              "Make illegal states unrepresentable"
-              — 不正な状態を表現不可能にすることで、バグの入り込む余地を根本から排除する。
+              "Make illegal states unrepresentable" —
+              不正な状態を表現不可能にすることで、バグの入り込む余地を根本から排除する。
             </blockquote>
             <h3>基本的な使い方</h3>
             <p>
@@ -237,8 +239,7 @@ export const App: React.FC = () => {
             <Card>
               <CardImage
                 style={{
-                  background:
-                    'linear-gradient(135deg, var(--kosui-accent), var(--kosui-accent-light))',
+                  background: 'linear-gradient(135deg, var(--kosui-accent), var(--kosui-accent-light))',
                 }}
               >
                 <svg
@@ -259,8 +260,7 @@ export const App: React.FC = () => {
               <CardBody>
                 <h4>Result 型ライブラリ</h4>
                 <p>
-                  Railway Oriented Programming を TypeScript
-                  で実現するための軽量ライブラリ。
+                  Railway Oriented Programming を TypeScript で実現するための軽量ライブラリ。
                 </p>
                 <div className='showcase-row' style={{ gap: '0.5rem' }}>
                   <Badge variant='coralSubtle'>TypeScript</Badge>
@@ -278,8 +278,7 @@ export const App: React.FC = () => {
             <Card>
               <CardImage
                 style={{
-                  background:
-                    'linear-gradient(135deg, var(--kosui-secondary), var(--kosui-secondary-light))',
+                  background: 'linear-gradient(135deg, var(--kosui-secondary), var(--kosui-secondary-light))',
                 }}
               >
                 <svg
@@ -318,8 +317,7 @@ export const App: React.FC = () => {
             <Card>
               <CardImage
                 style={{
-                  background:
-                    'linear-gradient(135deg, var(--kosui-success), #6AAA8A)',
+                  background: 'linear-gradient(135deg, var(--kosui-success), #6AAA8A)',
                 }}
               >
                 <svg
@@ -340,8 +338,7 @@ export const App: React.FC = () => {
               <CardBody>
                 <h4>Always-Valid Domain Model</h4>
                 <p>
-                  Branded Type と Zod
-                  で不正な状態を型レベルで排除する実践ガイド。
+                  Branded Type と Zod で不正な状態を型レベルで排除する実践ガイド。
                 </p>
                 <div className='showcase-row' style={{ gap: '0.5rem' }}>
                   <Badge variant='coralSubtle'>Zod</Badge>
@@ -446,7 +443,66 @@ export const App: React.FC = () => {
             </div>
           </div>
         </section>
+
+        {/* IconButton */}
+        <section>
+          <div className='showcase-section-label'>IconButton</div>
+          <IconButtonShowcase />
+        </section>
       </div>
     </>
+  );
+};
+
+const IconButtonShowcase: React.FC = () => {
+  const [liked, toggleLiked] = useReducer((s: boolean) => !s, false);
+  const [replied, toggleReplied] = useReducer((s: boolean) => !s, false);
+  const [reposted, toggleReposted] = useReducer((s: boolean) => !s, false);
+  const [likeCount, setLikeCount] = useState(12);
+
+  return (
+    <div className='showcase-stack' style={{ gap: '1.5rem' }}>
+      <div>
+        <p className='showcase-sub-label'>Interactive (toggle state)</p>
+        <div className='showcase-row' style={{ gap: '1.5rem' }}>
+          <LikeButton
+            active={liked}
+            count={likeCount}
+            onClick={() => {
+              toggleLiked();
+              setLikeCount((c) => liked ? c - 1 : c + 1);
+            }}
+          />
+          <ReplyButton
+            active={replied}
+            count={3}
+            onClick={toggleReplied}
+          />
+          <RepostButton
+            active={reposted}
+            count={7}
+            onClick={toggleReposted}
+          />
+          <ShareButton />
+        </div>
+      </div>
+      <div>
+        <p className='showcase-sub-label'>Active state</p>
+        <div className='showcase-row' style={{ gap: '1.5rem' }}>
+          <LikeButton active count={24} />
+          <ReplyButton active count={5} />
+          <RepostButton active count={11} />
+        </div>
+      </div>
+      <div>
+        <p className='showcase-sub-label'>Disabled</p>
+        <div className='showcase-row' style={{ gap: '1.5rem' }}>
+          <LikeButton disabled count={0} />
+          <ReplyButton disabled />
+          <RepostButton disabled count={2} />
+          <ShareButton disabled />
+        </div>
+      </div>
+    </div>
   );
 };
