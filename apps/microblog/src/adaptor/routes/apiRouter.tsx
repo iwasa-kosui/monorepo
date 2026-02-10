@@ -1,7 +1,8 @@
 import { sValidator } from '@hono/standard-validator';
 import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 import { Hono } from 'hono';
-import { deleteCookie, getCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import sharp from 'sharp';
@@ -10,6 +11,7 @@ import { z } from 'zod/v4';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { Password } from '../../domain/password/password.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
@@ -19,30 +21,43 @@ import { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { GetFederatedTimelineUseCase } from '../../useCase/getFederatedTimeline.ts';
+import { GetLikedPostsUseCase } from '../../useCase/getLikedPosts.ts';
 import { GetMutesUseCase } from '../../useCase/getMutes.ts';
+import { GetNotificationsUseCase } from '../../useCase/getNotifications.ts';
 import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts';
+import { GetServerTimelineUseCase } from '../../useCase/getServerTimeline.ts';
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
+import { SendFollowRequestUseCase } from '../../useCase/sendFollowRequest.ts';
 import { SendLikeUseCase } from '../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../useCase/sendRepost.ts';
+import { SignInUseCase } from '../../useCase/signIn.ts';
+import { SignUpUseCase } from '../../useCase/signUp.ts';
 import { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
+import { FedifyRemoteActorLookup } from '../fedify/remoteActorLookup.ts';
+import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
 import { PgActorResolverByFollowingId } from '../pg/actor/followsResolverByFollowingId.ts';
+import { PgLocalActorCreatedStore } from '../pg/actor/localActorCreatedStore.ts';
+import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
+import { PgRemoteActorCreatedStore } from '../pg/actor/remoteActorCreatedStore.ts';
 import { PgArticleDeletedStore } from '../pg/article/articleDeletedStore.ts';
 import { PgArticleResolverByRootPostId } from '../pg/article/articleResolverByRootPostId.ts';
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { PgFederatedTimelineItemsResolver } from '../pg/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { PgFollowRequestedStore } from '../pg/follow/followRequestedStore.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
+import { PgLikedPostsResolverByActorId } from '../pg/like/likedPostsResolverByActorId.ts';
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLocalLikeCreatedStore } from '../pg/like/localLikeCreatedStore.ts';
 import { PgLocalLikeDeletedStore } from '../pg/like/localLikeDeletedStore.ts';
@@ -51,6 +66,8 @@ import { PgMutedActorIdsResolverByUserId } from '../pg/mute/mutedActorIdsResolve
 import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
 import { PgMuteResolver } from '../pg/mute/muteResolver.ts';
 import { PgMutesResolverByUserId } from '../pg/mute/mutesResolverByUserId.ts';
+import { PgNotificationsReadStore } from '../pg/notification/notificationsReadStore.ts';
+import { PgNotificationsResolverByUserId } from '../pg/notification/notificationsResolverByUserId.ts';
 import { PgReplyNotificationCreatedStore } from '../pg/notification/replyNotificationCreatedStore.ts';
 import { PgUnreadNotificationCountResolverByUserId } from '../pg/notification/unreadNotificationCountResolverByUserId.ts';
 import { PgLocalPostResolverByUri } from '../pg/post/localPostResolverByUri.ts';
@@ -60,17 +77,23 @@ import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { PgAllRelaysResolver } from '../pg/relay/allRelaysResolver.ts';
 import { PgRelayResolverByActorUri } from '../pg/relay/relayResolverByActorUri.ts';
 import { PgRelaySubscriptionRequestedStore } from '../pg/relay/relaySubscriptionRequestedStore.ts';
 import { PgRepostCreatedStore } from '../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../pg/repost/repostDeletedStore.ts';
 import { PgRepostResolver } from '../pg/repost/repostResolver.ts';
 import { PgSessionResolver } from '../pg/session/sessionResolver.ts';
+import { PgSessionStartedStore } from '../pg/session/sessionStartedStore.ts';
 import { PgTimelineItemCreatedStore } from '../pg/timeline/timelineItemCreatedStore.ts';
 import { PgTimelineItemDeletedStore } from '../pg/timeline/timelineItemDeletedStore.ts';
 import { PgTimelineItemResolverByRepostId } from '../pg/timeline/timelineItemResolverByRepostId.ts';
 import { PgTimelineItemsResolverByActorIds } from '../pg/timeline/timelineItemsResolverByActorIds.ts';
+import { PgUserCreatedStore } from '../pg/user/userCreatedStore.ts';
 import { PgUserResolver } from '../pg/user/userResolver.ts';
+import { PgUserResolverByUsername } from '../pg/user/userResolverByUsername.ts';
+import { PgUserPasswordResolver } from '../pg/userPassword/userPasswordResolver.ts';
+import { PgUserPasswordSetStore } from '../pg/userPassword/userPasswordSetStore.ts';
 import { WebPushSender } from '../webPush/webPushSender.ts';
 import { sanitize } from './helper/sanitize.ts';
 
@@ -981,7 +1004,247 @@ const app = new Hono()
         err: (err) => c.json({ error: `Failed to subscribe to relay: ${JSON.stringify(err)}` }, 400),
       })(result);
     },
-  );
+  )
+  .post(
+    '/v1/sign-in',
+    sValidator(
+      'json',
+      z.object({
+        username: Username.zodType,
+        password: Password.zodType,
+      }),
+    ),
+    async (c) => {
+      const { username, password } = c.req.valid('json');
+      const logger = getLogger('microblog:sign-in');
+      logger.info('Sign in attempt', { username });
+
+      const useCase = SignInUseCase.create({
+        userResolverByUsername: PgUserResolverByUsername.getInstance(),
+        userPasswordResolver: PgUserPasswordResolver.getInstance(),
+        sessionStartedStore: PgSessionStartedStore.getInstance(),
+      });
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      return RA.flow(
+        useCase.run({ username, password, ctx }),
+        RA.match({
+          ok: (v) => {
+            logger.info('Sign in successful', { username });
+            setCookie(c, 'sessionId', v.sessionId, {
+              httpOnly: true,
+              path: '/',
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: 'lax',
+              secure: true,
+            });
+            return c.json({ success: true });
+          },
+          err: (e) => {
+            logger.warn('Sign in failed', { error: e });
+            return c.json({ error: 'Invalid username or password' }, 401);
+          },
+        }),
+      );
+    },
+  )
+  .post(
+    '/v1/sign-up',
+    sValidator(
+      'json',
+      z.object({
+        username: Username.zodType,
+        password: Password.zodType,
+      }),
+    ),
+    async (c) => {
+      const { username, password } = c.req.valid('json');
+      const logger = getLogger('microblog:sign-up');
+      logger.info('Sign up attempt', { username });
+
+      const useCase = SignUpUseCase.create({
+        userResolverByUsername: PgUserResolverByUsername.getInstance(),
+        userCreatedStore: PgUserCreatedStore.getInstance(),
+        localActorCreatedStore: PgLocalActorCreatedStore.getInstance(),
+        userPasswordSetStore: PgUserPasswordSetStore.getInstance(),
+      });
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      return RA.flow(
+        useCase.run({ username, password, ctx }),
+        RA.match({
+          ok: (v) => {
+            logger.info('Sign up successful', { username: v.user.username });
+            return c.json({ success: true, username: v.user.username });
+          },
+          err: (e) => {
+            logger.warn('Sign up failed', { error: e });
+            return c.json({ error: e.message }, 400);
+          },
+        }),
+      );
+    },
+  )
+  .post(
+    '/v1/follow',
+    sValidator(
+      'json',
+      z.object({
+        handle: z.string().min(1),
+      }),
+    ),
+    async (c) => {
+      const { handle } = c.req.valid('json');
+
+      const sessionIdResult = await RA.flow(
+        RA.ok(getCookie(c, 'sessionId')),
+        RA.andThen(SessionId.parse),
+      );
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
+
+      const useCase = SendFollowRequestUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        remoteActorLookup: FedifyRemoteActorLookup.getInstance(),
+        followRequestedStore: PgFollowRequestedStore.getInstance(),
+        remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
+        logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
+        actorResolverByUri: PgActorResolverByUri.getInstance(),
+      });
+
+      const result = await useCase.run({
+        sessionId: sessionIdResult.val,
+        handle,
+        request: c.req.raw,
+        ctx,
+      });
+
+      return RA.match({
+        ok: () => c.json({ success: true }),
+        err: (err) => c.json({ error: `Failed to follow: ${JSON.stringify(err)}` }, 400),
+      })(result);
+    },
+  )
+  .get('/v1/notifications', async (c) => {
+    const maybeSessionId = getCookie(c, 'sessionId');
+    if (!maybeSessionId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const useCase = GetNotificationsUseCase.create({
+      sessionResolver: PgSessionResolver.getInstance(),
+      userResolver: PgUserResolver.getInstance(),
+      notificationsResolver: PgNotificationsResolverByUserId.getInstance(),
+      notificationsReadStore: PgNotificationsReadStore.getInstance(),
+    });
+
+    return RA.flow(
+      RA.ok(maybeSessionId),
+      RA.andThen(SessionId.parse),
+      RA.andBind('result', (sessionId) => useCase.run({ sessionId })),
+      RA.match({
+        ok: ({ result: { user, notifications } }) => {
+          const notificationsWithSanitizedContent = notifications.map((n) => {
+            let sanitizedContent = '';
+            if (n.notification.type === 'like') {
+              sanitizedContent = sanitize(
+                (n as { likedPost: { content: string } }).likedPost.content,
+              );
+            } else if (n.notification.type === 'emojiReact') {
+              sanitizedContent = sanitize(
+                (n as { reactedPost: { content: string } }).reactedPost.content,
+              );
+            } else if (n.notification.type === 'reply') {
+              sanitizedContent = sanitize(
+                (n as { replyPost: { content: string } }).replyPost.content,
+              );
+            }
+            return { notification: n, sanitizedContent };
+          });
+          return c.json({
+            user,
+            notifications: notificationsWithSanitizedContent,
+          });
+        },
+        err: () => c.json({ error: 'Failed to load notifications' }, 400),
+      }),
+    );
+  })
+  .get('/v1/liked-posts', async (c) => {
+    const maybeSessionId = getCookie(c, 'sessionId');
+    if (!maybeSessionId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const useCase = GetLikedPostsUseCase.create({
+      sessionResolver: PgSessionResolver.getInstance(),
+      userResolver: PgUserResolver.getInstance(),
+      actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+      likedPostsResolver: PgLikedPostsResolverByActorId.getInstance(),
+    });
+
+    return RA.flow(
+      RA.ok(maybeSessionId),
+      RA.andThen(SessionId.parse),
+      RA.andBind('result', (sessionId) => useCase.run({ sessionId })),
+      RA.match({
+        ok: ({ result: { user, posts } }) => {
+          return c.json({
+            user,
+            posts: posts.map((post) => ({
+              ...post,
+              content: sanitize(post.content),
+            })),
+          });
+        },
+        err: () => c.json({ error: 'Failed to load liked posts' }, 400),
+      }),
+    );
+  })
+  .get('/v1/server-timeline', async (c) => {
+    const useCase = GetServerTimelineUseCase.getInstance();
+
+    return RA.flow(
+      RA.ok(undefined),
+      RA.andThen(() => useCase.run({ createdAt: undefined })),
+      RA.match({
+        ok: ({ posts }) =>
+          c.json({
+            posts: posts.map((post) => ({
+              ...post,
+              content: sanitize(post.content),
+            })),
+          }),
+        err: () => c.json({ error: 'Failed to load timeline' }, 500),
+      }),
+    );
+  })
+  .get('/v1/relays', async (c) => {
+    const sessionId = getCookie(c, 'sessionId');
+    if (!sessionId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const sessionIdResult = SessionId.parse(sessionId);
+    if (!sessionIdResult.ok) {
+      return c.json({ error: 'Invalid session' }, 401);
+    }
+
+    const allRelaysResolver = PgAllRelaysResolver.getInstance();
+    const result = await allRelaysResolver.resolve();
+
+    return RA.match({
+      ok: (relays) => c.json({ relays }),
+      err: () => c.json({ error: 'Failed to load relays' }, 400),
+    })(result);
+  });
 
 export type APIRouterType = typeof app;
 export { app as APIRouter };

@@ -1,18 +1,121 @@
-import type { FC } from 'hono/jsx';
+import { useEffect, useState } from 'hono/jsx';
+import { render } from 'hono/jsx/dom';
 
-import type { FederatedTimelineItemWithPost } from '../../domain/federatedTimeline/federatedTimelineItem.ts';
-import type { Relay } from '../../domain/relay/relay.ts';
-import { Layout } from '../../layout.tsx';
 import { PostView } from '../components/PostView.tsx';
 
-type Props = Readonly<{
-  items: ReadonlyArray<FederatedTimelineItemWithPost>;
-  relays: ReadonlyArray<Relay>;
-  isLoggedIn: boolean;
-}>;
+type FederatedTimelineItem = {
+  federatedTimelineItemId: string;
+  post: {
+    postId: string;
+    content: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
 
-export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) => (
-  <Layout>
+type Relay = {
+  relayId: string;
+  actorUri: string;
+  status: string;
+};
+
+const FederatedTimelinePage = () => {
+  const [items, setItems] = useState<FederatedTimelineItem[]>([]);
+  const [relays, setRelays] = useState<Relay[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showRelayModal, setShowRelayModal] = useState(false);
+  const [relayUri, setRelayUri] = useState('');
+  const [relayError, setRelayError] = useState('');
+  const [relaySuccess, setRelaySuccess] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const timelineResponse = await fetch('/api/v1/federated');
+        if (timelineResponse.ok) {
+          const timelineData = await timelineResponse.json();
+          setItems(timelineData.items);
+          setIsLoggedIn(true);
+
+          const relaysResponse = await fetch('/api/v1/relays');
+          if (relaysResponse.ok) {
+            const relaysData = await relaysResponse.json();
+            setRelays(relaysData.relays);
+          }
+        } else {
+          setIsLoggedIn(false);
+        }
+      } catch {
+        // Network error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+
+    const handleHashChange = () => {
+      if (window.location.hash === '#add-relay') {
+        setShowRelayModal(true);
+      } else {
+        setShowRelayModal(false);
+      }
+    };
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleRelaySubmit = async (e: Event) => {
+    e.preventDefault();
+    setRelayError('');
+    setRelaySuccess(false);
+    setIsSubscribing(true);
+
+    try {
+      const response = await fetch('/api/v1/relay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorUri: relayUri }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setRelaySuccess(true);
+        setRelayUri('');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        setRelayError(data.error || 'Failed to subscribe to relay');
+      }
+    } catch {
+      setRelayError('Network error. Please try again.');
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <section class='space-y-6 py-2'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white'>Federated Timeline</h1>
+        <div class='flex items-center justify-center py-8'>
+          <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
+            <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
+            <path
+              class='opacity-75'
+              fill='currentColor'
+              d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+            />
+          </svg>
+        </div>
+      </section>
+    );
+  }
+
+  return (
     <section class='space-y-6 py-2'>
       <div class='flex items-center justify-between mb-2'>
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
@@ -27,12 +130,16 @@ export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) 
           </a>
           {isLoggedIn
             ? (
-              <a
-                href='#add-relay'
+              <button
+                type='button'
+                onClick={() => {
+                  setShowRelayModal(true);
+                  window.location.hash = 'add-relay';
+                }}
                 class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
               >
                 Add Relay
-              </a>
+              </button>
             )
             : (
               <a
@@ -80,7 +187,7 @@ export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) 
 
       {items.length > 0
         ? (
-          items.map((item) => <PostView key={item.federatedTimelineItemId} post={item.post} />)
+          items.map((item) => <PostView key={item.federatedTimelineItemId} post={item.post as never} />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>
@@ -90,9 +197,16 @@ export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) 
             {isLoggedIn
               ? (
                 <p class='text-sm text-charcoal-light dark:text-gray-500 mt-2'>
-                  <a href='#add-relay' class='text-terracotta hover:underline'>
+                  <button
+                    type='button'
+                    onClick={() => {
+                      setShowRelayModal(true);
+                      window.location.hash = 'add-relay';
+                    }}
+                    class='text-terracotta hover:underline'
+                  >
                     Add a relay server
-                  </a>{' '}
+                  </button>{' '}
                   to see posts from other instances
                 </p>
               )
@@ -105,34 +219,45 @@ export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) 
         )}
 
       {/* Add Relay Modal */}
-      {isLoggedIn && (
+      {isLoggedIn && showRelayModal && (
         <div
-          id='add-relay'
-          class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50 opacity-0 pointer-events-none target:opacity-100 target:pointer-events-auto transition-opacity'
+          class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
+          onClick={() => {
+            setShowRelayModal(false);
+            window.location.hash = '';
+          }}
         >
-          <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 w-full max-w-md mx-4'>
+          <div
+            class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 w-full max-w-md mx-4'
+            onClick={(e) => e.stopPropagation()}
+          >
             <div class='flex items-center justify-between mb-4'>
               <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
                 Add Relay Server
               </h2>
-              <a
-                href='#'
+              <button
+                type='button'
+                onClick={() => {
+                  setShowRelayModal(false);
+                  window.location.hash = '';
+                }}
                 class='p-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 transition-colors rounded-xl hover:bg-sand-light dark:hover:bg-gray-700'
               >
                 <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
                   <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
                 </svg>
-              </a>
+              </button>
             </div>
 
-            <form id='add-relay-form' class='space-y-4'>
+            <form onSubmit={handleRelaySubmit} class='space-y-4'>
               <div>
                 <label class='block text-sm font-medium text-charcoal dark:text-gray-300 mb-1'>
                   Relay Actor URI
                 </label>
                 <input
                   type='url'
-                  name='actorUri'
+                  value={relayUri}
+                  onInput={(e) => setRelayUri((e.target as HTMLInputElement).value)}
                   placeholder='https://relay.example.com/actor'
                   required
                   class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset transition-all'
@@ -142,84 +267,46 @@ export const FederatedTimelinePage: FC<Props> = ({ items, relays, isLoggedIn }) 
                 </p>
               </div>
 
-              <div
-                id='add-relay-error'
-                class='hidden p-3 rounded-clay bg-terracotta/10 text-terracotta-dark dark:text-terracotta-light text-sm'
-              >
-              </div>
+              {relayError && (
+                <div class='p-3 rounded-clay bg-terracotta/10 text-terracotta-dark dark:text-terracotta-light text-sm'>
+                  {relayError}
+                </div>
+              )}
 
-              <div
-                id='add-relay-success'
-                class='hidden p-3 rounded-clay bg-sage/10 text-sage-dark dark:text-sage text-sm'
-              >
-                Relay subscription request sent! Waiting for approval...
-              </div>
+              {relaySuccess && (
+                <div class='p-3 rounded-clay bg-sage/10 text-sage-dark dark:text-sage text-sm'>
+                  Relay subscription request sent! Waiting for approval...
+                </div>
+              )}
 
               <div class='flex gap-2 justify-end'>
-                <a
-                  href='#'
+                <button
+                  type='button'
+                  onClick={() => {
+                    setShowRelayModal(false);
+                    window.location.hash = '';
+                  }}
                   class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
                 >
                   Cancel
-                </a>
+                </button>
                 <button
                   type='submit'
-                  id='add-relay-submit'
+                  disabled={isSubscribing}
                   class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed'
                 >
-                  Subscribe
+                  {isSubscribing ? 'Subscribing...' : 'Subscribe'}
                 </button>
               </div>
             </form>
-
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-              document.getElementById('add-relay-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const form = e.target;
-                const submitBtn = document.getElementById('add-relay-submit');
-                const errorDiv = document.getElementById('add-relay-error');
-                const successDiv = document.getElementById('add-relay-success');
-                const actorUri = form.actorUri.value;
-
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Subscribing...';
-                errorDiv.classList.add('hidden');
-                successDiv.classList.add('hidden');
-
-                try {
-                  const response = await fetch('/api/v1/relay', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ actorUri }),
-                  });
-                  const data = await response.json();
-
-                  if (response.ok) {
-                    successDiv.classList.remove('hidden');
-                    form.reset();
-                    setTimeout(() => {
-                      window.location.reload();
-                    }, 2000);
-                  } else {
-                    errorDiv.textContent = data.error || 'Failed to subscribe to relay';
-                    errorDiv.classList.remove('hidden');
-                  }
-                } catch (err) {
-                  errorDiv.textContent = 'Network error. Please try again.';
-                  errorDiv.classList.remove('hidden');
-                } finally {
-                  submitBtn.disabled = false;
-                  submitBtn.textContent = 'Subscribe';
-                }
-              });
-            `,
-              }}
-            />
           </div>
         </div>
       )}
     </section>
-  </Layout>
-);
+  );
+};
+
+if (globalThis.window) {
+  const root = document.getElementById('root')!;
+  render(<FederatedTimelinePage />, root);
+}

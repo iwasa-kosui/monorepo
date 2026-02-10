@@ -1,4 +1,4 @@
-import { useState } from 'hono/jsx';
+import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { ActorLink } from '../components/ActorLink.tsx';
@@ -638,6 +638,74 @@ const TimelineList = () => {
   );
 };
 
+type ServerTimelinePost = {
+  postId: string;
+  content: string;
+  [key: string]: unknown;
+};
+
+const ServerTimeline = () => {
+  const [posts, setPosts] = useState<ServerTimelinePost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch('/api/v1/server-timeline');
+        if (response.ok) {
+          const data = await response.json();
+          setPosts(data.posts);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPosts();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div class='flex items-center justify-center py-8'>
+        <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
+          <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
+          <path
+            class='opacity-75'
+            fill='currentColor'
+            d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+          />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <section class='space-y-6 py-2'>
+      <div class='flex items-center justify-between mb-2'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
+          blog.kosui.me
+        </h1>
+        <a
+          href='/about'
+          class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+        >
+          ioriについて
+        </a>
+      </div>
+      {posts.length > 0
+        ? (
+          posts.map((post) => <PostView key={post.postId} post={post as never} />)
+        )
+        : (
+          <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>
+            <p class='text-charcoal-light dark:text-gray-400'>まだ投稿がありません</p>
+          </div>
+        )}
+    </section>
+  );
+};
+
 const HomePage = () => {
   const { timeline } = useTimelineContext();
 
@@ -646,7 +714,7 @@ const HomePage = () => {
   }
 
   if (timeline.state.status === 'error') {
-    return <div>Error: {timeline.state.error}</div>;
+    return <ServerTimeline />;
   }
 
   return (
