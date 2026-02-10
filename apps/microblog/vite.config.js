@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => {
             localPost: './src/ui/pages/localPost.tsx',
             articles: './src/ui/pages/articles.tsx',
             articleDetail: './src/ui/pages/articleDetail.tsx',
+            signIn: './src/ui/pages/signIn.tsx',
+            signUp: './src/ui/pages/signUp.tsx',
+            follow: './src/ui/pages/follow.tsx',
+            about: './src/ui/pages/about.tsx',
+            notifications: './src/ui/pages/notifications.tsx',
+            likedPosts: './src/ui/pages/likedPosts.tsx',
+            federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
           },
           output: {
             entryFileNames: 'static/[name].js',

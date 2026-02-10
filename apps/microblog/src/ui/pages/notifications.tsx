@@ -1,21 +1,27 @@
-import { raw } from 'hono/html';
+import { useEffect, useState } from 'hono/jsx';
+import { render } from 'hono/jsx/dom';
 
-import type { NotificationWithDetails } from '../../domain/notification/notification.ts';
-import type { User } from '../../domain/user/user.ts';
-import { Layout } from '../../layout.tsx';
 import { NotificationItem } from '../components/NotificationItem.tsx';
 
-type Props = Readonly<{
-  user: User;
-  notifications: ReadonlyArray<{
-    notification: NotificationWithDetails;
-    sanitizedContent: string;
-  }>;
-}>;
+type NotificationData = {
+  notification: {
+    notification: {
+      notificationId: string;
+      type: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  sanitizedContent: string;
+};
 
-const pushSubscriptionScript = `
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+type NotificationsResponse = {
+  user: { id: string; username: string };
+  notifications: NotificationData[];
+};
+
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
@@ -23,139 +29,112 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
-}
+};
 
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
 
-function isInStandaloneMode() {
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true;
-}
+const isInStandaloneMode = () => {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (navigator as unknown as { standalone?: boolean }).standalone === true;
+};
 
-async function checkSubscription() {
-  const button = document.getElementById('push-subscribe-btn');
-  const status = document.getElementById('push-status');
-  const iosGuide = document.getElementById('ios-install-guide');
+const PushSubscriptionSection = () => {
+  const [pushStatus, setPushStatus] = useState<
+    'checking' | 'subscribed' | 'available' | 'unsupported' | 'ios-guide' | 'error'
+  >('checking');
+  const [isSubscribing, setIsSubscribing] = useState(false);
 
-  const ios = isIOS();
-  const standalone = isInStandaloneMode();
+  useEffect(() => {
+    const check = async () => {
+      const ios = isIOS();
+      const standalone = isInStandaloneMode();
 
-  // iOS Safari (not PWA) - show install guide
-  if (ios && !standalone) {
-    if (button) button.style.display = 'none';
-    if (status) status.style.display = 'none';
-    if (iosGuide) iosGuide.style.display = 'block';
-    return;
-  }
-
-  // Check Web Push support
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    if (button) button.style.display = 'none';
-    if (status) {
-      status.textContent = 'Push notifications not supported on this browser';
-      status.className = 'text-sm text-gray-500 dark:text-gray-400';
-    }
-    return;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-
-    if (subscription) {
-      if (button) button.style.display = 'none';
-      if (status) {
-        status.innerHTML = '<svg class="inline w-4 h-4 mr-1 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Push notifications enabled';
-        status.className = 'text-sm text-gray-500 dark:text-gray-400';
+      if (ios && !standalone) {
+        setPushStatus('ios-guide');
+        return;
       }
+
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPushStatus('unsupported');
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        setPushStatus(subscription ? 'subscribed' : 'available');
+      } catch {
+        setPushStatus('available');
+      }
+    };
+    check();
+  }, []);
+
+  const handleSubscribe = async () => {
+    setIsSubscribing(true);
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const response = await fetch('/api/v1/push/vapid-public-key');
+      const { publicKey } = await response.json();
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      await fetch('/api/v1/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+
+      setPushStatus('subscribed');
+    } catch {
+      setPushStatus('error');
+    } finally {
+      setIsSubscribing(false);
     }
-  } catch (error) {
-    console.error('Error checking subscription:', error);
-  }
-}
+  };
 
-async function subscribeToPush() {
-  const button = document.getElementById('push-subscribe-btn');
-  const status = document.getElementById('push-status');
-
-  if (button) {
-    button.disabled = true;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.register('/sw.js');
-
-    const response = await fetch('/api/v1/push/vapid-public-key');
-    const { publicKey } = await response.json();
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
-
-    await fetch('/api/v1/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription.toJSON()),
-    });
-
-    if (button) button.style.display = 'none';
-    if (status) {
-      status.innerHTML = '<svg class="inline w-4 h-4 mr-1 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Push notifications enabled';
-      status.className = 'text-sm text-gray-500 dark:text-gray-400';
-    }
-  } catch (error) {
-    console.error('Failed to subscribe:', error);
-    if (button) {
-      button.disabled = false;
-    }
-    if (status) {
-      status.textContent = 'Failed to enable push notifications';
-      status.className = 'text-sm text-red-600 dark:text-red-400';
-    }
-  }
-}
-
-function init() {
-  checkSubscription();
-  const button = document.getElementById('push-subscribe-btn');
-  if (button) {
-    button.addEventListener('click', subscribeToPush);
-  }
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-`;
-
-export const NotificationsPage = ({ user, notifications }: Props) => (
-  <Layout isLoggedIn={true}>
-    <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>
-        Notifications
-      </h1>
-
-      <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 mb-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover'>
-        <div class='flex items-center justify-between'>
-          <div>
-            <h2 class='text-sm font-medium text-charcoal dark:text-white'>
-              Push Notifications
-            </h2>
-            <p id='push-status' class='text-sm text-charcoal-light dark:text-gray-400'>
-              Get notified when someone likes your posts
-            </p>
-          </div>
+  return (
+    <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 mb-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover'>
+      <div class='flex items-center justify-between'>
+        <div>
+          <h2 class='text-sm font-medium text-charcoal dark:text-white'>
+            Push Notifications
+          </h2>
+          <p class='text-sm text-charcoal-light dark:text-gray-400'>
+            {pushStatus === 'subscribed'
+              ? (
+                <span>
+                  <svg
+                    class='inline w-4 h-4 mr-1 align-text-bottom'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                  >
+                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 13l4 4L19 7' />
+                  </svg>
+                  Push notifications enabled
+                </span>
+              )
+              : pushStatus === 'unsupported'
+              ? 'Push notifications not supported on this browser'
+              : pushStatus === 'error'
+              ? 'Failed to enable push notifications'
+              : 'Get notified when someone likes your posts'}
+          </p>
+        </div>
+        {pushStatus === 'available' && (
           <button
-            id='push-subscribe-btn'
             type='button'
+            onClick={handleSubscribe}
+            disabled={isSubscribing}
             class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
-            title='プッシュ通知を有効にする'
+            title='Enable push notifications'
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -172,9 +151,11 @@ export const NotificationsPage = ({ user, notifications }: Props) => (
               />
             </svg>
           </button>
-        </div>
+        )}
+      </div>
 
-        <div id='ios-install-guide' class='hidden mt-4 pt-4'>
+      {pushStatus === 'ios-guide' && (
+        <div class='mt-4 pt-4'>
           <div class='flex items-start gap-3'>
             <div class='flex-shrink-0 w-10 h-10 rounded-full bg-sand-light dark:bg-gray-700 flex items-center justify-center shadow-clay-sm'>
               <svg
@@ -204,16 +185,7 @@ export const NotificationsPage = ({ user, notifications }: Props) => (
                     1
                   </span>
                   <span>
-                    Tap the <strong>Share</strong> button{' '}
-                    <svg class='inline w-4 h-4 align-text-bottom' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                      <path
-                        stroke-linecap='round'
-                        stroke-linejoin='round'
-                        stroke-width='2'
-                        d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z'
-                      />
-                    </svg>{' '}
-                    at the bottom of Safari
+                    Tap the <strong>Share</strong> button at the bottom of Safari
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
@@ -245,19 +217,83 @@ export const NotificationsPage = ({ user, notifications }: Props) => (
             </div>
           </div>
         </div>
-      </div>
+      )}
+    </div>
+  );
+};
 
-      {raw(`<script>${pushSubscriptionScript}</script>`)}
+const NotificationsPage = () => {
+  const [data, setData] = useState<NotificationsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch('/api/v1/notifications');
+        if (response.status === 401) {
+          window.location.href = '/sign-in';
+          return;
+        }
+        if (!response.ok) {
+          setError('Failed to load notifications');
+          return;
+        }
+        const result = await response.json();
+        setData(result);
+      } catch {
+        setError('Network error. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <section class='mb-8'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Notifications</h1>
+        <div class='flex items-center justify-center py-8'>
+          <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
+            <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
+            <path
+              class='opacity-75'
+              fill='currentColor'
+              d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+            />
+          </svg>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section class='mb-8'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Notifications</h1>
+        <p class='text-charcoal-light dark:text-gray-400'>{error}</p>
+      </section>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <section class='mb-8'>
+      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Notifications</h1>
+
+      <PushSubscriptionSection />
 
       <div class='space-y-6 py-2'>
-        {notifications.length > 0
+        {data.notifications.length > 0
           ? (
-            notifications.map(({ notification, sanitizedContent }) => (
+            data.notifications.map(({ notification, sanitizedContent }) => (
               <NotificationItem
                 key={notification.notification.notificationId}
-                notification={notification}
+                notification={notification as never}
                 sanitizedContent={sanitizedContent}
-                recipientUsername={user.username}
+                recipientUsername={data.user.username}
               />
             ))
           )
@@ -288,5 +324,10 @@ export const NotificationsPage = ({ user, notifications }: Props) => (
           )}
       </div>
     </section>
-  </Layout>
-);
+  );
+};
+
+if (globalThis.window) {
+  const root = document.getElementById('root')!;
+  render(<NotificationsPage />, root);
+}
