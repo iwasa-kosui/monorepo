@@ -14,6 +14,14 @@ export type {
   FormLabelProps,
   FormRowProps,
 } from './components/Form/index.js';
+export { IconButton, LikeButton, ReplyButton, RepostButton, ShareButton } from './components/IconButton/index.js';
+export type {
+  IconButtonProps,
+  LikeButtonProps,
+  ReplyButtonProps,
+  RepostButtonProps,
+  ShareButtonProps,
+} from './components/IconButton/index.js';
 export { Input } from './components/Input/index.js';
 export type { InputProps } from './components/Input/index.js';
 export { Textarea } from './components/Textarea/index.js';
