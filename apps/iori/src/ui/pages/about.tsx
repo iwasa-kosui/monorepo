@@ -189,7 +189,7 @@ const AboutPage = () => {
           {t.sourceCodeDescription}
         </p>
         <a
-          href='https://github.com/iwasa-kosui/monorepo/tree/main/apps/microblog'
+          href='https://github.com/iwasa-kosui/monorepo/tree/main/apps/iori'
           target='_blank'
           rel='noopener noreferrer'
           class='inline-flex items-center gap-2 px-5 py-2.5 bg-charcoal hover:bg-charcoal-light text-white font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'

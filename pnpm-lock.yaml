@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  apps/microblog:
+  apps/iori:
     dependencies:
       '@dotenvx/dotenvx':
         specifier: 1.51.4
@@ -2574,9 +2574,6 @@ packages:
 
   '@types/nlcst@2.0.3':
     resolution: {integrity: sha512-vSYNSDe6Ix3q+6Z7ri9lyWqgGhJTmzRjZRqyq15N0Z/1/UnVsno9G/N40NBijoYx2seFDIl0+B2mgAb9mezUCA==}
-
-  '@types/node@20.11.17':
-    resolution: {integrity: sha512-QmgQZGWu1Yw9TDyAP9ZzpFJKynYNeOvwMJmaxABfieQoVoiVOS6MN1WSpqpRcbeA5+RW82kraAVxCCJg+780Qw==}
 
   '@types/node@20.19.17':
     resolution: {integrity: sha512-gfehUI8N1z92kygssiuWvLiwcbOB3IRktR6hTDgJlXMYh5OvkPSRmgfoBUmfZt+vhwJtX7v1Yw4KvvAf7c5QKQ==}
@@ -6641,9 +6638,6 @@ packages:
   unctx@2.5.0:
     resolution: {integrity: sha512-p+Rz9x0R7X+CYDkT+Xg8/GhpcShTlU8n+cf9OtOEf7zEQsNcCZO1dPKNRDqvUTaq+P32PMMkxWHwfrxkqfqAYg==}
 
-  undici-types@5.26.5:
-    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
-
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
@@ -9438,10 +9432,6 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
-  '@types/node@20.11.17':
-    dependencies:
-      undici-types: 5.26.5
-
   '@types/node@20.19.17':
     dependencies:
       undici-types: 6.21.0
@@ -9456,7 +9446,7 @@ snapshots:
 
   '@types/pg@8.16.0':
     dependencies:
-      '@types/node': 20.11.17
+      '@types/node': 22.19.7
       pg-protocol: 1.10.3
       pg-types: 2.2.0
 
@@ -9485,7 +9475,7 @@ snapshots:
 
   '@types/web-push@3.6.4':
     dependencies:
-      '@types/node': 20.11.17
+      '@types/node': 22.19.7
 
   '@types/ws@8.18.1':
     dependencies:
@@ -11617,8 +11607,8 @@ snapshots:
       '@babel/parser': 7.28.5
       eslint: 9.36.0(jiti@2.6.1)
       hermes-parser: 0.25.1
-      zod: 4.2.1
-      zod-validation-error: 4.0.2(zod@4.2.1)
+      zod: 3.25.76
+      zod-validation-error: 4.0.2(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
 
@@ -14547,8 +14537,6 @@ snapshots:
       unplugin: 2.3.11
     optional: true
 
-  undici-types@5.26.5: {}
-
   undici-types@6.21.0: {}
 
   undici-types@7.16.0: {}
@@ -15431,9 +15419,9 @@ snapshots:
       typescript: 5.9.3
       zod: 3.25.76
 
-  zod-validation-error@4.0.2(zod@4.2.1):
+  zod-validation-error@4.0.2(zod@3.25.76):
     dependencies:
-      zod: 4.2.1
+      zod: 3.25.76
 
   zod@3.22.3: {}
 

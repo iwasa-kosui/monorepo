@@ -1016,7 +1016,7 @@ const app = new Hono()
     ),
     async (c) => {
       const { username, password } = c.req.valid('json');
-      const logger = getLogger('microblog:sign-in');
+      const logger = getLogger('iori:sign-in');
       logger.info('Sign in attempt', { username });
 
       const useCase = SignInUseCase.create({
@@ -1060,7 +1060,7 @@ const app = new Hono()
     ),
     async (c) => {
       const { username, password } = c.req.valid('json');
-      const logger = getLogger('microblog:sign-up');
+      const logger = getLogger('iori:sign-up');
       logger.info('Sign up attempt', { username });
 
       const useCase = SignUpUseCase.create({

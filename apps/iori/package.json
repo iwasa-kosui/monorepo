@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "@iwasa-kosui/microblog",
+  "name": "@iwasa-kosui/iori",
   "engines": {
     "node": "24.12.0"
   },
