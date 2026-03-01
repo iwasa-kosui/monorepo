@@ -83,7 +83,8 @@ jobs:
           ssh $HOST "
             cd ~/monorepo
             git fetch --all
-            git checkout origin/main -- pnpm-lock.yaml apps/iori/package.json packages/result
+            git reset --hard origin/main
+            git clean -fd
             export PATH=\$HOME/.local/share/pnpm:\$PATH
             pnpm install --frozen-lockfile
             cd apps/iori
