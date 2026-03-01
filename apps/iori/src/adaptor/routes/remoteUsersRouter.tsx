@@ -50,7 +50,7 @@ app.get(
   ),
   async (c) => {
     const { actorId } = c.req.valid('param');
-    const logger = getLogger('microblog:get-remote-user');
+    const logger = getLogger('iori:get-remote-user');
     logger.info('Get remote user attempt', { actorId });
 
     // Require authentication to view remote user profiles
@@ -110,7 +110,7 @@ app.post(
   ),
   async (c) => {
     const { actorId: followingActorId } = c.req.valid('param');
-    const logger = getLogger('microblog:follow-remote-user');
+    const logger = getLogger('iori:follow-remote-user');
 
     const sessionIdCookie = getCookie(c, 'sessionId');
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);
@@ -207,7 +207,7 @@ app.post(
   ),
   async (c) => {
     const { actorId: followingActorId } = c.req.valid('param');
-    const logger = getLogger('microblog:unfollow-remote-user');
+    const logger = getLogger('iori:unfollow-remote-user');
 
     const sessionIdCookie = getCookie(c, 'sessionId');
     const currentUserResult = await getCurrentUserActorId(sessionIdCookie);

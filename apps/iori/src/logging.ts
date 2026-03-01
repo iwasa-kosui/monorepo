@@ -8,7 +8,7 @@ configureSync({
   },
   filters: {},
   loggers: [
-    { category: 'microblog', lowestLevel: 'debug', sinks: ['console'] },
+    { category: 'iori', lowestLevel: 'debug', sinks: ['console'] },
     { category: 'fedify', lowestLevel: 'info', sinks: ['console'] },
     { category: ['logtape', 'meta'], lowestLevel: 'warning', sinks: ['console'] },
   ],
