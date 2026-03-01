@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-gray-900 antialiased;
+  font-feature-settings: "palt";
+}
+
+/* Shiki code blocks */
+pre.shiki {
+  @apply overflow-x-auto rounded-lg p-4 text-sm leading-relaxed my-4;
+}
+
+html.dark pre.shiki {
+  --shiki-light: initial;
+  --shiki-dark: inherit;
+}
+
+pre.shiki code {
+  @apply font-mono;
+}
+
+/* Prose-like styles for MDX content */
+.prose h2 {
+  @apply text-2xl font-bold mt-12 mb-4 pb-2 border-b border-gray-200;
+}
+
+.prose h3 {
+  @apply text-xl font-bold mt-8 mb-3;
+}
+
+.prose h4 {
+  @apply text-lg font-semibold mt-6 mb-2;
+}
+
+.prose p {
+  @apply my-4 leading-relaxed;
+}
+
+.prose a {
+  @apply text-blue-600 hover:text-blue-800 underline;
+}
+
+.prose ul {
+  @apply my-4 pl-6 list-disc;
+}
+
+.prose ol {
+  @apply my-4 pl-6 list-decimal;
+}
+
+.prose li {
+  @apply my-1 leading-relaxed;
+}
+
+.prose blockquote {
+  @apply my-4 pl-4 border-l-4 border-gray-300 text-gray-600 italic;
+}
+
+.prose img {
+  @apply my-4 rounded-lg max-w-full;
+}
+
+.prose table {
+  @apply my-4 w-full border-collapse;
+}
+
+.prose th,
+.prose td {
+  @apply border border-gray-300 px-3 py-2 text-left;
+}
+
+.prose th {
+  @apply bg-gray-50 font-semibold;
+}
+
+.prose code:not(pre code) {
+  @apply bg-gray-100 rounded px-1.5 py-0.5 text-sm font-mono text-gray-800;
+}
+
+.prose hr {
+  @apply my-8 border-gray-200;
+}

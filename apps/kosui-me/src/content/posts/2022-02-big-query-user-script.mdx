@@ -1,0 +1,136 @@
+---
+title: "BigQuery の課金額で泣かないための UserScript"
+date: "2022-02-24T17:03:58+09:00"
+slug: "posts/2022/02/big-query-user-script"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20231224/20231224170228.png"
+---
+
+## はじめに
+
+BigQuery を利用する上で、うっかり高額なクエリを投げてしまったことはありませんか?また、「BigQuery を利用したいけれど課金額が分からないと破産しそうで怖い」という方もいるのではないかと思います。
+
+[https://qiita.com/itkr/items/745d54c781badc148bb9](https://qiita.com/itkr/items/745d54c781badc148bb9)
+
+そこで、BigQuery のエクスプローラ画面で、入力したクエリの課金額を実行前にその場で表示してくれる UserScript を作成しました。
+
+![BigQuery の課金額が表示されている様子![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20231224/20231224170228.png)BigQuery の課金額が表示されている様子
+
+本記事では、まず前提として Web サービス開発者にとっての BigQuery の有用性を述べた上で、BigQuery の課金体系をおさらいします。その上で、本記事で解決したい課題である「BigQuery のクエリへの課金額を実行前にその場で知りたい」について述べ、その解決策である UserScript について解説します。
+
+## 前提
+
+まず、前提として、BigQuery がどのようなソリューションで、どのように Web サービス開発者に利用されるか、そして BigQuery を利用する上で注意するべき事項として BigQuery の課金体系を述べます。
+
+### Web サービス開発者と BigQuery
+
+**BigQuery** は Google Cloud で提供されているフルマネージドなデータウェアハウスです。一般には BigQuery は「データサイエンティストがビッグデータを高速に解析するためのソリューション」として紹介されることが多いですが、BigQuery は Web サービス開発者にとっても非常に有用なソリューションです。
+
+例えば、不具合の影響範囲を調査したり、負荷対策のために各エンドポイントへのアクセス傾向を調査したりするために、膨大なアプリケーションログを解析しなければならない時があるかと思います。しかし、ローカル環境に TB 単位のログを持ってくるのは大変ですし、Google Cloud Logging のログエクスプローラは膨大なログ解析に対しては速度の面で不向きです。
+
+そんな時に、BigQuery は非常に便利です。公式ドキュメントに以下の記載があるように、BigQuery では膨大なアプリケーションログの分析も素早く済ませることができます。
+
+> BigQuery のスケーラブルな分散型分析エンジンを使用すると、数テラバイト、数ペタバイトのデータに対し、数秒もしくは数分でクエリを完了できます。
+> - [https://cloud.google.com/bigquery/docs/introduction](https://cloud.google.com/bigquery/docs/introduction)
+
+### BigQuery の課金体系
+
+一方で、他のクラウドサービスもそうであるように、BigQuery を利用するためには必ず課金体系を理解する必要があります。
+
+[公式ドキュメント](https://cloud.google.com/bigquery/pricing?hl=ja) によれば、BigQuery の課金体系は以下に分類できます。
+
+- ストレージ料金
+ログを保存するために掛かる費用
+
+- 分析料金
+保存したログを分析するために掛かる費用
+
+特に、BigQuery をオンデマンドに利用する場合、分析料金は米国リージョンで $5.00/TB、東京リージョンでは $6.00/TB (2022 年 2 月現在) となっています。また、BigQuery では [カラム型ストレージ](https://cloud.google.com/blog/ja/products/data-analytics/bigquery-explained-storage-overview) が採用されているため、スキャンした列のデータの合計容量に応じた課金が行われます。
+
+特に注意するべきことは、「スキャンした列のデータの合計容量に応じた課金が行われる」ということです。たとえば、うかつに `SELECT * FROM ...` をしてしまうと、すべての列をスキャンしてしまい、それだけ課金額が増えてしまいます。さらに、`LIMIT 1000` や `WHERE ...` のように読み出す行数を制限したとしても、指定した列へのスキャンは必ず行われるため、課金額は変わりません。つまり、必要な列だけを指定してクエリを構築することが重要です。
+
+また、[カスタム割り当て機能](https://cloud.google.com/bigquery/docs/custom-quotas) を利用することで、1 日に処理されるクエリデータの量を制限し、想定を超えた課金が発生することを防ぐことができます。
+
+BigQuery のコストを最適化するベストプラクティスとしてより詳しい情報を知りたい場合、[こちら](https://cloud.google.com/blog/ja/products/data-analytics/cost-optimization-best-practices-for-bigquery) の公式ブログ記事を読むことをおすすめします。
+
+## 課題
+
+私が抱えていた課題は、「これから投げる BigQuery のクエリに対する課金額の概算をパッと知りたい」です。BigQuery のエクスプローラは、以下の図のように処理されるデータサイズを表示してくれますが、私はその場で課金額が自動で計算されて表示されて欲しいと感じていました。
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20231224/20231224170301.png)
+
+## 解決策
+
+### 要件
+
+そこで、私は以下のような機能を実現したいと考えました。
+
+1. そのクエリで処理されるバイト数を取得する
+
+2. バイト数から課金額を計算し表示する
+
+### UserScript にした理由
+
+ブラウザで表示しているページを手軽に書き換える方法として、たとえば以下があります。
+今回は、「手軽に複数のブラウザに向けて公開したい」「ユーザが一度導入したら意識せずに機能が働いて欲しい」「ユーザのリテラシは高いと考えて良い」という要件のため、UserScript として開発しました。
+
+- 各ブラウザの拡張機能
+
+- ユーザが簡単に機能を導入できる
+
+- 開発者は提供したい各ブラウザの拡張機能の仕様に合わせる必要がある
+
+- UserScript
+
+- 開発者は簡単に複数のブラウザに向けて機能を公開できる
+
+- ブックマークレット
+
+- ユーザが能動的にアクションしないと実行されない
+
+### 処理されるバイト数の取得
+
+また、処理されるバイト数を取得する方法としてすぐ思いつく方法は「DOM からテキストを取得してパースする」があるかと思います。BigQuery ではクエリを書き換えるたびに処理されるバイト数を表示してくれるので、この DOM を MutationObserver で監視すれば取得できるでしょう。しかし、`10 MB` のように整形されたテキストよりも生のバイト数の方が扱いやすいため、この方法は採用しませんでした。
+
+代わりに、以下の方法で実現しました。
+
+まず、`XMLHttpRequest.prototype.send` をオーバーライドして XHR による通信を監視します。
+
+```javascript
+(function() {
+    const globalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(){
+        this.addEventListener("readystatechange", function() {
+            // XHR による通信のレスポンスが取得できる
+            console.log(this.responseText)
+        }, false)
+        globalSend.apply(this, arguments)
+    }
+}
+```
+
+次に、レスポンステキストに `totalBytesProcessed` が含まれている場合は、レスポンステキストを JSON 形式としてパースし、処理されるバイト数を取得します。
+
+```javascript
+if (this.responseText.includes("totalBytesProcessed")) {
+    const totalBytesProcessed = JSON.parse(this.responseText)[0]?.data?.response?.totalBytesProcessed
+}
+```
+
+この方法はあまり行儀の良いやり方ではないため、場合によっては利用者を不安にさせるかもしれませんが、今回の UserScript は全体で 50 行に満たない非常に小規模なスクリプトであるため、このスクリプトに危険性が無いことをご理解頂いた上で利用していただけると考えました。
+
+### スクリプト
+
+以下に該当のスクリプトを公開しています。
+
+今回のスクリプトでは、米国リージョンを基準にした料金を表示するため、他リージョンでの金額を表示したい方はよしなにスクリプトを書き換えていただければと思います。
+
+ 
+
+## おわりに
+
+課金額に気をつけながら、快適な BigQuery ライフを送りましょう。
+
+## 免責事項
+
+私は当ページに掲載した情報について可能な限り安全かつ正確であるように努めておりますが、安全性または正確性などについて責任を負うものでは有りません。
+当ページに掲載された情報によって生じたあらゆる損害等について、理由の如何に関わらず、私は一切責任を負いません。

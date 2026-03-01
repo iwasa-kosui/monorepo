@@ -1,0 +1,108 @@
+---
+title: "for...of 文を使わずに Promise を直列実行するための TypeScript 向けユーティリティ"
+date: "2023-05-12T14:44:43+09:00"
+slug: "posts/2023/05/serialize-array-returning-promises"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20231224/20231224154632.png)
+
+## はじめに
+
+「iterators を使わずに Array の各メソッドや Object.keys を使おうね」とか「Array に対する非同期処理の直列実行は reduce で書けるよね」とか、もう 2017 年ぐらいに十分話され尽くした話だとは思います。
+
+しかし、reduce による Promise の直列実行について、TypeScript 向けに「ジェネリクスで返り値の型もいい感じにしてくれる、よしなに for...of 文っぽく書けるお役立ち関数」として切り出されているケースがあんまり無かったので、それを紹介します。
+
+## Promise の並列実行
+
+JavaScript/TypeScript では、Promise を利用することでとてもシンプルに非同期処理を記述することができます。
+
+例えば、Promise.all を利用することでかんたんに非同期処理を並列化することができます。
+
+```typescript
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+// 並列に実行される
+await Promise.all([
+  sleep(5000), // 3 番目に完了する
+  sleep(3000), // 2 番目に完了する
+  sleep(1000), // 1 番目に完了する
+]);
+```
+
+これにより、ある配列に対する非同期処理を並列化したい場合も、下記のようにシンプルに記述することができます。
+
+```typescript
+const durations = [5000, 3000, 1000];
+await Promise.all(durations.map(sleep));
+```
+
+## for...of 文による Promise の直列実行
+
+一方で、やんごとなき事情により、非同期処理を直列化したい場合もあると思います。
+そんな時、for...of 文を使う方も多いのではないでしょうか。
+
+```typescript
+for (const duration of durations) {
+    await sleep(duration);
+}
+```
+
+しかし、[Airbnb JavaScript Style Guide](https://github.com/airbnb/javascript#iterators-and-generators) や
+[eslint-config-airbnb (v19.0.4 時点)](https://github.com/airbnb/javascript/blob/eslint-config-airbnb-v19.0.4/packages/eslint-config-airbnb-base/rules/style.js#L339-L342) にもあるように、for...of 文を含めた iterator の利用よりも Array や Object の各メソッドの利用が推奨されています。
+
+## reduce() による Promise の直列実行
+
+では、Array.prototype.reduce() による Promise の直列実行を試してみましょう。特に各 Promise の value を利用しない場合、そこまで複雑なコードにはなりません。
+
+```typescript
+await durations.reduce(async (prev, cur) => {
+  await prev;
+  return sleep(cur);
+}, Promise.resolve());
+```
+
+一方で、Promise の value を利用する場合はもう少しだけ読みにくくなります。パっと見て「あー、Promise を直列実行してるんだな」とすんなりと理解するには少し時間がかかる場合もあると思います。
+
+```typescript
+const asyncSayHello = async (username: string) => {
+  await sleep(Math.random());
+  return `Hello ${username}`;
+};
+
+const usernames = ['ken', 'john', 'yuri'];
+const greetings = await usernames.reduce>(
+  async (prev, cur) => [...(await prev), await asyncSayHello(cur)],
+  Promise.resolve([]),
+);
+
+// ['Hello, ken!', 'Hello, tom!', 'Hello, yuri!']
+console.log(greetings)
+```
+
+## ユーティリティ関数 forOf の紹介
+
+そこで、ちょっとしたユーティリティ関数 forOf があると便利かもしれません。まあ、2023 年にもなってドヤ顔で紹介するようなものではないんですが...。
+
+```typescript
+const forOf = (doFn: (entry: T) => Promise, arr: T[]): Promise =>
+  arr.reduce>(
+    async (prev, cur) => [...(await prev), await doFn(cur)],
+    Promise.resolve([]),
+  );
+```
+
+forOf のような関数を用意することで、Promise の value を使用する場合もしない場合も、ある程度すっきりします。
+
+```typescript
+await forOf(sleep, durations);
+await forOf(asyncSayHello, usernames);
+```
+
+## おわりに
+
+最近、あまりにブログを書かなかったので、リハビリとして書いてみました。まあちょっと私生活で色々大変だったのを言い訳にしつつ、最近生活が安定してきたのでまた少しずつ頑張るかという気持ちです。
+
+もっと仕事に根ざした記事を書けるように、さらに元気を取り戻していきたいです。
+
+ここまで読んで下さりありがとうございました。
