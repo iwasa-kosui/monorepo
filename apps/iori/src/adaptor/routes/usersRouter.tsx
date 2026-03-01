@@ -36,7 +36,7 @@ app.get(
   ),
   async (c) => {
     const { username } = c.req.valid('param');
-    const logger = getLogger('microblog:get-user');
+    const logger = getLogger('iori:get-user');
     logger.info('Get user attempt', { username });
 
     const sessionId = getCookie(c, 'sessionId');
@@ -131,7 +131,7 @@ app.post(
   async (c) => {
     const { username } = c.req.valid('param');
     const { handle } = c.req.valid('form');
-    const logger = getLogger('microblog:remote-follow');
+    const logger = getLogger('iori:remote-follow');
 
     // Extract domain from handle (e.g., @user@example.com -> example.com)
     const handleMatch = handle.match(/@?[^@]+@([^@]+)/);

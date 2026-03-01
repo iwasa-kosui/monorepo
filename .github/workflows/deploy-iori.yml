@@ -1,13 +1,13 @@
-name: Deploy Microblog
+name: Deploy iori
 
 on:
   push:
     branches:
       - main
     paths:
-      - "apps/microblog/**"
+      - "apps/iori/**"
       - "packages/**"
-      - ".github/workflows/deploy-microblog.yml"
+      - ".github/workflows/deploy-iori.yml"
   workflow_dispatch:
 
 jobs:
@@ -30,10 +30,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build microblog
+      - name: Build iori
         run: |
           pnpm --filter @iwasa-kosui/result run build
-          pnpm --filter microblog run build
+          pnpm --filter iori run build
 
       - name: Setup SSH
         run: |
@@ -43,7 +43,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.MICROBLOG_HOST }} >> ~/.ssh/known_hosts
 
       - name: Create env.conf
-        working-directory: apps/microblog
+        working-directory: apps/iori
         run: |
           cat > env.conf <<'EOF'
           [Service]
@@ -61,7 +61,7 @@ jobs:
       - name: Deploy config files
         env:
           HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
-        working-directory: apps/microblog
+        working-directory: apps/iori
         run: |
           ssh $HOST "sudo mkdir -p /etc/systemd/system/microblog.service.d"
           rsync -av --rsync-path="sudo rsync" microblog.service $HOST:/etc/systemd/system/microblog.service
@@ -73,7 +73,8 @@ jobs:
         env:
           HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
         run: |
-          rsync -avz --delete apps/microblog/dist/ $HOST:~/monorepo/apps/microblog/dist/
+          ssh $HOST "mkdir -p ~/monorepo/apps/iori/dist"
+          rsync -avz --delete apps/iori/dist/ $HOST:~/monorepo/apps/iori/dist/
 
       - name: Install dependencies and run migration on server
         env:
@@ -82,10 +83,10 @@ jobs:
           ssh $HOST "
             cd ~/monorepo
             git fetch --all
-            git checkout origin/main -- pnpm-lock.yaml apps/microblog/package.json packages/result
+            git checkout origin/main -- pnpm-lock.yaml apps/iori/package.json packages/result
             export PATH=\$HOME/.local/share/pnpm:\$PATH
             pnpm install --frozen-lockfile
-            cd apps/microblog
+            cd apps/iori
             pnpm run drizzle:push
           "
 

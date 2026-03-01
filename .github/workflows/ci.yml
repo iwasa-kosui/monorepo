@@ -43,8 +43,8 @@ jobs:
       - name: Test
         run: pnpm --filter result run test:ci
 
-  microblog:
-    name: "apps/microblog"
+  iori:
+    name: "apps/iori"
     runs-on: ubuntu-latest
     env:
       VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
@@ -70,19 +70,19 @@ jobs:
         run: pnpm --filter result run build
 
       - name: Lint
-        run: pnpm --filter microblog run lint
+        run: pnpm --filter iori run lint
 
       - name: Format check
-        run: pnpm --filter microblog run format:check
+        run: pnpm --filter iori run format:check
 
       - name: Type check
-        run: pnpm --filter microblog run typecheck
+        run: pnpm --filter iori run typecheck
 
       - name: Build
-        run: pnpm --filter microblog run build
+        run: pnpm --filter iori run build
 
       - name: Test
-        run: pnpm --filter microblog run test:ci
+        run: pnpm --filter iori run test:ci
 
   nen-diagnosis:
     name: "apps/nen-diagnosis"
