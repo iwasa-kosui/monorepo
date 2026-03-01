@@ -74,52 +74,52 @@ flowchart LR
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
     classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
 
-    actorUser[&#34;👤 ユーザー&#34;]
+    actorUser["👤 ユーザー"]
 
-    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+    subgraph boundarySg["バウンダリ (画面と要素)"]
         direction LR
 
-        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+        subgraph loginView["🖥️ ログイン画面"]
             direction LR
 
-            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn["👆 ログインボタン"]
             loginBtn:::boundary
         end
 
-        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+        subgraph articleListView["🖥️ 記事一覧画面"]
             direction LR
 
-            articleListSec[&#34;🖥️ 記事一覧
-セクション&#34;]
+            articleListSec["🖥️ 記事一覧
+セクション"]
             articleListSec:::boundary
 
-            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm["👆 投稿フォーム"]
             postForm:::boundary
         end
 
     end
 
-    subgraph controlSg[&#34;コントローラ&#34;]
+    subgraph controlSg["コントローラ"]
         direction LR
 
-        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl["🔑 認証する"]
         authnCtrl:::control
 
-        articleListCtrl[&#34;📜 記事一覧を
-取得する&#34;]
+        articleListCtrl["📜 記事一覧を
+取得する"]
         articleListCtrl:::control
 
-        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl["📤 投稿する"]
         postCtrl:::control
     end
 
-    subgraph entitySg[&#34;エンティティ&#34;]
+    subgraph entitySg["エンティティ"]
         direction LR
 
-        user[(&#34;ユーザー&#34;)]
+        user[("ユーザー")]
         user:::entity
 
-        article[(&#34;記事&#34;)]
+        article[("記事")]
         article:::entity
     end
 
@@ -151,38 +151,38 @@ flowchart LR
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
     classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
 
-    actorUser[&#34;👤 ユーザー&#34;]
+    actorUser["👤 ユーザー"]
 
-    subgraph boundarySg[&#34;バウンダリ&#34;]
+    subgraph boundarySg["バウンダリ"]
         direction LR
 
-        subgraph articleDetailView[&#34;🖥️ 記事詳細画面&#34;]
+        subgraph articleDetailView["🖥️ 記事詳細画面"]
             direction LR
 
-            deleteButton[&#34;🗑️ 削除ボタン&#34;]
+            deleteButton["🗑️ 削除ボタン"]
             deleteButton:::boundary
         end
     end
 
-    subgraph controlSg[&#34;コントローラ&#34;]
+    subgraph controlSg["コントローラ"]
         direction LR
 
-        articleAuthorCtrl[&#34;👤 記事投稿者
-取得コントロール&#34;]
+        articleAuthorCtrl["👤 記事投稿者
+取得コントロール"]
         articleAuthorCtrl:::control
 
-        articleDeleteCtrl[&#34;🗑️ 記事削除
-コントロール&#34;]
+        articleDeleteCtrl["🗑️ 記事削除
+コントロール"]
         articleDeleteCtrl:::control
     end
 
-    subgraph entitySg[&#34;エンティティ&#34;]
+    subgraph entitySg["エンティティ"]
         direction LR
 
-        article[(&#34;記事&#34;)]
+        article[("記事")]
         article:::entity
 
-        user[(&#34;ユーザー&#34;)]
+        user[("ユーザー")]
         user:::entity
     end
 
@@ -201,52 +201,52 @@ flowchart LR
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
     classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
 
-    actorUser[&#34;👤 ユーザー&#34;]
+    actorUser["👤 ユーザー"]
 
-    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+    subgraph boundarySg["バウンダリ (画面と要素)"]
         direction LR
 
-        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+        subgraph loginView["🖥️ ログイン画面"]
             direction LR
 
-            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn["👆 ログインボタン"]
             loginBtn:::boundary
         end
 
-        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+        subgraph articleListView["🖥️ 記事一覧画面"]
             direction LR
 
-            articleListSec[&#34;🖥️ 記事一覧
-セクション&#34;]
+            articleListSec["🖥️ 記事一覧
+セクション"]
             articleListSec:::boundary
 
-            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm["👆 投稿フォーム"]
             postForm:::boundary
         end
 
     end
 
-    subgraph controlSg[&#34;コントローラ&#34;]
+    subgraph controlSg["コントローラ"]
         direction LR
 
-        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl["🔑 認証する"]
         authnCtrl:::control
 
-        articleListCtrl[&#34;📜 記事一覧を
-取得する&#34;]
+        articleListCtrl["📜 記事一覧を
+取得する"]
         articleListCtrl:::control
 
-        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl["📤 投稿する"]
         postCtrl:::control
     end
 
-    subgraph entitySg[&#34;エンティティ&#34;]
+    subgraph entitySg["エンティティ"]
         direction LR
 
-        user[(&#34;ユーザー&#34;)]
+        user[("ユーザー")]
         user:::entity
 
-        article[(&#34;記事&#34;)]
+        article[("記事")]
         article:::entity
     end
 
@@ -278,52 +278,52 @@ flowchart LR
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
     classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
 
-    actorUser[&#34;👤 ユーザー&#34;]
+    actorUser["👤 ユーザー"]
 
-    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+    subgraph boundarySg["バウンダリ (画面と要素)"]
         direction LR
 
-        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+        subgraph loginView["🖥️ ログイン画面"]
             direction LR
 
-            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn["👆 ログインボタン"]
             loginBtn:::boundary
         end
 
-        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+        subgraph articleListView["🖥️ 記事一覧画面"]
             direction LR
 
-            articleListSec[&#34;🖥️ 記事一覧
-セクション&#34;]
+            articleListSec["🖥️ 記事一覧
+セクション"]
             articleListSec:::boundary
 
-            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm["👆 投稿フォーム"]
             postForm:::boundary
         end
 
     end
 
-    subgraph controlSg[&#34;コントローラ&#34;]
+    subgraph controlSg["コントローラ"]
         direction LR
 
-        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl["🔑 認証する"]
         authnCtrl:::control
 
-        articleListCtrl[&#34;📜 記事一覧を
-取得する&#34;]
+        articleListCtrl["📜 記事一覧を
+取得する"]
         articleListCtrl:::control
 
-        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl["📤 投稿する"]
         postCtrl:::control
     end
 
-    subgraph entitySg[&#34;エンティティ&#34;]
+    subgraph entitySg["エンティティ"]
         direction LR
 
-        user[(&#34;ユーザー&#34;)]
+        user[("ユーザー")]
         user:::entity
 
-        article[(&#34;記事&#34;)]
+        article[("記事")]
         article:::entity
     end
 
