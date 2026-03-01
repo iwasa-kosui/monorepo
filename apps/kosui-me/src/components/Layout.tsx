@@ -20,6 +20,12 @@ export const Layout = ({ children }: { children: ReactNode }) => {
               Posts
             </Link>
             <Link
+              to='/talks'
+              className='text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors'
+            >
+              Talks
+            </Link>
+            <Link
               to='/about'
               className='text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors'
             >
