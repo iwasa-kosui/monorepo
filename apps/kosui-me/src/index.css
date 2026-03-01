@@ -20,6 +20,47 @@
   /* Split-complementary accents (decorative only) */
   --color-teal: #5a8e80;
   --color-steel-blue: #5570b0;
+
+  /* Clay card shadows */
+  --shadow-clay:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.02), inset 0 2px 8px rgba(
+    255,
+    255,
+    255,
+    0.9
+  ), inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(60, 50, 45, 0.04),
+    0 4px 16px rgba(60, 50, 45, 0.06);
+  --shadow-clay-hover:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.02), inset 0 2px 8px rgba(
+    255,
+    255,
+    255,
+    0.9
+  ), inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(
+    60,
+    50,
+    45,
+    0.06
+  ), 0 8px 24px rgba(60, 50, 45, 0.08);
+  --shadow-clay-dark:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.15), inset 0 2px 6px rgba(
+    255,
+    255,
+    255,
+    0.03
+  ), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.15), 0
+    4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-clay-dark-hover:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.15), inset 0 2px 6px rgba(
+    255,
+    255,
+    255,
+    0.03
+  ), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.2), 0
+    8px 24px rgba(0, 0, 0, 0.15);
+
+  /* Clay border radius */
+  --radius-clay: 16px;
 }
 
 html {
@@ -110,4 +151,13 @@ pre.shiki code {
 
 .prose hr {
   @apply my-8 border-warm-gray dark:border-charcoal;
+}
+
+/* Clay card hover lift */
+.clay-hover-lift {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.clay-hover-lift:hover {
+  transform: translateY(-2px);
 }
