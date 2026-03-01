@@ -8,6 +8,8 @@ declare module '*.mdx' {
     image?: string;
     ogIcon?: string;
     ogSvg?: string;
+    description?: string;
+    tags?: string[];
   };
 
   const MDXComponent: ComponentType;

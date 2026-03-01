@@ -27,6 +27,23 @@ export const PostListPage = () => {
               <h2 className='text-lg font-semibold text-charcoal dark:text-gray-100 mt-1'>
                 {post.title}
               </h2>
+              {post.description && (
+                <p className='mt-1 text-sm text-charcoal-light dark:text-warm-gray'>
+                  {post.description}
+                </p>
+              )}
+              {post.tags && post.tags.length > 0 && (
+                <div className='mt-2 flex flex-wrap gap-1.5'>
+                  {post.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className='inline-block px-2 py-0.5 text-xs rounded-full bg-sand-light dark:bg-[#3d3835] text-charcoal-light dark:text-warm-gray'
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Link>
           </li>
         ))}
