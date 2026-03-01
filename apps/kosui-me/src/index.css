@@ -1,11 +1,34 @@
 @import "tailwindcss";
 
+@theme {
+  /* Primary (H=8°, darkened shrimp coral) */
+  --color-terracotta: #a5524c;
+  --color-terracotta-dark: #7d3d38;
+  --color-terracotta-light: #e09890;
+  --color-rust: #6b302c;
+
+  /* Neutrals (H=8° tinted) */
+  --color-charcoal: #48423e;
+  --color-charcoal-light: #6b6460;
+  --color-cream: #faf8f5;
+  --color-clay-bg: #f2efeb;
+  --color-warm-gray: #e0dcd6;
+  --color-warm-gray-dark: #ccc7c0;
+  --color-sand-light: #ede5da;
+  --color-warm-white: #fdf9f6;
+
+  /* Split-complementary accents (decorative only) */
+  --color-teal: #5a8e80;
+  --color-steel-blue: #5570b0;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-white text-gray-900 antialiased;
+  @apply bg-clay-bg text-charcoal antialiased dark:bg-[#1a1918]
+    dark:text-warm-gray;
   font-feature-settings: "palt";
 }
 
@@ -25,7 +48,8 @@ pre.shiki code {
 
 /* Prose-like styles for MDX content */
 .prose h2 {
-  @apply text-2xl font-bold mt-12 mb-4 pb-2 border-b border-gray-200;
+  @apply text-2xl font-bold mt-12 mb-4 pb-2 border-b border-warm-gray
+    dark:border-charcoal;
 }
 
 .prose h3 {
@@ -41,7 +65,8 @@ pre.shiki code {
 }
 
 .prose a {
-  @apply text-blue-600 hover:text-blue-800 underline;
+  @apply text-terracotta hover:text-terracotta-dark dark:text-terracotta-light
+    dark:hover:text-warm-white underline transition-colors;
 }
 
 .prose ul {
@@ -57,7 +82,8 @@ pre.shiki code {
 }
 
 .prose blockquote {
-  @apply my-4 pl-4 border-l-4 border-gray-300 text-gray-600 italic;
+  @apply my-4 pl-4 border-l-4 border-warm-gray-dark text-charcoal-light italic
+    dark:border-charcoal dark:text-warm-gray;
 }
 
 .prose img {
@@ -70,17 +96,18 @@ pre.shiki code {
 
 .prose th,
 .prose td {
-  @apply border border-gray-300 px-3 py-2 text-left;
+  @apply border border-warm-gray px-3 py-2 text-left dark:border-charcoal;
 }
 
 .prose th {
-  @apply bg-gray-50 font-semibold;
+  @apply bg-cream font-semibold dark:bg-charcoal;
 }
 
 .prose code:not(pre code) {
-  @apply bg-gray-100 rounded px-1.5 py-0.5 text-sm font-mono text-gray-800;
+  @apply bg-sand-light rounded px-1.5 py-0.5 text-sm font-mono text-charcoal
+    dark:bg-charcoal dark:text-warm-gray;
 }
 
 .prose hr {
-  @apply my-8 border-gray-200;
+  @apply my-8 border-warm-gray dark:border-charcoal;
 }

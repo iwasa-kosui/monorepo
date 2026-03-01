@@ -18,10 +18,10 @@ export const PostListPage = () => {
         {posts.map((post) => (
           <li key={post.slug}>
             <Link to={`/${post.slug}`} className='block group'>
-              <time className='text-sm text-gray-500' dateTime={post.date}>
+              <time className='text-sm text-terracotta dark:text-terracotta-light' dateTime={post.date}>
                 {formatDate(post.date)}
               </time>
-              <h2 className='text-lg font-medium text-gray-900 group-hover:text-blue-600 transition-colors'>
+              <h2 className='text-lg font-medium group-hover:text-terracotta dark:group-hover:text-terracotta-light transition-colors'>
                 {post.title}
               </h2>
             </Link>
