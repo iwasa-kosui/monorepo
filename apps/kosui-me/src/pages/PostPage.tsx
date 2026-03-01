@@ -18,7 +18,7 @@ export const PostPage = () => {
     return (
       <Layout>
         <h1 className='text-3xl font-bold'>404 - Not Found</h1>
-        <p className='mt-4 text-gray-600'>The requested post was not found.</p>
+        <p className='mt-4 text-charcoal-light'>The requested post was not found.</p>
       </Layout>
     );
   }
@@ -29,7 +29,7 @@ export const PostPage = () => {
     <Layout>
       <article>
         <header className='mb-8'>
-          <time className='text-sm text-gray-500' dateTime={meta.date}>
+          <time className='text-sm text-terracotta dark:text-terracotta-light' dateTime={meta.date}>
             {formatDate(meta.date)}
           </time>
           <h1 className='text-3xl font-bold mt-2'>{meta.title}</h1>
