@@ -104,10 +104,10 @@ const loadPosts = (): PostMeta[] => {
 
 const getTitleFontSize = (title: string): number => {
   const len = title.length;
-  if (len <= 20) return 52;
-  if (len <= 35) return 46;
-  if (len <= 50) return 40;
-  return 34;
+  if (len <= 20) return 64;
+  if (len <= 35) return 56;
+  if (len <= 50) return 48;
+  return 42;
 };
 
 const createCornerSwirl = (position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'): SatoriNode => {
@@ -401,15 +401,15 @@ const createOgImage = (post: PostMeta): SatoriNode => {
               left: '40px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '16px',
             },
             children: [
-              createShrimpIcon(24),
+              createShrimpIcon(64),
               {
                 type: 'div',
                 props: {
                   style: {
-                    fontSize: '20px',
+                    fontSize: '48px',
                     fontWeight: 'bold',
                     color: COLORS.accent,
                   },
@@ -536,6 +536,30 @@ const createDefaultOgImage = (): SatoriNode => ({
   },
 });
 
+const loadEmoji = async (segment: string): Promise<string> => {
+  const codePoints = [...segment]
+    .map((c) => c.codePointAt(0)!.toString(16))
+    .join('-');
+
+  const url = `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/${codePoints}.svg`;
+  const response = await fetch(url);
+  if (response.ok) {
+    const svg = await response.text();
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  }
+
+  // Some emoji need only the first code point (without variation selectors)
+  const baseCodePoint = segment.codePointAt(0)!.toString(16);
+  const fallbackUrl = `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/${baseCodePoint}.svg`;
+  const fallbackResponse = await fetch(fallbackUrl);
+  if (fallbackResponse.ok) {
+    const svg = await fallbackResponse.text();
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  }
+
+  return '';
+};
+
 const generateImage = async (element: SatoriNode, font: ArrayBuffer): Promise<Buffer> => {
   const svg = await satori(element, {
     width: 1200,
@@ -548,6 +572,12 @@ const generateImage = async (element: SatoriNode, font: ArrayBuffer): Promise<Bu
         style: 'normal',
       },
     ],
+    loadAdditionalAsset: async (languageCode: string, segment: string) => {
+      if (languageCode === 'emoji') {
+        return loadEmoji(segment);
+      }
+      return '';
+    },
   });
 
   const resvg = new Resvg(svg, {
