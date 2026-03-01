@@ -5,6 +5,8 @@ type PostFrontmatter = {
   date: string;
   slug: string;
   image?: string;
+  ogIcon?: string;
+  ogSvg?: string;
 };
 
 type PostModule = {
