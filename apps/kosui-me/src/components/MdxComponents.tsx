@@ -1,6 +1,15 @@
 import type { ComponentPropsWithoutRef } from 'react';
 
+import { extractText, isMermaid, MermaidDiagram } from './Mermaid.js';
+
 export const mdxComponents = {
+  pre: (props: ComponentPropsWithoutRef<'pre'>) => {
+    const text = extractText(props.children);
+    if (isMermaid(text)) {
+      return <MermaidDiagram chart={text} />;
+    }
+    return <pre {...props} />;
+  },
   h2: (props: ComponentPropsWithoutRef<'h2'>) => (
     <h2 className='text-2xl font-bold mt-12 mb-4 pb-2 border-b border-warm-gray dark:border-charcoal' {...props} />
   ),

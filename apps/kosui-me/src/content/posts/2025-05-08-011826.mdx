@@ -62,7 +62,7 @@ Mermaid.jsの他の機能を利用して、何が何でもMermaid.jsでロバス
 Mermaid.jsの `flowchart` 機能を利用して、ロバストネス図を描画しました。
 `class` を活用することで、バウンダリ・コントロール・エンティティの区別もしやすいと思います。
 
-```
+```mermaid
 ---
 config:
   theme: redux
@@ -143,7 +143,7 @@ flowchart LR
 
 その結果、以下のようなロバストネス図を得ることができました。これは概ね成功ではないでしょうか。
 
-```
+```mermaid
 flowchart LR
     classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
@@ -193,7 +193,7 @@ flowchart LR
     articleDeleteCtrl --> articleDetailView:::boundary
 ```
 
-```
+```mermaid
 flowchart LR
     classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
     classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
@@ -266,7 +266,7 @@ flowchart LR
 
 以下のテンプレートをコピペして利用してください。
 
-```
+```mermaid
 ---
 config:
   theme: redux
