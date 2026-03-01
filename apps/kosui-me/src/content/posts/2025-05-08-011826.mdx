@@ -1,0 +1,338 @@
+---
+title: "生成AIにMermaid.jsでロバストネス図を描いてもらう"
+date: "2025-05-08T01:18:26+09:00"
+slug: "posts/2025/05/08/011826"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250508/20250508011714.png"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250508/20250508011714.png)
+
+## 背景
+
+### 生成AIによる要求分析
+
+要求分析はチームによるシステム開発の要であり、関係者の認識を揃えるために非常に重要なプロセスです。
+
+システム開発のための要求分析の手法としてICONIXやRDRAなどが知られていますが、その過程ではユースケース図やロバストネス図などの図を用いてシステムの要求を視覚化することが一般的です。
+
+近年では生成AIを使用することでより高速に要求分析を行うことができるようになりました。特に、自然言語で記述された抽象的な要望を生成AIに与え、要求を抽出させた上でPlantUMLやMermaid.jsなどで図を執筆させることで、プロジェクトの立ち上げ速度を向上させることができます。
+
+例えば、「この要望から関係しうるアクターと外部システムをすべて列挙し、それぞれのアクターが持つ要望を3つ挙げて」と書くだけで、プロジェクト初期に巻き込むべきチームや関係者をすぐに発見できます。
+
+### ロバストネス図とは
+
+ロバストネス図を通じて、ユースケースとドメインモデルが実際の画面やAPIでどのように用いられるか整理することで、ユースケースやドメインモデルの妥当性を検証できます。
+
+以下は、PlantUMLで生成したロバストネス図の一つです。
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250508/20250508005200.png)
+
+ロバストネス図は、以下の3つの主要な要素で構成されています。
+
+- バウンダリオブジェクト (Boundary Object)
+
+例) 画面やAPIなど
+
+ユーザーや外部システムとのインタフェースを表します。
+
+- コントロールオブジェクト (Control Object)
+
+例) 「認証する」「商品の一覧を取得する」などのユースケース
+
+バウンダリオブジェクトとエンティティオブジェクトの間の仲介役として、システムの処理ロジックや制御の流れを表します。
+
+- エンティティオブジェクト (Entity Object)
+例) 「ユーザー」「商品」などの永続化されたデータ
+システムが扱う主要なデータや情報を表します。データベースやファイルストレージに永続化されることが一般的です。
+
+## 目的
+
+### Mermaid.jsでロバストネス図を描画したい
+
+PlantUMLにはロバストネス図の描画機能がありますが、Mermaid.jsにはありません。
+
+しかし、Mermaid.jsはJavaScriptとCSSだけで描画を完結させることができるため、GitHubやNotion、esaなどの様々なサービス上で導入されています。
+
+Mermaid.jsの他の機能を利用して、何が何でもMermaid.jsでロバストネス図を書いてみましょう。
+
+## 手法
+
+### Mermaid.jsのフローチャートを用いたロバストネス図
+
+Mermaid.jsの `flowchart` 機能を利用して、ロバストネス図を描画しました。
+`class` を活用することで、バウンダリ・コントロール・エンティティの区別もしやすいと思います。
+
+```
+---
+config:
+  theme: redux
+---
+flowchart LR
+    classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
+    classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
+    classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
+
+    actorUser[&#34;👤 ユーザー&#34;]
+
+    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+        direction LR
+
+        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+            direction LR
+
+            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn:::boundary
+        end
+
+        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+            direction LR
+
+            articleListSec[&#34;🖥️ 記事一覧
+セクション&#34;]
+            articleListSec:::boundary
+
+            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm:::boundary
+        end
+
+    end
+
+    subgraph controlSg[&#34;コントローラ&#34;]
+        direction LR
+
+        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl:::control
+
+        articleListCtrl[&#34;📜 記事一覧を
+取得する&#34;]
+        articleListCtrl:::control
+
+        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl:::control
+    end
+
+    subgraph entitySg[&#34;エンティティ&#34;]
+        direction LR
+
+        user[(&#34;ユーザー&#34;)]
+        user:::entity
+
+        article[(&#34;記事&#34;)]
+        article:::entity
+    end
+
+    actorUser --> loginBtn
+    loginBtn --> authnCtrl
+    authnCtrl --> user
+    authnCtrl --> articleListCtrl
+    articleListCtrl --> article
+    articleListSec -.- articleListCtrl
+    actorUser -.- articleListSec
+    actorUser --> postForm
+    postForm --> postCtrl
+    postCtrl --> article
+```
+
+### 生成AIを用いたロバストネス図の生成
+
+作成したロバストネス図を基に、Gemini 2.5 Flashに「記事削除機能」のロバストネス図を作成させます。
+
+> 記事詳細画面から、「削除」ボタンを押して記事を削除する機能のロバストネス図を書いてください。なお、記事を削除できるのは、その記事を投稿したユーザーだけです。まず記事投稿者取得コントロールによって記事を投稿したユーザーを取得し、次に記事削除コントロールによって記事を削除してください。
+> なお、ロバストネス図は下記のテンプレートを参考にMermaid.jsで書いてください。
+> (後述するテンプレート)
+
+その結果、以下のようなロバストネス図を得ることができました。これは概ね成功ではないでしょうか。
+
+```
+flowchart LR
+    classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
+    classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
+    classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
+
+    actorUser[&#34;👤 ユーザー&#34;]
+
+    subgraph boundarySg[&#34;バウンダリ&#34;]
+        direction LR
+
+        subgraph articleDetailView[&#34;🖥️ 記事詳細画面&#34;]
+            direction LR
+
+            deleteButton[&#34;🗑️ 削除ボタン&#34;]
+            deleteButton:::boundary
+        end
+    end
+
+    subgraph controlSg[&#34;コントローラ&#34;]
+        direction LR
+
+        articleAuthorCtrl[&#34;👤 記事投稿者
+取得コントロール&#34;]
+        articleAuthorCtrl:::control
+
+        articleDeleteCtrl[&#34;🗑️ 記事削除
+コントロール&#34;]
+        articleDeleteCtrl:::control
+    end
+
+    subgraph entitySg[&#34;エンティティ&#34;]
+        direction LR
+
+        article[(&#34;記事&#34;)]
+        article:::entity
+
+        user[(&#34;ユーザー&#34;)]
+        user:::entity
+    end
+
+    actorUser --> deleteButton
+    deleteButton --> articleAuthorCtrl
+    articleAuthorCtrl --> article
+    articleAuthorCtrl --> user
+    articleAuthorCtrl --> articleDeleteCtrl
+    articleDeleteCtrl --> article
+    articleDeleteCtrl --> articleDetailView:::boundary
+```
+
+```
+flowchart LR
+    classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
+    classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
+    classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
+
+    actorUser[&#34;👤 ユーザー&#34;]
+
+    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+        direction LR
+
+        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+            direction LR
+
+            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn:::boundary
+        end
+
+        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+            direction LR
+
+            articleListSec[&#34;🖥️ 記事一覧
+セクション&#34;]
+            articleListSec:::boundary
+
+            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm:::boundary
+        end
+
+    end
+
+    subgraph controlSg[&#34;コントローラ&#34;]
+        direction LR
+
+        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl:::control
+
+        articleListCtrl[&#34;📜 記事一覧を
+取得する&#34;]
+        articleListCtrl:::control
+
+        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl:::control
+    end
+
+    subgraph entitySg[&#34;エンティティ&#34;]
+        direction LR
+
+        user[(&#34;ユーザー&#34;)]
+        user:::entity
+
+        article[(&#34;記事&#34;)]
+        article:::entity
+    end
+
+    actorUser --> loginBtn
+    loginBtn --> authnCtrl
+    authnCtrl --> user
+    authnCtrl --> articleListCtrl
+    articleListCtrl --> article
+    articleListSec -.- articleListCtrl
+    actorUser -.- articleListSec
+    actorUser --> postForm
+    postForm --> postCtrl
+    postCtrl --> article
+```
+
+## 付録
+
+### テンプレート
+
+以下のテンプレートをコピペして利用してください。
+
+```
+---
+config:
+  theme: redux
+---
+flowchart LR
+    classDef boundary fill:#fff59d,stroke:#ffa000,stroke-width:2px;
+    classDef control fill:#e3f2fd,stroke:#2196f3,stroke-width:2px;
+    classDef entity fill:#e6ee9c,stroke:#4caf50,stroke-width:2px;
+
+    actorUser[&#34;👤 ユーザー&#34;]
+
+    subgraph boundarySg[&#34;バウンダリ (画面と要素)&#34;]
+        direction LR
+
+        subgraph loginView[&#34;🖥️ ログイン画面&#34;]
+            direction LR
+
+            loginBtn[&#34;👆 ログインボタン&#34;]
+            loginBtn:::boundary
+        end
+
+        subgraph articleListView[&#34;🖥️ 記事一覧画面&#34;]
+            direction LR
+
+            articleListSec[&#34;🖥️ 記事一覧
+セクション&#34;]
+            articleListSec:::boundary
+
+            postForm[&#34;👆 投稿フォーム&#34;]
+            postForm:::boundary
+        end
+
+    end
+
+    subgraph controlSg[&#34;コントローラ&#34;]
+        direction LR
+
+        authnCtrl[&#34;🔑 認証する&#34;]
+        authnCtrl:::control
+
+        articleListCtrl[&#34;📜 記事一覧を
+取得する&#34;]
+        articleListCtrl:::control
+
+        postCtrl[&#34;📤 投稿する&#34;]
+        postCtrl:::control
+    end
+
+    subgraph entitySg[&#34;エンティティ&#34;]
+        direction LR
+
+        user[(&#34;ユーザー&#34;)]
+        user:::entity
+
+        article[(&#34;記事&#34;)]
+        article:::entity
+    end
+
+    actorUser --> loginBtn
+    loginBtn --> authnCtrl
+    authnCtrl --> user
+    authnCtrl --> articleListCtrl
+    articleListCtrl --> article
+    articleListSec -.- articleListCtrl
+    actorUser -.- articleListSec
+    actorUser --> postForm
+    postForm --> postCtrl
+    postCtrl --> article
+```

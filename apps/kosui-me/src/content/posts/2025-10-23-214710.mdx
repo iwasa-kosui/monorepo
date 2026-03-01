@@ -1,0 +1,221 @@
+---
+title: "私がTypeScriptで `interface` よりも `type` を好む理由"
+date: "2025-10-23T21:47:10+09:00"
+slug: "posts/2025/10/23/214710"
+---
+
+## はじめに
+
+TypeScriptで型を定義する際、`interface` と `type` のどちらを使うべきか。これは、多くの開発現場で一度は議論になるテーマではないかと思います。
+
+世の中の多くのドキュメントや記事では、クラスへの `implements` のしやすさや、`interface` が持つ「宣言のマージ（Declaration Merging）」の利便性が紹介されることもあり、`interface` の利用が推奨されるケースもよく見かけます。
+
+しかし、特にサーバサイドアプリケーションや、ある程度規模のあるシステムを開発する上で、私はこの「宣言のマージ」機能が、時として予期せぬ挙動や、場合によってはセキュリティ上のリスクを静かにもたらす要因になると感じています。
+
+今回は、なぜ私がプロダクトコードにおいて `interface` の積極的な使用を避け、`type` エイリアスを好んで使うのか、具体的なシナリオを通してお話ししたいと思います。
+
+## 一見無害なコードに潜む問題
+
+あるユーザー情報を扱うAPIの開発シーンを想像してみてください。
+まず、`User` の型を `interface` で定義します。この時点では、ユーザー情報はIDと名前だけを持つとされています。
+
+```typescript
+// src/domain/user.ts
+
+// UserはIDと名前しか持たない
+interface User {
+  id: string
+  name: string
+}
+
+const User = {
+  create: (props: { name: string }): User => {
+    return { id: randomUUID(), name: props.name };
+  },
+} as const;
+
+// ユーザー情報を取得するリゾルバのインターフェース
+interface UserResolver {
+  resolve: (id: string) => Promise;
+}
+```
+
+次に、この `User` 型を返すAPIハンドラを実装します。DBからユーザー情報を取得し、見つからなければエラーを投げる、というごく一般的な処理です。
+
+```typescript
+// src/index.ts
+import { Hono } from "hono";
+import { createUserResolver } from "./adaptor/memory/userResolver.js";
+
+const app = new Hono();
+
+const userResolver = createUserResolver();
+
+app.get("/user/:id", async (c) => {
+  const id = c.req.param("id");
+  const res = await userResolver.resolve(id);
+  return c.json(res);
+});
+```
+
+このAPIハンドラの実装者は、`user.ts` の冒頭を見て「`User` は `id` と `name` しか持たない」と認識しているため、DBから取得した `user` オブジェクトをそのままクライアントに返却します。ここまでは、特に問題ないように見えます。
+
+ところが、数ヶ月後、別の開発者が認証機能の実装に伴い、 `src/domain/user.ts` の `User` `interface` に定義を追加したとします。
+
+```typescript
+// src/domain/user.ts
+
+// ...100行ほど上にあるさまざまな処理や定義...
+
+// 認証のために User にパスワードハッシュを追加
+interface User {
+  hashedPassword?: string
+}
+```
+
+ここで問題が発生します。TypeScriptの `interface` は、同じ名前で宣言されると、その定義が自動的にマージ（結合）されます。
+
+その結果、`src/index.ts` の実装者が意図していた `User` 型は、`id` と `name` だけでなく、`hashedPassword` も含む型へと静かに変化してしまっています。
+
+もし `userResolver` がDBからパスワードハッシュを含む完全なユーザーオブジェクトを返していた場合（これはORMなどを使っているとよくあるケースです）、APIハンドラ `handler` は、その実装者の意図に反して、パスワードハッシュを含んだオブジェクトをクライアントに返してしまうことになります。
+
+もちろん、これはやや極端な例かもしれません。経験豊富な開発チームであれば、APIのレスポンスを返す前に、Zodなどを使用したバリデーション処理や、機微情報を除外する処理を挟むのが一般的でしょうから、今回のようなケースが実際のプロダクトでそのまま起こることは稀だと考えます。
+
+また、わざわざ既存の型定義を編集せずに同じ名前で定義する人もそうそう居ないでしょう。(**私はそんな現場を目撃したことがありますが**、たまたま運が悪かっただけです)。
+
+しかし、ここで私が指摘したいのは、「型定義ファイルを見に行くだけでは、その型が最終的にどのような形状になるか断定できない」という interface の特性そのものが持つリスクです。プロジェクトが大規模化し、多くの開発者が関わるようになると、このような「暗黙のマージ」がコードの見通しを悪くさせ、意図しない挙動の温床になる可能性は否定できません。
+
+## 宣言のマージ
+
+この問題の根本的な原因は、`interface` の「宣言のマージ」という言語仕様そのものにあります。
+
+この機能は、例えば外部ライブラリの型定義を拡張する際（いわゆる "Module Augmentation"）には非常に強力です。例えば、FastifyやHonoの `Request` オブジェクトに、自前のミドルウェアで追加した `user` プロパティの型定義を後から追加する、といった用途には最適です。
+
+しかし、アプリケーション内部のドメインモデルや、APIのレスポンスのような「データの形状（Shape）」を定義する際に、この「どこからでも後から定義を上書き・追加できてしまう」という特性は、裏目に出ることがあります。
+
+型定義の「信頼できる唯一の情報源（Single Source of Truth）」が曖昧になり、知らないうちに型が変更されてしまう。これは、システムの堅牢性やセキュリティを担保する上で、私たちが軽視してはならないリスクだと考えています。
+
+## `type` エイリアスによる型定義
+
+では、この問題を回避するにはどうすればよいでしょうか。
+答えはシンプルで、私は `type` エイリアスを使うことを推奨します。
+
+先ほどの `User` を `type` で定義し直してみましょう。
+
+```typescript
+// src/domain/user.ts
+
+// typeで定義する
+type User = {
+  id: string
+  name: string
+}
+```
+
+APIハンドラの実装は先ほどと同じです。
+ここで、認証機能の開発者が `User` 型を同名で拡張しようと試みると、どうなるでしょうか。
+
+```typescript
+// src/domain/user.ts
+
+// 同じ名前の type を定義しようとすると...
+type User = {
+  // ^ Cannot redeclare block-scoped variable 'User'. ts(2451)
+  hashedPassword: string
+}
+```
+
+このように、`type` エイリアスは宣言のマージを許可しません。同じスコープ内で同じ名前の `type` を定義しようとすると、TypeScriptコンパイラが明確に「重複した識別子」としてエラーを検出してくれます。
+
+これにより、型定義が意図せず変更されることをコンパイル時点で防ぐことができます。`User` 型の定義は `src/domain/user.ts` に書かれたものがすべてである、ということが保証されるわけです。
+
+もし認証機能でパスワードハッシュを含めた型が必要なのであれば、`User` を拡張した新しい型を明示的に定義することになります。
+
+```typescript
+// src/domain/auth.ts
+import { User } from '../users/types'
+
+// User を拡張して、認証用の型を明示的に作成する
+type AuthUser = User & {
+    hashedPassword: string
+}
+```
+
+こうすることで、`User` 型（APIレスポンスに使われる型）は安全なまま保たれ、認証処理という別の関心事のために拡張された型を安全に使い分けることができます。
+
+## 補足
+
+### データベースから取得した値をそのまま返すべきではない
+
+今回の例では、データベースから取得した値をそのままHTTPレスポンスボディに含めていました。
+
+本来であれば、Zodなどのスキーマバリデーションライブラリを使用して、レスポンスボディを検証してから返却するべきです。
+
+```typescript
+import { z } from 'zod/v4'
+
+const ResponseBody = {
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
+} as const
+
+app.get("/user/:id", async (c) => {
+  const id = c.req.param("id");
+  const user = await userResolver.resolve(id);
+  const res = ResponseBody.schema.parse(user);
+  return c.json(res);
+});
+```
+
+> また別の論点ですが、「同名の型定義」は type であっても別ファイルならできてしまうので、「今まで思っていた User 型とは違うものが別ファイルに定義されてそれが渡されていたが、部分型一致で気づかなかった」があり得てしまうので、オブジェクト全返しは即座にやめた方が良い、ですね
+> &mdash; ユーン (@euxn23) [2025年10月24日](https://twitter.com/euxn23/status/1981519606612447443?ref_src=twsrc%5Etfw)
+   
+
+> そもそも，リポジトリ層から帰ってきたオブジェクトをそのまま DTO に入れて応答するのがよくないと思っているので，そこを Linter などで検査できると一番良いのではと考えています．Go などと比べると詰め替えの手間を省略できるのは便利ですが，逆に言えば予期しない値もレスポンスしやすいです
+> &mdash; Siketyan (@s6n_jp) [2025年10月24日](https://twitter.com/s6n_jp/status/1981527951956201956?ref_src=twsrc%5Etfw)
+   
+
+### ESLintの設定を見直そう
+
+[no-redeclare | typescript-eslint](https://typescript-eslint.io/rules/no-redeclare/) を使用すれば、interfaceを同じ名前で宣言することを禁止できます。
+
+また、[consistent-type-definitions | typescript-eslint](https://typescript-eslint.io/rules/consistent-type-definitions/) を使用すれば、自動でinterfaceまたはtypeのどちらかに寄せることができます。
+
+> これに賛同なのは前提として、 eslint-typescript/no-redeclare を使うとそもそも interface の重複自体を排除できる話が書いてあると嬉しそうです。
+> &mdash; ユーン (@euxn23) [2025年10月24日](https://twitter.com/euxn23/status/1981519316223975740?ref_src=twsrc%5Etfw)
+   
+
+### エッジケースのパフォーマンスに注意
+
+> Edge case performance
+> Large, complex logical types can be optimized better with interfaces by TypeScript's type checker.
+> [https://typescript-eslint.io/rules/consistent-type-definitions/](https://typescript-eslint.io/rules/consistent-type-definitions/)
+
+多くのケースでは型エイリアスとinterfaceのパフォーマンス上の違いはほとんどありません。ただし、エッジケースにおいては、 interfaceの方が型検査のパフォーマンスに優れています。
+
+> 明確なボトルネックがなく型チェックに1分くらいかかるTypeScriptのコードベースで、
+1500件ほどのtypeを一括にinterfaceに置換してみた。
+とくに型チェック時間は変わらなかった。
+現実はそんなもんです（？）
+> &mdash; 🈚️うひょ🤪✒📘 TypeScript本発売🫐 (@uhyo_) [2025年10月22日](https://twitter.com/uhyo_/status/1980824323503059097?ref_src=twsrc%5Etfw)
+   
+
+> ということで、interface + extends に機械的に変換できそうなインターセクション型約200件をinterface + extendsに変換してみた。
+その結果4〜5秒（7〜8%）の型チェック高速化が認められた。
+これも現実です（？）
+> &mdash; 🈚️うひょ🤪✒📘 TypeScript本発売🫐 (@uhyo_) [2025年10月22日](https://twitter.com/uhyo_/status/1980876807948890144?ref_src=twsrc%5Etfw)
+   
+
+## まとめ：トレードオフと私の選択
+
+もちろん、`interface` が悪だと言いたいわけではありません。
+
+先ほども触れたように、外部ライブラリの型定義を拡張する用途では `interface` のマージ機能が不可欠な場面もあります。また、古くから「オブジェクトの形状定義には `interface` を、それ以外（Union型やUtility Typeの結果など）には `type` を」という使い分けの指針も存在します。
+
+しかし、私たちが日々扱う「アプリケーションのデータ構造」である、APIのレスポンス、DBのエンティティ、ドメインオブジェクトなどを定義する際には、その型が「閉じている（closed）」こと、つまり「定義ファイルに書かれているプロパティがすべてである」という状態が、私は何よりも重要だと考えています。
+
+`type` を使うことは、その型定義が意図せず拡張されることを防ぐという、技術的な負債やセキュリティリスクを未然に防ぐための強力な防衛策となります。
+
+半年後にコードを修正する未来の自分やチームメイトが、その型定義を信頼して安全に開発を進められる。そうした保守性の高いコードベースを築くために、私はアプリケーションの型定義の第一選択として、`interface` よりも `type` を選ぶようにしています。

@@ -1,0 +1,501 @@
+---
+title: "Discriminated Unionを利用したStateパターンの実現"
+date: "2025-02-25T02:13:20+09:00"
+slug: "posts/2025/02/25/021320"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250505/20250505132720.png"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250505/20250505132720.png)
+
+### この記事について
+
+先日公開した下記の記事について、記事冒頭で紹介した「クラスベースによる状態遷移の実装」があまりに素朴な実装であり、その後Stateパターンへの言及がほとんどなされなかった上、あたかもクラスを用いた実装そのものに問題があるようなタイトルであったことから、様々なご指摘・ご意見を頂くこととなりました。
+
+[https://kosui.me/posts/2025/02/20/005900](https://kosui.me/posts/2025/02/20/005900)
+
+この記事ではその反省を活かし、単に「Discriminated Unionを利用してStateパターンを実現する」ということにフォーカスした内容へ再構成いたしました。
+
+## はじめに
+
+アプリケーション開発では、複数の内部状態を持つオブジェクトを取り扱うことがしばしばあります。例えば、タクシー配車アプリの配車リクエストや、CMS(Contents Management System)の記事、ECサイトの注文などが挙げられます。
+
+このようなオブジェクトについて、内部状態に応じて振る舞いを変化させるデザインパターンとして「Stateパターン」が知られています。
+
+この記事では、TypeScriptのクラスを使用したStateパターンを紹介したのち、クラスではなくタグ付きユニオンと関数を使用した実装例を紹介します。
+
+## 単純な状態遷移
+
+### 課題
+
+#### タクシー配車アプリ
+
+まずは、どの振る舞いも引数を持たない単純な状態遷移について、タクシー配車アプリの配車リクエストを例に見てみましょう。
+
+タクシー配車アプリでは、配車リクエストが「呼び出し（Waiting）」「迎車中（EnRoute）」「乗車中（InTrip）」「完了（Completed）」といった状態を経て処理が進み、キャンセル（Cancelled）などの例外経路も存在します。
+
+「呼び出し (Waiting)」状態の場合、「乗務員の割り当て (assignDriver)」を実行できる一方で、「迎車中 (EnRoute)」のように「走行開始 (startTrip)」は実行できません。
+
+```
+classDiagram
+    direction LR
+
+    class Waiting[&#34;Waiting
+呼び出し中&#34;] {
+      state: &#34;Waiting&#34;
+      passengerId: string
+    }
+
+    class EnRoute[&#34;EnRoute
+迎車中&#34;] {
+      state: &#34;EnRoute&#34;
+      passengerId: string
+    }
+
+    class InTrip[&#34;InTrip
+乗車中&#34;] {
+      state: &#34;InTrip&#34;
+      passengerId: string
+      startTime: Date
+    }
+
+    class Completed[&#34;Completed
+完了&#34;] {
+      state: &#34;Completed&#34;
+      passengerId: string
+      startTime: Date
+      endTime: Date
+    }
+
+    class Cancelled[&#34;Cancelled
+キャンセル済み&#34;] {
+      state: &#34;Cancelled&#34;
+      passengerId: string
+    }
+
+    Waiting --> EnRoute : assignDriver() 
+ 乗務員の割当
+    EnRoute --> InTrip : startTrip() 
+ 走行開始
+    InTrip --> Completed : completeTrip() 
+ 走行完了
+
+    Waiting --> Cancelled : cancel()
+    EnRoute --> Cancelled : cancel()
+    InTrip --> Cancelled : cancel()
+    Completed --> Cancelled : cancel()
+```
+
+#### 状態遷移を持つオブジェクトの実装
+
+まず、上記のような状態遷移を持つオブジェクトを1つのクラスへ実装する場合を考えます。
+
+下記実装では、`assignDriver` でも `startTrip` でも「望む状態からの遷移か」をわざわざチェックしているため、状態ごとの振る舞いの定義がとても煩雑になります。
+
+```typescript
+class TaxiRequest {
+  public state: 'Waiting' | 'EnRoute' | 'InTrip' | 'Completed' | 'Cancelled';
+  public passengerId: string;
+
+  constructor(passengerId: string) {
+    this.state = 'Waiting';
+    this.passengerId = passengerId;
+  }
+
+  // 乗務員が配車リクエストを受けると EnRoute に状態遷移
+  public assignDriver() {
+    if (this.state !== 'Waiting') {
+      throw new Error(`Invalid state transition: ${this.state} -> EnRoute`);
+    }
+    this.state = 'EnRoute';
+  }
+
+  // 乗客が乗車したら InTrip に状態遷移
+  public startTrip() {
+    // EnRoute のときだけ実行可能な想定だが…
+    // 実はクラス外部から this.state を書き換え可能で、想定外の状態でも呼ばれるかも
+    if (this.state !== 'EnRoute') {
+      throw new Error(`Invalid state transition: ${this.state} -> InTrip`);
+    }
+    this.state = 'InTrip';
+  }
+```
+
+### Stateパターン
+
+Stateパターンを適用することで、状態ごとの振る舞いを別のクラスとして管理できます。
+
+先ほどの例に挙げた「配車リクエスト」を、Stateパターンに従って実装してみましょう。
+
+[https://refactoring.guru/ja/design-patterns/state](https://refactoring.guru/ja/design-patterns/state)
+
+Stateパターンでは、実際の状態と振る舞いをStateクラスとして表現し、変化する状態をContextクラスが保持します。
+
+これによって、「呼び出し(Waiting)時に実行できる振る舞いは乗務員の割り当て (assignDriver)」「迎車中 (EnRoute)時に実行できる振る舞いは走行開始 (startTrip)」のように、それぞれの状態の振る舞いを各Stateクラスの実装として表現できます。
+
+```
+classDiagram
+    direction TD
+    class Context {
+        State state
+        handle() void
+        setState(State state) void
+    }
+    class State {
+        <>
+        handle() void
+        setContext(context: Context)
+    }
+    class StateA {
+        handle() void
+    }
+    class StateB {
+        handle() void
+    }
+    Context o-- State
+    State <|-- StateA
+    State <|-- StateB
+    note for Context &#34;状態をコントロールするクラス&#34;
+    note for State &#34;状態の抽象クラス&#34;
+    note for StateA &#34;実際の状態を表現するクラス&#34;
+```
+
+#### 実装例
+
+```
+classDiagram
+    direction LR
+
+    class Waiting[&#34;Waiting
+呼び出し中&#34;] {
+      state: &#34;Waiting&#34;
+      passengerId: string
+    }
+
+    class EnRoute[&#34;EnRoute
+迎車中&#34;] {
+      state: &#34;EnRoute&#34;
+      passengerId: string
+    }
+
+    class Cancelled[&#34;Cancelled
+キャンセル済み&#34;] {
+      state: &#34;Cancelled&#34;
+      passengerId: string
+    }
+
+    Waiting --> EnRoute : handle() 
+ 迎車中へ遷移
+    Waiting --> Cancelled : cancel()
+    Cancelled --> Cancelled : handle() 
+ 何も起こらない
+```
+
+「呼び出し(Waiting)」を表現する `WaitingState` クラスでは、 `handle()` を呼び出すと次の状態 「迎車中 (EnRoute)」へ遷移します。一方で、「キャンセル済み(Cancelled)」を表現する `CancelledState` クラスでは、次の状態でもキャンセル済みのままなので、 `handle()` を呼び出しても何も起きません。
+
+```typescript
+abstract class State {
+  protected context: Context;
+  constructor(context: Context) {
+    this.context = context;
+  }
+  // 次の状態へ遷移する
+  public abstract handle(): void;
+
+  public cancel(reason: string): void {
+    this.context.cancelReason = reason;
+    this.context.setState(new CancelledState(this.context));
+  }
+}
+
+class Context {
+  private currentState: State;
+  passengerId: string;
+  cancelReason?: string;
+
+  constructor(passengerId: string) {
+    this.passengerId = passengerId;
+    // 初期状態は Waiting とする
+    this.currentState = new WaitingState(this);
+  }
+
+  // 状態オブジェクトを切り替える
+  public setState(newState: State): void {
+    this.currentState = newState;
+  }
+
+  public handle() {
+    this.currentState.handle();
+  }
+}
+
+class WaitingState extends State {
+  protected context: Context;
+  constructor(context: Context) {
+    super(context);
+    this.context = context;
+  }
+
+  // 次の状態 (迎車中) へ遷移する
+  public handle(): void {
+    this.context.setState(new EnRouteState(this.context));
+  }
+}
+
+class CancelledState extends State {
+  protected context: Context;
+  constructor(context: Context) {
+    super(context);
+    this.context = context;
+  }
+
+  public handle(): void {
+    // キャンセル済みの場合は何もしない
+  }
+}
+
+//...
+```
+
+### Discriminated Unionを利用したStateパターン
+
+Discriminated Unionを活用することで、Stateパターンのように状態ごとの振る舞いを分けて定義できます。
+
+まず、呼び出し(Waiting)状態について振る舞いを定義します。
+
+`assignDriver` は引数に `Waiting` のみを取るため、この振る舞いは「呼び出し(Waiting)」状態からのみ呼び出せます。
+
+```typescript
+type Waiting = Readonly<{
+  kind: 'Waiting';
+  passengerId: string;
+}>;
+
+const assignDriver = (state: Waiting): EnRoute => ({
+  kind: 'EnRoute',
+  passengerId: state.passengerId,
+});
+
+const Waiting = {
+  handle: assignDriver,
+} as const;
+```
+
+同様に他の状態についても振る舞いを定義し、これらのDiscriminated Union `TaxiRequest` を定義します。
+
+```typescript
+type EnRoute = Readonly<{
+  kind: 'EnRoute';
+  passengerId: string;
+}>;
+
+const EnRoute = {
+  handle: //...
+} as const;
+
+type Cancelled = Readonly<{
+  kind: 'Cancelled';
+  passengerId: string;
+  reason: string;
+}>;
+
+const Cancelled = {
+  handle: //...
+} as const;
+
+type TaxiRequest = Waiting | EnRoute | Cancelled // | ... ;
+```
+
+Stateパターンの「`handle()` を呼び出せば、状態ごとの振る舞いが実行される」という性質を表現する `handle` 関数を定義し、これを `TaxiRequest` オブジェクトに持たせておきましょう。`never` 型のみを引数に取る `assertNever` を用いることで、処理が漏れている状態があれば型検査時に気付けるようにしておきます。
+
+```typescript
+const assertNever = (x: never): never => {
+    throw new Error(`Unexpected value: ${x}`);
+}
+
+const handle = (state: TaxiRequest): TaxiRequest => {
+  switch (state.kind) {
+    case 'Waiting':
+      return Waiting.handle(state);
+    case 'EnRoute':
+      // ...
+    case 'Cancelled':
+      return Cancelled.handle(state);
+    default:
+      return assertNever(state);
+  }
+};
+
+const cancel = (state: TaxiRequest, reason: string): Cancelled => ({
+  kind: 'Cancelled',
+  passengerId: state.passengerId,
+  reason,
+});
+
+const TaxiRequest = {
+  handle,
+  cancel,
+};
+```
+
+### `handle` は必要?
+
+どの状態でも共通して何らかの振る舞いを実行する「 `handle` 」のような操作が不要な場合、単にこれを省略できます。
+
+```typescript
+type Waiting = Readonly<{
+  kind: 'Waiting';
+  passengerId: string;
+}>;
+
+const assignDriver = (state: Waiting): EnRoute => ({
+  kind: 'EnRoute',
+  passengerId: state.passengerId,
+});
+
+const TaxiRequest = {
+  assignDriver,
+} as const;
+```
+
+## 複雑な状態遷移
+
+### 状態ごとに振る舞いの入力が異なる場合
+
+ここで、「呼び出し(Waiting)時に実行できる乗務員の割り当て (assignDriver)」や、「迎車中 (EnRoute)時に実行できる走行開始 (startTrip)」のように、状態ごとの振る舞いの入力が異なる場合を見てみましょう。
+
+下記の例では、乗務員の割り当て (assignDriver) の場合は「乗務員ID (driverId)」を、走行開始 (startTrip) の場合は「開始日時 (startTime)」を入力として欲しています。
+
+```
+classDiagram
+    direction LR
+
+    class Waiting[&#34;Waiting
+呼び出し中&#34;] {
+      state: &#34;Waiting&#34;
+      passengerId: string
+    }
+
+    class EnRoute[&#34;EnRoute
+迎車中&#34;] {
+      state: &#34;EnRoute&#34;
+      passengerId: string
+      driverId: string
+    }
+
+    class InTrip[&#34;InTrip
+乗車中&#34;] {
+      state: &#34;InTrip&#34;
+      passengerId: string
+      driverId: string
+      startTime: Date
+    }
+
+    class Completed[&#34;Completed
+完了&#34;] {
+      state: &#34;Completed&#34;
+      passengerId: string
+      driverId: string
+      startTime: Date
+      endTime: Date
+    }
+
+    Waiting --> EnRoute : assignDriver(**driverId**) 
+ 乗務員の割当
+    EnRoute --> InTrip : startTrip(**startTime**) 
+ 走行開始
+    InTrip --> Completed : completeTrip(**endTime**) 
+ 走行完了
+```
+
+### Stateパターンの場合
+
+振る舞いによって入力が異なる場合、`assignDriver` や `startTrip`、`completeTrip` のようにそれぞれの振る舞いを抽象クラス `State` に定義する必要があります。
+
+この場合、例えば `WaitingState` の実装では `startTrip` と `completeTrip` を「例外を投げるメソッド」として実装することになります。よって、誤って「呼び出し(Waiting)」時に `startTrip` を呼び出す操作をした場合、実行時に気付くこととなります。
+
+できれば誤った操作について型検査時に気が付きたいのですが、私はそれを分かりやすく実現する方法を思いつきませんでした。もしご存知の方がいれば教えて下さい。
+
+```typescript
+abstract class State {
+  protected context: Context;
+  constructor(context: Context) {
+    this.context = context;
+  }
+  public abstract assignDriver(driverId: string): void;
+  public abstract startTrip(startTime: Date): void;
+  public abstract completeTrip(endTime: Date): void;
+
+  public cancel(reason: string): void {
+    this.context.cancelReason = reason;
+    this.context.setState(new CancelledState(this.context));
+  }
+}
+
+class WaitingState extends State {
+  protected context: Context;
+  constructor(context: Context) {
+    super(context);
+    this.context = context;
+  }
+
+  public assignDriver(driverId: string): void {
+    this.context.setState(new EnRouteState(this.context, driverId));
+  }
+
+  public startTrip(): void {
+    throw new Error('乗務員が割り当てられていないため走行を開始できません。');
+  }
+
+  public completeTrip(): void {
+    throw new Error('乗車が開始されていないため完了できません。');
+  }
+}
+```
+
+### Discriminated Unionを利用したStateパターン
+
+Discriminated Unionを利用する場合、それぞれの振る舞いを表現する関数を個別に定義できます。よって、「`WaitingState` の状態で `startTrip` が呼び出されている」といった不正な操作は、型検査にて発見できます。
+
+一方で、`as` を利用して無理矢理に型推論の結果を無視した場合、誤った状態が関数に渡されたとしても、実行時に発見することはできないことに注意が必要です。
+
+```typescript
+type Waiting = Readonly<{
+  kind: 'Waiting';
+  passengerId: string;
+}>;
+
+type EnRoute = Readonly<{
+  kind: 'EnRoute';
+  passengerId: string;
+  driverId: string;
+}>;
+
+type InTrip = Readonly<{
+  kind: 'InTrip';
+  passengerId: string;
+  driverId: string;
+  startTime: Date;
+}>;
+
+const assignDriver = ({passengerId}: Waiting, driverId: string): EnRoute => ({
+  kind: 'EnRoute',
+  passengerId,
+  driverId,
+});
+
+const startTrip = ({passengerId, driverId}: EnRoute, startTime: Date): InTrip => ({
+  kind: 'EnRoute',
+  passengerId,
+  driverId,
+  startTime,
+});
+
+const TaxiRequest = {
+  assignDriver,
+  startTrip,
+} as const;
+```
+
+## まとめ
+
+この記事では、Discriminated Unionを利用したStateパターンの実現方法について、「単純な状態遷移」と「状態ごとに振る舞いの入力が異なるようなケース」の2つのケースを交えて紹介しました。

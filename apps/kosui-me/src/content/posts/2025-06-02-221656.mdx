@@ -1,0 +1,157 @@
+---
+title: "なぜTypeScriptでメソッド記法を避けるべきか？実務に近い事例の紹介"
+date: "2025-06-02T22:16:56+09:00"
+slug: "posts/2025/06/02/221656"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250602/20250602230338.png"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250602/20250602230338.png)
+
+## 参考文献
+
+- [プロを目指す人のためのTypeScript入門 安全なコードの書き方から高度な型の使い方まで | 技術評論社](https://gihyo.jp/book/2022/978-4-297-12747-3)
+
+通称ブルーベリー本。コラム17に記載。
+
+- [Method Shorthand Syntax Considered Harmful | Total TypeScript](https://www.totaltypescript.com/method-shorthand-syntax-considered-harmful)
+
+- [TypeScript の変性（共変・反変）を 5 分で理解する](https://zenn.dev/jay_es/articles/2024-02-13-typescript-variance)
+
+## はじめに
+
+TypeScriptでは、オブジェクトの型エイリアスには主に2通りの方法で関数を含めることができます。
+
+- 「メソッド記法」と呼ばれる方法
+
+- プロパティとして関数を定義する方法
+
+```typescript
+type User = Readonly<{ id: string }>
+type UserRepository = {
+    // メソッド記法
+    save1(user: User): Promise
+    // プロパティとして関数を定義
+    save2: (user: User) => Promise
+}
+```
+
+しかし、「[プロを目指す人のためのTypeScript入門](https://gihyo.jp/book/2022/978-4-297-12747-3)」を始め、さまざまな書籍やブログ記事で「メソッド記法」は避けるべきと解説されています。これは、メソッド記法を利用した場合は双変となってしまい、引数がサブタイプでも型検査を通過してしまうためです。この問題の背景については下記の記事が詳しいです。
+
+[https://zenn.dev/jay_es/articles/2024-02-13-typescript-variance](https://zenn.dev/jay_es/articles/2024-02-13-typescript-variance)
+
+しかし、「具体的にメソッド記法が問題となるケースが思い当たらない」という方も多いと思います。この記事では、実際のバックエンド開発で発生しうる事例を参考に考えてみましょう。
+
+## 事例
+
+### タスク管理サービス
+
+Jiraのようなタスク管理サービスを例に考えてみましょう。タスクのステータスは `ToDo` `Doing` `Done` のいずれかを取り、ステータスごとに個別のプロパティを持つとします。
+
+```typescript
+type User = { id: number }
+type Task =
+  | { id: number, status: 'ToDo' }
+  | { id: number, assignee: User, status: 'Doing' }
+  | { id: number, assignee: User, doneAt: Date, status: 'Done' }
+```
+
+ここで、`Doing` 状態のタスクを `ToDo` 状態へ戻すユースケース `UnassignTaskUseCase` を実装します。
+
+```typescript
+type Ok = { ok: true }
+type Err = { ok: false, reason: 'NOT_FOUND' | 'BAD_STATUS' }
+type UnassignTaskUseCase = {
+  run: (taskId: number) => Promise
+}
+```
+
+### メソッド記法のリポジトリ
+
+このユースケースを実装するためには、タスクを取得する処理と、タスクを永続化する処理が必要です。これらを `TaskRepository` が担うとします。ここで注意すべき点は、リポジトリの `save` がメソッド記法で定義されていることです。
+
+```typescript
+type TaskRepository {
+  find: (taskId: number) => Promise
+  save(task: Task): Promise
+  // ^^^ メソッド記法
+}
+
+const newUseCase = (taskRepository: TaskRepository): UnassignTaskUseCase => ({
+  run: async (taskId: number) => {
+    const task = await taskRepository.find(taskId)
+    if (!task) {
+      return { ok: false, reason: 'NOT_FOUND' }
+    }
+    if (task.status !== 'Doing') {
+      return { ok: false, reason: 'BAD_STATUS' }
+    }
+    await taskRepository.save({ id: task.id, status: 'ToDo' })
+    return { ok: true }
+  }
+})
+```
+
+### サブタイプを引数に取るリポジトリ実装
+
+ユースケースへ渡す `TaskRepository` の実体を実装します。ただし、`store` が特定のサブタイプのみを引数に取るとします。例えば、ある実装者が「`status` が `Doing` の場合は `assignee` の存在チェックをしたい」と考えたとしましょう。
+
+```typescript
+// Doingの場合は永続化する時に `assignee` がUserテーブルに存在するか検証する
+const saveDoing = (task: Task & { status: 'Doing' }) => {
+  console.log(task.assignee.id)
+  // task.assignee.id の存在チェック
+  return Promise.resolve(undefined)
+}
+
+const tasks = [{ id: 1, status: 'ToDo' }] as const
+const taskRepository = {
+  find: (taskId: number) => Promise.resolve(tasks.find(x => x.id === taskId)),
+  save: saveDoing,
+} as const
+```
+
+ここで、実装したリポジトリを基にユースケースを作成してみましょう。
+
+「プロパティとして関数を定義する方法」であれば、 `newUseCase` にタスクリポジトリを渡した時点でコンパイルが失敗します。
+
+しかし、「メソッド記法」でユースケースの依存するリポジトリを定義した結果、以下のように型検査を通過してしまいました。そして、実行に失敗します。
+
+```typescript
+const useCase = newUseCase(taskRepository)
+//                         ^^^^^^^^^^^^^^
+//                         型検査を通ってしまう
+useCase.run(1)
+// Cannot read properties of undefined (reading 'name')
+```
+
+[Playground Link](https://www.typescriptlang.org/play/?#code/C4TwDgpgBAqgzhATlAvFA3lAlgEwFxQB2ArgLYBGSUAvgFCiRQAqAhnANaq1RQA+G2fETKVEAGihxgLYMTgEA5EwD2AEWUKa3PgNwESFJBLZwsAc0IQIBeEcnTZ8qAvVZCZzXR79Me4YfEoE3NLa1gEQJxlSwBBYAJVGQgJKRk5RXVLT1p6cGgAeU40TGV2AmBEYmg6BmgAUURkYqhSggAzFgAbBAlECDZoxQA5fKYAfQAxfJgh1U1+BQAhGNUxgGUmGKYYNeza2EJgi1YOWwBhNmhi7UrCAgAKaQ4ASSEDUQBKVAA+KAAFRDKUhYBAAHkKOgaiG+tDouUYJ3YACUIGBlKZgMpECBUBhtG03DhHmx2K99CIkB8CACgSCIKDETpiIQcBACZYcDCeAB6blQAB6gqggEOGQC9DIBhhkAkwyADCjAKs22jgLAAbhBiRwCIiqf9AcCwUrlLguVBeQKhWKpXLYTkAMbRKRECAAd3Ol1xauRqPRWEx2I1JJRaIxWJAWpghzgpmOJJdCB+UHu6BuzIIbBAhGt8aepLeFMQXxQv0TPB4tsI9qzuJYjpY3qgWYDXp9IAAdOyiVnXh9tDwsG14wBCLNfIvFnh9WSIQgCVpQDrdZJQPoDO7OEbjKYzOZaUdeYu9zMk5upRxQfsoNAuA3uBTD7vF8fESfTsqzro9Rf9OCDZzLVYbLY7NkO53lWNbAHW-qekG2JHsqqq+EIWbNrgKQOOkzgqOonhdqOD5PiUL4VFU25aNQXa0CarjuIAdgyACwagAQKoA9gyABw2gBZvoAaMqAJoMgDRDIAQmaANYMUAAAZHKEQlQIAMgy2IggBjDIAPwyAGsMgDXDPxgAa2oAFOo8YA0gyADiWgA8UTxtClvaioqlRZhulmfocFAABkAjHuhl5uB4ND5oW2jGconQQM2nTKGY7rNqJVjITgOHGnySEhb5uBQNRGmAIMMgDlDOKgD1DDcEATlONK6r5fRfp0Kr3MyrLshA4VWkZdrgVmcC4gA2ghBAAIyoWkThKGoGg0AAukE9XGcA1VlrVkGBt6wa4iObYPB2OYBO52q0ggzYFd5xV1a2hL3AAHnGu1hag54QS84UfGICpwQQpkQOZl3UANUBDTaNVQHIEAXLGaCWM6CBfaq9ZQZN2Jdh9ANrcy9wtR8QA) から実際に試してみてください。
+
+### プロパティとして関数を定義した場合
+
+ここで、プロパティとして関数を定義した場合を見てみましょう。
+
+```typescript
+type TaskRepository {
+  find: (taskId: number) => Promise
+  save: (task: Task) => Promise
+  // ^^^ 関数プロパティ
+}
+```
+
+この場合、きちんとコンパイルが失敗します。
+
+```typescript
+const useCase = newUseCase(taskRepository)
+//                         ^^^^^^^^^^^^^
+// Argument of type
+// '{
+//    readonly find: (taskId: number) => Promise<{ readonly id: 1; readonly status: "ToDo"; } | undefined>;
+//    readonly save: (task: Task & { status: "Doing"; }) => Promise;
+// }' is not assignable to parameter of type 'TaskRepository'.
+//  Types of property 'save' are incompatible.
+```
+
+## まとめ
+
+メソッド記法を避けることで、依存性注入時に不正な実装を注入することを防止できます。
+やや冗長な例となってしまいましたが、参考になれば幸いです。

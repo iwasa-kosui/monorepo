@@ -1,0 +1,494 @@
+---
+title: "複雑な状態遷移😭: クラスではなく関数とDiscriminated Unionで状態の定義と遷移を表現する"
+date: "2025-02-20T00:59:00+09:00"
+slug: "posts/2025/02/20/005900"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250505/20250505132835.png"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250505/20250505132835.png)
+
+### 補足: 2025/02/25
+
+本記事でほとんど紹介されなかった「Stateパターン」を含めて再構成した記事を公開しましたので、今後は下記の記事をご覧ください。
+
+[https://kosui.me/posts/2025/02/25/021320](https://kosui.me/posts/2025/02/25/021320)
+
+### 補足: 2025/02/21
+
+クラスベースでも、Stateパターンを適用し、StateをDiscriminated Unionとして表現することで今回の問題を解決できます。つまり、クラスを利用することに問題があるわけではありません。この記事では、TypeScriptではあえてクラスを利用しなくても状態遷移を表現できることを紹介します。記事を一部修正し、Stateパターンをクラスによって実現する方法を追記しています。
+
+## 背景
+
+### サーバサイド実装での状態管理の重要性
+
+サーバサイドのビジネスロジックでは、エンティティ（注文、決済、在庫、タクシー配車リクエストなど）が複数の状態を行き来しながら進行します。
+
+たとえば、タクシー配車アプリでは、配車リクエストが「呼び出し（Waiting）」「迎車中（EnRoute）」「乗車中（InTrip）」「完了（Completed）」といった状態を経て処理が進み、キャンセル（Cancelled）などの例外経路も存在します。
+
+```
+classDiagram
+    direction LR
+
+    class Waiting[&#34;Waiting
+呼び出し中&#34;] {
+      state: &#34;Waiting&#34;
+      passengerId: string
+    }
+
+    class EnRoute[&#34;EnRoute
+迎車中&#34;] {
+      state: &#34;EnRoute&#34;
+      passengerId: string
+      driverId: string
+    }
+
+    class InTrip[&#34;InTrip
+乗車中&#34;] {
+      state: &#34;InTrip&#34;
+      passengerId: string
+      driverId: string
+      startTime: Date
+    }
+
+    class Completed[&#34;Completed
+完了&#34;] {
+      state: &#34;Completed&#34;
+      passengerId: string
+      driverId: string
+      startTime: Date
+      endTime: Date
+    }
+
+    class Cancelled[&#34;Cancelled
+キャンセル済み&#34;] {
+      state: &#34;Cancelled&#34;
+      passengerId: string
+      reason: string
+    }
+
+    Waiting --> EnRoute : assignDriver() 
+ 乗務員の割当
+    EnRoute --> InTrip : startTrip() 
+ 走行開始
+    InTrip --> Completed : completeTrip() 
+ 走行完了
+
+    Waiting --> Cancelled : cancel()
+    EnRoute --> Cancelled : cancel()
+    InTrip --> Cancelled : cancel()
+    Completed --> Cancelled : cancel()
+```
+
+こうした状態遷移を正しく管理することは、ビジネスロジックを安定して運用する上で欠かせません。
+
+ところが、状態が増えたり分岐が複雑化したりすると、開発チーム全体の理解が追いつかなくなり、不正な状態遷移を引き起こすバグが潜在化しやすくなります。
+
+### TypeScript の特徴と型システムの恩恵
+
+強力な型推論機能が特徴の一つである TypeScript では、判別可能なユニオン (Discriminated Unions) を利用して、より堅牢に状態遷移のロジックを表現できます。
+コンパイル時に誤った状態遷移を検知し、不整合やバグを防ぎやすくなります。
+
+## 課題
+
+### クラスベースによる状態遷移の実装
+
+以下のコードでは、タクシーの配車リクエストの状態遷移を実装しています。この実装では、各状態で持ちうるプロパティを`TaxiRequest` クラスにそのまま持たせています。
+
+一見すると、特に何の問題もなく状態遷移を表現できています。しかし、この実装には不正な状態遷移が引き起こされるリスクがあります。
+
+```typescript
+class TaxiRequest {
+  // 状態はすべてこのクラスのプロパティで保持する
+  public state: 'Waiting' | 'EnRoute' | 'InTrip' | 'Completed' | 'Cancelled';
+  public passengerId: string;
+  public driverId?: string;
+  public startTime?: Date;
+  public endTime?: Date;
+  public reason?: string;
+
+  constructor(passengerId: string) {
+    this.state = 'Waiting';
+    this.passengerId = passengerId;
+  }
+
+  // 乗務員が配車リクエストを受けると EnRoute に状態遷移
+  public assignDriver(driverId: string) {
+    this.driverId = driverId;
+    this.state = 'EnRoute';
+  }
+
+  // 乗客が乗車したら InTrip に状態遷移
+  public startTrip() {
+    // EnRoute のときだけ実行可能な想定だが…
+    // 実はクラス外部から this.state を書き換え可能で、想定外の状態でも呼ばれるかも
+    if (this.state !== 'EnRoute') {
+      throw new Error(`Invalid state transition: ${this.state} -> InTrip`);
+    }
+    this.state = 'InTrip';
+    this.startTime = new Date();
+  }
+
+  // 乗客の移動が完了したら Completed に状態遷移
+  public completeTrip() {
+    if (this.state !== 'InTrip') {
+      throw new Error(`Invalid state transition: ${this.state} -> Completed`);
+    }
+    this.state = 'Completed';
+    this.endTime = new Date();
+  }
+
+  // キャンセルされたら Cancelled に状態遷移
+  public cancel(reason: string) {
+    this.state = 'Cancelled';
+    this.reason = reason;
+  }
+}
+
+// 使用例
+const request = new TaxiRequest('passenger123');
+request.assignDriver('driver456');
+request.startTrip();
+request.completeTrip();
+```
+
+### リスク① 外部からの不正な操作
+
+インスタンスメソッド以外からも状態遷移ができるため、不正な状態遷移が引き起こされる恐れがあります。
+
+```typescript
+const request = new TaxiRequest('passenger123');
+request.state = 'EnRoute';
+// 乗務員が割り当てられていないのに
+// 走行が開始されてしまう！
+request.startTrip();
+```
+
+### リスク② 事前条件の検証不足
+
+状態遷移を担うメソッドは、必ず事前条件を検証する必要があります。
+
+例えば、「迎車中(EnRoute)」へ遷移する「乗務員割り当て(assignDriver)」は、必ず「呼び出し中(Waiting)」の状態から開始される必要があります。
+
+しかし、`assignDriver` で事前条件を十分に検証していない場合、誤った状態遷移を許してしまいます。
+
+```typescript
+class TaxiRequest {
+  // (中略)
+  public assignDriver(driverId: string) {
+    this.driverId = driverId;
+    this.state = 'EnRoute';
+  }
+}
+
+const request = new TaxiRequest('passenger123');
+request.cancel();
+// キャンセルされたはずの配車リクエストが
+// 再び開始されてしまう
+request.assignDriver();
+```
+
+### リスク③ 全容の把握が難しくなる
+
+状態が肥大化すると、クラス内のメソッド群やプロパティ間の依存関係が複雑化し、テストや保守が困難になります。
+
+- 例: `startTrip()` が成功すると `endTrip()` の呼び出しが有効になるが、同時に `cancel()` もあり得るのか?
+
+- 例: `assignDriver()` の後で `state` は必ず `EnRoute` である前提だが、他のメソッドが `state` を書き換えていないか?
+
+このように、「どのメソッドがどの状態を前提に動くのか」をクラス設計ですべてカバーしきるのは、手動で管理するには限界があります。さらに追加要件で状態が増えたり、外部APIの連携などで状態遷移パターンが増えると、テストも複雑化し漏れが生じやすくなるのが課題です。
+
+### リスク④ 特定の状態でのみ参照・変更できるプロパティを扱いにくい
+
+複雑な状態遷移を持つエンティティには、特定の状態でのみ参照・変更できるプロパティがありえます。
+
+例えば、「乗務員ID `driverId`」は「呼び出し中(Waiting)」の状態では参照できず、「迎車中(EnRoute)」以降に参照できます。
+
+しかし、下記の実装では、「乗務員ID `driverId`」が必ず参照できる状態でも型システムの上では `driverId` がnullableとなってしまいます。
+
+この他、「`state` が 'Completed' なのに他のプロパティが足りない」「`driverId` がないのに `state` が 'EnRoute' になる」などを、コンパイルレベルで防ぐのは難しくなってしまいます。
+
+```typescript
+class TaxiRequest {
+  public state: 'Waiting' | 'EnRoute' | 'InTrip' | 'Completed' | 'Cancelled';
+  public passengerId: string;
+  public driverId?: string;
+  public startTime?: Date;
+  public endTime?: Date;
+  public reason?: string;
+  // 中略
+}
+```
+
+## 解決策
+
+### Discriminated Union（判別可能なユニオン）による状態遷移の厳密な管理
+
+TypeScript のユニオン型を使い、状態を表すための `state` プロパティを判別子とすることで、**どの状態にどんなデータが必要か** を型レベルで明示できます。
+
+```typescript
+type Waiting = Readonly<{
+  state: "Waiting";
+  passengerId: string;
+}>;
+type EnRoute = Readonly<{
+  state: "EnRoute";
+  driverId: string;
+  passengerId: string;
+}>;
+type InTrip = Readonly<{
+  state: "InTrip";
+  driverId: string;
+  passengerId: string;
+  startTime: Date;
+}>;
+type Completed = Readonly<{
+  state: "Completed";
+  driverId: string;
+  passengerId: string;
+  startTime: Date;
+  endTime: Date;
+}>;
+type Cancelled = Readonly<{
+  state: "Cancelled";
+  passengerId: string;
+  reason: string;
+}>;
+type TaxiRequest = Waiting | EnRoute | InTrip | Completed | Cancelled;
+```
+
+このように定義しておけば、状態ごとに必須プロパティや使えるプロパティが明確化され、スイッチ文で状態に応じた分岐をする際にもコンパイラが型チェックを行ってくれます。
+
+#### 型検査時に不正を排除できる
+
+例えば、「乗務員ID `driverId`」は「呼び出し中(Waiting)」の状態で参照を試みると型検査時にエラーとなります。また、「迎車中(EnRoute)」の状態では必ず `nullable` とならずに参照できます。このように、実行せずとも型検査時に問題を検出できます。
+
+```typescript
+declare const waiting: Waiting;
+waiting.driverId; // Error: Property 'driverId' does not exist on type 'Waiting'.
+
+declare const enRoute: EnRoute;
+enRoute.driverId; // OK
+```
+
+#### 全容を把握しやすい
+
+それぞれの状態でどのようなプロパティを持つのか、容易に一覧できます。例えば、「走行開始時間 `startTime`」は「乗車中 (InTrip)」「完了済み (Completed)」の場合に参照できることが分かります。
+
+### Stateパターンをコンパニオンオブジェクトで実現する
+
+前述のように、状態ごとに属性や振る舞いを `State` として抽出し、それを操作するクラスを `Context` とするデザインパターンは「Stateパターン」として知られています。
+
+[https://refactoring.guru/ja/design-patterns/state](https://refactoring.guru/ja/design-patterns/state)
+
+```typescript
+class TaxiRequestContext {
+  public state: Waiting | EnRoute | InTrip | Completed | Cancelled;
+  // ...
+}
+```
+
+しかし、TypeScriptでは[コンパニオンオブジェクトパターン](https://typescriptbook.jp/tips/companion-object)を適用することで、クラスを定義せずに同様の要求を実現できます。
+
+```typescript
+type TaxiRequest = Waiting | EnRoute | InTrip | Completed | Cancelled;
+
+const TaxiRequest = {
+  assignDriver: ...
+} as const;
+```
+
+ここで、状態の遷移を関数で表現してみましょう。この実装における `assignDriver` は、次のような特徴を持っています。
+
+- 「呼び出し中(Waiting)」の配車リクエストのみ引数として受け取ります。誤った状態を渡すと型検査時にエラーが発生するため、安全に利用できます。
+
+- 関数の戻り値は 「迎車中(EnRoute)」であることが型で保証されるので、呼び出し元のコードでも安全に次の処理を実装できます。
+
+```typescript
+const assignDriver = (
+  { passengerId }: Waiting,
+  driverId: string
+): EnRoute => ({
+  state: 'EnRoute',
+  passengerId,
+  driverId,
+});
+
+export const TaxiRequest = {
+  assignDriver,
+} as const;
+```
+
+また、TypeScriptではメソッドと関数とでは変性が異なっているなど、クラスを利用する場合には型検査が緩くなることに注意が必要です。特にクラスを利用する必要がないケースでは、コンパニオンオブジェクトパターンを適用することをおすすめします。
+
+> オブジェクトの型定義をする際にメソッド記法を使うと双変になります。これは共変か反変のどちらかを満たしていればよい、という関係性です。そのため引数がサブタイプの場合でも型エラーになってくれません。つまり上記の反変のところで説明したようなランタイムエラーが実際に起ってしまう危険性があります。特別な意図がなければ避けるようにしましょう。
+> [TypeScript の変性（共変・反変）を 5 分で理解する](https://zenn.dev/jay_es/articles/2024-02-13-typescript-variance)
+
+### Branded typeの活用
+
+「乗務員ID `driverId`」と「乗客ID `passengerId`」を取り違えないように、Branded typeを活用できます。
+
+以下の例では、乗務員ID `driverId` を引数に取る関数へ乗客ID `passengerId` を渡そうとしています。Branded typeを活用することで、型検査時にエラーとして検出できました。
+
+```typescript
+type Brand = T & { [key in K]: unknown };
+
+const PassengerIdSymbol = Symbol("PassengerId");
+type PassengerId = Brand;
+
+const DriverIdSymbol = Symbol("DriverId");
+type DriverId = Brand;
+
+const assignDriver = ({ passengerId }: Waiting, driverId: DriverId): EnRoute => ({
+  state: "EnRoute",
+  driverId,
+  passengerId,
+});
+
+declare const waiting: Waiting;
+assignDriver(waiting, "badId"); // Error: Argument of type '"badId"' is not assignable to parameter of type 'DriverId'.
+```
+
+Branded typeについてより詳しく知りたい方は下記を参照してください。
+
+[https://bufferings.hatenablog.com/entry/2025/01/12/171721](https://bufferings.hatenablog.com/entry/2025/01/12/171721)
+
+[https://qiita.com/uhyo/items/de4cb2085fdbdf484b83](https://qiita.com/uhyo/items/de4cb2085fdbdf484b83)
+
+## まとめ
+
+### 背景
+
+- 複雑な状態を管理するサーバサイドロジックでは、状態遷移の安全性や可読性が重要。
+
+- TypeScript には、判別可能なユニオンなどの機能があり、状態遷移を型として表現できる。
+
+### 課題
+
+クラスに各状態で持ちうるプロパティをそのまま持たせる実装では、内部状態が思わぬタイミングで書き換えられる可能性があり、状態管理の責務が不明瞭になりがち。
+
+### 解決策
+
+- **ユニオン型による厳密な状態表現**
+
+- コンパイル時チェックで不正を防止し、ビジネスロジックの変更にも強い構造を作れる。
+
+- **関数ベースでエンティティを管理**
+
+- イミュータブルデータ構造・純粋関数と組み合わせやすく、状態管理ロジックを明確化できる。
+
+- テストしやすく、変更や再利用にも柔軟に対応可能。
+
+タクシー配車アプリのように状態が多く分岐が複雑なケースほど、TypeScript の型システムと関数ベースの実装が大きな威力を発揮します。型検査を味方に付けて、堅牢かつ拡張しやすいサーバサイド開発を目指してみてください。
+
+## おまけ: Java の Sealed インタフェースを利用した実装
+
+Java 17 以降で利用できる Sealed インタフェースと、Java 16 以降で利用できるレコードを活用することで、状態遷移を TypeScript のユニオン型に近い設計で表現しています。
+
+```java
+import java.time.LocalDateTime;
+
+public class TaxiRequestExample {
+
+    // --- Sealedインターフェイス: TaxiRequest ---
+    // どのクラス(レコード)がこれを実装できるかを permits で限定する
+    public sealed interface TaxiRequest 
+        permits Waiting, EnRoute, InTrip, Completed, Cancelled {
+        // 状態に共通するメソッドを定義してもOK
+        // 例: String passengerId();
+    }
+
+    // --- 各状態を表すレコード ---
+    // それぞれ final にすることでSealedインターフェイスを実装可能
+    public static final record Waiting(String passengerId) implements TaxiRequest {}
+    public static final record EnRoute(String passengerId, String driverId) implements TaxiRequest {}
+    public static final record InTrip(String passengerId, String driverId, LocalDateTime startTime) implements TaxiRequest {}
+    public static final record Completed(String passengerId, String driverId, LocalDateTime startTime, LocalDateTime endTime) implements TaxiRequest {}
+    public static final record Cancelled(String passengerId, String reason) implements TaxiRequest {}
+
+    // --- 状態遷移をまとめたユーティリティクラス ---
+    public static final class TaxiRequestTransitions {
+
+        private TaxiRequestTransitions() {}
+
+        // Waiting -> EnRoute
+        public static EnRoute assignDriver(Waiting waiting, String driverId) {
+            // 必要に応じてビジネスロジックやバリデーションを追加
+            return new EnRoute(waiting.passengerId(), driverId);
+        }
+
+        // EnRoute -> InTrip
+        public static InTrip startTrip(EnRoute enRoute) {
+            return new InTrip(
+                enRoute.passengerId(),
+                enRoute.driverId(),
+                LocalDateTime.now()
+            );
+        }
+
+        // InTrip -> Completed
+        public static Completed completeTrip(InTrip inTrip) {
+            return new Completed(
+                inTrip.passengerId(),
+                inTrip.driverId(),
+                inTrip.startTime(),
+                LocalDateTime.now()
+            );
+        }
+
+        // どの状態からでもキャンセル可能 (例)
+        public static Cancelled cancel(TaxiRequest request, String reason) {
+            // パターンマッチングswitch (Java 17/19以降でプレビュー機能など必要な場合あり)
+            String passengerId = switch (request) {
+                case Waiting w    -> w.passengerId();
+                case EnRoute e    -> e.passengerId();
+                case InTrip i     -> i.passengerId();
+                case Completed c  -> c.passengerId();
+                case Cancelled c2 -> c2.passengerId();
+            };
+            return new Cancelled(passengerId, reason);
+        }
+    }
+
+    // --- 動作例を示すメインメソッド ---
+    public static void main(String[] args) {
+        // 1. Waiting状態のリクエストを作成
+        Waiting waiting = new Waiting("passenger123");
+
+        // 2. ドライバーを割り当て -> EnRoute
+        EnRoute enRoute = TaxiRequestTransitions.assignDriver(waiting, "driver456");
+        System.out.println("assignDriver => " + enRoute);
+
+        // 3. 乗客が乗車した -> InTrip
+        InTrip inTrip = TaxiRequestTransitions.startTrip(enRoute);
+        System.out.println("startTrip => " + inTrip);
+
+        // 4. 乗車が完了した -> Completed
+        Completed completed = TaxiRequestTransitions.completeTrip(inTrip);
+        System.out.println("completeTrip => " + completed);
+
+        // 5. キャンセル操作の例 (どの状態からでも可とする仕様)
+        Cancelled cancelledFromCompleted = TaxiRequestTransitions.cancel(completed, "Some issue");
+        System.out.println("cancel => " + cancelledFromCompleted);
+
+        // 6. パターンマッチング付きswitchで各状態ごとに処理
+        handleTaxiRequest(completed);
+    }
+
+    // --- パターンマッチングswitchのサンプル ---
+    public static void handleTaxiRequest(TaxiRequest request) {
+        // 状態ごとに分岐して固有の情報を参照できる
+        switch (request) {
+            case Waiting w ->
+                System.out.println("状態: Waiting, passenger: " + w.passengerId());
+            case EnRoute e ->
+                System.out.println("状態: EnRoute, driver: " + e.driverId());
+            case InTrip i ->
+                System.out.println("状態: InTrip, started at: " + i.startTime());
+            case Completed c ->
+                System.out.println("状態: Completed, endTime: " + c.endTime());
+            case Cancelled c2 ->
+                System.out.println("状態: Cancelled, reason: " + c2.reason());
+        }
+    }
+}
+```

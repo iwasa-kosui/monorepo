@@ -1,0 +1,312 @@
+---
+title: "TypeScriptでドメインイベントを容易に記録できるコード設計を考える"
+date: "2025-05-06T14:28:42+09:00"
+slug: "posts/2025/05/06/142842"
+image: "https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250506/20250506155457.png"
+---
+
+![](https://cdn-ak.f.st-hatena.com/images/fotolife/k/kosui_me/20250506/20250506155457.png)
+
+## はじめに
+
+### データアナリストの現場の苦しみ
+
+近年、ビジネスの意思決定にはデータの活用が重要だという認識が広まりつつあります。実際、データアナリストに関する求人やデータ分析の発表が増えているのを実感します。
+
+しかし、現場では、異常かつ不十分なデータをデータアナリストが必死に処理しながら分析を試みている状況です。それによって、本来集中したいデータの分析に充分に取り組めていないのが現状だと思います。あっちこっちのシステムに散らばった中途半端なデータの数々を寄せ集め、微妙なフォーマットの違いに気を配りながら整形し、それぞれのデータの法的な契約状態に注意しながら分析を行うのは、非常に大変な作業です。データアナリストの方々は、データの収集と整形に多くの時間を費やしているのではないでしょうか。
+
+> 現在、IT系の仕事の中でデータアナリストは高い人気を博している。大手を含めて日本企業の大多数は情報活用が出来ていないので、データアナリストやその志望者にはブルーオーシャンが広がっているように見えるかもしれない。しかし、情報の分析・活用の現場で欠けているのはデータ分析のスキルではない。豊穣かつ正確なローデータ（分析用の生データ）の供給源となるべき「まともな基幹システム」である。
+> ——— [基幹システムが劣化するとデータ分析が栄える - 設計者の発言](https://dbconcept.hatenablog.com/entry/2025/01/27/100337)
+
+### アプリケーション開発者は今すぐデータの変更の記録に取り組もう
+
+この問題は、私たちアプリケーション開発者にとっても他人ごとではありません。データの源泉であるアプリケーションが適切に変更を記録すれば、このような問題は避けられるはずです。記録さえしておけば、今は忙しくても、後でデータアナリストへ必要なデータを取り出して配信できます。
+
+しかし、一度失われてしまったデータを復元することは二度とできません。これは将来どうにかするべき問題ではなく、今すぐ取り組むべき問題だということを認識しなければなりません。そして、「今記録できていないから今さらやっても仕方がない」という考えは捨てるべきです。データが記録できていない状態を現在進行形の問題として捉えるべきです。
+
+### データ変更の記録はアプリケーション開発者をも助ける
+
+実は、データ変更の記録は、アプリケーション開発者にとっても大きなメリットがあります。実際、私は何度もデータ変更の記録に助けられました。
+
+例えば、顧客から監査記録の提出を求められた場合、データ変更の記録があれば、それを整形し適切に匿名化することで顧客のニーズに応えられます。
+
+また、データ変更の記録は、アプリケーションの不具合や障害の調査にも役立ちます。不整合なデータが発生した場合、データ変更の記録を確認することで、いつどのような操作によってそれが発生したのかを特定できます。これにより、問題の原因を迅速に特定し、修正することができます。
+
+### この記事の目的
+
+そこで本記事では、データ変更の記録方法を型化し、「データ変更の記録が全くない状態」から「整形も配信もしないが、少なくとも記録だけはある状態」を目指します。
+
+具体的には、ドメインイベントの記録を容易にするためのリポジトリ設計を紹介します。
+
+## ドメインイベント
+
+### ドメインイベントとは
+
+イベントとは、過去に発生した出来事を表すものです。ドメインイベントは、ドメインで発生した出来事を指します。
+
+例えば、EC サイトにおけるドメインイベントには以下のようなものがあります。
+
+- ユーザーが作成されたとき
+
+- ユーザーが削除されたとき
+
+- 注文が作成されたとき
+
+- 注文がキャンセルされたとき
+
+- 商品が在庫切れになったとき
+
+- 商品が再入荷されたとき
+
+### ドメインイベントを記録すべき理由
+
+ドメインイベントを記録することで、様々な恩恵を受けられます。例えば、以下のようなものがあります。
+
+- 監査
+
+- 不具合や障害の調査
+
+- ユーザーの行動分析
+
+- ユーザーの行動に基づいたレコメンデーション
+
+- 過去のデータを利用したビジネスの意思決定
+
+## リポジトリ設計
+
+### エンティティを受け取るリポジトリ
+
+典型的なリポジトリの設計では、リポジトリはエンティティを受け取ります。例えば、ユーザーのリポジトリは以下のように設計されることが多いです。
+
+- `save` メソッドで User エンティティを受け取り、永続化する
+
+- `delete` メソッドで User エンティティを受け取り、削除する
+
+```typescript
+type User = Readonly<{
+  id: string;
+  name: string;
+}>;
+
+type UserRepository = Readonly<{
+  save: (user: User) => Promise;
+  delete: (userId: string) => Promise;
+}>;
+```
+
+この場合、ドメインイベントを記録するためには次の方法があります。
+
+- リポジトリの中でドメインイベントを記録する
+
+`save` メソッドや `delete` メソッドの中でドメインイベントを生成して記録する
+
+- リポジトリへエンティティとドメインイベントの両方を引数として渡す
+
+`save` メソッドや `delete` メソッドへドメインイベントを引数として渡す
+
+どちらの方法でも、ドメインイベントを記録することはできますが、以下のような問題があります。
+
+- リポジトリの中でドメインイベントを記録する場合
+
+リポジトリの責務が増えてしまいます。特に、エンティティの状態からドメインイベントを逆算して生成することは難しいです。
+例えば、「管理者が他のユーザーを削除した」というドメインイベントを記録する場合、リポジトリは「管理者が誰か」を知る必要があります。
+しかし、削除対象のユーザーのエンティティからは「管理者が誰か」を知ることはできません。
+
+- リポジトリへエンティティとドメインイベントの両方を引数として渡す場合
+
+リポジトリの複雑度が増してしまいます。そのエンティティとドメインイベントの関係が正しいか検証する必要が生まれます。
+
+### ドメインイベントのみを受け取るリポジトリ
+
+そこで、ドメインイベントのみを受け取るリポジトリを設計します。
+ドメインイベントは、ドメインの状態の変化に加え、変化後の状態を保持します。
+
+以下の例では、ユーザーの作成と削除のドメインイベントを定義し、それを受け取るリポジトリ(ストア)を設計します。
+
+```typescript
+type UserCreated = Readonly<{
+  eventId: string;
+  eventAt: Date;
+  eventName: "UserCreated";
+  user: User;
+}>;
+
+type UserCreatedStore = Readonly<{
+  store: (event: UserCreated) => Promise;
+}>;
+
+type UserDeleted = Readonly<{
+  eventId: string;
+  eventAt: Date;
+  eventName: "UserDeleted";
+  payload: {
+    /** ユーザーを削除した管理者のID */
+    deletedBy: string;
+  };
+  user: Pick;
+}>;
+
+type UserDeletedStore = Readonly<{
+  store: (event: UserDeleted) => Promise;
+}>;
+```
+
+### ドメインイベントの一般化
+
+それぞれの集約のドメインイベントについて、別々に定義するのは冗長です。
+そこで、ドメインイベントをユーティリティ型として一般化します。
+
+```typescript
+type DomainEvent = Readonly<{
+  eventId: string;
+  eventAt: Date;
+  eventName: TEventName;
+  payload: TPayload;
+  /**
+   * 集約のID。例えばユーザーのID。
+   */
+  aggregateId: TState["id"];
+  /**
+   * 集約の状態。例えば、ユーザーそのもの。
+   * ユーザーを削除する場合は、ユーザーのIDのみを保持する。
+   */
+  aggregateState: TState;
+}>;
+
+type UserEvent<
+  TEventName,
+  TPayload,
+  TState extends User | Pick
+> = DomainEvent;
+
+type UserCreated = UserEvent<"UserCreated", unknown, User>;
+
+type UserDeleted = UserEvent<
+  "UserDeleted",
+  {
+    /** ユーザーを削除した管理者のID */
+    deletedBy: string;
+  },
+  Pick
+>;
+```
+
+## テーブル設計
+
+ドメインイベントを記録するためのテーブル設計を考えます。
+理想としては、ドメインイベントごとにテーブルを定義することでエンティティとのリレーションシップを表現できるようになります。
+しかし、ドメインイベントの数が多くなると、テーブルの数も増えてしまいます。
+そのため、ドメインイベントを一般化した型を利用して、ドメインイベントを一つのテーブルにまとめることができます。
+
+ここでは、PostgreSQL向けに以下のようなテーブル設計を提案します。
+
+- `payload` や `aggregate_state` は JSON 型で保存する
+
+データの整形や整合性チェックはデータ基盤上でも何とかなるので、ここではとにかく整合性よりもデータを記録することに集中します。
+
+- `event_id` は UUID 型で保存する
+
+UUID v7を使用し、`eventId` でソートすれば時系列順のイベントを取得できる状態を目指します。
+
+- `event_at` を保存する
+
+`event_id` からタイムスタンプを復元することはできますが、データを利用する側がイベントの発生日時を絞ってクエリしやすいように `event_at` を保存しておきます。
+
+- `aggregate_name` は集約の名前を保存する
+
+データを分析する時に「ユーザーに関するイベント」など特定の集約のイベントを抽出するために必要です
+
+```sql
+CREATE TABLE domain_events (
+  event_id UUID NOT NULL,
+  event_at TIMESTAMP NOT NULL,
+  event_name VARCHAR(255) NOT NULL,
+  payload JSON NOT NULL,
+  aggregate_id VARCHAR(255) NOT NULL,
+  aggregate_name VARCHAR(255) NOT NULL,
+  aggregate_props JSON NOT NULL,
+  PRIMARY KEY (event_id)
+);
+```
+
+より具体的なデータモデリングの技法については、私の同僚であり先任のテックリードが書いた以下の記事が参考になります。
+
+[https://kakehashi-dev.hatenablog.com/entry/2024/05/15/090000](https://kakehashi-dev.hatenablog.com/entry/2024/05/15/090000)
+
+## ドメインイベントを中心にしたアプリケーション設計
+
+ユーザーの作成を例にとって、ドメインイベントを中心にしたアプリケーション設計を考えます。
+ドメインイベントを中心にしたアプリケーション設計は、以下のような構成になります。
+
+- ドメインイベントを生成する関数
+
+- ドメインイベントを記録するストア
+
+- ビジネスロジックに応じてドメインイベントの生成と記録を行うユースケース
+
+具体的な実装例を下記にて公開しています。
+[https://github.com/iwasa-kosui/til/tree/main/packages/domain-event](https://github.com/iwasa-kosui/til/tree/main/packages/domain-event)
+
+```typescript
+import { generator } from "ui7";
+const uuid = generator();
+
+const createUser = (props: Omit): UserCreated => {
+  // 注意: UUID v7 をユーザーIDに使用する場合、
+  // IDからユーザーの作成日時を特定できてしまう。
+  // ユーザーIDをエンドユーザーに露出すべきでない場合、他の手段を採用すべき。
+  const userId = uuid();
+  return {
+    eventId: uuid(),
+    eventAt: new Date(),
+    eventName: "UserCreated",
+    payload: {},
+    aggregateId: userId,
+    aggregateState: { id: userId, ...props },
+  };
+};
+
+type Result = { ok: true; data: T } | { ok: false; error: E };
+const Result = {
+  ok: (data: T): Result => ({ ok: true, data }),
+  err: (error: E): Result => ({ ok: false, error }),
+} as const;
+
+type UserResolver = Readonly<{
+  resolveByName: (name: string) => Promise;
+}>;
+type UserAlreadyExists = Readonly<{
+  code: "UserAlreadyExists";
+  message: string;
+  detail: {
+    name: string;
+  };
+}>;
+
+const UserAlreadyExists = {
+  new: (name: string): UserAlreadyExists => ({
+    code: "UserAlreadyExists",
+    message: `User with name ${name} already exists`,
+    detail: { name },
+  }),
+} as const;
+
+const CreateUserUseCase = (
+  userResolver: UserResolver,
+  userCreatedStore: UserCreatedStore
+) => {
+  const run = async (
+    props: Omit
+  ): Promise> => {
+    const user = await userResolver.resolveByName(props.name);
+    if (user !== undefined) {
+      return Result.err(UserAlreadyExists.new(props.name));
+    }
+    const event = createUser(props);
+    await userCreatedStore.store(event);
+    return Result.ok(event.aggregateState);
+  };
+
+  return { run } as const;
+};
+```
