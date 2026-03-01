@@ -7,6 +7,7 @@ type PostMeta = {
   date: string;
   slug: string;
   image?: string;
+  description?: string;
 };
 
 const loadPosts = (): PostMeta[] => {
@@ -23,8 +24,9 @@ const loadPosts = (): PostMeta[] => {
     const date = fm.match(/^date:\s*"(.+)"$/m)?.[1] ?? '';
     const slug = fm.match(/^slug:\s*"(.+)"$/m)?.[1] ?? '';
     const image = fm.match(/^image:\s*"(.+)"$/m)?.[1];
+    const description = fm.match(/^description:\s*"(.+)"$/m)?.[1];
 
-    return [{ title, date, slug, image }];
+    return [{ title, date, slug, image, description }];
   });
 
   return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -54,6 +56,7 @@ const main = (): void => {
       id: `${siteUrl}/${post.slug}`,
       link: `${siteUrl}/${post.slug}`,
       date: new Date(post.date),
+      ...(post.description ? { description: post.description } : {}),
       ...(post.image ? { image: post.image } : {}),
     });
   }
