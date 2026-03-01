@@ -6,6 +6,8 @@ declare module '*.mdx' {
     date: string;
     slug: string;
     image?: string;
+    ogIcon?: string;
+    ogSvg?: string;
   };
 
   const MDXComponent: ComponentType;
