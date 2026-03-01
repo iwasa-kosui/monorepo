@@ -73,6 +73,7 @@ jobs:
         env:
           HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
         run: |
+          ssh $HOST "mkdir -p ~/monorepo/apps/iori/dist"
           rsync -avz --delete apps/iori/dist/ $HOST:~/monorepo/apps/iori/dist/
 
       - name: Install dependencies and run migration on server
