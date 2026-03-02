@@ -1,5 +1,72 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import externalArticlesData from '../content/external-articles/data.json';
+import talksData from '../content/talks/data.json';
+
+type TalkMeta = {
+  title: string;
+  date: string;
+  event: string;
+  tags: string[];
+  duration: string;
+  description: string;
+  year: string;
+  name: string;
+  slideType: string;
+};
+
+type ExternalArticleMeta = {
+  title: string;
+  url: string;
+  date: string;
+  publisher: string;
+  description?: string;
+  tags: string[];
+};
+
+const talks = (talksData as TalkMeta[]).slice(0, 3);
+const externalArticles = (externalArticlesData as ExternalArticleMeta[]).slice(
+  0,
+  3,
+);
+
+const careers = [
+  {
+    period: '2022 - 現在',
+    org: '株式会社カケハシ',
+    role: 'テックリード',
+    description:
+      '認証認可・組織管理など共通基盤の設計・開発。TypeScriptと関数型プログラミングで堅牢なプラットフォームを構築。',
+  },
+  {
+    period: '2019 - 2022',
+    org: '株式会社ディー・エヌ・エー',
+    role: 'Webエンジニア',
+    description: 'タクシー配車アプリ「MOV」(現: GO) の業務管理システム開発。',
+  },
+];
+
+const education = [
+  {
+    period: '2017 - 2018',
+    org: '東京農工大学大学院 工学府',
+    description: '人工知能・マルチエージェントシステム・自然言語処理を研究。',
+  },
+  {
+    period: '2013 - 2017',
+    org: '東京農工大学 工学部 情報工学科',
+    description: '学士（情報工学）取得。',
+  },
+];
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
 ---
 
 <BaseLayout
@@ -33,65 +100,327 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
     </div>
   </section>
 
-  <section>
+  <section class="mb-10">
     <h2 class="text-2xl font-bold mb-6">
-      <span class="heading-accent">専門領域</span>
+      <span class="heading-accent">大切にしていること</span>
     </h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
-          医療SaaSの品質要求に応えるアーキテクチャ設計
+    <div class="space-y-6">
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-1">
+          ドメインに根ざした技術選択
         </h3>
         <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
-          3省2ガイドライン等の法令要件、患者データの機密性、薬局チェーンの複雑な組織構造といったドメイン固有の制約を分析し、中長期の拡張性と短期のデリバリーを両立するアーキテクチャを選択しています。サービスベースアーキテクチャによる段階的な分離、RLSによるDB層でのテナント分離、ドメインイベントによる監査証跡の確保などを実践しています。
-        </p>
-        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
-          SRE KAIGI 2026: 品質特性の明文化 → ADRでの意思決定記録 →
-          中長期の改善計画策定というプロセスを実践
+          技術選択の出発点は、事業が置かれた制約の理解にあると考えています。法規制・データの機密性・組織構造といったドメイン固有の制約を分析し、中長期の拡張性と短期のデリバリーを両立するアーキテクチャを選択しています。現在は医療SaaS企業にて、サービスベースアーキテクチャによる段階的な分離やDB層でのテナント分離などを実践しています。
         </p>
       </div>
-
-      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
-          コアドメイン集中を支えるプラットフォーム
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-1">
+          チームが本質的な価値に集中できる環境をつくる
         </h3>
         <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
-          認証認可・組織管理・ライセンスといった横断的関心事をプラットフォームとして引き受け、プロダクトチームが電子薬歴や患者フォローアップといった本質的な顧客価値に集中できる環境をつくっています。プロダクトチームとの対話を通じたドメインモデリングで要求を構造化し、APIとして提供。100店舗超の薬局チェーンの階層的な組織構造や、二要素認証の義務化など、変化する要件に対応しています。
-        </p>
-        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
-          TechPlay 2023:
-          「プラットフォームの目的は工数削減ではなく、プロダクトチームがコアドメインに集中できる状態の実現」
+          認証認可・組織管理・ライセンスといった横断的関心事をプラットフォームとして引き受け、プロダクトチームが本質的な顧客価値に集中できる環境をつくっています。チームとの対話を通じてドメインモデリングで要求を構造化し、APIとして提供。変化する要件に継続的に対応できるプラットフォームを目指しています。
         </p>
       </div>
+    </div>
+  </section>
 
-      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
-          型システムによるビジネスルールの正確な表現
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-6">
+      <span class="heading-accent">関心領域</span>
+    </h2>
+    <div class="space-y-6">
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-1">
+          型システムの利用とドメインモデリング
         </h3>
         <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
-          医療システムにおいて不正な状態遷移は患者データの漏洩に直結します。複雑なビジネスルールを型で表現し、誤りをコンパイル時に検出することで、仕様と実装のズレを構造的に防いでいます。OpenID
-          Connect認証フローの状態遷移を代数的データ型で型安全に管理し、表形式データの検証ではApplicative
+          複雑なビジネスルールを型で表現し、誤りをコンパイル時に検出することで、仕様と実装のズレを構造的に防いでいます。認証フローの状態遷移を代数的データ型で型安全に管理し、表形式データの検証ではApplicative
           Validationですべてのエラーを同時に収集。チーム全体で活用できるよう、スコープ限定・ペアプロ・レシピ集によるオンボーディングを整備しています。
         </p>
-        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
-          関数型まつり 2025 + TSKaigi 2024:
-          型で不正状態を排除し、チーム全体で運用可能にする実践
-        </p>
+        <ul class="mt-2 space-y-1 text-sm list-disc list-inside">
+          <li>
+            <a
+              href="/talks/2025/fp-matsuri"
+              class="text-accent dark:text-accent-light hover:underline"
+            >堅牢な認証基盤の実現: TypeScriptで代数的データ型を活用する</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — 関数型まつり 2025</span>
+          </li>
+          <li>
+            <a
+              href="/talks/2024/tskaigi"
+              class="text-accent dark:text-accent-light hover:underline"
+            >複雑なビジネスルールに挑む:
+              正確性と効率性を両立するfp-tsのチーム活用術</a>
+            <span class="text-subtle dark:text-[#9ca3af]"> — TSKaigi 2024</span>
+          </li>
+          <li>
+            <a
+              href="https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-accent dark:text-accent-light hover:underline"
+            >TypeScriptのテストにはas const satisfiesが便利です</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — KAKEHASHI Tech Blog</span>
+          </li>
+          <li>
+            <a
+              href="https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-accent dark:text-accent-light hover:underline"
+            >他言語経験者が知っておきたいTypeScriptのクラスの注意点</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — KAKEHASHI Tech Blog</span>
+          </li>
+        </ul>
       </div>
-
-      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
-          チームで信頼性を育てる継続的改善
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-1">
+          信頼性エンジニアリング
         </h3>
         <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
-          専任SREを持たない開発チームでも、設計を"自分ごと"として運用し続けることで信頼性は向上できます。品質特性の明文化とADRによる意思決定の記録、ポストモーテムからの改善計画策定を実践。Delta
-          Lakeのタイムトラベルによる過去データへの即座アクセスを実現し、障害時の原因特定時間を大幅に短縮しました。
+          専任SREを持たない開発チームでも、設計を"自分ごと"として運用し続けることで信頼性は向上できます。品質特性の明文化とADRによる意思決定の記録、ポストモーテムからの改善計画策定を実践。障害時の原因特定時間を大幅に短縮する仕組みづくりに取り組んでいます。
         </p>
-        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
-          SRE KAIGI 2026 + イミュータブルドキュメントモデル:
-          意思決定を不変の記録として残し、継続的に改善する文化
-        </p>
+        <ul class="mt-2 space-y-1 text-sm list-disc list-inside">
+          <li>
+            <a
+              href="/talks/2026/sre-kaigi-2026"
+              class="text-accent dark:text-accent-light hover:underline"
+            >開発チームが信頼性向上のためにできること</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — SRE Kaigi 2026</span>
+          </li>
+          <li>
+            <a
+              href="/talks/2023/document"
+              class="text-accent dark:text-accent-light hover:underline"
+            >更新"しない"ドキュメント管理
+              「イミュータブルドキュメントモデル」の実運用</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — Findy Lunch LT 2023</span>
+          </li>
+          <li>
+            <a
+              href="https://kakehashi-dev.hatenablog.com/entry/2024/09/19/110000"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-accent dark:text-accent-light hover:underline"
+            >目的別データベースの実践: PostgreSQL 行レベルセキュリティと
+              DynamoDB Outboxパターン</a>
+            <span class="text-subtle dark:text-[#9ca3af]">
+              — KAKEHASHI Tech Blog</span>
+          </li>
+        </ul>
       </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-6">
+      <span class="heading-accent">経歴</span>
+    </h2>
+    <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+      <h3 class="text-base font-semibold text-charcoal dark:text-gray-100 mb-4">
+        職歴
+      </h3>
+      <div class="space-y-4">
+        {
+          careers.map((item) => (
+            <div class="flex gap-4">
+              <span
+                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap pt-0.5 w-24 flex-shrink-0"
+              >
+                {item.period}
+              </span>
+              <div>
+                <p class="text-sm font-semibold text-charcoal dark:text-gray-100">
+                  {item.org}
+                </p>
+                <p class="text-xs font-medium text-accent dark:text-accent-light">
+                  {item.role}
+                </p>
+                <p class="text-xs text-subtle dark:text-[#9ca3af] mt-0.5 leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <hr class="my-5 border-gray-200 dark:border-gray-700" />
+
+      <h3 class="text-base font-semibold text-charcoal dark:text-gray-100 mb-4">
+        学歴
+      </h3>
+      <div class="space-y-4">
+        {
+          education.map((item) => (
+            <div class="flex gap-4">
+              <span
+                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap pt-0.5 w-24 flex-shrink-0"
+              >
+                {item.period}
+              </span>
+              <div>
+                <p class="text-sm font-semibold text-charcoal dark:text-gray-100">
+                  {item.org}
+                </p>
+                <p class="text-xs text-subtle dark:text-[#9ca3af] mt-0.5 leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-6">
+      <span class="heading-accent">登壇 & 記事</span>
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-3">
+          登壇
+        </h3>
+        <ul class="space-y-3">
+          {
+            talks.map((talk) => (
+              <li>
+                <a
+                  href={`/talks/${talk.year}/${talk.name}`}
+                  class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+                >
+                  <time
+                    class="text-xs text-subtle dark:text-[#9ca3af]"
+                    datetime={talk.date}
+                  >
+                    {formatDate(talk.date)}
+                  </time>
+                  <p class="text-xs font-semibold text-accent dark:text-accent-light mt-0.5">
+                    @ {talk.event}
+                  </p>
+                  <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-1 leading-snug">
+                    {talk.title}
+                  </p>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a
+          href="/talks"
+          class="inline-block mt-3 text-sm font-medium text-accent dark:text-accent-light hover:underline"
+        >
+          すべて見る &rarr;
+        </a>
+      </div>
+
+      <div>
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-3">
+          記事
+        </h3>
+        <ul class="space-y-3">
+          {
+            externalArticles.map((article) => (
+              <li>
+                <a
+                  href={article.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+                >
+                  <time
+                    class="text-xs text-subtle dark:text-[#9ca3af]"
+                    datetime={article.date}
+                  >
+                    {formatDate(article.date)}
+                  </time>
+                  <p class="text-xs font-semibold text-accent dark:text-accent-light mt-0.5">
+                    @ {article.publisher}
+                  </p>
+                  <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-1 leading-snug">
+                    {article.title}
+                  </p>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a
+          href="/posts"
+          class="inline-block mt-3 text-sm font-medium text-accent dark:text-accent-light hover:underline"
+        >
+          すべて見る &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-6">
+      <span class="heading-accent">リンク</span>
+    </h2>
+    <div class="flex flex-wrap gap-2">
+      <a
+        href="https://github.com/iwasa-kosui"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+      >
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+        </svg>
+        GitHub
+      </a>
+      <a
+        href="https://x.com/kosui_me"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+      >
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+        </svg>
+        X
+      </a>
+      <a
+        href="https://speakerdeck.com/kakehashi"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+      >
+        <svg
+          class="w-3.5 h-3.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5"
+          />
+        </svg>
+        Speaker Deck
+      </a>
+      <a
+        href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+      >
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+        </svg>
+        Google Scholar
+      </a>
     </div>
   </section>
 </BaseLayout>
