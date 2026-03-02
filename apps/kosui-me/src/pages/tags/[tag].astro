@@ -178,10 +178,7 @@ const kindConfig = {
         if (item.kind === 'post') {
           return (
         <li>
-          <a
-            href={`/${item.data.slug}`}
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-          >
+          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
                 class="text-xs text-subtle dark:text-[#9ca3af]"
@@ -196,7 +193,9 @@ const kindConfig = {
               </span>
             </div>
             <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
-              {item.data.title}
+              <a href={`/${item.data.slug}`} class="card-link-overlay">
+                {item.data.title}
+              </a>
             </h2>
             {
               item.data.description && (
@@ -207,26 +206,19 @@ const kindConfig = {
             }
             {
               item.data.tags && item.data.tags.length > 0 && (
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.tags.map((t) => (
-                      <TagBadge tag={t} linked={false} />
-                    ))
-                  }
+                <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
+                  {item.data.tags.map((t) => <TagBadge tag={t} />)}
                 </div>
               )
             }
-          </a>
+          </div>
         </li>
       );
         }
         if (item.kind === 'talk') {
           return (
         <li>
-          <a
-            href={`/talks/${item.data.year}/${item.data.name}`}
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-          >
+          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
                 class="text-xs text-subtle dark:text-[#9ca3af]"
@@ -248,7 +240,12 @@ const kindConfig = {
               )
             }
             <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
-              {item.data.title}
+              <a
+                href={`/talks/${item.data.year}/${item.data.name}`}
+                class="card-link-overlay"
+              >
+                {item.data.title}
+              </a>
             </h2>
             {
               item.data.description && (
@@ -259,28 +256,19 @@ const kindConfig = {
             }
             {
               item.data.tags.length > 0 && (
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.tags.map((t) => (
-                      <TagBadge tag={t} linked={false} />
-                    ))
-                  }
+                <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
+                  {item.data.tags.map((t) => <TagBadge tag={t} />)}
                 </div>
               )
             }
-          </a>
+          </div>
         </li>
       );
         }
         // external-article
         return (
         <li>
-          <a
-            href={item.data.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-          >
+          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
                 class="text-xs text-subtle dark:text-[#9ca3af]"
@@ -298,7 +286,14 @@ const kindConfig = {
               @ {item.data.publisher}
             </p>
             <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
-              {item.data.title}
+              <a
+                href={item.data.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="card-link-overlay"
+              >
+                {item.data.title}
+              </a>
             </h2>
             {
               item.data.description && (
@@ -309,16 +304,12 @@ const kindConfig = {
             }
             {
               item.data.tags.length > 0 && (
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.tags.map((t) => (
-                      <TagBadge tag={t} linked={false} />
-                    ))
-                  }
+                <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
+                  {item.data.tags.map((t) => <TagBadge tag={t} />)}
                 </div>
               )
             }
-          </a>
+          </div>
         </li>
       );
       })

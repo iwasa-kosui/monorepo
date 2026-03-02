@@ -29,10 +29,7 @@ function formatDate(dateStr: string): string {
     {
       sortedPosts.map((post) => (
         <li>
-          <a
-            href={`/${post.data.slug}`}
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-          >
+          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <time
               class="text-xs text-accent dark:text-accent-light"
               datetime={post.data.date}
@@ -40,7 +37,9 @@ function formatDate(dateStr: string): string {
               {formatDate(post.data.date)}
             </time>
             <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
-              {post.data.title}
+              <a href={`/${post.data.slug}`} class="card-link-overlay">
+                {post.data.title}
+              </a>
             </h2>
             {
               post.data.description && (
@@ -51,16 +50,12 @@ function formatDate(dateStr: string): string {
             }
             {
               post.data.tags && post.data.tags.length > 0 && (
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  {
-                    post.data.tags.map((tag: string) => (
-                      <TagBadge tag={tag} linked={false} />
-                    ))
-                  }
+                <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
+                  {post.data.tags.map((tag: string) => <TagBadge tag={tag} />)}
                 </div>
               )
             }
-          </a>
+          </div>
         </li>
       ))
     }
