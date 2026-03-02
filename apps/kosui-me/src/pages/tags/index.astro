@@ -1,0 +1,105 @@
+---
+import TagBadge from '@/components/TagBadge.astro';
+import { getTagDefinition } from '@/config/tags';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { type CollectionEntry, getCollection } from 'astro:content';
+import externalArticlesData from '../../content/external-articles/data.json';
+import talksData from '../../content/talks/data.json';
+
+type TalkMeta = {
+  tags: string[];
+  [key: string]: unknown;
+};
+
+type ExternalArticleMeta = {
+  tags: string[];
+  [key: string]: unknown;
+};
+
+const posts: CollectionEntry<'posts'>[] = await getCollection('posts');
+const talks = talksData as TalkMeta[];
+const externalArticles = externalArticlesData as ExternalArticleMeta[];
+
+// Collect all tags with counts
+const tagCounts = new Map<string, number>();
+
+for (const post of posts) {
+  for (const tag of post.data.tags ?? []) {
+    tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+  }
+}
+for (const talk of talks) {
+  for (const tag of talk.tags ?? []) {
+    tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+  }
+}
+for (const article of externalArticles) {
+  for (const tag of article.tags ?? []) {
+    tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+  }
+}
+
+// Group by category
+const tagsByCategory = new Map<string, { tag: string; count: number }[]>();
+
+for (const [tag, count] of tagCounts) {
+  const { category } = getTagDefinition(tag);
+  const existing = tagsByCategory.get(category) ?? [];
+  existing.push({ tag, count });
+  tagsByCategory.set(category, existing);
+}
+
+// Sort tags within each category by count descending
+for (const tags of tagsByCategory.values()) {
+  tags.sort((a, b) => b.count - a.count);
+}
+
+// Define category display order
+const categoryOrder = [
+  'Languages',
+  'TypeScript Concepts',
+  'Cloud',
+  'Databases',
+  'Design',
+  'Security',
+  'Practices',
+  'Tools',
+  'Academic',
+  'Other',
+];
+
+const sortedCategories = [...tagsByCategory.entries()].sort((a, b) => {
+  const ai = categoryOrder.indexOf(a[0]);
+  const bi = categoryOrder.indexOf(b[0]);
+  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+});
+---
+
+<BaseLayout title="Tags - kosui" ogTitle="Tags">
+  <h1 class="text-3xl font-bold mb-8">
+    <span class="heading-accent">Tags</span>
+  </h1>
+  <div class="space-y-8">
+    {
+      sortedCategories.map(([category, tags]) => (
+        <section class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+          <h2 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
+            {category}
+          </h2>
+          <div class="flex flex-wrap gap-2">
+            {
+              tags.map(({ tag, count }) => (
+                <span class="inline-flex items-center gap-1">
+                  <TagBadge tag={tag} />
+                  <span class="text-xs text-subtle dark:text-[#9ca3af]">
+                    ({count})
+                  </span>
+                </span>
+              ))
+            }
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</BaseLayout>
