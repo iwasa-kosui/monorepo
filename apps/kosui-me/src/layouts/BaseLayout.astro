@@ -1,0 +1,118 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogUrl?: string;
+  ogType?: string;
+  oembedUrl?: string;
+}
+
+const {
+  title = 'kosui',
+  description =
+    'kosuiの技術ブログ。TypeScript, Node.js, インフラなどの知見を発信しています。',
+  ogTitle,
+  ogDescription,
+  ogImage = 'https://kosui.me/og/default.png',
+  ogUrl,
+  ogType = 'website',
+  oembedUrl,
+} = Astro.props;
+
+const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
+const displayOgTitle = ogTitle ?? title;
+const displayOgDescription = ogDescription ?? description;
+---
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{displayTitle}</title>
+    <meta name="description" content={displayOgDescription} />
+    <meta property="og:title" content={displayOgTitle} />
+    <meta property="og:description" content={displayOgDescription} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="kosui" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    {ogUrl && <meta property="og:url" content={ogUrl} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={displayOgTitle} />
+    <meta name="twitter:description" content={displayOgDescription} />
+    <meta name="twitter:image" content={ogImage} />
+    {
+      oembedUrl && (
+        <link
+          rel="alternate"
+          type="application/json+oembed"
+          href={oembedUrl}
+          title={displayOgTitle}
+        />
+      )
+    }
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="kosui"
+      href="/feed.xml"
+    />
+  </head>
+  <body>
+    <div class="min-h-screen flex flex-col">
+      <header class="border-b border-warm-gray dark:border-charcoal">
+        <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+          <a
+            href="/"
+            class="text-xl font-bold text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-warm-white transition-colors"
+          >
+            kosui
+          </a>
+          <div class="flex gap-6 text-sm">
+            <a
+              href="/posts/"
+              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
+            >
+              Posts
+            </a>
+            <a
+              href="/talks/"
+              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
+            >
+              Talks
+            </a>
+            <a
+              href="/about/"
+              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
+            >
+              About
+            </a>
+            <a
+              href="/feed.xml"
+              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
+            >
+              RSS
+            </a>
+          </div>
+        </nav>
+      </header>
+      <main class="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
+        <slot />
+      </main>
+      <footer class="border-t border-warm-gray dark:border-charcoal">
+        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-charcoal-light dark:text-warm-gray">
+          &copy; {new Date().getFullYear()} kosui
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
