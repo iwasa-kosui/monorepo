@@ -20,8 +20,8 @@ talk:
     医療システムの認証基盤で代数的データ型を活用し、複雑な状態管理を型安全に実現した事例を紹介します。
   tags:
     - TypeScript
-    - Functional Programming
-    - Authentication
+    - 関数型プログラミング
+    - 認証
   duration: "20min"
   speaker: "岩佐 幸翠"
 ---

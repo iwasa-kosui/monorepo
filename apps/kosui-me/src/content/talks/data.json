@@ -5,8 +5,8 @@
     "event": "SRE KAIGI 2026",
     "tags": [
       "SRE",
-      "Architecture",
-      "Platform"
+      "アーキテクチャ",
+      "プラットフォーム"
     ],
     "duration": "30min",
     "description": "Embedded SRE不在でも開発チームが信頼性に責任を持ち、改善を続けるための具体的な方法論と、運用を通じて学んだ教訓を紹介します。",
@@ -20,8 +20,8 @@
     "event": "関数型まつり 2025",
     "tags": [
       "TypeScript",
-      "Functional Programming",
-      "Authentication"
+      "関数型プログラミング",
+      "認証"
     ],
     "duration": "20min",
     "description": "医療システムの認証基盤で代数的データ型を活用し、複雑な状態管理を型安全に実現した事例を紹介します。",
@@ -34,8 +34,8 @@
     "date": "2024-12-08",
     "event": "社内LT",
     "tags": [
-      "Software Engineering",
-      "Product Management"
+      "ソフトウェアエンジニアリング",
+      "プロダクトマネジメント"
     ],
     "duration": "10min",
     "description": "プロダクトマネージャー向けに、ソフトウェアエンジニアリングの基礎と、\nPdMとエンジニアが協働するためのアプローチを解説する。",
@@ -66,7 +66,7 @@
     "tags": [
       "TypeScript",
       "fp-ts",
-      "Functional Programming"
+      "関数型プログラミング"
     ],
     "duration": "20min",
     "description": "fp-tsの柔軟な関数合成・エラー合成機能を活用し、Excel入稿機能の複雑なバリデーションで正確性と効率性を両立させた事例を紹介します。",
@@ -80,7 +80,7 @@
     "event": "Findy様 TypeScript 開発言語を統一 〜フロントからバックまで活用〜 Lunch LT",
     "tags": [
       "TypeScript",
-      "Backend"
+      "バックエンド"
     ],
     "duration": "10min",
     "description": "TypeScriptの柔軟な型システムをバックエンドで活用し、品質とスピードを両立させるための実践的なテクニックを紹介します。",
@@ -93,8 +93,8 @@
     "date": "2023-12-06",
     "event": "Findy様 ドキュメント管理を制する 陳腐化を防ぐための実践事例 Lunch LT",
     "tags": [
-      "Documentation",
-      "Team Practice"
+      "ドキュメント",
+      "チームプラクティス"
     ],
     "duration": "20min",
     "description": "ドキュメントを更新し続ける代わりに、意思決定を記録する「イミュータブルドキュメントモデル」の実運用について紹介します。",
@@ -107,8 +107,8 @@
     "date": "2023-10-24",
     "event": "SmartHR・カケハシ・リクルートのエンジニアが語る「複雑化するプラットフォーム開発をスムーズに進めるための方法」",
     "tags": [
-      "Platform",
-      "Architecture"
+      "プラットフォーム",
+      "アーキテクチャ"
     ],
     "duration": "15min",
     "description": "大規模SaaSにおけるプラットフォームシステム開発で、要求分析とアジャイル開発を小さく反復する方法論を紹介します。",
@@ -121,7 +121,7 @@
     "date": "2021-12-27",
     "event": "DeNA TechCon 2021 Winter",
     "tags": [
-      "Browser",
+      "ブラウザ",
       "User-Agent",
       "Chrome"
     ],
@@ -137,7 +137,7 @@
     "event": "MCCMMANCC 2019",
     "tags": [
       "Go",
-      "Compiler"
+      "コンパイラ"
     ],
     "duration": "15min",
     "description": "Go言語の「iota」という言語機能に焦点を当て、\nGoコンパイラのソースコードを読み解きながら内部実装を探索する。",

@@ -13,8 +13,8 @@ talk:
   description: |
     大規模SaaSにおけるプラットフォームシステム開発で、要求分析とアジャイル開発を小さく反復する方法論を紹介します。
   tags:
-    - Platform
-    - Architecture
+    - プラットフォーム
+    - アーキテクチャ
   duration: "15min"
   speaker: "岩佐 幸翠"
 ---
