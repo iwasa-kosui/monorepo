@@ -19,27 +19,22 @@ export const TalkListPage = () => {
               href={`https://talks.kosui.me/${talk.year}/${talk.name}/`}
               target='_blank'
               rel='noopener noreferrer'
-              className='block group'
+              className='block bg-cream dark:bg-[#2d2a28] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover'
             >
-              <div className='flex items-center gap-2 text-sm'>
-                <time className='text-terracotta dark:text-terracotta-light' dateTime={talk.date}>
-                  {formatDate(talk.date)}
-                </time>
-                {talk.event && (
-                  <span className='text-charcoal-light dark:text-warm-gray'>
-                    — {talk.event}
-                  </span>
-                )}
-              </div>
-              <h2 className='text-lg font-medium group-hover:text-terracotta dark:group-hover:text-terracotta-light transition-colors'>
-                {talk.title}
-              </h2>
+              <time className='text-xs text-terracotta dark:text-terracotta-light' dateTime={talk.date}>
+                {formatDate(talk.date)}
+              </time>
+              {talk.event && <p className='text-sm font-medium text-teal dark:text-teal mt-1'>@ {talk.event}</p>}
+              <h2 className='text-lg font-semibold text-charcoal dark:text-gray-100 mt-1'>{talk.title}</h2>
+              {talk.description && (
+                <p className='mt-1 text-sm text-charcoal-light dark:text-warm-gray'>{talk.description}</p>
+              )}
               {talk.tags.length > 0 && (
-                <div className='flex flex-wrap gap-1.5 mt-1'>
+                <div className='mt-2 flex flex-wrap gap-1.5'>
                   {talk.tags.map((tag) => (
                     <span
                       key={tag}
-                      className='text-xs px-1.5 py-0.5 rounded bg-warm-gray/30 text-charcoal-light dark:bg-charcoal/50 dark:text-warm-gray'
+                      className='inline-block px-2 py-0.5 text-xs rounded-full bg-sand-light dark:bg-[#3d3835] text-charcoal-light dark:text-warm-gray'
                     >
                       {tag}
                     </span>
