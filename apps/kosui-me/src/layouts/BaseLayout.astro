@@ -27,6 +27,7 @@ const {
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
+const canonicalUrl = ogUrl ?? new URL(Astro.url.pathname, Astro.site).href;
 
 const pathname = Astro.url.pathname;
 
@@ -66,6 +67,7 @@ const navItems = [
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <link rel="canonical" href={canonicalUrl} />
     {ogUrl && <meta property="og:url" content={ogUrl} />}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={displayOgTitle} />
