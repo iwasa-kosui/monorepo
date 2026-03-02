@@ -75,8 +75,8 @@ const TalkCard = ({ item }: { item: TimelineItem & { kind: 'talk' } }) => (
         {formatDate(item.date)}
       </time>
       <KindLabel kind='talk' />
-      {item.data.event && <span className='text-xs text-charcoal-light dark:text-warm-gray'>{item.data.event}</span>}
     </div>
+    {item.data.event && <p className='text-sm font-medium text-teal dark:text-teal mt-1'>@ {item.data.event}</p>}
     <h2 className='text-lg font-semibold text-charcoal dark:text-gray-100 mt-1'>{item.data.title}</h2>
     {item.data.description && (
       <p className='mt-1 text-sm text-charcoal-light dark:text-warm-gray'>{item.data.description}</p>
@@ -97,8 +97,8 @@ const ExternalArticleCard = ({ item }: { item: TimelineItem & { kind: 'external-
         {formatDate(item.date)}
       </time>
       <KindLabel kind='external-article' />
-      <span className='text-xs text-charcoal-light dark:text-warm-gray'>{item.data.publisher}</span>
     </div>
+    <p className='text-sm font-medium text-steel-blue dark:text-steel-blue mt-1'>@ {item.data.publisher}</p>
     <h2 className='text-lg font-semibold text-charcoal dark:text-gray-100 mt-1'>{item.data.title}</h2>
     {item.data.description && (
       <p className='mt-1 text-sm text-charcoal-light dark:text-warm-gray'>{item.data.description}</p>
