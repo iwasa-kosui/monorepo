@@ -1,4 +1,6 @@
 ---
+import AuthorCard from '@/components/AuthorCard.astro';
+import ShareButtons from '@/components/ShareButtons.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
@@ -26,19 +28,24 @@ function formatDate(dateStr: string): string {
 
 const slugFileName = post.data.slug.replace(/\//g, '-');
 const ogImage = `https://kosui.me/og/${slugFileName}.png`;
+const pageUrl = `https://kosui.me/${post.data.slug}`;
 ---
 
 <BaseLayout
   ogTitle={post.data.title}
   ogDescription={post.data.description}
   ogImage={ogImage}
-  ogUrl={`https://kosui.me/${post.data.slug}`}
+  ogUrl={pageUrl}
   ogType="article"
 >
+  <section class="mb-8 p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
+    <AuthorCard />
+  </section>
+
   <article>
     <header class="mb-8">
       <time
-        class="text-sm text-terracotta dark:text-terracotta-light"
+        class="text-sm text-accent dark:text-accent-light"
         datetime={post.data.date}
       >
         {formatDate(post.data.date)}
@@ -49,6 +56,18 @@ const ogImage = `https://kosui.me/og/${slugFileName}.png`;
       <Content />
     </div>
   </article>
+
+  <section class="mt-12 mb-8">
+    <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
+      Share
+    </h3>
+    <ShareButtons title={post.data.title} url={pageUrl} />
+  </section>
+
+  <section class="p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
+    <AuthorCard />
+  </section>
+
   <script>
   const mermaidElements = document.querySelectorAll<HTMLPreElement>(
     'pre.mermaid',
