@@ -1,5 +1,4 @@
 ---
-import TagBadge from '@/components/TagBadge.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection } from 'astro:content';
 import externalArticlesData from '../content/external-articles/data.json';
@@ -109,9 +108,7 @@ const kindConfig = {
       />
       <div>
         <h1 class="text-2xl font-bold text-charcoal dark:text-gray-100">
-          岩佐 幸翠 <span
-            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
-          >/ kosui</span>
+          岩佐 幸翠 <span class="text-subtle dark:text-[#9ca3af] text-base font-normal">/ kosui</span>
         </h1>
         <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
           テックリード @ 株式会社カケハシ
@@ -148,18 +145,8 @@ const kindConfig = {
             rel="noopener noreferrer"
             class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
           >
-            <svg
-              class="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5"
-              />
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
             </svg>
             Speaker Deck
           </a>
@@ -168,9 +155,7 @@ const kindConfig = {
     </div>
   </section>
 
-  <h2 class="text-2xl font-bold mb-6">
-    <span class="heading-accent">Timeline</span>
-  </h2>
+  <h2 class="text-2xl font-bold mb-6"><span class="heading-accent">Timeline</span></h2>
   <ul class="space-y-4">
     {
       timeline.map((item) => {
@@ -206,7 +191,15 @@ const kindConfig = {
             {
               item.data.tags && item.data.tags.length > 0 && (
                 <div class="mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.tags.map((tag) => (
+                      <span
+                        class="inline-block px-2 py-0.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  }
                 </div>
               )
             }
@@ -252,7 +245,15 @@ const kindConfig = {
             {
               item.data.tags.length > 0 && (
                 <div class="mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.tags.map((tag) => (
+                      <span
+                        class="inline-block px-2 py-0.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  }
                 </div>
               )
             }
@@ -296,7 +297,15 @@ const kindConfig = {
             {
               item.data.tags.length > 0 && (
                 <div class="mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.tags.map((tag) => (
+                      <span
+                        class="inline-block px-2 py-0.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  }
                 </div>
               )
             }
