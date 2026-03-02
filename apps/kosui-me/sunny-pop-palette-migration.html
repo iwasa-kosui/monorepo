@@ -1,617 +1,755 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sunny Pop パレット移行計画 — kosui-me</title>
-<style>
-  :root {
-    --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: var(--font);
-    background: #fafafa;
-    color: #1a1a2e;
-    line-height: 1.6;
-    padding: 2rem;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-  h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 1rem; border-bottom: 2px solid #e05e52; padding-bottom: 0.3rem; }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: #4A4860; }
-  p, li { font-size: 0.95rem; }
-  p { margin-bottom: 0.75rem; }
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sunny Pop パレット移行計画 — kosui-me</title>
+    <style>
+    :root {
+      --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: var(--font);
+      background: #fafafa;
+      color: #1a1a2e;
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 2.5rem 0 1rem;
+      border-bottom: 2px solid #e05e52;
+      padding-bottom: 0.3rem;
+    }
+    h3 {
+      font-size: 1.1rem;
+      margin: 1.5rem 0 0.75rem;
+      color: #4a4860;
+    }
+    p, li {
+      font-size: 0.95rem;
+    }
+    p {
+      margin-bottom: 0.75rem;
+    }
 
-  .subtitle { color: #4A4860; margin-bottom: 2rem; }
+    .subtitle {
+      color: #4a4860;
+      margin-bottom: 2rem;
+    }
 
-  /* Color swatch grid */
-  .palette-section { margin-bottom: 2rem; }
-  .swatch-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1rem;
-  }
-  .swatch-card {
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-    background: #fff;
-  }
-  .swatch-row {
-    display: flex;
-    height: 60px;
-  }
-  .swatch-half {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-    font-weight: 600;
-    position: relative;
-  }
-  .swatch-half .label {
-    position: absolute;
-    top: 4px;
-    left: 8px;
-    font-size: 0.6rem;
-    font-weight: 400;
-    opacity: 0.7;
-    font-family: var(--font);
-  }
-  .swatch-info {
-    padding: 0.6rem 0.85rem;
-  }
-  .swatch-name {
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-  .swatch-usage {
-    font-size: 0.75rem;
-    color: #666;
-    margin-top: 2px;
-  }
-  .arrow {
-    display: inline-block;
-    margin: 0 0.3rem;
-    color: #e05e52;
-    font-weight: bold;
-  }
+    /* Color swatch grid */
+    .palette-section {
+      margin-bottom: 2rem;
+    }
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .swatch-card {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        0 4px 16px rgba(0, 0, 0, 0.04);
+      background: #fff;
+    }
+    .swatch-row {
+      display: flex;
+      height: 60px;
+    }
+    .swatch-half {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      position: relative;
+    }
+    .swatch-half .label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 0.6rem;
+      font-weight: 400;
+      opacity: 0.7;
+      font-family: var(--font);
+    }
+    .swatch-info {
+      padding: 0.6rem 0.85rem;
+    }
+    .swatch-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .swatch-usage {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 2px;
+    }
+    .arrow {
+      display: inline-block;
+      margin: 0 0.3rem;
+      color: #e05e52;
+      font-weight: bold;
+    }
 
-  /* Dark mode section */
-  .dark-preview {
-    background: #1A1820;
-    border-radius: 12px;
-    padding: 1.5rem;
-    color: #F5EFE0;
-    margin: 1rem 0;
-  }
-  .dark-preview .card-preview {
-    background: #2A2630;
-    border-radius: 12px;
-    padding: 1rem;
-    margin-top: 0.75rem;
-  }
-  .dark-preview .tag-preview {
-    display: inline-block;
-    background: #3A3540;
-    border-radius: 9999px;
-    padding: 0.15rem 0.6rem;
-    font-size: 0.75rem;
-    margin-top: 0.5rem;
-  }
+    /* Dark mode section */
+    .dark-preview {
+      background: #1a1820;
+      border-radius: 12px;
+      padding: 1.5rem;
+      color: #f5efe0;
+      margin: 1rem 0;
+    }
+    .dark-preview .card-preview {
+      background: #2a2630;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-top: 0.75rem;
+    }
+    .dark-preview .tag-preview {
+      display: inline-block;
+      background: #3a3540;
+      border-radius: 9999px;
+      padding: 0.15rem 0.6rem;
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+    }
 
-  /* Header preview */
-  .header-preview {
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    margin: 1rem 0;
-  }
-  .header-light {
-    background: #FFF8ED;
-    padding: 1rem 1.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .header-dark {
-    background: #1A1820;
-    padding: 1rem 1.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 700;
-    font-size: 1.1rem;
-  }
-  .logo-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #e05e52, #F2A93B);
-  }
-  .pill-nav {
-    display: flex;
-    gap: 2px;
-    border-radius: 9999px;
-    padding: 3px;
-  }
-  .pill-nav.light { background: rgba(26, 26, 46, 0.05); }
-  .pill-nav.dark { background: rgba(255, 255, 255, 0.06); }
-  .pill-item {
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.82rem;
-    cursor: default;
-  }
-  .pill-active {
-    background: #e05e52;
-    color: #fff;
-    font-weight: 600;
-  }
-  .pill-inactive-light { color: rgba(26, 26, 46, 0.55); }
-  .pill-inactive-dark { color: #B0A890; }
+    /* Header preview */
+    .header-preview {
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      margin: 1rem 0;
+    }
+    .header-light {
+      background: #fff8ed;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-dark {
+      background: #1a1820;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .logo-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e05e52, #f2a93b);
+    }
+    .pill-nav {
+      display: flex;
+      gap: 2px;
+      border-radius: 9999px;
+      padding: 3px;
+    }
+    .pill-nav.light {
+      background: rgba(26, 26, 46, 0.05);
+    }
+    .pill-nav.dark {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .pill-item {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      cursor: default;
+    }
+    .pill-active {
+      background: #e05e52;
+      color: #fff;
+      font-weight: 600;
+    }
+    .pill-inactive-light {
+      color: rgba(26, 26, 46, 0.55);
+    }
+    .pill-inactive-dark {
+      color: #b0a890;
+    }
 
-  /* Comparison table */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.88rem;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #eee;
-  }
-  th {
-    background: #FFF8ED;
-    font-weight: 600;
-    font-size: 0.8rem;
-    color: #4A4860;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  td code {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    background: #f5f0e6;
-    padding: 0.1rem 0.35rem;
-    border-radius: 4px;
-  }
-  .color-dot {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    vertical-align: middle;
-    margin-right: 0.3rem;
-    border: 1px solid rgba(0,0,0,0.1);
-  }
+    /* Comparison table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #fff8ed;
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: #4a4860;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    td code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: #f5f0e6;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    .color-dot {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 0.3rem;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
 
-  /* Astro recommendation */
-  .recommendation {
-    background: #FFF0D1;
-    border-left: 4px solid #F2A93B;
-    padding: 1rem 1.25rem;
-    border-radius: 0 8px 8px 0;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-  }
-  .recommendation strong { color: #a03830; }
+    /* Astro recommendation */
+    .recommendation {
+      background: #fff0d1;
+      border-left: 4px solid #f2a93b;
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .recommendation strong {
+      color: #a03830;
+    }
 
-  /* New color only */
-  .new-badge {
-    display: inline-block;
-    background: #e05e52;
-    color: #fff;
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 0.3rem;
-  }
+    /* New color only */
+    .new-badge {
+      display: inline-block;
+      background: #e05e52;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-left: 0.3rem;
+    }
 
-  @media (max-width: 600px) {
-    body { padding: 1rem; }
-    .swatch-grid { grid-template-columns: 1fr; }
-  }
-</style>
-</head>
-<body>
+    @media (max-width: 600px) {
+      body {
+        padding: 1rem;
+      }
+      .swatch-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <h1>Sunny Pop パレット移行計画</h1>
+    <p class="subtitle">
+      kosui-me デザインリニューアル &mdash; Astro 移行時に適用
+    </p>
 
-<h1>Sunny Pop パレット移行計画</h1>
-<p class="subtitle">kosui-me デザインリニューアル &mdash; Astro 移行時に適用</p>
+    <!-- ================================================ -->
+    <h2>1. Primary (Accent)</h2>
+    <p>
+      メインアクセントカラー。リンク、ボタン、アクティブナビゲーションに使用。
+    </p>
+    <div class="swatch-grid">
+      <!-- terracotta -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #a5524c; color: #fff">
+            <span class="label">現行</span>#a5524c
+          </div>
+          <div class="swatch-half" style="background: #e05e52; color: #fff">
+            <span class="label">新</span>#e05e52
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">terracotta</div>
+          <div class="swatch-usage">
+            メインアクセント・リンク色・アクティブナビ背景
+          </div>
+        </div>
+      </div>
+      <!-- terracotta-dark -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #7d3d38; color: #fff">
+            <span class="label">現行</span>#7d3d38
+          </div>
+          <div class="swatch-half" style="background: #c04a40; color: #fff">
+            <span class="label">新</span>#c04a40
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">terracotta-dark</div>
+          <div class="swatch-usage">ホバー状態</div>
+        </div>
+      </div>
+      <!-- terracotta-light -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #e09890; color: #fff">
+            <span class="label">現行</span>#e09890
+          </div>
+          <div class="swatch-half" style="background: #f0887e; color: #fff">
+            <span class="label">新</span>#f0887e
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">terracotta-light</div>
+          <div class="swatch-usage">ダークモードのリンク色</div>
+        </div>
+      </div>
+      <!-- rust -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #6b302c; color: #fff">
+            <span class="label">現行</span>#6b302c
+          </div>
+          <div class="swatch-half" style="background: #a03830; color: #fff">
+            <span class="label">新</span>#a03830
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">rust</div>
+          <div class="swatch-usage">強調テキスト</div>
+        </div>
+      </div>
+    </div>
 
-<!-- ================================================ -->
-<h2>1. Primary (Accent)</h2>
-<p>メインアクセントカラー。リンク、ボタン、アクティブナビゲーションに使用。</p>
-<div class="swatch-grid">
-  <!-- terracotta -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#a5524c; color:#fff;">
-        <span class="label">現行</span>#a5524c
-      </div>
-      <div class="swatch-half" style="background:#e05e52; color:#fff;">
-        <span class="label">新</span>#e05e52
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">terracotta</div>
-      <div class="swatch-usage">メインアクセント・リンク色・アクティブナビ背景</div>
-    </div>
-  </div>
-  <!-- terracotta-dark -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#7d3d38; color:#fff;">
-        <span class="label">現行</span>#7d3d38
-      </div>
-      <div class="swatch-half" style="background:#c04a40; color:#fff;">
-        <span class="label">新</span>#c04a40
+    <!-- ================================================ -->
+    <h2>2. Secondary (Golden) <span class="new-badge">NEW</span></h2>
+    <p>
+      暖かさを加えるゴールデン系のセカンダリカラー。装飾・バッジ・ハイライトに使用。
+    </p>
+    <div class="swatch-grid">
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #f2a93b; color: #fff">
+            <span class="label">新規</span>#F2A93B
+          </div>
+          <div class="swatch-half" style="background: #fff0d1; color: #9a7a30">
+            <span class="label">新規</span>#FFF0D1
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">golden / golden-light</div>
+          <div class="swatch-usage">
+            アクセント装飾 / バッジ背景・ソフトハイライト
+          </div>
+        </div>
       </div>
     </div>
-    <div class="swatch-info">
-      <div class="swatch-name">terracotta-dark</div>
-      <div class="swatch-usage">ホバー状態</div>
-    </div>
-  </div>
-  <!-- terracotta-light -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#e09890; color:#fff;">
-        <span class="label">現行</span>#e09890
-      </div>
-      <div class="swatch-half" style="background:#f0887e; color:#fff;">
-        <span class="label">新</span>#f0887e
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">terracotta-light</div>
-      <div class="swatch-usage">ダークモードのリンク色</div>
-    </div>
-  </div>
-  <!-- rust -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#6b302c; color:#fff;">
-        <span class="label">現行</span>#6b302c
-      </div>
-      <div class="swatch-half" style="background:#a03830; color:#fff;">
-        <span class="label">新</span>#a03830
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">rust</div>
-      <div class="swatch-usage">強調テキスト</div>
-    </div>
-  </div>
-</div>
 
-<!-- ================================================ -->
-<h2>2. Secondary (Golden) <span class="new-badge">NEW</span></h2>
-<p>暖かさを加えるゴールデン系のセカンダリカラー。装飾・バッジ・ハイライトに使用。</p>
-<div class="swatch-grid">
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#F2A93B; color:#fff;">
-        <span class="label">新規</span>#F2A93B
+    <!-- ================================================ -->
+    <h2>3. Neutrals</h2>
+    <p>
+      テキスト・背景・ボーダーなどの基本色。ゴールデンティントを加えた暖かいニュートラル。
+    </p>
+    <div class="swatch-grid">
+      <!-- charcoal -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #48423e; color: #fff">
+            <span class="label">現行</span>#48423e
+          </div>
+          <div class="swatch-half" style="background: #1a1a2e; color: #fff">
+            <span class="label">新</span>#1A1A2E
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">charcoal</div>
+          <div class="swatch-usage">本文テキスト（ダークネイビー）</div>
+        </div>
       </div>
-      <div class="swatch-half" style="background:#FFF0D1; color:#9a7a30;">
-        <span class="label">新規</span>#FFF0D1
+      <!-- charcoal-light -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #6b6460; color: #fff">
+            <span class="label">現行</span>#6b6460
+          </div>
+          <div class="swatch-half" style="background: #4a4860; color: #fff">
+            <span class="label">新</span>#4A4860
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">charcoal-light</div>
+          <div class="swatch-usage">サブテキスト・日付</div>
+        </div>
+      </div>
+      <!-- cream -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div
+            class="swatch-half"
+            style="background: #faf8f5; color: #666; border-bottom: 1px solid #eee"
+          >
+            <span class="label">現行</span>#faf8f5
+          </div>
+          <div
+            class="swatch-half"
+            style="background: #fffdf7; color: #666; border-bottom: 1px solid #eee"
+          >
+            <span class="label">新</span>#FFFDF7
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">cream</div>
+          <div class="swatch-usage">カード背景（ライトモード）</div>
+        </div>
+      </div>
+      <!-- clay-bg -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #f2efeb; color: #666">
+            <span class="label">現行</span>#f2efeb
+          </div>
+          <div class="swatch-half" style="background: #fff8ed; color: #666">
+            <span class="label">新</span>#FFF8ED
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">clay-bg</div>
+          <div class="swatch-usage">ページ背景（ゴールデンティント）</div>
+        </div>
+      </div>
+      <!-- warm-gray -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #e0dcd6; color: #666">
+            <span class="label">現行</span>#e0dcd6
+          </div>
+          <div class="swatch-half" style="background: #f2d9a0; color: #666">
+            <span class="label">新</span>#F2D9A0
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">warm-gray</div>
+          <div class="swatch-usage">ボーダー・装飾線</div>
+        </div>
+      </div>
+      <!-- warm-gray-dark -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #ccc7c0; color: #666">
+            <span class="label">現行</span>#ccc7c0
+          </div>
+          <div class="swatch-half" style="background: #d4b87a; color: #fff">
+            <span class="label">新</span>#D4B87A
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">warm-gray-dark</div>
+          <div class="swatch-usage">強調ボーダー・blockquote</div>
+        </div>
+      </div>
+      <!-- sand-light -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div class="swatch-half" style="background: #ede5da; color: #666">
+            <span class="label">現行</span>#ede5da
+          </div>
+          <div class="swatch-half" style="background: #fff0d1; color: #666">
+            <span class="label">新</span>#FFF0D1
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">sand-light</div>
+          <div class="swatch-usage">タグ背景</div>
+        </div>
+      </div>
+      <!-- warm-white -->
+      <div class="swatch-card">
+        <div class="swatch-row">
+          <div
+            class="swatch-half"
+            style="background: #fdf9f6; color: #666; border-bottom: 1px solid #eee"
+          >
+            <span class="label">現行</span>#fdf9f6
+          </div>
+          <div
+            class="swatch-half"
+            style="background: #fffdf7; color: #666; border-bottom: 1px solid #eee"
+          >
+            <span class="label">新</span>#FFFDF7
+          </div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">warm-white</div>
+          <div class="swatch-usage">最も明るい背景</div>
+        </div>
       </div>
     </div>
-    <div class="swatch-info">
-      <div class="swatch-name">golden / golden-light</div>
-      <div class="swatch-usage">アクセント装飾 / バッジ背景・ソフトハイライト</div>
-    </div>
-  </div>
-</div>
 
-<!-- ================================================ -->
-<h2>3. Neutrals</h2>
-<p>テキスト・背景・ボーダーなどの基本色。ゴールデンティントを加えた暖かいニュートラル。</p>
-<div class="swatch-grid">
-  <!-- charcoal -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#48423e; color:#fff;">
-        <span class="label">現行</span>#48423e
-      </div>
-      <div class="swatch-half" style="background:#1A1A2E; color:#fff;">
-        <span class="label">新</span>#1A1A2E
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">charcoal</div>
-      <div class="swatch-usage">本文テキスト（ダークネイビー）</div>
-    </div>
-  </div>
-  <!-- charcoal-light -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#6b6460; color:#fff;">
-        <span class="label">現行</span>#6b6460
-      </div>
-      <div class="swatch-half" style="background:#4A4860; color:#fff;">
-        <span class="label">新</span>#4A4860
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">charcoal-light</div>
-      <div class="swatch-usage">サブテキスト・日付</div>
-    </div>
-  </div>
-  <!-- cream -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#faf8f5; color:#666; border-bottom: 1px solid #eee;">
-        <span class="label">現行</span>#faf8f5
-      </div>
-      <div class="swatch-half" style="background:#FFFDF7; color:#666; border-bottom: 1px solid #eee;">
-        <span class="label">新</span>#FFFDF7
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">cream</div>
-      <div class="swatch-usage">カード背景（ライトモード）</div>
-    </div>
-  </div>
-  <!-- clay-bg -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#f2efeb; color:#666;">
-        <span class="label">現行</span>#f2efeb
-      </div>
-      <div class="swatch-half" style="background:#FFF8ED; color:#666;">
-        <span class="label">新</span>#FFF8ED
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">clay-bg</div>
-      <div class="swatch-usage">ページ背景（ゴールデンティント）</div>
-    </div>
-  </div>
-  <!-- warm-gray -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#e0dcd6; color:#666;">
-        <span class="label">現行</span>#e0dcd6
-      </div>
-      <div class="swatch-half" style="background:#F2D9A0; color:#666;">
-        <span class="label">新</span>#F2D9A0
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">warm-gray</div>
-      <div class="swatch-usage">ボーダー・装飾線</div>
-    </div>
-  </div>
-  <!-- warm-gray-dark -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#ccc7c0; color:#666;">
-        <span class="label">現行</span>#ccc7c0
-      </div>
-      <div class="swatch-half" style="background:#D4B87A; color:#fff;">
-        <span class="label">新</span>#D4B87A
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">warm-gray-dark</div>
-      <div class="swatch-usage">強調ボーダー・blockquote</div>
-    </div>
-  </div>
-  <!-- sand-light -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#ede5da; color:#666;">
-        <span class="label">現行</span>#ede5da
-      </div>
-      <div class="swatch-half" style="background:#FFF0D1; color:#666;">
-        <span class="label">新</span>#FFF0D1
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">sand-light</div>
-      <div class="swatch-usage">タグ背景</div>
-    </div>
-  </div>
-  <!-- warm-white -->
-  <div class="swatch-card">
-    <div class="swatch-row">
-      <div class="swatch-half" style="background:#fdf9f6; color:#666; border-bottom: 1px solid #eee;">
-        <span class="label">現行</span>#fdf9f6
-      </div>
-      <div class="swatch-half" style="background:#FFFDF7; color:#666; border-bottom: 1px solid #eee;">
-        <span class="label">新</span>#FFFDF7
-      </div>
-    </div>
-    <div class="swatch-info">
-      <div class="swatch-name">warm-white</div>
-      <div class="swatch-usage">最も明るい背景</div>
-    </div>
-  </div>
-</div>
+    <!-- ================================================ -->
+    <h2>4. ダークモード</h2>
+    <p>ダークネイビー+パープル系の落ち着いた暗色に変更。</p>
 
-<!-- ================================================ -->
-<h2>4. ダークモード</h2>
-<p>ダークネイビー+パープル系の落ち着いた暗色に変更。</p>
+    <h3>ベース色の変更</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>要素</th>
+          <th>現行</th>
+          <th>新</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>body 背景</td>
+          <td>
+            <span class="color-dot" style="background: #1a1918"></span>
+            <code>#1a1918</code>
+          </td>
+          <td>
+            <span class="color-dot" style="background: #1a1820"></span>
+            <code>#1A1820</code>
+          </td>
+        </tr>
+        <tr>
+          <td>body テキスト</td>
+          <td><code>warm-gray</code> (CSS変数)</td>
+          <td>
+            <span class="color-dot" style="background: #f5efe0"></span>
+            <code>#F5EFE0</code>
+          </td>
+        </tr>
+        <tr>
+          <td>カード背景</td>
+          <td>
+            <span class="color-dot" style="background: #2d2a28"></span>
+            <code>#2d2a28</code>
+          </td>
+          <td>
+            <span class="color-dot" style="background: #2a2630"></span>
+            <code>#2A2630</code>
+          </td>
+        </tr>
+        <tr>
+          <td>タグ背景</td>
+          <td>
+            <span class="color-dot" style="background: #3d3835"></span>
+            <code>#3d3835</code>
+          </td>
+          <td>
+            <span class="color-dot" style="background: #3a3540"></span>
+            <code>#3A3540</code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
-<h3>ベース色の変更</h3>
-<table>
-  <thead>
-    <tr><th>要素</th><th>現行</th><th>新</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>body 背景</td>
-      <td><span class="color-dot" style="background:#1a1918;"></span><code>#1a1918</code></td>
-      <td><span class="color-dot" style="background:#1A1820;"></span><code>#1A1820</code></td>
-    </tr>
-    <tr>
-      <td>body テキスト</td>
-      <td><code>warm-gray</code> (CSS変数)</td>
-      <td><span class="color-dot" style="background:#F5EFE0;"></span><code>#F5EFE0</code></td>
-    </tr>
-    <tr>
-      <td>カード背景</td>
-      <td><span class="color-dot" style="background:#2d2a28;"></span><code>#2d2a28</code></td>
-      <td><span class="color-dot" style="background:#2A2630;"></span><code>#2A2630</code></td>
-    </tr>
-    <tr>
-      <td>タグ背景</td>
-      <td><span class="color-dot" style="background:#3d3835;"></span><code>#3d3835</code></td>
-      <td><span class="color-dot" style="background:#3A3540;"></span><code>#3A3540</code></td>
-    </tr>
-  </tbody>
-</table>
-
-<h3>ダークモード プレビュー</h3>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-  <div>
-    <p style="font-size: 0.8rem; color: #999; margin-bottom: 0.5rem;">現行</p>
-    <div style="background: #1a1918; border-radius: 12px; padding: 1.5rem; color: #e0dcd6;">
-      <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">Body text (warm-gray)</div>
-      <div style="background: #2d2a28; border-radius: 12px; padding: 1rem; margin-top: 0.5rem;">
-        <div style="font-size: 0.85rem;">Card content</div>
-        <span style="display:inline-block; background:#3d3835; border-radius:9999px; padding:0.1rem 0.5rem; font-size:0.75rem; margin-top:0.5rem;">tag</span>
+    <h3>ダークモード プレビュー</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
+      <div>
+        <p style="font-size: 0.8rem; color: #999; margin-bottom: 0.5rem">
+          現行
+        </p>
+        <div style="background: #1a1918; border-radius: 12px; padding: 1.5rem; color: #e0dcd6">
+          <div style="font-size: 0.9rem; margin-bottom: 0.5rem">
+            Body text (warm-gray)
+          </div>
+          <div style="background: #2d2a28; border-radius: 12px; padding: 1rem; margin-top: 0.5rem">
+            <div style="font-size: 0.85rem">Card content</div>
+            <span
+              style="display: inline-block; background: #3d3835; border-radius: 9999px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-top: 0.5rem"
+            >tag</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p style="font-size: 0.8rem; color: #999; margin-bottom: 0.5rem">
+          Sunny Pop
+        </p>
+        <div class="dark-preview">
+          <div style="font-size: 0.9rem; margin-bottom: 0.5rem">
+            Body text (#F5EFE0)
+          </div>
+          <div class="card-preview">
+            <div style="font-size: 0.85rem">Card content</div>
+            <span class="tag-preview">tag</span>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  <div>
-    <p style="font-size: 0.8rem; color: #999; margin-bottom: 0.5rem;">Sunny Pop</p>
-    <div class="dark-preview">
-      <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">Body text (#F5EFE0)</div>
-      <div class="card-preview">
-        <div style="font-size: 0.85rem;">Card content</div>
-        <span class="tag-preview">tag</span>
+
+    <div class="recommendation">
+      <strong>Astro 移行時の推奨:</strong> ダークモードのハードコード色 (<code
+      >dark:bg-[#2d2a28]</code> など) は CSS 変数 (<code
+      >--color-dark-card</code>, <code>--color-dark-tag</code>) に置き換え、
+      一元管理すること。対象ファイル: <code>HomePage.tsx</code>, <code
+      >PostListPage.tsx</code>,
+      <code>TalkListPage.tsx</code>, <code>index.css</code>
+    </div>
+
+    <!-- ================================================ -->
+    <h2>5. ヘッダー・ナビゲーション</h2>
+    <p>
+      テキストリンクから Logo Badge + Filled Pill Nav に変更。ボーダーは削除。
+    </p>
+
+    <h3>ライトモード</h3>
+    <div class="header-preview">
+      <div class="header-light">
+        <div class="logo">
+          <div class="logo-icon"></div>
+          <span style="color: #1a1a2e">kosui</span>
+        </div>
+        <div class="pill-nav light">
+          <span class="pill-item pill-active">Posts</span>
+          <span class="pill-item pill-inactive-light">Talks</span>
+          <span class="pill-item pill-inactive-light">About</span>
+          <span class="pill-item pill-inactive-light">RSS</span>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
-<div class="recommendation">
-  <strong>Astro 移行時の推奨:</strong> ダークモードのハードコード色 (<code>dark:bg-[#2d2a28]</code> など) は
-  CSS 変数 (<code>--color-dark-card</code>, <code>--color-dark-tag</code>) に置き換え、
-  一元管理すること。対象ファイル: <code>HomePage.tsx</code>, <code>PostListPage.tsx</code>,
-  <code>TalkListPage.tsx</code>, <code>index.css</code>
-</div>
-
-<!-- ================================================ -->
-<h2>5. ヘッダー・ナビゲーション</h2>
-<p>テキストリンクから Logo Badge + Filled Pill Nav に変更。ボーダーは削除。</p>
-
-<h3>ライトモード</h3>
-<div class="header-preview">
-  <div class="header-light">
-    <div class="logo">
-      <div class="logo-icon"></div>
-      <span style="color:#1A1A2E;">kosui</span>
+    <h3>ダークモード</h3>
+    <div class="header-preview">
+      <div class="header-dark">
+        <div class="logo">
+          <div class="logo-icon"></div>
+          <span style="color: #f5efe0">kosui</span>
+        </div>
+        <div class="pill-nav dark">
+          <span class="pill-item pill-active">Posts</span>
+          <span class="pill-item pill-inactive-dark">Talks</span>
+          <span class="pill-item pill-inactive-dark">About</span>
+          <span class="pill-item pill-inactive-dark">RSS</span>
+        </div>
+      </div>
     </div>
-    <div class="pill-nav light">
-      <span class="pill-item pill-active">Posts</span>
-      <span class="pill-item pill-inactive-light">Talks</span>
-      <span class="pill-item pill-inactive-light">About</span>
-      <span class="pill-item pill-inactive-light">RSS</span>
-    </div>
-  </div>
-</div>
 
-<h3>ダークモード</h3>
-<div class="header-preview">
-  <div class="header-dark">
-    <div class="logo">
-      <div class="logo-icon"></div>
-      <span style="color:#F5EFE0;">kosui</span>
-    </div>
-    <div class="pill-nav dark">
-      <span class="pill-item pill-active">Posts</span>
-      <span class="pill-item pill-inactive-dark">Talks</span>
-      <span class="pill-item pill-inactive-dark">About</span>
-      <span class="pill-item pill-inactive-dark">RSS</span>
-    </div>
-  </div>
-</div>
+    <h3>ナビゲーション仕様</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>パス</th>
+          <th>ラベル</th>
+          <th>アクティブ判定</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/</code></td>
+          <td>Posts</td>
+          <td><code>pathname === '/'</code></td>
+        </tr>
+        <tr>
+          <td><code>/talks</code></td>
+          <td>Talks</td>
+          <td><code>pathname.startsWith('/talks')</code></td>
+        </tr>
+        <tr>
+          <td><code>/about</code></td>
+          <td>About</td>
+          <td><code>pathname.startsWith('/about')</code></td>
+        </tr>
+        <tr>
+          <td><code>/feed.xml</code></td>
+          <td>RSS</td>
+          <td>常に非アクティブ（外部リンク）</td>
+        </tr>
+      </tbody>
+    </table>
 
-<h3>ナビゲーション仕様</h3>
-<table>
-  <thead>
-    <tr><th>パス</th><th>ラベル</th><th>アクティブ判定</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><code>/</code></td><td>Posts</td><td><code>pathname === '/'</code></td></tr>
-    <tr><td><code>/talks</code></td><td>Talks</td><td><code>pathname.startsWith('/talks')</code></td></tr>
-    <tr><td><code>/about</code></td><td>About</td><td><code>pathname.startsWith('/about')</code></td></tr>
-    <tr><td><code>/feed.xml</code></td><td>RSS</td><td>常に非アクティブ（外部リンク）</td></tr>
-  </tbody>
-</table>
+    <!-- ================================================ -->
+    <h2>6. ハードコード色の一覧と置換マップ</h2>
+    <p>以下は各ファイルでハードコードされているダークモード色の置換対応表。</p>
 
-<!-- ================================================ -->
-<h2>6. ハードコード色の一覧と置換マップ</h2>
-<p>以下は各ファイルでハードコードされているダークモード色の置換対応表。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>ファイル</th>
+          <th>要素</th>
+          <th>現行</th>
+          <th>新</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>index.css</code></td>
+          <td>body</td>
+          <td><code>dark:bg-[#1a1918]</code></td>
+          <td><code>dark:bg-[#1A1820]</code></td>
+        </tr>
+        <tr>
+          <td><code>PostListPage.tsx</code></td>
+          <td>カード</td>
+          <td><code>dark:bg-[#2d2a28]</code></td>
+          <td><code>dark:bg-[#2A2630]</code></td>
+        </tr>
+        <tr>
+          <td><code>PostListPage.tsx</code></td>
+          <td>タグ</td>
+          <td><code>dark:bg-[#3d3835]</code></td>
+          <td><code>dark:bg-[#3A3540]</code></td>
+        </tr>
+        <tr>
+          <td><code>TalkListPage.tsx</code></td>
+          <td>カード</td>
+          <td><code>dark:bg-[#2d2a28]</code></td>
+          <td><code>dark:bg-[#2A2630]</code></td>
+        </tr>
+        <tr>
+          <td><code>TalkListPage.tsx</code></td>
+          <td>タグ</td>
+          <td><code>dark:bg-[#3d3835]</code></td>
+          <td><code>dark:bg-[#3A3540]</code></td>
+        </tr>
+        <tr>
+          <td><code>HomePage.tsx</code></td>
+          <td>カード</td>
+          <td><code>dark:bg-[#2d2a28]</code></td>
+          <td><code>dark:bg-[#2A2630]</code></td>
+        </tr>
+        <tr>
+          <td><code>HomePage.tsx</code></td>
+          <td>タグ</td>
+          <td><code>dark:bg-[#3d3835]</code></td>
+          <td><code>dark:bg-[#3A3540]</code></td>
+        </tr>
+      </tbody>
+    </table>
 
-<table>
-  <thead>
-    <tr><th>ファイル</th><th>要素</th><th>現行</th><th>新</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>index.css</code></td><td>body</td>
-      <td><code>dark:bg-[#1a1918]</code></td>
-      <td><code>dark:bg-[#1A1820]</code></td>
-    </tr>
-    <tr>
-      <td><code>PostListPage.tsx</code></td><td>カード</td>
-      <td><code>dark:bg-[#2d2a28]</code></td>
-      <td><code>dark:bg-[#2A2630]</code></td>
-    </tr>
-    <tr>
-      <td><code>PostListPage.tsx</code></td><td>タグ</td>
-      <td><code>dark:bg-[#3d3835]</code></td>
-      <td><code>dark:bg-[#3A3540]</code></td>
-    </tr>
-    <tr>
-      <td><code>TalkListPage.tsx</code></td><td>カード</td>
-      <td><code>dark:bg-[#2d2a28]</code></td>
-      <td><code>dark:bg-[#2A2630]</code></td>
-    </tr>
-    <tr>
-      <td><code>TalkListPage.tsx</code></td><td>タグ</td>
-      <td><code>dark:bg-[#3d3835]</code></td>
-      <td><code>dark:bg-[#3A3540]</code></td>
-    </tr>
-    <tr>
-      <td><code>HomePage.tsx</code></td><td>カード</td>
-      <td><code>dark:bg-[#2d2a28]</code></td>
-      <td><code>dark:bg-[#2A2630]</code></td>
-    </tr>
-    <tr>
-      <td><code>HomePage.tsx</code></td><td>タグ</td>
-      <td><code>dark:bg-[#3d3835]</code></td>
-      <td><code>dark:bg-[#3A3540]</code></td>
-    </tr>
-  </tbody>
-</table>
+    <!-- ================================================ -->
+    <h2>7. Shadow トークン（変更なし）</h2>
+    <p>
+      Clay shadow と <code>--radius-clay: 16px</code>
+      は現行値をそのまま流用。変更不要。
+    </p>
 
-<!-- ================================================ -->
-<h2>7. Shadow トークン（変更なし）</h2>
-<p>Clay shadow と <code>--radius-clay: 16px</code> は現行値をそのまま流用。変更不要。</p>
-
-<!-- ================================================ -->
-<h2>8. 全色一覧（コピー用）</h2>
-<pre style="background:#1A1A2E; color:#F5EFE0; padding:1.25rem; border-radius:8px; font-size:0.82rem; line-height:1.7; overflow-x:auto;">
+    <!-- ================================================ -->
+    <h2>8. 全色一覧（コピー用）</h2>
+    <pre style="background: #1a1a2e; color: #f5efe0; padding: 1.25rem; border-radius: 8px; font-size: 0.82rem; line-height: 1.7; overflow-x: auto">
 <span style="color:#666;">/* Primary (Accent) */</span>
 --color-terracotta:       <span style="color:#e05e52;">#e05e52</span>;
 --color-terracotta-dark:  <span style="color:#c04a40;">#c04a40</span>;
@@ -639,6 +777,5 @@
 --color-dark-tag:         #3A3540;
 --color-dark-nav-text:    #B0A890;
 </pre>
-
-</body>
+  </body>
 </html>

@@ -27,6 +27,27 @@ const {
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
+
+const pathname = Astro.url.pathname;
+
+const navItems = [
+  {
+    href: '/',
+    label: 'Posts',
+    isActive: pathname === '/' || pathname.startsWith('/posts'),
+  },
+  {
+    href: '/talks',
+    label: 'Talks',
+    isActive: pathname.startsWith('/talks'),
+  },
+  {
+    href: '/about',
+    label: 'About',
+    isActive: pathname.startsWith('/about'),
+  },
+  { href: '/feed.xml', label: 'RSS', isActive: false, external: true },
+] as const;
 ---
 
 <!DOCTYPE html>
@@ -69,47 +90,48 @@ const displayOgDescription = ogDescription ?? description;
   </head>
   <body>
     <div class="min-h-screen flex flex-col">
-      <header class="border-b border-warm-gray dark:border-charcoal">
+      <header>
         <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <a
             href="/"
-            class="text-xl font-bold text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-warm-white transition-colors"
+            class="flex items-center gap-2 font-bold text-charcoal dark:text-[#F5EFE0] hover:opacity-80 transition-opacity"
           >
+            <img
+              src="https://icon.kosui.me"
+              alt=""
+              width="30"
+              height="30"
+              class="rounded-full"
+            />
             kosui
           </a>
-          <div class="flex gap-6 text-sm">
-            <a
-              href="/posts/"
-              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
-            >
-              Posts
-            </a>
-            <a
-              href="/talks/"
-              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
-            >
-              Talks
-            </a>
-            <a
-              href="/about/"
-              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
-            >
-              About
-            </a>
-            <a
-              href="/feed.xml"
-              class="text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors"
-            >
-              RSS
-            </a>
+          <div class="flex gap-1 text-sm">
+            {
+              navItems.map((item) => (
+                <a
+                  href={item.href}
+                  class={item.isActive
+                  ? 'px-3 py-1.5 rounded-full bg-terracotta text-white font-semibold transition-colors'
+                  : 'px-3 py-1.5 rounded-full text-charcoal/55 dark:text-[#B0A890] hover:text-charcoal dark:hover:text-[#F5EFE0] transition-colors'}
+                  {...('external' in item
+                  ? {
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                  }
+                  : {})}
+                >
+                  {item.label}
+                </a>
+              ))
+            }
           </div>
         </nav>
       </header>
       <main class="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
         <slot />
       </main>
-      <footer class="border-t border-warm-gray dark:border-charcoal">
-        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-charcoal-light dark:text-warm-gray">
+      <footer>
+        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-charcoal-light dark:text-[#B0A890]">
           &copy; {new Date().getFullYear()} kosui
         </div>
       </footer>
