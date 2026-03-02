@@ -1,21 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  /* Primary (H=8, darkened shrimp coral) */
-  --color-terracotta: #a5524c;
-  --color-terracotta-dark: #7d3d38;
-  --color-terracotta-light: #e09890;
-  --color-rust: #6b302c;
+  /* Primary (Accent) */
+  --color-terracotta: #e05e52;
+  --color-terracotta-dark: #c04a40;
+  --color-terracotta-light: #f0887e;
+  --color-rust: #a03830;
 
-  /* Neutrals (H=8 tinted) */
-  --color-charcoal: #48423e;
-  --color-charcoal-light: #6b6460;
-  --color-cream: #faf8f5;
-  --color-clay-bg: #f2efeb;
-  --color-warm-gray: #e0dcd6;
-  --color-warm-gray-dark: #ccc7c0;
-  --color-sand-light: #ede5da;
-  --color-warm-white: #fdf9f6;
+  /* Secondary (Golden) */
+  --color-golden: #f2a93b;
+  --color-golden-light: #fff0d1;
+
+  /* Neutrals */
+  --color-charcoal: #1a1a2e;
+  --color-charcoal-light: #4a4860;
+  --color-cream: #fffdf7;
+  --color-clay-bg: #fff8ed;
+  --color-warm-gray: #f2d9a0;
+  --color-warm-gray-dark: #d4b87a;
+  --color-sand-light: #fff0d1;
+  --color-warm-white: #fffdf7;
 
   /* Split-complementary accents (decorative only) */
   --color-teal: #5a8e80;
@@ -68,8 +72,8 @@ html {
 }
 
 body {
-  @apply bg-clay-bg text-charcoal antialiased dark:bg-[#1a1918]
-    dark:text-warm-gray;
+  @apply bg-clay-bg text-charcoal antialiased dark:bg-[#1a1820]
+    dark:text-[#f5efe0];
   font-feature-settings: "palt";
 }
 
