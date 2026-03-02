@@ -78,6 +78,9 @@ const TalkCard = ({ item }: { item: TimelineItem & { kind: 'talk' } }) => (
       {item.data.event && <span className='text-xs text-charcoal-light dark:text-warm-gray'>{item.data.event}</span>}
     </div>
     <h2 className='text-lg font-semibold text-charcoal dark:text-gray-100 mt-1'>{item.data.title}</h2>
+    {item.data.description && (
+      <p className='mt-1 text-sm text-charcoal-light dark:text-warm-gray'>{item.data.description}</p>
+    )}
     <TagList tags={item.data.tags} />
   </a>
 );

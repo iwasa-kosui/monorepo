@@ -7,6 +7,7 @@ export type TalkMeta = {
   tags: string[];
   duration: string;
   description: string;
+  image?: string;
   year: string;
   name: string;
   slideType: string;
