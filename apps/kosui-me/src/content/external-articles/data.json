@@ -1,0 +1,65 @@
+[
+  {
+    "title": "TypeScriptのテストにはas const satisfiesが便利です",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000",
+    "date": "2025-12-14",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["TypeScript", "Testing"]
+  },
+  {
+    "title": "TypeScriptの宣言的な配列操作 - ビジネスロジックを明確にする",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2025/11/19/110000",
+    "date": "2025-11-19",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["TypeScript"]
+  },
+  {
+    "title": "日本の医療に本気で向き合う。認証・権限管理基盤チームの決意",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2025/08/29/105510",
+    "date": "2025-08-29",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["Team", "Authentication"]
+  },
+  {
+    "title": "他言語経験者が知っておきたいTypeScriptのクラスの注意点",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000",
+    "date": "2025-08-19",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["TypeScript"]
+  },
+  {
+    "title": "目的別データベースの実践: PostgreSQL 行レベルセキュリティと DynamoDB Outboxパターン",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2024/09/19/110000",
+    "date": "2024-09-19",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["PostgreSQL", "DynamoDB", "Database"]
+  },
+  {
+    "title": "社内ドキュメントはなぜ更新されないのか？情報の鮮度を最小限の運用負荷で維持する「イミュータブルドキュメントモデル」のススメ",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2023/10/16/100000",
+    "date": "2023-10-16",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["Documentation", "Team Practice"]
+  },
+  {
+    "title": "リストを題材にして代数的データ構造に入門してみる",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2022/12/07/110000",
+    "date": "2022-12-07",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["Functional Programming", "TypeScript"]
+  },
+  {
+    "title": "AWS ECS on Fargate + FireLens で大きなログが扱いやすくなった話",
+    "url": "https://engineering.dena.com/blog/2022/08/firelens/",
+    "date": "2022-08-12",
+    "publisher": "DeNA Engineering Blog",
+    "tags": ["AWS", "ECS", "Fargate", "FireLens"]
+  },
+  {
+    "title": "なぜバックエンドTypeScriptか？技術選定背景と実践例を紹介します",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2022/03/07/100000",
+    "date": "2022-03-07",
+    "publisher": "KAKEHASHI Tech Blog",
+    "tags": ["TypeScript", "Backend"]
+  }
+]

@@ -1,4 +1,4 @@
-import data from './data.json';
+import data from './data.json' with { type: 'json' };
 
 export type TalkMeta = {
   title: string;
