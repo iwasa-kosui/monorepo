@@ -38,10 +38,6 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
   ogUrl={pageUrl}
   ogType="article"
 >
-  <section class="mb-8 p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
-    <AuthorCard />
-  </section>
-
   <article>
     <header class="mb-8">
       <time
@@ -50,7 +46,8 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       >
         {formatDate(post.data.date)}
       </time>
-      <h1 class="text-3xl font-bold mt-2">{post.data.title}</h1>
+      <h1 class="text-3xl font-bold mt-2 mb-4">{post.data.title}</h1>
+      <AuthorCard />
     </header>
     <div class="prose">
       <Content />
