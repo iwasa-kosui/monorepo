@@ -77,7 +77,6 @@ body {
   }
 }
 
-
 /* Shiki code blocks */
 pre.astro-code {
   @apply overflow-x-auto rounded-2xl p-6 text-sm leading-relaxed my-4;
