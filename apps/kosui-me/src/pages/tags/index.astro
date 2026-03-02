@@ -68,13 +68,11 @@ const categoryOrder = [
   'Other',
 ];
 
-const sortedCategories = [...tagsByCategory.entries()].sort(
-  (a, b) => {
-    const ai = categoryOrder.indexOf(a[0]);
-    const bi = categoryOrder.indexOf(b[0]);
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-  },
-);
+const sortedCategories = [...tagsByCategory.entries()].sort((a, b) => {
+  const ai = categoryOrder.indexOf(a[0]);
+  const bi = categoryOrder.indexOf(b[0]);
+  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+});
 ---
 
 <BaseLayout title="Tags - kosui" ogTitle="Tags">
@@ -93,8 +91,9 @@ const sortedCategories = [...tagsByCategory.entries()].sort(
               tags.map(({ tag, count }) => (
                 <span class="inline-flex items-center gap-1">
                   <TagBadge tag={tag} />
-                  <span class="text-xs text-subtle dark:text-[#9ca3af]"
-                  >({count})</span>
+                  <span class="text-xs text-subtle dark:text-[#9ca3af]">
+                    ({count})
+                  </span>
                 </span>
               ))
             }

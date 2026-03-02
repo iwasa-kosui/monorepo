@@ -14,7 +14,7 @@ talk:
     TypeScriptの柔軟な型システムをバックエンドで活用し、品質とスピードを両立させるための実践的なテクニックを紹介します。
   tags:
     - TypeScript
-    - Backend
+    - バックエンド
   duration: "10min"
   speaker: "岩佐 幸翠"
 ---

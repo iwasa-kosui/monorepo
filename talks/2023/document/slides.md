@@ -13,8 +13,8 @@ talk:
   description: |
     ドキュメントを更新し続ける代わりに、意思決定を記録する「イミュータブルドキュメントモデル」の実運用について紹介します。
   tags:
-    - Documentation
-    - Team Practice
+    - ドキュメント
+    - チームプラクティス
   duration: "20min"
   speaker: "岩佐 幸翠"
 ---

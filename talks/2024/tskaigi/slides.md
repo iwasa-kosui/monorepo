@@ -21,7 +21,7 @@ talk:
   tags:
     - TypeScript
     - fp-ts
-    - Functional Programming
+    - 関数型プログラミング
   duration: "20min"
   speaker: "岩佐 幸翠"
 ---

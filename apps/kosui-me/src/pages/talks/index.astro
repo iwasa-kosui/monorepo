@@ -51,60 +51,26 @@ const platformNames: Record<ExternalSlideType, string> = {
           : null;
 
         return (
-        <a
-          href={`/talks/${presentation.year}/${presentation.name}`}
-          class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-        >
-          <div class="relative z-10">
-            <div class="text-xs text-accent dark:text-accent-light mb-1">
-              {dateEventLine}
-            </div>
-            <div class="flex items-start gap-2">
-              <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 flex-1">
+        <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="text-xs text-accent dark:text-accent-light mb-1">
+            {dateEventLine}
+          </div>
+          <div class="flex items-start gap-2">
+            <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 flex-1">
+              <a
+                href={`/talks/${presentation.year}/${presentation.name}`}
+                class="card-link-overlay"
+              >
                 {presentation.title}
-              </h3>
-              {
-                isExternal && platformName && (
-                  <span
-                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-accent/10 dark:bg-accent-light/10 text-accent dark:text-accent-light whitespace-nowrap"
-                  >
-                    <svg
-                      class="w-3 h-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                    {platformName}
-                  </span>
-                )
-              }
-            </div>
+              </a>
+            </h3>
             {
-              talk?.description && (
-                <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 line-clamp-2">
-                  {talk.description.trim()}
-                </p>
-              )
-            }
-            {
-              talk?.tags && talk.tags.length > 0 && (
-                <div class="flex flex-wrap gap-1.5 mt-3">
-                  {talk.tags.map((tag) => <TagBadge tag={tag} />)}
-                </div>
-              )
-            }
-            {
-              talk?.duration && (
-                <div class="flex items-center gap-1 mt-2 text-xs text-subtle dark:text-[#9ca3af]">
+              isExternal && platformName && (
+                <span
+                  class="relative z-10 inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-accent/10 dark:bg-accent-light/10 text-accent dark:text-accent-light whitespace-nowrap"
+                >
                   <svg
-                    class="w-3.5 h-3.5"
+                    class="w-3 h-3"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -113,15 +79,49 @@ const platformNames: Record<ExternalSlideType, string> = {
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                     />
                   </svg>
-                  {talk.duration}
-                </div>
+                  {platformName}
+                </span>
               )
             }
           </div>
-        </a>
+          {
+            talk?.description && (
+              <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 line-clamp-2">
+                {talk.description.trim()}
+              </p>
+            )
+          }
+          {
+            talk?.tags && talk.tags.length > 0 && (
+              <div class="relative z-10 flex flex-wrap gap-1.5 mt-3">
+                {talk.tags.map((tag) => <TagBadge tag={tag} />)}
+              </div>
+            )
+          }
+          {
+            talk?.duration && (
+              <div class="flex items-center gap-1 mt-2 text-xs text-subtle dark:text-[#9ca3af]">
+                <svg
+                  class="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                {talk.duration}
+              </div>
+            )
+          }
+        </div>
       );
       })
     }

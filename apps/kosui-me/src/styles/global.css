@@ -180,6 +180,14 @@ pre.mermaid {
   border-radius: 60% 40% 45% 55% / 50% 55% 45% 50%;
 }
 
+/* Stretched link: title <a> covers the whole card, tags sit above */
+.card-link-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

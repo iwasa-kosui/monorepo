@@ -7,7 +7,7 @@ talk:
     Goコンパイラのソースコードを読み解きながら内部実装を探索する。
   tags:
     - Go
-    - Compiler
+    - コンパイラ
   duration: "15min"
 external:
   type: speakerdeck
