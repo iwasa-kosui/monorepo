@@ -2,15 +2,96 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="About - kosui" ogTitle="About">
-  <h1 class="text-3xl font-bold mb-8">About</h1>
-  <div class="prose">
-    <p>
-      kosui (<a href="https://x.com/kosui_me">@kosui_me</a>) のブログです。
-    </p>
-    <p>
-      TypeScript, Node.js,
-      インフラなどサーバサイド開発に関する知見を発信しています。
-    </p>
-  </div>
+<BaseLayout
+  title="About - kosui"
+  ogTitle="About"
+  ogDescription="医療SaaSの品質要求に応えるアーキテクチャ設計とプラットフォーム構築を専門とするテックリード。"
+>
+  <section class="mb-10">
+    <h1 class="text-3xl font-bold mb-6">About</h1>
+    <div class="flex items-start gap-5">
+      <img
+        src="https://icon.kosui.me"
+        alt="kosui"
+        width="72"
+        height="72"
+        class="rounded-full ring-2 ring-accent/20 flex-shrink-0"
+      />
+      <div>
+        <h2 class="text-2xl font-bold text-charcoal dark:text-gray-100">
+          岩佐 幸翠 <span
+            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
+          >/ kosui</span>
+        </h2>
+        <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
+          テックリード @ 株式会社カケハシ
+        </p>
+        <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 leading-relaxed">
+          医療SaaS企業にて、法令要件や顧客環境の分析からアーキテクチャ設計までを一貫して担い、認証認可・組織管理などの共通基盤をテックリードとして設計・開発しています。プロダクトチームがコアドメインに集中できるプラットフォームの構築と、関数型ドメインモデリングによる堅牢なシステム設計を実践しています。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="text-2xl font-bold mb-6">
+      <span class="heading-accent">専門領域</span>
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          医療SaaSの品質要求に応えるアーキテクチャ設計
+        </h3>
+        <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+          3省2ガイドライン等の法令要件、患者データの機密性、薬局チェーンの複雑な組織構造といったドメイン固有の制約を分析し、中長期の拡張性と短期のデリバリーを両立するアーキテクチャを選択しています。サービスベースアーキテクチャによる段階的な分離、RLSによるDB層でのテナント分離、ドメインイベントによる監査証跡の確保などを実践しています。
+        </p>
+        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
+          SRE KAIGI 2026: 品質特性の明文化 → ADRでの意思決定記録 →
+          中長期の改善計画策定というプロセスを実践
+        </p>
+      </div>
+
+      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          コアドメイン集中を支えるプラットフォーム
+        </h3>
+        <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+          認証認可・組織管理・ライセンスといった横断的関心事をプラットフォームとして引き受け、プロダクトチームが電子薬歴や患者フォローアップといった本質的な顧客価値に集中できる環境をつくっています。プロダクトチームとの対話を通じたドメインモデリングで要求を構造化し、APIとして提供。100店舗超の薬局チェーンの階層的な組織構造や、二要素認証の義務化など、変化する要件に対応しています。
+        </p>
+        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
+          TechPlay 2023:
+          「プラットフォームの目的は工数削減ではなく、プロダクトチームがコアドメインに集中できる状態の実現」
+        </p>
+      </div>
+
+      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          型システムによるビジネスルールの正確な表現
+        </h3>
+        <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+          医療システムにおいて不正な状態遷移は患者データの漏洩に直結します。複雑なビジネスルールを型で表現し、誤りをコンパイル時に検出することで、仕様と実装のズレを構造的に防いでいます。OpenID
+          Connect認証フローの状態遷移を代数的データ型で型安全に管理し、表形式データの検証ではApplicative
+          Validationですべてのエラーを同時に収集。チーム全体で活用できるよう、スコープ限定・ペアプロ・レシピ集によるオンボーディングを整備しています。
+        </p>
+        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
+          関数型まつり 2025 + TSKaigi 2024:
+          型で不正状態を排除し、チーム全体で運用可能にする実践
+        </p>
+      </div>
+
+      <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          チームで信頼性を育てる継続的改善
+        </h3>
+        <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+          専任SREを持たない開発チームでも、設計を"自分ごと"として運用し続けることで信頼性は向上できます。品質特性の明文化とADRによる意思決定の記録、ポストモーテムからの改善計画策定を実践。Delta
+          Lakeのタイムトラベルによる過去データへの即座アクセスを実現し、障害時の原因特定時間を大幅に短縮しました。
+        </p>
+        <p class="text-xs text-subtle/70 dark:text-[#9ca3af]/70 mt-3 leading-relaxed">
+          SRE KAIGI 2026 + イミュータブルドキュメントモデル:
+          意思決定を不変の記録として残し、継続的に改善する文化
+        </p>
+      </div>
+    </div>
+  </section>
 </BaseLayout>
