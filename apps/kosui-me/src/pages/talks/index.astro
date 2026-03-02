@@ -1,4 +1,5 @@
 ---
+import TagBadge from '@/components/TagBadge.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import {
   type ExternalSlideType,
@@ -25,7 +26,9 @@ const platformNames: Record<ExternalSlideType, string> = {
 ---
 
 <BaseLayout title="Talks - kosui" ogTitle="Talks">
-  <h1 class="text-3xl font-bold mb-8"><span class="heading-accent">Talks</span></h1>
+  <h1 class="text-3xl font-bold mb-8">
+    <span class="heading-accent">Talks</span>
+  </h1>
   <div class="space-y-4">
     {
       presentations.map((presentation) => {
@@ -93,15 +96,7 @@ const platformNames: Record<ExternalSlideType, string> = {
             {
               talk?.tags && talk.tags.length > 0 && (
                 <div class="flex flex-wrap gap-1.5 mt-3">
-                  {
-                    talk.tags.map((tag) => (
-                      <span
-                        class="inline-block px-2 py-0.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]"
-                      >
-                        {tag}
-                      </span>
-                    ))
-                  }
+                  {talk.tags.map((tag) => <TagBadge tag={tag} />)}
                 </div>
               )
             }
