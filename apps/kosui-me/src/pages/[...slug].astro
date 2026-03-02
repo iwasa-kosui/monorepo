@@ -49,4 +49,14 @@ const ogImage = `https://kosui.me/og/${slugFileName}.png`;
       <Content />
     </div>
   </article>
+  <script>
+  const mermaidElements = document.querySelectorAll<HTMLPreElement>(
+    'pre.mermaid',
+  );
+  if (mermaidElements.length > 0) {
+    const { default: mermaid } = await import('mermaid');
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    await mermaid.run({ nodes: mermaidElements });
+  }
+  </script>
 </BaseLayout>
