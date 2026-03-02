@@ -1,0 +1,100 @@
+---
+interface Props {
+  title: string;
+  url: string;
+}
+
+const { title, url } = Astro.props;
+---
+
+<div class="flex flex-wrap justify-center gap-3" data-share-buttons>
+  <a
+    data-share="hatena"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21.3 0H2.7A2.7 2.7 0 000 2.7v18.6A2.7 2.7 0 002.7 24h18.6a2.7 2.7 0 002.7-2.7V2.7A2.7 2.7 0 0021.3 0zM8.4 18.75H5.85V5.25H8.9c2.08 0 3.71.94 3.71 3.08 0 1.48-.85 2.48-2.15 2.88v.04c1.6.23 2.71 1.35 2.71 3.12 0 2.5-1.85 3.63-4.26 3.63l-.51.65zm.38-8.08c1.08 0 1.83-.5 1.83-1.6 0-1.08-.65-1.6-1.83-1.6H8.1v3.2h.68zm.2 5.88c1.28 0 2.07-.56 2.07-1.78 0-1.18-.78-1.73-2.08-1.73H8.1v3.51h.88zM17.1 19a1.35 1.35 0 110-2.7 1.35 1.35 0 010 2.7z" />
+    </svg>
+    Hatena
+  </a>
+  <a
+    data-share="x"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+    X
+  </a>
+  <a
+    data-share="linkedin"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+    LinkedIn
+  </a>
+  <a
+    data-share="bluesky"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.785 2.627 3.584 3.493 6.173 3.16-.388.543-.247 1.596.744 2.508-2.404.26-5.098 1.408-2.36 4.928C7.307 23.942 11.3 23.17 12 20.2c.7 2.97 4.693 3.742 6.819.643 2.738-3.52.044-4.668-2.36-4.928.991-.912 1.132-1.965.744-2.508 2.59.333 5.388-.533 6.173-3.16.246-.828.624-5.79.624-6.479 0-.688-.139-1.86-.902-2.203-.659-.3-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z" />
+    </svg>
+    Bluesky
+  </a>
+  <a
+    data-share="mastodon"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 00.023-.043v-1.809a.052.052 0 00-.02-.041.053.053 0 00-.046-.01 20.282 20.282 0 01-4.709.547c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 01-.319-1.433.053.053 0 01.066-.054 19.648 19.648 0 004.622.536c.164 0 .329 0 .494-.003.9-.024 1.848-.07 2.737-.203.027-.004.054-.01.08-.016 2.394-.436 4.674-1.774 4.907-5.228.009-.147.023-.646.023-.801 0-.245.062-2.462-.01-3.76" />
+      <path d="M19.903 7.715v5.677h-2.291V7.886c0-1.198-.504-1.805-1.512-1.805-1.115 0-1.673.721-1.673 2.147v3.015h-2.278V8.228c0-1.426-.558-2.147-1.673-2.147-1.008 0-1.512.607-1.512 1.805v5.506H6.673V7.715c0-1.198.304-2.151.916-2.858.63-.707 1.457-1.07 2.482-1.07 1.187 0 2.087.455 2.686 1.366l.578.97.579-.97c.599-.911 1.499-1.366 2.686-1.366 1.025 0 1.852.363 2.482 1.07.612.707.916 1.66.916 2.858" />
+    </svg>
+    Mastodon
+  </a>
+  <a
+    data-share="misskey"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#9ca3af] hover:opacity-80 transition-opacity"
+  >
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.193 9.006c-.092-.09-.217-.127-.338-.1l-4.753.978a10.893 10.893 0 00-2.986-3.464l1.785-4.503a.352.352 0 00-.07-.367.352.352 0 00-.362-.104L12.153 2.88a10.967 10.967 0 00-4.56-.52L5.935.135A.353.353 0 005.568 0a.352.352 0 00-.319.2L3.81 3.443A10.908 10.908 0 000 12.108c0 2.726 1 5.349 2.82 7.39l.002.002a.08.08 0 00.012.016c2.063 2.305 4.894 3.648 7.98 3.783.11.005.22.008.33.008a10.94 10.94 0 007.466-2.928c3.269-3.042 4.455-7.74 2.93-11.916l1.622-3.24a.35.35 0 00.031-.207z" />
+    </svg>
+    Misskey
+  </a>
+</div>
+
+<script is:inline define:vars={{ pageTitle: title, pageUrl: url }}>
+const encodedUrl = encodeURIComponent(pageUrl);
+const encodedTitle = encodeURIComponent(pageTitle);
+const text = encodeURIComponent(`${pageTitle} ${pageUrl}`);
+
+const shareUrls = {
+  hatena: `https://b.hatena.ne.jp/entry/s/${pageUrl.replace('https://', '')}`,
+  x: `https://x.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
+  linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+  bluesky: `https://bsky.app/intent/compose?text=${text}`,
+  mastodon: `https://donshare.net/share.html?text=${text}`,
+  misskey: `https://misskeyshare.link/share.html?text=${text}`,
+};
+
+document.querySelectorAll('[data-share]').forEach((el) => {
+  const platform = el.getAttribute('data-share');
+  if (platform && shareUrls[platform]) {
+    el.setAttribute('href', shareUrls[platform]);
+  }
+});
+</script>

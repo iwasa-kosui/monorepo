@@ -96,13 +96,13 @@ const navItems = [
         <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <a
             href="/"
-            class="flex items-center gap-2 font-bold text-charcoal dark:text-[#F5EFE0] hover:opacity-80 transition-opacity"
+            class="flex items-center gap-3 text-2xl font-bold text-accent hover:text-accent-dark transition-colors"
           >
             <img
               src="https://icon.kosui.me"
               alt=""
-              width="30"
-              height="30"
+              width="40"
+              height="40"
               class="rounded-full"
             />
             kosui
@@ -113,8 +113,8 @@ const navItems = [
                 <a
                   href={item.href}
                   class={item.isActive
-                  ? 'px-3 py-1.5 rounded-full bg-terracotta text-white font-semibold transition-colors'
-                  : 'px-3 py-1.5 rounded-full text-charcoal/55 dark:text-[#B0A890] hover:text-charcoal dark:hover:text-[#F5EFE0] transition-colors'}
+                  ? 'px-3 py-1.5 rounded-full bg-accent text-white font-semibold transition-colors'
+                  : 'px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors'}
                   {...('external' in item
                   ? {
                     target: '_blank',
@@ -133,7 +133,7 @@ const navItems = [
         <slot />
       </main>
       <footer>
-        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-charcoal-light dark:text-[#B0A890]">
+        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
           &copy; {new Date().getFullYear()} kosui
         </div>
       </footer>

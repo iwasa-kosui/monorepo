@@ -24,12 +24,12 @@ const displayTitle = ogpData.title || hostname;
   href={ogpData.url}
   target="_blank"
   rel="noopener noreferrer"
-  class="block bg-cream dark:bg-[#2A2630] rounded-clay shadow-clay dark:shadow-clay-dark overflow-hidden clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+  class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark overflow-hidden clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
 >
   <div class={hasImage ? 'flex' : ''}>
     {
       hasImage && (
-        <div class="w-32 h-24 flex-shrink-0 bg-sand-light dark:bg-[#3A3540]">
+        <div class="w-32 h-24 flex-shrink-0 bg-tag-bg dark:bg-[#2a2a32]">
           <img
             src={ogpData.imageUrl!}
             alt=""
@@ -45,12 +45,12 @@ const displayTitle = ogpData.title || hostname;
       </h4>
       {
         ogpData.description && (
-          <p class="text-xs text-charcoal-light dark:text-warm-gray mt-1 line-clamp-2">
+          <p class="text-xs text-subtle dark:text-[#9ca3af] mt-1 line-clamp-2">
             {ogpData.description}
           </p>
         )
       }
-      <div class="flex items-center gap-1 mt-2 text-xs text-terracotta dark:text-terracotta-light">
+      <div class="flex items-center gap-1 mt-2 text-xs text-accent dark:text-accent-light">
         <svg
           class="w-3 h-3"
           fill="none"
