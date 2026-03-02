@@ -1,0 +1,52 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { type CollectionEntry, getCollection, render } from 'astro:content';
+
+type PostEntry = CollectionEntry<'posts'>;
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+  return posts.map((post: PostEntry) => ({
+    params: { slug: post.data.slug },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props as { post: PostEntry };
+const { Content } = await render(post);
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+const slugFileName = post.data.slug.replace(/\//g, '-');
+const ogImage = `https://kosui.me/og/${slugFileName}.png`;
+---
+
+<BaseLayout
+  ogTitle={post.data.title}
+  ogDescription={post.data.description}
+  ogImage={ogImage}
+  ogUrl={`https://kosui.me/${post.data.slug}`}
+  ogType="article"
+>
+  <article>
+    <header class="mb-8">
+      <time
+        class="text-sm text-terracotta dark:text-terracotta-light"
+        datetime={post.data.date}
+      >
+        {formatDate(post.data.date)}
+      </time>
+      <h1 class="text-3xl font-bold mt-2">{post.data.title}</h1>
+    </header>
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
