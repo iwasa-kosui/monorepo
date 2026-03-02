@@ -14,7 +14,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           </Link>
           <div className='flex gap-6 text-sm'>
             <Link
-              to='/'
+              to='/posts'
               className='text-charcoal-light hover:text-charcoal dark:text-warm-gray dark:hover:text-warm-white transition-colors'
             >
               Posts

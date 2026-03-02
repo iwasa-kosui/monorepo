@@ -1,4 +1,4 @@
-import data from './data.json';
+import data from './data.json' with { type: 'json' };
 
 export type TalkMeta = {
   title: string;
@@ -7,6 +7,7 @@ export type TalkMeta = {
   tags: string[];
   duration: string;
   description: string;
+  image?: string;
   year: string;
   name: string;
   slideType: string;
