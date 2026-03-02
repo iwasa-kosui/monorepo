@@ -11,8 +11,10 @@
     "@astrojs/react": "4.4.2",
     "@astrojs/sitemap": "3.7.0",
     "astro": "^5.16.15",
+    "mermaid": "11.12.3",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "unist-util-visit": "5.1.0"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

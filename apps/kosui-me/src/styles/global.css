@@ -78,17 +78,17 @@ body {
 }
 
 /* Shiki code blocks */
-pre.shiki {
-  @apply overflow-x-auto rounded-lg p-4 text-sm leading-relaxed my-4;
+pre.astro-code {
+  @apply overflow-x-auto rounded-2xl p-6 text-sm leading-relaxed my-4;
 }
 
-html.dark pre.shiki {
-  --shiki-light: initial;
-  --shiki-dark: inherit;
-}
-
-pre.shiki code {
+pre.astro-code code {
   @apply font-mono;
+}
+
+/* Mermaid diagrams */
+pre.mermaid {
+  @apply flex justify-center my-4 rounded-2xl p-6 bg-[#24292e];
 }
 
 /* Prose-like styles for MDX content */
