@@ -6,6 +6,7 @@ export type ExternalArticleMeta = {
   date: string;
   publisher: string;
   description?: string;
+  image?: string;
   tags: string[];
 };
 

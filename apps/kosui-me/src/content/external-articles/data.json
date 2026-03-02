@@ -4,6 +4,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000",
     "date": "2025-12-14",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "テストでダミーデータを定義する際の型検査エラーを、as const satisfies の組み合わせで解決する方法を紹介。Discriminated Unionやオプショナルプロパティを持つ型でも、型安全性を保ちながらリテラル型推論を活用できる。",
     "tags": ["TypeScript", "Testing"]
   },
   {
@@ -11,6 +12,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/11/19/110000",
     "date": "2025-11-19",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "配列操作を手続き的スタイルから宣言的スタイルへ移行するメリットを解説。filterやmapなどの高階関数とカリー化を組み合わせ、ビジネスロジックの意図を明確にするコーディング手法を提案。",
     "tags": ["TypeScript"]
   },
   {
@@ -18,6 +20,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/08/29/105510",
     "date": "2025-08-29",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "複数プロダクト間で共通する認証・権限管理を一元化する基盤の役割や、厚生労働省ガイドラインに基づく二要素認証必須化への対応など、医療DXを支える基盤チームの取り組みと展望を紹介。",
     "tags": ["Team", "Authentication"]
   },
   {
@@ -25,6 +28,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000",
     "date": "2025-08-19",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "Java/C#経験者がTypeScriptのクラスを使う際の4つの落とし穴を解説。構造的部分型によるドメインオブジェクトの混同、thisの動的束縛、private修飾子の実行時の限界などについて代替アプローチとともに紹介。",
     "tags": ["TypeScript"]
   },
   {
@@ -32,6 +36,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2024/09/19/110000",
     "date": "2024-09-19",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "PostgreSQLの行レベルセキュリティによるテナント間データ分離と、DynamoDBのOutboxパターンによるイベント配信を紹介。医療SaaSにおける個人情報保護と高可用性の要件に応じた目的別データベース選定の実践例。",
     "tags": ["PostgreSQL", "DynamoDB", "Database"]
   },
   {
@@ -39,6 +44,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2023/10/16/100000",
     "date": "2023-10-16",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "情報を可変的なリソース情報と不変的なイベント情報に分類し、イベントの積み重ねとしてリソースを表現することで、最小限の運用負荷でドキュメントの鮮度を維持するアプローチを提案。",
     "tags": ["Documentation", "Team Practice"]
   },
   {
@@ -46,6 +52,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2022/12/07/110000",
     "date": "2022-12-07",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "プログラマに馴染み深い「リスト」を題材に、Sum Type(和)とProduct Type(積)で代数的にデータ構造を表現する方法を解説。方程式の展開を通じてリストの構造を直感的に理解する。",
     "tags": ["Functional Programming", "TypeScript"]
   },
   {
@@ -53,6 +60,7 @@
     "url": "https://engineering.dena.com/blog/2022/08/firelens/",
     "date": "2022-08-12",
     "publisher": "DeNA Engineering Blog",
+    "description": "ECS on Fargate環境でFireLensを使用した際に、16KB以上のログが分割されてJSONパースが失敗する問題の原因と、FluentBitのMultilineフィルタによるログ結合の解決策を解説。",
     "tags": ["AWS", "ECS", "Fargate", "FireLens"]
   },
   {
@@ -60,6 +68,7 @@
     "url": "https://kakehashi-dev.hatenablog.com/entry/2022/03/07/100000",
     "date": "2022-03-07",
     "publisher": "KAKEHASHI Tech Blog",
+    "description": "バックエンドにTypeScriptを採用した技術選定の背景と実践例を紹介。構造的部分型の柔軟性やImmutableプログラミングとの親和性を評価し、NestJS・Prisma・fp-tsを組み合わせた型安全な開発の知見を共有。",
     "tags": ["TypeScript", "Backend"]
   }
 ]
