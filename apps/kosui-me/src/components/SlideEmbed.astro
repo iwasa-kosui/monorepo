@@ -1,0 +1,23 @@
+---
+import type { Presentation } from '@/utils/presentations';
+
+interface Props {
+  presentation: Presentation;
+}
+
+const { presentation } = Astro.props;
+
+const embedUrl = presentation.slideType === 'local'
+  ? `/slides${presentation.basePath}?embedded=true&controls=true`
+  : presentation.external.embedUrl;
+---
+
+<div class="aspect-video w-full rounded-clay overflow-hidden shadow-clay dark:shadow-clay-dark">
+  <iframe
+    src={embedUrl}
+    title={presentation.title}
+    class="w-full h-full border-0"
+    loading="lazy"
+    allowfullscreen
+  ></iframe>
+</div>
