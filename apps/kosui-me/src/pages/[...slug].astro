@@ -46,7 +46,12 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       >
         {formatDate(post.data.date)}
       </time>
-      <h1 class="text-3xl font-bold mt-2 mb-4">{post.data.title}</h1>
+      <h1
+        class="text-3xl font-bold mt-2 mb-4"
+        transition:name={`post-title-${post.data.slug}`}
+      >
+        {post.data.title}
+      </h1>
       <AuthorCard />
     </header>
     <div class="prose">

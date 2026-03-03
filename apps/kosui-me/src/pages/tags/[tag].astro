@@ -192,7 +192,10 @@ const kindConfig = {
                 {label}
               </span>
             </div>
-            <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
+            <h2
+              class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1"
+              transition:name={`post-title-${item.data.slug}`}
+            >
               <a href={`/${item.data.slug}`} class="card-link-overlay">
                 {item.data.title}
               </a>
@@ -239,7 +242,10 @@ const kindConfig = {
                 </p>
               )
             }
-            <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
+            <h2
+              class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1"
+              transition:name={`talk-title-${item.data.year}-${item.data.name}`}
+            >
               <a
                 href={`/talks/${item.data.year}/${item.data.name}`}
                 class="card-link-overlay"

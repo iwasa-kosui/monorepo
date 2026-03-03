@@ -163,17 +163,23 @@ pre.mermaid {
 }
 
 .clay-hover-lift:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.005);
+}
+
+.clay-hover-lift:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.1s;
 }
 
 /* Page heading accent underline */
 .heading-accent {
   @apply inline-block;
   background-image: linear-gradient(var(--color-accent), var(--color-accent));
-  background-size: 100% 3px;
+  background-size: 0% 3px;
   background-position: 0 100%;
   background-repeat: no-repeat;
   padding-bottom: 4px;
+  animation: underlineGrow 0.6s cubic-bezier(0.0, 0, 0.2, 1) 0.3s forwards;
 }
 
 .blob-avatar {
@@ -198,4 +204,129 @@ pre.mermaid {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ===== Page transition keyframes ===== */
+@keyframes slideUpFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDownFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes slideDownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Card entrance animation ===== */
+@keyframes cardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-entrance {
+  opacity: 0;
+  animation: cardEntrance 0.4s cubic-bezier(0.0, 0, 0.2, 1) forwards;
+}
+
+/* ===== Heading reveal animation ===== */
+@keyframes headingReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-heading-reveal {
+  animation: headingReveal 0.5s cubic-bezier(0.0, 0, 0.2, 1) both;
+}
+
+/* ===== Underline grow animation ===== */
+@keyframes underlineGrow {
+  from {
+    background-size: 0% 3px;
+  }
+  to {
+    background-size: 100% 3px;
+  }
+}
+
+/* ===== Section entrance animation ===== */
+@keyframes sectionFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-section-entrance {
+  opacity: 0;
+  animation: sectionFadeUp 0.5s cubic-bezier(0.0, 0, 0.2, 1) forwards;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-card-entrance,
+  .animate-heading-reveal,
+  .animate-section-entrance {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .heading-accent {
+    animation: none;
+    background-size: 100% 3px;
+  }
+
+  .clay-hover-lift {
+    transition: none;
+  }
 }
