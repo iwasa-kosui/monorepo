@@ -12,7 +12,7 @@ mdc: true
 
 talk:
   date: "2026-01-31"
-  event: "SRE KAIGI 2026"
+  event: "SRE Kaigi 2026"
   description: |
     Embedded SRE不在でも開発チームが信頼性に責任を持ち、改善を続けるための具体的な方法論と、運用を通じて学んだ教訓を紹介します。
   tags:
