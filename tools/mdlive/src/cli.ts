@@ -39,6 +39,7 @@ const runFileMode = async (
 
   const server = createServer({
     port,
+    baseDir: path.dirname(filePath),
     getHtml,
   });
 
@@ -145,6 +146,7 @@ const runDirectoryMode = async (
 
   const server = createServer({
     port,
+    baseDir: dirPath,
     getHtml,
     getFileTree: () => fileTree,
     getFileContent,
