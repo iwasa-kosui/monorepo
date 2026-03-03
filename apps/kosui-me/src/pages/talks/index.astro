@@ -56,7 +56,10 @@ const platformNames: Record<ExternalSlideType, string> = {
             {dateEventLine}
           </div>
           <div class="flex items-start gap-2">
-            <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 flex-1">
+            <h3
+              class="text-lg font-semibold text-charcoal dark:text-gray-100 flex-1"
+              transition:name={`talk-title-${presentation.year}-${presentation.name}`}
+            >
               <a
                 href={`/talks/${presentation.year}/${presentation.name}`}
                 class="card-link-overlay"

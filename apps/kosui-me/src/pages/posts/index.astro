@@ -36,7 +36,10 @@ function formatDate(dateStr: string): string {
             >
               {formatDate(post.data.date)}
             </time>
-            <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1">
+            <h2
+              class="text-lg font-semibold text-charcoal dark:text-gray-100 mt-1"
+              transition:name={`post-title-${post.data.slug}`}
+            >
               <a href={`/${post.data.slug}`} class="card-link-overlay">
                 {post.data.title}
               </a>

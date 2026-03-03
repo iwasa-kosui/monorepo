@@ -30,6 +30,39 @@ const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
 const canonicalUrl = ogUrl ?? new URL(Astro.url.pathname, Astro.site).href;
 
+const slideUpFade = {
+  forwards: {
+    old: {
+      name: 'slideUpFadeOut',
+      duration: '200ms',
+      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      fillMode: 'both' as const,
+    },
+    new: {
+      name: 'slideUpFadeIn',
+      duration: '300ms',
+      delay: '100ms',
+      easing: 'cubic-bezier(0.0, 0, 0.2, 1)',
+      fillMode: 'both' as const,
+    },
+  },
+  backwards: {
+    old: {
+      name: 'slideDownFadeOut',
+      duration: '200ms',
+      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      fillMode: 'both' as const,
+    },
+    new: {
+      name: 'slideDownFadeIn',
+      duration: '300ms',
+      delay: '100ms',
+      easing: 'cubic-bezier(0.0, 0, 0.2, 1)',
+      fillMode: 'both' as const,
+    },
+  },
+};
+
 const pathname = Astro.url.pathname;
 
 const navItems = [
@@ -103,7 +136,7 @@ const navItems = [
   </head>
   <body>
     <div class="min-h-screen flex flex-col">
-      <header>
+      <header transition:name="site-header">
         <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <a
             href="/"
@@ -115,6 +148,7 @@ const navItems = [
               width="40"
               height="40"
               class="rounded-full"
+              transition:name="site-logo"
             />
             <span class="hidden sm:inline">kosui</span>
           </a>
@@ -142,7 +176,7 @@ const navItems = [
       </header>
       <main
         class="flex-1 max-w-3xl mx-auto px-4 py-8 pb-20 md:pb-8 w-full"
-        transition:animate="fade"
+        transition:animate={slideUpFade}
       >
         <slot />
       </main>
@@ -155,6 +189,7 @@ const navItems = [
     <nav
       class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#111114]/80 backdrop-blur border-t border-border dark:border-[#2a2a32] md:hidden bottom-nav"
       aria-label="Mobile navigation"
+      transition:name="mobile-nav"
     >
       <div class="flex items-center justify-around max-w-3xl mx-auto px-4 py-2">
         {
@@ -163,10 +198,10 @@ const navItems = [
             ) => (
             <a
               href={item.href}
-              class={`flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-colors ${
+              class={`flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-all ${
                 item.isActive
-                  ? 'text-accent font-semibold'
-                  : 'text-subtle dark:text-[#9ca3af]'
+                  ? 'text-accent font-semibold scale-110'
+                  : 'text-subtle dark:text-[#9ca3af] active:scale-95'
               }`}
             >
               {
@@ -252,5 +287,39 @@ const navItems = [
         }
       </div>
     </nav>
+    <script>
+    document.addEventListener('astro:page-load', () => {
+        const prefersReduced =
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReduced) return;
+
+        const cards = document.querySelectorAll<HTMLElement>(
+          '.clay-hover-lift',
+        );
+        cards.forEach((card, index) => {
+          if (index >= 15) {
+            card.style.opacity = '1';
+            return;
+          }
+          card.classList.add('animate-card-entrance');
+          card.style.animationDelay = `${index * 60}ms`;
+        });
+
+        document.querySelectorAll<HTMLElement>('.heading-accent').forEach(
+          (el) => {
+            el.style.animationName = 'none';
+            void el.offsetWidth;
+            el.style.animationName = '';
+          },
+        );
+
+        document.querySelectorAll<HTMLElement>('main > section').forEach(
+          (section, index) => {
+            section.classList.add('animate-section-entrance');
+            section.style.animationDelay = `${150 + index * 100}ms`;
+          },
+        );
+      });
+    </script>
   </body>
 </html>
