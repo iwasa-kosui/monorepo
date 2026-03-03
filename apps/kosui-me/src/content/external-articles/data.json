@@ -16,6 +16,14 @@
     "tags": ["TypeScript"]
   },
   {
+    "title": "カケハシのマルチプロダクト インフラアーキテクチャ",
+    "url": "https://findy-tools.io/companies/kakehashi/91/97",
+    "date": "2025-09-25",
+    "publisher": "Findy Tools",
+    "description": "医療SaaSを支えるマルチプロダクト基盤のアーキテクチャを紹介。OpenID Connectによる認証基盤、アカウント・アセット管理、Databricksを用いたデータ基盤、API・イベントドリブンによるプロダクト間連携の設計思想を解説。",
+    "tags": ["アーキテクチャ", "認証", "データ基盤"]
+  },
+  {
     "title": "日本の医療に本気で向き合う。認証・権限管理基盤チームの決意",
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/08/29/105510",
     "date": "2025-08-29",
