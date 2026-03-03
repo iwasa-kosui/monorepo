@@ -60,7 +60,10 @@ const navItems = [
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="light dark" />
     <title>{displayTitle}</title>
     <meta name="description" content={displayOgDescription} />
@@ -112,7 +115,7 @@ const navItems = [
             />
             <span class="hidden sm:inline">kosui</span>
           </a>
-          <div class="flex gap-0.5 sm:gap-1 text-xs sm:text-sm">
+          <div class="hidden md:flex gap-0.5 sm:gap-1 text-xs sm:text-sm">
             {
               navItems.map((item) => (
                 <a
@@ -134,7 +137,7 @@ const navItems = [
           </div>
         </nav>
       </header>
-      <main class="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
+      <main class="flex-1 max-w-3xl mx-auto px-4 py-8 pb-20 md:pb-8 w-full">
         <slot />
       </main>
       <footer>
@@ -143,5 +146,105 @@ const navItems = [
         </div>
       </footer>
     </div>
+    <nav
+      class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#111114]/80 backdrop-blur border-t border-border dark:border-[#2a2a32] md:hidden bottom-nav"
+      aria-label="Mobile navigation"
+    >
+      <div class="flex items-center justify-around max-w-3xl mx-auto px-4 py-2">
+        {
+          navItems.filter(item => !('external' in item)).map((
+              item,
+            ) => (
+            <a
+              href={item.href}
+              class={`flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-colors ${
+                item.isActive
+                  ? 'text-accent font-semibold'
+                  : 'text-subtle dark:text-[#9ca3af]'
+              }`}
+            >
+              {
+                item.label === 'Posts' && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                )
+              }
+              {
+                item.label === 'Talks' && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )
+              }
+              {
+                item.label === 'Tags' && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                    <line x1="7" y1="7" x2="7.01" y2="7" />
+                  </svg>
+                )
+              }
+              {
+                item.label === 'About' && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                )
+              }
+              <span>{item.label}</span>
+            </a>
+          ))
+        }
+      </div>
+    </nav>
   </body>
 </html>

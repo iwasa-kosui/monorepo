@@ -188,6 +188,11 @@ pre.mermaid {
   z-index: 0;
 }
 
+/* Bottom navigation safe area for iPhone notch/home bar */
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
