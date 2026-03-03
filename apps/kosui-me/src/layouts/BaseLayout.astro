@@ -1,4 +1,5 @@
 ---
+import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
 
 interface Props {
@@ -97,6 +98,7 @@ const navItems = [
       title="kosui"
       href="/feed.xml"
     />
+    <ClientRouter />
   </head>
   <body>
     <div class="min-h-screen flex flex-col">
@@ -137,7 +139,10 @@ const navItems = [
           </div>
         </nav>
       </header>
-      <main class="flex-1 max-w-3xl mx-auto px-4 py-8 pb-20 md:pb-8 w-full">
+      <main
+        class="flex-1 max-w-3xl mx-auto px-4 py-8 pb-20 md:pb-8 w-full"
+        transition:animate="fade"
+      >
         <slot />
       </main>
       <footer>

@@ -66,13 +66,15 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
   </section>
 
   <script>
-  const mermaidElements = document.querySelectorAll<HTMLPreElement>(
-    'pre.mermaid',
-  );
-  if (mermaidElements.length > 0) {
-    const { default: mermaid } = await import('mermaid');
-    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-    await mermaid.run({ nodes: mermaidElements });
-  }
+  document.addEventListener('astro:page-load', async () => {
+    const mermaidElements = document.querySelectorAll<HTMLPreElement>(
+      'pre.mermaid',
+    );
+    if (mermaidElements.length > 0) {
+      const { default: mermaid } = await import('mermaid');
+      mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+      await mermaid.run({ nodes: mermaidElements });
+    }
+  });
   </script>
 </BaseLayout>
