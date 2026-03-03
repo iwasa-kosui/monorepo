@@ -24,7 +24,9 @@ type ExternalArticleMeta = {
   tags: string[];
 };
 
-const talks = (talksData as TalkMeta[]).slice(0, 3);
+const talks = (talksData as TalkMeta[])
+  .filter((t) => t.event !== '社内LT')
+  .slice(0, 3);
 const externalArticles = (externalArticlesData as ExternalArticleMeta[]).slice(
   0,
   3,
@@ -137,44 +139,57 @@ function formatDate(dateStr: string): string {
           複雑なビジネスルールを型で表現し、誤りをコンパイル時に検出することで、仕様と実装のズレを構造的に防いでいます。認証フローの状態遷移を代数的データ型で型安全に管理し、表形式データの検証ではApplicative
           Validationですべてのエラーを同時に収集。チーム全体で活用できるよう、スコープ限定・ペアプロ・レシピ集によるオンボーディングを整備しています。
         </p>
-        <ul class="mt-2 space-y-1 text-sm list-disc list-inside">
-          <li>
-            <a
-              href="/talks/2025/fp-matsuri"
-              class="text-accent dark:text-accent-light hover:underline"
-            >堅牢な認証基盤の実現: TypeScriptで代数的データ型を活用する</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — 関数型まつり 2025</span>
-          </li>
-          <li>
-            <a
-              href="/talks/2024/tskaigi"
-              class="text-accent dark:text-accent-light hover:underline"
-            >複雑なビジネスルールに挑む:
-              正確性と効率性を両立するfp-tsのチーム活用術</a>
-            <span class="text-subtle dark:text-[#9ca3af]"> — TSKaigi 2024</span>
-          </li>
-          <li>
-            <a
-              href="https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-accent dark:text-accent-light hover:underline"
-            >TypeScriptのテストにはas const satisfiesが便利です</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — KAKEHASHI Tech Blog</span>
-          </li>
-          <li>
-            <a
-              href="https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-accent dark:text-accent-light hover:underline"
-            >他言語経験者が知っておきたいTypeScriptのクラスの注意点</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — KAKEHASHI Tech Blog</span>
-          </li>
-        </ul>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <a
+            href="/talks/2025/fp-matsuri"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              関数型まつり 2025
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              堅牢な認証基盤の実現: TypeScriptで代数的データ型を活用する
+            </p>
+          </a>
+          <a
+            href="/talks/2024/tskaigi"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              TSKaigi 2024
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              複雑なビジネスルールに挑む:
+              正確性と効率性を両立するfp-tsのチーム活用術
+            </p>
+          </a>
+          <a
+            href="https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              KAKEHASHI Tech Blog
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              TypeScriptのテストにはas const satisfiesが便利です
+            </p>
+          </a>
+          <a
+            href="https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              KAKEHASHI Tech Blog
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              他言語経験者が知っておきたいTypeScriptのクラスの注意点
+            </p>
+          </a>
+        </div>
       </div>
       <div>
         <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-1">
@@ -183,36 +198,45 @@ function formatDate(dateStr: string): string {
         <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
           専任SREを持たない開発チームでも、設計を"自分ごと"として運用し続けることで信頼性は向上できます。品質特性の明文化とADRによる意思決定の記録、ポストモーテムからの改善計画策定を実践。障害時の原因特定時間を大幅に短縮する仕組みづくりに取り組んでいます。
         </p>
-        <ul class="mt-2 space-y-1 text-sm list-disc list-inside">
-          <li>
-            <a
-              href="/talks/2026/sre-kaigi-2026"
-              class="text-accent dark:text-accent-light hover:underline"
-            >開発チームが信頼性向上のためにできること</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — SRE Kaigi 2026</span>
-          </li>
-          <li>
-            <a
-              href="/talks/2023/document"
-              class="text-accent dark:text-accent-light hover:underline"
-            >更新"しない"ドキュメント管理
-              「イミュータブルドキュメントモデル」の実運用</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — Findy Lunch LT 2023</span>
-          </li>
-          <li>
-            <a
-              href="https://kakehashi-dev.hatenablog.com/entry/2024/09/19/110000"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-accent dark:text-accent-light hover:underline"
-            >目的別データベースの実践: PostgreSQL 行レベルセキュリティと
-              DynamoDB Outboxパターン</a>
-            <span class="text-subtle dark:text-[#9ca3af]">
-              — KAKEHASHI Tech Blog</span>
-          </li>
-        </ul>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <a
+            href="/talks/2026/sre-kaigi-2026"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              SRE Kaigi 2026
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              開発チームが信頼性向上のためにできること
+            </p>
+          </a>
+          <a
+            href="/talks/2023/document"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              Findy Lunch LT 2023
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              更新"しない"ドキュメント管理
+              「イミュータブルドキュメントモデル」の実運用
+            </p>
+          </a>
+          <a
+            href="https://kakehashi-dev.hatenablog.com/entry/2024/09/19/110000"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-3 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <p class="text-xs font-semibold text-accent dark:text-accent-light">
+              KAKEHASHI Tech Blog
+            </p>
+            <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-0.5 leading-snug">
+              目的別データベースの実践: PostgreSQL 行レベルセキュリティと
+              DynamoDB Outboxパターン
+            </p>
+          </a>
+        </div>
       </div>
     </div>
   </section>
