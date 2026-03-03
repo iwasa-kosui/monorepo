@@ -56,27 +56,11 @@
     "tags": ["ドキュメント", "チームプラクティス"]
   },
   {
-    "title": "リストを題材にして代数的データ構造に入門してみる",
-    "url": "https://kakehashi-dev.hatenablog.com/entry/2022/12/07/110000",
-    "date": "2022-12-07",
-    "publisher": "KAKEHASHI Tech Blog",
-    "description": "プログラマに馴染み深い「リスト」を題材に、Sum Type(和)とProduct Type(積)で代数的にデータ構造を表現する方法を解説。方程式の展開を通じてリストの構造を直感的に理解する。",
-    "tags": ["関数型プログラミング", "TypeScript"]
-  },
-  {
     "title": "AWS ECS on Fargate + FireLens で大きなログが扱いやすくなった話",
     "url": "https://engineering.dena.com/blog/2022/08/firelens/",
     "date": "2022-08-12",
     "publisher": "DeNA Engineering Blog",
     "description": "ECS on Fargate環境でFireLensを使用した際に、16KB以上のログが分割されてJSONパースが失敗する問題の原因と、FluentBitのMultilineフィルタによるログ結合の解決策を解説。",
     "tags": ["AWS", "ECS", "Fargate", "FireLens"]
-  },
-  {
-    "title": "なぜバックエンドTypeScriptか？技術選定背景と実践例を紹介します",
-    "url": "https://kakehashi-dev.hatenablog.com/entry/2022/03/07/100000",
-    "date": "2022-03-07",
-    "publisher": "KAKEHASHI Tech Blog",
-    "description": "バックエンドにTypeScriptを採用した技術選定の背景と実践例を紹介。構造的部分型の柔軟性やImmutableプログラミングとの親和性を評価し、NestJS・Prisma・fp-tsを組み合わせた型安全な開発の知見を共有。",
-    "tags": ["TypeScript", "バックエンド"]
   }
 ]
