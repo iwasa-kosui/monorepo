@@ -7,7 +7,12 @@ interface Props {
 const { title, url } = Astro.props;
 ---
 
-<div class="flex flex-wrap justify-center gap-3" data-share-buttons>
+<div
+  class="flex flex-wrap justify-center gap-3"
+  data-share-buttons
+  data-page-title={title}
+  data-page-url={url}
+>
   <a
     data-share="hatena"
     target="_blank"
@@ -77,24 +82,39 @@ const { title, url } = Astro.props;
   </a>
 </div>
 
-<script is:inline define:vars={{ pageTitle: title, pageUrl: url }}>
-const encodedUrl = encodeURIComponent(pageUrl);
-const encodedTitle = encodeURIComponent(pageTitle);
-const text = encodeURIComponent(`${pageTitle} ${pageUrl}`);
+<script>
+function initShareButtons() {
+  document.querySelectorAll<HTMLElement>('[data-share-buttons]').forEach(
+    (container) => {
+      const pageUrl = container.dataset.pageUrl;
+      const pageTitle = container.dataset.pageTitle;
+      if (!pageUrl || !pageTitle) return;
 
-const shareUrls = {
-  hatena: `https://b.hatena.ne.jp/entry/s/${pageUrl.replace('https://', '')}`,
-  x: `https://x.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
-  linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-  bluesky: `https://bsky.app/intent/compose?text=${text}`,
-  mastodon: `https://donshare.net/share.html?text=${text}`,
-  misskey: `https://misskeyshare.link/share.html?text=${text}`,
-};
+      const encodedUrl = encodeURIComponent(pageUrl);
+      const encodedTitle = encodeURIComponent(pageTitle);
+      const text = encodeURIComponent(`${pageTitle} ${pageUrl}`);
 
-document.querySelectorAll('[data-share]').forEach((el) => {
-  const platform = el.getAttribute('data-share');
-  if (platform && shareUrls[platform]) {
-    el.setAttribute('href', shareUrls[platform]);
-  }
-});
+      const shareUrls: Record<string, string> = {
+        hatena: `https://b.hatena.ne.jp/entry/s/${
+          pageUrl.replace('https://', '')
+        }`,
+        x: `https://x.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
+        linkedin:
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+        bluesky: `https://bsky.app/intent/compose?text=${text}`,
+        mastodon: `https://donshare.net/share.html?text=${text}`,
+        misskey: `https://misskeyshare.link/share.html?text=${text}`,
+      };
+
+      container.querySelectorAll<HTMLElement>('[data-share]').forEach((el) => {
+        const platform = el.dataset.share;
+        if (platform && shareUrls[platform]) {
+          el.setAttribute('href', shareUrls[platform]);
+        }
+      });
+    },
+  );
+}
+
+document.addEventListener('astro:page-load', initShareButtons);
 </script>
