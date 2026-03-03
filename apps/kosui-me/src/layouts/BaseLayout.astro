@@ -101,7 +101,7 @@ const navItems = [
         <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <a
             href="/"
-            class="flex items-center gap-3 text-2xl font-bold text-accent hover:text-accent-dark transition-colors"
+            class="flex items-center gap-2 sm:gap-3 text-2xl font-bold text-accent hover:text-accent-dark transition-colors"
           >
             <img
               src="https://icon.kosui.me"
@@ -110,16 +110,16 @@ const navItems = [
               height="40"
               class="rounded-full"
             />
-            kosui
+            <span class="hidden sm:inline">kosui</span>
           </a>
-          <div class="flex gap-1 text-sm">
+          <div class="flex gap-0.5 sm:gap-1 text-xs sm:text-sm">
             {
               navItems.map((item) => (
                 <a
                   href={item.href}
                   class={item.isActive
-                  ? 'px-3 py-1.5 rounded-full bg-accent text-white font-semibold transition-colors'
-                  : 'px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors'}
+                  ? 'px-2 sm:px-3 py-1.5 rounded-full bg-accent text-white font-semibold transition-colors'
+                  : 'px-2 sm:px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors'}
                   {...('external' in item
                   ? {
                     target: '_blank',
