@@ -5,6 +5,8 @@
     </marker>
   </defs>
 
+  <rect width="100%" height="100%" fill="#fff"/>
+
   <!-- 単一デプロイユニット -->
   <rect x="10" y="5" width="320" height="120" rx="10" fill="#f8fafc" stroke="#1a1a2e" stroke-width="2" stroke-dasharray="6,3"/>
   <text x="170" y="22" text-anchor="middle" fill="#1a1a2e" style="font-size:10px;font-weight:700">単一デプロイユニット</text>

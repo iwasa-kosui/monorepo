@@ -5,6 +5,8 @@
     </marker>
   </defs>
 
+  <rect width="100%" height="100%" fill="#fff"/>
+
   <!-- サービスA -->
   <rect x="10" y="10" width="90" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
   <text x="55" y="32" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">サービスA</text>
