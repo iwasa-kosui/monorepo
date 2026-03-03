@@ -1,4 +1,0 @@
-@import "tailwindcss";
-@import "@iwasa-kosui/ui/styles.css";
-
-@custom-variant dark (&:is(.dark *));
