@@ -1,0 +1,41 @@
+name: Deploy kosui-me
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/kosui-me/**"
+      - ".github/workflows/deploy-kosui-me.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build kosui-me
+        run: pnpm --filter kosui-me run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/kosui-me/dist --project-name=kosui-me --commit-message="${{ github.sha }}"
+          packageManager: npm
