@@ -1,11 +1,43 @@
+import * as fs from 'node:fs';
 import * as http from 'node:http';
+import * as path from 'node:path';
 import { URL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import type { FileNode } from './fileTree.js';
 
+const MIME_TYPES: Readonly<Record<string, string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+  '.pdf': 'application/pdf',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
+  '.xml': 'application/xml',
+  '.txt': 'text/plain',
+  '.csv': 'text/csv',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.zip': 'application/zip',
+};
+
 export type ServerOptions = Readonly<{
   port: number;
+  baseDir: string;
   getHtml: (filePath?: string) => Promise<string>;
   getFileTree?: () => FileNode;
   getFileContent?: (relativePath: string) => Promise<string | null>;
@@ -19,6 +51,7 @@ export type Server = Readonly<{
 
 export const createServer = ({
   port,
+  baseDir,
   getHtml,
   getFileTree,
   getFileContent,
@@ -68,6 +101,31 @@ export const createServer = ({
         res.end('Internal Server Error');
       }
       return;
+    }
+
+    // Static file serving
+    const decodedPath = decodeURIComponent(url.pathname);
+    const filePath = path.resolve(path.join(baseDir, decodedPath));
+    if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+
+    try {
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Content-Length': stat.size,
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+    } catch {
+      // File not found, fall through to 404
     }
 
     res.writeHead(404, { 'Content-Type': 'text/plain' });
