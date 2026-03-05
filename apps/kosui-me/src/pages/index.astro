@@ -42,7 +42,8 @@ type TimelineItem =
   | { kind: 'talk'; date: string; data: TalkMeta }
   | { kind: 'external-article'; date: string; data: ExternalArticleMeta };
 
-const posts: PostEntry[] = await getCollection('posts');
+const allPosts: PostEntry[] = await getCollection('posts');
+const posts = allPosts.filter((post) => !post.data.private);
 const talks = talksData as TalkMeta[];
 const externalArticles = externalArticlesData as ExternalArticleMeta[];
 

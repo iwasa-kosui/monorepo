@@ -11,6 +11,7 @@ interface Props {
   ogUrl?: string;
   ogType?: string;
   oembedUrl?: string;
+  noindex?: boolean;
 }
 
 const {
@@ -23,6 +24,7 @@ const {
   ogUrl,
   ogType = 'website',
   oembedUrl,
+  noindex = false,
 } = Astro.props;
 
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
@@ -101,6 +103,7 @@ const navItems = [
     />
     <meta name="color-scheme" content="light dark" />
     <title>{displayTitle}</title>
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <meta name="description" content={displayOgDescription} />
     <meta property="og:title" content={displayOgTitle} />
     <meta property="og:description" content={displayOgDescription} />

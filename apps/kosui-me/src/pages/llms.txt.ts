@@ -26,7 +26,8 @@ type ExternalArticleMeta = {
 export const GET: APIRoute = async () => {
   const siteUrl = 'https://kosui.me';
 
-  const posts = await getCollection('posts');
+  const allPosts = await getCollection('posts');
+  const posts = allPosts.filter((post: PostEntry) => !post.data.private);
   const sortedPosts = posts.sort(
     (a: PostEntry, b: PostEntry) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime(),
   );

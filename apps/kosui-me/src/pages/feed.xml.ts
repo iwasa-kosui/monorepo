@@ -36,7 +36,8 @@ type FeedItem = {
 export const GET: APIRoute = async () => {
   const siteUrl = 'https://kosui.me';
 
-  const posts = await getCollection('posts');
+  const allPosts = await getCollection('posts');
+  const posts = allPosts.filter((post: PostEntry) => !post.data.private);
   const talks = talksData as TalkMeta[];
   const externalArticles = externalArticlesData as ExternalArticleMeta[];
 
