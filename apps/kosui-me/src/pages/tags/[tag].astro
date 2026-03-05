@@ -41,7 +41,8 @@ type TimelineItem =
   | { kind: 'external-article'; date: string; data: ExternalArticleMeta };
 
 export async function getStaticPaths() {
-  const posts: CollectionEntry<'posts'>[] = await getCollection('posts');
+  const allPosts: CollectionEntry<'posts'>[] = await getCollection('posts');
+  const posts = allPosts.filter((post) => !post.data.private);
   const talks = talksData as TalkMeta[];
   const externalArticles = externalArticlesData as ExternalArticleMeta[];
 
@@ -71,12 +72,13 @@ export async function getStaticPaths() {
 
 const { tag } = Astro.props as { tag: string };
 
-const posts: CollectionEntry<'posts'>[] = await getCollection('posts');
+const allPostsForTag: CollectionEntry<'posts'>[] = await getCollection('posts');
+const postsForTag = allPostsForTag.filter((post) => !post.data.private);
 const talks = talksData as TalkMeta[];
 const externalArticles = externalArticlesData as ExternalArticleMeta[];
 
 const timeline: TimelineItem[] = [
-  ...posts
+  ...postsForTag
     .filter((post) => post.data.tags?.includes(tag))
     .map(
       (post): TimelineItem => ({

@@ -16,6 +16,7 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props as { post: PostEntry };
 const { Content } = await render(post);
+const isPrivate = post.data.private === true;
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -37,6 +38,7 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
   ogImage={ogImage}
   ogUrl={pageUrl}
   ogType="article"
+  noindex={isPrivate}
 >
   <article class="article-paper">
     <header class="mb-8">
@@ -54,17 +56,30 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       </h1>
       <AuthorCard />
     </header>
+    {
+      isPrivate && (
+        <div class="mb-6 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-clay shadow-clay dark:shadow-clay-dark">
+          <p class="text-sm text-amber-800 dark:text-amber-200">
+            この記事は限定公開です。検索エンジンやRSSフィードには掲載されません。
+          </p>
+        </div>
+      )
+    }
     <div class="prose">
       <Content />
     </div>
   </article>
 
-  <section class="mt-12 mb-8">
-    <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
-      Share
-    </h3>
-    <ShareButtons title={post.data.title} url={pageUrl} />
-  </section>
+  {
+    !isPrivate && (
+      <section class="mt-12 mb-8">
+        <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
+          Share
+        </h3>
+        <ShareButtons title={post.data.title} url={pageUrl} />
+      </section>
+    )
+  }
 
   <section class="p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
     <AuthorCard />
