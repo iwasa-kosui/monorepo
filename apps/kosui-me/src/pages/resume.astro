@@ -1,0 +1,373 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import externalArticlesData from '../content/external-articles/data.json';
+import talksData from '../content/talks/data.json';
+
+type TalkMeta = {
+  title: string;
+  date: string;
+  event: string;
+  tags: string[];
+  duration: string;
+  description: string;
+  year: string;
+  name: string;
+  slideType: string;
+};
+
+type ExternalArticleMeta = {
+  title: string;
+  url: string;
+  date: string;
+  publisher: string;
+  description?: string;
+  tags: string[];
+};
+
+const talks = (talksData as TalkMeta[]).filter((t) => t.event !== '社内LT');
+const externalArticles = externalArticlesData as ExternalArticleMeta[];
+
+const careers = [
+  {
+    period: '2022.04 - 現在',
+    org: '株式会社カケハシ',
+    role: 'テックリード',
+    description:
+      '医療SaaS企業にて、認証認可・組織管理・ライセンスなどマルチプロダクト共通基盤の設計・開発をリード。',
+    details: [
+      'OpenID Connect準拠の認証基盤を設計・実装し、10以上のプロダクトの認証を統合',
+      'PostgreSQL行レベルセキュリティによるテナント分離、DynamoDB Outboxパターンによるイベント駆動アーキテクチャを構築',
+      'TypeScriptと関数型プログラミング（代数的データ型、Applicative Validation）を活用した堅牢なドメインモデルの設計',
+      'サービスベースアーキテクチャによる段階的なシステム分離戦略を策定・推進',
+      '厚生労働省ガイドラインに基づく二要素認証必須化の設計・実装',
+      'ADR（Architecture Decision Records）・ポストモーテムなどのエンジニアリングプラクティスをチームに導入',
+    ],
+  },
+  {
+    period: '2019.04 - 2022.03',
+    org: '株式会社ディー・エヌ・エー',
+    role: 'Webエンジニア',
+    description: 'タクシー配車アプリ「MOV」（現: GO）の業務管理システム開発。',
+    details: [
+      'React / TypeScript によるフロントエンド開発、Go によるバックエンドAPI開発',
+      'AWS ECS on Fargate環境でのFireLensを活用したログ基盤の構築・運用',
+      'Chrome User-Agent文字列削減に伴うサービス影響の調査・対策を主導',
+    ],
+  },
+];
+
+const education = [
+  {
+    period: '2017.04 - 2019.03',
+    org: '東京農工大学大学院 工学府 情報工学専攻',
+    degree: '修士（工学）',
+    description:
+      '人工知能・マルチエージェントシステム・自然言語処理を研究。国際会議での論文発表あり。',
+  },
+  {
+    period: '2013.04 - 2017.03',
+    org: '東京農工大学 工学部 情報工学科',
+    degree: '学士（工学）',
+    description: '',
+  },
+];
+
+const skillCategories = [
+  {
+    category: '言語',
+    skills: ['TypeScript', 'Go', 'Python'],
+  },
+  {
+    category: 'フレームワーク・ライブラリ',
+    skills: ['React', 'Node.js', 'Hono', 'Astro', 'fp-ts'],
+  },
+  {
+    category: 'クラウド・インフラ',
+    skills: ['AWS', 'Cloudflare', 'Terraform'],
+  },
+  {
+    category: 'データベース',
+    skills: ['PostgreSQL', 'DynamoDB'],
+  },
+  {
+    category: '設計・アーキテクチャ',
+    skills: [
+      'ドメイン駆動設計',
+      'サービスベースアーキテクチャ',
+      'イベント駆動アーキテクチャ',
+      'OAuth / OpenID Connect',
+    ],
+  },
+  {
+    category: 'プラクティス',
+    skills: [
+      '関数型プログラミング',
+      'ADR',
+      'ポストモーテム',
+      'SLI/SLO設計',
+    ],
+  },
+];
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+---
+
+<BaseLayout
+  title="Resume - kosui"
+  ogTitle="Resume"
+  ogDescription="岩佐 幸翠（kosui）の職務経歴書。医療SaaSの共通基盤設計・開発を専門とするテックリード。"
+>
+  <section class="mb-8">
+    <h1 class="text-3xl font-bold mb-6">Resume</h1>
+    <div class="flex items-start gap-5">
+      <img
+        src="https://icon.kosui.me"
+        alt="kosui"
+        width="72"
+        height="72"
+        class="rounded-full ring-2 ring-accent/20 flex-shrink-0"
+        transition:name="site-logo"
+      />
+      <div>
+        <h2 class="text-2xl font-bold text-charcoal dark:text-gray-100">
+          岩佐 幸翠 <span
+            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
+          >/ kosui</span>
+        </h2>
+        <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
+          テックリード @ 株式会社カケハシ
+        </p>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <a
+            href="https://github.com/iwasa-kosui"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-xs text-subtle dark:text-[#9ca3af] hover:text-accent dark:hover:text-accent-light transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z">
+              </path>
+            </svg>
+            GitHub
+          </a>
+          <a
+            href="https://x.com/kosui_me"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-xs text-subtle dark:text-[#9ca3af] hover:text-accent dark:hover:text-accent-light transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z">
+              </path>
+            </svg>
+            X
+          </a>
+          <a
+            href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-xs text-subtle dark:text-[#9ca3af] hover:text-accent dark:hover:text-accent-light transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z">
+              </path>
+            </svg>
+            Google Scholar
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">職務要約</span>
+    </h2>
+    <p class="text-sm text-charcoal dark:text-gray-200 leading-relaxed">
+      医療SaaS企業にて、法令要件や顧客環境の分析からアーキテクチャ設計までを一貫して担い、認証認可・組織管理などの共通基盤をテックリードとして設計・開発しています。プロダクトチームがコアドメインに集中できるプラットフォームの構築と、関数型ドメインモデリングによる堅牢なシステム設計を実践しています。
+    </p>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">スキル</span>
+    </h2>
+    <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+      <div class="space-y-4">
+        {
+          skillCategories.map((cat) => (
+            <div class="flex flex-col sm:flex-row sm:gap-4">
+              <span
+                class="text-xs font-semibold text-accent dark:text-accent-light w-40 flex-shrink-0 pt-0.5"
+              >
+                {cat.category}
+              </span>
+              <div class="flex flex-wrap gap-1.5 mt-1 sm:mt-0">
+                {
+                  cat.skills.map((skill) => (
+                    <span
+                      class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec]"
+                    >
+                      {skill}
+                    </span>
+                  ))
+                }
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">職務経歴</span>
+    </h2>
+    <div class="space-y-6">
+      {
+        careers.map((item) => (
+          <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 mb-2">
+              <div>
+                <p class="text-base font-semibold text-charcoal dark:text-gray-100">
+                  {item.org}
+                </p>
+                <p class="text-sm font-medium text-accent dark:text-accent-light">
+                  {item.role}
+                </p>
+              </div>
+              <span
+                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap flex-shrink-0"
+              >
+                {item.period}
+              </span>
+            </div>
+            <p class="text-sm text-charcoal dark:text-gray-200 leading-relaxed mb-3">
+              {item.description}
+            </p>
+            <ul class="space-y-1.5">
+              {
+                item.details.map((detail) => (
+                  <li class="text-xs text-subtle dark:text-[#9ca3af] leading-relaxed flex gap-2">
+                    <span
+                      class="text-accent dark:text-accent-light flex-shrink-0 mt-0.5"
+                    >
+                      -
+                    </span>
+                    <span>{detail}</span>
+                  </li>
+                ))
+              }
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">学歴</span>
+    </h2>
+    <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+      <div class="space-y-4">
+        {
+          education.map((item) => (
+            <div class="flex gap-4">
+              <span
+                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap pt-0.5 w-32 flex-shrink-0"
+              >
+                {item.period}
+              </span>
+              <div>
+                <p class="text-sm font-semibold text-charcoal dark:text-gray-100">
+                  {item.org}
+                </p>
+                <p class="text-xs font-medium text-accent dark:text-accent-light">
+                  {item.degree}
+                </p>
+                {
+                  item.description && (
+                    <p class="text-xs text-subtle dark:text-[#9ca3af] mt-0.5 leading-relaxed">
+                      {item.description}
+                    </p>
+                  )
+                }
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">登壇</span>
+    </h2>
+    <div class="space-y-2">
+      {
+        talks.map((talk) => (
+          <a
+            href={`/talks/${talk.year}/${talk.name}`}
+            class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <span
+              class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap flex-shrink-0"
+            >
+              {formatDate(talk.date)}
+            </span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-charcoal dark:text-gray-100 leading-snug">
+                {talk.title}
+              </p>
+              <p class="text-xs text-accent dark:text-accent-light mt-0.5">
+                @ {talk.event}
+              </p>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">
+      <span class="heading-accent">執筆</span>
+    </h2>
+    <div class="space-y-2">
+      {
+        externalArticles.map((article) => (
+          <a
+            href={article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <span
+              class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap flex-shrink-0"
+            >
+              {formatDate(article.date)}
+            </span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-charcoal dark:text-gray-100 leading-snug">
+                {article.title}
+              </p>
+              <p class="text-xs text-accent dark:text-accent-light mt-0.5">
+                @ {article.publisher}
+              </p>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>
