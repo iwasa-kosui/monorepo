@@ -1,0 +1,186 @@
+---
+title: "TypeScriptの型安全の限界: Zodでもプロトタイプ汚染は防げるのか"
+date: "2026-03-06T12:00:00+09:00"
+slug: "posts/2026/03/06/typescript-runtime-safety"
+ogIcon: "ts"
+description: "TypeScriptの型安全を過信するリスクについてのX上の議論をきっかけに、Zodのスキーマ定義次第ではプロトタイプ汚染を防げないケースを検証しました。構造的部分型がサーバサイド開発にもたらすセキュリティリスクについても考察します。"
+tags: ["TypeScript"]
+---
+
+import { CodePlayground } from '../../components/CodePlayground/CodePlayground';
+
+## この記事について
+
+X上で[@yuta0801_](https://x.com/yuta0801_)さんのポストをきっかけに、TypeScriptの型安全とランタイムバリデーションについて議論しました。
+
+議論の論点は大きく2つあります。
+
+#### TypeScriptの静的型付けによって担保される品質は過大評価されている
+
+@yuta0801_ さんの元々の主張です。TypeScriptの型安全によって得られるものがある一方で、TypeScriptという言語を選んだ時に失うものもある。静的型付けが担保する品質を表面的に捉えすぎている、という問題提起です。
+
+私はこれをサーバサイドTSの文脈で受け取りました。SQLや外部APIの結果など実行時に決まる値が多いサーバサイドでは、型だけでは安全性を保証できません。結局Zodなどでランタイムバリデーションを行う必要があり、「型安全な開発」だけで十分とは言えません。
+
+#### サーバサイドTSにおけるプロトタイプ汚染との付き合い方
+
+@yuta0801_ さんが特に強調していたのが、型に定義されていないプロパティがランタイムに存在しうること、そして `__proto__` プロパティへの代入が脆弱性につながるという点です。構造的部分型による余分なプロパティの問題と、JavaScriptランタイム固有のプロトタイプ汚染は別々の問題ですが、いずれも「型で定義したプロパティしか存在しない」と仮定することの危険性を示しています。
+
+この記事では、元の議論を紹介した上で、Zodのスキーマ定義次第ではプロトタイプ汚染を防げないケースを検証し、構造的部分型がサーバサイド開発にもたらすリスクについて考察します。
+
+## 議論の経緯
+
+### 発端: TypeScriptの静的型付けへの過大評価
+
+[https://x.com/yuta0801_/status/1926736879350640652](https://x.com/yuta0801_/status/1926736879350640652)
+
+> TypeScriptの静的型付けによって担保される品質をみんな過大評価しすぎているというか、表面的で目先のことしか捉えられていないという前提のもとでTypeScriptアンチをやっている
+
+### サーバサイドTSの文脈での返信
+
+[https://x.com/kosui_me/status/2029038278482247781](https://x.com/kosui_me/status/2029038278482247781)
+
+> 1年前のPostに返信すること&サーバサイドTSの話をしてしまうことをお許しを...
+>
+> サーバサイドTypeScriptの文脈で言えば、いくらSQLや外部APIの結果に型を付与しようが、Zodなどのスキーマライブラリでパースしないと怖くて取得結果を使えないというのがありますよね。
+>
+> そういう意味ではサーバサイドTSって結局のところランタイムで頑張ってる部分が超多いので、「型安全な開発」を過剰にヨイショせず、「ちゃんとランタイムの問題からも逃げずに頑張りましょう」という意識を持つのが大事そうだなと思いました。
+
+### 型システムの実用性と限界、そして `__proto__` の問題
+
+[https://x.com/yuta0801_/status/2029553476855058726](https://x.com/yuta0801_/status/2029553476855058726)
+
+> 歓迎ですよ！現実としては基本的にはTypeScriptの型を信じる前提で、ある程度まともに使えていれば基本的な部分においては十分満たせられるところに落ち着いてしまっています。実行時に外部から取得する値は決定的ではないので、厳密な型がある言語でも本質的にはデータの詰め替え作業がバリデーションとみなせるのでTSでもしたほうがいいのかみたいな議論は確かにできそうです。とはいえ準正常系までほぼカバーできるならそれ以外のまれな異常系はもうランタイムパニックで十分見たいな空気感ですね。結局JavaにはぬるぽがあるしRustにもインデックス外アクセスでのパニックがあるので、何をどう守りたいかという話にはなっていきます。そうとはいっても１つだけとんでもなく重要なことがあって、型に定義されていないプロパティが存在しうること、そして\_\_proto\_\_という悪名高きプロパティに代入されうるということで、定義したプロパティしかないとして扱うことだけ今でも脆弱性につながる部分なので\_\_proto\_\_だけでもエコシステムの努力で何とかしてほしいところがだいぶ強いです。
+
+### 元ツイートの文脈の補足
+
+[https://x.com/yuta0801_/status/2029574592160043075](https://x.com/yuta0801_/status/2029574592160043075)
+
+> 改めて元ツイートから読んでみたら文脈が曖昧でした。もともとの主張は、TypeScriptによって得られる型安全よりも、TypeScriptという言語を選んだ時に失うものがあるみたいな前提がありました
+
+## 検証: Zodのスキーマ定義次第ではプロトタイプ汚染を防げない
+
+議論の中で触れられた `__proto__` によるプロトタイプ汚染について、Zodでバリデーションすれば防げるのかを検証しました。
+
+なお、プロトタイプ汚染はJavaScriptランタイム固有の問題であり、TypeScriptの型システムが構造的部分型かどうかとは無関係に発生します。TypeScriptが名目的型付けであったとしても、`JSON.parse` と unsafe な merge を組み合わせれば同様の問題が起きます。
+
+### 前提: `JSON.parse` と `__proto__`
+
+`JSON.parse` は `__proto__` を通常の own property として扱います。
+
+```typescript
+const raw = JSON.parse('{"__proto__": {"polluted": true}, "name": "test"}');
+Object.keys(raw); // ['__proto__', 'name']
+Object.prototype.hasOwnProperty.call(raw, "__proto__"); // true
+```
+
+この時点では `__proto__` はただの own property であり、プロトタイプチェーンは汚染されていません。しかし、これを再帰的な deep merge に渡すと汚染が発生します。以下の `vulnerableMerge` は `for...in` でキーを列挙しています。`JSON.parse` が生成した `__proto__` は enumerable な own property であるため、`for...in` でも `Object.keys` でも列挙されます。
+
+```typescript
+function vulnerableMerge(target, source) {
+  for (const key in source) {
+    if (typeof source[key] === "object" && source[key] !== null) {
+      if (typeof target[key] !== "object") target[key] = {};
+      vulnerableMerge(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+
+vulnerableMerge({}, raw);
+({}).polluted; // true — プロトタイプが汚染された
+```
+
+以下のプレイグラウンドで実際に動かして確認できます。
+
+<CodePlayground client:visible code={[
+  'const raw = JSON.parse(\'{"__proto__": {"polluted": true}, "name": "test"}\');',
+  'console.log("keys:", JSON.stringify(Object.keys(raw)));',
+  'console.log("hasOwnProperty __proto__:", Object.prototype.hasOwnProperty.call(raw, "__proto__"));',
+  '',
+  'function vulnerableMerge(target, source) {',
+  '  for (const key in source) {',
+  '    if (typeof source[key] === "object" && source[key] !== null) {',
+  '      if (typeof target[key] !== "object") target[key] = {};',
+  '      vulnerableMerge(target[key], source[key]);',
+  '    } else {',
+  '      target[key] = source[key];',
+  '    }',
+  '  }',
+  '  return target;',
+  '}',
+  '',
+  'vulnerableMerge({}, raw);',
+  'console.log("polluted:", ({}).polluted);',
+].join('\n')} lang="javascript" title="プロトタイプ汚染デモ" />
+
+このような自前の再帰的merge関数を書くケースは現代では少ないかもしれませんが、プロトタイプ汚染は依然としてエコシステム全体で発生し続けている問題です。2025年には `devalue` パッケージの `parse` 関数でプロトタイプ汚染が発見され（[CVE-2025-57820](https://security.snyk.io/vuln/SNYK-JS-DEVALUE-12205530)）、2026年には `immutable` の `mergeDeep()` でも同様の脆弱性が報告されています（[CVE-2026-29063](https://github.com/advisories/GHSA-wf6x-7x77-mvgw)）。
+
+### Zodのスキーマ別の検証結果
+
+Zod 3.22.3 と 4.2.1 の両方で検証しました。結果は同じです。
+
+| スキーマ | `__proto__` 除去 | プロトタイプ汚染 |
+|---|---|---|
+| `z.object({...})` (デフォルト: strip) | される | **発生しない** |
+| `z.object({...}).passthrough()` | される | **発生しない** |
+| `z.looseObject({...})` (v4) | される | **発生しない** |
+| `z.record(z.string(), z.any())` | される | **発生しない** |
+| `z.any()` | **されない** | **発生する** |
+| `z.unknown()` | **されない** | **発生する** |
+
+`z.object()` や `z.record()` は内部でオブジェクトを再構築するため、`__proto__` が結果に含まれません。一方、`z.any()` や `z.unknown()` は入力値をそのまま返すため、`__proto__` がそのまま残ります。
+
+```typescript
+// z.record — 安全: __proto__ が除去される
+const recordParsed = z.record(z.string(), z.any()).parse(raw);
+Object.keys(recordParsed); // ['name'] — __proto__ は消えている
+
+// z.any — 危険: __proto__ がそのまま残る
+const anyParsed = z.any().parse(raw);
+Object.keys(anyParsed); // ['__proto__', 'name']
+```
+
+### バリデーションスキーマの選択を誤ると防げない
+
+`z.object()` や `z.record()` を適切に使えば、Zodはプロトタイプ汚染を防いでくれます。問題は `z.any()` や `z.unknown()` を使ったときです。これらは設計上バリデーションを行わないスキーマであり、入力値をそのまま通過させます。「とりあえずZodを通しておく」という使い方では、実態としてバリデーションを行っていないのと同じです。
+
+Zodはバリデーションライブラリであって、サニタイズライブラリではありません。スキーマを適切に定義してはじめて保護が機能します。
+
+また、`JSON.parse` のレベルで `__proto__` を除去・拒否するアプローチもあります。Fastifyが採用している [secure-json-parse](https://github.com/fastify/secure-json-parse) は `JSON.parse` のドロップイン置換として、`__proto__` や `constructor.prototype` をデフォルトでエラーにします。アプリケーション全体でプロトタイプ汚染を防ぎたい場合は、このようにパースの段階で対策するのも有効です。
+
+## 構造的部分型がサーバサイド開発にもたらすリスク
+
+前節のプロトタイプ汚染はJavaScriptランタイム固有の問題でしたが、ここではTypeScriptの型システムに起因するサーバサイド開発のリスクについて考えます。
+
+議論で指摘された「型に定義されていないプロパティが存在しうること」は、TypeScriptの構造的部分型に起因します。TypeScriptでは型が構造で判定されるため、定義されたプロパティを満たしていれば余分なプロパティがあっても型チェックを通過します。
+
+```typescript
+type User = { name: string };
+
+// nameを持っていれば、それ以外のプロパティがあっても User として扱える
+const data: User = JSON.parse('{"name": "alice", "isAdmin": true}');
+// data.isAdmin は型上は存在しないが、ランタイムには存在する
+```
+
+これはmass assignmentのリスクにつながります。リクエストボディを型アノテーションだけでフィルタしたつもりが、実際には余分なフィールドがそのまま残り、意図しないデータがDBに書き込まれたり、クライアントに返されたりする可能性があります。
+
+### Goのstructとの比較
+
+Goもinterfaceレベルでは構造的部分型ですが、データ型自体は `struct` で定義します。`encoding/json` はstructへのデコード時、定義されたフィールドのみを埋め、未知のフィールドは結果のオブジェクトに含まれません。
+
+```go
+type User struct {
+    Name string `json:"name"`
+}
+
+// encoding/json はstructに定義されたフィールドのみをデコードする
+// isAdmin はUser構造体に含まれない
+var user User
+json.Unmarshal([]byte(`{"name": "alice", "isAdmin": true}`), &user)
+```
+
+ただし、Goのデフォルトの挙動は未知のフィールドを**静かに無視する**だけであり、**拒否する**わけではありません。未知のフィールドをエラーにしたい場合は、`json.Decoder` の `DisallowUnknownFields()` を明示的に呼ぶ必要があります。また、`map[string]interface{}` にデコードすれば未知のフィールドも全て含まれるため、Goでもデータの受け取り方次第で同様のリスクは存在します。
+
+それでも、Goのstructはランタイムに構造制約を持つため、「定義していないフィールドがオブジェクトに勝手に入ってくる」という問題は起きません。TypeScriptの `JSON.parse` は `any` を返し、型アノテーションはランタイムに何の制約も加えないため、Zodの `z.object()` のようなライブラリがGoのstructに相当する役割を担っていると言えます。
