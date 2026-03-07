@@ -404,7 +404,7 @@ sequenceDiagram
 sequenceDiagram
     actor Admin as 管理者 / 基盤提供者
     participant S as akashic-ts
-    participant AUTH as 認可<br/>（BIZ-005）
+    participant AUTH as ロール割当管理<br/>（BIZ-005）
     participant EV as イベント配信<br/>（BIZ-006）
 
     alt 猶予期間経過後の自動削除

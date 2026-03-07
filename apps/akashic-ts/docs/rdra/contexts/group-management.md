@@ -290,7 +290,7 @@ sequenceDiagram
 sequenceDiagram
     actor Admin as 組織管理者<br/>/ グループ管理者
     participant S as akashic-ts
-    participant AUTH as 認可<br/>（BIZ-005）
+    participant AUTH as ロール割当管理<br/>（BIZ-005）
     participant EV as イベント配信<br/>（BIZ-006）
 
     Admin->>S: グループ削除要求<br/>（グループID）
