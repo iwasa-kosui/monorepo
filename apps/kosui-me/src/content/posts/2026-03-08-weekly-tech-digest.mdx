@@ -1,0 +1,146 @@
+---
+title: "Weekly Tech Digest: 2026-03-08"
+date: "2026-03-08T12:00:00+09:00"
+slug: "posts/2026/03/08/weekly-tech-digest"
+description: "TypeScript 6.0 RC、Claude Codeのコンテキスト管理、Effect v4ベータ、Error.isError()、Durably、Object.groupBy()など、今週気になった技術記事まとめ。"
+tags: ["Weekly"]
+private: true
+---
+
+今週はTypeScript 6.0 RCという大きなリリースがあった。Claude Code関連の記事も3本と多く、エージェント開発のプラクティスが急速に成熟してきている印象。JS標準APIの新顔も2つ取り上げた。
+
+## 言語・ランタイム
+
+### TypeScript 6.0 RC
+
+[Announcing TypeScript 6.0 RC](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-rc/)
+
+TypeScript 6.0 RCがリリースされた。JavaScriptベースの最後のリリースであり、Go言語で書き直される次期バージョン7.0（ネイティブポート）への橋渡しとして位置付けられている。
+
+- **新機能**: Temporal API型定義、`RegExp.escape`、`Map`/`WeakMap`の`getOrInsert`/`getOrInsertComputed`メソッド、`#/`で始まるサブパスインポートのサポート
+- **デフォルト値の変更**: `strict: true`、`module: esnext`、`target: es2025`がデフォルトに
+- **重大な非推奨化**: `target: es5`、`baseUrl`（`paths`なしでの単独使用）、`moduleResolution: node`、AMD/UMD/SystemJSモジュール形式、`outFile`などが廃止予定
+- **型推論の改善**: `this`を使用しない関数での型推論がより適切に処理されるように
+- **移行ツール**: `--stableTypeOrdering`フラグで6.0と7.0間の型順序の相違を診断可能
+
+## AI開発・エージェント
+
+### Claude Codeのコンテキスト管理入門（CADDi）
+
+[モデルの性能を引き出すための Claude Code コンテキストマネジメント入門](https://caddi.tech/claude-code-context-management-202603)
+
+LLMのコンテキストウィンドウの観点からClaude Codeの動作原理を解説し、期待するコード出力を安定して得るためのコンテキスト管理の理論と実践方法を紹介する記事。
+
+- コンテキストウィンドウの約40%までの「Smart zone」で重要なタスクを完了させることが重要で、それ以降は性能が低下しやすい
+- Plan Mode（Shift+Tab 2回）で実装計画と実装を別セッションに分けることで、クリーンなコンテキストで高性能を維持できる
+- コンテキストが30〜40%を超える場合は、Planファイルに進捗を記載してコンテキストをクリアし、別セッションから引き継ぐ手法を推奨
+- CLAUDE.mdにアーキテクチャ・テスト方針・コーディング規約を記載しておくことが不可欠。Plan Modeで期待通りのプランが出ない場合はCLAUDE.mdの情報不足を疑う
+- Chroma Researchの「Context Rot」研究を参照し、コンテキスト肥大化による出力品質劣化への対策を解説
+
+### Claude Codeの進化と各機能の活かし方
+
+[Claude Codeの進化と各機能の活かし方](https://speakerdeck.com/oikon48/claude-codenojin-hua-toge-ji-neng-nohuo-kasifang)
+
+Claude Codeの制御機能（CLAUDE.md、Permissions、Hooks）と拡張機能（Skills、Subagents、MCPサーバー連携）の全体像から個別の実装パターンまでを網羅的に紹介するスライド。
+
+- **制御機能**: CLAUDE.md、Permissions、Hooksを通じたClaudeの動作制御
+- **拡張機能**: Skills、Subagents、MCPサーバー連携による機能追加
+- **チーム機能**: Agent Teamsで複数インスタンスが協調動作
+- コンテキスト準備、ツール整備、検証手段の提供が実装の鍵
+
+### skill-auditor: Agent Skillの監査ツール
+
+[作ったAgent Skill、ちゃんと動いていますか？監査用のSkill、skill-auditorを作った話](https://nyosegawa.github.io/posts/skill-auditor/)
+
+Claude Codeで複数のAgent Skillを運用する際に発生するスキル間の注意力競合（Attention競合）問題に対応するため、ポートフォリオ全体を監査する専用スキル「skill-auditor」を開発した話。
+
+- **Whack-a-Mole問題**: あるスキルのdescriptionを強化すると隣のスキルの精度が低下するゼロサム的競争が発生
+- **Agent-as-a-Judgeアプローチ**: 正解ラベルなしでセッション文脈からルーティング正誤を判定し、構造化ルブリックとconfidenceスコアで精度を担保
+- **融合アーキテクチャ**: Skill Chain型（逐次パイプライン）とSub-agent型（並列分析）を組み合わせた設計
+- 32スキル・472セッション・17,851ターンの分析で、平均精度0.685、10件のパッチ提案、8件の競合ペア検出
+
+## ライブラリ・ツール
+
+### This Week in Effect - 2026-03-06
+
+[This Week in Effect - 2026-03-06](https://effect.website/blog/this-week-in-effect/2026/03/06/)
+
+TypeScript向けのライブラリEffectの週間ニュースレター。Effect v4ベータ版の進捗やコミュニティの動向を紹介。
+
+- Effect v4ベータ版でHTTP改善、AI・OpenAI互換性サポート、スキーマおよびCLI機能強化など複数の改善
+- Discord登録者6,140名超え、コミュニティの認知度が向上
+- AnswerOverflowが月間150万アクティブユーザーのプロジェクトで完全Effectベースで稼働中
+- Warp、Samsung Food、Heartbeat等40社以上がEffect経験者を募集中
+
+### Error.isError(): より安全なエラーチェック
+
+[From instanceof to Error.isError: Safer Error Checking in JavaScript](https://allthingssmitty.com/2026/02/23/from-instanceof-to-error-iserror-safer-error-checking-in-javascript/)
+
+`instanceof Error`がクロスレルム環境（iframe、Worker、SSRなど）で失敗する問題に対し、新しい`Error.isError()`メソッドがエンジンレベルで確実にエラーオブジェクトを識別する方法を提供する。
+
+- `instanceof`はJavaScriptの異なるグローバル環境では判定が失敗する場合がある
+- `Error.isError()`はエンジンレベルの内部マークを確認し、レルム横断的に対応
+- Chrome 134+、Firefox 138+、Node.js 24.3+で対応済み
+- ロギングシステム、テストフレームワーク、SSR環境など境界を越えるコード領域に推奨
+
+### Durably: TypeScript用の再開可能なジョブ実行ライブラリ
+
+[Durably Guide](https://coji.github.io/durably/guide/)
+
+長時間実行タスクを段階的に分割し、中断後も最後の成功ステップから再開できるTypeScriptライブラリ。SQLiteにステップ結果を保存することで進捗損失を防ぐ。
+
+- `step.run()`と`step.progress()`によるシンプルなAPIで直感的に実装可能
+- サーバー（Cron、パイプライン用）、フルスタック（リアルタイムUI付き）、SPA（SQLite WASM + OPFSでオフライン対応）の3つの実行モード
+- 1000行のうち500行インポート後にクラッシュしても601行目から再開できるプログレストラッキング
+- Zodスキーマによるジョブの入出力の型定義、Kyselyを使ったSQLiteアクセスで型安全
+- ハートビートによる障害検知で、停止したジョブを自動的に「stale」としてマークし再実行
+- RedisキューやクラウドサービスなしでSQLite + WASMで動作
+
+### Object.groupBy(): 配列のグループ化
+
+[Object.groupBy() - MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/groupBy)
+
+イテラブルの要素をコールバック関数の戻り値に基づいてグループ化する静的メソッド。Baseline 2024として主要ブラウザで利用可能。
+
+```javascript
+const inventory = [
+  { name: "asparagus", type: "vegetables", quantity: 5 },
+  { name: "bananas", type: "fruit", quantity: 0 },
+];
+Object.groupBy(inventory, ({ type }) => type);
+// { vegetables: [...], fruit: [...] }
+```
+
+- 戻り値はnullプロトタイプオブジェクトで、各プロパティがグループの要素配列を持つ
+- 文字列以外のキーでグループ化したい場合は`Map.groupBy()`を使用
+- `Array.prototype.reduce()`で書いていたグループ化処理を簡潔に記述可能
+
+## インフラ・セキュリティ
+
+### JAWS Days 2026: 認証認可入門
+
+[楽しく学ぼう！認証認可入門](https://speakerdeck.com/opelab/20260307-jaws-days-novice-lane-auth)
+
+JAWS Days 2026のNovice Laneで発表された、AWS IAMを軸にした認証認可の入門スライド。「AWSはIAMに始まり、IAMに終わる」というメッセージのもと、約341のAPI・13,176のアクションを持つIAMの全体像を整理している。
+
+- 認証と認可を明確に分離し、Principal / Action / Resource / Effectの4要素でポリシー設計を構造化
+- デフォルト全拒否のホワイトリスト方式で、最小権限の原則を実践する設計指針
+- 複数人での認証情報使い回しや単一マスター認証情報といったアンチパターンも紹介
+
+## その他
+
+### 開発環境現状確認2026
+
+[開発環境現状確認2026 - 交換ブログvol.19](https://note.com/mozumasu/n/ned3bb3c776c6?sub_rt=share_pb)
+
+Neovim + WezTerm + dotfiles管理という構成の開発環境紹介。自分もNeovim + WezTermユーザーなので共感ポイントが多い。Kinesis Advantage 360への言及もあり、エルゴノミクス方面も気になる。
+
+### アーキテクトの教科書
+
+[アーキテクトの教科書 価値を生むソフトウェアのアーキテクチャ構築](https://www.amazon.co.jp/dp/4798184772/)
+
+米久保 剛 著、翔泳社、2024年7月発売。これからアーキテクトを目指すITエンジニアや経験の浅いアーキテクト向けの入門書。著者自身が若手時代に「こんな本があれば」と思う内容を目指して執筆。
+
+- アーキテクトの役割定義とビジネスを支えるITアーキテクトの責務を明確化
+- 変化に強いコードを書くためのソフトウェア設計原則を実践的に解説
+- アーキテクチャ品質を担保するためのテスト戦略や品質保証もカバー
