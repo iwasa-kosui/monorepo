@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kosui.me/sitemap-index.xml
