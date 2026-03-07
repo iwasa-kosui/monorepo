@@ -1,0 +1,812 @@
+# akashic-ts トレーサビリティマトリクス
+# GOAL ← REQ ← BUC ← UC ← INFO/STATE/COND の単方向 traces_to チェーン
+
+# =============================================================================
+# システム価値レイヤー
+# =============================================================================
+
+actors:
+  - id: ACTOR-001
+    name: ユーザー
+    type: human
+  - id: ACTOR-002
+    name: 組織管理者
+    type: human
+  - id: ACTOR-003
+    name: 組織単位管理者
+    type: human
+  - id: ACTOR-004
+    name: グループ管理者
+    type: human
+  - id: ACTOR-005
+    name: プロダクト提供者
+    type: system
+  - id: ACTOR-006
+    name: 基盤提供者
+    type: human
+  - id: ACTOR-007
+    name: セールス部門
+    type: human
+  - id: ACTOR-008
+    name: セールスオペレーション部門
+    type: human
+  - id: ACTOR-009
+    name: カスタマーサクセス部門
+    type: human
+
+goals:
+  - id: GOAL-001
+    name: マルチ組織の階層管理
+    actors: [ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-006, ACTOR-008]
+  - id: GOAL-002
+    name: 統一的なユーザーライフサイクル管理
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: GOAL-003
+    name: 完全な監査証跡
+    actors: [ACTOR-002, ACTOR-006, ACTOR-009]
+  - id: GOAL-004
+    name: イベント駆動連携
+    actors: [ACTOR-005, ACTOR-006]
+  - id: GOAL-005
+    name: 拡張可能なロール割当モデル
+    actors: [ACTOR-001, ACTOR-002, ACTOR-005]
+
+requirements:
+  # BIZ-001: 組織管理
+  - id: REQ-001
+    name: 組織を作成できる
+    traces_to: [GOAL-001]
+  - id: REQ-002
+    name: 組織の設定を変更できる
+    traces_to: [GOAL-001]
+  - id: REQ-003
+    name: 組織を無効化・復元・削除できる
+    traces_to: [GOAL-001]
+  - id: REQ-004
+    name: 組織の一覧・詳細を参照できる
+    traces_to: [GOAL-001]
+  - id: REQ-005
+    name: 組織コードの一意性が保証される
+    traces_to: [GOAL-001]
+  # BIZ-002: 組織単位管理
+  - id: REQ-006
+    name: 組織単位を作成できる
+    traces_to: [GOAL-001]
+  - id: REQ-007
+    name: 組織単位の設定を変更できる
+    traces_to: [GOAL-001]
+  - id: REQ-008
+    name: 組織単位をサブツリーごと移動できる
+    traces_to: [GOAL-001]
+  - id: REQ-009
+    name: 組織単位を削除できる
+    traces_to: [GOAL-001]
+  - id: REQ-010
+    name: 組織単位のツリーを参照できる
+    traces_to: [GOAL-001]
+  - id: REQ-011
+    name: 組織作成時にルートOUが自動生成される
+    traces_to: [GOAL-001]
+  # BIZ-003: グループ管理
+  - id: REQ-012
+    name: グループを作成できる
+    traces_to: [GOAL-001]
+  - id: REQ-013
+    name: グループの設定を変更できる
+    traces_to: [GOAL-001]
+  - id: REQ-014
+    name: グループにOUを追加・削除・並替できる
+    traces_to: [GOAL-001]
+  - id: REQ-015
+    name: グループを削除できる
+    traces_to: [GOAL-001]
+  - id: REQ-016
+    name: グループの一覧・詳細を参照できる
+    traces_to: [GOAL-001]
+  # BIZ-004: ユーザーライフサイクル
+  - id: REQ-017
+    name: メールアドレスによる招待でユーザーを追加できる
+    traces_to: [GOAL-002]
+  - id: REQ-018
+    name: 管理者がユーザーを直接作成できる
+    traces_to: [GOAL-002]
+  - id: REQ-019
+    name: 招待を承諾してユーザーが参加できる
+    traces_to: [GOAL-002]
+  - id: REQ-020
+    name: ユーザーのプロフィールを変更できる
+    traces_to: [GOAL-002]
+  - id: REQ-021
+    name: ユーザーを無効化・復元できる
+    traces_to: [GOAL-002]
+  - id: REQ-022
+    name: ユーザーを削除できる
+    traces_to: [GOAL-002]
+  - id: REQ-023
+    name: ユーザーの一覧・詳細を参照できる
+    traces_to: [GOAL-002]
+  # BIZ-005: ロール割当管理
+  - id: REQ-024
+    name: ユーザーにOU/グループに対するロールを割り当てできる
+    traces_to: [GOAL-002, GOAL-005]
+  - id: REQ-025
+    name: ロール割当を取り消しできる
+    traces_to: [GOAL-002, GOAL-005]
+  - id: REQ-026
+    name: ロール割当の一覧を参照できる
+    traces_to: [GOAL-002, GOAL-005]
+  - id: REQ-027
+    name: ロール定義・パーミッション・アクセス制御は外部に委ねる
+    traces_to: [GOAL-005]
+  # BIZ-006: イベント配信
+  - id: REQ-028
+    name: すべてのドメインイベントを永続的に記録できる
+    traces_to: [GOAL-003]
+  - id: REQ-029
+    name: イベントストリームをポーリングで取得できる
+    traces_to: [GOAL-004]
+  - id: REQ-030
+    name: イベントコンシューマごとにフィルタ条件を設定できる
+    traces_to: [GOAL-004]
+  - id: REQ-031
+    name: データの一括取得APIを提供できる
+    traces_to: [GOAL-004]
+  - id: REQ-032
+    name: 監査ログを検索・参照できる
+    traces_to: [GOAL-003]
+
+# =============================================================================
+# 外部環境レイヤー
+# =============================================================================
+
+contexts:
+  - id: BIZ-001
+    name: organization-management
+    goals: [GOAL-001]
+  - id: BIZ-002
+    name: ou-management
+    goals: [GOAL-001]
+  - id: BIZ-003
+    name: group-management
+    goals: [GOAL-001]
+  - id: BIZ-004
+    name: user-lifecycle
+    goals: [GOAL-002]
+  - id: BIZ-005
+    name: role-assignment
+    goals: [GOAL-002, GOAL-005]
+  - id: BIZ-006
+    name: event-streaming
+    goals: [GOAL-003, GOAL-004]
+
+business_usecases:
+  # BIZ-001
+  - id: BUC-001
+    name: 新規組織をプロビジョニングする
+    traces_to: [REQ-001, REQ-005]
+    actors: [ACTOR-006, ACTOR-007, ACTOR-008]
+  - id: BUC-002
+    name: 組織の設定を変更する
+    traces_to: [REQ-002, REQ-005]
+    actors: [ACTOR-002, ACTOR-006]
+  - id: BUC-003
+    name: 組織をデプロビジョニングする
+    traces_to: [REQ-003]
+    actors: [ACTOR-006, ACTOR-009]
+  - id: BUC-004
+    name: 組織を参照する
+    traces_to: [REQ-004]
+    actors: [ACTOR-002, ACTOR-006, ACTOR-007, ACTOR-008, ACTOR-009]
+  # BIZ-002
+  - id: BUC-005
+    name: 組織単位を作成する
+    traces_to: [REQ-006]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-008]
+  - id: BUC-006
+    name: 組織単位の設定を変更する
+    traces_to: [REQ-007]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: BUC-007
+    name: 組織単位を移動する
+    traces_to: [REQ-008]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: BUC-008
+    name: 組織単位を削除する
+    traces_to: [REQ-009]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: BUC-009
+    name: 組織単位ツリーを参照する
+    traces_to: [REQ-010]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-008]
+  # BIZ-003
+  - id: BUC-010
+    name: グループを作成する
+    traces_to: [REQ-012]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: BUC-011
+    name: グループの設定を変更する
+    traces_to: [REQ-013]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: BUC-012
+    name: グループのOU構成を変更する
+    traces_to: [REQ-014]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: BUC-013
+    name: グループを削除する
+    traces_to: [REQ-015]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: BUC-014
+    name: グループを参照する
+    traces_to: [REQ-016]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-004]
+  # BIZ-004
+  - id: BUC-015
+    name: ユーザーを招待する
+    traces_to: [REQ-017]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-007, ACTOR-008, ACTOR-009]
+  - id: BUC-016
+    name: ユーザーを直接作成する
+    traces_to: [REQ-018]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-008]
+  - id: BUC-017
+    name: 招待を承諾する
+    traces_to: [REQ-019]
+    actors: [ACTOR-001]
+  - id: BUC-018
+    name: ユーザーのプロフィールを変更する
+    traces_to: [REQ-020]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003]
+  - id: BUC-019
+    name: ユーザーを無効化・復元する
+    traces_to: [REQ-021]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006, ACTOR-009]
+  - id: BUC-020
+    name: ユーザーを削除する
+    traces_to: [REQ-022]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: BUC-021
+    name: ユーザーを参照する
+    traces_to: [REQ-023]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-007, ACTOR-008, ACTOR-009]
+  # BIZ-005
+  - id: BUC-022
+    name: ロールを割り当てる
+    traces_to: [REQ-024]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-006]
+  - id: BUC-023
+    name: ロール割当を取り消す
+    traces_to: [REQ-025]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-006]
+  - id: BUC-024
+    name: ロール割当を参照する
+    traces_to: [REQ-026]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-005, ACTOR-006]
+  # BIZ-006
+  - id: BUC-025
+    name: イベントコンシューマを管理する
+    traces_to: [REQ-029, REQ-030]
+    actors: [ACTOR-005, ACTOR-006]
+  - id: BUC-026
+    name: イベントを取得する
+    traces_to: [REQ-029]
+    actors: [ACTOR-005]
+  - id: BUC-027
+    name: データを一括取得する
+    traces_to: [REQ-031]
+    actors: [ACTOR-005]
+  - id: BUC-028
+    name: 監査ログを参照する
+    traces_to: [REQ-028, REQ-032]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+
+# =============================================================================
+# システム境界レイヤー
+# =============================================================================
+
+usecases:
+  # BIZ-001
+  - id: UC-001
+    name: 組織を作成する
+    traces_to: [BUC-001]
+    actors: [ACTOR-006, ACTOR-007, ACTOR-008]
+  - id: UC-002
+    name: 組織名を変更する
+    traces_to: [BUC-002]
+    actors: [ACTOR-002, ACTOR-006]
+  - id: UC-003
+    name: 組織コードを変更する
+    traces_to: [BUC-002]
+    actors: [ACTOR-002, ACTOR-006]
+  - id: UC-004
+    name: 組織を無効化する
+    traces_to: [BUC-003]
+    actors: [ACTOR-006, ACTOR-009]
+  - id: UC-005
+    name: 組織を復元する
+    traces_to: [BUC-003]
+    actors: [ACTOR-006, ACTOR-009]
+  - id: UC-006
+    name: 組織を削除する
+    traces_to: [BUC-003]
+    actors: [ACTOR-006]
+  - id: UC-007
+    name: 組織一覧を取得する
+    traces_to: [BUC-004]
+    actors: [ACTOR-002, ACTOR-006, ACTOR-007, ACTOR-008, ACTOR-009]
+  - id: UC-008
+    name: 組織詳細を取得する
+    traces_to: [BUC-004]
+    actors: [ACTOR-002, ACTOR-006, ACTOR-007, ACTOR-008, ACTOR-009]
+  # BIZ-002
+  - id: UC-009
+    name: 組織単位を作成する
+    traces_to: [BUC-005]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-008]
+  - id: UC-010
+    name: 組織単位の表示名を変更する
+    traces_to: [BUC-006]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-011
+    name: 組織単位のOUコードを変更する
+    traces_to: [BUC-006]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-012
+    name: 組織単位のメタデータを更新する
+    traces_to: [BUC-006]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-013
+    name: 組織単位を移動する
+    traces_to: [BUC-007]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-014
+    name: 組織単位を削除する
+    traces_to: [BUC-008]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-015
+    name: 組織単位ツリーを取得する
+    traces_to: [BUC-009]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-008]
+  - id: UC-016
+    name: 組織単位詳細を取得する
+    traces_to: [BUC-009]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-008]
+  # BIZ-003
+  - id: UC-017
+    name: グループを作成する
+    traces_to: [BUC-010]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-018
+    name: グループの表示名を変更する
+    traces_to: [BUC-011]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-019
+    name: グループのコードを変更する
+    traces_to: [BUC-011]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-020
+    name: グループのメタデータを更新する
+    traces_to: [BUC-011]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-021
+    name: グループにOUを追加する
+    traces_to: [BUC-012]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-022
+    name: グループからOUを削除する
+    traces_to: [BUC-012]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-023
+    name: グループ内のOU順序を変更する
+    traces_to: [BUC-012]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-024
+    name: グループを削除する
+    traces_to: [BUC-013]
+    actors: [ACTOR-002, ACTOR-004]
+  - id: UC-025
+    name: グループ一覧を取得する
+    traces_to: [BUC-014]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-004]
+  - id: UC-026
+    name: グループ詳細を取得する
+    traces_to: [BUC-014]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-004]
+  # BIZ-004
+  - id: UC-027
+    name: ユーザーを招待する
+    traces_to: [BUC-015]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-007, ACTOR-008, ACTOR-009]
+  - id: UC-028
+    name: ユーザーを直接作成する
+    traces_to: [BUC-016]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-008]
+  - id: UC-029
+    name: 招待を承諾する
+    traces_to: [BUC-017]
+    actors: [ACTOR-001]
+  - id: UC-030
+    name: 招待を取り消す
+    traces_to: [BUC-015]
+    actors: [ACTOR-002, ACTOR-003]
+  - id: UC-031
+    name: ユーザーの表示名を変更する
+    traces_to: [BUC-018]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003]
+  - id: UC-032
+    name: ユーザーのユーザー名を変更する
+    traces_to: [BUC-018]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003]
+  - id: UC-033
+    name: ユーザーのメールアドレスを変更する
+    traces_to: [BUC-018]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003]
+  - id: UC-034
+    name: ユーザーを無効化する
+    traces_to: [BUC-019]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006, ACTOR-009]
+  - id: UC-035
+    name: ユーザーを復元する
+    traces_to: [BUC-019]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006, ACTOR-009]
+  - id: UC-036
+    name: ユーザーを削除する
+    traces_to: [BUC-020]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: UC-037
+    name: ユーザー一覧を取得する
+    traces_to: [BUC-021]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-007, ACTOR-008, ACTOR-009]
+  - id: UC-038
+    name: ユーザー詳細を取得する
+    traces_to: [BUC-021]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-007, ACTOR-008, ACTOR-009]
+  # BIZ-005
+  - id: UC-039
+    name: ユーザーにOUに対するロールを割り当てる
+    traces_to: [BUC-022]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: UC-040
+    name: ユーザーにグループに対するロールを割り当てる
+    traces_to: [BUC-022]
+    actors: [ACTOR-002, ACTOR-004, ACTOR-006]
+  - id: UC-041
+    name: OUに対するロール割当を取り消す
+    traces_to: [BUC-023]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: UC-042
+    name: グループに対するロール割当を取り消す
+    traces_to: [BUC-023]
+    actors: [ACTOR-002, ACTOR-004, ACTOR-006]
+  - id: UC-043
+    name: ロール割当一覧を取得する
+    traces_to: [BUC-024]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-005, ACTOR-006]
+  - id: UC-044
+    name: ユーザーのロール割当一覧を取得する
+    traces_to: [BUC-024]
+    actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-005, ACTOR-006]
+  # BIZ-006
+  - id: UC-045
+    name: イベントコンシューマを登録する
+    traces_to: [BUC-025]
+    actors: [ACTOR-005, ACTOR-006]
+  - id: UC-046
+    name: イベントコンシューマのフィルタを変更する
+    traces_to: [BUC-025]
+    actors: [ACTOR-005, ACTOR-006]
+  - id: UC-047
+    name: イベントコンシューマを削除する
+    traces_to: [BUC-025]
+    actors: [ACTOR-005, ACTOR-006]
+  - id: UC-048
+    name: イベントコンシューマ一覧を取得する
+    traces_to: [BUC-025]
+    actors: [ACTOR-005, ACTOR-006]
+  - id: UC-049
+    name: イベントストリームをポーリングする
+    traces_to: [BUC-026]
+    actors: [ACTOR-005]
+  - id: UC-050
+    name: データを一括取得する
+    traces_to: [BUC-027]
+    actors: [ACTOR-005]
+  - id: UC-051
+    name: 監査ログを検索する
+    traces_to: [BUC-028]
+    actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+
+screens:
+  - id: SCR-001
+    name: 組織一覧画面
+    information: [INFO-001]
+  - id: SCR-002
+    name: 組織詳細・編集画面
+    information: [INFO-001]
+  - id: SCR-003
+    name: 組織単位ツリー画面
+    information: [INFO-002]
+  - id: SCR-004
+    name: 組織単位詳細・編集画面
+    information: [INFO-002]
+  - id: SCR-005
+    name: グループ一覧画面
+    information: [INFO-003]
+  - id: SCR-006
+    name: グループ詳細・編集画面
+    information: [INFO-003]
+  - id: SCR-007
+    name: ユーザー一覧画面
+    information: [INFO-004]
+  - id: SCR-008
+    name: ユーザー詳細・編集画面
+    information: [INFO-004]
+  - id: SCR-009
+    name: ロール割当管理画面
+    information: [INFO-005]
+  - id: SCR-010
+    name: イベントコンシューマ管理画面
+    information: [INFO-006]
+  - id: SCR-011
+    name: 監査ログ画面
+    information: [INFO-001, INFO-002, INFO-003, INFO-004, INFO-005, INFO-009]
+
+events:
+  # BIZ-001
+  - id: EVT-001
+    name: 組織作成イベント
+    trigger: UC-001
+  - id: EVT-002
+    name: 組織名変更イベント
+    trigger: UC-002
+  - id: EVT-003
+    name: 組織コード変更イベント
+    trigger: UC-003
+  - id: EVT-004
+    name: 組織無効化イベント
+    trigger: UC-004
+  - id: EVT-005
+    name: 組織復元イベント
+    trigger: UC-005
+  - id: EVT-006
+    name: 組織削除イベント
+    trigger: UC-006
+  # BIZ-002
+  - id: EVT-007
+    name: 組織単位作成イベント
+    trigger: UC-009
+  - id: EVT-008
+    name: 組織単位表示名変更イベント
+    trigger: UC-010
+  - id: EVT-009
+    name: 組織単位OUコード変更イベント
+    trigger: UC-011
+  - id: EVT-010
+    name: 組織単位メタデータ更新イベント
+    trigger: UC-012
+  - id: EVT-011
+    name: 組織単位移動イベント
+    trigger: UC-013
+  - id: EVT-012
+    name: 組織単位削除イベント
+    trigger: UC-014
+  # BIZ-003
+  - id: EVT-013
+    name: グループ作成イベント
+    trigger: UC-017
+  - id: EVT-014
+    name: グループ表示名変更イベント
+    trigger: UC-018
+  - id: EVT-015
+    name: グループコード変更イベント
+    trigger: UC-019
+  - id: EVT-016
+    name: グループメタデータ更新イベント
+    trigger: UC-020
+  - id: EVT-017
+    name: グループOU追加イベント
+    trigger: UC-021
+  - id: EVT-018
+    name: グループOU削除イベント
+    trigger: UC-022
+  - id: EVT-019
+    name: グループOU順序変更イベント
+    trigger: UC-023
+  - id: EVT-020
+    name: グループ削除イベント
+    trigger: UC-024
+  # BIZ-004
+  - id: EVT-021
+    name: ユーザー招待イベント
+    trigger: UC-027
+  - id: EVT-022
+    name: ユーザー作成イベント
+    trigger: UC-028
+  - id: EVT-023
+    name: 招待承諾イベント
+    trigger: UC-029
+  - id: EVT-024
+    name: 招待取消イベント
+    trigger: UC-030
+  - id: EVT-025
+    name: ユーザー表示名変更イベント
+    trigger: UC-031
+  - id: EVT-026
+    name: ユーザー名変更イベント
+    trigger: UC-032
+  - id: EVT-027
+    name: ユーザーメールアドレス変更イベント
+    trigger: UC-033
+  - id: EVT-028
+    name: ユーザー無効化イベント
+    trigger: UC-034
+  - id: EVT-029
+    name: ユーザー復元イベント
+    trigger: UC-035
+  - id: EVT-030
+    name: ユーザー削除イベント
+    trigger: UC-036
+  # BIZ-005
+  - id: EVT-031
+    name: ロール割当作成イベント
+    trigger: [UC-039, UC-040]
+  - id: EVT-032
+    name: ロール割当削除イベント
+    trigger: [UC-041, UC-042]
+  # BIZ-006
+  - id: EVT-033
+    name: コンシューマ登録イベント
+    trigger: UC-045
+  - id: EVT-034
+    name: コンシューマフィルタ変更イベント
+    trigger: UC-046
+  - id: EVT-035
+    name: コンシューマ削除イベント
+    trigger: UC-047
+
+# =============================================================================
+# システムレイヤー
+# =============================================================================
+
+information:
+  - id: INFO-001
+    name: 組織
+    traces_to: [GOAL-001]
+    contexts: [BIZ-001]
+  - id: INFO-002
+    name: 組織単位（OU）
+    traces_to: [GOAL-001]
+    contexts: [BIZ-002]
+  - id: INFO-003
+    name: グループ
+    traces_to: [GOAL-001]
+    contexts: [BIZ-003]
+  - id: INFO-004
+    name: ユーザー
+    traces_to: [GOAL-002]
+    contexts: [BIZ-004]
+  - id: INFO-005
+    name: ロール割当
+    traces_to: [GOAL-002, GOAL-005]
+    contexts: [BIZ-004, BIZ-005]
+  - id: INFO-006
+    name: イベントコンシューマ
+    traces_to: [GOAL-004]
+    contexts: [BIZ-006]
+  - id: INFO-007
+    name: 招待
+    traces_to: [GOAL-002]
+    contexts: [BIZ-004]
+  - id: INFO-008
+    name: グループOU構成
+    traces_to: [GOAL-001]
+    contexts: [BIZ-003]
+  - id: INFO-009
+    name: ドメインイベント
+    traces_to: [GOAL-003, GOAL-004]
+    contexts: [BIZ-006]
+
+states:
+  - id: STATE-001
+    name: 組織状態
+    entity: INFO-001
+    traces_to: [GOAL-001]
+    contexts: [BIZ-001]
+  - id: STATE-002
+    name: ユーザー状態
+    entity: INFO-004
+    traces_to: [GOAL-002]
+    contexts: [BIZ-004]
+  - id: STATE-003
+    name: 招待状態
+    entity: INFO-007
+    traces_to: [GOAL-002]
+    contexts: [BIZ-004]
+
+conditions:
+  # BIZ-001
+  - id: COND-001
+    name: 組織コード一意性
+    traces_to: [UC-001, UC-003]
+  - id: COND-002
+    name: 有効な組織のみ設定変更可
+    traces_to: [UC-002, UC-003]
+  - id: COND-003
+    name: 猶予期間内のみ復元可
+    traces_to: [UC-005]
+  - id: COND-004
+    name: 即時削除は基盤提供者のみ
+    traces_to: [UC-006]
+  - id: COND-005
+    name: ユーザーは1組織のみ所属
+    traces_to: [UC-001]
+  # BIZ-002
+  - id: COND-006
+    name: OUコード組織内一意性
+    traces_to: [UC-009, UC-011]
+  - id: COND-007
+    name: ルートOU削除不可
+    traces_to: [UC-014]
+  - id: COND-008
+    name: 移動先の循環参照禁止
+    traces_to: [UC-013]
+  - id: COND-009
+    name: OU削除時ユーザー非削除
+    traces_to: [UC-014]
+  # BIZ-003
+  - id: COND-010
+    name: グループコード組織内一意性
+    traces_to: [UC-017, UC-019]
+  - id: COND-011
+    name: グループ内OU重複禁止
+    traces_to: [UC-021]
+  - id: COND-012
+    name: OUの複数グループ所属可
+    traces_to: [UC-021]
+  # BIZ-004
+  - id: COND-013
+    name: ユーザーは1組織のみ所属
+    traces_to: [UC-027, UC-028, UC-029]
+  - id: COND-014
+    name: 認証は外部IdPに委譲
+    traces_to: []
+  - id: COND-015
+    name: ユーザー名またはメールアドレスのいずれかは必須
+    traces_to: [UC-028, UC-032, UC-033]
+  - id: COND-016
+    name: ユーザー名は組織内で一意
+    traces_to: [UC-028, UC-032]
+  - id: COND-017
+    name: 無効化中のユーザーはアクセス不可
+    traces_to: [UC-034]
+  - id: COND-018
+    name: 削除時ロール割当も削除
+    traces_to: [UC-036]
+  # BIZ-005
+  - id: COND-019
+    name: 同一割当の重複禁止
+    traces_to: [UC-039, UC-040]
+  - id: COND-020
+    name: ロール名は外部定義
+    traces_to: []
+  - id: COND-021
+    name: 割当対象はOUまたはグループ
+    traces_to: [UC-039, UC-040]
+  - id: COND-022
+    name: ターゲット存在確認
+    traces_to: [UC-039, UC-040]
+  # BIZ-006
+  - id: COND-023
+    name: イベントIDによる冪等性
+    traces_to: [UC-049]
+  - id: COND-024
+    name: 集約ID単位の順序保証
+    traces_to: [UC-049]
+  - id: COND-025
+    name: イベント保持期間
+    traces_to: [UC-049, UC-051]
+  - id: COND-026
+    name: 監査ログ参照範囲の制限
+    traces_to: [UC-051]
+  - id: COND-027
+    name: コンシューマ名の一意性
+    traces_to: [UC-045]

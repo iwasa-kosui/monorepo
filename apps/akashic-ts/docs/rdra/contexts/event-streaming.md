@@ -108,7 +108,7 @@ boundary:
     - id: "SCR-011"
       name: "監査ログ画面"
       description: "基盤提供者・組織管理者・OU管理者向け画面。ドメインイベントの検索・詳細表示。アクターの権限に応じて参照範囲を制限"
-      information: ["INFO-001", "INFO-002", "INFO-003", "INFO-004", "INFO-005"]
+      information: ["INFO-001", "INFO-002", "INFO-003", "INFO-004", "INFO-005", "INFO-009"]
   events:
     - id: "EVT-033"
       name: "コンシューマ登録イベント"
@@ -125,7 +125,7 @@ boundary:
 
 # システムレイヤー
 system:
-  information: ["INFO-006"]
+  information: ["INFO-006", "INFO-009"]
   states: []
   conditions:
     - id: "COND-023"
