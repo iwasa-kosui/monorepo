@@ -143,13 +143,13 @@ requirements:
     name: すべてのドメインイベントを永続的に記録できる
     traces_to: [GOAL-003]
   - id: REQ-029
-    name: イベントストリームをポーリングで取得できる
+    name: イベント配信アダプターによるPush配信でドメインイベントをリアルタイムに取得できる
     traces_to: [GOAL-004]
   - id: REQ-030
-    name: イベントコンシューマごとにフィルタ条件を設定できる
+    name: サブスクリプションごとにイベントパターンでフィルタ条件を設定できる
     traces_to: [GOAL-004]
   - id: REQ-031
-    name: データの一括取得APIを提供できる
+    name: スナップショットアダプターにより一貫性のあるデータを取得できる
     traces_to: [GOAL-004]
   - id: REQ-032
     name: 監査ログを検索・参照できる
@@ -283,15 +283,11 @@ business_usecases:
     actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-005, ACTOR-006]
   # BIZ-006
   - id: BUC-025
-    name: イベントコンシューマを管理する
+    name: イベントサブスクリプションを管理する
     traces_to: [REQ-029, REQ-030]
     actors: [ACTOR-005, ACTOR-006]
   - id: BUC-026
-    name: イベントを取得する
-    traces_to: [REQ-029]
-    actors: [ACTOR-005]
-  - id: BUC-027
-    name: データを一括取得する
+    name: スナップショットからデータを取得する
     traces_to: [REQ-031]
     actors: [ACTOR-005]
   - id: BUC-028
@@ -487,33 +483,37 @@ usecases:
     actors: [ACTOR-001, ACTOR-002, ACTOR-003, ACTOR-004, ACTOR-005, ACTOR-006]
   # BIZ-006
   - id: UC-045
-    name: イベントコンシューマを登録する
+    name: サブスクリプションを登録する
     traces_to: [BUC-025]
     actors: [ACTOR-005, ACTOR-006]
   - id: UC-046
-    name: イベントコンシューマのフィルタを変更する
+    name: サブスクリプションのイベントパターンを変更する
     traces_to: [BUC-025]
     actors: [ACTOR-005, ACTOR-006]
   - id: UC-047
-    name: イベントコンシューマを削除する
+    name: サブスクリプションを削除する
     traces_to: [BUC-025]
     actors: [ACTOR-005, ACTOR-006]
   - id: UC-048
-    name: イベントコンシューマ一覧を取得する
+    name: サブスクリプション一覧を取得する
     traces_to: [BUC-025]
     actors: [ACTOR-005, ACTOR-006]
-  - id: UC-049
-    name: イベントストリームをポーリングする
-    traces_to: [BUC-026]
-    actors: [ACTOR-005]
   - id: UC-050
-    name: データを一括取得する
-    traces_to: [BUC-027]
+    name: スナップショットを取得する
+    traces_to: [BUC-026]
     actors: [ACTOR-005]
   - id: UC-051
     name: 監査ログを検索する
     traces_to: [BUC-028]
     actors: [ACTOR-002, ACTOR-003, ACTOR-006]
+  - id: UC-052
+    name: スナップショットを生成する
+    traces_to: [BUC-026]
+    actors: []
+  - id: UC-053
+    name: イベント配信の運用状況を監視する
+    traces_to: [BUC-025]
+    actors: [ACTOR-006]
 
 screens:
   - id: SCR-001
@@ -544,7 +544,7 @@ screens:
     name: ロール割当管理画面
     information: [INFO-005]
   - id: SCR-010
-    name: イベントコンシューマ管理画面
+    name: サブスクリプション管理画面
     information: [INFO-006]
   - id: SCR-011
     name: 監査ログ画面
@@ -654,13 +654,13 @@ events:
     trigger: [UC-041, UC-042]
   # BIZ-006
   - id: EVT-033
-    name: コンシューマ登録イベント
+    name: サブスクリプション登録イベント
     trigger: UC-045
   - id: EVT-034
-    name: コンシューマフィルタ変更イベント
+    name: サブスクリプションパターン変更イベント
     trigger: UC-046
   - id: EVT-035
-    name: コンシューマ削除イベント
+    name: サブスクリプション削除イベント
     trigger: UC-047
 
 # =============================================================================
@@ -689,7 +689,7 @@ information:
     traces_to: [GOAL-002, GOAL-005]
     contexts: [BIZ-004, BIZ-005]
   - id: INFO-006
-    name: イベントコンシューマ
+    name: イベントサブスクリプション
     traces_to: [GOAL-004]
     contexts: [BIZ-006]
   - id: INFO-007
@@ -703,6 +703,10 @@ information:
   - id: INFO-009
     name: ドメインイベント
     traces_to: [GOAL-003, GOAL-004]
+    contexts: [BIZ-006]
+  - id: INFO-010
+    name: スナップショット
+    traces_to: [GOAL-004]
     contexts: [BIZ-006]
 
 states:
@@ -797,16 +801,28 @@ conditions:
   # BIZ-006
   - id: COND-023
     name: イベントIDによる冪等性
-    traces_to: [UC-049]
+    traces_to: [UC-045]
   - id: COND-024
-    name: 集約ID単位の順序保証
-    traces_to: [UC-049]
+    name: 順序非保証と集約バージョン番号によるリオーダリング
+    traces_to: [UC-045]
   - id: COND-025
-    name: イベント保持期間
-    traces_to: [UC-049, UC-051]
+    name: データ保持期間
+    traces_to: [UC-050, UC-051]
   - id: COND-026
     name: 監査ログ参照範囲の制限
     traces_to: [UC-051]
   - id: COND-027
-    name: コンシューマ名の一意性
+    name: サブスクリプション名の一意性
+    traces_to: [UC-045]
+  - id: COND-028
+    name: スナップショットの一貫性保証
+    traces_to: [UC-052]
+  - id: COND-029
+    name: スナップショットとイベントストリームの接続点
+    traces_to: [UC-050, UC-052]
+  - id: COND-030
+    name: スナップショット生成間隔
+    traces_to: [UC-052]
+  - id: COND-031
+    name: 配信アダプターの認証・認可責任
     traces_to: [UC-045]

@@ -87,7 +87,7 @@ contexts:
     goals: ["GOAL-002", "GOAL-005"]
   - id: "BIZ-006"
     name: "event-streaming"
-    description: "ドメインイベントの記録・配信・一括データ取得"
+    description: "ドメインイベントの記録・Push配信・スナップショット提供"
     primary_actors: ["ACTOR-005", "ACTOR-006"]
     goals: ["GOAL-003", "GOAL-004"]
 ---
@@ -142,7 +142,7 @@ graph TB
     orgAdmin -->|組織全体の管理| system
     ouAdmin -->|担当OU配下の管理| system
     grpAdmin -->|担当グループの管理| system
-    product <-->|イベント受信・データ取得| system
+    product <-->|イベント受信・スナップショット取得| system
     platform -->|組織管理・基盤設定| system
     sales -->|組織プロビジョニング・ユーザー操作| system
     salesops -->|組織初期設定・OU構築・ユーザー操作| system
