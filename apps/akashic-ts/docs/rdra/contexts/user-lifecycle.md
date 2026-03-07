@@ -209,7 +209,7 @@ boundary:
 
 # システムレイヤー
 system:
-  information: ["INFO-004", "INFO-005"]
+  information: ["INFO-004", "INFO-005", "INFO-007"]
   states: ["STATE-002", "STATE-003"]
   conditions:
     - id: "COND-013"

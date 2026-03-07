@@ -171,7 +171,7 @@ boundary:
 
 # システムレイヤー
 system:
-  information: ["INFO-003"]
+  information: ["INFO-003", "INFO-008"]
   states: []
   conditions:
     - id: "COND-010"
