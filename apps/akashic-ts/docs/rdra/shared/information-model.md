@@ -151,28 +151,25 @@ entities:
         description: "同一ユーザー・同一ターゲット・同一ロール名の重複割当禁止"
 
   - id: "INFO-006"
-    name: "イベントコンシューマ"
-    description: "イベントストリームの消費者。フィルタ条件でイベントを選択的に取得する"
+    name: "イベントサブスクリプション"
+    description: "イベント配信の購読設定。配信アダプターを通じてプロダクト提供者にイベントをPush配信する"
     traces_to: ["GOAL-004"]
     attributes:
-      - name: "consumerId"
-        type: "ConsumerId (UUID)"
+      - name: "subscriptionId"
+        type: "SubscriptionId (UUID)"
         constraints: "PK"
-      - name: "consumerName"
+      - name: "subscriptionName"
         type: "string"
         constraints: "NOT NULL, UNIQUE（基盤全体）"
-      - name: "filterConditions"
-        type: "FilterConditions"
-        constraints: "イベント種別・コンテキスト・組織によるフィルタ"
-      - name: "cursorPosition"
-        type: "CursorPosition"
-        constraints: "NOT NULL（最終取得位置）"
-      - name: "apiCredential"
-        type: "ApiCredential"
-        constraints: "NOT NULL（認証用クレデンシャル）"
-      - name: "lastFetchedAt"
-        type: "Instant?"
-        constraints: "最終取得日時"
+      - name: "destinationConfig"
+        type: "DestinationConfig"
+        constraints: "NOT NULL（配信先の設定。アダプター固有の情報を含む）"
+      - name: "eventPattern"
+        type: "EventPattern"
+        constraints: "NOT NULL（イベントパターン: イベント種別・コンテキスト・組織）"
+      - name: "status"
+        type: "SubscriptionStatus"
+        constraints: "NOT NULL（active / inactive）"
       - name: "createdAt"
         type: "Instant"
         constraints: "NOT NULL"
@@ -272,9 +269,39 @@ entities:
       - name: "occurredAt"
         type: "Instant"
         constraints: "NOT NULL（イベント発生日時）"
+      - name: "aggregateVersion"
+        type: "number"
+        constraints: "NOT NULL（集約内の単調増加バージョン番号。リオーダリング・欠損検出に使用）"
       - name: "sequenceNumber"
         type: "bigint"
         constraints: "NOT NULL, UNIQUE（ストリーム内のグローバル順序番号。カーソルとして使用）"
+
+  - id: "INFO-010"
+    name: "スナップショット"
+    description: "エンティティの現在状態をある論理時点で一括キャプチャしたもの。スナップショットアダプターを通じて書き出される"
+    traces_to: ["GOAL-004"]
+    attributes:
+      - name: "snapshotVersion"
+        type: "number"
+        constraints: "PK（単調増加）"
+      - name: "organizationId"
+        type: "OrganizationId?"
+        constraints: "FK → INFO-001（組織単位パーティショニングの場合。全体スナップショットの場合はNULL）"
+      - name: "storageLocation"
+        type: "string"
+        constraints: "NOT NULL（スナップショットアダプター上のロケーション識別子）"
+      - name: "eventSequenceNumber"
+        type: "bigint"
+        constraints: "NOT NULL（このスナップショット時点のイベントストリーム位置）"
+      - name: "entityCounts"
+        type: "Record<string, number>"
+        constraints: "NOT NULL（エンティティ種別ごとのレコード数）"
+      - name: "status"
+        type: "SnapshotStatus"
+        constraints: "NOT NULL（generating / available / expired）"
+      - name: "createdAt"
+        type: "Instant"
+        constraints: "NOT NULL"
 ---
 
 # 情報モデル
@@ -299,7 +326,7 @@ erDiagram
     User ||--o{ RoleAssignment : "has"
     User ||--o{ Invitation : "invitedBy"
 
-    EventConsumer ||--o{ DomainEvent : "consumes"
+    Snapshot ||--|| DomainEvent : "eventSequenceNumber"
 
     Organization {
         OrganizationId organizationId PK
@@ -375,13 +402,12 @@ erDiagram
         Instant createdAt
     }
 
-    EventConsumer {
-        ConsumerId consumerId PK
-        string consumerName UK
-        JSON filterConditions
-        CursorPosition cursorPosition
-        ApiCredential apiCredential
-        Instant lastFetchedAt
+    EventSubscription {
+        SubscriptionId subscriptionId PK
+        string subscriptionName UK
+        DestinationConfig destinationConfig
+        EventPattern eventPattern
+        SubscriptionStatus status
         Instant createdAt
         Instant updatedAt
     }
@@ -395,8 +421,19 @@ erDiagram
         JSON eventPayload
         JSON aggregateState
         string actorId
+        number aggregateVersion
         Instant occurredAt
         bigint sequenceNumber UK
+    }
+
+    Snapshot {
+        number snapshotVersion PK
+        OrganizationId organizationId FK
+        string storageLocation
+        bigint eventSequenceNumber
+        JSON entityCounts
+        SnapshotStatus status
+        Instant createdAt
     }
 ```
 
@@ -409,10 +446,11 @@ erDiagram
 | INFO-003 グループ | groupCode | 組織内 |
 | INFO-004 ユーザー | username | 組織内（設定時のみ） |
 | INFO-005 ロール割当 | (userId, targetType, targetId, roleName) | 基盤全体 |
-| INFO-006 コンシューマ | consumerName | 基盤全体 |
+| INFO-006 サブスクリプション | subscriptionName | 基盤全体 |
 | INFO-007 招待 | invitationToken | 基盤全体 |
 | INFO-008 グループOU構成 | (groupId, ouId) | 基盤全体 |
 | INFO-009 ドメインイベント | eventId, sequenceNumber | 基盤全体 |
+| INFO-010 スナップショット | snapshotVersion | 基盤全体 |
 
 ## カスケード削除の影響範囲
 
