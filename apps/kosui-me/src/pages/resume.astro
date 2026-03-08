@@ -214,23 +214,51 @@ const careers: Career[] = [
       '事業内容: モバイルゲーム、スポーツ、ヘルスケア等の多角的インターネットサービス',
     projects: [
       {
-        title: 'C向け大規模サービスの認証基盤',
-        period: '2020年1月 - 2022年8月',
+        title: '認証認可プラットフォームのリノベーション',
+        period: '2020年8月 - 2022年8月',
         role: 'Webエンジニア',
         summary:
-          'C向け大規模サービスの認証基盤の開発・運用。',
+          '大規模かつグローバルな認証認可プラットフォームの段階的リノベーション。長期運用を見据え、運用を止めずにEC2からECS、Perl (PSGI) からJava (Quarkus) への移行を設計・実行。',
         achievements: [
-          'Chrome User-Agent文字列削減に伴うサービス影響の調査・対策を主導',
+          'サービス群の分割境界を決定。サービス間のピンポンを回避するため密集度を高める設計方針を策定',
+          'BFFアプリケーションのコードアーキテクチャをコンペ形式で選定',
+          'ペアレンタルコントロール機能のマイクロサービス化を設計。既存概念を整理・ドキュメント化し、業務ロジックを抽象化したRPCライクなAPI設計を実現',
+          'BFFアプリケーションのインフラ構築（ECS + DynamoDB）',
         ],
-        techStack: ['React', 'TypeScript', 'Go', 'AWS (ECS, Fargate, FireLens)'],
+        techStack: [
+          'Java (Quarkus)',
+          'Perl',
+          'TypeScript',
+          'React',
+          'AWS (ECS, DynamoDB)',
+        ],
+      },
+      {
+        title: '認証認可プラットフォームの開発・運用',
+        period: '2020年1月 - 2020年7月',
+        role: 'Webエンジニア',
+        summary:
+          '大規模かつグローバルな認証認可プラットフォームの開発と運用。',
+        achievements: [
+          'Firestoreにおけるクエリを改善しインフラコストを削減',
+          'Chrome User-Agent文字列削減とUA-CHの導入に伴うサービス影響の調査・対応策の立案・設計を主導',
+        ],
+        techStack: [
+          'Go',
+          'TypeScript',
+          'React',
+          'AWS (ECS, Fargate, FireLens)',
+          'Firestore',
+        ],
       },
       {
         title: 'タクシー配車アプリ業務管理システム',
         period: '2019年4月 - 2020年1月',
         role: 'Webエンジニア',
         summary:
-          'タクシー配車アプリ「MOV」（現: GO）の業務管理システム開発。',
+          'タクシー配車アプリ「MOV」（現: GO）のタクシー事業者向け管理アプリケーションの運用改善。',
         achievements: [
+          'CSチームからのヒアリングに基づき改善策を提案し、詳細設計・実装を通じて事業の運用工数を削減',
           'React / TypeScript によるフロントエンド開発、Go によるバックエンドAPI開発',
         ],
         techStack: ['React', 'TypeScript', 'Go'],
