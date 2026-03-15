@@ -70,26 +70,38 @@ type User = {
 };
 ```
 
-`Sensitive<string>`と`string`は型レベルで区別できるように見えます。これを活かして、ロガーの引数型を`Record<string, string | number | boolean>`のようにプリミティブに制約すれば、`Sensitive<string>`を拒否できそうに思えます。
+`Sensitive<string>`と`string`は型レベルで区別できます。これを活かして、Conditional Typesでセンシティブなフィールドを再帰的に検出し、`never`に推論することで型エラーを起こすアプローチが考えられます。
 
 ```typescript
-function safeLog(data: Record<string, string | number | boolean>): void {
+// sensitiveTagブランドを持つフィールドをneverに推論するユーティリティ型
+type RejectSensitive<T> = {
+  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown } ? never : T[K];
+};
+
+function safeLog<T extends Record<string, unknown>>(
+  data: T & RejectSensitive<T>
+): void {
   logger.info(data);
 }
 ```
 
-しかし、これは機能しません。`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。サブタイプはスーパータイプに代入可能なので、`Sensitive<string>`は`string | number | boolean`を受け入れる文脈をすべて通過します。
+一見、これでうまくいくように見えます。実際、`User`を直接渡すと`email`が`never`に推論され、型エラーになります。
 
 ```typescript
-// 型エラーにならない。Sensitive<string>はstringのサブタイプなので互換
-safeLog({ id: "1", role: "admin", email: user.email });
-
-// 変数経由でも同様に通過する
-const payload = { id: user.id, role: user.role, email: user.email };
-safeLog(payload);
+// 型エラー: emailがSensitive<string>なのでneverに推論される
+safeLog(user);
+safeLog({ ...user });
 ```
 
-Branded Typeのintersectionアプローチでは、型レベルでのPII検出は原理的に不可能です。
+しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。
+
+```typescript
+// string変数への代入でブランドが落ちる
+const email: string = user.email;
+safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
+```
+
+これはBranded Typeの原理的な限界です。intersection型で付けたブランドはスーパータイプへの代入で消失するため、型レベルでの検出は必ずバイパス可能です。
 
 さらに根本的な問題として、Branded Typeはコンパイル時だけの概念であり、ランタイムには何も残りません。`JSON.stringify`の出力に影響を与えることはなく、値は素の`string`としてそのままシリアライズされます。
 
@@ -232,7 +244,7 @@ Pino redactはブラックリスト方式であり、既知のセンシティブ
 
 ## まとめ
 
-TypeScriptの構造的部分型は、余分なプロパティを持つオブジェクトを互換とみなします。Branded Typeで型にタグを付けても、intersection型はプリミティブのサブタイプとして扱われるため、ロガーの引数型制約をすり抜けます。そもそもランタイムには何も残りません。
+TypeScriptの構造的部分型は、余分なプロパティを持つオブジェクトを互換とみなします。Branded TypeとConditional Typesを組み合わせれば型レベルで検出できるように見えますが、intersection型のブランドは`string`変数への代入で消失するため、バイパスが常に可能です。そもそもランタイムには何も残りません。
 
 この限界を踏まえて、以下の多層防御を提案しました。
 
