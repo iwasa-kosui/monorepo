@@ -10,20 +10,21 @@ tags: ["TypeScript", "セキュリティ"]
 
 ## ログにPIIが混入するとなぜ致命的か
 
-サーバサイド開発において、ログにPII（個人識別情報）が混入する事故は珍しくありません。ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信される。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
+サーバサイド開発において、ログに個人識別情報(PII)が混入する事故には注意が必要です。例えば、ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信されてしまう事例を思い浮かべてください。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
 
-しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPR、HIPAAでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しうる。コンプライアンス違反であり、単なるバグではなくインシデントです。
+しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPR、HIPAAでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しえます。これはコンプライアンス違反であり、単なるバグではなくインシデントです。
 
-厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではないし、人手のチェックリストではスケールしません。
+厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさや状態遷移の正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではないし、人手のチェックリストではスケールしません。
 
-だからこそ仕組みで防ぐ必要がある。TypeScriptで型を使えば防げそうな気がしますが、実はそう簡単ではありません。
+だからこそ仕組みで防ぐ必要があります。
+
+さて、TypeScriptで型を使えば防げそうな気がしますが、実はそう簡単ではありません。
 
 ## 構造的部分型がPIIを透過させる
 
 TypeScriptの型システムには、ログへのPII混入を防げない構造的な理由があります。具体例で見てみましょう。
 
 ```typescript
-// ドメインオブジェクト: メールアドレスを含む
 type User = {
   id: string;
   role: string;
@@ -37,12 +38,12 @@ type LogSafeUser = {
 };
 
 function createLogData(user: User): LogSafeUser {
-  // スプレッド構文でログ用オブジェクトを作る。ありがちなパターン
+  // スプレッド構文でログ用オブジェクトを作る
   return { ...user };
 }
 ```
 
-`createLogData`の戻り値の型は`LogSafeUser`です。型検査は通ります。しかしランタイムでは、`{ ...user }`によって`email`フィールドもコピーされている。`JSON.stringify`すれば`email`が出力されます。
+以下の例では、`createLogData`の戻り値の型は`LogSafeUser`であり、型検査は通ります。しかしランタイムでは、`{ ...user }`によって`email`フィールドもコピーされています。これをこのままロガーがログへ出力してしまうと、個人情報が漏洩してしまいます。
 
 ```typescript
 const user: User = { id: "1", role: "admin", email: "alice@example.com" };
@@ -50,19 +51,18 @@ const logData = createLogData(user);
 
 console.log(JSON.stringify(logData));
 // {"id":"1","role":"admin","email":"alice@example.com"}
-// <- 型上は LogSafeUser なのに、email が含まれている
+// 型上は LogSafeUser を満たすのに、email が含まれている
 ```
 
-なぜ型エラーにならないのか。TypeScriptの構造的部分型では、`{ id, role, email }`は`{ id, role }`のスーパーセットであり、`LogSafeUser`として有効です。余剰プロパティチェックはオブジェクトリテラルの直接代入時のみ発動し、スプレッド構文や変数経由の代入では[チェックされません](https://www.typescriptlang.org/docs/handbook/type-compatibility.html)。スプレッド内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)は出ていますが、現時点では未対応です。
-
-型アノテーションを正しく付けたにもかかわらず、スプレッド構文ひとつでPIIが漏れる。型が「安全です」と言っているのに、ランタイムでは安全ではないわけです。
+なぜ型エラーにならないのか考えてみましょう。TypeScriptでは構造的部分型を採用しているため、`{ id, role, email }`は`{ id, role }`のスーパーセットであり、`LogSafeUser`として有効です。余剰プロパティチェックはオブジェクトリテラルの直接代入時のみ発動し、スプレッド構文や変数経由の代入では[チェックされません](https://www.typescriptlang.org/docs/handbook/type-compatibility.html)。スプレッド内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[Issue](https://github.com/microsoft/TypeScript/issues/39998)は出ていますが、現時点では未対応です。
 
 ## 型レベルの防御はなぜ機能しないのか
 
-構造的部分型による漏洩を型レベルで防げないか。Branded Typeを使ったアプローチを考えてみます。
+Branded Typeを使ったアプローチを適用し、型レベルで防げないか考えてみましょう。
 
 ```typescript
-type Sensitive<T> = T & { readonly __sensitive: unique symbol };
+const SensitiveSymbol = Symbol('Sensitive');
+type Sensitive<T> = T & { readonly __sensitive: typeof SensitiveSymbol };
 
 type User = {
   id: string;
@@ -71,7 +71,7 @@ type User = {
 };
 ```
 
-Branded Typeは型レベルの「タグ」であり、`Sensitive<string>`と`string`を区別できます。ロガーの引数型で`Sensitive`を含む型を拒否するConditional Typeを書けば、コンパイル時に検出できるかもしれません。
+Branded Typeは型レベルのタグであり、`Sensitive<string>`と`string`を区別できます。ロガーの引数型で`Sensitive`を含む型を拒否するConditional Typeを書けば、コンパイル時に検出できるかもしれません。
 
 しかし、この防御には本質的な限界があります。
 
@@ -80,7 +80,7 @@ Branded Typeは型レベルの「タグ」であり、`Sensitive<string>`と`str
 
 Branded TypeやConditional Typesでどれだけ巧妙な型を組んでも、構造的部分型で余剰プロパティを持つオブジェクトが型検査を通過する以上、同じ問題に帰着します。型情報上は`Sensitive`なフィールドが存在しないので、「安全」と判定されてしまう。
 
-これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に明記されている通り、TypeScriptは意図的に完全なSound型システムではありません。正確性と生産性のバランスを取るという設計判断であり、型検査が通ったコードがランタイムで型通りに動く保証はない。型だけで全てを守れるという期待は、TypeScriptの設計思想と矛盾しています。
+これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に明記されている通り、TypeScriptは意図的にsoundnessなシステムではありません。正確性と生産性のバランスを取るという設計判断であり、型検査が通ったコードがランタイムで型通りに動く保証はない。つまり、型だけで全てを守れるという期待は、そもそもTypeScriptの設計思想と矛盾しています。
 
 ## ランタイム検証を主防御に据える
 
