@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow-r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <rect width="800" height="360" fill="#fafafa" rx="8" />
+
+  <!-- Title -->
+  <text x="400" y="32" text-anchor="middle" font-size="15" font-weight="700" fill="#1e293b">要望 → 要求 → 要件 → 仕様 → 設計</text>
+
+  <!-- ===== 5 boxes ===== -->
+  <!-- Box 1: 要望 -->
+  <rect x="30" y="60" width="130" height="72" rx="8" fill="#fef9c3" stroke="#facc15" stroke-width="1.5" />
+  <text x="95" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#854d0e">要望</text>
+  <text x="95" y="104" text-anchor="middle" font-size="9" fill="#713f12">「あったらいいな」</text>
+  <text x="95" y="118" text-anchor="middle" font-size="9" fill="#713f12">「できたらいいな」</text>
+
+  <!-- Arrow -->
+  <line x1="164" y1="96" x2="192" y2="96" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-r)" />
+
+  <!-- Box 2: 要求 -->
+  <rect x="200" y="60" width="150" height="72" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="1.5" />
+  <text x="275" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">要求</text>
+  <text x="275" y="104" text-anchor="middle" font-size="9" fill="#14532d">「顧客は、○○を解決</text>
+  <text x="275" y="118" text-anchor="middle" font-size="9" fill="#14532d">するため、△△したい」</text>
+
+  <!-- Arrow -->
+  <line x1="354" y1="96" x2="382" y2="96" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-r)" />
+
+  <!-- Box 3: 要件 -->
+  <rect x="390" y="60" width="150" height="72" rx="8" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5" />
+  <text x="465" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">要件</text>
+  <text x="465" y="104" text-anchor="middle" font-size="9" fill="#1e3a8a">「システムは、○○</text>
+  <text x="465" y="118" text-anchor="middle" font-size="9" fill="#1e3a8a">しなければならない」</text>
+
+  <!-- Arrow -->
+  <line x1="544" y1="96" x2="572" y2="96" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-r)" />
+
+  <!-- Box 4: 仕様 -->
+  <rect x="580" y="60" width="90" height="72" rx="8" fill="#e0e7ff" stroke="#818cf8" stroke-width="1.5" />
+  <text x="625" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#3730a3">仕様</text>
+
+  <!-- Arrow -->
+  <line x1="674" y1="96" x2="702" y2="96" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-r)" />
+
+  <!-- Box 5: 設計 -->
+  <rect x="710" y="60" width="70" height="72" rx="8" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.5" />
+  <text x="745" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">設計</text>
+
+  <!-- ===== Annotations ===== -->
+  <!-- Who/Why/What labels -->
+  <text x="275" y="155" text-anchor="middle" font-size="10" font-weight="600" fill="#166534">Who / Why / What を明確化</text>
+  <line x1="275" y1="136" x2="275" y2="143" stroke="#4ade80" stroke-width="1.5" />
+
+  <text x="465" y="155" text-anchor="middle" font-size="10" font-weight="600" fill="#1e40af">主語をシステムに置換</text>
+  <line x1="465" y1="136" x2="465" y2="143" stroke="#60a5fa" stroke-width="1.5" />
+
+  <!-- Bracket: 要求分析 scope -->
+  <line x1="30" y1="185" x2="542" y2="185" stroke="#22c55e" stroke-width="2" />
+  <line x1="30" y1="178" x2="30" y2="185" stroke="#22c55e" stroke-width="2" />
+  <line x1="542" y1="178" x2="542" y2="185" stroke="#22c55e" stroke-width="2" />
+  <text x="286" y="203" text-anchor="middle" font-size="12" font-weight="700" fill="#15803d">要求分析（この記事のスコープ）</text>
+
+  <!-- Bracket: SDD scope — dashed portion covers 要求, solid covers 要件→設計 -->
+  <!-- Dashed part: 要求 region -->
+  <line x1="200" y1="235" x2="390" y2="235" stroke="#6366f1" stroke-width="2" stroke-dasharray="6,3" />
+  <line x1="200" y1="228" x2="200" y2="235" stroke="#6366f1" stroke-width="2" stroke-dasharray="4,3" />
+  <!-- Solid part: 要件→設計 -->
+  <line x1="390" y1="235" x2="780" y2="235" stroke="#6366f1" stroke-width="2" />
+  <line x1="780" y1="228" x2="780" y2="235" stroke="#6366f1" stroke-width="2" />
+  <text x="490" y="253" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">SDD（仕様駆動開発）</text>
+  <text x="295" y="253" text-anchor="middle" font-size="9" fill="#6366f1">ツールにより部分的にカバー</text>
+  <text x="295" y="265" text-anchor="middle" font-size="9" fill="#6366f1">（例: OpenSpec の proposal.md）</text>
+
+  <!-- Overlap highlight -->
+  <rect x="200" y="185" width="342" height="50" fill="#e0e7ff" fill-opacity="0.15" rx="4" stroke="none" />
+
+  <!-- Bottom annotation -->
+  <text x="400" y="310" text-anchor="middle" font-size="10" fill="#64748b">要求〜要件のレイヤーで両者が重なり、補完し合う</text>
+</svg>
