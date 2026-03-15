@@ -15,7 +15,7 @@ import { CodePlayground } from '../../components/CodePlayground/CodePlayground';
 
 サーバサイド開発において、ログにPIIが混入する事故は珍しくありません。ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信されてしまう。多くの開発チームにとっては気をつけるべきことではあるものの、直ちにビジネスへ影響するような問題になるとは限りません。
 
-しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPRでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しうるわけです。医療情報を扱う場合はHIPAAによるさらに厳しい制約も加わります。いずれにせよ、単なるバグではなくインシデントです。
+しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPRでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しうるわけです。医療情報を扱う場合は厚生労働省の「医療情報システムの安全管理に関するガイドライン」や総務省・経済産業省の関連ガイドラインによるさらに厳しい制約も加わります。いずれにせよ、単なるバグではなくインシデントです。
 
 厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではありませんし、人手のチェックリストではスケールしません。
 
@@ -23,38 +23,9 @@ import { CodePlayground } from '../../components/CodePlayground/CodePlayground';
 
 ## 構造的部分型がPIIを透過させる
 
-TypeScriptは構造的部分型を採用しています。これは、型の互換性を名前ではなく構造で判定する仕組みです。ある型が求めるプロパティをすべて持っていれば、余分なプロパティがあっても互換とみなされます。オブジェクトリテラルを直接代入する場合に限り、例外的に余剰プロパティチェックが働きますが、変数経由やスプレッド構文ではこの例外は適用されません。
+TypeScriptは構造的部分型を採用しています。型の互換性を名前ではなく構造で判定するため、ある型が求めるプロパティをすべて持っていれば、余分なプロパティがあっても互換とみなされます。
 
-この仕様がログへのPII混入を引き起こす具体的なシナリオを見てみましょう。
-
-```typescript
-type User = Readonly<{
-  id: string;
-  role: string;
-  email: string; // PII
-}>;
-
-type LogPayload = Readonly<{
-  id: string;
-  role: string;
-}>;
-
-function logUserAction(action: string, payload: LogPayload): void {
-  logger.info({ action, ...payload });
-}
-```
-
-`logUserAction`は`LogPayload`だけを受け付けるので安全に見えます。しかし、`User`は`LogPayload`が求めるプロパティを全て持っているため、構造的部分型の互換性により`User`をそのまま渡せてしまいます。
-
-```typescript
-const user: User = { id: "1", role: "admin", email: "alice@example.com" };
-
-// 型エラーにならない。Userは{id, role}を持っているので、LogPayloadとして互換
-logUserAction("login", user);
-// => {"action":"login","id":"1","role":"admin","email":"alice@example.com"}
-```
-
-以下のプレイグラウンドで実際に試せます。「問題」タブを見ると型エラーが出ていないこと、「実行」するとemailがそのまま出力されることが確認できます。
+以下のプレイグラウンドで実際に試してみてください。`logUserAction`は`LogPayload`（`id`と`role`だけ）を受け付けるので安全に見えますが、`User`をそのまま渡しても型エラーになりません。「実行」するとemailがそのまま出力されることが確認できます。
 
 <CodePlayground client:visible code={[
   'type User = Readonly<{',
@@ -78,51 +49,13 @@ logUserAction("login", user);
   'logUserAction("login", user);',
 ].join('\n')} lang="typescript" title="構造的部分型によるPII漏洩" />
 
-余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みなので、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年4月時点では未対応です。
+オブジェクトリテラルを直接代入する場合に限り余剰プロパティチェックが例外的に働きますが、変数経由やスプレッド構文では適用されません。スプレッド構文内でも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年4月時点では未対応です。
 
 ## Branded Typeでも防げない
 
-構造的部分型による漏洩を型レベルで防げないか、Branded Typeを使ったアプローチを考えてみます。
+構造的部分型による漏洩を型レベルで防げないか、Branded Typeを使ったアプローチを考えてみます。`Sensitive<string>`というintersection型でブランドを付け、Conditional Typesで再帰的に検出して`never`に推論することで型エラーを起こす戦略です。
 
-```typescript
-declare const sensitiveTag: unique symbol;
-type Sensitive<T> = T & { readonly [sensitiveTag]: true };
-
-type User = Readonly<{
-  id: string;
-  role: string;
-  email: Sensitive<string>;
-}>;
-```
-
-`Sensitive<string>`と`string`は型レベルで区別できます。これを活かして、Conditional Typesでセンシティブなフィールドを再帰的に検出し、`never`に推論することで型エラーを起こすアプローチが考えられます。
-
-```typescript
-// sensitiveTagブランドを持つフィールドを再帰的に検出してneverに推論するユーティリティ型
-type RejectSensitive<T> = {
-  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }
-    ? never
-    : T[K] extends object
-      ? T[K] & RejectSensitive<T[K]>
-      : T[K];
-};
-
-function safeLog<T extends Record<string, unknown>>(
-  data: T & RejectSensitive<T>
-): void {
-  logger.info(data);
-}
-```
-
-一見、これでうまくいくように見えます。実際、`User`を直接渡すと`email`が`never`に推論され、型エラーになります。
-
-```typescript
-// 型エラー: emailがSensitive<string>なのでneverに推論される
-safeLog(user);
-safeLog({ ...user });
-```
-
-以下のプレイグラウンドで試すと、「問題」タブに型エラーが表示されているのが確認できます。
+以下のプレイグラウンドでは、`safeLog(user)`が型エラーになることを「問題」タブで確認できます。
 
 <CodePlayground client:visible code={[
   'declare const sensitiveTag: unique symbol;',
@@ -147,15 +80,7 @@ safeLog({ ...user });
   'safeLog({ ...user });',
 ].join('\n')} lang="typescript" title="RejectSensitiveによる型レベル検出" collapsedRanges={[[1, 14]]} />
 
-しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。
-
-```typescript
-// string変数への代入でブランドが落ちる
-const email: string = user.email;
-safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
-```
-
-以下のプレイグラウンドで確認できます。`safeLog(user)` は型エラーになりますが、一度`string`変数に代入してから渡すと型エラーが消えます。`safeLog(user)` のコメントアウトを外して「問題」タブの変化を見てみてください。
+しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。以下のプレイグラウンドで確認できます。`safeLog(user)` のコメントアウトを外して「問題」タブの変化を見てみてください。
 
 <CodePlayground client:visible code={[
   'declare const sensitiveTag: unique symbol;',
@@ -197,59 +122,7 @@ safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
 
 そこで、値そのものをシリアライズ不能にしてしまうアプローチを考えます。ScalaではCirisの[`Secret`型](https://cir.is/)として既に確立されているパターンです。
 
-```typescript
-type Sensitive<T> = Readonly<{
-  unwrap(): T;
-  toJSON(): string;
-  toString(): string;
-}>;
-
-const Sensitive = {
-  of: <T>(value: T): Sensitive<T> => ({
-    unwrap() { return value; },
-    toJSON() { return "[REDACTED]"; },
-    toString() { return "[REDACTED]"; },
-  }),
-};
-```
-
-`Sensitive.of()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`、`toJSON`、`toString`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返り、`toString()`も同様にオーバーライドしているためテンプレートリテラル経由でも値は漏れません。
-
-```typescript
-type User = Readonly<{
-  id: string;
-  role: string;
-  email: Sensitive<string>;
-}>;
-
-const user: User = {
-  id: "1",
-  role: "admin",
-  email: Sensitive.of("alice@example.com"),
-};
-
-// スプレッドしてログに渡しても、emailの値は漏れない
-JSON.stringify({ ...user });
-// => {"id":"1","role":"admin","email":"[REDACTED]"}
-
-// 構造化ロガー（Pino等）でも同様
-logger.info(user);
-// => {"id":"1","role":"admin","email":"[REDACTED]"}
-
-// console.logではutil.inspectが使われるため、toJSONは呼ばれない
-// ただし値自体はクロージャ内にあるため漏れない
-console.log(user);
-// => { id: '1', role: 'admin', email: { unwrap: [Function], toJSON: [Function], toString: [Function] } }
-
-// テンプレートリテラルではtoString()が呼ばれる
-console.log(`User: ${user.email}`);
-// => "User: [REDACTED]"
-
-// 値が必要な場面では明示的にunwrapする
-sendEmail(user.email.unwrap());
-```
-
-実行して`[REDACTED]`になることを確認できます。`JSON.stringify`でもスプレッド構文でもemailの値が漏れないのがわかります。
+`Sensitive.of()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`、`toJSON`、`toString`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返り、`toString()`も同様にオーバーライドしているためテンプレートリテラル経由でも値は漏れません。実行して確認してみてください。
 
 <CodePlayground client:visible code={[
   'type Sensitive<T> = Readonly<{',
