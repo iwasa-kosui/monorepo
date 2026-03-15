@@ -73,9 +73,13 @@ type User = {
 `Sensitive<string>`と`string`は型レベルで区別できます。これを活かして、Conditional Typesでセンシティブなフィールドを再帰的に検出し、`never`に推論することで型エラーを起こすアプローチが考えられます。
 
 ```typescript
-// sensitiveTagブランドを持つフィールドをneverに推論するユーティリティ型
+// sensitiveTagブランドを持つフィールドを再帰的に検出してneverに推論するユーティリティ型
 type RejectSensitive<T> = {
-  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown } ? never : T[K];
+  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }
+    ? never
+    : T[K] extends object
+      ? T[K] & RejectSensitive<T[K]>
+      : T[K];
 };
 
 function safeLog<T extends Record<string, unknown>>(
