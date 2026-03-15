@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" font-family="system-ui, -apple-system, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="system-ui, -apple-system, sans-serif">
   <defs>
     <marker id="arrow-r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
   </defs>
 
-  <rect width="800" height="340" fill="#fafafa" rx="8" />
+  <rect width="800" height="360" fill="#fafafa" rx="8" />
 
   <!-- Title -->
   <text x="400" y="32" text-anchor="middle" font-size="15" font-weight="700" fill="#1e293b">要望 → 要求 → 要件 → 仕様 → 設計</text>
@@ -63,14 +63,20 @@
   <line x1="542" y1="178" x2="542" y2="185" stroke="#22c55e" stroke-width="2" />
   <text x="286" y="203" text-anchor="middle" font-size="12" font-weight="700" fill="#15803d">要求分析（この記事のスコープ）</text>
 
-  <!-- Bracket: SDD scope -->
-  <line x1="390" y1="230" x2="780" y2="230" stroke="#6366f1" stroke-width="2" />
-  <line x1="390" y1="223" x2="390" y2="230" stroke="#6366f1" stroke-width="2" />
-  <line x1="780" y1="223" x2="780" y2="230" stroke="#6366f1" stroke-width="2" />
-  <text x="585" y="248" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">SDD（仕様駆動開発）</text>
+  <!-- Bracket: SDD scope — dashed portion covers 要求, solid covers 要件→設計 -->
+  <!-- Dashed part: 要求 region -->
+  <line x1="200" y1="235" x2="390" y2="235" stroke="#6366f1" stroke-width="2" stroke-dasharray="6,3" />
+  <line x1="200" y1="228" x2="200" y2="235" stroke="#6366f1" stroke-width="2" stroke-dasharray="4,3" />
+  <!-- Solid part: 要件→設計 -->
+  <line x1="390" y1="235" x2="780" y2="235" stroke="#6366f1" stroke-width="2" />
+  <line x1="780" y1="228" x2="780" y2="235" stroke="#6366f1" stroke-width="2" />
+  <text x="490" y="253" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">SDD（仕様駆動開発）</text>
+  <text x="295" y="253" text-anchor="middle" font-size="9" fill="#6366f1">ツールにより部分的にカバー</text>
+  <text x="295" y="265" text-anchor="middle" font-size="9" fill="#6366f1">（例: OpenSpec の proposal.md）</text>
 
-  <!-- Overlap annotation -->
-  <rect x="390" y="185" width="152" height="45" fill="#f0fdf4" fill-opacity="0.4" stroke="none" />
-  <text x="466" y="285" text-anchor="middle" font-size="10" fill="#64748b">要件レイヤーで両者が重なり、補完し合う</text>
-  <line x1="466" y1="275" x2="466" y2="232" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" />
+  <!-- Overlap highlight -->
+  <rect x="200" y="185" width="342" height="50" fill="#e0e7ff" fill-opacity="0.15" rx="4" stroke="none" />
+
+  <!-- Bottom annotation -->
+  <text x="400" y="310" text-anchor="middle" font-size="10" fill="#64748b">要求〜要件のレイヤーで両者が重なり、補完し合う</text>
 </svg>
