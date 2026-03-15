@@ -115,7 +115,8 @@ pre.astro-code code {
 
 /* Mermaid diagrams */
 pre.mermaid {
-  @apply flex justify-center my-4 rounded-2xl p-6 bg-white border border-gray-200;
+  @apply flex justify-center my-4 rounded-2xl p-6 bg-white border
+    border-gray-200;
 }
 
 /* Prose-like styles for MDX content */

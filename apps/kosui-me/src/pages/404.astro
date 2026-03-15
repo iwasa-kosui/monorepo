@@ -15,7 +15,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
           width="96"
           height="96"
           class="shrimp-icon"
-          style="image-rendering: pixelated;"
+          style="image-rendering: pixelated"
         />
       </div>
     </div>
@@ -41,323 +41,395 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 </BaseLayout>
 
 <style>
-  .shrimp-scene {
-    position: relative;
-    width: 240px;
-    height: 140px;
-  }
+.shrimp-scene {
+  position: relative;
+  width: 240px;
+  height: 140px;
+}
 
-  /* === Shrimp pacing back and forth, looking worried === */
+/* === Shrimp pacing back and forth, looking worried === */
+.shrimp-container {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: shrimpPace 7s ease-in-out infinite;
+}
+
+.shrimp-icon {
+  cursor: pointer;
+  filter: drop-shadow(0 4px 12px rgba(224, 94, 82, 0.2));
+  animation: shrimpWorry 7s ease-in-out infinite;
+}
+
+.question-mark {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--color-accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.qm-1 {
+  animation: questionPop1 7s ease-in-out infinite;
+}
+.qm-2 {
+  animation: questionPop2 7s ease-in-out infinite;
+}
+.qm-3 {
+  animation: questionPop3 7s ease-in-out infinite;
+}
+
+.shrimp-icon:hover {
+  animation: shrimpWiggle 0.4s ease-in-out;
+}
+
+.shrimp-icon:active {
+  transform: scale(0.9) rotate(-10deg);
+}
+
+/* === Home link === */
+.home-link {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.home-link:hover {
+  transform: translateY(-2px);
+}
+
+.home-link:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* === Keyframes === */
+
+/* Left-right pacing: timidly walks right, freezes, walks left, freezes */
+@keyframes shrimpPace {
+  0% {
+    left: 25%;
+    transform: translateX(-50%) translateY(-50%);
+  }
+  /* freeze, gathering courage */
+  12% {
+    left: 25%;
+    transform: translateX(-50%) translateY(-50%);
+  }
+  /* timidly walk right */
+  42% {
+    left: 75%;
+    transform: translateX(-50%) translateY(-50%) scaleX(1);
+  }
+  /* arrive, freeze in surprise */
+  48% {
+    left: 75%;
+    transform: translateX(-50%) translateY(-50%) scaleX(1);
+  }
+  /* turn around */
+  52% {
+    left: 75%;
+    transform: translateX(-50%) translateY(-50%) scaleX(-1);
+  }
+  /* freeze again, hesitating */
+  60% {
+    left: 75%;
+    transform: translateX(-50%) translateY(-50%) scaleX(-1);
+  }
+  /* timidly walk back */
+  90% {
+    left: 25%;
+    transform: translateX(-50%) translateY(-50%) scaleX(-1);
+  }
+  /* turn back to original direction */
+  94% {
+    left: 25%;
+    transform: translateX(-50%) translateY(-50%) scaleX(1);
+  }
+  100% {
+    left: 25%;
+    transform: translateX(-50%) translateY(-50%) scaleX(1);
+  }
+}
+
+/* Gentle trembling + timid head tilts = nervous look */
+@keyframes shrimpWorry {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  /* frozen, trembling slightly */
+  3% {
+    transform: translateY(-1px) rotate(-1deg);
+  }
+  5% {
+    transform: translateY(1px) rotate(1deg);
+  }
+  7% {
+    transform: translateY(-1px) rotate(-1deg);
+  }
+  10% {
+    transform: translateY(0) rotate(0deg);
+  }
+  /* walking: gentle bobbing */
+  18% {
+    transform: translateY(-3px) rotate(-2deg);
+  }
+  22% {
+    transform: translateY(1px) rotate(1deg);
+  }
+  28% {
+    transform: translateY(-3px) rotate(-2deg);
+  }
+  32% {
+    transform: translateY(1px) rotate(1deg);
+  }
+  38% {
+    transform: translateY(-2px) rotate(-1deg);
+  }
+  /* arrive right: startled peek */
+  44% {
+    transform: translateY(-2px) rotate(0deg);
+  }
+  47% {
+    transform: translateY(0) rotate(6deg);
+  }
+  50% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  53% {
+    transform: translateY(0) rotate(3deg);
+  }
+  /* frozen, trembling */
+  56% {
+    transform: translateY(-1px) rotate(1deg);
+  }
+  58% {
+    transform: translateY(1px) rotate(-1deg);
+  }
+  60% {
+    transform: translateY(0) rotate(0deg);
+  }
+  /* walking back: gentle bobbing */
+  66% {
+    transform: translateY(-3px) rotate(2deg);
+  }
+  70% {
+    transform: translateY(1px) rotate(-1deg);
+  }
+  76% {
+    transform: translateY(-3px) rotate(2deg);
+  }
+  80% {
+    transform: translateY(1px) rotate(-1deg);
+  }
+  86% {
+    transform: translateY(-2px) rotate(1deg);
+  }
+  /* arrive left: nervous glance */
+  91% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  94% {
+    transform: translateY(0) rotate(3deg);
+  }
+  97% {
+    transform: translateY(-1px) rotate(-1deg);
+  }
+}
+
+/* 3 question marks pop up one after another at each pause */
+/* Right pause: ~42%-60%, Left pause: ~88%-100% */
+
+/* 1st ？ */
+@keyframes questionPop1 {
+  0%, 42% {
+    opacity: 0;
+    transform: translate(0, 4px) scale(0.3);
+  }
+  44% {
+    opacity: 1;
+    transform: translate(0, -2px) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(1px, -12px) scale(0.9);
+  }
+  56% {
+    opacity: 0;
+    transform: translate(2px, -24px) scale(0.5);
+  }
+  88% {
+    opacity: 0;
+    transform: translate(0, 4px) scale(0.3);
+  }
+  90% {
+    opacity: 1;
+    transform: translate(0, -2px) scale(1);
+  }
+  96% {
+    opacity: 0.8;
+    transform: translate(1px, -12px) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(2px, -22px) scale(0.5);
+  }
+}
+
+/* 2nd ？ (offset right, slightly delayed) */
+@keyframes questionPop2 {
+  0%, 44% {
+    opacity: 0;
+    transform: translate(10px, 4px) scale(0.3);
+  }
+  46% {
+    opacity: 1;
+    transform: translate(12px, -4px) scale(0.9);
+  }
+  52% {
+    opacity: 0.7;
+    transform: translate(13px, -14px) scale(0.8);
+  }
+  58% {
+    opacity: 0;
+    transform: translate(14px, -28px) scale(0.4);
+  }
+  90% {
+    opacity: 0;
+    transform: translate(10px, 4px) scale(0.3);
+  }
+  92% {
+    opacity: 1;
+    transform: translate(12px, -4px) scale(0.9);
+  }
+  97% {
+    opacity: 0.7;
+    transform: translate(13px, -14px) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(14px, -24px) scale(0.4);
+  }
+}
+
+/* 3rd ？ (offset left, slightly more delayed) */
+@keyframes questionPop3 {
+  0%, 46% {
+    opacity: 0;
+    transform: translate(-6px, 0px) scale(0.3);
+  }
+  48% {
+    opacity: 0.8;
+    transform: translate(-7px, -6px) scale(0.75);
+  }
+  54% {
+    opacity: 0.6;
+    transform: translate(-7px, -16px) scale(0.65);
+  }
+  60% {
+    opacity: 0;
+    transform: translate(-6px, -30px) scale(0.3);
+  }
+  92% {
+    opacity: 0;
+    transform: translate(-6px, 0px) scale(0.3);
+  }
+  94% {
+    opacity: 0.8;
+    transform: translate(-7px, -6px) scale(0.75);
+  }
+  98% {
+    opacity: 0.6;
+    transform: translate(-7px, -16px) scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-6px, -26px) scale(0.3);
+  }
+}
+
+@keyframes shrimpWiggle {
+  0% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* === Reduced motion === */
+@media (prefers-reduced-motion: reduce) {
   .shrimp-container {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    animation: shrimpPace 7s ease-in-out infinite;
+    animation: none;
+    opacity: 1;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
   }
 
   .shrimp-icon {
-    cursor: pointer;
-    filter: drop-shadow(0 4px 12px rgba(224, 94, 82, 0.2));
-    animation: shrimpWorry 7s ease-in-out infinite;
-  }
-
-  .question-mark {
-    position: absolute;
-    top: -8px;
-    right: -4px;
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--color-accent);
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .qm-1 {
-    animation: questionPop1 7s ease-in-out infinite;
-  }
-  .qm-2 {
-    animation: questionPop2 7s ease-in-out infinite;
-  }
-  .qm-3 {
-    animation: questionPop3 7s ease-in-out infinite;
+    animation: none;
   }
 
   .shrimp-icon:hover {
-    animation: shrimpWiggle 0.4s ease-in-out;
+    animation: none;
   }
 
-  .shrimp-icon:active {
-    transform: scale(0.9) rotate(-10deg);
+  .question-mark {
+    animation: none;
+    display: none;
   }
-
-
-  /* === Home link === */
-  .home-link {
-    transition:
-      transform 0.2s ease,
-      background-color 0.2s ease;
-  }
-
-  .home-link:hover {
-    transform: translateY(-2px);
-  }
-
-  .home-link:active {
-    transform: translateY(0) scale(0.97);
-  }
-
-  /* === Keyframes === */
-
-  /* Left-right pacing: timidly walks right, freezes, walks left, freezes */
-  @keyframes shrimpPace {
-    0% {
-      left: 25%;
-      transform: translateX(-50%) translateY(-50%);
-    }
-    /* freeze, gathering courage */
-    12% {
-      left: 25%;
-      transform: translateX(-50%) translateY(-50%);
-    }
-    /* timidly walk right */
-    42% {
-      left: 75%;
-      transform: translateX(-50%) translateY(-50%) scaleX(1);
-    }
-    /* arrive, freeze in surprise */
-    48% {
-      left: 75%;
-      transform: translateX(-50%) translateY(-50%) scaleX(1);
-    }
-    /* turn around */
-    52% {
-      left: 75%;
-      transform: translateX(-50%) translateY(-50%) scaleX(-1);
-    }
-    /* freeze again, hesitating */
-    60% {
-      left: 75%;
-      transform: translateX(-50%) translateY(-50%) scaleX(-1);
-    }
-    /* timidly walk back */
-    90% {
-      left: 25%;
-      transform: translateX(-50%) translateY(-50%) scaleX(-1);
-    }
-    /* turn back to original direction */
-    94% {
-      left: 25%;
-      transform: translateX(-50%) translateY(-50%) scaleX(1);
-    }
-    100% {
-      left: 25%;
-      transform: translateX(-50%) translateY(-50%) scaleX(1);
-    }
-  }
-
-  /* Gentle trembling + timid head tilts = nervous look */
-  @keyframes shrimpWorry {
-    0%,
-    100% {
-      transform: translateY(0) rotate(0deg);
-    }
-    /* frozen, trembling slightly */
-    3% {
-      transform: translateY(-1px) rotate(-1deg);
-    }
-    5% {
-      transform: translateY(1px) rotate(1deg);
-    }
-    7% {
-      transform: translateY(-1px) rotate(-1deg);
-    }
-    10% {
-      transform: translateY(0) rotate(0deg);
-    }
-    /* walking: gentle bobbing */
-    18% {
-      transform: translateY(-3px) rotate(-2deg);
-    }
-    22% {
-      transform: translateY(1px) rotate(1deg);
-    }
-    28% {
-      transform: translateY(-3px) rotate(-2deg);
-    }
-    32% {
-      transform: translateY(1px) rotate(1deg);
-    }
-    38% {
-      transform: translateY(-2px) rotate(-1deg);
-    }
-    /* arrive right: startled peek */
-    44% {
-      transform: translateY(-2px) rotate(0deg);
-    }
-    47% {
-      transform: translateY(0) rotate(6deg);
-    }
-    50% {
-      transform: translateY(0) rotate(-4deg);
-    }
-    53% {
-      transform: translateY(0) rotate(3deg);
-    }
-    /* frozen, trembling */
-    56% {
-      transform: translateY(-1px) rotate(1deg);
-    }
-    58% {
-      transform: translateY(1px) rotate(-1deg);
-    }
-    60% {
-      transform: translateY(0) rotate(0deg);
-    }
-    /* walking back: gentle bobbing */
-    66% {
-      transform: translateY(-3px) rotate(2deg);
-    }
-    70% {
-      transform: translateY(1px) rotate(-1deg);
-    }
-    76% {
-      transform: translateY(-3px) rotate(2deg);
-    }
-    80% {
-      transform: translateY(1px) rotate(-1deg);
-    }
-    86% {
-      transform: translateY(-2px) rotate(1deg);
-    }
-    /* arrive left: nervous glance */
-    91% {
-      transform: translateY(0) rotate(-6deg);
-    }
-    94% {
-      transform: translateY(0) rotate(3deg);
-    }
-    97% {
-      transform: translateY(-1px) rotate(-1deg);
-    }
-  }
-
-  /* 3 question marks pop up one after another at each pause */
-  /* Right pause: ~42%-60%, Left pause: ~88%-100% */
-
-  /* 1st ？ */
-  @keyframes questionPop1 {
-    0%, 42% { opacity: 0; transform: translate(0, 4px) scale(0.3); }
-    44%     { opacity: 1; transform: translate(0, -2px) scale(1); }
-    50%     { opacity: 0.8; transform: translate(1px, -12px) scale(0.9); }
-    56%     { opacity: 0; transform: translate(2px, -24px) scale(0.5); }
-    88%     { opacity: 0; transform: translate(0, 4px) scale(0.3); }
-    90%     { opacity: 1; transform: translate(0, -2px) scale(1); }
-    96%     { opacity: 0.8; transform: translate(1px, -12px) scale(0.9); }
-    100%    { opacity: 0; transform: translate(2px, -22px) scale(0.5); }
-  }
-
-  /* 2nd ？ (offset right, slightly delayed) */
-  @keyframes questionPop2 {
-    0%, 44% { opacity: 0; transform: translate(10px, 4px) scale(0.3); }
-    46%     { opacity: 1; transform: translate(12px, -4px) scale(0.9); }
-    52%     { opacity: 0.7; transform: translate(13px, -14px) scale(0.8); }
-    58%     { opacity: 0; transform: translate(14px, -28px) scale(0.4); }
-    90%     { opacity: 0; transform: translate(10px, 4px) scale(0.3); }
-    92%     { opacity: 1; transform: translate(12px, -4px) scale(0.9); }
-    97%     { opacity: 0.7; transform: translate(13px, -14px) scale(0.8); }
-    100%    { opacity: 0; transform: translate(14px, -24px) scale(0.4); }
-  }
-
-  /* 3rd ？ (offset left, slightly more delayed) */
-  @keyframes questionPop3 {
-    0%, 46% { opacity: 0; transform: translate(-6px, 0px) scale(0.3); }
-    48%     { opacity: 0.8; transform: translate(-7px, -6px) scale(0.75); }
-    54%     { opacity: 0.6; transform: translate(-7px, -16px) scale(0.65); }
-    60%     { opacity: 0; transform: translate(-6px, -30px) scale(0.3); }
-    92%     { opacity: 0; transform: translate(-6px, 0px) scale(0.3); }
-    94%     { opacity: 0.8; transform: translate(-7px, -6px) scale(0.75); }
-    98%     { opacity: 0.6; transform: translate(-7px, -16px) scale(0.65); }
-    100%    { opacity: 0; transform: translate(-6px, -26px) scale(0.3); }
-  }
-
-  @keyframes shrimpWiggle {
-    0% {
-      transform: rotate(0deg);
-    }
-    20% {
-      transform: rotate(-12deg);
-    }
-    40% {
-      transform: rotate(10deg);
-    }
-    60% {
-      transform: rotate(-6deg);
-    }
-    80% {
-      transform: rotate(4deg);
-    }
-    100% {
-      transform: rotate(0deg);
-    }
-  }
-
-  /* === Reduced motion === */
-  @media (prefers-reduced-motion: reduce) {
-    .shrimp-container {
-      animation: none;
-      opacity: 1;
-      left: 50%;
-      transform: translateX(-50%) translateY(-50%);
-    }
-
-    .shrimp-icon {
-      animation: none;
-    }
-
-    .shrimp-icon:hover {
-      animation: none;
-    }
-
-    .question-mark {
-      animation: none;
-      display: none;
-    }
-
-  }
+}
 </style>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
-    const shrimp = document.getElementById('shrimp');
-    if (!shrimp || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+document.addEventListener('astro:page-load', () => {
+  const shrimp = document.getElementById('shrimp');
+  if (
+    !shrimp || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) return;
 
-    // Inject keyframes once
-    if (!document.getElementById('sweat-keyframes')) {
-      const style = document.createElement('style');
-      style.id = 'sweat-keyframes';
-      style.textContent = `
+  // Inject keyframes once
+  if (!document.getElementById('sweat-keyframes')) {
+    const style = document.createElement('style');
+    style.id = 'sweat-keyframes';
+    style.textContent = `
         @keyframes sweatFly {
           0%   { opacity: 1; transform: translate(0, 0) scale(0.4); }
           30%  { opacity: 1; transform: translate(var(--sx), var(--sy)) scale(1); }
           100% { opacity: 0; transform: translate(calc(var(--sx) * 1.6), calc(var(--sy) * 1.6 + 12px)) scale(0.6); }
         }
       `;
-      document.head.appendChild(style);
-    }
+    document.head.appendChild(style);
+  }
 
-    let cooldown = false;
+  let cooldown = false;
 
-    shrimp.addEventListener('mouseenter', () => {
-      if (cooldown) return;
-      cooldown = true;
-      setTimeout(() => { cooldown = false; }, 800);
+  shrimp.addEventListener('mouseenter', () => {
+    if (cooldown) return;
+    cooldown = true;
+    setTimeout(() => {
+      cooldown = false;
+    }, 800);
 
-      const el = document.createElement('span');
-      el.textContent = '💦';
-      el.style.cssText = `
+    const el = document.createElement('span');
+    el.textContent = '💦';
+    el.style.cssText = `
         position: absolute;
         top: 10%;
         right: -4px;
@@ -365,10 +437,10 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
         pointer-events: none;
         animation: sweatFly 0.7s ease-out forwards;
       `;
-      el.style.setProperty('--sx', '14px');
-      el.style.setProperty('--sy', '-12px');
-      shrimp.appendChild(el);
-      el.addEventListener('animationend', () => el.remove());
-    });
+    el.style.setProperty('--sx', '14px');
+    el.style.setProperty('--sy', '-12px');
+    shrimp.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
   });
+});
 </script>
