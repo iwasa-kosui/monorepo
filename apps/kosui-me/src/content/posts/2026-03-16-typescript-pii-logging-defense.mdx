@@ -152,7 +152,7 @@ safeLog({ ...user });
   '// emailがSensitive<string>なのでneverに推論され、型エラーになる',
   'safeLog(user);',
   'safeLog({ ...user });',
-].join('\n')} lang="typescript" title="RejectSensitiveによる型レベル検出" />
+].join('\n')} lang="typescript" title="RejectSensitiveによる型レベル検出" collapsedRanges={[[1, 14]]} />
 
 しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。
 
@@ -194,7 +194,7 @@ safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
   '// ↓ string変数に代入するとブランドが消え、型エラーにならない',
   'const email: string = user.email;',
   'safeLog({ id: user.id, role: user.role, email });',
-].join('\n')} lang="typescript" title="Branded Typeのバイパス" />
+].join('\n')} lang="typescript" title="Branded Typeのバイパス" collapsedRanges={[[1, 14]]} />
 
 これはBranded Typeの原理的な限界です。intersection型で付けたブランドはスーパータイプへの代入で消失するので、型レベルでの検出は必ずバイパスできてしまいます。
 
@@ -299,7 +299,7 @@ sendEmail(user.email.unwrap());
   '',
   '// unwrapすれば値を取り出せる',
   'console.log("unwrap:", user.email.unwrap());',
-].join('\n')} lang="typescript" title="Sensitive型によるPII防御" />
+].join('\n')} lang="typescript" title="Sensitive型によるPII防御" collapsedRanges={[[1, 13]]} />
 
 このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Zod stripのような出口での防御は、ログ出力箇所ごとに毎回呼ぶ必要があり、呼び忘れの箇所が増えるほどリスクが高まります。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。適用箇所がフィールド定義の1箇所に集約されるので、出口N箇所に依存するアプローチより管理しやすいです。
 
