@@ -47,17 +47,10 @@
   <line x1="438" y1="85" x2="486" y2="85" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arr-red)" />
 
   <!-- Agent (sad) -->
-  <rect x="496" y="50" width="120" height="70" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" />
-  <text x="556" y="74" text-anchor="middle" font-size="22">&#x1F916;</text>
-  <text x="556" y="96" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">情報欠落で</text>
-  <text x="556" y="110" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">正しく解釈できない</text>
-
-  <!-- Tried methods -->
-  <rect x="640" y="50" width="126" height="70" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1" />
-  <text x="703" y="68" text-anchor="middle" font-size="9" fill="#64748b">試した転送方法:</text>
-  <text x="703" y="84" text-anchor="middle" font-size="9" fill="#94a3b8">- Screenshot</text>
-  <text x="703" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">- CSV export</text>
-  <text x="703" y="112" text-anchor="middle" font-size="9" fill="#94a3b8">- MCP</text>
+  <rect x="496" y="50" width="270" height="70" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" />
+  <text x="631" y="74" text-anchor="middle" font-size="22">&#x1F916;</text>
+  <text x="631" y="96" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">情報欠落で</text>
+  <text x="631" y="110" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">正しく解釈できない</text>
 
   <!-- Lower row: RDRA path -->
   <rect x="20" y="156" width="760" height="148" rx="8" fill="#fff" stroke="#86efac" stroke-width="1.5" />
