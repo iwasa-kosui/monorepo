@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 280" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#94a3b8" />
+    </marker>
+    <marker id="arr-warn" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#dc2626" />
+    </marker>
+  </defs>
+
+  <rect width="760" height="280" fill="#fafafa" rx="8" />
+
+  <!-- Row labels -->
+  <text x="24" y="72" font-size="11" font-weight="700" fill="#334155">Event Storming</text>
+  <text x="24" y="208" font-size="11" font-weight="700" fill="#334155">RDRA</text>
+
+  <!-- === Upper row: Event Storming === -->
+
+  <!-- Box 1: FigJam/Miro -->
+  <rect x="140" y="32" width="170" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" />
+  <text x="225" y="56" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">FigJam / Miro</text>
+  <!-- Mini sticky notes -->
+  <rect x="156" y="64" width="36" height="20" rx="2" fill="#fef3c7" stroke="#d97706" stroke-width="0.7" />
+  <text x="174" y="77" text-anchor="middle" font-size="6.5" fill="#92400e">Event</text>
+  <rect x="198" y="68" width="36" height="20" rx="2" fill="#ffedd5" stroke="#ea580c" stroke-width="0.7" />
+  <text x="216" y="81" text-anchor="middle" font-size="6.5" fill="#9a3412">Command</text>
+  <rect x="240" y="62" width="36" height="20" rx="2" fill="#e0e7ff" stroke="#6366f1" stroke-width="0.7" />
+  <text x="258" y="75" text-anchor="middle" font-size="6.5" fill="#3730a3">Policy</text>
+  <rect x="170" y="88" width="36" height="20" rx="2" fill="#fef3c7" stroke="#d97706" stroke-width="0.7" />
+  <text x="188" y="101" text-anchor="middle" font-size="6.5" fill="#92400e">Event</text>
+  <rect x="214" y="90" width="36" height="20" rx="2" fill="#dbeafe" stroke="#3b82f6" stroke-width="0.7" />
+  <text x="232" y="103" text-anchor="middle" font-size="6.5" fill="#1e40af">Read</text>
+
+  <!-- Arrow 1→2 (the problem point) -->
+  <line x1="318" y1="72" x2="360" y2="72" stroke="#dc2626" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arr-warn)" />
+  <text x="339" y="64" text-anchor="middle" font-size="8" font-weight="600" fill="#dc2626">変換</text>
+
+  <!-- Box 2: Lossy text conversion — THE PROBLEM -->
+  <rect x="368" y="32" width="170" height="80" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2" />
+  <text x="453" y="56" text-anchor="middle" font-size="10" font-weight="700" fill="#dc2626">情報が欠落</text>
+  <text x="453" y="74" text-anchor="middle" font-size="9" fill="#7f1d1d">位置関係・グルーピング境界</text>
+  <text x="453" y="90" text-anchor="middle" font-size="9" fill="#7f1d1d">矢印の意味が消失</text>
+  <text x="453" y="106" text-anchor="middle" font-size="8" fill="#991b1b">→ エージェントが正しく解釈できない</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="546" y1="72" x2="588" y2="72" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)" />
+
+  <!-- Box 3: Agent result -->
+  <rect x="596" y="32" width="140" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" />
+  <text x="666" y="62" text-anchor="middle" font-size="10" fill="#64748b">コーディング</text>
+  <text x="666" y="78" text-anchor="middle" font-size="10" fill="#64748b">エージェント</text>
+  <text x="666" y="100" text-anchor="middle" font-size="9" fill="#94a3b8">誤った仕様を生成</text>
+
+  <!-- === Lower row: RDRA === -->
+
+  <!-- Box 1: Markdown table -->
+  <rect x="140" y="168" width="170" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" />
+  <text x="225" y="190" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">Markdown 表形式</text>
+  <!-- Mini table -->
+  <line x1="156" y1="200" x2="294" y2="200" stroke="#e2e8f0" stroke-width="1" />
+  <text x="168" y="214" font-size="7.5" fill="#475569" font-weight="600">ID</text>
+  <text x="210" y="214" font-size="7.5" fill="#475569" font-weight="600">要求</text>
+  <text x="270" y="214" font-size="7.5" fill="#475569" font-weight="600">関連</text>
+  <line x1="156" y1="220" x2="294" y2="220" stroke="#e2e8f0" stroke-width="1" />
+  <text x="168" y="233" font-size="7.5" fill="#64748b">REQ-1</text>
+  <text x="210" y="233" font-size="7.5" fill="#64748b">...したい</text>
+  <text x="270" y="233" font-size="7.5" fill="#64748b">GOAL-1</text>
+  <line x1="156" y1="238" x2="294" y2="238" stroke="#e2e8f0" stroke-width="1" />
+
+  <!-- Arrow 1→2 (direct, no conversion needed) -->
+  <line x1="318" y1="208" x2="360" y2="208" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)" />
+  <text x="339" y="200" text-anchor="middle" font-size="8" fill="#64748b">そのまま</text>
+
+  <!-- Box 2: Structure preserved -->
+  <rect x="368" y="168" width="170" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" />
+  <text x="453" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">構造を保持</text>
+  <text x="453" y="210" text-anchor="middle" font-size="9" fill="#64748b">ID参照で依存関係を追跡</text>
+  <text x="453" y="226" text-anchor="middle" font-size="9" fill="#64748b">WHYの連鎖を遡れる</text>
+  <text x="453" y="242" text-anchor="middle" font-size="8" fill="#64748b">変換による情報欠落なし</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="546" y1="208" x2="588" y2="208" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)" />
+
+  <!-- Box 3: Agent result -->
+  <rect x="596" y="168" width="140" height="80" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" />
+  <text x="666" y="198" text-anchor="middle" font-size="10" fill="#64748b">コーディング</text>
+  <text x="666" y="214" text-anchor="middle" font-size="10" fill="#64748b">エージェント</text>
+  <text x="666" y="236" text-anchor="middle" font-size="9" fill="#64748b">要求を正しく反映</text>
+</svg>

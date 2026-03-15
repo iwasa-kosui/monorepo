@@ -92,7 +92,7 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
     );
     if (mermaidElements.length > 0) {
       const { default: mermaid } = await import('mermaid');
-      mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+      mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
       await mermaid.run({ nodes: mermaidElements });
     }
   });

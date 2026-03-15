@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#3b82f6" />
+    </marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#22c55e" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="300" fill="#fafafa" rx="8" />
+
+  <!-- Title -->
+  <text x="400" y="36" text-anchor="middle" font-size="16" font-weight="700" fill="#1e293b">リアルタイム共同編集とエージェントの連携サイクル</text>
+
+  <!-- Main container -->
+  <rect x="20" y="56" width="760" height="230" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" />
+
+  <!-- Step 1: Meeting + simultaneous edit -->
+  <rect x="80" y="80" width="180" height="64" rx="8" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5" />
+  <text x="170" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">全員で同時編集</text>
+  <text x="170" y="120" text-anchor="middle" font-size="10" fill="#15803d">議論しながらドキュメントを</text>
+  <text x="170" y="134" text-anchor="middle" font-size="10" fill="#15803d">リアルタイムに育てる</text>
+
+  <!-- People icons -->
+  <circle cx="100" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="100" y="176" text-anchor="middle" font-size="10" fill="#166534">E</text>
+  <circle cx="140" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="140" y="176" text-anchor="middle" font-size="10" fill="#166534">O</text>
+  <circle cx="180" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="180" y="176" text-anchor="middle" font-size="10" fill="#166534">C</text>
+  <circle cx="220" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="220" y="176" text-anchor="middle" font-size="10" fill="#166534">P</text>
+  <text x="82" y="204" font-size="9" fill="#64748b">E: エンジニア</text>
+  <text x="82" y="218" font-size="9" fill="#64748b">O: Ops / C: CS / P: PM</text>
+
+  <!-- Arrow 1→2 -->
+  <path d="M 270 112 C 310 112, 310 112, 350 112" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrow-green)" />
+
+  <!-- Step 2: Claude Code reads -->
+  <rect x="360" y="80" width="180" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
+  <text x="450" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">Claude Code</text>
+  <text x="450" y="120" text-anchor="middle" font-size="10" fill="#1d4ed8">ドキュメントを読み込み</text>
+  <text x="450" y="134" text-anchor="middle" font-size="10" fill="#1d4ed8">仮説・業務フローを生成</text>
+
+  <!-- Arrow 2→3 -->
+  <path d="M 550 112 C 590 112, 590 112, 620 112" stroke="#3b82f6" stroke-width="2" fill="none" marker-end="url(#arrow-blue)" />
+
+  <!-- Step 3: Next iteration output -->
+  <rect x="630" y="80" width="130" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
+  <text x="695" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">次の</text>
+  <text x="695" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">イテレーション</text>
+  <text x="695" y="134" text-anchor="middle" font-size="10" fill="#1d4ed8">成果物を更新</text>
+
+  <!-- Cycle arrow back: 3 → 1 -->
+  <path d="M 695 150 C 695 240, 170 240, 170 150" stroke="#22c55e" stroke-width="2" stroke-dasharray="6,4" fill="none" marker-end="url(#arrow-green)" />
+  <text x="430" y="256" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">サイクルを繰り返し、要求分析をチーム全体の営みにする</text>
+</svg>
