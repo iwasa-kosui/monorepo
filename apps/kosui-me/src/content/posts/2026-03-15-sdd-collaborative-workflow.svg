@@ -1,8 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" font-family="system-ui, -apple-system, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" font-family="system-ui, -apple-system, sans-serif">
   <defs>
-    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
-    </marker>
     <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#3b82f6" />
     </marker>
@@ -12,94 +9,51 @@
   </defs>
 
   <!-- Background -->
-  <rect width="800" height="520" fill="#fafafa" rx="8" />
+  <rect width="800" height="300" fill="#fafafa" rx="8" />
 
   <!-- Title -->
-  <text x="400" y="36" text-anchor="middle" font-size="16" font-weight="700" fill="#1e293b">要求分析ドキュメントの共同編集フロー比較</text>
+  <text x="400" y="36" text-anchor="middle" font-size="16" font-weight="700" fill="#1e293b">リアルタイム共同編集とエージェントの連携サイクル</text>
 
-  <!-- ====== Section A: GitHub flow ====== -->
-  <rect x="20" y="56" width="760" height="170" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" />
-  <rect x="20" y="56" width="760" height="32" rx="8" fill="#fef2f2" />
-  <rect x="20" y="76" width="760" height="12" fill="#fef2f2" />
-  <text x="40" y="78" font-size="13" font-weight="700" fill="#b91c1c">GitHub Push フロー ― ボトルネックが生まれる</text>
+  <!-- Main container -->
+  <rect x="20" y="56" width="760" height="230" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" />
 
-  <!-- Meeting -->
-  <rect x="50" y="108" width="130" height="54" rx="6" fill="#f1f5f9" stroke="#cbd5e1" />
-  <text x="115" y="131" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">ミーティング</text>
-  <text x="115" y="148" text-anchor="middle" font-size="10" fill="#64748b">全員で議論</text>
-
-  <!-- Arrow -->
-  <line x1="180" y1="135" x2="228" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
-
-  <!-- One person -->
-  <rect x="236" y="108" width="150" height="54" rx="6" fill="#fef2f2" stroke="#fca5a5" />
-  <text x="311" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#991b1b">1人が議事録から</text>
-  <text x="311" y="143" text-anchor="middle" font-size="11" font-weight="600" fill="#991b1b">Markdownを修正</text>
-  <text x="311" y="158" text-anchor="middle" font-size="9" fill="#b91c1c">ボトルネック</text>
-
-  <!-- Arrow -->
-  <line x1="386" y1="135" x2="434" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
-
-  <!-- git push -->
-  <rect x="442" y="108" width="120" height="54" rx="6" fill="#f1f5f9" stroke="#cbd5e1" />
-  <text x="502" y="131" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">git push</text>
-  <text x="502" y="148" text-anchor="middle" font-size="10" fill="#64748b">GitHub へ反映</text>
-
-  <!-- Arrow -->
-  <line x1="562" y1="135" x2="610" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
-
-  <!-- Agent reads -->
-  <rect x="618" y="108" width="140" height="54" rx="6" fill="#f1f5f9" stroke="#cbd5e1" />
-  <text x="688" y="131" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">エージェントが</text>
-  <text x="688" y="148" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">読み込み</text>
-
-  <!-- Problem annotation -->
-  <text x="311" y="196" text-anchor="middle" font-size="10" fill="#b91c1c">修正作業が1人に集中し、他メンバーは待機状態になる</text>
-
-  <!-- ====== Section B: Confluence/Notion flow ====== -->
-  <rect x="20" y="246" width="760" height="260" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" />
-  <rect x="20" y="246" width="760" height="32" rx="8" fill="#f0fdf4" />
-  <rect x="20" y="266" width="760" height="12" fill="#f0fdf4" />
-  <text x="40" y="268" font-size="13" font-weight="700" fill="#15803d">Confluence / Notion フロー ― チーム全体の営みになる</text>
-
-  <!-- Cycle: center layout -->
   <!-- Step 1: Meeting + simultaneous edit -->
-  <rect x="80" y="300" width="180" height="64" rx="8" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5" />
-  <text x="170" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">全員で同時編集</text>
-  <text x="170" y="340" text-anchor="middle" font-size="10" fill="#15803d">議論しながらドキュメントを</text>
-  <text x="170" y="354" text-anchor="middle" font-size="10" fill="#15803d">リアルタイムに育てる</text>
+  <rect x="80" y="80" width="180" height="64" rx="8" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5" />
+  <text x="170" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">全員で同時編集</text>
+  <text x="170" y="120" text-anchor="middle" font-size="10" fill="#15803d">議論しながらドキュメントを</text>
+  <text x="170" y="134" text-anchor="middle" font-size="10" fill="#15803d">リアルタイムに育てる</text>
 
   <!-- People icons -->
-  <circle cx="100" cy="392" r="12" fill="#bbf7d0" stroke="#22c55e" />
-  <text x="100" y="396" text-anchor="middle" font-size="10" fill="#166534">E</text>
-  <circle cx="140" cy="392" r="12" fill="#bbf7d0" stroke="#22c55e" />
-  <text x="140" y="396" text-anchor="middle" font-size="10" fill="#166534">O</text>
-  <circle cx="180" cy="392" r="12" fill="#bbf7d0" stroke="#22c55e" />
-  <text x="180" y="396" text-anchor="middle" font-size="10" fill="#166534">C</text>
-  <circle cx="220" cy="392" r="12" fill="#bbf7d0" stroke="#22c55e" />
-  <text x="220" y="396" text-anchor="middle" font-size="10" fill="#166534">P</text>
-  <text x="82" y="424" font-size="9" fill="#64748b">E: エンジニア</text>
-  <text x="82" y="438" font-size="9" fill="#64748b">O: Ops / C: CS / P: PM</text>
+  <circle cx="100" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="100" y="176" text-anchor="middle" font-size="10" fill="#166534">E</text>
+  <circle cx="140" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="140" y="176" text-anchor="middle" font-size="10" fill="#166534">O</text>
+  <circle cx="180" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="180" y="176" text-anchor="middle" font-size="10" fill="#166534">C</text>
+  <circle cx="220" cy="172" r="12" fill="#bbf7d0" stroke="#22c55e" />
+  <text x="220" y="176" text-anchor="middle" font-size="10" fill="#166534">P</text>
+  <text x="82" y="204" font-size="9" fill="#64748b">E: エンジニア</text>
+  <text x="82" y="218" font-size="9" fill="#64748b">O: Ops / C: CS / P: PM</text>
 
   <!-- Arrow 1→2 -->
-  <path d="M 270 332 C 310 332, 310 332, 350 332" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M 270 112 C 310 112, 310 112, 350 112" stroke="#22c55e" stroke-width="2" fill="none" marker-end="url(#arrow-green)" />
 
   <!-- Step 2: Claude Code reads -->
-  <rect x="360" y="300" width="180" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
-  <text x="450" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">Claude Code</text>
-  <text x="450" y="340" text-anchor="middle" font-size="10" fill="#1d4ed8">ドキュメントを読み込み</text>
-  <text x="450" y="354" text-anchor="middle" font-size="10" fill="#1d4ed8">仮説・業務フローを生成</text>
+  <rect x="360" y="80" width="180" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
+  <text x="450" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">Claude Code</text>
+  <text x="450" y="120" text-anchor="middle" font-size="10" fill="#1d4ed8">ドキュメントを読み込み</text>
+  <text x="450" y="134" text-anchor="middle" font-size="10" fill="#1d4ed8">仮説・業務フローを生成</text>
 
   <!-- Arrow 2→3 -->
-  <path d="M 550 332 C 590 332, 590 332, 620 332" stroke="#3b82f6" stroke-width="2" fill="none" marker-end="url(#arrow-blue)" />
+  <path d="M 550 112 C 590 112, 590 112, 620 112" stroke="#3b82f6" stroke-width="2" fill="none" marker-end="url(#arrow-blue)" />
 
   <!-- Step 3: Next iteration output -->
-  <rect x="630" y="300" width="130" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
-  <text x="695" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">次の</text>
-  <text x="695" y="340" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">イテレーション</text>
-  <text x="695" y="354" text-anchor="middle" font-size="10" fill="#1d4ed8">成果物を更新</text>
+  <rect x="630" y="80" width="130" height="64" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
+  <text x="695" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">次の</text>
+  <text x="695" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">イテレーション</text>
+  <text x="695" y="134" text-anchor="middle" font-size="10" fill="#1d4ed8">成果物を更新</text>
 
   <!-- Cycle arrow back: 3 → 1 -->
-  <path d="M 695 370 C 695 460, 170 460, 170 370" stroke="#22c55e" stroke-width="2" stroke-dasharray="6,4" fill="none" marker-end="url(#arrow-green)" />
-  <text x="430" y="476" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">サイクルを繰り返し、要求分析をチーム全体の営みにする</text>
+  <path d="M 695 150 C 695 240, 170 240, 170 150" stroke="#22c55e" stroke-width="2" stroke-dasharray="6,4" fill="none" marker-end="url(#arrow-green)" />
+  <text x="430" y="256" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">サイクルを繰り返し、要求分析をチーム全体の営みにする</text>
 </svg>
