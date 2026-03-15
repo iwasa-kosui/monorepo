@@ -8,6 +8,8 @@ tags: ["TypeScript", "セキュリティ"]
 private: true
 ---
 
+import { CodePlayground } from '../../components/CodePlayground/CodePlayground';
+
 ## ログにPIIが混入するとなぜ致命的か
 
 サーバサイド開発において、ログにPIIが混入する事故は珍しくありません。ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信されてしまう。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
@@ -50,6 +52,30 @@ const user: User = { id: "1", role: "admin", email: "alice@example.com" };
 logUserAction("login", user);
 // => {"action":"login","id":"1","role":"admin","email":"alice@example.com"}
 ```
+
+以下のプレイグラウンドで実際に試せます。「問題」タブを見ると型エラーが出ていないこと、「実行」するとemailがそのまま出力されることが確認できます。
+
+<CodePlayground client:visible code={[
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: string; // PII',
+  '};',
+  '',
+  'type LogPayload = {',
+  '  id: string;',
+  '  role: string;',
+  '};',
+  '',
+  'function logUserAction(action: string, payload: LogPayload): void {',
+  '  console.log(JSON.stringify({ action, ...payload }));',
+  '}',
+  '',
+  'const user: User = { id: "1", role: "admin", email: "alice@example.com" };',
+  '',
+  '// 型エラーにならない！',
+  'logUserAction("login", user);',
+].join('\n')} lang="typescript" title="構造的部分型によるPII漏洩" />
 
 この問題は、特に開発が進んでしばらくしてから顕在化することが多いように感じます。最初は`LogPayload`専用のオブジェクトを`{ id: user.id, role: user.role }`のように明示的に構築していたのが、「`User`はどうせ`id`と`role`を持っているのだから直接渡せばいい」と誰かがスプレット構文でショートカットした瞬間に、`email`が静かにログに混入し始めます。後から`User`に`phoneNumber`フィールドが追加されても、型エラーは出てくれません。
 
@@ -104,6 +130,40 @@ safeLog({ ...user });
 const email: string = user.email;
 safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
 ```
+
+以下のプレイグラウンドで確認できます。`safeLog(user)` は型エラーになりますが、一度`string`変数に代入してから渡すと型エラーが消えます。`safeLog(user)` のコメントアウトを外して「問題」タブの変化を見てみてください。
+
+<CodePlayground client:visible code={[
+  'declare const sensitiveTag: unique symbol;',
+  'type Sensitive<T> = T & { readonly [sensitiveTag]: true };',
+  '',
+  'type RejectSensitive<T> = {',
+  '  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }',
+  '    ? never',
+  '    : T[K] extends object',
+  '      ? T[K] & RejectSensitive<T[K]>',
+  '      : T[K];',
+  '};',
+  '',
+  'function safeLog<T extends Record<string, unknown>>(data: T & RejectSensitive<T>): void {',
+  '  console.log(JSON.stringify(data));',
+  '}',
+  '',
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: Sensitive<string>;',
+  '};',
+  '',
+  'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
+  '',
+  '// ↓ これは型エラーになる（コメントアウトを外して確認）',
+  '// safeLog(user);',
+  '',
+  '// ↓ string変数に代入するとブランドが消え、型エラーにならない',
+  'const email: string = user.email;',
+  'safeLog({ id: user.id, role: user.role, email });',
+].join('\n')} lang="typescript" title="Branded Typeのバイパス" />
 
 これはBranded Typeの原理的な限界です。intersection型で付けたブランドはスーパータイプへの代入で消失するので、型レベルでの検出は必ずバイパスできてしまいます。
 
@@ -170,6 +230,45 @@ console.log(`User: ${user.email}`);
 // 値が必要な場面では明示的にunwrapする
 sendEmail(user.email.unwrap());
 ```
+
+実行して`[REDACTED]`になることを確認できます。`JSON.stringify`でもスプレッド構文でもemailの値が漏れないのがわかります。
+
+<CodePlayground client:visible code={[
+  'type Sensitive<T> = {',
+  '  unwrap(): T;',
+  '  toJSON(): string;',
+  '  toString(): string;',
+  '};',
+  '',
+  'function sensitive<T>(value: T): Sensitive<T> {',
+  '  return {',
+  '    unwrap() { return value; },',
+  '    toJSON() { return "[REDACTED]"; },',
+  '    toString() { return "[REDACTED]"; },',
+  '  };',
+  '}',
+  '',
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: Sensitive<string>;',
+  '};',
+  '',
+  'const user: User = {',
+  '  id: "1",',
+  '  role: "admin",',
+  '  email: sensitive("alice@example.com"),',
+  '};',
+  '',
+  '// スプレッドしてもemailは漏れない',
+  'console.log("stringify:", JSON.stringify({ ...user }));',
+  '',
+  '// テンプレートリテラルでもtoString()が呼ばれる',
+  'console.log(`template: User email is ${user.email}`);',
+  '',
+  '// unwrapすれば値を取り出せる',
+  'console.log("unwrap:", user.email.unwrap());',
+].join('\n')} lang="typescript" title="Sensitive型によるPII防御" />
 
 このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Zod stripのような出口での防御は、ログ出力箇所ごとに毎回呼ぶ必要があり、呼び忘れの箇所が増えるほどリスクが高まります。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。適用箇所がフィールド定義の1箇所に集約されるので、出口N箇所に依存するアプローチより管理しやすいです。
 
