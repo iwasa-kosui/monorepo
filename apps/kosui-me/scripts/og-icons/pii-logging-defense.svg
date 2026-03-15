@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f07060" />
+      <stop offset="100%" stop-color="#c44a38" />
+    </linearGradient>
+    <radialGradient id="dotGrad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#f07060" />
+      <stop offset="100%" stop-color="#c44a38" />
+    </radialGradient>
+    <radialGradient id="lensGrad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#fff" />
+      <stop offset="100%" stop-color="#fef8f7" />
+    </radialGradient>
+  </defs>
+
+  <!-- Magnifying glass handle -->
+  <line x1="114" y1="144" x2="142" y2="172" stroke="#c44a38" stroke-width="16" stroke-linecap="round" />
+  <line x1="116" y1="143" x2="139" y2="166" stroke="#e06858" stroke-width="5" stroke-linecap="round" opacity="0.4" />
+
+  <!-- Lens ring (thick stroke) -->
+  <circle cx="74" cy="104" r="56" fill="url(#lensGrad)" stroke="url(#grad)" stroke-width="12" />
+  <!-- Lens highlight -->
+  <ellipse cx="52" cy="80" rx="18" ry="10" fill="#fff" opacity="0.6" transform="rotate(-30 52 80)" />
+
+  <!-- "PII" inside lens (white text on glass) -->
+  <!-- P -->
+  <line x1="36" y1="92" x2="36" y2="122" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <path d="M36,92 L50,92 C62,92 62,107 50,107 L36,107" fill="none" stroke="#c44a38" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- I with serifs -->
+  <line x1="76" y1="92" x2="76" y2="122" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <line x1="69" y1="92" x2="83" y2="92" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <line x1="69" y1="122" x2="83" y2="122" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <!-- I with serifs -->
+  <line x1="100" y1="92" x2="100" y2="122" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <line x1="93" y1="92" x2="107" y2="92" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+  <line x1="93" y1="122" x2="107" y2="122" stroke="#c44a38" stroke-width="7" stroke-linecap="round" />
+
+  <!-- Bold exclamation mark -->
+  <rect x="192" y="46" width="26" height="100" rx="13" fill="url(#grad)" />
+  <circle cx="205" cy="172" r="16" fill="url(#dotGrad)" />
+</svg>

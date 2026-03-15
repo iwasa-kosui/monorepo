@@ -1,0 +1,375 @@
+---
+title: "ログのPII漏洩を防止する: TypeScriptの型推論とランタイムの境界"
+date: "2026-03-16T12:00:00+09:00"
+slug: "posts/2026/03/16/typescript-pii-logging-defense"
+ogIcon: "typescript"
+ogSvg: "pii-logging-defense"
+description: "TypeScriptの構造的部分型はログへのPII混入を型レベルで防げない。型の限界を認めた上で、センシティブな値を関数クロージャに閉じ込めるSensitive型と、Pino redactによる多層防御の設計パターンを提案する。"
+tags: ["TypeScript", "セキュリティ"]
+private: false
+---
+
+import { CodePlayground } from '../../components/CodePlayground/CodePlayground';
+
+## ログにPIIが混入するとなぜ致命的か
+
+サーバサイド開発において、ログにPIIが混入する事故は珍しくありません。ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信されてしまう。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
+
+しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPRでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しうるわけです。医療情報を扱う場合はHIPAAによるさらに厳しい制約も加わります。いずれにせよ、単なるバグではなくインシデントです。
+
+厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではありませんし、人手のチェックリストではスケールしません。
+
+だからこそ仕組みで防ぐ必要があります。TypeScriptで型を使えば防げそうな気がしますが、実はそう簡単ではありません。
+
+## 構造的部分型がPIIを透過させる
+
+TypeScriptは構造的部分型を採用しています。これは、型の互換性を名前ではなく構造で判定する仕組みです。ある型が求めるプロパティをすべて持っていれば、余分なプロパティがあっても互換とみなされます。オブジェクトリテラルを直接代入する場合に限り、例外的に余剰プロパティチェックが働きますが、変数経由やスプレッド構文ではこの例外は適用されません。
+
+この仕様がログへのPII混入を引き起こす具体的なシナリオを見てみましょう。
+
+```typescript
+type User = {
+  id: string;
+  role: string;
+  email: string; // PII
+};
+
+type LogPayload = {
+  id: string;
+  role: string;
+};
+
+function logUserAction(action: string, payload: LogPayload): void {
+  logger.info({ action, ...payload });
+}
+```
+
+`logUserAction`は`LogPayload`だけを受け付けるので安全に見えます。しかし、`User`は`LogPayload`が求めるプロパティを全て持っているため、構造的部分型の互換性により`User`をそのまま渡せてしまいます。
+
+```typescript
+const user: User = { id: "1", role: "admin", email: "alice@example.com" };
+
+// 型エラーにならない。Userは{id, role}を持っているので、LogPayloadとして互換
+logUserAction("login", user);
+// => {"action":"login","id":"1","role":"admin","email":"alice@example.com"}
+```
+
+以下のプレイグラウンドで実際に試せます。「問題」タブを見ると型エラーが出ていないこと、「実行」するとemailがそのまま出力されることが確認できます。
+
+<CodePlayground client:visible code={[
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: string; // PII',
+  '};',
+  '',
+  'type LogPayload = {',
+  '  id: string;',
+  '  role: string;',
+  '};',
+  '',
+  'function logUserAction(action: string, payload: LogPayload): void {',
+  '  console.log(JSON.stringify({ action, ...payload }));',
+  '}',
+  '',
+  'const user: User = { id: "1", role: "admin", email: "alice@example.com" };',
+  '',
+  '// 型エラーにならない！',
+  'logUserAction("login", user);',
+].join('\n')} lang="typescript" title="構造的部分型によるPII漏洩" />
+
+余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みなので、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年4月時点では未対応です。
+
+## Branded Typeでも防げない
+
+構造的部分型による漏洩を型レベルで防げないか、Branded Typeを使ったアプローチを考えてみます。
+
+```typescript
+declare const sensitiveTag: unique symbol;
+type Sensitive<T> = T & { readonly [sensitiveTag]: true };
+
+type User = {
+  id: string;
+  role: string;
+  email: Sensitive<string>;
+};
+```
+
+`Sensitive<string>`と`string`は型レベルで区別できます。これを活かして、Conditional Typesでセンシティブなフィールドを再帰的に検出し、`never`に推論することで型エラーを起こすアプローチが考えられます。
+
+```typescript
+// sensitiveTagブランドを持つフィールドを再帰的に検出してneverに推論するユーティリティ型
+type RejectSensitive<T> = {
+  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }
+    ? never
+    : T[K] extends object
+      ? T[K] & RejectSensitive<T[K]>
+      : T[K];
+};
+
+function safeLog<T extends Record<string, unknown>>(
+  data: T & RejectSensitive<T>
+): void {
+  logger.info(data);
+}
+```
+
+一見、これでうまくいくように見えます。実際、`User`を直接渡すと`email`が`never`に推論され、型エラーになります。
+
+```typescript
+// 型エラー: emailがSensitive<string>なのでneverに推論される
+safeLog(user);
+safeLog({ ...user });
+```
+
+以下のプレイグラウンドで試すと、「問題」タブに型エラーが表示されているのが確認できます。
+
+<CodePlayground client:visible code={[
+  'declare const sensitiveTag: unique symbol;',
+  'type Sensitive<T> = T & { readonly [sensitiveTag]: true };',
+  '',
+  'type RejectSensitive<T> = {',
+  '  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }',
+  '    ? never',
+  '    : T[K] extends object',
+  '      ? T[K] & RejectSensitive<T[K]>',
+  '      : T[K];',
+  '};',
+  '',
+  'function safeLog<T extends Record<string, unknown>>(data: T & RejectSensitive<T>): void {',
+  '  console.log(JSON.stringify(data));',
+  '}',
+  '',
+  'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
+  '',
+  '// emailがSensitive<string>なのでneverに推論され、型エラーになる',
+  'safeLog(user);',
+  'safeLog({ ...user });',
+].join('\n')} lang="typescript" title="RejectSensitiveによる型レベル検出" collapsedRanges={[[1, 14]]} />
+
+しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。
+
+```typescript
+// string変数への代入でブランドが落ちる
+const email: string = user.email;
+safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
+```
+
+以下のプレイグラウンドで確認できます。`safeLog(user)` は型エラーになりますが、一度`string`変数に代入してから渡すと型エラーが消えます。`safeLog(user)` のコメントアウトを外して「問題」タブの変化を見てみてください。
+
+<CodePlayground client:visible code={[
+  'declare const sensitiveTag: unique symbol;',
+  'type Sensitive<T> = T & { readonly [sensitiveTag]: true };',
+  '',
+  'type RejectSensitive<T> = {',
+  '  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }',
+  '    ? never',
+  '    : T[K] extends object',
+  '      ? T[K] & RejectSensitive<T[K]>',
+  '      : T[K];',
+  '};',
+  '',
+  'function safeLog<T extends Record<string, unknown>>(data: T & RejectSensitive<T>): void {',
+  '  console.log(JSON.stringify(data));',
+  '}',
+  '',
+  'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
+  '',
+  '// ↓ これは型エラーになる（コメントアウトを外して確認）',
+  '// safeLog(user);',
+  '',
+  '// ↓ string変数に代入するとブランドが消え、型エラーにならない',
+  'const email: string = user.email;',
+  'safeLog({ id: user.id, role: user.role, email });',
+].join('\n')} lang="typescript" title="Branded Typeのバイパス" collapsedRanges={[[1, 14]]} />
+
+これはBranded Typeの原理的な限界です。intersection型で付けたブランドはスーパータイプへの代入で消失するので、型レベルでの検出は必ずバイパスできてしまいます。
+
+そもそもBranded Typeはコンパイル時だけの概念で、ランタイムには何も残りません。`JSON.stringify`の出力に影響を与えることはなく、値は素の`string`としてそのままシリアライズされます。
+
+これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に「Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.」と明記されている通り、TypeScriptは意図的に健全（sound）な型システムを目指していません。型検査が通ったコードがランタイムで型通りに動く保証はないのです。
+
+型レベルの防御は「ないよりはまし」ですが、すり抜けるパターンが構造的に存在し、すり抜けたときにランタイムでは何も守ってくれない以上、主防御にはなりえません。
+
+## 値をシリアライズ不能にする: Sensitive型
+
+ここまで見てきた通り、型レベルの防御はコンパイル時のみでランタイムには何も残りません。
+
+そこで、値そのものをシリアライズ不能にしてしまうアプローチを考えます。ScalaではCirisの[`Secret`型](https://cir.is/)として既に確立されているパターンです。
+
+```typescript
+type Sensitive<T> = {
+  unwrap(): T;
+  toJSON(): string;
+  toString(): string;
+};
+
+function sensitive<T>(value: T): Sensitive<T> {
+  return {
+    unwrap() { return value; },
+    toJSON() { return "[REDACTED]"; },
+    toString() { return "[REDACTED]"; },
+  };
+}
+```
+
+`sensitive()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`、`toJSON`、`toString`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返り、`toString()`も同様にオーバーライドしているためテンプレートリテラル経由でも値は漏れません。
+
+```typescript
+type User = {
+  id: string;
+  role: string;
+  email: Sensitive<string>;
+};
+
+const user: User = {
+  id: "1",
+  role: "admin",
+  email: sensitive("alice@example.com"),
+};
+
+// スプレッドしてログに渡しても、emailの値は漏れない
+JSON.stringify({ ...user });
+// => {"id":"1","role":"admin","email":"[REDACTED]"}
+
+// 構造化ロガー（Pino等）でも同様
+logger.info(user);
+// => {"id":"1","role":"admin","email":"[REDACTED]"}
+
+// console.logではutil.inspectが使われるため、toJSONは呼ばれない
+// ただし値自体はクロージャ内にあるため漏れない
+console.log(user);
+// => { id: '1', role: 'admin', email: { unwrap: [Function], toJSON: [Function], toString: [Function] } }
+
+// テンプレートリテラルではtoString()が呼ばれる
+console.log(`User: ${user.email}`);
+// => "User: [REDACTED]"
+
+// 値が必要な場面では明示的にunwrapする
+sendEmail(user.email.unwrap());
+```
+
+実行して`[REDACTED]`になることを確認できます。`JSON.stringify`でもスプレッド構文でもemailの値が漏れないのがわかります。
+
+<CodePlayground client:visible code={[
+  'type Sensitive<T> = {',
+  '  unwrap(): T;',
+  '  toJSON(): string;',
+  '  toString(): string;',
+  '};',
+  '',
+  'function sensitive<T>(value: T): Sensitive<T> {',
+  '  return {',
+  '    unwrap() { return value; },',
+  '    toJSON() { return "[REDACTED]"; },',
+  '    toString() { return "[REDACTED]"; },',
+  '  };',
+  '}',
+  '',
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: Sensitive<string>;',
+  '};',
+  '',
+  'const user: User = {',
+  '  id: "1",',
+  '  role: "admin",',
+  '  email: sensitive("alice@example.com"),',
+  '};',
+  '',
+  '// スプレッドしてもemailは漏れない',
+  'console.log("stringify:", JSON.stringify({ ...user }));',
+  '',
+  '// テンプレートリテラルでもtoString()が呼ばれる',
+  'console.log(`template: User email is ${user.email}`);',
+  '',
+  '// unwrapすれば値を取り出せる',
+  'console.log("unwrap:", user.email.unwrap());',
+].join('\n')} lang="typescript" title="Sensitive型によるPII防御" collapsedRanges={[[1, 13]]} />
+
+このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。
+
+Branded Typeとは違ってランタイムに実体を持つため、型検査をすり抜けてもシリアライズ時に値が漏れることはありません。ログ出力では`"[REDACTED]"`と表示されるので、「意図的にマスクされている」ことが明確に伝わりますし、障害調査で空オブジェクトと誤認されることもありません。
+
+### Sensitive型の限界
+
+ただし、Sensitive型にも限界があります。
+
+まず、`unwrap()`で取り出した値は素の文字列に戻るため、取り出し後の扱いは開発者の責任です。
+
+```typescript
+// メール送信のためにunwrapした値を、うっかりログに含めてしまう
+const rawEmail = user.email.unwrap();
+logger.info({ action: "send_email", to: rawEmail }); // 漏れる
+```
+
+Sensitive型が守るのは「ラップされた状態の値」であり、「unwrapされた後の値」ではありません。この弱点を補うには、`unwrap()`の呼び出し箇所をESLintカスタムルールで制限し、PIIを取り出せるコンテキストを限定するといった運用上の工夫を組み合わせる必要があります。
+
+また、関数をプロパティに持つオブジェクトは`structuredClone`できません。Worker間のメッセージパッシングや`postMessage`など、構造化複製アルゴリズムに依存する処理ではSensitive型を含むオブジェクトをそのまま渡せないので、事前に`unwrap`するか受け側で再ラップする必要があります。
+
+それから、ドメインモデル定義時にすべてのPIIフィールドを`sensitive()`でラップする必要がある以上、漏れなく適用することが前提になります。ラップし忘れたフィールドは素の値のままログに出てしまいます。この問題に対してはPino redactが安全網として機能します（後述）。
+
+パフォーマンス面では、PIIフィールドごとに関数オブジェクトが生成されます。通常のAPIサーバではまず問題になりませんが、大量のオブジェクトを生成するバッチ処理等では留意が必要です。
+
+### ドメインモデルへの組み込み
+
+Sensitive型を使うと、PIIフィールドをドメインモデルの定義段階で明示できます。
+
+```typescript
+// PIIフィールドが型から読み取れる
+type Patient = {
+  id: string;
+  department: string;
+  name: Sensitive<string>;
+  diagnosis: Sensitive<string>;
+  insuranceNumber: Sensitive<string>;
+};
+
+// 値が必要な場面では明示的にunwrapする
+function formatInsuranceClaim(patient: Patient) {
+  return {
+    patientName: patient.name.unwrap(),
+    diagnosis: patient.diagnosis.unwrap(),
+    insuranceNo: patient.insuranceNumber.unwrap(),
+  };
+}
+```
+
+`unwrap()`の呼び出しはコードレビューで目立つため、「ここでPIIを取り出しているが、この用途は妥当か？」という判断を促す効果もあります。
+
+## Pino redactとの併用
+
+Sensitive型は便利ですが、全てのPIIフィールドに`sensitive()`を付け忘れなく適用できるかという問題は残ります。ここで[Pino](https://github.com/pinojs/pino)のredactオプションがフォールバックとして使えます。
+
+```typescript
+import pino from "pino";
+
+const logger = pino({
+  redact: {
+    paths: ["email", "*.email", "password", "*.password"],
+    censor: "[REDACTED]",
+  },
+});
+```
+
+Pino redactはブラックリスト方式で、既知のセンシティブなフィールド名を指定してマスキングします。内部実装の[fast-redact](https://github.com/davidmarkclements/fast-redact)は`**.email`のような任意深度の再帰パターンをサポートしないので、ネストの深い構造では防御が不完全になりえます。新しいセンシティブフィールドが追加されたときにredactリストの更新を忘れるリスクもつきまといます。
+
+なので、Pino redactは主防御ではなく安全網です。Sensitive型で値をクロージャに閉じ込めるのが主防御で、Pino redactはSensitive型の適用漏れがあったときに、フィールド名が既知であればキャッチしてくれるフォールバックという立ち位置です。
+
+## まとめ
+
+TypeScriptの構造的部分型は、余分なプロパティを持つオブジェクトを互換とみなします。Branded TypeとConditional Typesを組み合わせれば型レベルで検出できるように見えますが、intersection型のブランドは`string`変数への代入で消失するので、バイパスが常に可能です。そもそもランタイムには何も残りません。
+
+この限界を踏まえて、本記事ではSensitive型とPino redactの二層構成を提案しました。Sensitive型はPIIを関数クロージャに閉じ込め、`JSON.stringify`や構造化ロガー経由では`toJSON()`により`"[REDACTED]"`として出力されます。防御がデータ構造自体に組み込まれているので、入口（フィールド定義）で一度ラップすれば出口での対応は要りません。そのうえで、Pino redactが既知のセンシティブフィールド名をブラックリスト方式でマスキングし、Sensitive型の適用漏れに対する安全網になります。
+
+「型安全な開発」という言葉で安心してしまわず、型にできることとできないことを正確に理解した上で、ランタイムでの防御を設計していくのが大事ではないでしょうか。
+
+## 参考文献
+
+- [TypeScript: Type Compatibility](https://www.typescriptlang.org/docs/handbook/type-compatibility.html) — 構造的部分型と余剰プロパティチェックの仕様
+- [Suggestion: perform excess property checks when spreading an inline object literal (TypeScript Issue #39998)](https://github.com/microsoft/TypeScript/issues/39998) — スプレッド構文で余剰プロパティチェックを効かせる要望（未対応）
+- [TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals) — TypeScriptが意図的にSound型システムではないことの公式見解
+- [Pino Redaction](https://github.com/pinojs/pino/blob/main/docs/redaction.md) — センシティブフィールドの自動マスキング
+- [fast-redact](https://github.com/davidmarkclements/fast-redact) — Pino redactの内部実装。パスパターンの制約
+- [Ciris - Secret](https://cir.is/docs/configurations#secret) — Scalaにおけるセンシティブ値のラッパー型。同様のパターンの先行事例

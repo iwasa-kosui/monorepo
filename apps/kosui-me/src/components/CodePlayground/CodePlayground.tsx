@@ -3,15 +3,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuickJS } from './useQuickJS';
 import { useTypeScriptTranspiler } from './useTypeScriptTranspiler';
 
+let nextInstanceId = 0;
+
 interface CodePlaygroundProps {
   code: string;
   lang?: 'javascript' | 'typescript';
   title?: string;
+  collapsedRanges?: [number, number][];
 }
 
 export function CodePlayground(
-  { code: initialCode, lang = 'javascript', title }: CodePlaygroundProps,
+  { code: initialCode, lang = 'javascript', title, collapsedRanges }: CodePlaygroundProps,
 ) {
+  const instanceIdRef = useRef<number | null>(null);
+  if (instanceIdRef.current === null) {
+    instanceIdRef.current = nextInstanceId++;
+  }
   const [output, setOutput] = useState<
     { logs: string[]; error: string | null } | null
   >(null);
@@ -90,9 +97,8 @@ export function CodePlayground(
       const editorEl = container.querySelector('.playground-editor');
       if (!editorEl) return;
 
-      const fileUri = monaco.Uri.parse(
-        lang === 'typescript' ? 'file:///playground.ts' : 'file:///playground.js',
-      );
+      const ext = lang === 'typescript' ? 'ts' : 'js';
+      const fileUri = monaco.Uri.parse(`file:///playground-${instanceIdRef.current}.${ext}`);
       const model = monaco.editor.getModel(fileUri)
         ?? monaco.editor.createModel(trimmedCode, lang, fileUri);
 
@@ -111,12 +117,34 @@ export function CodePlayground(
           horizontal: 'auto',
         },
         renderLineHighlight: 'none',
-        folding: false,
+        folding: !!collapsedRanges?.length,
+        showFoldingControls: collapsedRanges?.length ? 'always' : 'never',
         glyphMargin: false,
         automaticLayout: true,
       });
 
       editorInstanceRef.current = { getValue: () => editor.getValue() };
+
+      if (collapsedRanges?.length) {
+        monaco.languages.registerFoldingRangeProvider(lang, {
+          provideFoldingRanges(m) {
+            if (m.uri.toString() !== fileUri.toString()) return [];
+            return collapsedRanges.map(([start, end]) => ({
+              start,
+              end,
+              kind: monaco.languages.FoldingRangeKind.Region,
+            }));
+          },
+        });
+        // Fold after folding ranges are computed
+        setTimeout(() => {
+          for (const [start] of collapsedRanges) {
+            editor.setPosition({ lineNumber: start, column: 1 });
+            editor.trigger('api', 'editor.fold', {});
+          }
+          editor.setPosition({ lineNumber: 1, column: 1 });
+        }, 200);
+      }
 
       const updateHeight = () => {
         const contentHeight = editor.getContentHeight();
@@ -154,7 +182,7 @@ export function CodePlayground(
     return () => {
       disposed = true;
     };
-  }, [lang, trimmedCode]);
+  }, [lang, trimmedCode, collapsedRanges]);
 
   const handleRun = useCallback(async () => {
     setRunning(true);
