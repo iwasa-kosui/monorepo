@@ -16,4 +16,12 @@ const posts = defineCollection({
   }),
 });
 
-export const collections = { posts };
+const resume = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/resume' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+  }),
+});
+
+export const collections = { posts, resume };
