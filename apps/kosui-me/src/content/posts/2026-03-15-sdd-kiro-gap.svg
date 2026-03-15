@@ -12,7 +12,7 @@
 
   <!-- Step 0: Stakeholder state -->
   <rect x="24" y="30" width="140" height="66" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" />
-  <text x="94" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">チームリーダーですら</text>
+  <text x="94" y="52" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">システムの受益者も</text>
   <text x="94" y="67" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">要求を言語化できない</text>
   <text x="94" y="84" text-anchor="middle" font-size="9" fill="#b91c1c">プラットフォーム領域の現実</text>
 
