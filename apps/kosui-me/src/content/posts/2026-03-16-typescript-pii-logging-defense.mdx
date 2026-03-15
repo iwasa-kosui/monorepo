@@ -78,7 +78,7 @@ logUserAction("login", user);
   'logUserAction("login", user);',
 ].join('\n')} lang="typescript" title="構造的部分型によるPII漏洩" />
 
-余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みなので、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年4月時点では未対応です。
+余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みなので、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年3月時点では未対応です。
 
 ## Branded Typeでも防げない
 
@@ -209,11 +209,12 @@ const Sensitive = {
     unwrap() { return value; },
     toJSON() { return "[REDACTED]"; },
     toString() { return "[REDACTED]"; },
+    [Symbol.for("nodejs.util.inspect.custom")]() { return "[REDACTED]"; },
   }),
 };
 ```
 
-`Sensitive.of()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`、`toJSON`、`toString`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返り、`toString()`も同様にオーバーライドしているためテンプレートリテラル経由でも値は漏れません。
+`Sensitive.of()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`、`toJSON`、`toString`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返り、`toString()`も同様にオーバーライドしているためテンプレートリテラル経由でも値は漏れません。`[Symbol.for("nodejs.util.inspect.custom")]`はNode.jsの`console.log`が内部で使う`util.inspect`のフックで、これを定義しておくと`console.log`でも`[REDACTED]`と表示されます。
 
 ```typescript
 type User = Readonly<{
@@ -236,10 +237,9 @@ JSON.stringify({ ...user });
 logger.info(user);
 // => {"id":"1","role":"admin","email":"[REDACTED]"}
 
-// console.logではutil.inspectが使われるため、toJSONは呼ばれない
-// ただし値自体はクロージャ内にあるため漏れない
+// console.logではutil.inspectが使われ、util.inspect.customが呼ばれる
 console.log(user);
-// => { id: '1', role: 'admin', email: { unwrap: [Function], toJSON: [Function], toString: [Function] } }
+// => { id: '1', role: 'admin', email: '[REDACTED]' }
 
 // テンプレートリテラルではtoString()が呼ばれる
 console.log(`User: ${user.email}`);
@@ -263,6 +263,7 @@ sendEmail(user.email.unwrap());
   '    unwrap() { return value; },',
   '    toJSON() { return "[REDACTED]"; },',
   '    toString() { return "[REDACTED]"; },',
+  '    [Symbol.for("nodejs.util.inspect.custom")]() { return "[REDACTED]"; },',
   '  }),',
   '};',
   '',
@@ -286,7 +287,52 @@ sendEmail(user.email.unwrap());
   '',
   '// unwrapすれば値を取り出せる',
   'console.log("unwrap:", user.email.unwrap());',
-].join('\n')} lang="typescript" title="Sensitive型によるPII防御" collapsedRanges={[[1, 13]]} />
+].join('\n')} lang="typescript" title="Sensitive型によるPII防御" collapsedRanges={[[1, 14]]} />
+
+Node.jsの`console.log`は内部で`util.inspect`を使っており、`util.inspect`はオブジェクトに`[Symbol.for("nodejs.util.inspect.custom")]`メソッドがあればその戻り値を表示します。以下のプレイグラウンドではNode.jsの`util.inspect`をシミュレートして、このシンボルが定義されている場合と定義されていない場合の出力の違いを確認できます。
+
+<CodePlayground client:visible code={[
+  'type Sensitive<T> = Readonly<{',
+  '  unwrap(): T;',
+  '  toJSON(): string;',
+  '  toString(): string;',
+  '}>;',
+  '',
+  'const inspectSymbol = Symbol.for("nodejs.util.inspect.custom");',
+  '',
+  '// util.inspect.customなし',
+  'const withoutInspect = {',
+  '  unwrap() { return "alice@example.com"; },',
+  '  toJSON() { return "[REDACTED]"; },',
+  '  toString() { return "[REDACTED]"; },',
+  '};',
+  '',
+  '// util.inspect.customあり',
+  'const withInspect = {',
+  '  unwrap() { return "alice@example.com"; },',
+  '  toJSON() { return "[REDACTED]"; },',
+  '  toString() { return "[REDACTED]"; },',
+  '  [inspectSymbol]() { return "[REDACTED]"; },',
+  '};',
+  '',
+  '// Node.jsのutil.inspectの挙動をシミュレート',
+  'function simulateUtilInspect(obj: Record<string | symbol, unknown>): string {',
+  '  const customInspect = obj[inspectSymbol];',
+  '  if (typeof customInspect === "function") {',
+  '    return customInspect.call(obj) as string;',
+  '  }',
+  '  // util.inspect.customがない場合、プロパティが列挙される',
+  '  const keys = Object.keys(obj);',
+  '  const entries = keys.map(k => `${k}: [Function]`);',
+  '  return `{ ${entries.join(", ")} }`;',
+  '}',
+  '',
+  'console.log("customなし:", simulateUtilInspect(withoutInspect));',
+  '// => { unwrap: [Function], toJSON: [Function], toString: [Function] }',
+  '',
+  'console.log("customあり:", simulateUtilInspect(withInspect));',
+  '// => [REDACTED]',
+].join('\n')} lang="typescript" title="util.inspect.customによるconsole.log防御" collapsedRanges={[[1, 5]]} />
 
 このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。
 
