@@ -3,26 +3,26 @@ title: "TypeScriptの型だけでPII漏洩は防げない — ログ出力境界
 date: "2026-03-15T12:00:00+09:00"
 slug: "posts/2026/03/15/typescript-pii-logging-defense"
 ogIcon: "ts"
-description: "TypeScriptの構造的部分型はログへのPII混入を型レベルで防げない。型の限界を正直に認めた上で、Zod stripとPino redactによるランタイム主防御と、型を使った「忘れにくい設計」を組み合わせる多層防御の設計パターンを提案する。"
+description: "TypeScriptの構造的部分型はログへのPII混入を型レベルで防げない。型の限界を認めた上で、センシティブな値を関数クロージャに閉じ込めるSensitive型と、Pino redactによる多層防御の設計パターンを提案する。"
 tags: ["TypeScript", "セキュリティ"]
-
+private: true
 ---
 
 ## ログにPIIが混入するとなぜ致命的か
 
-サーバサイド開発において、ログに個人識別情報(PII)が混入する事故には注意が必要です。例えば、ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信されてしまう事例を思い浮かべてください。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
+サーバサイド開発において、ログにPIIが混入する事故は珍しくありません。ユーザーのメールアドレスや氏名がログに書き込まれ、それがDatadogやNew Relicなどの外部SaaSに送信される。多くの開発チームにとっては「気をつけましょう」で済む問題かもしれません。
 
-しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPR、HIPAAでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しえます。これはコンプライアンス違反であり、単なるバグではなくインシデントです。
+しかし、医療システムや金融システムのように厳格なデータ保護要件を持つドメインでは話が変わります。個人情報保護法やGDPRでは個人データの取り扱いに厳しい制約があり、ログ基盤として国外にデータセンターを持つSaaSを利用している場合、ログへのPII混入は個人データの国外移転に該当しうる。医療情報を扱う場合はHIPAAによるさらに厳しい制約も加わります。いずれにせよ、単なるバグではなくインシデントです。
 
-厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさや状態遷移の正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではないし、人手のチェックリストではスケールしません。
+厄介なのは、QAプロセスでログの中身が見落とされやすいことです。品質管理ではUIの使いやすさやAPIレスポンスの正しさに意識が向きがちで、「ロガーに何が渡されているか」を毎リリースで検証するチームは少ないのではないでしょうか。リリースのたびに全ログ出力をチェックするのは現実的ではないし、人手のチェックリストではスケールしません。
 
-だからこそ仕組みで防ぐ必要があります。
-
-さて、TypeScriptで型を使えば防げそうな気がしますが、実はそう簡単ではありません。
+だからこそ仕組みで防ぐ必要がある。TypeScriptで型を使えば防げそうな気がしますが、実はそう簡単ではありません。
 
 ## 構造的部分型がPIIを透過させる
 
-TypeScriptの型システムには、ログへのPII混入を防げない構造的な理由があります。具体例で見てみましょう。
+TypeScriptは構造的部分型を採用しています。これは、型の互換性を名前ではなく構造で判定する仕組みです。ある型が求めるプロパティをすべて持っていれば、余分なプロパティがあっても互換とみなされます。オブジェクトリテラルを直接代入する場合に限り、例外的に余剰プロパティチェックが働きますが、変数経由やスプレッド構文ではこの例外は適用されません。
+
+この仕様がログへのPII混入を引き起こす具体的なシナリオを見てみましょう。
 
 ```typescript
 type User = {
@@ -31,179 +31,208 @@ type User = {
   email: string; // PII
 };
 
-// ログ用の型: PIIを含まないはず
-type LogSafeUser = {
+type LogPayload = {
   id: string;
   role: string;
 };
 
-function createLogData(user: User): LogSafeUser {
-  // スプレッド構文でログ用オブジェクトを作る
-  return { ...user };
+function logUserAction(action: string, payload: LogPayload): void {
+  logger.info({ action, ...payload });
 }
 ```
 
-以下の例では、`createLogData`の戻り値の型は`LogSafeUser`であり、型検査は通ります。しかしランタイムでは、`{ ...user }`によって`email`フィールドもコピーされています。これをこのままロガーがログへ出力してしまうと、個人情報が漏洩してしまいます。
+`logUserAction`は`LogPayload`だけを受け付けるので安全に見えます。しかし、`User`は`LogPayload`が求めるプロパティを全て持っているため、構造的部分型の互換性により`User`をそのまま渡せてしまいます。
 
 ```typescript
 const user: User = { id: "1", role: "admin", email: "alice@example.com" };
-const logData = createLogData(user);
 
-console.log(JSON.stringify(logData));
-// {"id":"1","role":"admin","email":"alice@example.com"}
-// 型上は LogSafeUser を満たすのに、email が含まれている
+// 型エラーにならない。Userは{id, role}を持っているので、LogPayloadとして互換
+logUserAction("login", user);
+// => {"action":"login","id":"1","role":"admin","email":"alice@example.com"}
 ```
 
-なぜ型エラーにならないのか考えてみましょう。TypeScriptでは構造的部分型を採用しているため、`{ id, role, email }`は`{ id, role }`のスーパーセットであり、`LogSafeUser`として有効です。余剰プロパティチェックはオブジェクトリテラルの直接代入時のみ発動し、スプレッド構文や変数経由の代入では[チェックされません](https://www.typescriptlang.org/docs/handbook/type-compatibility.html)。スプレッド内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[Issue](https://github.com/microsoft/TypeScript/issues/39998)は出ていますが、現時点では未対応です。
+この問題はリファクタリング時に特に起きやすい。最初は`LogPayload`専用のオブジェクトを`{ id: user.id, role: user.role }`のように明示的に構築していたのが、「`User`はどうせ`id`と`role`を持っているのだから直接渡せばいい」と誰かがショートカットした瞬間に、`email`が静かにログに混入し始めます。後から`User`に`phoneNumber`フィールドが追加されても、型エラーは出ません。
 
-## 型レベルの防御はなぜ機能しないのか
+余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みであり、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、現時点では未対応です。
 
-Branded Typeを使ったアプローチを適用し、型レベルで防げないか考えてみましょう。
+## Branded Typeで防げるケースと防げないケース
+
+構造的部分型による漏洩を型レベルで防げないか。Branded Typeを使ったアプローチを考えてみます。
 
 ```typescript
-const SensitiveSymbol = Symbol('Sensitive');
-type Sensitive<T> = T & { readonly __sensitive: typeof SensitiveSymbol };
+declare const sensitiveTag: unique symbol;
+type Sensitive<T> = T & { readonly [sensitiveTag]: true };
 
 type User = {
   id: string;
   role: string;
-  email: Sensitive<string>; // センシティブとマーク
+  email: Sensitive<string>;
 };
 ```
 
-Branded Typeは型レベルのタグであり、`Sensitive<string>`と`string`を区別できます。ロガーの引数型で`Sensitive`を含む型を拒否するConditional Typeを書けば、コンパイル時に検出できるかもしれません。
+`Sensitive<string>`と`string`は型レベルで区別できます。これを活かして、センシティブなフィールドを含む型をロガーの引数型で拒否することを試みます。
 
-しかし、この防御には本質的な限界があります。
-
-- スプレッド後にブランドが伝播するかは型定義次第で、フィールドを個別に取り出して再構築すれば消える
-- そもそもランタイムには存在しない。Branded Typeはコンパイル時の概念であり、`JSON.stringify`の結果には何の影響も与えない
-
-Branded TypeやConditional Typesでどれだけ巧妙な型を組んでも、構造的部分型で余剰プロパティを持つオブジェクトが型検査を通過する以上、同じ問題に帰着します。型情報上は`Sensitive`なフィールドが存在しないので、「安全」と判定されてしまう。
-
-これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に明記されている通り、TypeScriptは意図的にsoundnessなシステムではありません。正確性と生産性のバランスを取るという設計判断であり、型検査が通ったコードがランタイムで型通りに動く保証はない。つまり、型だけで全てを守れるという期待は、そもそもTypeScriptの設計思想と矛盾しています。
-
-## ランタイム検証を主防御に据える
-
-型に限界があるなら、ランタイムで実際にデータを除去・マスキングする仕組みを主防御に据えるべきです。ここでは2つのアプローチを紹介します。
-
-### Zodのstripでログ出力前に余剰プロパティを除去する
-
-[Zod](https://zod.dev/)の`z.object()`はデフォルトで余剰プロパティをstripします。ログに渡す前にスキーマを通せば、定義したフィールドのみが残ります。
+**検出できるケース**: ロガーの引数型を`Record<string, string | number | boolean>`のようにプリミティブ型に制約すれば、`Sensitive<string>`（intersection型）を持つオブジェクトを直接渡そうとしたときに型エラーになります。
 
 ```typescript
-import { z } from "zod";
-
-// ログに書き込んでよいフィールドだけを定義
-const logSafeUserSchema = z.object({
-  id: z.string(),
-  role: z.string(),
-});
-
-type LogSafeUser = z.output<typeof logSafeUserSchema>;
-
-function createLogData(user: User): LogSafeUser {
-  // スキーマを通すことで、emailは除去される
-  return logSafeUserSchema.parse(user);
+function safeLog(data: Record<string, string | number | boolean>): void {
+  logger.info(data);
 }
 
-const user: User = { id: "1", role: "admin", email: "alice@example.com" };
-console.log(JSON.stringify(createLogData(user)));
-// {"id":"1","role":"admin"}
-// <- emailは含まれない
+// 型エラー: emailがSensitive<string>なのでstring | number | booleanに合わない
+safeLog({ id: "1", role: "admin", email: user.email });
 ```
 
-これはホワイトリスト方式です。「何を許可するか」を明示的に定義し、それ以外は全て除去する。ログに含めてよいフィールドを自分で選ぶため、意図しないPII混入を防げます。
+**検出できないケース**: 変数経由で渡すと、構造的部分型の互換性により通過します。
 
-スキーマ定義のコストはかかりますが、型アノテーションだけの防御と決定的に違うのは、Zodは実際にランタイムでデータを除去するという点です。型アノテーションは嘘をつけるが、`parse`の結果は嘘をつかない。
+```typescript
+const payload = { id: user.id, role: user.role, email: user.email };
+safeLog(payload); // 型エラーにならない
+```
 
-パフォーマンスが気になる場合は、`z.object().pick()`で必要なフィールドだけを選ぶか、Valibotのような軽量バリデータも選択肢になります。
+さらに根本的な問題として、Branded Typeはコンパイル時だけの概念であり、ランタイムには何も残りません。`JSON.stringify`の出力に影響を与えることはなく、値は素の`string`としてそのままシリアライズされます。
 
-### Pinoのredactでセンシティブフィールドを自動マスキングする
+これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に「Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.」と明記されている通り、TypeScriptは意図的に完全なSound型システムではありません。型検査が通ったコードがランタイムで型通りに動く保証はない。
 
-[Pino](https://github.com/pinojs/pino)のredactオプションは、指定したパスのフィールドをログ出力時に自動的にマスキングしてくれます。
+型レベルの防御は「ないよりはまし」だが、すり抜けるパターンが構造的に存在し、すり抜けたときにランタイムでは何も守ってくれない以上、主防御にはなりえません。
+
+## 値をシリアライズ不能にする: Sensitive型
+
+ここまでの議論を振り返ると、問題の構造が見えてきます。
+
+- **型レベルの防御**: コンパイル時のみ。ランタイムには何も残らない
+- **ログ出力前のフィルタ（Zod strip等）**: ランタイムで機能するが、呼び忘れたら無防備
+
+発想を変えて、**値そのものをシリアライズ不能にする**アプローチを考えます。
+
+```typescript
+type Sensitive<T> = {
+  unwrap(): T;
+  toJSON(): string;
+};
+
+function sensitive<T>(value: T): Sensitive<T> {
+  return {
+    unwrap() { return value; },
+    toJSON() { return "[REDACTED]"; },
+  };
+}
+```
+
+`sensitive()`は値を関数クロージャに閉じ込めます。外から見えるのは`unwrap`と`toJSON`という関数プロパティだけであり、値自体はクロージャの中に隠されています。`toJSON()`を定義しているため、`JSON.stringify`でシリアライズされた場合は`"[REDACTED]"`が返ります。
+
+```typescript
+type User = {
+  id: string;
+  role: string;
+  email: Sensitive<string>;
+};
+
+const user: User = {
+  id: "1",
+  role: "admin",
+  email: sensitive("alice@example.com"),
+};
+
+// スプレッドしてログに渡しても、emailの値は漏れない
+JSON.stringify({ ...user });
+// => {"id":"1","role":"admin","email":"[REDACTED]"}
+
+// 構造化ロガー（Pino等）でも同様
+logger.info(user);
+// => {"id":"1","role":"admin","email":"[REDACTED]"}
+
+// console.logでも値は見えない
+console.log(user);
+// => { id: '1', role: 'admin', email: { unwrap: [Function: unwrap], toJSON: [Function: toJSON] } }
+
+// テンプレートリテラルでも漏れない
+console.log(`User: ${user.email}`);
+// => "User: [object Object]"
+
+// 値が必要な場面では明示的にunwrapする
+sendEmail(user.email.unwrap());
+```
+
+このアプローチの決定的な強みは、**防御がデータ構造自体に組み込まれている**ことです。Zod stripのような「ログ出力前に毎回呼ぶ」アプローチでは呼び忘れが致命的ですが、Sensitive型は値をラップした時点で防御が成立します。出口で何もしなくても漏れない。
+
+また、Branded Typeとは違い、ランタイムに実体を持つため、型検査をすり抜けてもシリアライズ時に値が漏れることはありません。ログ出力では`"[REDACTED]"`と表示されるため、「意図的にマスクされている」ことが明確に伝わり、障害調査で空オブジェクトと誤認されることもありません。
+
+### Sensitive型が防げないケース
+
+Sensitive型は万能ではありません。`unwrap()`で取り出した値は素の文字列に戻るため、取り出し後の扱いは開発者の責任です。
+
+```typescript
+// メール送信のためにunwrapした値を、うっかりログに含めてしまう
+const rawEmail = user.email.unwrap();
+logger.info({ action: "send_email", to: rawEmail }); // 漏れる
+```
+
+Sensitive型が守るのは「ラップされた状態の値」であり、「unwrapされた後の値」ではありません。この弱点を補うには、`unwrap()`の呼び出し箇所をESLintカスタムルールで制限し、「PIIを取り出せるコンテキストを限定する」といった運用上の対策を組み合わせる必要があります。
+
+### ドメインモデルへの組み込み
+
+Sensitive型は、PIIフィールドをドメインモデルの定義段階で明示する設計パターンです。
+
+```typescript
+// PIIフィールドが型から読み取れる
+type Patient = {
+  id: string;
+  department: string;
+  name: Sensitive<string>;
+  diagnosis: Sensitive<string>;
+  insuranceNumber: Sensitive<string>;
+};
+
+// 値が必要な場面では明示的にunwrapする
+function formatInsuranceClaim(patient: Patient) {
+  return {
+    patientName: patient.name.unwrap(),
+    diagnosis: patient.diagnosis.unwrap(),
+    insuranceNo: patient.insuranceNumber.unwrap(),
+  };
+}
+```
+
+`unwrap()`の呼び出しはコードレビューで目立つため、「ここでPIIを取り出しているが、この用途は妥当か？」という判断を促す効果もあります。
+
+## Pino redactとの併用
+
+Sensitive型は強力ですが、全てのPIIフィールドに`sensitive()`を付け忘れなく適用できるかという問題は残ります。ここで[Pino](https://github.com/pinojs/pino)のredactオプションがフォールバックとして機能します。
 
 ```typescript
 import pino from "pino";
 
 const logger = pino({
   redact: {
-    paths: ["email", "*.email", "user.email", "password", "*.password"],
+    paths: ["email", "*.email", "password", "*.password"],
     censor: "[REDACTED]",
   },
 });
-
-logger.info({ user: { id: "1", role: "admin", email: "alice@example.com" } });
-// {"user":{"id":"1","role":"admin","email":"[REDACTED]"}}
 ```
 
-こちらはブラックリスト方式です。「何を隠すか」を指定し、該当するフィールドをマスキングする。既存のコードベースに後付けで導入しやすいのが利点ですが、新しいセンシティブフィールドが追加されたときにredactリストの更新を忘れるリスクはあります。
+Pino redactはブラックリスト方式であり、既知のセンシティブなフィールド名を指定してマスキングします。内部実装の[fast-redact](https://github.com/davidmarkclements/fast-redact)は`**.email`のような任意深度の再帰パターンをサポートしないため、ネストの深い構造では防御が不完全になりえます。新しいセンシティブフィールドが追加されたときにredactリストの更新を忘れるリスクもある。
 
-### ホワイトリストとブラックリストの組み合わせ
+だからこそ、Pino redactは主防御ではなく安全網です。
 
-理想的には両方を使います。
-
-- Zod stripがホワイトリストとして機能し、ログ出力関数の入り口で許可されたフィールドだけを通す。これが主防御
-- Pino redactがブラックリストとして機能し、Zodのstripをすり抜けた場合に既知のセンシティブフィールド名をキャッチする安全網になる
-
-単一の防御に依存するのではなく、異なるアプローチを重ねることで、どちらか一方が破られても被害を最小化できます。
-
-## 「忘れにくい設計」: 型とランタイムの正しい組み合わせ方
-
-ここまでで「ランタイム検証が主防御」と述べました。ただ、ランタイム検証には致命的な弱点があります。Zodの`parse`を呼び忘れたら、何も防げません。
-
-ここで型の出番です。型は「全てを防ぐ壁」ではなく、「ランタイム検証を忘れさせない仕組み」として使います。
-
-```typescript
-import { z } from "zod";
-
-// ログに書き込んでよいフィールドのスキーマ
-const logSafeUserSchema = z.object({
-  id: z.string(),
-  role: z.string(),
-});
-
-// Zodスキーマの出力型 = ログ関数が受け付ける型
-type LogSafeUser = z.output<typeof logSafeUserSchema>;
-
-// ロガーのラッパー: LogSafeUser しか受け付けない
-function logUser(data: LogSafeUser): void {
-  logger.info(data);
-}
-
-// --- 使う側 ---
-
-const user: User = { id: "1", role: "admin", email: "alice@example.com" };
-
-// NG: User を直接渡すと型エラー（emailが余剰）
-// ...ただし変数経由では型エラーにならない場合がある
-
-// OK: Zodを通してから渡す
-logUser(logSafeUserSchema.parse(user));
-```
-
-この設計のポイントは、ログ出力関数の引数型を`z.output<typeof schema>`にしていることです。スキーマの定義と型が自動的に同期するため、「型は更新したがスキーマは更新していない」という乖離が起きません。
-
-ただし、構造的部分型のため、変数経由で`User`オブジェクトを渡すと型エラーにならない場合があります。ここが型の限界です。だからこそ、この型制約はあくまで「ミスに気づきやすくする補助線」であり、実際にデータを除去するのはZodの`parse`です。
-
-型を過信するのではなく、型の限界を理解した上で、型とランタイムにそれぞれ正しい役割を割り当てる。この考え方がPII漏洩防止の設計の核になります。
+- **主防御**: Sensitive型で値をクロージャに閉じ込める。シリアライズ時に自動で不可視になる
+- **安全網**: Pino redactで既知のセンシティブフィールド名をマスキングする。Sensitive型の適用漏れがあっても、フィールド名が既知であればキャッチできる
 
 ## まとめ
 
-TypeScriptの型システムだけでログへのPII漏洩を防ぐことはできません。構造的部分型は余剰プロパティを透過させ、Branded TypeやConditional Typesもランタイムには無力です。これはTypeScriptの欠陥ではなく、正確性と生産性のバランスを取るという設計思想です。
+TypeScriptの構造的部分型は、余分なプロパティを持つオブジェクトを互換とみなします。Branded TypeやConditional Typesで型レベルの防御を試みることはできますが、変数経由で渡されると検出できず、そもそもランタイムには何も残りません。
 
-型の限界を認めた上で、以下の多層防御を設計に組み込むのがよいと考えています。
+この限界を踏まえて、以下の多層防御を提案しました。
 
-1. ログ出力の境界にZod stripを挟む。ログに書き込んでよいフィールドをスキーマで定義し、`parse`を通すことで余剰プロパティを実際に除去する。これが主防御
-2. Pino redactをフォールバックとして設定する。既知のセンシティブフィールド名をredactリストに登録し、Zodをすり抜けた場合のセーフティネットにする
-3. ログ出力関数の引数型をZodスキーマの出力型に制約する。`z.output<typeof schema>`を使い、スキーマと型の乖離を防ぐ。型は「全てを防ぐ壁」ではなく「parseの呼び忘れに気づきやすくする仕組み」として使う
+1. **Sensitive型**: PIIを関数クロージャに閉じ込める。`JSON.stringify`、構造化ロガー、`console.log`のいずれの経路でも値は`"[REDACTED]"`として出力される。防御がデータ構造自体に組み込まれているため、「呼び忘れ」が存在しない。ただし`unwrap()`後の値の管理は開発者の責任であり、ESLintカスタムルール等で呼び出し箇所を制限する運用が望ましい
+2. **Pino redact**: 既知のセンシティブフィールド名をブラックリスト方式でマスキングする。Sensitive型の適用漏れに対する安全網
 
-「型安全な開発」という言葉に安心せず、型にできることとできないことを正確に理解すること。それがサーバサイドTypeScriptで型とランタイムを正しく組み合わせる第一歩です。
+「型安全な開発」という言葉に安心せず、型にできることとできないことを正確に理解すること。それがサーバサイドTypeScriptで堅牢なPII防御を設計する第一歩です。
 
 ## 参考文献
 
 - [TypeScript: Type Compatibility](https://www.typescriptlang.org/docs/handbook/type-compatibility.html) — 構造的部分型と余剰プロパティチェックの仕様
 - [Suggestion: perform excess property checks when spreading an inline object literal (TypeScript Issue #39998)](https://github.com/microsoft/TypeScript/issues/39998) — スプレッド構文で余剰プロパティチェックを効かせる要望（未対応）
 - [TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals) — TypeScriptが意図的にSound型システムではないことの公式見解
-- [Zod Documentation](https://zod.dev/) — strip/strictの挙動
 - [Pino Redaction](https://github.com/pinojs/pino/blob/main/docs/redaction.md) — センシティブフィールドの自動マスキング
-- [Best Logging Practices for Safeguarding Sensitive Data (Better Stack)](https://betterstack.com/community/guides/logging/sensitive-data/) — ログにおけるPII保護のベストプラクティス
+- [fast-redact](https://github.com/davidmarkclements/fast-redact) — Pino redactの内部実装。パスパターンの制約
