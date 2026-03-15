@@ -28,6 +28,14 @@ export function CodePlayground(
   const quickJS = useQuickJS();
   const tsTranspiler = useTypeScriptTranspiler();
 
+  // WASMモジュールをプリロードして初回実行時の待ち時間を削減
+  useEffect(() => {
+    quickJS.initialize();
+    if (lang === 'typescript') {
+      tsTranspiler.initialize();
+    }
+  }, [quickJS.initialize, tsTranspiler.initialize, lang]);
+
   const trimmedCode = initialCode.trim();
 
   // Highlight the fallback code block with Shiki (async, client-side)
