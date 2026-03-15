@@ -8,6 +8,7 @@ type SatoriNode = any;
 
 type PostMeta = {
   title: string;
+  ogTitle?: string;
   slug: string;
   ogIcon?: string;
   ogSvg?: string;
@@ -95,10 +96,11 @@ const loadPosts = (): PostMeta[] => {
     const fm = frontmatterMatch[1];
     const title = fm.match(/^title:\s*"(.+)"$/m)?.[1] ?? '';
     const slug = fm.match(/^slug:\s*"(.+)"$/m)?.[1] ?? '';
+    const ogTitle = fm.match(/^ogTitle:\s*"(.+)"$/m)?.[1]?.replace(/\\n/g, '\n');
     const ogIcon = fm.match(/^ogIcon:\s*"(.+)"$/m)?.[1];
     const ogSvg = fm.match(/^ogSvg:\s*"(.+)"$/m)?.[1];
 
-    return [{ title, slug, ogIcon, ogSvg }];
+    return [{ title, ogTitle, slug, ogIcon, ogSvg }];
   });
 };
 
@@ -296,7 +298,7 @@ const createShrimpIcon = (size: number): SatoriNode => {
   };
 };
 
-const loadCustomSvg = (ogSvg: string): SatoriNode | null => {
+const loadCustomSvg = (ogSvg: string, size: number): SatoriNode | null => {
   const svgPath = path.join(process.cwd(), 'scripts', 'og-icons', `${ogSvg}.svg`);
   if (!fs.existsSync(svgPath)) {
     console.warn(`SVG file not found: ${svgPath}`);
@@ -312,16 +314,17 @@ const loadCustomSvg = (ogSvg: string): SatoriNode | null => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '48px',
-        height: '48px',
+        width: `${size}px`,
+        height: `${size}px`,
+        flexShrink: 0,
       },
       children: {
         type: 'img',
         props: {
           src: `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`,
-          width: 48,
-          height: 48,
-          style: { width: '48px', height: '48px' },
+          width: size,
+          height: size,
+          style: { width: `${size}px`, height: `${size}px` },
         },
       },
     },
@@ -329,49 +332,84 @@ const loadCustomSvg = (ogSvg: string): SatoriNode | null => {
 };
 
 const createOgImage = (post: PostMeta): SatoriNode => {
-  const fontSize = getTitleFontSize(post.title);
+  const hasVisual = !!post.ogSvg;
+  const visualNode = post.ogSvg ? loadCustomSvg(post.ogSvg, 280) : null;
+  const badgeNode = post.ogIcon ? createIconBadge(post.ogIcon) : null;
+  const displayTitle = post.ogTitle ?? post.title;
+  const fontSize = hasVisual ? Math.min(getTitleFontSize(post.title), 48) : getTitleFontSize(post.title);
 
-  let iconNode: SatoriNode | null = null;
-  if (post.ogSvg) {
-    iconNode = loadCustomSvg(post.ogSvg);
-  }
-  if (!iconNode && post.ogIcon) {
-    iconNode = createIconBadge(post.ogIcon);
-  }
+  let cardChildren: SatoriNode[];
 
-  const cardChildren: SatoriNode[] = [
-    {
-      type: 'div',
-      props: {
-        style: {
-          display: 'flex',
-          fontSize: `${fontSize}px`,
-          fontWeight: 'bold',
-          color: COLORS.title,
-          lineHeight: 1.4,
-          textAlign: 'center',
-          justifyContent: 'center',
-          flex: 1,
-          alignItems: 'center',
-          padding: '0 20px',
+  if (visualNode) {
+    // Side-by-side layout: title left + visual right
+    cardChildren = [
+      {
+        type: 'div',
+        props: {
+          style: {
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '40px',
+            width: '100%',
+          },
+          children: [
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  fontSize: `${fontSize}px`,
+                  fontWeight: 'bold',
+                  color: COLORS.title,
+                  lineHeight: 1.4,
+                  whiteSpace: 'pre-line',
+                  flex: 1,
+                },
+                children: displayTitle,
+              },
+            },
+            visualNode,
+          ],
         },
-        children: post.title,
       },
-    },
-  ];
-
-  if (iconNode) {
-    cardChildren.push({
-      type: 'div',
-      props: {
-        style: {
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginTop: '12px',
+    ];
+  } else {
+    // Default centered layout
+    cardChildren = [
+      {
+        type: 'div',
+        props: {
+          style: {
+            display: 'flex',
+            fontSize: `${fontSize}px`,
+            fontWeight: 'bold',
+            color: COLORS.title,
+            lineHeight: 1.4,
+            textAlign: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            alignItems: 'center',
+            padding: '0 20px',
+          },
+          children: post.title,
         },
-        children: iconNode,
       },
-    });
+    ];
+
+    if (badgeNode) {
+      cardChildren.push({
+        type: 'div',
+        props: {
+          style: {
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: '12px',
+          },
+          children: badgeNode,
+        },
+      });
+    }
   }
 
   return {
