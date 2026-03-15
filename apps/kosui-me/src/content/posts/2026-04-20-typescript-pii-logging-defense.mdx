@@ -123,6 +123,37 @@ safeLog(user);
 safeLog({ ...user });
 ```
 
+以下のプレイグラウンドで試すと、「問題」タブに型エラーが表示されているのが確認できます。
+
+<CodePlayground client:visible code={[
+  'declare const sensitiveTag: unique symbol;',
+  'type Sensitive<T> = T & { readonly [sensitiveTag]: true };',
+  '',
+  'type RejectSensitive<T> = {',
+  '  [K in keyof T]: T[K] extends { readonly [sensitiveTag]: unknown }',
+  '    ? never',
+  '    : T[K] extends object',
+  '      ? T[K] & RejectSensitive<T[K]>',
+  '      : T[K];',
+  '};',
+  '',
+  'function safeLog<T extends Record<string, unknown>>(data: T & RejectSensitive<T>): void {',
+  '  console.log(JSON.stringify(data));',
+  '}',
+  '',
+  'type User = {',
+  '  id: string;',
+  '  role: string;',
+  '  email: Sensitive<string>;',
+  '};',
+  '',
+  'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
+  '',
+  '// emailがSensitive<string>なのでneverに推論され、型エラーになる',
+  'safeLog(user);',
+  'safeLog({ ...user });',
+].join('\n')} lang="typescript" title="RejectSensitiveによる型レベル検出" />
+
 しかし、`Sensitive<string>`は`string & { readonly [sensitiveTag]: true }`というintersection型であり、`string`のサブタイプです。つまり、`string`型の変数に代入した時点でブランドが消え、型チェックをすり抜けます。
 
 ```typescript
