@@ -2,7 +2,7 @@
 title: "TypeScriptの型だけでPII漏洩は防げない — ログ出力境界の多層防御設計"
 date: "2026-03-16T12:00:00+09:00"
 slug: "posts/2026/03/16/typescript-pii-logging-defense"
-ogIcon: "ts"
+ogIcon: "typescript"
 description: "TypeScriptの構造的部分型はログへのPII混入を型レベルで防げない。型の限界を認めた上で、センシティブな値を関数クロージャに閉じ込めるSensitive型と、Pino redactによる多層防御の設計パターンを提案する。"
 tags: ["TypeScript", "セキュリティ"]
 private: false
@@ -77,8 +77,6 @@ logUserAction("login", user);
   'logUserAction("login", user);',
 ].join('\n')} lang="typescript" title="構造的部分型によるPII漏洩" />
 
-この問題は、特に開発が進んでしばらくしてから顕在化することが多いように感じます。最初は`LogPayload`専用のオブジェクトを`{ id: user.id, role: user.role }`のように明示的に構築していたのが、「`User`はどうせ`id`と`role`を持っているのだから直接渡せばいい」と誰かがスプレット構文でショートカットした瞬間に、`email`が静かにログに混入し始めます。後から`User`に`phoneNumber`フィールドが追加されても、型エラーは出てくれません。
-
 余剰プロパティチェックはオブジェクトリテラルの直接代入時にのみ例外的に発動する仕組みなので、変数やスプレッドを経由すれば効きません。スプレッド構文内のインラインオブジェクトリテラルでも余剰プロパティチェックを効かせてほしいという[要望](https://github.com/microsoft/TypeScript/issues/39998)はありますが、2026年4月時点では未対応です。
 
 ## Branded Typeでも防げない
@@ -141,12 +139,6 @@ safeLog({ ...user });
   '  console.log(JSON.stringify(data));',
   '}',
   '',
-  'type User = {',
-  '  id: string;',
-  '  role: string;',
-  '  email: Sensitive<string>;',
-  '};',
-  '',
   'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
   '',
   '// emailがSensitive<string>なのでneverに推論され、型エラーになる',
@@ -180,12 +172,6 @@ safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
   '  console.log(JSON.stringify(data));',
   '}',
   '',
-  'type User = {',
-  '  id: string;',
-  '  role: string;',
-  '  email: Sensitive<string>;',
-  '};',
-  '',
   'const user = { id: "1", role: "admin", email: "alice@example.com" as Sensitive<string> };',
   '',
   '// ↓ これは型エラーになる（コメントアウトを外して確認）',
@@ -200,13 +186,13 @@ safeLog({ id: user.id, role: user.role, email }); // 型エラーにならない
 
 そもそもBranded Typeはコンパイル時だけの概念で、ランタイムには何も残りません。`JSON.stringify`の出力に影響を与えることはなく、値は素の`string`としてそのままシリアライズされます。
 
-これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に「Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.」と明記されている通り、TypeScriptは意図的に完全なSound型システムではありません。型検査が通ったコードがランタイムで型通りに動く保証はないのです。
+これらの限界は個別のテクニックの問題ではなく、TypeScriptの設計思想に起因しています。[TypeScript Design Goals](https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals)のNon-goal #3に「Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.」と明記されている通り、TypeScriptは意図的に健全（sound）な型システムを目指していません。型検査が通ったコードがランタイムで型通りに動く保証はないのです。
 
 型レベルの防御は「ないよりはまし」ですが、すり抜けるパターンが構造的に存在し、すり抜けたときにランタイムでは何も守ってくれない以上、主防御にはなりえません。
 
 ## 値をシリアライズ不能にする: Sensitive型
 
-ここまで見てきた通り、型レベルの防御はコンパイル時のみでランタイムには何も残らないし、Zod stripのようなログ出力前のフィルタはランタイムで機能するものの呼び忘れたら無防備です。
+ここまで見てきた通り、型レベルの防御はコンパイル時のみでランタイムには何も残りません。
 
 そこで、値そのものをシリアライズ不能にしてしまうアプローチを考えます。ScalaではCirisの[`Secret`型](https://cir.is/)として既に確立されているパターンです。
 
@@ -301,7 +287,7 @@ sendEmail(user.email.unwrap());
   'console.log("unwrap:", user.email.unwrap());',
 ].join('\n')} lang="typescript" title="Sensitive型によるPII防御" collapsedRanges={[[1, 13]]} />
 
-このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Zod stripのような出口での防御は、ログ出力箇所ごとに毎回呼ぶ必要があり、呼び忘れの箇所が増えるほどリスクが高まります。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。適用箇所がフィールド定義の1箇所に集約されるので、出口N箇所に依存するアプローチより管理しやすいです。
+このアプローチのミソは、防御がデータ構造自体に組み込まれている点です。Sensitive型なら入口（ドメインモデル定義）で一度ラップすれば、出口で何もしなくても漏れません。
 
 Branded Typeとは違ってランタイムに実体を持つため、型検査をすり抜けてもシリアライズ時に値が漏れることはありません。ログ出力では`"[REDACTED]"`と表示されるので、「意図的にマスクされている」ことが明確に伝わりますし、障害調査で空オブジェクトと誤認されることもありません。
 
