@@ -24,5 +24,8 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      exclude: ['@swc/wasm-web'],
+    },
   },
 });

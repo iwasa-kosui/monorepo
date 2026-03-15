@@ -96,15 +96,15 @@ vulnerableMerge({}, raw);
 以下のプレイグラウンドで実際に動かして確認できます。
 
 <CodePlayground client:visible code={[
-  'const raw = JSON.parse(\'{"__proto__": {"polluted": true}, "name": "test"}\');',
+  'const raw: Record<string, unknown> = JSON.parse(\'{"__proto__": {"polluted": true}, "name": "test"}\');',
   'console.log("keys:", JSON.stringify(Object.keys(raw)));',
   'console.log("hasOwnProperty __proto__:", Object.prototype.hasOwnProperty.call(raw, "__proto__"));',
   '',
-  'function vulnerableMerge(target, source) {',
+  'function vulnerableMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {',
   '  for (const key in source) {',
   '    if (typeof source[key] === "object" && source[key] !== null) {',
   '      if (typeof target[key] !== "object") target[key] = {};',
-  '      vulnerableMerge(target[key], source[key]);',
+  '      vulnerableMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);',
   '    } else {',
   '      target[key] = source[key];',
   '    }',
@@ -113,8 +113,8 @@ vulnerableMerge({}, raw);
   '}',
   '',
   'vulnerableMerge({}, raw);',
-  'console.log("polluted:", ({}).polluted);',
-].join('\n')} lang="javascript" title="プロトタイプ汚染デモ" />
+  'console.log("polluted:", (({}) as Record<string, unknown>).polluted);',
+].join('\n')} lang="typescript" title="プロトタイプ汚染デモ (TypeScript)" />
 
 このような自前の再帰的merge関数を書くケースは現代では少ないかもしれませんが、プロトタイプ汚染は依然としてエコシステム全体で発生し続けている問題です。2025年には `devalue` パッケージの `parse` 関数でプロトタイプ汚染が発見され（[CVE-2025-57820](https://security.snyk.io/vuln/SNYK-JS-DEVALUE-12205530)）、2026年には `immutable` の `mergeDeep()` でも同様の脆弱性が報告されています（[CVE-2026-29063](https://github.com/advisories/GHSA-wf6x-7x77-mvgw)）。
 
