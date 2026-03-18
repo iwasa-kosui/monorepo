@@ -2,16 +2,11 @@ import { createClient } from '../client.js';
 import { printJson, stripHtml } from '../output.js';
 import { loadSession } from '../session.js';
 
-interface TimelineItem {
-  post: {
-    id: string;
-    content: string;
-    createdAt: string;
-  };
-  actor: {
-    name: string | null;
-    preferredUsername: string;
-  };
+interface DisplayItem {
+  postId: string;
+  content: string;
+  createdAt: string;
+  username: string;
 }
 
 export async function timelineCommand(args: string[]): Promise<void> {
@@ -56,29 +51,39 @@ export async function timelineCommand(args: string[]): Promise<void> {
 
   const items = extractItems(type, data);
   for (const item of items) {
-    const name = item.actor?.name ?? item.actor?.preferredUsername ?? 'unknown';
-    const content = stripHtml(item.post.content);
-    const time = new Date(item.post.createdAt).toLocaleString();
-    const handle = item.actor?.preferredUsername ? `@${item.actor.preferredUsername}` : '';
-    console.log(`[${time}] ${name} ${handle}`.trimEnd());
+    const content = stripHtml(item.content);
+    const time = new Date(item.createdAt).toLocaleString();
+    console.log(`[${time}] @${item.username}`);
     console.log(content);
-    console.log(`  id: ${item.post.id}`);
+    console.log(`  id: ${item.postId}`);
     console.log('---');
   }
 }
 
-// Each endpoint returns a different shape
-function extractItems(type: string, data: Record<string, unknown>): TimelineItem[] {
-  if (type === 'home') {
-    return (data.timelineItems ?? []) as TimelineItem[];
-  }
-  if (type === 'federated') {
-    return (data.items ?? []) as TimelineItem[];
+// Each endpoint returns a different shape; normalize to DisplayItem[]
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractItems(type: string, data: Record<string, any>): DisplayItem[] {
+  if (type === 'home' || type === 'federated') {
+    // home: { timelineItems: [{ post: PostWithAuthor, ... }] }
+    // federated: { items: [{ post: PostWithAuthor, ... }] }
+    const raw = (type === 'home' ? data.timelineItems : data.items) ?? [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return raw.map((item: any) => ({
+      postId: item.post.postId,
+      content: item.post.content,
+      createdAt: item.post.createdAt,
+      username: item.post.username,
+    }));
   }
   if (type === 'server') {
-    // server-timeline returns { posts: [{ content, id, createdAt, actor, ... }] }
-    // actor info may be nested differently
-    return (data.posts ?? []) as TimelineItem[];
+    // server-timeline: { posts: [PostWithAuthor] } (flat, no post nesting)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data.posts ?? []).map((post: any) => ({
+      postId: post.postId,
+      content: post.content,
+      createdAt: post.createdAt,
+      username: post.username,
+    }));
   }
   return [];
 }
