@@ -18,15 +18,33 @@ export function App({ client }: AppProps): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { exit } = useApp();
 
-  const { items, loading, error, reload, createPost, deletePost, toggleLike, toggleRepost } = useTimeline(client);
+  const {
+    items,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    reload,
+    loadMore,
+    createPost,
+    deletePost,
+    toggleLike,
+    toggleRepost,
+  } = useTimeline(client);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   const handleMoveDown = useCallback(() => {
-    setSelectedIndex((prev) => Math.min(prev + 1, items.length - 1));
-  }, [items.length]);
+    setSelectedIndex((prev) => {
+      const next = Math.min(prev + 1, items.length - 1);
+      if (next >= items.length - 3 && hasMore && !loadingMore) {
+        void loadMore();
+      }
+      return next;
+    });
+  }, [items.length, hasMore, loadingMore, loadMore]);
 
   const handleMoveUp = useCallback(() => {
     setSelectedIndex((prev) => Math.max(prev - 1, 0));
@@ -93,7 +111,7 @@ export function App({ client }: AppProps): React.ReactElement {
 
   return (
     <Box flexDirection='column'>
-      <Timeline items={items} selectedIndex={selectedIndex} />
+      <Timeline items={items} selectedIndex={selectedIndex} loadingMore={loadingMore} hasMore={hasMore} />
       {mode === 'compose' && <ComposeInput onSubmit={handleSubmitPost} onCancel={handleCancelCompose} />}
       <StatusBar mode={mode} error={error} />
     </Box>

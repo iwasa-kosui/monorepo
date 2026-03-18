@@ -42,7 +42,6 @@ export function PostItem({ item, isSelected }: PostItemProps): React.ReactElemen
           {'↻ '}
           {post.repostCount}
         </Text>
-        <Text dimColor>id:{post.postId}</Text>
       </Box>
     </Box>
   );

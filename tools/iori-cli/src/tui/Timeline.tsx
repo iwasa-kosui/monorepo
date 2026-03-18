@@ -7,12 +7,14 @@ import { PostItem } from './PostItem.js';
 interface TimelineProps {
   items: TimelineItemData[];
   selectedIndex: number;
+  loadingMore: boolean;
+  hasMore: boolean;
 }
 
 const LINES_PER_ITEM = 5;
 const RESERVED_LINES = 4;
 
-export function Timeline({ items, selectedIndex }: TimelineProps): React.ReactElement {
+export function Timeline({ items, selectedIndex, loadingMore, hasMore }: TimelineProps): React.ReactElement {
   const { stdout } = useStdout();
   const terminalRows = stdout?.rows ?? 24;
 
@@ -47,6 +49,7 @@ export function Timeline({ items, selectedIndex }: TimelineProps): React.ReactEl
       })}
       <Text dimColor>
         {selectedIndex + 1}/{items.length}
+        {loadingMore ? ' 読み込み中...' : !hasMore ? ' (末尾)' : ''}
       </Text>
     </Box>
   );

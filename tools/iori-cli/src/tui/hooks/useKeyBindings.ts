@@ -1,4 +1,5 @@
 import { useInput } from 'ink';
+import { useRef } from 'react';
 
 interface KeyBindingsOptions {
   isActive: boolean;
@@ -13,8 +14,18 @@ interface KeyBindingsOptions {
 }
 
 export function useKeyBindings(opts: KeyBindingsOptions): void {
+  const pendingG = useRef(false);
+
   useInput((input, key) => {
     if (!opts.isActive) return;
+
+    if (pendingG.current) {
+      pendingG.current = false;
+      if (input === 'g') {
+        opts.onReload();
+        return;
+      }
+    }
 
     if (input === 'j' || key.downArrow) {
       opts.onMoveDown();
@@ -28,8 +39,8 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       opts.onLike();
     } else if (input === 'R') {
       opts.onRepost();
-    } else if (input === 'r') {
-      opts.onReload();
+    } else if (input === 'g') {
+      pendingG.current = true;
     } else if (input === 'q') {
       opts.onQuit();
     }

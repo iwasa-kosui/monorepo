@@ -6,31 +6,65 @@ import type { HomeTimelineResponse, TimelineItemData } from '../../types.js';
 interface UseTimelineResult {
   items: TimelineItemData[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  loadMore: () => Promise<void>;
   createPost: (content: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   toggleLike: (index: number) => Promise<void>;
   toggleRepost: (index: number) => Promise<void>;
 }
 
+const PAGE_SIZE = 10;
+
 export function useTimeline(client: Client): UseTimelineResult {
   const [items, setItems] = useState<TimelineItemData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setHasMore(true);
     try {
       const data = await client.get<HomeTimelineResponse>('/api/v1/home');
       setItems(data.timelineItems);
+      if (data.timelineItems.length < PAGE_SIZE) {
+        setHasMore(false);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }, [client]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || items.length === 0) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const lastItem = items[items.length - 1];
+      const createdAt = new Date(lastItem.createdAt).getTime();
+      const data = await client.get<HomeTimelineResponse>('/api/v1/home', {
+        createdAt: String(createdAt),
+      });
+      if (data.timelineItems.length < PAGE_SIZE) {
+        setHasMore(false);
+      }
+      if (data.timelineItems.length > 0) {
+        setItems((cur) => [...cur, ...data.timelineItems]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [client, items, loadingMore, hasMore]);
 
   const createPost = useCallback(async (content: string) => {
     try {
@@ -144,5 +178,17 @@ export function useTimeline(client: Client): UseTimelineResult {
     }
   }, [client, items]);
 
-  return { items, loading, error, reload, createPost, deletePost, toggleLike, toggleRepost };
+  return {
+    items,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    reload,
+    loadMore,
+    createPost,
+    deletePost,
+    toggleLike,
+    toggleRepost,
+  };
 }

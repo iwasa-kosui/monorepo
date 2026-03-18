@@ -14,7 +14,7 @@ export function StatusBar({ mode, error }: StatusBarProps): React.ReactElement {
       {error && <Text color='red'>{error}</Text>}
       <Text dimColor>
         {mode === 'normal'
-          ? 'j/k:移動 a:投稿 d:削除 L:Like R:Repost r:リロード q:終了'
+          ? 'j/k:移動 a:投稿 d:削除 L:Like R:Repost gg:リロード q:終了'
           : 'Enter:送信 Esc:キャンセル'}
       </Text>
     </Box>
