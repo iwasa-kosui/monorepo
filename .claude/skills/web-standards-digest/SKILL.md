@@ -5,7 +5,7 @@ description: |
   WinterTC, Node.js, TypeScript, ECMAScript, Deno, Bun, V8, Hono, Effect, Zod など
   Web 標準・ランタイム・サーバサイドTSエコシステムの直近1ヶ月の動向を
   サブエージェントで並行調査し、private な MDX 記事として出力するスキル。
-  GitHub Actions から呼ばれた場合は Draft PR も作成する。
+  Draft PR も作成する。
 allowed-tools: WebSearch, WebFetch, Agent, Write, Read, Glob, Bash
 ---
 
@@ -79,9 +79,7 @@ private: true
 - Web Standards Digest の結果のみを記載する（他カテゴリは後で手動追記する前提）
 - 横断的な注目トピックがあれば冒頭の概要に含める
 
-### ステップ3: Draft PR の作成（GitHub Actions 環境の場合のみ）
-
-環境変数 `GITHUB_ACTIONS` が設定されている場合のみ実行する。ローカル実行時はスキップする。
+### ステップ3: Draft PR の作成
 
 Bash ツールで以下を実行する:
 
