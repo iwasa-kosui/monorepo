@@ -1,4 +1,8 @@
 import { Box, Text, useApp } from 'ink';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import type { Client } from '../client.js';
@@ -75,6 +79,26 @@ export function App({ client }: AppProps): React.ReactElement {
     }
   }, [tab]);
 
+  const handleEditorCompose = useCallback(() => {
+    if (tab !== 'timeline') return;
+    const editor = process.env['EDITOR'] || 'vi';
+    const dir = mkdtempSync(join(tmpdir(), 'iori-'));
+    const filePath = join(dir, 'post.md');
+    writeFileSync(filePath, '', 'utf-8');
+    try {
+      process.stdin.setRawMode?.(false);
+      const result = spawnSync(editor, [filePath], { stdio: 'inherit' });
+      process.stdin.setRawMode?.(true);
+      if (result.status !== 0) return;
+      const content = readFileSync(filePath, 'utf-8').trim();
+      if (content) {
+        void createPost(content);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, [tab, createPost]);
+
   const handleDelete = useCallback(() => {
     if (tab !== 'timeline') return;
     const item = tlItems[tlSelectedIndex];
@@ -127,6 +151,7 @@ export function App({ client }: AppProps): React.ReactElement {
     onMoveDown: handleMoveDown,
     onMoveUp: handleMoveUp,
     onCompose: handleCompose,
+    onEditorCompose: handleEditorCompose,
     onDelete: handleDelete,
     onLike: handleLike,
     onRepost: handleRepost,

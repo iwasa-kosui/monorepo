@@ -6,6 +6,7 @@ interface KeyBindingsOptions {
   onMoveDown: () => void;
   onMoveUp: () => void;
   onCompose: () => void;
+  onEditorCompose: () => void;
   onDelete: () => void;
   onLike: () => void;
   onRepost: () => void;
@@ -32,6 +33,8 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       opts.onMoveDown();
     } else if (input === 'k' || key.upArrow) {
       opts.onMoveUp();
+    } else if (input === 'e') {
+      opts.onEditorCompose();
     } else if (input === 'a') {
       opts.onCompose();
     } else if (input === 'd') {
