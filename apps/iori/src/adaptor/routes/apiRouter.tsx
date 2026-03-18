@@ -18,6 +18,7 @@ import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import { Federation } from '../../federation.ts';
 import { CreateMuteUseCase } from '../../useCase/createMute.ts';
+import { CreatePostUseCase } from '../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { GetFederatedTimelineUseCase } from '../../useCase/getFederatedTimeline.ts';
@@ -42,6 +43,7 @@ import { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { FedifyRemoteActorLookup } from '../fedify/remoteActorLookup.ts';
+import { createOgpFetcher } from '../ogp/ogpFetcher.ts';
 import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -61,6 +63,7 @@ import { PgLikedPostsResolverByActorId } from '../pg/like/likedPostsResolverByAc
 import { PgLikeResolver } from '../pg/like/likeResolver.ts';
 import { PgLocalLikeCreatedStore } from '../pg/like/localLikeCreatedStore.ts';
 import { PgLocalLikeDeletedStore } from '../pg/like/localLikeDeletedStore.ts';
+import { PgLinkPreviewCreatedStore } from '../pg/linkPreview/linkPreviewCreatedStore.ts';
 import { PgMuteCreatedStore } from '../pg/mute/muteCreatedStore.ts';
 import { PgMutedActorIdsResolverByUserId } from '../pg/mute/mutedActorIdsResolverByUserId.ts';
 import { PgMuteDeletedStore } from '../pg/mute/muteDeletedStore.ts';
@@ -77,6 +80,7 @@ import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { PgAcceptedRelaysResolver } from '../pg/relay/acceptedRelaysResolver.ts';
 import { PgAllRelaysResolver } from '../pg/relay/allRelaysResolver.ts';
 import { PgRelayResolverByActorUri } from '../pg/relay/relayResolverByActorUri.ts';
 import { PgRelaySubscriptionRequestedStore } from '../pg/relay/relaySubscriptionRequestedStore.ts';
@@ -614,6 +618,55 @@ const app = new Hono()
       filename,
     });
   })
+  .post(
+    '/v1/posts',
+    sValidator(
+      'json',
+      z.object({
+        content: z.string().min(1),
+        imageUrls: z.optional(z.array(z.string())),
+      }),
+    ),
+    async (c) => {
+      const sessionId = getCookie(c, 'sessionId');
+      if (!sessionId) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      const sessionIdResult = SessionId.parse(sessionId);
+      if (!sessionIdResult.ok) {
+        return c.json({ error: 'Invalid session' }, 401);
+      }
+
+      const useCase = CreatePostUseCase.create({
+        sessionResolver: PgSessionResolver.getInstance(),
+        postCreatedStore: PgPostCreatedStore.getInstance(),
+        userResolver: PgUserResolver.getInstance(),
+        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
+        timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+        linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
+        ogpFetcher: createOgpFetcher(),
+        acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
+      });
+
+      const { content, imageUrls } = c.req.valid('json');
+      const postContent = await PostContent.fromMarkdown(content);
+
+      return RA.flow(
+        useCase.run({
+          sessionId: SessionId.orThrow(sessionId),
+          content: postContent,
+          imageUrls: imageUrls ?? [],
+          ctx: Federation.getInstance().createContext(c.req.raw, undefined),
+        }),
+        RA.match({
+          ok: () => c.json({ success: true }),
+          err: (err) => c.json({ error: `Failed to create post: ${JSON.stringify(err)}` }, 400),
+        }),
+      );
+    },
+  )
   .delete('/v1/posts/:postId', async (c) => {
     const postIdParam = c.req.param('postId');
     const postIdResult = PostId.parse(postIdParam);

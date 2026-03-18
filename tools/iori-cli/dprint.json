@@ -1,0 +1,4 @@
+{
+  "extends": "../../dprint.json",
+  "includes": ["src/**/*.ts", "*.json", "*.mjs"]
+}
