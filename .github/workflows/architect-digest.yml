@@ -1,0 +1,81 @@
+name: Architect Digest
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  digest:
+    if: github.actor == 'iwasa-kosui'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(TZ=Asia/Tokyo date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: >-
+            --allowedTools
+            WebSearch
+            WebFetch
+            Agent
+            Write
+            Read
+            Glob
+            Grep
+            Bash
+            Skill
+          prompt: |
+            今日は ${{ steps.date.outputs.date }} です。
+
+            以下の手順でArchitect Digestを作成し、Draft PRを発行してください。
+
+            ## 手順1: 調査
+
+            architect-digest スキルを Skill ツールで実行し、直近1ヶ月のソフトウェアアーキテクチャ関連の動向を調査してください。
+
+            ## 手順2: MDX記事の作成
+
+            調査結果をもとに、以下のパスにMDX記事を作成してください:
+            `apps/kosui-me/src/content/posts/${{ steps.date.outputs.date }}-architect-digest.mdx`
+
+            ### 記事フォーマット
+
+            既存記事 `apps/kosui-me/src/content/posts/2026-03-08-weekly-tech-digest.mdx` のスタイルを参考にしてください。
+
+            frontmatterは以下の形式:
+            ```
+            ---
+            title: "Architect Digest: ${{ steps.date.outputs.date }}"
+            date: "${{ steps.date.outputs.date }}T12:00:00+09:00"
+            slug: "posts/YYYY/MM/DD/architect-digest"
+            description: "（調査内容に基づく要約を記述）"
+            tags: ["Architect"]
+            private: true
+            ---
+            ```
+
+            slugの YYYY/MM/DD は実際の日付に置き換えてください。
+
+            記事本文の書き方:
+            - 冒頭に2〜3文の概要を書く
+            - セクション見出し（##）でカテゴリ分け（設計パターン、Cloud Native、Platform Engineeringなど）
+            - 各トピックは ### で見出しをつけ、リンクを貼り、箇条書きで要点をまとめる
+
+            ## 手順3: Draft PRの作成
+
+            Bashツールで以下を実行してください:
+            1. ブランチ `architect-digest/${{ steps.date.outputs.date }}` を作成してチェックアウト
+            2. 作成したMDXファイルをコミット（メッセージ: `feat(kosui-me): add Architect Digest ${{ steps.date.outputs.date }}`、Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>）
+            3. リモートにプッシュ
+            4. gh pr create でDraft PRを作成（タイトル: `feat(kosui-me): Architect Digest ${{ steps.date.outputs.date }}`）
