@@ -1,5 +1,5 @@
 import { Box, Text, useStdout } from 'ink';
-import React, { useMemo } from 'react';
+import React from 'react';
 
 import type { TimelineItemData } from '../types.js';
 import { PostItem } from './PostItem.js';
@@ -20,15 +20,7 @@ export function Timeline({ items, selectedIndex, loadingMore, hasMore }: Timelin
 
   const visibleCount = Math.max(1, Math.floor((terminalRows - RESERVED_LINES) / LINES_PER_ITEM));
 
-  const viewportStart = useMemo(() => {
-    if (selectedIndex < Math.floor(visibleCount / 2)) {
-      return 0;
-    }
-    if (selectedIndex > items.length - Math.ceil(visibleCount / 2)) {
-      return Math.max(0, items.length - visibleCount);
-    }
-    return selectedIndex - Math.floor(visibleCount / 2);
-  }, [selectedIndex, items.length, visibleCount]);
+  const viewportStart = selectedIndex;
 
   const visibleItems = items.slice(viewportStart, viewportStart + visibleCount);
 
