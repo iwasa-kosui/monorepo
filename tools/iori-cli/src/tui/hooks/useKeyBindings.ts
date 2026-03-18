@@ -10,6 +10,7 @@ interface KeyBindingsOptions {
   onLike: () => void;
   onRepost: () => void;
   onReload: () => void;
+  onTabSwitch: () => void;
   onQuit: () => void;
 }
 
@@ -41,6 +42,8 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       opts.onRepost();
     } else if (input === 'g') {
       pendingG.current = true;
+    } else if (key.tab) {
+      opts.onTabSwitch();
     } else if (input === 'q') {
       opts.onQuit();
     }

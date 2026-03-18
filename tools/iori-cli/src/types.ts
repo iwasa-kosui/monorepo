@@ -39,3 +39,27 @@ export interface HomeTimelineResponse {
 }
 
 export type Mode = 'normal' | 'compose';
+
+export type Tab = 'timeline' | 'notifications';
+
+export interface NotificationActor {
+  username: string;
+  url?: string;
+}
+
+export interface NotificationItemData {
+  notification: {
+    notification: {
+      type: string;
+    };
+    likerActor?: NotificationActor;
+    followerActor?: NotificationActor;
+    replierActor?: NotificationActor;
+    createdAt: number;
+  };
+  sanitizedContent: string;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItemData[];
+}

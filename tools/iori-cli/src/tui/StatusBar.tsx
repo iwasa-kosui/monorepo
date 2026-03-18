@@ -1,21 +1,39 @@
 import { Box, Text } from 'ink';
 import React from 'react';
 
-import type { Mode } from '../types.js';
+import type { Mode, Tab } from '../types.js';
 
 interface StatusBarProps {
   mode: Mode;
+  tab: Tab;
   error: string | null;
 }
 
-export function StatusBar({ mode, error }: StatusBarProps): React.ReactElement {
+function normalModeHelp(tab: Tab): string {
+  if (tab === 'timeline') {
+    return 'j/k:移動 a:投稿 d:削除 L:Like R:Repost gg:リロード Tab:通知 q:終了';
+  }
+  return 'j/k:移動 gg:リロード Tab:タイムライン q:終了';
+}
+
+export function StatusBar({ mode, tab, error }: StatusBarProps): React.ReactElement {
   return (
     <Box flexDirection='column'>
+      <Box gap={1}>
+        <Text color={tab === 'timeline' ? 'cyan' : undefined} bold={tab === 'timeline'} inverse={tab === 'timeline'}>
+          {' タイムライン '}
+        </Text>
+        <Text
+          color={tab === 'notifications' ? 'cyan' : undefined}
+          bold={tab === 'notifications'}
+          inverse={tab === 'notifications'}
+        >
+          {' 通知 '}
+        </Text>
+      </Box>
       {error && <Text color='red'>{error}</Text>}
       <Text dimColor>
-        {mode === 'normal'
-          ? 'j/k:移動 a:投稿 d:削除 L:Like R:Repost gg:リロード q:終了'
-          : 'Enter:送信 Esc:キャンセル'}
+        {mode === 'normal' ? normalModeHelp(tab) : 'Enter:送信 Esc:キャンセル'}
       </Text>
     </Box>
   );

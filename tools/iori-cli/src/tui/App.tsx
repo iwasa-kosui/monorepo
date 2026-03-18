@@ -2,10 +2,12 @@ import { Box, Text, useApp } from 'ink';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import type { Client } from '../client.js';
-import type { Mode } from '../types.js';
+import type { Mode, Tab } from '../types.js';
 import { ComposeInput } from './ComposeInput.js';
 import { useKeyBindings } from './hooks/useKeyBindings.js';
+import { useNotifications } from './hooks/useNotifications.js';
 import { useTimeline } from './hooks/useTimeline.js';
+import { NotificationList } from './NotificationList.js';
 import { StatusBar } from './StatusBar.js';
 import { Timeline } from './Timeline.js';
 
@@ -15,16 +17,18 @@ interface AppProps {
 
 export function App({ client }: AppProps): React.ReactElement {
   const [mode, setMode] = useState<Mode>('normal');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [tab, setTab] = useState<Tab>('timeline');
+  const [tlSelectedIndex, setTlSelectedIndex] = useState(0);
+  const [notifSelectedIndex, setNotifSelectedIndex] = useState(0);
   const { exit } = useApp();
 
   const {
-    items,
-    loading,
+    items: tlItems,
+    loading: tlLoading,
     loadingMore,
     hasMore,
-    error,
-    reload,
+    error: tlError,
+    reload: tlReload,
     loadMore,
     createPost,
     deletePost,
@@ -32,50 +36,87 @@ export function App({ client }: AppProps): React.ReactElement {
     toggleRepost,
   } = useTimeline(client);
 
+  const {
+    items: notifItems,
+    loading: notifLoading,
+    error: notifError,
+    reload: notifReload,
+  } = useNotifications(client);
+
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void tlReload();
+  }, [tlReload]);
 
   const handleMoveDown = useCallback(() => {
-    setSelectedIndex((prev) => {
-      const next = Math.min(prev + 1, items.length - 1);
-      if (next >= items.length - 3 && hasMore && !loadingMore) {
-        void loadMore();
+    if (tab === 'timeline') {
+      setTlSelectedIndex((prev) => {
+        const next = Math.min(prev + 1, tlItems.length - 1);
+        if (next >= tlItems.length - 3 && hasMore && !loadingMore) {
+          void loadMore();
+        }
+        return next;
+      });
+    } else {
+      setNotifSelectedIndex((prev) => Math.min(prev + 1, notifItems.length - 1));
+    }
+  }, [tab, tlItems.length, hasMore, loadingMore, loadMore, notifItems.length]);
+
+  const handleMoveUp = useCallback(() => {
+    if (tab === 'timeline') {
+      setTlSelectedIndex((prev) => Math.max(prev - 1, 0));
+    } else {
+      setNotifSelectedIndex((prev) => Math.max(prev - 1, 0));
+    }
+  }, [tab]);
+
+  const handleCompose = useCallback(() => {
+    if (tab === 'timeline') {
+      setMode('compose');
+    }
+  }, [tab]);
+
+  const handleDelete = useCallback(() => {
+    if (tab !== 'timeline') return;
+    const item = tlItems[tlSelectedIndex];
+    if (item) {
+      void deletePost(item.post.postId);
+      if (tlSelectedIndex >= tlItems.length - 1 && tlSelectedIndex > 0) {
+        setTlSelectedIndex(tlSelectedIndex - 1);
+      }
+    }
+  }, [tab, tlItems, tlSelectedIndex, deletePost]);
+
+  const handleLike = useCallback(() => {
+    if (tab === 'timeline') {
+      void toggleLike(tlSelectedIndex);
+    }
+  }, [tab, tlSelectedIndex, toggleLike]);
+
+  const handleRepost = useCallback(() => {
+    if (tab === 'timeline') {
+      void toggleRepost(tlSelectedIndex);
+    }
+  }, [tab, tlSelectedIndex, toggleRepost]);
+
+  const handleReload = useCallback(() => {
+    if (tab === 'timeline') {
+      setTlSelectedIndex(0);
+      void tlReload();
+    } else {
+      setNotifSelectedIndex(0);
+      void notifReload();
+    }
+  }, [tab, tlReload, notifReload]);
+
+  const handleTabSwitch = useCallback(() => {
+    setTab((prev) => {
+      const next = prev === 'timeline' ? 'notifications' : 'timeline';
+      if (next === 'notifications' && notifItems.length === 0 && !notifLoading) {
+        void notifReload();
       }
       return next;
     });
-  }, [items.length, hasMore, loadingMore, loadMore]);
-
-  const handleMoveUp = useCallback(() => {
-    setSelectedIndex((prev) => Math.max(prev - 1, 0));
-  }, []);
-
-  const handleCompose = useCallback(() => {
-    setMode('compose');
-  }, []);
-
-  const handleDelete = useCallback(() => {
-    const item = items[selectedIndex];
-    if (item) {
-      void deletePost(item.post.postId);
-      if (selectedIndex >= items.length - 1 && selectedIndex > 0) {
-        setSelectedIndex(selectedIndex - 1);
-      }
-    }
-  }, [items, selectedIndex, deletePost]);
-
-  const handleLike = useCallback(() => {
-    void toggleLike(selectedIndex);
-  }, [selectedIndex, toggleLike]);
-
-  const handleRepost = useCallback(() => {
-    void toggleRepost(selectedIndex);
-  }, [selectedIndex, toggleRepost]);
-
-  const handleReload = useCallback(() => {
-    setSelectedIndex(0);
-    void reload();
-  }, [reload]);
+  }, [notifItems.length, notifLoading, notifReload]);
 
   const handleQuit = useCallback(() => {
     exit();
@@ -90,6 +131,7 @@ export function App({ client }: AppProps): React.ReactElement {
     onLike: handleLike,
     onRepost: handleRepost,
     onReload: handleReload,
+    onTabSwitch: handleTabSwitch,
     onQuit: handleQuit,
   });
 
@@ -105,15 +147,21 @@ export function App({ client }: AppProps): React.ReactElement {
     setMode('normal');
   }, []);
 
-  if (loading && items.length === 0) {
+  const loading = tab === 'timeline' ? tlLoading : notifLoading;
+  const error = tab === 'timeline' ? tlError : notifError;
+  const currentItems = tab === 'timeline' ? tlItems : notifItems;
+
+  if (loading && currentItems.length === 0) {
     return <Text>読み込み中...</Text>;
   }
 
   return (
     <Box flexDirection='column'>
-      <Timeline items={items} selectedIndex={selectedIndex} loadingMore={loadingMore} hasMore={hasMore} />
+      {tab === 'timeline'
+        ? <Timeline items={tlItems} selectedIndex={tlSelectedIndex} loadingMore={loadingMore} hasMore={hasMore} />
+        : <NotificationList items={notifItems} selectedIndex={notifSelectedIndex} />}
       {mode === 'compose' && <ComposeInput onSubmit={handleSubmitPost} onCancel={handleCancelCompose} />}
-      <StatusBar mode={mode} error={error} />
+      <StatusBar mode={mode} tab={tab} error={error} />
     </Box>
   );
 }
