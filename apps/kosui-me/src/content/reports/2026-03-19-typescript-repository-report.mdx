@@ -1,0 +1,110 @@
+---
+title: "TypeScript本体リポジトリ 直近3ヶ月の動向レポート（2026年1月〜3月）"
+date: "2026-03-19T18:00:00+09:00"
+slug: "2026/03/19/typescript-repository-report"
+description: "TypeScript 6.0のRC公開、Go言語による7.0ネイティブポートの急速な進展、strict: trueのデフォルト化やES5非推奨など大規模な破壊的変更。15年の歴史で最大の転換期にあるTypeScriptリポジトリの直近3ヶ月を詳報。"
+tags: ["TypeScript", "OSS"]
+---
+
+TypeScriptは15年の歴史で最大の転換期にある。JavaScript版コンパイラの最終メジャーリリースとなる6.0がRC段階に達し、Go言語で書き直された7.0（Project Corsa）が並行して急速に機能充実している。この3ヶ月間で何が起きているのかを、リリース状況・コントリビューター・注目PR・課題の4軸で整理する。
+
+## リリース状況
+
+### TypeScript 6.0 — JavaScript版の最後
+
+TypeScript 6.0は2026年2月18日にBeta、3月6日にRCが公開された。GAは3月17日の予定。JavaScript版コンパイラとしては最後のメジャーリリースとなる。
+
+デフォルト値の変更が最大のトピックで、`strict`が`true`に、`target`が`es2025`に、`module`が`esnext`に、`types`が`[]`（空配列）にそれぞれ変更された。新規プロジェクトでは`tsconfig.json`に`strict: true`を書かなくてもstrictモードが有効になる。
+
+非推奨・削除も大規模に行われた。`target: es5`、`--downlevelIteration`、`--moduleResolution node10`/`classic`、`--outFile`、`amd`/`umd`/`systemjs`モジュール、`import assert`構文（`with`キーワードへ移行）などが対象で、`"ignoreDeprecations": "6.0"`を設定すれば動作は続くが、7.0では完全削除される。
+
+新機能としては、Node.jsのsubpath imports（`#/`プレフィックス）サポート、Stage 3 Temporal APIの組み込み型、`RegExp.escape()`やMap/WeakMap upsertメソッドの型定義、`es2025`ターゲット、Go版との差異診断用`--stableTypeOrdering`フラグが追加された。
+
+チームは6.0を明確にメンテナンスモードと位置づけており、コミュニティPRの大半はマージしない方針を表明している（[#62963](https://github.com/microsoft/TypeScript/issues/62963)）。2つのコードベースの並行メンテナンスは現実的でないという判断だ。
+
+### TypeScript 7.0（Project Corsa）— Go版コンパイラ
+
+Go言語で書き直されたコンパイラで、ビルド時間最大10倍高速化、メモリ使用量約50%削減を実現する。VS Codeのコードベース（150万行）でプロジェクト読み込みが9.6秒から1.2秒に改善された実績がある。
+
+2026年1月15日にstable版が公開済みで、コンパイラコア（パース・バインディング・型チェック）は完了している。JavaScript emitは作業中。約20,000のテストケースのうちエラーを出すべき約6,000ケースで74件を除きパリティを達成した。
+
+LSP（Language Server Protocol）を標準採用し、TSServer独自プロトコルから脱却する方向。TypeScript 6.1は予定されておらず、6.0.xパッチのみで次は7.0になる。
+
+## 活躍しているコントリビューター
+
+### Microsoftチーム
+
+**Jake Bailey (jakebailey)** が圧倒的に最もアクティブで、33コミット・約24PRをマージした。ES5ターゲットのデフォルト廃止、`import assert`の非推奨化、`downlevelIteration`の非推奨化など、7.0に向けた破壊的変更の準備を主導している。テストインフラの整備やリリースエンジニアリング（release-6.0ブランチへのチェリーピック）も担当しており、6.0リリースの実質的なドライバーと言える。
+
+**Daniel Rosenwasser (DanielRosenwasser)** は12コミット・約10PRで、`--strict`のデフォルトを`true`にする変更を実施した。これに伴う大量のfourslashテスト修正（strict化対応・`noImplicitAny`準備・strict initialization更新）を複数PRにわたって処理している。
+
+**Ryan Cavanaugh (RyanCavanaugh)** は7コミット・3PRで、`--outFile`の非推奨化、`alwaysStrict: false`の非推奨化、`types`デフォルトの`[]`化と`"*"`ワイルドカードサポートの追加を担当した。
+
+**Anders Hejlsberg (ahejlsberg)** はコミット数こそ2件だが、型チェッカーのクラッシュ修正（abstractプロパティチェック時・mixinチェック時）と、typescript-goでの`getLiteralTypeFromProperties`計算キャッシュによるパフォーマンス最適化PRを出している。TypeScript言語設計者本人がGo版のパフォーマンスチューニングに直接関与している点は注目に値する。
+
+**Andrew Branch (andrewbranch)** はTypeScript本体側では1コミットのみだが、typescript-goでauto-importインフラの完全再設計（[#2390](https://github.com/microsoft/TypeScript-go/pull/2390)）を行っており、Go版の開発にリソースを集中させている。
+
+**Sheetal Kamat (sheetalkamat)** は`rootDir`のデフォルト変更とLanguage Server側の修正を担当した。
+
+### コミュニティコントリビューター
+
+**Andarist (Mateusz Burzynski)** が突出した貢献をしている。React/Emotionエコシステムでも知られる人物で、型チェッカーのクラッシュ修正を複数件（`getEffectsSignature`の循環再入・ジェネリックmapped typeのindex type deferral・unreachable code diagnosticのノード欠損時のクラッシュ）行い、`never`型のdiscriminant判定改善も実装した。いずれもコア型システムの堅牢性向上に寄与する高品質な修正。
+
+**Renegade334** はTemporal APIの型定義（`lib.esnext.temporal`）、Map upsertメソッドの型定義追加など、新しいES仕様の型定義追加に特化して3PRをマージしている。
+
+**AlCalzone** はtypescript-go側でESデコレータ変換の実装（[#2926](https://github.com/microsoft/TypeScript-go/pull/2926)）を行った。tsgo採用のブロッカーだった機能で、本人のコメントによるとClaude Opusを使って移植作業を行ったとのこと。
+
+**petamoriken** はES2025ターゲットの導入とScriptTargetFeaturesの追加を行い、コミュニティからの反応が非常に大きかった。
+
+**GitHub Copilot** がPR作者として約5件のPRをマージしている点も特筆に値する。typescript-goからのバグ修正ポート、declaration emitのクラッシュ修正などで、MSチームメンバーがCopilotを使ってPRを作成・提出している形態と推測される。
+
+## 注目すべきPR
+
+### TypeScript本体
+
+- [#63087](https://github.com/microsoft/TypeScript/pull/63087): `--strict`のデフォルトを`true`に変更（DanielRosenwasser）。リアクション数最多で最もインパクトの大きい変更
+- [#63067](https://github.com/microsoft/TypeScript/pull/63067): `target`のデフォルトを最新標準ESに変更しES5を非推奨化（jakebailey）
+- [#63054](https://github.com/microsoft/TypeScript/pull/63054): `types`のデフォルトを`[]`に変更し`"*"`ワイルドカードをサポート（RyanCavanaugh）
+- [#63046](https://github.com/microsoft/TypeScript/pull/63046): ES2025ターゲットの導入（petamoriken）。リアクション27件
+- [#62628](https://github.com/microsoft/TypeScript/pull/62628): `lib.esnext.temporal`の追加（Renegade334）。リアクション23件
+- [#63084](https://github.com/microsoft/TypeScript/pull/63084): `--stableTypeOrdering`フラグの追加（jakebailey）。Go版との互換性確認用
+- [#63172](https://github.com/microsoft/TypeScript/pull/63172): `import assert`構文の非推奨化（jakebailey）
+
+### TypeScript-go
+
+- [#2926](https://github.com/microsoft/TypeScript-go/pull/2926): ESデコレータ変換の実装（AlCalzone）。tsgo採用のブロッカーを解消
+- [#2390](https://github.com/microsoft/TypeScript-go/pull/2390): auto-importインフラの再設計（andrewbranch）。並列化を活かした新アーキテクチャ
+- [#2343](https://github.com/microsoft/TypeScript-go/pull/2343): `--experimentalDecorators`と`--emitDecoratorMetadata`の実装（weswigham）
+- [#3053](https://github.com/microsoft/TypeScript-go/pull/3053): リンク編集のポート（iisaduan）
+
+## 直面している課題
+
+### エコシステム互換性
+
+typescript-goで最も深刻な未解決課題はエコシステムの互換性だ。Yarn PnPサポート（[#460](https://github.com/microsoft/TypeScript-go/issues/460)、リアクション101）、Jestサポート（[#464](https://github.com/microsoft/TypeScript-go/issues/464)、リアクション34）、Transformer Plugin / Compiler API（[#516](https://github.com/microsoft/TypeScript-go/issues/516)、リアクション35）がいずれも未実装で、既存ツールチェーンの移行パスが不透明な状態にある。
+
+Vue SFCやSvelteなどのEmbedded JavaScript/TypeScriptサポート（[#648](https://github.com/microsoft/TypeScript-go/issues/648)、リアクション100）も重要課題で、フレームワークエコシステムへの影響が大きい。
+
+エディタ拡張向けAPI（[#2824](https://github.com/microsoft/TypeScript-go/issues/2824)）のパターンも議論中で、ESLintやPrettier統合など既存のTypeScript Language Service APIに依存するツール群の移行が課題になっている。
+
+### 大規模プロジェクトでの安定性
+
+pnpmモノレポでの高メモリ消費（[#2780](https://github.com/microsoft/TypeScript-go/issues/2780)、コメント37件）が報告されている。言語サーバのエラーも複数報告されており、Go版のプロダクション安定性はまだ発展途上。
+
+JavaScript版でもこの3ヶ月で複数のスタックオーバーフロークラッシュが報告された。ループ内で再代入される変数の型推論（[#63192](https://github.com/microsoft/TypeScript/issues/63192)）、再帰的タプルrest型のintersection（[#63040](https://github.com/microsoft/TypeScript/issues/63040)）、深くネストされた条件型でtsserverが無限ハング（[#63207](https://github.com/microsoft/TypeScript/issues/63207)）などだ。
+
+### 6.0移行の痛み
+
+GoogleとBloombergがフィードバックを提出している。Googleは影響を受けるライブラリが全体の0.1%未満で重大な困難はないと報告したが、7.0の非推奨化については懸念を表明した（[#63214](https://github.com/microsoft/TypeScript/issues/63214)）。Bloombergは`moduleResolution: node`から`bundler`への移行で問題が発生し、JSONの宣言ファイル拡張子（`.json.d.ts` vs `.d.json.ts`）の互換性問題を報告している（[#63245](https://github.com/microsoft/TypeScript/issues/63245)）。
+
+### 長年の型システム要望
+
+Exact Types（[#12936](https://github.com/microsoft/TypeScript/issues/12936)、2016年起票・コメント307件）、Higher-Kinded Types（[#1213](https://github.com/microsoft/TypeScript/issues/1213)、2014年起票・コメント183件）、Class Decorator Mutation（[#4881](https://github.com/microsoft/TypeScript/issues/4881)、2015年起票・コメント287件）など、コミュニティが何年も待ち望んでいる機能が、ネイティブポートへのリソース集中によりさらに後回しになる可能性が高い。
+
+## 総括
+
+この3ヶ月間のTypeScript開発は、6.0のデフォルト値刷新による技術的負債の清算と、7.0（Go版）への移行準備が二本柱だ。Jake BaileyとDaniel Rosenwasserが6.0の破壊的変更を主導し、Anders HejlsbergとAndrew Branchがtypescript-go側に注力するという分業体制が明確になっている。
+
+コミュニティ側ではAndaristによる型チェッカーコアのクラッシュ修正が光り、AlCalzoneのESデコレータ移植のようにAIコーディングアシスタントを活用した大規模コントリビューションも出現している。GitHub Copilotが直接PR作者として登場する形態も定着しつつある。
+
+課題は明確で、Go版のエコシステム互換性（Yarn PnP・Jest・カスタムTransformer・Vue/Svelte対応）の確保が7.0の実用化に向けた最大のボトルネックだ。6.0の破壊的変更も短期的な移行コストを伴うが、GoogleやBloombergのフィードバックを見る限り、大企業レベルでは管理可能な範囲に収まっている。
