@@ -1,0 +1,249 @@
+---
+title: "Architect Digest: 2026-03-19"
+date: "2026-03-19T12:00:00+09:00"
+slug: "posts/2026/03/19/architect-digest"
+description: "Kubernetes 1.36のUser Namespaces GA、OpenTelemetryのSpan Events非推奨化、Cilium 1.19の暗号化Strict Mode、Martin FowlerのAI時代の開発者像、Proof-oriented Event Sourcingなど、アーキテクト注目の直近1ヶ月の動向。"
+tags: ["Architect"]
+private: true
+---
+
+全領域を通じて「AIエージェントとの統合」が最大のテーマになっている。Martin FowlerはAI時代の開発者の役割変化を繰り返し論じ、ThoughtWorks Radar Vol.33はMCPとエージェントを中心に据え、CNCFエコシステムではOpenTelemetryがGraduation申請を提出した。Cloud Native側ではKubernetes 1.36のリリースが4月に迫り、Ingress NGINXの廃止が本番環境に影響を及ぼし始めている。
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: AI時代の開発者像
+
+[Fragments - March 16](https://martinfowler.com/fragments/2026-03-16.html) / [Fragments - February 25](https://martinfowler.com/fragments/2026-02-25.html) / [Fragments - February 9](https://martinfowler.com/fragments/2026-02-09.html)
+
+直近1ヶ月のFowlerの発信はほぼ全てAI/LLMとソフトウェア開発の関係に集中している。
+
+- Annie Vellaの調査（158人のプロ開発者）を引用し、タスクが「作成」から「検証」へシフトする"supervisory engineering work"の概念を紹介
+- Laura Tachoの組織データでは開発者の92.6%がAIアシスタントを使用、コードの27%がAIにより実質的な人間介入なしに書かれている
+- LLMへの依存で開発者がドメインとソフトウェアの理解を失う"cognitive debt"問題を議論。「過去数十年、開発を根本的に変えると主張するツールの大半はsnake oilだった」と懐疑的スタンスを表明
+
+### Patterns for Reducing Friction in AI-Assisted Development
+
+[Patterns for Reducing Friction in AI-Assisted Development](https://martinfowler.com/articles/reduce-friction-ai/)
+
+Rahul GargによるmartinFowler.com連載。AIを「ツール」ではなく「チームメイト」として扱うための5パターンを提案。
+
+- Knowledge Priming: 技術スタック・ディレクトリ構造・命名規約等のキュレーション済みコンテキストを共有し、AIが汎用パターンに陥るのを防ぐ
+- Design-First Collaboration: 実装前に段階的な設計レベルを経る
+- Context Anchoring: セッション間で意思決定を保持するリビングドキュメントを維持する
+- Sensible Defaults、Feedback Flywheelは未公開
+
+### Host Leadership
+
+[Host Leadership](https://martinfowler.com/bliki/HostLeadership.html)
+
+Servant Leadershipに代わるリーダーシップモデル。リーダーは場を整え、チームを招き入れ、アイデアと課題を提供した上で一歩引く。
+
+### Architecture Advice Process
+
+[Decentralizing Architectural Decisions](https://www.infoq.com/news/2026/03/architecture-advice-process/)
+
+Andrew Harmel-Lawがアーキテクチャ意思決定の分権化を提唱。Advice Processにより誰でもアーキテクチャ決定を行えるようにし、従来のアーキテクトはアドバイス提供者・コンテキスト提供者・コーチ役に移行する。
+
+### Netflix Commerce Architectureの進化
+
+[Netflix DVDs to Global Streaming](https://www.infoq.com/news/2026/03/netflix-dvds-to-global-streaming/)
+
+QCon London 2026での発表。ブラジルの非同期決済確認（数日単位）への対応で、リアルタイム処理からリアルタイム＋遅延シグナルのハイブリッドモデルへ移行。validation window、grace period、provisional accessなどの概念を導入。
+
+### ThoughtWorks Technology Radar Vol.33
+
+[Technology Radar](https://www.thoughtworks.com/radar)
+
+2026年版は未公開。最新のVol.33（2025年11月）の主要テーマ:
+
+- MCP（Model Context Protocol）が「エージェントを動かすための究極の統合プロトコル」に。A2A、AG-UIなど新プロトコルも登場
+- Context Engineeringがエージェントワークフローの最適化に不可欠に
+- SLMがエージェントAIの狭く反復的なタスクのデフォルト選択肢として浮上
+- AI加速型シャドーIT、安易なAPI→MCP変換、Text-to-SQLへの過度な依存がアンチパターンとして指摘
+
+### Proof-oriented Event Sourcing
+
+[Proof-oriented Event Sourcing](https://www.kurrent.io/blog/proof-oriented-event-sourcing/)
+
+Kurrent（旧Event Store）が提唱する実験的手法。AIコーディングエージェントが生成したイベントソーシング集約を「証明」で検証する。全到達可能状態で不変条件が成立するか、壊れた場合は最小反例を返す。幻覚の余地がない決定的・機械可読な結果を提供する点が特徴。
+
+### Managing Asynchronous APIs at Scale
+
+[Managing Asynchronous APIs at Scale](https://www.infoq.com/news/2026/03/managing-async-apis/)
+
+QCon London 2026でJust Eat TakeawayのIan Cooperが発表。AsyncAPI・xRegistry・CloudEvents・EventCatalogなどを活用し、非同期APIを同期APIと同等の厳格さで管理する手法。
+
+## Cloud Native / CNCF
+
+### Kubernetes 1.36（4月22日リリース予定）
+
+[Kubernetes 1.36 What You Need to Know](https://cloudsmith.com/blog/kubernetes-1-36-what-you-need-to-know)
+
+18件がStableに昇格する大型リリース。
+
+- User Namespaces in PodsがGA: Pod内でユーザー名前空間を利用可能にし、セキュリティ分離を強化
+- MutatingAdmissionPolicyがGA: CELベースでWebhookなしのアドミッション変更が可能に
+- Volume Group SnapshotがGA: 複数ボリュームのクラッシュ整合性スナップショット
+- Device Taints & TolerationsがBeta: GPUなどデバイスにノードtaintsに類似したメカニズムを導入
+- DRA関連4件がGA: Dynamic Resource Allocationの成熟が進行
+- gitRepo Volume Pluginが無効化
+
+### Ingress NGINX 廃止
+
+[Ingress NGINX Retirement](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/) / [Statement](https://kubernetes.io/blog/2026/01/29/ingress-nginx-statement/)
+
+2026年3月にEOL。本番Kubernetesクラスタの50%が利用しているとされ、影響は大きい。Gateway APIへの移行が推奨されている。メンテナ不足・技術的負債・IngressNightmare脆弱性（CVSS 9.8）が背景。
+
+### OpenTelemetry: Span Events APIの非推奨化
+
+[Deprecating Span Events](https://opentelemetry.io/blog/2026/deprecating-span-events/)
+
+スパンイベントとログベースイベントの重複を解消するため、Span Event APIを非推奨に。イベントはLogs APIへ統一される。
+
+### OpenTelemetry: Declarative ConfigurationがStable化
+
+[Stable Declarative Config](https://opentelemetry.io/blog/2026/stable-declarative-config/)
+
+JSONスキーマ、YAML表現、インメモリ表現、SDKオペレーションがStableに。5言語で実装済み。
+
+### OpenTelemetry: CNCF Graduation申請
+
+[Graduation Application](https://github.com/cncf/toc/issues/1739)
+
+正式にGraduation申請が提出済み。コントリビューター71,682名でKubernetesに次ぐCNCF第2位の活動規模。
+
+### OpenTelemetry: Kubernetes属性セマンティック規約がRC化
+
+[K8s SemConv RC](https://opentelemetry.io/blog/2026/k8s-semconv-rc/)
+
+k8sattributesプロセッサやresourcedetectionプロセッサで使用されるK8s属性のセマンティック規約がRC化。
+
+### Cilium 1.19（10周年記念リリース）
+
+[Cilium 1.19](https://www.infoq.com/news/2026/02/cilium-119/)
+
+- 暗号化Strict Mode: IPsec・WireGuardの両方で未暗号化トラフィックをdrop。ゼロトラスト向け
+- Ztunnel統合（Beta）: サイドカープロキシなしでワークロード間のTCP接続を透過的に暗号化・認証
+- Gateway API v1.4対応: GRPCRouteのGAMMAサポート
+- Multi-Pool IPAMがStable化
+
+### Istio 1.29
+
+[Istio 1.29](https://istio.io/latest/news/releases/1.29.x/announcing-1.29/)
+
+Ambient Mesh関連の改善が中心。DNSキャプチャがambientワークロードでデフォルト有効化、Multi-Network MulticlusterがBeta化。
+
+### CNCFプロジェクト動向
+
+- Dragonfly卒業（1月14日）: P2P技術によるコンテナイメージ・AIモデルの大規模配信。イメージプルタイムを数分から数秒に短縮
+- Cedar: AWSが設計したオープンソースポリシー言語がサンドボックス入り。RBAC/ABAC/ReBACをサポート
+- KubeCon + CloudNativeCon Europe 2026: 3/23〜26にアムステルダムで開催
+
+## Platform Engineering / SRE / Observability
+
+### State of Platform Engineering Vol.4
+
+[Platform Engineering Maturity in 2026](https://platformengineering.org/blog/platform-engineering-maturity-in-2026)
+
+500名以上の実務者への調査に基づくレポート。
+
+- 94%の組織がAIをプラットフォーム戦略に不可欠と回答
+- DORA metricsが最も広く採用されている測定フレームワーク（40.8%）
+- 「Shift Left」から「Shift Down」（開発者に責任を押し付けるのではなくプラットフォームに埋め込む）への転換が進行
+- Platform EngineerはDevOpsエンジニアに対し26.6%高い給与（US$193,412 vs US$152,710）
+
+### AI × Platform Engineering の融合
+
+[AI Is Merging With Platform Engineering](https://thenewstack.io/in-2026-ai-is-merging-with-platform-engineering-are-you-ready/)
+
+Platform EngineeringがAIエージェントのオーケストレーション層として位置づけられつつある。コード生成、セキュリティ検証、デプロイ、ロールバック、ランタイム監視を担うマルチエージェントシステムをCI/CDやGitOpsワークフローに統合する流れ。
+
+### Backstage: AI機能追加と5周年
+
+[Backstage Blog](https://backstage.io/blog/)
+
+Actions RegistryとMCPサーバーサポートによるAI機能を追加。3,400以上の組織・200万人以上の開発者が利用し、IDPフレームワーク市場で89%のシェア。
+
+### The SRE Report 2026
+
+[The SRE Report 2026](https://www.catchpoint.com/learn/sre-report-2026)
+
+400名以上のSRE/DevOps/IT専門家を対象にした調査。
+
+- 「Slow Is the New Down」がキーテーマ。約2/3のSREがパフォーマンス劣化はダウンタイムと同等に深刻だとマネジメント層と合意
+- パフォーマンス改善をNPSや収益といったビジネスKPIに結びつけている組織は25%にとどまる
+- テレメトリコストが年間数百万ドルに達する企業が増加。サンプリング設定・保持期間の階層化・カーディナリティキャッピングが実践されている
+
+### Grafana 12.4
+
+[Grafana 12.4 Release](https://grafana.com/blog/grafana-12-4-release-all-the-latest-features/)
+
+- Git Sync（パブリックプレビュー）: ダッシュボードのソースコード管理
+- Dynamic Dashboards（パブリックプレビュー）: タブレイアウト・パネル表示/非表示ルール・オートグリッド
+- SCIM GA: IdPからのユーザーライフサイクル自動化
+
+### Prometheus v3.10.0
+
+[Prometheus Releases](https://github.com/prometheus/prometheus/releases)
+
+Distrolessコンテナイメージを新たに提供。UID/GID 65532（nonroot）を使用しVOLUME宣言を除去することでセキュリティを強化。
+
+### OpenTelemetry eBPF Instrumentation 1.0に向けて
+
+[OBI 2026 Goals](https://opentelemetry.io/blog/2026/obi-goals/)
+
+Grafana LabsがOSSコミュニティに寄贈したBeyla（eBPFベースの自動計装エージェント）がOBIとしてOpenTelemetryプロジェクトに統合。2026年の旗艦目標は安定版1.0リリース。
+
+### IaC動向
+
+- **OpenTofu vs Terraform の乖離拡大**: 状態管理、変数評価、プロバイダー拡張において根本的な差異が生じ、移行は事実上一方通行に（[比較記事](https://tech.breakingcube.com/2026/03/14/opentofu-vs-terraform-comparison-2026/)）
+- **Pulumi v3.226.0**: Agent Skillsを公開し、Claude CodeやCursor等のAIコーディングツールがPulumiプロジェクトを理解可能に（[Releases](https://github.com/pulumi/pulumi/releases)）
+- **Terraform Enterprise Replicated版**: 2026年4月1日にサポート終了。Kubernetes/Docker/Podman/Nomadへの移行が必要
+
+## クラウドベンダー・業界動向
+
+### AWS: OpenAIとの戦略的パートナーシップ
+
+[AWS Weekly Roundup March 2](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-openai-partnership-aws-elemental-inference-strands-labs-and-more-march-2-2026/)
+
+OpenAIとAmazonが複数年の戦略的パートナーシップを発表。OpenAI Frontierモデルの独占提供、2GWのTrainium（Trainium3/4）コミットメントを含む。
+
+### AWS: Amazon S3 20周年
+
+[AWS Weekly Roundup March 16](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-amazon-s3-turns-20-amazon-route-53-global-resolver-general-availability-and-more-march-16-2026/)
+
+500兆以上のオブジェクトを保存、毎秒2億以上のリクエストを処理。価格はローンチ時から約85%低下。
+
+### AWS Architecture Blog注目記事
+
+[AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/)
+
+- ProGlove: 6,000 AWSアカウントを3人で管理するサーバーレスSaaSのaccount-per-tenantアーキテクチャ
+- Salesforce: 1,000以上のEKSクラスタでCluster AutoscalerからKarpenterへの移行
+- Amazon Key: EventBridgeによるモノリスからイベント駆動アーキテクチャへの移行
+
+### GCP: AI基盤の大幅強化
+
+[Google Cloud AI Infrastructure at NVIDIA GTC 2026](https://cloud.google.com/blog/products/compute/google-cloud-ai-infrastructure-at-nvidia-gtc-2026)
+
+NVIDIA GTC 2026で、2026年後半にVera Rubin NVL72ラック規模システムの提供を予定と発表。DynamoとGKE Inference Gatewayの統合も発表。
+
+### GCP: Agent Engine上のAIエージェント設計パターン
+
+[Building Scalable AI Agents](https://cloud.google.com/blog/topics/partners/building-scalable-ai-agents-design-patterns-with-agent-engine-on-google-cloud)
+
+Agent-to-Agent Protocol（A2A）をAgent Engine内でネイティブサポート。リテール、製造、ヘルスケア、自動車等の業界横断的なエージェントアーキテクチャ。
+
+### テック企業ブログ注目記事
+
+- **Spotify**: Claude Code基盤の内部システム「Honk」でAI生成コードのみ使用するエンジニアが登場。広告プラットフォームにマルチエージェントアーキテクチャを導入（[Spotify Engineering](https://engineering.atspotify.com/)）
+- **Meta**: Ranking Engineer Agent（自律AIエージェント）、JiTTesting（エージェンティック開発時代のテスト手法）、Gigawatt級AIクラスタ「Prometheus」（[Engineering at Meta](https://engineering.fb.com/)）
+- **Uber**: エージェンティックAIで設計仕様を自動生成、Database Federation、Rate Limiting Systemの事例（[Uber Engineering](https://www.uber.com/en-US/blog/engineering/)）
+- **Netflix**: MediaFM（長尺動画理解のマルチモーダルAI基盤モデル）、LLMポストトレーニングのスケーリング（[Netflix TechBlog](https://netflixtechblog.com/)）
+
+### カンファレンス
+
+- **QCon London 2026**（3/16〜19）: 20周年記念。Staff+ Architecture、Platform Engineering、Observability & SRE等の専門トラック（[QCon London](https://qconlondon.com/)）
+- **KubeCon Europe 2026**（3/23〜26）: アムステルダムにて開催
+- **Google Cloud Next 2026**（4/22〜24）: ラスベガスにて開催予定
+- **DDD Europe 2026**（6/8〜12）: アントワープにて開催予定（[DDD Europe](https://2026.dddeurope.com/)）
