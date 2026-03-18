@@ -1,0 +1,71 @@
+---
+import AuthorCard from '@/components/AuthorCard.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { type CollectionEntry, getCollection, render } from 'astro:content';
+
+type ReportEntry = CollectionEntry<'reports'>;
+
+export async function getStaticPaths() {
+  const reports = await getCollection('reports');
+  return reports.map((report: ReportEntry) => ({
+    params: { slug: report.data.slug },
+    props: { report },
+  }));
+}
+
+const { report } = Astro.props as { report: ReportEntry };
+const { Content } = await render(report);
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+---
+
+<BaseLayout
+  ogTitle={report.data.title}
+  ogDescription={report.data.description}
+  noindex={true}
+>
+  <article class="article-paper">
+    <header class="mb-8">
+      <time
+        class="text-sm text-accent dark:text-accent-light"
+        datetime={report.data.date}
+      >
+        {formatDate(report.data.date)}
+      </time>
+      <h1
+        class="text-3xl font-bold mt-2 mb-4"
+        transition:name={`report-title-${report.data.slug}`}
+      >
+        {report.data.title}
+      </h1>
+      <AuthorCard />
+    </header>
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+
+  <section class="p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
+    <AuthorCard />
+  </section>
+
+  <script>
+  document.addEventListener('astro:page-load', async () => {
+    const mermaidElements = document.querySelectorAll<HTMLPreElement>(
+      'pre.mermaid',
+    );
+    if (mermaidElements.length > 0) {
+      const { default: mermaid } = await import('mermaid');
+      mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+      await mermaid.run({ nodes: mermaidElements });
+    }
+  });
+  </script>
+</BaseLayout>

@@ -4,14 +4,14 @@ disable-model-invocation: true
 description: |
   設計パターン・アーキテクチャ思想、Cloud Native / CNCF、Platform Engineering / SRE、
   クラウドベンダー・業界動向など、ソフトウェアアーキテクトが注視すべき直近1ヶ月の動向を
-  サブエージェントで並行調査し、private な MDX 記事として出力するスキル。
+  サブエージェントで並行調査し、reports コレクションの MDX 記事として出力するスキル。
   GitHub Actions から呼ばれた場合は Draft PR も作成する。
 allowed-tools: WebSearch, WebFetch, Agent, Write, Read, Glob, Bash
 ---
 
 # Architect Digest
 
-ソフトウェアアーキテクトが注視すべき直近1ヶ月の動向を調査し、kosui.me の Architect Digest 記事（private）として出力する。
+ソフトウェアアーキテクトが注視すべき直近1ヶ月の動向を調査し、kosui.me の reports コレクションに Architect Digest 記事として出力する。
 
 ## 実行手順
 
@@ -54,14 +54,14 @@ allowed-tools: WebSearch, WebFetch, Agent, Write, Read, Glob, Bash
 
 #### ファイルパス
 
-`apps/kosui-me/src/content/posts/{DATE}-architect-digest.mdx`
+`apps/kosui-me/src/content/reports/{DATE}-architect-digest.mdx`
 
 #### 既存記事の参照
 
 記事を書く前に、直近の既存記事を Read ツールで1つ読み、文体・構成を参考にする:
 
 ```
-apps/kosui-me/src/content/posts/*-weekly-tech-digest.mdx
+apps/kosui-me/src/content/reports/*-architect-digest.mdx
 ```
 
 #### frontmatter
@@ -70,10 +70,9 @@ apps/kosui-me/src/content/posts/*-weekly-tech-digest.mdx
 ---
 title: "Architect Digest: {DATE}"
 date: "{DATE}T12:00:00+09:00"
-slug: "posts/{YYYY}/{MM}/{DD}/architect-digest"
+slug: "{YYYY}/{MM}/{DD}/architect-digest"
 description: "（調査内容に基づく1行要約）"
 tags: ["Architect"]
-private: true
 ---
 ```
 
