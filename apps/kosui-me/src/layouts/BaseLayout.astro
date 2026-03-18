@@ -151,7 +151,7 @@ const navItems = [
               width="40"
               height="40"
               class="rounded-full"
-              transition:name="site-logo"
+              transition:name={pathname !== '/' ? 'site-logo' : undefined}
             />
             <span class="hidden sm:inline">kosui</span>
           </a>
