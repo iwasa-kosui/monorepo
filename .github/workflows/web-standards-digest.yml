@@ -37,46 +37,4 @@ jobs:
             Skill
           prompt: |
             今日は ${{ steps.date.outputs.date }} です。
-
-            以下の手順でWeekly Tech Digestの Web Standards セクションを作成し、Draft PRを発行してください。
-
-            ## 手順1: 調査
-
-            web-standards-digest スキルを Skill ツールで実行し、直近1ヶ月のWeb標準・ランタイム・TSエコシステムの動向を調査してください。
-
-            ## 手順2: MDX記事の作成
-
-            調査結果をもとに、以下のパスにMDX記事を作成してください:
-            `apps/kosui-me/src/content/posts/${{ steps.date.outputs.date }}-weekly-tech-digest.mdx`
-
-            ### 記事フォーマット
-
-            既存記事 `apps/kosui-me/src/content/posts/2026-03-08-weekly-tech-digest.mdx` のスタイルを参考にしてください。
-
-            frontmatterは以下の形式:
-            ```
-            ---
-            title: "Weekly Tech Digest: ${{ steps.date.outputs.date }}"
-            date: "${{ steps.date.outputs.date }}T12:00:00+09:00"
-            slug: "posts/YYYY/MM/DD/weekly-tech-digest"
-            description: "（調査内容に基づく要約を記述）"
-            tags: ["Weekly"]
-            private: true
-            ---
-            ```
-
-            slugの YYYY/MM/DD は実際の日付に置き換えてください。
-
-            記事本文の書き方:
-            - 冒頭に2〜3文の概要を書く
-            - セクション見出し（##）でカテゴリ分け（言語・ランタイム、エコシステムなど）
-            - 各トピックは ### で見出しをつけ、リンクを貼り、箇条書きで要点をまとめる
-            - Web Standards Digestの結果のみを記載する（他カテゴリは後で手動追記する前提）
-
-            ## 手順3: Draft PRの作成
-
-            Bashツールで以下を実行してください:
-            1. ブランチ `weekly-tech-digest/${{ steps.date.outputs.date }}` を作成してチェックアウト
-            2. 作成したMDXファイルをコミット（メッセージ: `feat(kosui-me): add Weekly Tech Digest ${{ steps.date.outputs.date }}`、Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>）
-            3. リモートにプッシュ
-            4. gh pr create でDraft PRを作成（タイトル: `feat(kosui-me): Weekly Tech Digest ${{ steps.date.outputs.date }}`）
+            /web-standards-digest
