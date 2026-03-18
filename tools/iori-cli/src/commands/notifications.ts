@@ -2,22 +2,30 @@ import { createClient } from '../client.js';
 import { printJson, stripHtml } from '../output.js';
 import { loadSession } from '../session.js';
 
-interface Notification {
+interface Actor {
+  username: string;
+  url?: string;
+}
+
+interface NotificationItem {
   notification: {
     notification: {
       type: string;
-      createdAt: string;
     };
-    actor: {
-      name: string | null;
-      preferredUsername: string;
-    };
+    likerActor?: Actor;
+    followerActor?: Actor;
+    replierActor?: Actor;
+    createdAt: number;
   };
   sanitizedContent: string;
 }
 
 interface NotificationsResponse {
-  notifications: Notification[];
+  notifications: NotificationItem[];
+}
+
+function resolveActor(n: NotificationItem['notification']): Actor | undefined {
+  return n.likerActor ?? n.followerActor ?? n.replierActor;
 }
 
 export async function notificationsCommand(args: string[]): Promise<void> {
@@ -39,12 +47,12 @@ export async function notificationsCommand(args: string[]): Promise<void> {
 
   for (const item of data.notifications) {
     const n = item.notification;
-    const actor = n.actor;
-    const name = actor.name ?? actor.preferredUsername;
     const type = n.notification.type;
-    const time = new Date(n.notification.createdAt).toLocaleString();
+    const time = new Date(n.createdAt).toLocaleString();
+    const actor = resolveActor(n);
+    const actorLabel = actor ? `@${actor.username}` : 'unknown';
     const content = stripHtml(item.sanitizedContent);
-    console.log(`[${time}] ${type} from ${name} (@${actor.preferredUsername})`);
+    console.log(`[${time}] ${type} from ${actorLabel}`);
     if (content) {
       console.log(`  ${content}`);
     }
