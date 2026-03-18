@@ -20,7 +20,9 @@ export default defineConfig({
       },
     }),
     react(),
-    sitemap(),
+    sitemap({
+      filter: (page) => !page.includes('/reports'),
+    }),
   ],
   vite: {
     plugins: [tailwindcss()],

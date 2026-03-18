@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /reports
 
 Sitemap: https://kosui.me/sitemap-index.xml

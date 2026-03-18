@@ -16,6 +16,21 @@ const posts = defineCollection({
   }),
 });
 
+const reports = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/reports' }),
+  schema: z.object({
+    title: z.string(),
+    date: z.string(),
+    slug: z.string(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    image: z.string().optional(),
+    ogIcon: z.string().optional(),
+    ogSvg: z.string().optional(),
+    private: z.boolean().optional(),
+  }),
+});
+
 const resume = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/resume' }),
   schema: z.object({
@@ -24,4 +39,4 @@ const resume = defineCollection({
   }),
 });
 
-export const collections = { posts, resume };
+export const collections = { posts, reports, resume };
