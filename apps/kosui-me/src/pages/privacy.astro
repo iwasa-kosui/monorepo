@@ -1,0 +1,84 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Privacy Policy - kosui" noindex={true}>
+  <section class="mb-10">
+    <h1 class="text-3xl font-bold mb-6">Privacy Policy</h1>
+
+    <div class="space-y-8 text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          運営者
+        </h2>
+        <p>
+          本サイト kosui.me は kosui が個人で運営しています。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          アクセス計測
+        </h2>
+        <p>
+          本サイトでは Cloudflare Web Analytics
+          を利用してアクセス状況を計測しています。 この計測はブラウザ側での Real
+          User Measurements によるもので、Cookie を使用しません。
+        </p>
+        <p class="mt-2">
+          収集される情報はページURL、リファラー、ブラウザ・OS情報、国・地域などの統計的なデータです。
+          個人を特定する情報は収集されません。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          サーバーログ
+        </h2>
+        <p>
+          本サイトは Cloudflare を経由して配信されており、
+          CDNの標準的な動作としてアクセス時のIPアドレス、ブラウザ情報などがログに記録される場合があります。
+          これらのログはサイト運営者が直接取得・管理するものではなく、Cloudflareのプライバシーポリシーに従って取り扱われます。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          外部サービスへのリンク
+        </h2>
+        <p>
+          本サイトにはX、GitHub等の外部サービスへのリンクが含まれています。
+          リンク先での情報の取り扱いは各サービスのプライバシーポリシーに従います。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          お問い合わせ
+        </h2>
+        <p>
+          本ポリシーに関するお問い合わせは
+          <a
+            href="https://x.com/kosui_me"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-accent dark:text-accent-light hover:underline"
+          >X (@kosui_me)</a>
+          までご連絡ください。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          改定
+        </h2>
+        <p>
+          本ポリシーは予告なく改定することがあります。改定後のポリシーは本ページに掲載した時点で効力を生じます。
+        </p>
+        <p class="mt-2">
+          制定日: 2026年3月18日
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
