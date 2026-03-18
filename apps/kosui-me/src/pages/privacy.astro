@@ -1,0 +1,89 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Privacy Policy - kosui" noindex={true}>
+  <article class="article-paper">
+    <h1 class="text-3xl font-bold mb-8">Privacy Policy</h1>
+
+    <div class="prose">
+      <h2>運営者</h2>
+      <p>
+        本サイト kosui.me は kosui が個人で運営しています。
+      </p>
+
+      <h2>アクセス計測</h2>
+      <p>
+        本サイトでは
+        <a
+          href="https://www.cloudflare.com/web-analytics/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Cloudflare Web Analytics</a>
+        を利用してアクセス状況を計測しています。この計測はブラウザに埋め込まれたJavaScriptビーコンによるReal
+        User
+        Measurementsで、ページロード完了時とユーザー離脱時にデータを送信します。
+      </p>
+      <p>
+        ビーコンはページURL（クエリ文字列を除く）、リファラー、ブラウザ・OS情報、Core
+        Web
+        Vitals（LCP、INP等）、リソースロード時間などのパフォーマンスデータを収集します。
+      </p>
+      <p>
+        Cloudflareによれば、Web
+        AnalyticsはCookie、localStorage、sessionStorageなどのクライアントサイドステートを一切使用しません。また、IPアドレスやUser
+        Agentによるフィンガープリンティングも行わないとされています。ビーコンのHTTPリクエストに含まれるIPアドレスは、最寄りのCloudflareデータセンターで破棄され、コアデータベースやログには保存されません。ユニーク訪問者の計測にはIPアドレスやCookieではなく、リファラーのホスト名変化を用いる方式が採用されています。
+      </p>
+      <p>
+        詳細は
+        <a
+          href="https://www.cloudflare.com/privacypolicy/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Cloudflareのプライバシーポリシー</a>
+        をご参照ください。
+      </p>
+
+      <h2>Cookie</h2>
+      <p>
+        上記のとおり、Cloudflare Web
+        Analytics自体はCookieを使用しません。ただし、CloudflareのCDN・セキュリティ機能がボット対策等の目的で技術的に必要なCookie（<code
+        >__cf_bm</code>、<code
+        >cf_clearance</code>等）を設定する場合があります。これらはCloudflareが「strictly
+        necessary」に分類するもので、追跡やパーソナライゼーションの目的では使用されません。
+      </p>
+
+      <h2>サーバーログ</h2>
+      <p>
+        本サイトは Cloudflare
+        を経由して配信されています。Cloudflareのプライバシーポリシーでは、CDN・セキュリティサービスの運用においてエンドユーザーのIPアドレスをログに記録する場合があると記載されています。
+        これらのログはサイト運営者が直接取得・管理するものではなく、Cloudflareのプライバシーポリシーに従って取り扱われます。
+      </p>
+
+      <h2>外部サービスへのリンク</h2>
+      <p>
+        本サイトにはX、GitHub等の外部サービスへのリンクが含まれています。
+        リンク先での情報の取り扱いは各サービスのプライバシーポリシーに従います。
+      </p>
+
+      <h2>お問い合わせ</h2>
+      <p>
+        本ポリシーに関するお問い合わせは
+        <a
+          href="https://x.com/kosui_me"
+          target="_blank"
+          rel="noopener noreferrer"
+        >X (@kosui_me)</a>
+        までご連絡ください。
+      </p>
+
+      <h2>改定</h2>
+      <p>
+        本ポリシーは予告なく改定することがあります。改定後のポリシーは本ページに掲載した時点で効力を生じます。
+      </p>
+      <p>
+        制定日: 2026年3月18日
+      </p>
+    </div>
+  </article>
+</BaseLayout>
