@@ -1,0 +1,134 @@
+---
+title: "Weekly Tech Digest: 2026-03-19"
+date: "2026-03-19T12:00:00+09:00"
+slug: "posts/2026/03/19/weekly-tech-digest"
+description: "Temporal Stage 4到達、Node.jsリリーススケジュール年1回化、TypeScript 7.0 (tsgo)の進捗、Deno Deploy GA、Bun v1.3.10のES Decorators対応、Effect v4 Betaなど。"
+tags: ["Weekly"]
+private: true
+---
+
+今週の最大ニュースはTemporalのStage 4到達。2017年の提案開始から約9年、ようやくECMAScript 2026に含まれる見込みとなった。Node.jsのリリーススケジュール変更（年1回化・全バージョンLTS化）も長期的に大きな影響がある。ランタイム各社はそれぞれ独自の方向で進化を加速させている。
+
+## 標準化動向
+
+### TC39: Temporal が Stage 4 に到達
+
+[TC39 Advances Temporal to Stage 4 - socket.dev](https://socket.dev/blog/tc39-advances-temporal-to-stage-4)
+[Temporal reaches Stage 4 - Igalia](https://www.igalia.com/chats/temporal-stage-4)
+
+2026年3月10〜12日のニューヨークでのTC39プレナリーで、Temporalが Stage 4 に昇格した。`Date`を置き換える新しい日付・時刻APIで、`Temporal.Instant`、`Temporal.ZonedDateTime`、`Temporal.PlainDate`等のイミュータブルな型を導入する。Firefox、Chrome、Edge、Safari TPで実装が進行中。
+
+同プレナリーでの他のステージ変動:
+
+- **Stage 4**: Intl Era and MonthCode、Explicit Resource Management（条件付き）
+- **Stage 3**: Import Text（テキストファイルをモジュールとして直接import）
+- **Stage 2.7**: Error Stack Accessor、Iterator Includes
+- **Stage 2**: Intl Unit Protocol、Thenable Curtailment
+- **Stage 1**: Error Code Property
+- **撤回**: Dynamic Import Host Adjustment
+
+### WinterTC: CLI API と HTTP Server の標準化を議論中
+
+[WinterTC55 admin - GitHub](https://github.com/WinterTC55/admin/issues)
+
+WinterTC（旧WinterCG / Ecma TC55）では、CLI APIとHTTP Serverの標準化が2回連続で議題に挙がっており、活発に議論が進んでいる。2月にはChair Groupとして @lucacasonato と @andreubotella が選出され、ガバナンス体制が固まった。ただし仕様の大きなマイルストーン到達は確認できず。
+
+## 言語・ランタイム
+
+### TypeScript 7.0 (tsgo) の進捗
+
+[TypeScript 6.0 RC](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-rc/)
+[microsoft/typescript-go - GitHub](https://github.com/microsoft/typescript-go)
+
+TypeScript 6.0 RCは前回取り上げたので割愛するが、注目すべきはGoネイティブポートであるTypeScript 7.0 (tsgo) の進捗状況。
+
+- 型チェックはほぼ完全にポート済み。約6,000のエラーケースのうちtsgoが検出できないのは74ケースのみ
+- `--incremental`、プロジェクトリファレンス、`--build`モードが動作
+- LSPプロトコルを採用（従来のTSServerプロトコルから変更）
+- VSCodeコードベース（150万行）のコンパイルが89秒 → 8.74秒（10.2x高速化）。型チェックは約30x高速化
+- `@typescript/native-preview`パッケージでnightlyビルドを試用可能
+- 正式リリースはTypeScript 6.0 GAの「すぐ後」の予定
+
+### Node.js: リリーススケジュールの年1回化を発表
+
+[Evolving the Node.js Release Schedule](https://nodejs.org/en/blog/announcements/evolving-the-nodejs-release-schedule)
+
+v27.x以降、年2回のメジャーリリースから年1回（4月リリース、10月にLTS昇格）に変更される。奇数/偶数の区別がなくなり、全メジャーバージョンがLTSになる。v26.0.0は2026年4月予定で、現行モデルの最後のリリース。
+
+直近のリリース:
+
+- **v25.8.1**（3月11日）: `"type": "module"`パッケージ内の拡張子なしCJSファイルの修正、`--use-system-ca`がプロセス単位からenv単位に変更、sqlite 3.52.0更新
+- **v25.7.0**（2月24日）: HTTP/2にHTTP/1フォールバック設定、SEAでESMエントリポイントをサポート
+- **v22.22.1 LTS**（3月5日）: ルート証明書をNSS 3.119に更新、`--heapsnapshot-near-heap-limit`がstableに昇格
+
+**注意**: Node.js 20 LTSは2026-04-30にEOL。**3月24日にセキュリティリリース（High 2件含む9件）が予定**されている。
+
+### Deno 2.7: Temporal安定化と Deploy GA
+
+[Deno 2.7](https://deno.com/blog/v2.7)
+[Deno Deploy is GA](https://deno.com/blog/deno-deploy-is-ga)
+[Introducing Deno Sandbox](https://deno.com/blog/introducing-deno-sandbox)
+
+Deno 2.7（2月25日）の主な変更:
+
+- **Temporal API安定化**: `--unstable-temporal`フラグが不要に
+- **Windows ARMサポート**: 公式ビルド提供開始
+- **`package.json`の`overrides`フィールドサポート**
+- **Node.js互換性の大幅改善**: `worker_threads`、`child_process`、`zlib`（Zstd対応）、`node:test` mock API等
+
+Deno Deploy GAも同時に発表され、LLM生成コードを安全に実行するための**Deno Sandbox**（microVMサービス）や、Prisma提携による無料Postgresデータベースのプロビジョニング機能が追加された。
+
+### Bun v1.3.10/v1.3.11: ES Decorators、ネイティブREPL、Bun.cron
+
+[Bun v1.3.10](https://bun.com/blog/bun-v1.3.10)
+[Bun v1.3.11](https://bun.com/blog/bun-v1.3.11)
+
+Bun v1.3.10（3月18日）:
+
+- **TC39標準ES Decorators対応**
+- **ネイティブREPLの完全書き直し**（Zig実装）
+- **`--compile --target=browser`**: 自己完結型HTML出力
+- **Windows ARM64サポート**
+- パフォーマンス改善: `structuredClone`が配列に対して最大25倍、`path.parse()`が最大7倍高速化
+
+Bun v1.3.11（同日）:
+
+- **`Bun.cron`**: OSレベルのcronジョブ
+- **`Bun.sliceAnsi`**: ANSI/グラフェム対応文字列スライス
+- Linux x64バイナリが4MB軽量化
+
+## エコシステム
+
+### Effect v4 Beta: ランタイム書き直しとバンドルサイズ大幅削減
+
+[Effect v4 Beta](https://effect.website/blog/releases/effect/40-beta/)
+[This Week in Effect - 2026-03-13](https://effect.website/blog/this-week-in-effect/2026/03/13/)
+
+前回触れたEffect v4 Betaの詳細が明らかになってきた。
+
+- **ランタイムの完全書き直し**: fiberランタイムをスクラッチから再実装。メモリオーバーヘッド低減と実行速度向上
+- **バンドルサイズ**: Effect + Stream + Schemaの最小プログラムが約70kBから約20kBに縮小
+- **パッケージ統合**: `@effect/platform`、`@effect/rpc`、`@effect/cluster`等がコアパッケージに統合
+- **統一バージョニング**: 全パッケージが単一バージョン番号を共有
+- ベータ期間中にHTTP改善（静的ファイルサーバー、`HttpClient.withRateLimiter`のretry-afterヘッダー対応）、AI/OpenAI互換サポート等が追加
+
+マイグレーション事例では、クライアントJSバンドルが約965kBから約811kBに、ワーカー起動時間が589msから471msに改善されたとの報告がある。v3はフィーチャーフリーズに入り、本番環境ではv3が引き続き推奨。
+
+### Hono v4.12.0: $path()メソッド、getConnInfoアダプタ拡充
+
+[Hono GitHub Releases](https://github.com/honojs/hono/releases)
+
+Hono v4.12.0（2月19日）の主な変更:
+
+- **`$path()`メソッド追加**: HonoクライアントにフルURLではなくパス文字列を返すメソッド
+- **Basic Auth `onAuthSuccess`コールバック**: 認証成功後のコンテキスト変数設定が可能に
+- **`getConnInfo`アダプタ拡充**: AWS Lambda（API Gateway v1/v2/ALB）、Cloudflare Pages、Netlify対応
+- **言語ミドルウェア改善**: RFC 4647 Lookupベースの段階的切り詰めに対応
+
+v4.12.2（2月23日）ではAWS LambdaアダプタのALB背後での`X-Forwarded-For`不正処理が修正された。IPベースアクセス制御のバイパスにつながる脆弱性だったため、該当環境ではアップデート推奨。
+
+### Zod: 安定期、目立ったリリースなし
+
+[Zod GitHub Releases](https://github.com/colinhacks/zod/releases)
+
+直近1ヶ月で目立った新リリースは確認できなかった。最新はv4.3.6（1月23日）。`@modelcontextprotocol/sdk`や`openai`パッケージ等、まだZod v3を前提としているライブラリが残っており、エコシステムの移行は途上。
