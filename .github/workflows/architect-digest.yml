@@ -1,0 +1,40 @@
+name: Architect Digest
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  digest:
+    if: github.actor == 'iwasa-kosui'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(TZ=Asia/Tokyo date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: >-
+            --allowedTools
+            WebSearch
+            WebFetch
+            Agent
+            Write
+            Read
+            Glob
+            Grep
+            Bash
+            Skill
+          prompt: |
+            今日は ${{ steps.date.outputs.date }} です。
+            /architect-digest
