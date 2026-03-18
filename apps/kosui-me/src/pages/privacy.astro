@@ -21,13 +21,26 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
           アクセス計測
         </h2>
         <p>
-          本サイトでは Cloudflare Web Analytics
-          を利用してアクセス状況を計測しています。 この計測はブラウザ側での Real
-          User Measurements によるもので、Cookie を使用しません。
+          本サイトでは
+          <a
+            href="https://www.cloudflare.com/web-analytics/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-accent dark:text-accent-light hover:underline"
+          >Cloudflare Web Analytics</a>
+          を利用してアクセス状況を計測しています。この計測はブラウザに埋め込まれたJavaScriptビーコンによるReal
+          User Measurementsです。追跡目的のCookieは使用しません。
         </p>
         <p class="mt-2">
-          収集される情報はページURL、リファラー、ブラウザ・OS情報、国・地域などの統計的なデータです。
-          個人を特定する情報は収集されません。
+          ビーコンはページURL、リファラー、ブラウザ・OS情報、国・地域などの統計的なデータに加え、Performance
+          APIを通じたページロード時間等のパフォーマンスデータを収集します。Cloudflareによれば、これらの情報から個人を特定することはないとされています。詳細は
+          <a
+            href="https://www.cloudflare.com/privacypolicy/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-accent dark:text-accent-light hover:underline"
+          >Cloudflareのプライバシーポリシー</a>
+          をご参照ください。
         </p>
       </div>
 
