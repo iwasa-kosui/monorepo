@@ -29,11 +29,21 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
             class="text-accent dark:text-accent-light hover:underline"
           >Cloudflare Web Analytics</a>
           を利用してアクセス状況を計測しています。この計測はブラウザに埋め込まれたJavaScriptビーコンによるReal
-          User Measurementsです。追跡目的のCookieは使用しません。
+          User
+          Measurementsで、ページロード完了時とユーザー離脱時にデータを送信します。
         </p>
         <p class="mt-2">
-          ビーコンはページURL、リファラー、ブラウザ・OS情報、国・地域などの統計的なデータに加え、Performance
-          APIを通じたページロード時間等のパフォーマンスデータを収集します。Cloudflareによれば、これらの情報から個人を特定することはないとされています。詳細は
+          ビーコンはページURL（クエリ文字列を除く）、リファラー、ブラウザ・OS情報、Core
+          Web
+          Vitals（LCP、INP等）、リソースロード時間などのパフォーマンスデータを収集します。
+        </p>
+        <p class="mt-2">
+          Cloudflareによれば、Web
+          AnalyticsはCookie、localStorage、sessionStorageなどのクライアントサイドステートを一切使用しません。また、IPアドレスやUser
+          Agentによるフィンガープリンティングも行わないとされています。ビーコンのHTTPリクエストに含まれるIPアドレスは、最寄りのCloudflareデータセンターで破棄され、コアデータベースやログには保存されません。ユニーク訪問者の計測にはIPアドレスやCookieではなく、リファラーのホスト名変化を用いる方式が採用されています。
+        </p>
+        <p class="mt-2">
+          詳細は
           <a
             href="https://www.cloudflare.com/privacypolicy/"
             target="_blank"
@@ -46,11 +56,25 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 
       <div>
         <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
+          Cookie
+        </h2>
+        <p>
+          上記のとおり、Cloudflare Web
+          Analytics自体はCookieを使用しません。ただし、CloudflareのCDN・セキュリティ機能がボット対策等の目的で技術的に必要なCookie（<code
+            class="text-xs"
+          >__cf_bm</code>、<code class="text-xs"
+          >cf_clearance</code>等）を設定する場合があります。これらはCloudflareが「strictly
+          necessary」に分類するもので、追跡やパーソナライゼーションの目的では使用されません。
+        </p>
+      </div>
+
+      <div>
+        <h2 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-2">
           サーバーログ
         </h2>
         <p>
-          本サイトは Cloudflare を経由して配信されており、
-          CDNの標準的な動作としてアクセス時のIPアドレス、ブラウザ情報などがログに記録される場合があります。
+          本サイトは Cloudflare
+          を経由して配信されています。Cloudflareのプライバシーポリシーでは、CDN・セキュリティサービスの運用においてエンドユーザーのIPアドレスをログに記録する場合があると記載されています。
           これらのログはサイト運営者が直接取得・管理するものではなく、Cloudflareのプライバシーポリシーに従って取り扱われます。
         </p>
       </div>
