@@ -26,6 +26,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.2",
     "@types/node": "^20",
+    "@types/react": "^18.3.28",
     "dprint": "0.51.1",
     "eslint": "^9",
     "eslint-plugin-simple-import-sort": "12.1.1",
@@ -34,5 +35,10 @@
     "typescript": "^5",
     "typescript-eslint": "8.53.0",
     "vitest": "4.0.15"
+  },
+  "dependencies": {
+    "ink": "^5.2.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1"
   }
 }

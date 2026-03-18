@@ -1,4 +1,5 @@
 import { deleteCommand } from './commands/delete.js';
+import { interactiveCommand } from './commands/interactive.js';
 import { loginCommand } from './commands/login.js';
 import { notificationsCommand } from './commands/notifications.js';
 import { postCommand } from './commands/post.js';
@@ -11,8 +12,9 @@ Usage:
   iori <command> [options]
 
 Commands:
+  (none) / tl    Interactive TUI
   login          Log in to a server
-  timeline       Show timeline
+  timeline       Show timeline (non-interactive)
   post           Create a post
   delete         Delete a post
   notifications  Show notifications
@@ -28,8 +30,9 @@ async function main() {
   switch (command) {
     case 'login':
       return loginCommand(rest);
-    case 'timeline':
     case 'tl':
+      return interactiveCommand();
+    case 'timeline':
       return timelineCommand(rest);
     case 'post':
       return postCommand(rest);
@@ -46,9 +49,10 @@ async function main() {
     case 'help':
     case '--help':
     case '-h':
-    case undefined:
       console.log(HELP);
       return;
+    case undefined:
+      return interactiveCommand();
     default:
       console.error(`Unknown command: ${command}`);
       console.log(HELP);
