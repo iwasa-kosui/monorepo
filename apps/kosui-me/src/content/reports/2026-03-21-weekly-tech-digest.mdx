@@ -1,0 +1,111 @@
+---
+title: "Weekly Tech Digest: 2026-03-21"
+date: "2026-03-21T12:00:00+09:00"
+slug: "2026/03/21/weekly-tech-digest"
+description: "TypeScript 6.0 GAリリース間近、Hono連続セキュリティ修正、Node.js 3/24セキュリティリリース予告、Chrome 146でIterator.concat搭載、Effect v4 BetaにAIツールキット予告。"
+tags: ["Weekly"]
+---
+
+TypeScript 6.0がGA間近で、Goネイティブポート（tsgo）への橋渡しとなる最後のJSベースメジャーリリースとなる。Honoはプロトタイプ汚染・ReDoSなどセキュリティ修正が4リリース連続で入っており、該当バージョンのユーザーはアップデートを推奨。Node.jsは3月24日にHigh 2件を含むセキュリティリリースが控えている。
+
+## 標準化動向
+
+### WinterTC: 3月20日定例ミーティング開催
+
+[WinterTC55/admin Issue #169](https://github.com/WinterTC55/admin/issues/169)
+
+3月20日にTC55の隔週定例会議が開催された。アジェンダには以下が含まれていた（議事録は未公開）。
+
+- **CLI API**（約20分）: `argv`・環境変数・カレントディレクトリなどへのアクセスを非Node依存な形で標準化するAPI。ワークインプログレスが継続中
+- **HTTPサーバー**（約20分）: サーバーサイドランタイム向けHTTPサーバーAPI標準化の継続議論
+- **ストリームイテレータ**（約15分）: James Snellによるストリームとイテレータの統合提案
+
+Minimum Common API（ECMA-429）が旗艦仕様として整備中だが、CLI APIとSockets APIはまだwork in progressの段階。仕様の大きなマイルストーン到達は確認できず。
+
+### TC39: 3月プレナリー後の動き
+
+3月10〜12日のプレナリー結果（Temporal Stage 4到達など）は[前回](/reports/2026/03/19/weekly-tech-digest)で既報。その後の追加的な公式発表や新規提案は確認できなかった。次回プレナリーは5月の予定。ミーティングノートはtc39/notesリポジトリに未公開。
+
+## 言語・ランタイム
+
+### TypeScript 6.0 GA リリース間近
+
+[TypeScript 6.0 RC](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-rc/)
+
+3月6日にRCが公開され、GAは3月17日を予定していた。3月21日時点でGA公式ブログ記事は確認できていないが、リリース直後の可能性がある。TypeScript 6.0はJavaScriptベースの**最後のメジャーリリース**と位置づけられており、6.1は出さない方針（重大なセキュリティ問題のみ6.0.xパッチで対応）。
+
+RCでの主な変更点:
+
+- **デフォルト値の変更（破壊的）**: `strict: true`、`module: esnext`、`target: es2025`、`types: []`がデフォルトに
+- **新機能**: Node.jsの`#/`サブパスインポート対応、Temporal API・`RegExp.escape`・Map/WeakMapの`getOrInsert`/`getOrInsertComputed`の型サポート、`--stableTypeOrdering`フラグ（tsgoの挙動を先取りプレビュー）
+- **非推奨化**: `import ... assert {...}`構文、ES5ターゲット、AMD/UMD/SystemJS、`baseUrl`、レガシーnamespace構文
+
+### tsgo（TypeScript 7.0）: 型チェックほぼ完成、emitは作業中
+
+[microsoft/typescript-go](https://github.com/microsoft/typescript-go)
+
+3月13日付けで更新が確認されている。型チェックのパリティはほぼ達成（約6,000テストケース中74ケースを除き一致）。一方、JS emitパイプラインは未完成で、`--target`のダウンレベルコンパイルは`es2021`まで、デコレータのコンパイルは未サポート。既存のTypeScript API（Strada API）にも非対応のため、ESLintプラグイン等はそのまま動かない。GAターゲットは2026年夏〜後半。
+
+### V8 / Chrome 146: Iterator.concat とゼロデイ修正
+
+[Chrome 146 Release Notes](https://developer.chrome.com/release-notes/146)
+
+Chrome 146が3月10日にstableリリースされ、V8にTC39 Iterator sequencing提案の`Iterator.concat`が搭載された。既存のイテレーターを連結して新しいイテレーターを作成できる。
+
+セキュリティ面では、V8のゼロデイ脆弱性（CVE-2026-3910: Inappropriate implementation in V8）を含む緊急パッチが3月中旬に配信されている。
+
+### Node.js: 3月24日セキュリティリリース予告
+
+[Node.js March 2026 Security Releases](https://nodejs.org/en/blog/vulnerability/march-2026-security-releases)
+
+3月24日にNode.js全サポートライン（25.x / 24.x / 22.x / 20.x）に対してセキュリティリリースが予定されている。High 2件、Medium 4〜5件、Low 2件の修正が含まれる。具体的なCVE番号や修正内容はリリース後に開示予定。Node.js 20 LTSは2026-04-30にEOLのため、これが最後のセキュリティ修正の一つになる可能性がある。
+
+### Deno: 2.7.x パッチリリース相次ぐ
+
+[Deno Releases](https://github.com/denoland/deno/releases)
+
+Deno 2.7系で複数のパッチリリースが出ている。
+
+- **v2.7.5**（3月11日）: HTMLカバレッジレポートに関数単位のカバレッジを追加、`deno doc`でnpmパッケージをサポート
+- **v2.7.6**（3月18日）: 構造化クローン用のcloneableリソースレジストリを追加、V8を146.8.0に更新
+- **v2.7.7**（3月19日）: macOSでの`select`フォールバック実装の修正、Node.js worker threadスタブの修正
+
+### Bun: v1.3.11 以降の新リリースなし
+
+3月21日時点でv1.3.12以降は未リリース。
+
+## エコシステム
+
+### Hono v4.12.5〜v4.12.8: セキュリティ修正が連続
+
+[Hono Releases](https://github.com/honojs/hono/releases)
+
+2週間で4リリースが出ており、セキュリティ関連の修正が目立つ。
+
+- **v4.12.7**（3月10日）: `parseBody({ dot: true })`使用時に`__proto__`パスセグメントを無視してプロトタイプ汚染を防止
+- **v4.12.6**（3月10日）: `accept`ヘッダー処理でのReDoS脆弱性を正規表現置き換えで対処。Lambda@EdgeでNode.js 24.x上のコールバックハンドラー非推奨化を回避する互換性修正も含む
+- **v4.12.8**（3月14日）: Bearer認証のプレフィックスオプションで正規表現メタ文字をエスケープするセキュリティ修正
+- **v4.12.5**（3月4日）: JWTの`decode`/`decodeHeader`関数でトークンフォーマット検証を追加
+
+プロトタイプ汚染・ReDoS・認証バイパスと影響が大きい修正が含まれるため、アップデートを推奨。
+
+### Effect v4 Beta: AIツールキットとdurable workflowsの予告
+
+[This Week in Effect - 2026-03-13](https://effect.website/blog/this-week-in-effect/2026/03/13/)
+
+v4 Betaの開発が引き続き活発。3月13日版の主な進捗:
+
+- `LanguageModel`オプションでツールキットユニオンのサポートを追加
+- シェル自動補完用の新モジュール`effect/unstable/cli/Completions`を追加
+- `Layer.mock`が双方向APIに変更
+- `RpcGroup.toLayer`がハンドラー依存関係を含むように変更
+- Tim Smartがコーディングエージェント構築用のEffect toolkitを予告（"coming soon"）
+- `@effect/workflow`によるdurable workflowsも紹介
+
+コミュニティからは`effect-oauth-client`（Effect v4 HttpClient向けOAuth 2.0 Client Credentialsヘルパー）が登場している。
+
+### Zod: 引き続き安定期
+
+[Zod Releases](https://github.com/colinhacks/zod/releases)
+
+対象期間中の新リリースは確認できず。最新はv4.3.6（1月23日）のまま。カナリー版として`4.4.0-canary.20260125T215152`が存在するが、正式リリースには至っていない。
