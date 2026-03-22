@@ -31,7 +31,7 @@ export function PostItem({ item, isSelected }: PostItemProps): React.ReactElemen
         <Text dimColor>{'  '}{time}</Text>
       </Text>
       <Box paddingLeft={2}>
-        <Text wrap='wrap'>{content}</Text>
+        <Text wrap='truncate'>{content}</Text>
       </Box>
       <Box paddingLeft={2} gap={2}>
         <Text color={post.liked ? 'red' : 'gray'}>
