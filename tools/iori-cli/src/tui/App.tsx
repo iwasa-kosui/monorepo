@@ -10,6 +10,7 @@ import type { Mode, Tab } from '../types.js';
 import { ComposeInput } from './ComposeInput.js';
 import { useKeyBindings } from './hooks/useKeyBindings.js';
 import { useNotifications } from './hooks/useNotifications.js';
+import { usePagination } from './hooks/usePagination.js';
 import { useTimeline } from './hooks/useTimeline.js';
 import { NotificationList } from './NotificationList.js';
 import { StatusBar } from './StatusBar.js';
@@ -72,6 +73,32 @@ export function App({ client }: AppProps): React.ReactElement {
       setNotifSelectedIndex((prev) => Math.max(prev - 1, 0));
     }
   }, [tab]);
+
+  const { itemsPerPage } = usePagination(tlItems.length);
+
+  const handlePageForward = useCallback(() => {
+    if (tab === 'timeline') {
+      setTlSelectedIndex((prev) => {
+        const currentPage = Math.floor(prev / itemsPerPage);
+        const nextPageStart = (currentPage + 1) * itemsPerPage;
+        const next = Math.min(nextPageStart, tlItems.length - 1);
+        if (next >= tlItems.length - 3 && hasMore && !loadingMore) {
+          void loadMore();
+        }
+        return next;
+      });
+    }
+  }, [tab, itemsPerPage, tlItems.length, hasMore, loadingMore, loadMore]);
+
+  const handlePageBack = useCallback(() => {
+    if (tab === 'timeline') {
+      setTlSelectedIndex((prev) => {
+        const currentPage = Math.floor(prev / itemsPerPage);
+        const prevPageStart = Math.max(0, (currentPage - 1) * itemsPerPage);
+        return prevPageStart;
+      });
+    }
+  }, [tab, itemsPerPage]);
 
   const handleCompose = useCallback(() => {
     if (tab === 'timeline') {
@@ -150,6 +177,8 @@ export function App({ client }: AppProps): React.ReactElement {
     isActive: mode === 'normal',
     onMoveDown: handleMoveDown,
     onMoveUp: handleMoveUp,
+    onPageForward: handlePageForward,
+    onPageBack: handlePageBack,
     onCompose: handleCompose,
     onEditorCompose: handleEditorCompose,
     onDelete: handleDelete,

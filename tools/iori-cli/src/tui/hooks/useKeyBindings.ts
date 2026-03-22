@@ -5,6 +5,8 @@ interface KeyBindingsOptions {
   isActive: boolean;
   onMoveDown: () => void;
   onMoveUp: () => void;
+  onPageForward: () => void;
+  onPageBack: () => void;
   onCompose: () => void;
   onEditorCompose: () => void;
   onDelete: () => void;
@@ -43,6 +45,10 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       opts.onLike();
     } else if (input === 'R') {
       opts.onRepost();
+    } else if (input === 'h' || key.leftArrow) {
+      opts.onPageBack();
+    } else if (input === 'l' || key.rightArrow) {
+      opts.onPageForward();
     } else if (input === 'g') {
       pendingG.current = true;
     } else if (key.tab) {

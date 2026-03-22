@@ -11,7 +11,7 @@ interface StatusBarProps {
 
 function normalModeHelp(tab: Tab): string {
   if (tab === 'timeline') {
-    return 'j/k:移動 a:投稿 e:エディタ d:削除 L:Like R:Repost gg:リロード Tab:通知 q:終了';
+    return 'j/k:移動 h/l:ページ送り a:投稿 e:エディタ d:削除 L:Like R:Repost gg:リロード Tab:通知 q:終了';
   }
   return 'j/k:移動 gg:リロード Tab:タイムライン q:終了';
 }

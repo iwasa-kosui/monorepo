@@ -2,6 +2,7 @@ import { Box, Text, useStdout } from 'ink';
 import React from 'react';
 
 import type { TimelineItemData } from '../types.js';
+import { usePagination } from './hooks/usePagination.js';
 import { PostItem } from './PostItem.js';
 
 interface TimelineProps {
@@ -11,18 +12,13 @@ interface TimelineProps {
   hasMore: boolean;
 }
 
-const LINES_PER_ITEM = 5;
-const RESERVED_LINES = 4;
-
 export function Timeline({ items, selectedIndex, loadingMore, hasMore }: TimelineProps): React.ReactElement {
   const { stdout } = useStdout();
-  const terminalRows = stdout?.rows ?? 24;
+  const { itemsPerPage, totalPages } = usePagination(items.length);
 
-  const visibleCount = Math.max(1, Math.floor((terminalRows - RESERVED_LINES) / LINES_PER_ITEM));
-
-  const viewportStart = selectedIndex;
-
-  const visibleItems = items.slice(viewportStart, viewportStart + visibleCount);
+  const currentPage = Math.floor(selectedIndex / itemsPerPage);
+  const pageStart = currentPage * itemsPerPage;
+  const visibleItems = items.slice(pageStart, pageStart + itemsPerPage);
 
   if (items.length === 0) {
     return <Text dimColor>タイムラインに投稿がありません</Text>;
@@ -31,7 +27,7 @@ export function Timeline({ items, selectedIndex, loadingMore, hasMore }: Timelin
   return (
     <Box flexDirection='column'>
       {visibleItems.map((item, i) => {
-        const actualIndex = viewportStart + i;
+        const actualIndex = pageStart + i;
         return (
           <Box key={item.timelineItemId} flexDirection='column'>
             <PostItem item={item} isSelected={actualIndex === selectedIndex} />
@@ -40,7 +36,7 @@ export function Timeline({ items, selectedIndex, loadingMore, hasMore }: Timelin
         );
       })}
       <Text dimColor>
-        {selectedIndex + 1}/{items.length}
+        {selectedIndex + 1}/{items.length} ページ {currentPage + 1}/{totalPages}
         {loadingMore ? ' 読み込み中...' : !hasMore ? ' (末尾)' : ''}
       </Text>
     </Box>
