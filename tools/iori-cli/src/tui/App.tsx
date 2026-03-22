@@ -13,6 +13,7 @@ import { useNotifications } from './hooks/useNotifications.js';
 import { usePagination } from './hooks/usePagination.js';
 import { useTimeline } from './hooks/useTimeline.js';
 import { NotificationList } from './NotificationList.js';
+import { PostDetail } from './PostDetail.js';
 import { StatusBar } from './StatusBar.js';
 import { Timeline } from './Timeline.js';
 
@@ -100,6 +101,16 @@ export function App({ client }: AppProps): React.ReactElement {
     }
   }, [tab, itemsPerPage]);
 
+  const handleSelect = useCallback(() => {
+    if (tab === 'timeline' && tlItems[tlSelectedIndex]) {
+      setMode('detail');
+    }
+  }, [tab, tlItems, tlSelectedIndex]);
+
+  const handleDetailBack = useCallback(() => {
+    setMode('normal');
+  }, []);
+
   const handleCompose = useCallback(() => {
     if (tab === 'timeline') {
       setMode('compose');
@@ -179,6 +190,7 @@ export function App({ client }: AppProps): React.ReactElement {
     onMoveUp: handleMoveUp,
     onPageForward: handlePageForward,
     onPageBack: handlePageBack,
+    onSelect: handleSelect,
     onCompose: handleCompose,
     onEditorCompose: handleEditorCompose,
     onDelete: handleDelete,
@@ -207,6 +219,24 @@ export function App({ client }: AppProps): React.ReactElement {
 
   if (loading && currentItems.length === 0) {
     return <Text>読み込み中...</Text>;
+  }
+
+  if (mode === 'detail') {
+    const detailItem = tlItems[tlSelectedIndex];
+    if (detailItem) {
+      return (
+        <PostDetail
+          item={detailItem}
+          onBack={handleDetailBack}
+          onLike={handleLike}
+          onRepost={handleRepost}
+          onDelete={() => {
+            handleDelete();
+            setMode('normal');
+          }}
+        />
+      );
+    }
   }
 
   return (

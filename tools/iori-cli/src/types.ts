@@ -38,7 +38,7 @@ export interface HomeTimelineResponse {
   timelineItems: TimelineItemData[];
 }
 
-export type Mode = 'normal' | 'compose';
+export type Mode = 'normal' | 'compose' | 'detail';
 
 export type Tab = 'timeline' | 'notifications';
 
