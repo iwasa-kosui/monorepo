@@ -1,0 +1,196 @@
+---
+title: "Architect Digest: 2026-03-21"
+date: "2026-03-21T12:00:00+09:00"
+slug: "2026/03/21/architect-digest"
+description: "KubernetesにAI Gateway WGとAgent Sandboxが登場、GoogleがWizを320億ドルで買収完了、StripeのMachine Payments Protocolがエージェント決済を標準化、Cloudflareのvinextが1週間でNext.js代替を構築など、AIエージェントがインフラ層に浸透した1ヶ月。"
+tags: ["Architect"]
+---
+
+AIエージェントが「実験段階」から「インフラ層への組み込み」へ移行した1ヶ月だった。KubernetesにはAIエージェント専用のWGとCRDが新設され、StripeはAIエージェントによる自律決済のオープンプロトコルを公開し、AWS Bedrock AgentCoreはGA機能を矢継ぎ早に追加した。一方でCloudflareのvinextがVercelから公開2日で7件の脆弱性を指摘されるなど、AI生成コードの品質保証が喫緊の課題として浮上している。KubeCon Europe 2026が3月23日に開幕する。
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: Humans and Agents in Software Engineering Loops
+
+[Humans and Agents in Software Engineering Loops](https://martinfowler.com/articles/exploring-gen-ai/humans-and-agents.html)（Kief Morris、3月4日）
+
+「ループ外の人間」（バイブコーディング）、「ループ内の人間」、「ループ上の人間」の3モデルを提示。推奨は「ループ上の人間」で、開発者はエージェントの品質チェックや仕様（ハーネス）の構築・管理に注力する。エージェント自体がハーネスを改善提案する「エージェント的フライホイール」の可能性にも言及。
+
+### Martin Fowler: Fragments（3月10日・19日）
+
+[Fragments 3/19](https://martinfowler.com/fragments/2026-03-19.html) / [Fragments 3/10](https://martinfowler.com/fragments/2026-03-10.html)
+
+- 3/19: コードレビューは「バグ捕捉」ではなく「製品として出すべきか」の判断活動（David Poll）。Charity Majorsが本番環境の可観測性がAI時代の議論で過小評価されていると指摘
+- 3/10: ジュニア開発者がAI自動化に早期依存するとシステムへの深い理解が失われる「Apprentice Gap」を提起。COBOL近代化でAIによるコード変換は表面的改善に過ぎず、戦略的設計見直しが必要と指摘
+
+### Google: マルチエージェントアーキテクチャのスケーリング原則
+
+[Google Publishes Scaling Principles for Agentic Architectures](https://www.infoq.com/news/2026/03/google-multi-agent/)（3月3日）
+
+GoogleとMITの研究者がマルチエージェントシステムのスケーリング予測フレームワークを発表。エージェントアーキテクチャを独立型・一元化型・分散型・ハイブリッド型の4カテゴリに分類し、「ツール・調整トレードオフ」「能力飽和」「トポロジー依存エラー増幅」の3つの支配的効果を特定した。最適な調整戦略を87%の精度で予測できると報告。
+
+### The Oil and Water Moment in AI Architecture
+
+[The Oil and Water Moment in AI Architecture](https://www.infoq.com/articles/oil-water-moment-ai-architecture/)（Shweta Vohra、3月13日）
+
+決定論的ソフトウェアと確率論的AIが混在する状況を「oil and water moment」と表現。コンプライアンスは設計時ではなく継続的なランタイム規律へ移行する必要があるとし、「V-Impact Canvas」（アーキテクチャ意図・設計ガバナンス・価値測定）の3層フレームワークを提案。
+
+### Configuration as a Control Plane
+
+[Configuration as a Control Plane](https://www.infoq.com/articles/configuration-control-plane/)（Karthiek Maralla、3月20日）
+
+「設定管理はもはや運用上の懸念事項ではなく、高レバレッジな信頼性規律になった」という主張。AWS・Meta・Google・Netflixなどハイパースケーラーが採用する共通パターン（段階的ロールアウト、ブラスト半径の封じ込め、事前検証、自動ロールバック）を分析し、Azure Front Door・DynamoDB・Cloudflare・Cloud Pub/Subなど設定ミスによる大規模障害事例を整理。
+
+### QCon London 2026: The Hidden Power of Boring Problems
+
+[The Hidden Power of Boring Problems](https://www.infoq.com/news/2026/03/engineering-boring-problems/)（Yinka Omole、3月16日）
+
+Dan McKinnleyの「Innovation Token」概念を用い、PostgreSQLが正確性とトランザクション保証への初期集中によりJSON・全文検索・ベクター拡張を大幅改修なく追加できた事例を紹介。AI・自動化が普及しても、データモデリング・信頼性・分散システムといった基礎問題は繰り返し登場すると論じた。
+
+## Cloud Native / CNCF
+
+### Kubernetes AI Gateway Working Group 設立
+
+[Announcing the AI Gateway Working Group](https://kubernetes.io/blog/2026/03/09/announcing-ai-gateway-wg/)（3月9日）
+
+AIワークロード向けネットワークインフラを標準化する新WGが正式発足。Gateway API仕様を実装しつつ、トークンベースのレート制限・推論APIへのアクセス制御・プロンプトインジェクション防御・セマンティックルーティングを備えたゲートウェイを定義する。SIG Networkが後ろ盾となり、Envoy Gateway・kgateway・GKE Gatewayとの統合を想定。KubeCon Amsterdamでプロトタイプを発表予定。
+
+### Agent Sandbox: Kubernetes上のAIエージェント実行基盤
+
+[Running Agents on Kubernetes with Agent Sandbox](https://kubernetes.io/blog/2026/03/20/running-agents-on-kubernetes-with-agent-sandbox/)（3月20日）
+
+SIG Appsのサブプロジェクトとして、AIエージェント向けの新CRD「Sandbox」が導入された。gVisor・Kata Containersによるランタイム隔離でLLM生成コードを安全に実行し、`SandboxWarmPool`により事前プロビジョニングされたPodプールでコールドスタートを解消する。Python SDKを提供し、AIエンジニアがインフラを意識せずライフサイクル管理を実施可能。
+
+### Ingress2Gateway 1.0 リリース
+
+[Ingress2Gateway 1.0 Release](https://kubernetes.io/blog/2026/03/20/ingress2gateway-1-0-release/)（3月20日）
+
+Ingress-NGINX廃止に伴うGateway APIへの移行支援ツールが1.0に到達。対応するIngress-NGINXアノテーション数が3つから30以上に拡大（CORS・バックエンドTLS・正規表現マッチング等）。未対応設定は明示的に警告・代替案を提示する。GoogleとMicrosoftが共同開発。
+
+### WG Serving 解散（AIインファレンス支援完了）
+
+[WG Serving Concludes](https://www.cncf.io/blog/2026/02/26/kubernetes-wg-serving-concludes-following-successful-advancement-of-ai-inference-support/)（2月26日）
+
+AIインファレンスワークロード向けオーケストレーション基盤の目標達成に伴い正式解散。Inference Gatewayのリクエストスケジューラー採用やAIゲートウェイ機能の標準化を推進した成果は、後継プロジェクト「llm-d」「AIBrix」と各SIGへ引き継がれる。
+
+### Securing Production Debugging in Kubernetes
+
+[Securing Production Debugging](https://kubernetes.io/blog/2026/03/18/securing-production-debugging-in-kubernetes/)（3月18日）
+
+本番デバッグにおけるcluster-adminや共有bastion・長期SSH鍵の利用を問題視し、RBACによる最小権限・短命のID連携認証情報・SSHスタイルのハンドシェイクモデルを推奨。一時的な例外が恒常化しやすいリスクと監査証跡消失の問題を指摘した。
+
+### OpenTelemetry: OTTLコンテキスト推論がFilter Processorに対応
+
+[OTTL Context Inference Comes to the Filter Processor](https://opentelemetry.io/blog/2026/ottl-context-inference-come-to-filterprocessor/)（3月2日）
+
+Collector v0.146.0から、`resource.attributes`のようなプレフィックスを付けるだけで実行コンテキストを自動推論可能に。従来は`resource`/`span`/`spanevent`等のコンテキストブロックを個別に記述する必要があった。
+
+### OpenTelemetry: MastodonによるCollectorの本番運用事例
+
+[How Mastodon Runs OpenTelemetry Collectors in Production](https://opentelemetry.io/blog/2026/devex-mastodon/)（3月18日）
+
+約20人規模のチームが毎分約1,000万リクエストを処理する環境でCollectorを運用。Kubernetesネームスペースごとに1台のCollectorを配置するシンプルな構成を採用し、tail-basedサンプリングで成功トレースを約0.1%にサンプリング、エラーは100%収集。「2年間でCollectorに問題が1件も発生しなかった」安定性を報告。
+
+### Cilium v1.20 プレリリース / CiliumCon
+
+[CiliumCon Deep Dive](https://www.cncf.io/blog/2026/03/18/kubecon-cloudnativecon-europe-2026-co-located-event-deep-dive-ciliumcon/)（3月18日）
+
+v1.20.0-pre.0が公開され、次期リリースの開発が進行中。CiliumConは3月23日にAmsterdamで開催（7回目）。Ciliumプロジェクト10周年を記念し、Cisco・Microsoft・Rocheが登壇。Tetragonを使ったセキュリティポリシー実装やDPU上のハードウェア高速化が注目テーマ。
+
+### KubeCon + CloudNativeCon Europe 2026（開催直前）
+
+[CNCF Unveils Schedule](https://www.cncf.io/announcements/2025/12/10/cncf-unveils-schedule-for-kubecon-cloudnativecon-europe-2026/)
+
+224セッション・12,000人超が参加見込み。基調講演は「AI x クラウドネイティブ」「欧州デジタル主権」「CRA（サイバーレジリエンス法）とOSS」が三本柱。SNCFやSaxo Bankが国家・金融インフラへのKubernetes適用事例を紹介し、Rory McCune（Datadog）がLLMによるKubernetesセキュリティ保護の実証的検証を行う。
+
+## Platform Engineering / SRE / Observability
+
+### Stripe Machine Payments Protocol（MPP）
+
+[Machine Payments Protocol](https://stripe.com/blog/machine-payments-protocol)（3月18日）
+
+AIエージェントが人間の介入なしに決済できるオープンプロトコルをTempoと共同策定。HTTPの402レスポンスを活用した要求→支払い承認→リソース提供のフローで、OAuthに近い「セッション」プリミティブで事前に支出上限を設定する。設計パートナーにAnthropic・OpenAI・Visa・Mastercard・DoorDash。
+
+### incident.io: AI SRE の本格展開
+
+[SRE Tools & Reliability Practices 2026](https://incident.io/blog/sre-tools-reliability-practices-2026)
+
+マルチエージェントシステムがGitHub PR・Slack・ログ・メトリクス・トレースを横断的に調査し、1〜2分以内に仮説と報告をSlack上に提示。根本原因を特定しての修正PR生成精度が最大90%、MTTRを最大5倍短縮。Airbnb・Etsy・Zendeskが設計パートナーとして参加。
+
+### Uber: Superuser Gateway
+
+[Superuser Gateway Guardrails](https://www.uber.com/blog/superuser-gateway-guardrails/)（2月26日）
+
+DBA・SRE等が実行する高インパクト操作を、専用CLI→PR生成→自動バリデーション→ピアレビュー→バックエンド実行というワークフローに置き換え、個別エンジニアのスーパーユーザー権限を廃止。監査証跡を共有アカウントではなく個人に紐付ける設計。
+
+### Coroot: eBPFベースのOSS観測可能性ツール
+
+[Coroot](https://www.helpnetsecurity.com/2026/02/23/coroot-open-source-observability-apm-tool/)（2月23日）
+
+Kubernetes環境向けのOSS APMツール。eBPFエージェントがカーネルレベルのデータを取得し、コード変更なしでメトリクス・ログ・トレース・継続的プロファイリングを収集。Prometheusフォーマットでメトリクスを公開し、既存スタックへの統合が容易。
+
+### IaC動向
+
+- **Terraform v1.14.7**（3月11日）: List Resources（リモートリソースの一覧取得）、実験的機能「deferred actions」により`count`/`for_each`にunknown値を使用可能（[Releases](https://github.com/hashicorp/terraform/releases)）
+- **HCP Terraform旧無料プランが3月31日にEOL**: リソース数ベース（500リソースまで無料）の拡張無料プランに自動移行。移行は不可逆（[HashiCorp Blog](https://www.hashicorp.com/en/blog/continuing-hcp-terraform-s-enhanced-free-tier-experience)）
+- **Pulumi HCLネイティブサポート**: Q1 2026 GA予定。Pulumi CloudがTerraform/OpenTofuのステートバックエンドとして機能し、HCL をPulumiエンジンで直接実行可能に（[InfoQ](https://www.infoq.com/news/2026/01/pulumi-adds-terraform-hcl/)）
+- **OpenTofu Day @ KubeCon Europe**: CNCF Sandbox加入後初のKubeConでの開催。State-of-the-projectアップデートとコアメンテナへの質問パネルを予定（[CNCF Blog](https://www.cncf.io/blog/2026/03/09/kubecon-cloudnativecon-europe-2026-co-located-event-deep-dive-opentofu-day/)）
+
+## クラウドベンダー・業界動向
+
+### Google Cloud: Wiz買収完了（320億ドル）
+
+[Google Completes Acquisition of Wiz](https://cloud.google.com/blog/products/identity-security/google-completes-acquisition-of-wiz)（3月11日）
+
+Googleの買収史上最大規模。WizブランドはGoogle Cloud傘下で維持し、AWS・Azure・Oracle Cloudとの互換性を継続する。MandiantとWizを組み合わせ、脅威インテリジェンスからインシデントレスポンスまでのエンドツーエンドセキュリティプラットフォームを構築。
+
+### AWS: Bedrock AgentCore の大幅強化
+
+[AgentCore Adds Quality Evaluations and Policy Controls](https://aws.amazon.com/blogs/aws/amazon-bedrock-agentcore-adds-quality-evaluations-and-policy-controls-for-deploying-trusted-ai-agents/)（3月3日〜17日）
+
+- Policy GA（3月3日）: 自然言語でポリシーを記述するとCedar形式に自動変換
+- AgentCore Memoryがストリーミング通知をサポート（3月12日）。変更をKinesisにプッシュ配信
+- AG-UI（Agent-User Interaction）プロトコルをサポート（3月13日）。MCP・A2Aに続く第3のプロトコル
+- `InvokeAgentRuntimeCommand` APIによりランタイムセッション内でシェルコマンド直接実行が可能に（3月17日）
+
+### AWS: Route 53 Global Resolver GA
+
+[Amazon Route 53 Global Resolver](https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-route-53-global-resolver/)（3月9日）
+
+30リージョンでIPv4/IPv6対応のグローバルエニーキャストDNSリゾルバー。DNS over HTTPS/TLS暗号化、DNSトンネリング・DGAブロッキング、DNSSECバリデーションに対応し、リージョン障害からDNS解決を切り離す設計。
+
+### GCP: Gemini 3.1 Pro / Flash-Lite
+
+[Gemini 3.1 Pro on Vertex AI](https://cloud.google.com/blog/products/ai-machine-learning/gemini-3-1-pro-on-gemini-cli-gemini-enterprise-and-vertex-ai)
+
+Gemini 3.1 ProがVertex AI・Gemini Enterpriseでプレビュー公開。Flash-Liteは大量翻訳・コンテンツモデレーション向け最速・最安値モデル。gemini-3-pro-previewは3月26日で廃止予定。
+
+### Cloudflare: vinext（AIで1週間で作ったNext.js代替）
+
+[vinext](https://blog.cloudflare.com/vinext/)
+
+1人のエンジニアがAIモデルを用い、$1,100のトークン費用・800超のAIセッションで1週間でNext.js APIサーフェスをVite上に再実装。ビルド速度4.4倍高速化、クライアントバンドルサイズ57%削減。ただし公開2日後にVercelがクリティカル2件を含む7件の脆弱性を報告しており、本番利用は要注意。
+
+### Cloudflare: 2026 Threat Report
+
+[2026 Threat Report](https://blog.cloudflare.com/2026-threat-report/)（3月3日）
+
+攻撃者の動機が「最大被害」から「効率最大化」へシフト。生成AIによるリアルタイムネットワークマッピング・エクスプロイト開発の自動化が進行し、低スキル攻撃者でも高インパクト攻撃が可能に。Salt Typhoon等の中国系APTによる重要インフラへの事前侵入、31.4 Tbps超の記録的DDoSを観測。
+
+### Netflix: JDK Vector APIによるレコメンデーション最適化
+
+[Optimizing Recommendation Systems with JDK's Vector API](https://netflixtechblog.com/optimizing-recommendation-systems-with-jdks-vector-api-30d2830401ec)（3月3日）
+
+Rankerサービス内のvideo serendipity scoringが各ノードCPUの約7.5%を消費していた問題を、JDK Vector APIによるバッチ処理・メモリレイアウト再設計・SIMDスコアリングカーネルの実装で解決。
+
+### GCP: Threat Horizons レポート
+
+[Cloud CISO Perspectives](https://cloud.google.com/blog/products/identity-security/cloud-ciso-perspectives-new-threat-horizons-report-highlights-current-cloud-threats)
+
+React2Shell事件では脆弱性公開後約48時間で暗号通貨マイナーが展開され、攻撃のエクスプロイトウィンドウがほぼ崩壊している。北朝鮮APTがKubernetesを悪用した暗号通貨組織への攻撃キャンペーンを詳述。大手ランサムウェアグループがログ・コアダンプ・バックアップを意図的に削除するアンチフォレンジック戦術に移行。
+
+### DDD Europe 2026 プログラム公開
+
+[DDD Europe 2026 Program](https://2026.dddeurope.com/program/)
+
+10周年記念回。基調講演者はMartin Fowler、Diana Montalion、Indu Alagarsamy。「Foundations」と「EventCentric」の2トラック制で、DDDの10年間の変遷を総括する場になる見込み。6月10〜12日にアントワープで開催。
