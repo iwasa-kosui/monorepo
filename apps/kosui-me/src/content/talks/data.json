@@ -1,5 +1,20 @@
 [
   {
+    "title": "TypeScriptのclassはなぜこうなったのか — 歴史・落とし穴・そして使いどころを探る30分",
+    "date": "2026-05-11",
+    "event": "TSKaigi 2026",
+    "tags": [
+      "TypeScript",
+      "ECMAScript",
+      "class"
+    ],
+    "duration": "30min",
+    "description": "TypeScriptのclassがECMAScriptとの「追いかけっこ」で今の形になるまでの歴史を紐解き、\n構造的部分型と型消去という2つの根本原因から落とし穴を体系的に整理します。",
+    "year": "2026",
+    "name": "tskaigi",
+    "slideType": "local"
+  },
+  {
     "title": "開発チームが信頼性向上のためにできること",
     "date": "2026-01-31",
     "event": "SRE Kaigi 2026",
