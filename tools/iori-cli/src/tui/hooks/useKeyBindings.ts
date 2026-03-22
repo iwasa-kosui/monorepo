@@ -7,6 +7,7 @@ interface KeyBindingsOptions {
   onMoveUp: () => void;
   onPageForward: () => void;
   onPageBack: () => void;
+  onSelect: () => void;
   onCompose: () => void;
   onEditorCompose: () => void;
   onDelete: () => void;
@@ -31,7 +32,9 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       }
     }
 
-    if (input === 'j' || key.downArrow) {
+    if (key.return) {
+      opts.onSelect();
+    } else if (input === 'j' || key.downArrow) {
       opts.onMoveDown();
     } else if (input === 'k' || key.upArrow) {
       opts.onMoveUp();
@@ -41,7 +44,7 @@ export function useKeyBindings(opts: KeyBindingsOptions): void {
       opts.onCompose();
     } else if (input === 'd') {
       opts.onDelete();
-    } else if (input === 'L') {
+    } else if (input === 'L' || input === 'f') {
       opts.onLike();
     } else if (input === 'R') {
       opts.onRepost();
