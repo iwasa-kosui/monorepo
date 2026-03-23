@@ -120,6 +120,11 @@ pre.mermaid {
 }
 
 /* Prose-like styles for MDX content */
+.prose h1 {
+  @apply text-3xl font-bold mb-6 pb-2 border-b border-border
+    dark:border-[#2a2a32];
+}
+
 .prose h2 {
   @apply text-2xl font-bold mt-12 mb-4 pb-2 border-b border-border
     dark:border-[#2a2a32];
