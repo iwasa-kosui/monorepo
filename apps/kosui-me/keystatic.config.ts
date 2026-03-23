@@ -1,4 +1,4 @@
-import { collection, config, fields } from '@keystatic/core';
+import { collection, config, fields, singleton } from '@keystatic/core';
 import './src/styles/keystatic.css';
 
 const postSchema = {
@@ -35,6 +35,19 @@ export default config({
       format: { contentField: 'content' },
       entryLayout: 'content',
       schema: postSchema,
+    }),
+  },
+  singletons: {
+    resume: singleton({
+      label: 'Resume',
+      path: 'src/content/resume/resume',
+      format: { contentField: 'content' },
+      entryLayout: 'content',
+      schema: {
+        title: fields.text({ label: 'Title' }),
+        description: fields.text({ label: 'Description', multiline: true }),
+        content: fields.mdx({ label: 'Content' }),
+      },
     }),
   },
 });
