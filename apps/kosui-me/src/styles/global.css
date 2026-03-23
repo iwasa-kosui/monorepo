@@ -194,6 +194,29 @@ pre.mermaid {
   @apply my-8 border-border dark:border-[#2a2a32];
 }
 
+.prose details {
+  @apply mt-6 mb-2;
+}
+
+.prose details > summary {
+  @apply text-lg font-semibold text-charcoal dark:text-gray-100 cursor-pointer
+    list-none;
+}
+
+.prose details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose details > summary::before {
+  content: "▶";
+  @apply inline-block mr-2 text-sm text-accent dark:text-accent-light
+    transition-transform duration-200;
+}
+
+.prose details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 /* Clay card hover lift */
 .clay-hover-lift {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
