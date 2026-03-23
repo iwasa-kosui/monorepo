@@ -1,4 +1,5 @@
 import { collection, config, fields } from '@keystatic/core';
+import './src/styles/keystatic.css';
 
 const postSchema = {
   title: fields.slug({ name: { label: 'Title' } }),
