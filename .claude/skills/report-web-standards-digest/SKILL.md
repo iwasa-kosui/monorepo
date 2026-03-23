@@ -1,5 +1,5 @@
 ---
-name: web-standards-digest
+name: report-web-standards-digest
 disable-model-invocation: true
 description: |
   WinterTC, Node.js, TypeScript, ECMAScript, Deno, Bun, V8, Hono, Effect, Zod など
