@@ -11,6 +11,8 @@
     "@astrojs/react": "4.4.2",
     "@astrojs/sitemap": "3.7.0",
     "@jitl/quickjs-singlefile-browser-release-sync": "0.32.0",
+    "@keystatic/astro": "5.0.6",
+    "@keystatic/core": "0.5.49",
     "@swc/wasm-web": "1.15.18",
     "astro": "^5.16.15",
     "mermaid": "11.12.3",
@@ -47,6 +49,7 @@
   },
   "scripts": {
     "dev": "astro dev",
+    "dev:keystatic": "KEYSTATIC=true astro dev",
     "generate:og": "npx tsx scripts/generate-og-images.ts",
     "generate:og:talks": "node scripts/generate-og-images-talks.mjs",
     "generate:talks": "npx tsx scripts/generate-talks.ts",
