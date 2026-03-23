@@ -10,7 +10,7 @@ export default config({
       format: { contentField: 'content' },
       schema: {
         title: fields.slug({ name: { label: 'Title' } }),
-        date: fields.datetime({ label: 'Date' }),
+        date: fields.text({ label: 'Date' }),
         slug: fields.text({ label: 'Slug' }),
         description: fields.text({ label: 'Description', multiline: true }),
         tags: fields.array(fields.text({ label: 'Tag' }), {
@@ -31,7 +31,7 @@ export default config({
       format: { contentField: 'content' },
       schema: {
         title: fields.slug({ name: { label: 'Title' } }),
-        date: fields.datetime({ label: 'Date' }),
+        date: fields.text({ label: 'Date' }),
         slug: fields.text({ label: 'Slug' }),
         description: fields.text({ label: 'Description', multiline: true }),
         tags: fields.array(fields.text({ label: 'Tag' }), {
