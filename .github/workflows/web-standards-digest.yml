@@ -37,4 +37,4 @@ jobs:
             Skill
           prompt: |
             今日は ${{ steps.date.outputs.date }} です。
-            /web-standards-digest
+            /report-web-standards-digest

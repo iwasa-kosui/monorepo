@@ -1,5 +1,5 @@
 ---
-name: architect-digest
+name: report-architect-digest
 disable-model-invocation: true
 description: |
   設計パターン・アーキテクチャ思想、Cloud Native / CNCF、Platform Engineering / SRE、
