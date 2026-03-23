@@ -1,0 +1,165 @@
+/*
+ * Keystatic エディタのスタイルを実際の記事表示に寄せるカスタム CSS。
+ * .ProseMirror は Keystatic の MDX エディタ内の contenteditable 要素。
+ */
+
+.ProseMirror {
+  font-feature-settings: "palt";
+  color: #1a1a2e;
+  line-height: 1.75;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e5ea;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.ProseMirror h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror p {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.ProseMirror a {
+  color: #e05e52;
+  text-decoration: underline;
+}
+
+.ProseMirror a:hover {
+  color: #c04a40;
+}
+
+.ProseMirror ul {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+}
+
+.ProseMirror li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  line-height: 1.75;
+}
+
+.ProseMirror blockquote {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-left: 1rem;
+  border-left: 4px solid #e5e5ea;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.ProseMirror code {
+  background-color: #f0f0f2;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ProseMirror pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.ProseMirror table {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #e5e5ea;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.ProseMirror th {
+  font-weight: 600;
+  background-color: #faf5f4;
+}
+
+.ProseMirror hr {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  border-color: #e5e5ea;
+}
+
+.ProseMirror img {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  max-width: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ProseMirror {
+    color: #ececec;
+  }
+
+  .ProseMirror h2 {
+    border-bottom-color: #2a2a32;
+  }
+
+  .ProseMirror a {
+    color: #f0887e;
+  }
+
+  .ProseMirror a:hover {
+    color: #fff;
+  }
+
+  .ProseMirror blockquote {
+    border-left-color: #2a2a32;
+    color: #9ca3af;
+  }
+
+  .ProseMirror code {
+    background-color: #2a2a32;
+    color: #9ca3af;
+  }
+
+  .ProseMirror th,
+  .ProseMirror td {
+    border-color: #2a2a32;
+  }
+
+  .ProseMirror th {
+    background-color: #1c1c22;
+  }
+
+  .ProseMirror hr {
+    border-color: #2a2a32;
+  }
+}

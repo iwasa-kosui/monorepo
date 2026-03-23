@@ -18,9 +18,26 @@ const integrations = [
   }),
 ];
 
+const vitePlugins = [tailwindcss()];
+
 if (process.env.KEYSTATIC) {
   const keystatic = (await import('@keystatic/astro')).default;
   integrations.push(keystatic());
+  vitePlugins.push({
+    name: 'keystatic-custom-css',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (ctx.path?.startsWith('/keystatic')) {
+          return html.replace(
+            '</head>',
+            '<link rel="stylesheet" href="/keystatic-editor.css"></head>',
+          );
+        }
+        return html;
+      },
+    },
+  });
 }
 
 export default defineConfig({
@@ -32,7 +49,7 @@ export default defineConfig({
   },
   integrations,
   vite: {
-    plugins: [tailwindcss()],
+    plugins: vitePlugins,
     optimizeDeps: {
       exclude: ['@swc/wasm-web'],
     },
