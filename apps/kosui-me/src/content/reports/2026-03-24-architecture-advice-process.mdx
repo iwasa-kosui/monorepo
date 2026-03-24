@@ -1,0 +1,104 @@
+---
+title: "Architecture Advice Process: アーキテクチャ意思決定の分散化"
+date: "2026-03-24T12:00:00+09:00"
+slug: "2026/03/24/architecture-advice-process"
+description: "Andrew Harmel-Lawが提唱する「助言プロセス」によるアーキテクチャ意思決定の分散化について、InfoQ記事の詳細和訳と関連リソースの調査をまとめる。"
+tags: ["Architect", "Organization"]
+---
+
+Andrew Harmel-LawがGOTO Copenhagen 2025で発表した「Architecture Advice Process」について、Ben LindersがInfoQで報告した[記事](https://www.infoq.com/news/2026/03/architecture-advice-process/)の詳細和訳と、関連リソースからの補足情報をまとめる。Harmel-Lawはこのアプローチを[Martin Fowlerのサイトでの長編記事](https://martinfowler.com/articles/scaling-architecture-conversationally.html)や、2024年のO'Reilly書籍 *Facilitating Software Architecture* でも体系的に論じている。
+
+## 従来のアーキテクチャ実践の限界
+
+Harmel-Lawは、従来のアーキテクチャ実践が現代の開発手法とシステムの複雑性に追いついていないと主張する。
+
+「象牙の塔型アーキテクト」は開発チームから離れた場所で設計方針を決定し、実装の詳細には関与しない。このモデルではアーキテクトがフィードバックループから切り離され、ボトルネックになる。「ハンズオン型アーキテクト」は自らもコードを書きながら設計判断を行うが、スケールの限界に直面する。一人の人間がすべてのチームのコードに関与し続けることはできない。
+
+Harmel-Lawの言葉を借りれば、アーキテクトは「自分のアーキテクチャ理解を全員に明確に伝えるだけでなく、実装と運用から生じるフィードバックや失敗から常に学び続けなければならない。率直に言って、これは不可能だ——少なくとも、フローのボトルネックになりたくないのであれば」。
+
+アーキテクチャにおける最大の課題は「すべての適切な場所に、すべての適切なタイミングで存在すること」だ。組織が大きくなるにつれ、どちらのモデルも意思決定がスケールしない。
+
+## 助言プロセスの原則
+
+代案として提示されるのが助言ベースの分散型意思決定モデルだ。原典はFrederic Lalouxの *Reinventing Organizations* における助言プロセスであり、Harmel-Lawはこれをアーキテクチャ意思決定に適用した。
+
+ルールは一つ。「誰でも、影響を受ける全関係者と専門知識を持つ人々から助言を求める限り——許可を求めるのとは異なる——どんな決定でも下せる」。
+
+2つの条件がある。決定を下す者は、事前に以下の両方から助言を求めなければならない。
+
+- その決定によって実質的に影響を受ける人々
+- その決定の対象領域について専門知識を持つ人々
+
+重要なのは、助言を求めることは義務だが、助言に従うことは義務ではないという点だ。「決定者は助言に同意する義務はないが、助言を求め、耳を傾け、記録しなければならない」。決定権と説明責任は完全に決定者に帰属する。これはコンセンサスではなく、アカウンタビリティを重視する仕組みだ。
+
+## アーキテクトの役割変容
+
+助言プロセスの下で、従来のアーキテクトは4つの新しい役割に変容する。
+
+**助言提供者**: 技術的な選択肢の長所と短所を提示する。**文脈提供者**: 組織の技術戦略やシステム全体の制約条件を共有する。**意思決定コーチ**: 決定者がトレードオフを整理し、根拠のある判断に至るプロセスを支援する。**対話のキュレーター**: 関連するチームや専門家を結びつけ、必要な対話が起きるよう調整する。
+
+いずれも自ら決定を下す役割ではなく、決定の質を高める触媒として機能する。Harmel-Law自身の感想として「従来の『アーキテクト』の役割を担ってきた者として、これを体験するのは爽快だ」と述べている。
+
+実際のコンサルティングの現場では「最近の仕事の大半は、アーキテクトやテックリードに手放させることだ」という。ただし、恐れは通常1ヶ月以内に解消される。「コントロールを諦めるのではなく、自分の思考と知識をより広く行き渡らせられるのだ」と気づくからだ。
+
+## 4つの支援要素
+
+### Architecture Decision Records
+
+Michael Nygardが考案したADRを助言プロセスに適応させたものが記録の中核になる。Harmel-Law版のADRには通常のセクションに加え、「受け取ったアドバイス」の欄がある。アドバイザーの名前と日付とともに記録され、著者は選択肢セクションでそのアドバイスに直接向き合うことが求められる。従うかどうかに関わらず、助言を受けた事実とその内容を明示する。
+
+### Architecture Advisory Forum
+
+毎週1時間の定例会議。参加者はチーム代表者や専門知識の保持者だが、招待はオープンで透明性が確保される。定常アジェンダは、進行中のスパイク、提案中の決定、決定状況のレビュー、メトリクスのレビュー、その他。従来のArchitecture Review Boardとの違いは、AAFが決定の承認権限を持たない点だ。決定の所有権は起案者に残り、参加者はアドバイスのみを提供する。Harmel-Lawの言葉では「ここでアーキテクチャが『行われて』おり、教訓が共有され学ばれているなら、それは成功だ」。
+
+### チーム策定のアーキテクチャ原則
+
+効果的な原則はS.M.A.R.T.で、ビジネス戦略との整合があり、含意と結果が明示されている。Martin Fowlerのサイトに掲載された具体例として「チームの独立性を最も重視する。ソリューションはチームの境界に沿って分割する」という原則がある。この原則の含意は、重複の許容、ライセンスコスト増、結果整合性のトレードオフを受け入れるということだ。原則は意思決定の結果を命じるのではなく、評価の指針を与える。
+
+### Technology Radar
+
+Thoughtworksの "Build Your Own Radar" ツールを組織内にカスタマイズしたもの。4象限（Techniques / Tools / Platforms / Languages & Frameworks）と移動リング（Experiment / Adopt / Hold / Retire）で構成される。組織の技術スナップショットとして機能し、ADRから関連エントリへの参照を可能にする。
+
+## 具体例: Lambda vs. Kubernetes
+
+記事ではチームがコンピュート方式を選択する具体例を挙げている。Lambda関数、Kubernetes Pod上のマイクロサービス、カスタムコンピュートノードの中からLambdaを選択するケースだ。
+
+チームはADRで自らの選択を提案する。システムアーキテクトはLambdaのコールドスタート遅延と状態管理の困難さについて懸念を表明する。しかしチームは、その懸念を認識した上でLambdaを選択できる。選択の結果に対する説明責任はチームが負う。アーキテクトの助言は記録されるが、拒否権にはならない。
+
+## 失敗パターン
+
+Harmel-Lawは以下の失敗パターンを特定している。
+
+**Bad decisions**: シニアメンバーが決定をブロックする。助言プロセスの下では、助言者は懸念を表明できるが決定を止める権限はない。上位者がこの境界を越えると、プロセス全体が形骸化する。
+
+**Old guard == new guard**: 名義上は分散化されているが、実質的に同じシニアアーキテクトが全決定を行い続けている状態。
+
+**Off the radar decisions**: 決定が文書化されず、適切なアドバイスを求めないまま行われる。Martin Fowlerのサイトではこれを「プロセスのギャップを示す警告サイン」と位置づけ、発見時は強制執行ではなく学習の機会として扱うべきだとしている。
+
+**No trust**: プロセスへの信頼が不十分で、決定者が実質的にアドバイスを「許可」として扱ってしまう。助言プロセスでは決定者が助言に従わない選択をしても、それは正当な行為だ。この文化的移行が最も困難で、「助言者が許可を与える」という階層的メンタルモデルを脱却する必要がある。
+
+Martin Fowlerのサイトではさらに**Shadow architecture**——シニアアーキテクトが密かに決定を覆したり並行して決定を行う——を最も破壊的な失敗モードとして挙げている。Harmel-Law自身「この失敗モードがこのアプローチを困難にしているのかと問われれば、その通りだ」と認めている。
+
+## 知識のフローとストック
+
+助言プロセスは「知識のストック」——個人が蓄える専門性による個人的権力——を「知識のフロー」——適切な人に情報が流れる仕組みによる組織的利益——に置き換える文化的転換を要求する。「階層、閉鎖的で半ば秘密の知識、権力ゲーム」から「知識共有と共有された経験」への移行だ。
+
+Alberto Brandoliniの言葉が示唆的だ。「本番にデプロイされるのはあなたの美しいダイアグラムではない。開発者の仮定だ」。助言プロセスは、この「開発者の仮定」の質を組織的に高める仕組みとして機能する。
+
+## Xapo Bankでの実践事例
+
+Martin Fowlerのサイトには、Xapo Bankでの[実践事例](https://martinfowler.com/articles/xapo-architecture-experience.html)が詳細に記録されている。2014年にBitcoinサービス会社として創業し2020年に銀行に転換したXapo Bankは、15年ものレガシーコードベース、複数の.NETバージョン混在、3〜6ヶ月のリリースサイクルという課題を抱えていた。
+
+DDDとTeam Topologiesによる再編を先行させた上で、AAFを導入。5年間で200以上のADRを作成し、意思決定の加速、アーキテクチャ知識の分散、クロスファンクショナルな可視性の向上を実現した。ADRをConfluenceからJiraに移行し、決定のリードタイムを計測可能にしたという実践的な工夫も報告されている。
+
+教訓として、知識として「合意不要」を受け入れていても参加者は無意識に「皆さん同意しますか？」を求め続けたこと、成功にはエンジニアリングを横断してコラボレーションを推進するフルタイムのスチュワードが必要だったことが挙げられている。
+
+## 関連リソース
+
+- [Decentralizing Architectural Decisions with the Architecture Advice Process](https://www.infoq.com/news/2026/03/architecture-advice-process/) — 本記事の原文（Ben Linders、InfoQ、2026年3月5日）
+- [Scaling Architecture Conversationally](https://martinfowler.com/articles/scaling-architecture-conversationally.html) — Harmel-LawによるMartin Fowlerサイトでの長編記事
+- [Decentralizing the Practice of Architecture at Xapo Bank](https://martinfowler.com/articles/xapo-architecture-experience.html) — Xapo Bankでの実践事例
+- [Empowering Teams: Decentralizing Architectural Decision-Making](https://www.infoq.com/articles/empowering-decentralizing-architectural-decision-making/) — Xapo BankのPeter HunterとElena Stojmilovaによる報告
+- [A Commune in the Ivory Tower](https://gotocph.com/2025/sessions/3816/a-commune-in-the-ivory-tower) — GOTO Copenhagen 2025でのHarmel-Lawの講演
+- *Facilitating Software Architecture* (O'Reilly, 2024) — Harmel-Lawの書籍
+- *Reinventing Organizations* (Frederic Laloux) — 助言プロセスの原典
