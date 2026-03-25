@@ -27,8 +27,8 @@ function formatDate(dateStr: string): string {
 ---
 
 <BaseLayout
-  ogTitle={`🤖 ${report.data.title}`}
-  ogDescription={report.data.description}
+  ogTitle={report.data.title}
+  ogDescription={`[AI生成] ${report.data.description}`}
   noindex={true}
 >
   <article class="article-paper">
