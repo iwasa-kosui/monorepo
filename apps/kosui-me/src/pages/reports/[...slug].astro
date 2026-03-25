@@ -27,7 +27,7 @@ function formatDate(dateStr: string): string {
 ---
 
 <BaseLayout
-  ogTitle={report.data.title}
+  ogTitle={`🤖 ${report.data.title}`}
   ogDescription={report.data.description}
   noindex={true}
 >
@@ -43,7 +43,7 @@ function formatDate(dateStr: string): string {
         class="text-3xl font-bold mt-2 mb-4"
         transition:name={`report-title-${report.data.slug}`}
       >
-        {report.data.title}
+        🤖 {report.data.title}
       </h1>
       <AuthorCard />
     </header>
