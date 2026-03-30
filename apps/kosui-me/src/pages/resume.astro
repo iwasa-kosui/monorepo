@@ -121,40 +121,4 @@ function formatDate(dateStr: string): string {
     </section>
   </article>
 
-  <script>
-  function wrapH4WithDetails() {
-    const prose = document.querySelector('.prose');
-    if (!prose) return;
-
-    const h4s = Array.from(prose.querySelectorAll('h4'));
-    for (const h4 of h4s) {
-      const details = document.createElement('details');
-      const summary = document.createElement('summary');
-
-      summary.textContent = h4.textContent;
-
-      // Collect all siblings until next h4, h3, h2, h1, or end
-      const siblings: Node[] = [];
-      let next = h4.nextSibling;
-      while (next) {
-        if (
-          next instanceof HTMLElement
-          && /^H[1-4]$/i.test(next.tagName)
-        ) {
-          break;
-        }
-        siblings.push(next);
-        next = next.nextSibling;
-      }
-
-      h4.replaceWith(details);
-      details.appendChild(summary);
-      for (const sibling of siblings) {
-        details.appendChild(sibling);
-      }
-    }
-  }
-
-  wrapH4WithDetails();
-  </script>
 </BaseLayout>
