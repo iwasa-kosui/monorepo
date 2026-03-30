@@ -1,0 +1,204 @@
+---
+title: "Architect Digest: 2026-03-31"
+date: "2026-03-31T12:00:00+09:00"
+slug: "2026/03/31/architect-digest"
+description: "AI速度にガバナンスを追随させる宣言的アーキテクチャの台頭、OpenTelemetry Profilesのパブリックアルファ到達、llm-dのCNCFサンドボックス採択によるKubernetesの推論ファーストクラス化、SpotifyのAIエージェント「Honk」が10日間で1000PRをマージなど、AIエージェントがアーキテクチャ実践そのものを変えつつある1ヶ月。"
+tags: ["Architect"]
+---
+
+「AIの速度にアーキテクチャガバナンスを追随させる」が今月の通底テーマだった。InfoQでは宣言的アーキテクチャ（機械可読なADR・EventModel・OpenAPI Validator）によるAI時代のガバナンスが提唱され、Martin Fowlerのサイトではエンジニアの作業が「創造」から「検証」へシフトしているという実証研究が紹介された。プラットフォーム層ではllm-dがCNCFサンドボックスに採択されKubernetesが推論ファーストクラスのインフラへ進化し、OpenTelemetry Profilesがパブリックアルファに到達して可観測性の第4シグナルが立ち上がった。一方でSpotifyのAIエージェント「Honk」が10日間で1000PRをマージする事例は、ボトルネックがコード生成からレビューへ移行するという組織的課題を浮き彫りにしている。
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: Patterns for Reducing Friction in AI-Assisted Development（更新）
+
+[Patterns for Reducing Friction in AI-Assisted Development](https://martinfowler.com/articles/reduce-friction-ai/)
+
+3月3日に「Design-First Collaboration」、3月17日に「Context Anchoring」の2セクションが追加された。Design-First Collaborationは実装前にAIと段階的な設計を経ることで要件の誤解を早期発見するパターン。Context Anchoringは機能の進化に伴う意思決定と制約を「生きたドキュメント」として管理し、AIへの外部メモリとして使うパターンで、セッション境界を越えてコンテキストを保持し以前の決定との矛盾を防ぐ。
+
+### Martin Fowler: Fragments（3月16日・26日）
+
+[Fragments 3/16](https://martinfowler.com/fragments/2026-03-16.html) / [Fragments 3/26](https://martinfowler.com/fragments/2026-03-26.html)
+
+- 3/16: AIを使う158名のプロエンジニア対象の研究（Annie Vella）を紹介。エンジニアの作業が「創造」から「検証」へシフトしており、AIへの指示・出力評価・修正にかかる「supervisory engineering work」という概念を提示。Chad Fowlerは「制約はコード生成ではなく安全に置き換えることに移った」と主張
+- 3/26: Julias Shawの「仕様書は設計図、実際の安全策はコードとのズレを検出するテストスイート」という指摘を紹介。Anthropicの8万ユーザー調査では、AIへの楽観・悲観は二分されず各人の価値観ごとに異なり、発展途上国ほど楽観的という結果
+
+### InfoQ: Architectural Governance at AI Speed
+
+[Architectural Governance at AI Speed](https://www.infoq.com/articles/architectural-governance-ai-speed/)（3月26日）
+
+GenAIがコード生成を加速する一方、従来の人手によるアーキテクチャレビューが追いつかない問題を提起。解決策として「宣言的アーキテクチャ」を提唱し、EventModeling（`eventmodel.json`）、OpenAPI Validator、Architecture.md（AIエージェントが読める形式のADR）の3アプローチを示す。「機械可読性は技術的な利便性ではなくコア要件」という主張が核心で、人間だけが理解できる決定はスケールしないと断じている。
+
+### InfoQ: Architecting Autonomy at Scale
+
+[Architecting Autonomy at Scale](https://www.infoq.com/articles/architecting-autonomy-scale/)（3月27日）
+
+C4モデルの各レベルで権限を配分する設計を提案。コンテキスト→エンタープライズアーキテクト、コンテナ→ソリューションアーキテクト、コンポーネント→ソリューションエンジニア、コード→テックリード。承認ゲートではなくフィットネス関数による自動チェックで整合性を維持し、アーキテクトは「司令官から指導者へ」転換する。
+
+### InfoQ: Architecting Portable Systems on Open Standards for Digital Sovereignty
+
+[Architecting Portable Systems on Open Standards for Digital Sovereignty](https://www.infoq.com/articles/portable-systems-sovereignty/)（3月23日）
+
+「絶対的なデジタル主権は幻想」と断言し、ベンダーロックイン回避のための現実的な設計指針を提示。KubernetesやPostgreSQL等のオープン標準を活用しても、ストレージやCI/CDでプロプライエタリ依存が生まれやすい点を警告。開発者は自然に利便性へ流れるため、ガードレールがなければ依存が生まれ、過剰な制限はシャドーITを招くというジレンマを指摘。
+
+### KurrentDB: イベントネイティブアーキテクチャとAI
+
+[We'll End Up Where We Started. Except with Different Technology.](https://www.kurrent.io/blog/we-will-end-up-where-we-started/)（3月30日）
+
+AIシステムのデータインフラ設計における根本的な問題を指摘。「状態ベースのシステムは今何が真実かを知っているが、どうしてそこに至ったかを記録していない」。CDCは現在状態をもたらすがイベント列や因果関係はもたらさない。イベントネイティブアーキテクチャを中心に設計することでAIの完全な監査可能性と再現性を実現できると主張。
+
+## Cloud Native / CNCF
+
+### llm-d: CNCFサンドボックス採択
+
+[llm-d officially a CNCF Sandbox project](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/)（3月24日、KubeCon EU 2026）
+
+Google Cloud・IBM Research・Red Hatが共同開発したKubernetes-nativeの分散LLM推論フレームワーク。NVIDIA・CoreWeave・AMD・Hugging Face・Mistralも設立コントリビューターとして参加。技術的な核心はPrefill/Decodeの分離（プロンプト処理とトークン生成を独立してスケール）、階層型KVキャッシュ（GPU・TPU・CPU・ストレージにまたがるオフローディング）、状態認識ルーティング（KVキャッシュヒット率・インフライトリクエスト数に基づく最適バックエンド選択）、ハードウェア非依存設計の4点。Qwen3-32Bでベースライン比5倍スループット改善を報告。
+
+### Fluid: CNCFインキュベーション昇格
+
+[Fluid becomes a CNCF Incubating Project](https://www.cncf.io/blog/2026/03/24/fluid-becomes-a-cncf-incubating-project/)（3月24日）
+
+Nanjing University・Alibaba Cloud・Alluxioが共同開発したクラウドネイティブデータオーケストレーション基盤。KubernetesでDatasetリソースを第一級市民として扱い、HDFS・S3・GCS等をAlluxioやJuiceFSを通じてキャッシュする。コントリビューター979人、Xiaomi・NetEase・China Telecomが採用。今後はLLM KVCacheオーケストレーションへの対応を目指す。
+
+### Tekton: CNCFインキュベーション昇格
+
+[Tekton becomes a CNCF Incubating Project](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/)（3月24日）
+
+KubernetesネイティブのCI/CDフレームワーク。Pipelines・Triggers・CLI・Dashboard・Chainsの5コンポーネントで構成。GitHub Stars 11,000+、コントリビューター600人超。サンドボックスを経ずにインキュベーション入りしている点が特徴的。Argo CD・SPIFFE/SPIRE・Sigstoreとの連携によるサプライチェーンセキュリティが戦略上の軸。
+
+### Kubernetes v1.36: コードフリーズ完了
+
+[Kubernetes v1.36 Sneak Peek](https://medium.com/google-cloud/kubernetes-v1-36-sneak-peek-7c5422ffd841)
+
+4月22日リリース予定のv1.36が3月18日にコードフリーズを完了。トラッキングされているエンハンスメントは80件。主な注目点は以下の通り。
+
+- HPAScaleToZero がデフォルト有効化へ（v1.16以来のアルファからついに昇格）
+- kube-proxyのIPVSモードが非推奨化
+- DRA Resource MetricsがGA（GPU等のAI/MLワークロード向けリソースメトリクスが安定化）
+- User Namespaces in PodsおよびMutating Admission PoliciesがStable入り
+- ExternalJWTSigner gRPC API（Alpha）: SA JWT署名をHSMやCloud KMSに委譲、APIサーバ再起動なしにキーローテーション可能
+
+### Istio: gcr.ioからの移行発表とCVE開示
+
+[Istio News](https://istio.io/latest/news/)（3月23日〜）
+
+資金調達モデル変更を受け、2027年1月1日以降`gcr.io/istio-release`でのイメージ配布が終了し、新レジストリ`registry.istio.io`に移行する。また複数のCVE（CVSS 8.7）が開示され、v1.29.1・v1.28.5・v1.27.8へのアップグレードが必要。v1.27は3月30日にEOLを迎えた。
+
+### OpenTelemetry: Profiles パブリックアルファ
+
+[OpenTelemetry Profiles Enters Public Alpha](https://opentelemetry.io/blog/2026/profiles-alpha/)（3月26日）
+
+トレース・メトリクス・ログに次ぐ第4のシグナルとして、継続的プロダクションプロファイリングの統一標準がAlpha段階に到達。Elasticが寄贈したeBPFプロファイリングエージェントをOTel Collectorに統合し、追加インストルメンテーション不要でLinux上の全システムプロファイリングが可能。スタック表現の重複排除と文字列辞書サポートによりpprof比で40%のワイヤサイズ削減を達成。Go・Node.js・Ruby・.NET 9/10・Erlang/Elixirに対応。
+
+### OpenTelemetry: Declarative Configuration が Stable化
+
+[Stable Declarative Config](https://opentelemetry.io/blog/2026/stable-declarative-config/)（3月5日）
+
+JSONスキーマ（opentelemetry-configuration 1.0.0）、YAMLファイル形式、インメモリ表現、環境変数`OTEL_CONFIG_FILE`が安定化。C++・Go・Java・JavaScript・PHPの5言語で実装が利用可能。今後は新機能提案時に宣言的設定の型定義を同時に提案する「宣言的設定ファースト」の方針に移行する。
+
+### OpenTelemetry: Span Events API の非推奨化
+
+[Deprecating Span Events](https://opentelemetry.io/blog/2026/deprecating-span-events/)（3月17日）
+
+`Span.AddEvent`と`Span.RecordException`の2つの重複したイベント記録手段が混乱を招いていたため、Logs APIに一本化する方向性が示された。互換レイヤを通じた移行期間が設けられ、OTEP 4430が移行計画の詳細を定義している。
+
+## Platform Engineering / SRE / Observability
+
+### Grafana: CVE-2026-27876（CVSS 9.1 Critical）
+
+[Grafana Security Release](https://grafana.com/blog/grafana-security-release-critical-and-high-severity-security-fixes-for-cve-2026-27876-and-cve-2026-27880/)（3月25日）
+
+SQL式機能がファイルシステムへの任意ファイル書き込みを許可し、複数の攻撃ベクトルを連鎖させてリモートコード実行が可能だった。v11.6.0以降が影響対象で、`sqlExpressions`機能フラグが有効かつ閲覧者以上の権限が前提条件。Grafana 12.4.2等でパッチ済み。CVE-2026-27880（CVSS 7.5）も同時修正で、認証なしのメモリ枯渇攻撃が可能だった。
+
+### OpenTelemetry eBPF Instrumentation（旧Grafana Beyla）
+
+[Grafana's eBPF Beyla Future Hinges on OpenTelemetry](https://thenewstack.io/grafanas-ebpf-beyla-future-hinges-on-opentelemetry/)
+
+Grafana BeylaがCNCF OpenTelemetryプロジェクトに寄贈され、OpenTelemetry eBPF Instrumentation（OBI）として開発が継続。eBPFベースのゼロインストゥルメンテーションがKubernetes可観測性スタックの標準となりつつあり、CNCF TAGの調査ではKubernetesを大規模運用するチームの67%が少なくとも1つのeBPFベース可観測性ツールを採用している。
+
+### Catchpoint SRE Report 2026
+
+[The SRE Report 2026](https://www.catchpoint.com/learn/sre-report-2026)
+
+第8版の主要データ。AIへの楽観的見方が44%→60%に増加する一方、AIシステムの信頼性監視に高い自信を持つのは13%のみで、AI可観測性の課題が浮き彫りに。カオスエンジニアリングを定期的に実施している組織は17%にとどまり、保護された学習時間を持つSREはわずか6%。SREエンジニアの中央値が月34%の時間を反復作業に費やしている。
+
+### Terraform v1.15.0-beta1
+
+[Releases · hashicorp/terraform](https://github.com/hashicorp/terraform/releases)（3月18日）
+
+Windows ARM64ビルドの追加、モジュールソースで変数/ローカル変数が使用可能になる機能、`convert`関数の追加、変数と出力ブロックの非推奨属性サポートなど。v1.14.8（3月25日）ではプロバイダーアップグレード後のクラッシュ問題を修正。
+
+### Pulumi: 3月の注目アップデート
+
+[Pulumi Blog](https://www.pulumi.com/blog/)
+
+Pulumi ESCに`fn::final`機能を追加（3月17日）。親環境の設定値を子環境で上書き不可にする制御で、コンプライアンス維持に対応。Pulumi CloudがTerraformステートのストレージバックエンドとして機能する機能がGA（3月5日）。Kubernetes GatekeeperのOPAをPulumiポリシーパックに直接導入可能に（3月19日）。パフォーマンス向上機能（最大20倍）がGA。
+
+### Platform Engineering Day @ KubeCon EU
+
+[Platform Engineering Day](https://www.cncf.io/blog/2026/03/19/kubecon-cloudnativecon-europe-2026-co-located-event-deep-dive-platform-engineering-day/)（3月23日）
+
+5回目の開催。GitLabによるSaaSからセルフマネージドまでスケールするKubernetesプラットフォームの構築、Booking.comによるPlatform Engineering 2.0（Just-Enough KubernetesとAI-Native DevOps）などが注目セッション。AIエージェントをIDPに統合する動きが本格化しており、コード生成・セキュリティ検証・デプロイを担う専門エージェントをCI/CDに組み込むマルチエージェント構成が議論された。
+
+## クラウドベンダー・業界動向
+
+### GCP: llm-d と AI Hypercomputer
+
+[Google Cloud AI Infrastructure at NVIDIA GTC 2026](https://cloud.google.com/blog/products/compute/google-cloud-ai-infrastructure-at-nvidia-gtc-2026)
+
+NVIDIAの次世代「Vera Rubin」プラットフォームについて、Google Cloudが最初期提供クラウドに名乗り。NVL72は36CPU×72GPUの完全液冷で、Blackwell比で推論5倍・学習3.5倍の性能向上を主張。GKE Inference GatewayとNVIDIA Dynamoの統合も発表。
+
+### GCP: 分散AIエージェントのアーキテクチャパターン
+
+[Building Distributed AI Agents](https://cloud.google.com/blog/topics/developers-practitioners/building-distributed-ai-agents/)（3月18日）
+
+「単一の強力なエージェント」ではなく「専門化した分散マイクロサービス群」としてエージェントを設計するオーケストレーターパターンを解説。Google Agent Development Kit（ADK）で構築、A2Aプロトコルで連携、Cloud Runにデプロイするスタックを推奨。
+
+### AWS: Amazon Connect Health
+
+[Amazon Connect Health](https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-connect-health-agentic-ai-healthcare/)（3月5日）
+
+医療行政向けの目的特化型エージェントAIプラットフォーム。患者確認・予約管理・アンビエントドキュメンテーション・医療コーディングの5エージェントをHIPAA適格で提供。AI生成アウトプットを原典に紐付けるevidence mapping機能が特徴。料金は月99ドル/ユーザー。
+
+### AWS: S3バケットのアカウント地域ネームスペース化
+
+[AWS Weekly Roundup](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-amazon-s3-turns-20-amazon-route-53-global-resolver-general-availability-and-more-march-16-2026/)
+
+バケット名がグローバル一意ではなくなり、アカウント+リージョン内でのみ一意性が保証される仕様に変更。S3は20周年を迎え、500兆オブジェクト・毎秒2億リクエスト処理を達成している。
+
+### AWS: CloudWatch Application Signals SLO機能追加
+
+[CloudWatch Application Signals adds SLO capabilities](https://aws.amazon.com/about-aws/whats-new/2026/03/cloudwatch-application-signals-adds-slo-capabilities/)（3月13日）
+
+30日間のメトリクス分析に基づくSLO推奨値、サービス全体の信頼性を横断表示するService-Level SLOs、カレンダー期間対応のSLOパフォーマンスレポートの3機能を追加。バーンレートアラートにも対応。
+
+### Meta: Ranking Engineer Agent（REA）
+
+[Ranking Engineer Agent](https://engineering.fb.com/2026/03/17/developer-tools/ranking-engineer-agent-rea-autonomous-ai-system-accelerating-meta-ads-ranking-innovation/)（3月17日）
+
+広告ランキングモデルのMLライフサイクル全体を自律的に実行するエージェントシステム。Hibernate-and-Wakeメカニズムにより数週間にわたる非同期ワークフローを継続実行できる点が従来のAIアシスタントとの違い。三相プランニングと二重ソース仮説エンジンを組み合わせ、初回展開で2倍のモデル精度と5倍のエンジニアリングアウトプット向上を報告。
+
+### Spotify: Honk（AIコーディングエージェント）
+
+[Spotify Honk rewrite](https://www.infoq.com/news/2026/03/spotify-honk-rewrite/)（QCon London 2026発表）
+
+Claude Code上に構築した内部AIエージェント「Honk」が10日間で1000PRをマージ。決定論的スクリプトによるマイグレーション自動化では70%のケースしか処理できず、残り30%の複雑な例外処理にLLMが必要だった。GitHub Pushとプルリクエスト作成を分離し、CI検証後にのみPR作成するアーキテクチャを採用。ボトルネックがコード生成からPRレビューに移ったため、マイグレーション担当者のセルフマージ許可などの組織的変更も実施。
+
+### Netflix: Ontology-Driven Observability
+
+[Ontology at Netflix](https://www.infoq.com/news/2026/03/ontology-at-netflix/)（QCon London 2026発表）
+
+あるインシデントで30人以上のエンジニアが9チームにわたり4時間を要した事例から、オントロジー駆動の観測性基盤を構築。「Subject | Predicate | Object」トリプルでサービス間の関係を形式化し、Metrics/Events/Logs/Tracesを統合するMELTレイヤーを構築。Claudeをco-developerとして統合し、PRを提案させてHumanがレビューする形式を採用。
+
+### Netflix: Graph Abstraction
+
+[High Throughput Graph Abstraction at Netflix](https://www.infoq.com/news/2026/03/netflix-graph-abstraction/)
+
+650TBのグラフデータを単一桁ミリ秒レイテンシ・毎秒約1000万オペレーションで処理する基盤。Neo4jやAWS Neptuneを評価したが水平スケーリングの問題からスタンドアロングラフDBは採用せず、既存のKey-Value抽象化層の上にグラフ抽象化レイヤーを構築。クエリの柔軟性を意図的に制限することで予測可能なレイテンシを確保する設計。
+
+### QCon London 2026: Martin Kleppmann キーノート
+
+[Martin Kleppmann on Local-First and Cloud Sovereignty](https://www.infoq.com/news/2026/03/qcon-local-first-sovereignty/)（3月16日）
+
+欧州クラウド市場がAWS・Azure・Googleに約70%支配され欧州系が約2%という状況に警鐘。S3 API・Kubernetes・Kafkaなどのデファクトスタンダードによるマルチクラウド化、BlueSkyのAT Protocolによるデータポータビリティ、CRDTベースのローカルファーストソフトウェアの3つを「コモディティ化」戦略として提示。
