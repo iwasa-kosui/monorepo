@@ -1,0 +1,118 @@
+---
+title: "TC39 proposal-error-stack-accessor: 長年の非標準を最小限の仕様で標準化する試み"
+date: "2026-03-31T12:00:00+09:00"
+slug: "2026/03/31/error-stack-accessor"
+description: "Error.prototype.stack を accessor property として標準化する TC39 提案の技術仕様、議論経緯、エンジン間の実装差異、SES セキュリティ動機を調査した。"
+tags: ["JavaScript", "TC39", "ECMAScript"]
+---
+
+`Error.prototype.stack` はすべての主要 JavaScript エンジンが提供しているにもかかわらず、ECMAScript 仕様に含まれたことがない。エンジンごとにプロパティの種別（データプロパティか accessor か）、文字列フォーマット、非 Error オブジェクトへの振る舞いが異なり、相互運用性の問題を抱えてきた。[proposal-error-stack-accessor](https://github.com/tc39/proposal-error-stack-accessor) はこの状況に対し、スタック文字列の内容には一切踏み込まず、`stack` プロパティの存在と accessor としての振る舞いだけを規定するという最小スコープの標準化を目指している。
+
+## 提案の概要と経緯
+
+### 分離の背景
+
+元々 `Error.prototype.stack` の標準化は [proposal-error-stacks](https://github.com/tc39/proposal-error-stacks) という包括的な提案で進められていた。`System.getStack`、`System.getStackString` といった新規 API やスタック文字列フォーマットの規定を含む野心的な内容だったが、実装者からの抵抗が強く Stage 1 で長期間停滞した。スタックトレースの文字列フォーマットはブラウザ検出コードが依存しており、エンジン間で収束させることが現実的に困難だったためだ。
+
+2024年12月、方針を転換し「`stack` プロパティの存在を仕様化する部分だけを切り出す」として proposal-error-stack-accessor が分離された。
+
+### ステージ進行
+
+- **2025年2月**: TC39 第106回 Plenary で初提示。Stage 1 を飛ばして **Stage 2 に直接到達**
+- **2025年11月**: **Stage 2.7** へ進行（Stage 3 直前の最終確認段階）
+
+Stage 1 飛び級が可能だったのは、「新 API なし、フォーマット規定なし、既存挙動の accessor 定義だけ」という徹底したスコープ絞り込みによる。proposal-error-stacks が何年も Stage 1 に留まった経緯と対照的だ。
+
+### チャンピオンと動機
+
+チャンピオンは Jordan Harband（[@ljharb](https://github.com/ljharb)）と Mark Miller（[@erights](https://github.com/erights)）。Mark Miller の関与は SES（Secure ECMAScript）のセキュリティ要件に直結しており、後述するセキュリティ動機が提案の重要な柱になっている。
+
+## 技術仕様
+
+### accessor property としての定義
+
+`Error.prototype.stack` を以下の属性で定義する。
+
+```
+{ [[Enumerable]]: false, [[Configurable]]: true }
+```
+
+accessor property なので `[[Writable]]` は存在しない。`[[Configurable]]: true` であるため、サブクラスやセキュアな環境で再定義・削除が可能だ。
+
+### getter のセマンティクス
+
+[仕様テキスト](https://tc39.es/proposal-error-stack-accessor/) の `get Error.prototype.stack` は以下の手順を踏む。
+
+1. `this` がオブジェクトでなければ TypeError
+2. `this` が `[[ErrorData]]` 内部スロットを持たなければ `undefined` を返す
+3. 実装定義の文字列を返す
+
+`[[ErrorData]]` を持たないオブジェクト（Error インスタンスでないもの）に対して例外を投げるのではなく `undefined` を返す点が重要だ。これは V8 の現行実装に合わせた設計であり、SpiderMonkey が例外を投げる現行動作とは異なる。
+
+### setter のセマンティクス
+
+`set Error.prototype.stack` は引数 `v` を取り、以下を実行する。
+
+1. `this` がオブジェクトでなければ TypeError
+2. `v` が文字列でなければ TypeError
+3. `SetterThatIgnoresPrototypeProperties(this, %Error.prototype%, "stack", v)` を呼ぶ
+
+`SetterThatIgnoresPrototypeProperties` は Iterator Helpers 提案で導入された抽象操作で、以下のように動作する。
+
+- `this` が `Error.prototype` 自体であれば TypeError（プロトタイプ汚染の防止）
+- `this` に `stack` の own property がなければ `CreateDataPropertyOrThrow` で **own property として新設**
+- 既に own property があれば `Set` で上書き
+
+setter は「Error インスタンスに own property を生やす」操作であり、プロトタイプの accessor を置き換えるのではない。`err.stack = "custom"` という代入は prototype chain を汚染せず、そのインスタンスだけに影響する。
+
+### スタック文字列の内容
+
+仕様は **"implementation-defined string"** とだけ記述しており、フォーマットを一切規定しない。フォーマット標準化は proposal-error-stacks 側の課題として残されている。
+
+## 各エンジンの現行実装
+
+### プロパティの種別と配置
+
+エンジン間で `stack` の実装方法は大きく異なる。
+
+**V8（Chrome 115以降 / Node.js 21以降）** は Error インスタンスの own accessor property として実装している。getter は非 Error レシーバーに `undefined` を返し、setter は no-op として扱う。Chrome 54〜114 / Node.js 7〜20 では表面上は value property だが、`[[GetOwnProperty]]` に exotic behavior を持ち初回アクセス時に `prepareStackTrace` を実行する遅延評価を行っていた。
+
+**SpiderMonkey（Firefox）** は `Error.prototype` 上の accessor property として実装している。getter は非 Error レシーバーに対して**例外を投げる**。これは V8・JSC と異なる振る舞いであり、提案の仕様（`undefined` を返す）とは合致しない。
+
+**JavaScriptCore（Safari）** は Error インスタンスの own string data property（`{ writable: true, configurable: true, enumerable: false }`）として実装している。3エンジンの中で最もシンプルだ。
+
+### スタック文字列フォーマットの差異
+
+V8 は先頭行に `Error: message` を含め、フレームを `at funcName (file:line:col)` 形式で出力する。SpiderMonkey と JSC はエラーメッセージを含めず、`funcName@file:line:col` 形式を使う。JSC はトップレベルフレームを `global code@...` と表記する独自仕様がある。
+
+これらのフォーマット差異は proposal-error-stack-accessor のスコープ外であり、標準化後も各エンジンが独自フォーマットを維持できる。
+
+### Node.js 固有の API
+
+Node.js（V8）は `Error.stackTraceLimit`（デフォルト10フレーム）、`Error.captureStackTrace`（任意オブジェクトへの stack 付与）、`Error.prepareStackTrace`（文字列生成のカスタマイズ）といった非標準 API を提供している。`Error.captureStackTrace` の標準化は別提案 [proposal-error-capturestacktrace](https://github.com/tc39/proposal-error-capturestacktrace) として 2025年2月に Stage 1 に到達している。
+
+## SES とセキュリティ動機
+
+### accessor 標準化のセキュリティ上の意義
+
+Mark Miller が共同チャンピオンである背景には、SES/Hardened JavaScript のセキュリティ要件がある。スタックトレースにはファイルパス、関数名、内部実行経路が含まれ、コンパートメント間の信頼境界を越えた情報漏洩のリスクがある。
+
+現行実装の多くは `stack` を Error インスタンスの own data property として設定するため、`lockdown()` でプロトタイプを凍結しても各インスタンスの `stack` にはアクセスできてしまう。`Error.prototype` 上の **configurable な accessor** として標準化されれば、SES は `lockdown()` 時にプロトタイプ上の getter を削除・差し替えすることでスタック情報の漏洩を制御できる。
+
+MetaMask Snaps が SES を使いサードパーティ JavaScript を隔離実行している実例があり、スタックトレースの制御は実務的な要請でもある。
+
+### 一般的なスタックトレースのセキュリティリスク
+
+CWE-209（エラーメッセージによる情報漏洩）の観点から、スタックトレースは攻撃者の偵察フェーズで有用な情報源になり得る。本番環境でスタックトレースをユーザーに表示しない、JSON API レスポンスに含めないといった対策は広く知られているが、JavaScript レベルでアクセスを制御する仕組みは仕様として存在していなかった。
+
+## エラー監視ツールへの影響
+
+Sentry などのエラー監視ツールは各エンジン固有のスタック文字列をパースし、内部の構造化フォーマットに変換している。proposal-error-stack-accessor がスタック文字列のフォーマットを規定しない以上、各エンジン固有のパース処理は引き続き必要だ。
+
+一方で、`Error.prototype.stack` が configurable な accessor として仕様保証されることで、SDK がプロトタイプ上の getter をフックして構造化スタック情報を取得するアプローチが仕様上で正当化される。現状ではこうしたフックはエンジンの実装詳細に依存しており、将来のエンジン更新で壊れるリスクがあった。
+
+## 関連提案
+
+- [proposal-error-stacks](https://github.com/tc39/proposal-error-stacks)（Stage 1）: スタック文字列フォーマットの規定や `System.getStack` 等の新規 API を含む。実装者の抵抗により停滞中
+- [proposal-error-capturestacktrace](https://github.com/tc39/proposal-error-capturestacktrace)（Stage 1）: V8 の `Error.captureStackTrace` を標準化する提案。Error 以外の任意オブジェクトを対象とし、proposal-error-stack-accessor とは補完関係
+- [Error Cause](https://github.com/tc39/proposal-error-cause)（ES2022 標準化済み）: `new Error('msg', { cause: originalError })` によるエラー連鎖。深さ方向の文脈追跡を担い、stack accessor とは直接の依存関係はない
