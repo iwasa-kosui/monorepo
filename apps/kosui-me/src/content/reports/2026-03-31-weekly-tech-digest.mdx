@@ -1,0 +1,122 @@
+---
+title: "Weekly Tech Digest: 2026-03-31"
+date: "2026-03-31T12:00:00+09:00"
+slug: "2026/03/31/weekly-tech-digest"
+description: "TypeScript 6.0 GA、Node.js全線セキュリティリリース（High 2件含む9 CVE）、WinterTCにEnvironment Access API提案、Deno 2.7.8/2.7.9、Effect v4 Beta破壊的変更進行中。"
+tags: ["Weekly"]
+---
+
+TypeScript 6.0がJSベース最後のメジャーリリースとして3月23日に正式GAとなった。Node.jsは3月24日に全サポートライン（20/22/24/25）で9件のCVEを修正するセキュリティリリースを実施しており、特にHTTPヘッダーのプロトタイプ汚染によるクラッシュ（CVE-2026-21710）とTLSのSNICallback例外クラッシュ（CVE-2026-21637）がHigh severityに分類されている。WinterTCではEnvironment Access APIとPackage mapsの新規提案が登場した。
+
+## 標準化動向
+
+### WinterTC: Environment Access APIとPackage mapsの提案
+
+[WinterTC55/admin Issue #172](https://github.com/WinterTC55/admin/issues/172) / [Issue #173](https://github.com/WinterTC55/admin/issues/173)
+
+3月中に2件の新規提案がオープンされた。
+
+- **Environment Access API**（#172）: `process.env`（Node.js）/ `Deno.env`（Deno）などランタイム間で非互換な環境変数・引数アクセスを統一するAPI。Web Platform PrimitivesのReadableStream/WritableStreamを活用した設計が提示されている
+- **Package maps**（#173）: Node.jsの`--experimental-package-map`をベースに、`node_modules`ウォークの代わりに静的JSONファイルでパッケージ解決する仕組みをランタイム横断で標準化できるかの関心確認
+
+4月3日のミーティング（[Issue #174](https://github.com/WinterTC55/admin/issues/174)）でこれらが議題に含まれている。
+
+### TC39: 3月プレナリー結果の補足
+
+第113回プレナリー（3月10〜12日、ニューヨーク）の結果は[前回](/reports/2026/03/21/weekly-tech-digest)で既報だが、[socket.devの詳細まとめ](https://socket.dev/blog/tc39-advances-temporal-to-stage-4)から追加情報を補足する。
+
+- **Stage 2.7**: Error Stack Accessor（`Error.prototype.stack`の仕様標準化）、Iterator includes
+- **Stage 2**: Intl unit protocol、Thenable Curtailment
+- **Stage 1**: Error code property（エラーオブジェクトへの標準化されたエラーコード追加）
+- **取り下げ**: Dynamic import host adjustment
+
+正式ミーティングノートは[tc39/notes](https://github.com/tc39/notes)にまだ公開されていない。次回プレナリーは5月19〜21日（アムステルダム）。
+
+## 言語・ランタイム
+
+### TypeScript 6.0 正式リリース
+
+[Announcing TypeScript 6.0](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/)
+
+3月23日にGAリリースされた。JSベースコンパイラによる**最後のメジャーリリース**で、6.1は出さない方針（重大なセキュリティ問題のみ6.0.xパッチで対応）。
+
+主な破壊的変更:
+
+- `strict: true`、`module: esnext`、`target: es2025`、`types: []`がデフォルトに
+- `esModuleInterop`と`allowSyntheticDefaultImports`が常時有効化
+- `alwaysStrict`がデフォルト有効化
+- `rootDir`のデフォルト挙動変更: `tsconfig.json`配置ディレクトリが常に`rootDir`に
+- ES5ターゲット、AMD/UMD/SystemJS、`import ... assert {...}`構文が非推奨化
+
+`"ignoreDeprecations": "6.0"`で一時的に非推奨警告を抑制できるが、TypeScript 7.0で削除される。自動移行ツール`ts5to6`も提供されている。
+
+### tsgo（TypeScript 7.0）: npmで試用可能に
+
+[Announcing TypeScript Native Previews](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) / [microsoft/typescript-go](https://github.com/microsoft/typescript-go)
+
+Goネイティブの新実装（内部コードネーム: Corsa）が`@typescript/native-preview`としてnpmに公開されている。フルビルドで概ね10倍高速。型チェック・CLI（`--incremental`、project references、`--build`モード）・エディタ機能（補完、go-to-definition、rename等）が利用可能。ダウンレベルコンパイルはES2021まで、デコレータコンパイルは未対応。GAターゲットは2026年夏〜後半。
+
+### Node.js: 3月24日セキュリティリリース（9 CVE）
+
+[Node.js March 2026 Security Releases](https://nodejs.org/en/blog/vulnerability/march-2026-security-releases)
+
+v20.20.2 / v22.22.2 / v24.14.1 / v25.8.2が同日リリースされた。
+
+**High（2件）:**
+
+- **CVE-2026-21637**: `_tls_wrap.js`の`loadSNI()`で`SNICallback`が同期例外をスローするとプロセスがクラッシュ
+- **CVE-2026-21710**: `__proto__`という名前のHTTPヘッダーを受信して`req.headersDistinct`にアクセスすると未捕捉`TypeError`でクラッシュ
+
+**Medium（5件）:**
+
+- **CVE-2026-21711**: Permission Modelで`--allow-net`なしでもUnix Domain Socketサーバーが作成可能（25.xのみ）
+- **CVE-2026-21712**: 不正なIDNを`url.format()`に渡すとアサーションエラーでクラッシュ（24.x/25.x）
+- **CVE-2026-21713**: `crypto_hmac.cc`が`memcmp()`を使用しHMAC検証にタイミングサイドチャネルが存在
+- **CVE-2026-21714**: HTTP/2の`WINDOW_UPDATE`フレームでメモリリーク
+- **CVE-2026-21717**: V8文字列ハッシュがinteger-like文字列で衝突予測可能、`JSON.parse()`経由のHashDoS
+
+**Low（2件）:** Permission Modelのファイルシステム権限チェック漏れ（CVE-2026-21715、CVE-2026-21716）
+
+Node.js 20 LTSは2026年4月30日にEOLのため、これが最後のセキュリティ修正の一つとなる。
+
+### Deno 2.7.8 / 2.7.9
+
+[Deno Releases](https://github.com/denoland/deno/releases)
+
+- **v2.7.8**（3月25日）: HTTP/2の再実装、P-521署名・検証・ECDH導出の実装、OpenTelemetryコンソールエクスポーター追加
+- **v2.7.9**（3月27日）: `util.stripVTControlCharacters`対応、Windows TTY読み書きの書き直し、操作レベルメトリクスラッパーの最適化
+
+Node.js互換性の着実な積み上げが続いている。
+
+### Bun: v1.3.11以降の新リリースなし
+
+[Bun v1.3.11](https://bun.sh/blog/bun-v1.3.11)
+
+3月31日時点でv1.3.12以降は未リリース。直前のv1.3.11（3月18日）では`Bun.cron`（OSネイティブcronジョブAPI）、Linux x64バイナリ4MB軽量化、105件のバグ修正が含まれていた。
+
+## エコシステム
+
+### Hono v4.12.9: バグ修正パッチ
+
+[Hono v4.12.9](https://github.com/honojs/hono/releases/tag/v4.12.9)
+
+3月23日リリース。`parseBody`のbodyCacheに起因する`TypeError`修正、CORSの`credentials: true`でワイルドカード使用時にリクエストオリジンを反映する修正、`PickResponseByStatusCode`型の追加など。前回報告のセキュリティ修正ラッシュは落ち着き、通常のバグ修正リリースに戻っている。
+
+### Effect: v4 Betaで破壊的変更が進行中
+
+[This Week in Effect - 2026-03-20](https://effect.website/blog/this-week-in-effect/2026/03/20/) / [2026-03-27](https://effect.website/blog/this-week-in-effect/2026/03/27/)
+
+v3系ではeffect@3.21.0がリリースされ、`Schema.ArrayEnsure`と`Schema.Result`ヘルパーの追加、`Stream.scanEffect`のハング問題修正が含まれる。
+
+v4 Betaでは破壊的変更が積極的に入っている。
+
+- `HttpApi.gen`コード生成モジュールを追加
+- `withResponse`オプションを`responseMode`に改名
+- `MakeOptions.disableValidation`を`disableChecks`に改名
+- PostgreSQLでLISTEN専用接続を追加、`NOTIFY`から`pg_notify`に変更
+
+### Zod: 引き続き安定期
+
+[Zod Releases](https://github.com/colinhacks/zod/releases)
+
+対象期間中の新リリースは確認できず。最新はv4.3.6（1月22日）のまま。GitHubではIssueが活発にオープンされており開発は継続中。
