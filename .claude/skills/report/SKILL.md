@@ -6,7 +6,7 @@ description: |
   MDX レポート記事として出力する汎用レポート作成スキル。
   テーマ特化のスキル（report-architect-digest, report-web-standards-digest）で
   カバーされない領域に使う。
-  GitHub Actions から呼ばれた場合は Draft PR も作成する。
+  調査完了後に Draft PR を作成する。
 allowed-tools: WebSearch, WebFetch, Agent, Write, Read, Glob, Bash
 ---
 
@@ -75,9 +75,7 @@ tags: [{指定されたタグ}]
 - 各トピックは ### で見出しをつけ、情報源のリンクを貼り、箇条書きで要点をまとめる
 - 横断的な注目トピックがあれば冒頭の概要に含める
 
-### ステップ4: Draft PR の作成（GitHub Actions 環境の場合のみ）
-
-環境変数 `GITHUB_ACTIONS` が設定されている場合のみ実行する。ローカル実行時はスキップする。
+### ステップ4: Draft PR の作成
 
 Bash ツールで以下を実行する:
 
