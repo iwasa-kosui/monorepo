@@ -1,0 +1,301 @@
+---
+title: "npm サプライチェーン攻撃の原理と対策: npm / Yarn v1 / pnpm それぞれの防御戦略"
+date: "2026-04-01T12:00:00+09:00"
+slug: "2026/04/01/npm-supply-chain-security"
+description: "npm エコシステムにおけるサプライチェーン攻撃の攻撃手法と悪用される機能を解説し、npm・Yarn v1・pnpm それぞれのパッケージマネージャで取りうる防御策を整理した。"
+tags: ["npm", "Security", "Supply Chain"]
+---
+
+2025年の npm マルウェアアドバイザリは 7,197件で前年比69%増。2025年9月の Shai-Hulud ワームは chalk や debug を含む18パッケージ（週間合計26億ダウンロード）を侵害し、500以上のパッケージに自己伝播した。2026年3月には週間3億ダウンロードの axios が北朝鮮の脅威アクター UNC1069 により侵害され、クロスプラットフォーム RAT が注入された。npm エコシステムに対するサプライチェーン攻撃は、規模・巧妙さともに年々深刻化している。
+
+本レポートでは攻撃の原理と悪用される npm の機能を整理した上で、npm・Yarn v1・pnpm の3つのパッケージマネージャそれぞれで取りうる具体的な防御策を提示する。
+
+## 攻撃手法と悪用される npm の機能
+
+### ライフサイクルスクリプトの悪用
+
+`package.json` の `scripts` フィールドに定義された `preinstall`・`install`・`postinstall` は `npm install` 時に自動実行される。攻撃者にとって最も利用しやすい攻撃経路であり、2025年の主要インシデントのほぼ全てがこの機構を悪用している。
+
+Shai-Hulud（2025年9月）は `postinstall` スクリプトに悪意あるコードを注入し、npm トークンや CI シークレットを窃取した上で、盗んだトークンを使って別パッケージにも感染を拡大する自己複製機能を備えていた。Cline CLI の侵害（2026年2月）では `postinstall` に `npm install -g openclaw@latest` を仕込むという単純な手法が使われた。axios の侵害（2026年3月）は `postinstall` フックで OS 別のペイロード（macOS: AppleScript, Windows: PowerShell, Linux: Python）を配信した。
+
+- [GitHub Blog: Our plan for a more secure npm supply chain](https://github.blog/security/supply-chain-security/our-plan-for-a-more-secure-npm-supply-chain/)
+- [Socket: Cline CLI npm package compromised](https://socket.dev/blog/cline-cli-npm-package-compromised-via-suspected-cache-poisoning-attack)
+- [Socket: Axios npm package compromised](https://socket.dev/blog/axios-npm-package-compromised)
+
+### タイポスクワッティング
+
+人気パッケージに酷似した名前でパッケージを公開し、開発者のタイプミスを誘う。npm レジストリが誰でも任意の名前でパッケージを公開できるオープンな名前空間である点が悪用される。
+
+SANDWORM_MODE（2026年2月）では `claud-code`、`cloude-code`、`suport-color`、`rimarf` など19パッケージが Claude Code や supports-color などの人気ツールを模倣した。StegaBin キャンペーン（2026年2月）は `fastify-lint`、`expressjs-lint`、`loadash-lint` など26パッケージを北朝鮮 FAMOUS CHOLLIMA の帰属で展開した。
+
+- [Socket: SANDWORM_MODE npm worm](https://socket.dev/blog/sandworm-mode-npm-worm-ai-toolchain-poisoning)
+- [Socket: StegaBin 26 malicious npm packages](https://socket.dev/blog/stegabin-26-malicious-npm-packages-use-pastebin-steganography)
+
+### Dependency Confusion
+
+企業が内部レジストリで使用するパッケージ名を、攻撃者が公開 npm レジストリに高いバージョン番号で登録する。パッケージマネージャのバージョン解決ロジックにより、内部パッケージよりも公開レジストリの高バージョンが優先される。
+
+2021年2月に Alex Birsan が Apple、Microsoft、PayPal、Shopify など35以上の企業にこの手法で侵入成功したことで広く認知された。スコープなしパッケージ名（`@scope/` を使わない内部パッケージ）が特に脆弱で、公開 JavaScript ソースや GitHub リポジトリから内部パッケージ名を特定される。
+
+- [Alex Birsan: Dependency Confusion](https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610)
+
+### Manifest Confusion
+
+npm レジストリはパッケージ公開時に manifest（メタデータ）と tarball（実際のパッケージ内容）を別々に受け取るが、両者の整合性を検証しない。攻撃者は manifest では無害な `package.json`（スクリプトなし）を提示しつつ、tarball 内の実際の `package.json` に悪意あるスクリプトや隠し依存を含めることができる。`npm audit` やロックファイル生成が tarball 内の実際の `package.json` ではなく manifest を参照するケースがあるため、セキュリティ監査ツールも欺ける。
+
+2023年6月に公開されたこの脆弱性は、npm@6/9、yarn@1、pnpm@7 に影響した。
+
+- [vlt Blog: The massive hole in the npm ecosystem](https://blog.vlt.sh/blog/the-massive-hole-in-the-npm-ecosystem)
+
+### アカウント乗っ取り
+
+正規メンテナーの npm トークンやアカウント認証情報を侵害し、信頼済みパッケージに悪意あるバージョンを公開する。caret (`^`) や tilde (`~`) のバージョン範囲による自動更新で下流に即座に伝播する。2018年の event-stream 事件ではソーシャルエンジニアリングで管理権限を取得し、Copay ビットコインウォレットから100 BTC 以上の残高を持つアカウントが標的にされた。axios の侵害も長期間有効な npm トークンの漏洩が起点だった。
+
+- [npm Blog: Details about the event-stream incident](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident)
+
+### 難読化ペイロード
+
+静的解析を回避するために多層の暗号化やエンコーディングが使われる。Base64 + XOR 暗号（axios 侵害）、AES 暗号化テストフィクスチャ（event-stream）、ゼロ幅 Unicode 文字によるステガノグラフィ（StegaBin）、Base64 + zlib を100回反復（dYdX）など手法は多岐にわたる。SANDWORM_MODE は AES-256-GCM で48-96時間の遅延実行を行い、さらに AI ツールチェーンポイズニングとして MCP サーバを隠しディレクトリに設置し、プロンプトインジェクションで SSH 鍵や AWS 認証情報を窃取させる攻撃も組み込んでいた。
+
+- [Socket: SANDWORM_MODE npm worm](https://socket.dev/blog/sandworm-mode-npm-worm-ai-toolchain-poisoning)
+- [Socket: Malicious dYdX packages](https://socket.dev/blog/malicious-dydx-packages-published-to-npm-and-pypi)
+
+## npm の対策
+
+### ignore-scripts と allow-git
+
+`.npmrc` に `ignore-scripts=true` を設定すると `preinstall` / `postinstall` 等のライフサイクルスクリプトが無効化される。サプライチェーン攻撃の最大の攻撃経路を遮断する最も基本的な対策だが、`bcrypt`、`sharp`、`node-sass` などネイティブバイナリをコンパイルするパッケージも動作しなくなるため、`npm rebuild <パッケージ名>` での個別対応が必要になる。
+
+npm v11.10.0（2026年2月）で追加された `--allow-git=none` も重要で、git 依存が自前の `.npmrc` を含む場合に `git=./malicious-script.sh` と設定することで `ignore-scripts` を迂回する脆弱性への対策になる。
+
+```ini
+# .npmrc
+ignore-scripts=true
+allow-git=none
+```
+
+- [nodejs-security.com: npm ignore-scripts best practices](https://www.nodejs-security.com/blog/npm-ignore-scripts-best-practices-as-security-mitigation-for-malicious-packages)
+- [GitHub Blog: npm bulk trusted publishing config and script security](https://github.blog/changelog/2026-02-18-npm-bulk-trusted-publishing-config-and-script-security-now-generally-available/)
+
+### min-release-age
+
+npm v11.10.0 で導入された設定で、パッケージの公開から一定日数が経過するまでインストールを拒否する。悪意あるパッケージは通常数時間〜数日で検出・削除されるため、この冷却期間が防御バッファになる。7日間のクールダウンで2025年の主要攻撃10件中8件を防げたとされる。
+
+```ini
+# .npmrc（単位: 日）
+min-release-age=7
+```
+
+ただし、pnpm の `minimumReleaseAgeExclude` に相当する除外機構がまだなく、緊急セキュリティパッチの即時適用が困難という制限がある。
+
+- [Socket: npm introduces minimumReleaseAge](https://socket.dev/blog/npm-introduces-minimumreleaseage-and-bulk-oidc-configuration)
+- [Andrew Nesbitt: Package Managers Need to Cool Down](https://nesbitt.io/2026/03/04/package-managers-need-to-cool-down.html)
+
+### npm audit と npm audit signatures
+
+`npm audit` は依存ツリーのパッケージを GitHub Advisory Database と照合し、既知の脆弱性を検出する。`npm audit fix` で互換性のある範囲で自動修正できる。`npm audit signatures` は別の機能で、パッケージのレジストリ署名（ECDSA）と provenance attestation を検証し、改ざんを検知する。
+
+```bash
+npm audit --audit-level=high
+npm audit signatures
+```
+
+- [npm Docs: npm-audit](https://docs.npmjs.com/cli/v11/commands/npm-audit/)
+
+### npm provenance と Trusted Publishing
+
+`npm publish --provenance` で Sigstore の公開インフラにより署名され、パッケージがどのソースコードから、どの CI ジョブでビルド・公開されたかが暗号的に証明される。Trusted Publishing（2025年7月 GA）では OIDC トークンで直接パブリッシュでき、長命トークンを完全に排除する。2025年12月には Classic Token が全て失効し、セッションベース認証（2時間有効）に移行した。
+
+provenance はあくまで「出所の検証可能性」であり、悪意あるコードがないことを保証するものではない点に注意が必要。
+
+- [npm Docs: Generating provenance statements](https://docs.npmjs.com/generating-provenance-statements/)
+- [GitHub Blog: npm trusted publishing with OIDC](https://github.blog/changelog/2025-07-31-npm-trusted-publishing-with-oidc-is-generally-available/)
+
+### package-lock.json と npm ci
+
+`package-lock.json` は依存ツリーの全バージョンと integrity hash を固定する。CI では必ず `npm ci` を使用し、ロックファイルとの不整合時にエラーにすべきだ。2026年3月の axios 侵害では、ロックファイルがコミット済みで `npm ci` を使用していたプロジェクトは影響を受けなかった。外部コントリビューターからのロックファイル変更 PR は慎重にレビューする必要がある。
+
+- [Snyk: Why npm lockfiles can be a security blindspot](https://snyk.io/blog/why-npm-lockfiles-can-be-a-security-blindspot-for-injecting-malicious-modules/)
+
+### npm の推奨 .npmrc 設定（2026年4月時点）
+
+```ini
+ignore-scripts=true
+allow-git=none
+min-release-age=7
+save-exact=true
+strict-ssl=true
+registry=https://registry.npmjs.org/
+@yourorg:registry=https://your-private-registry.example.com/
+```
+
+- [OWASP: NPM Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/NPM_Security_Cheat_Sheet.html)
+
+## Yarn v1 の対策
+
+Yarn v1（Classic）は2024年以降新バージョンがリリースされておらず、メンテナンスは事実上停止している。npm や pnpm と比べてセキュリティ機能が限定的であり、中長期的には Yarn Berry（v2+）か pnpm への移行を検討すべきだ。
+
+### ignore-scripts
+
+`yarn install --ignore-scripts` で全ライフサイクルスクリプトを無効化できる。ただし npm と同様に all-or-nothing のアプローチで、パッケージ単位の粒度制御ができない。`.yarnrc` に `ignore-scripts true` を設定してもローカルスクリプトが実行されるバグ（[GitHub Issue #1713](https://github.com/yarnpkg/yarn/issues/1713)）が報告されている。
+
+パッケージ単位の制御が必要な場合は `@lavamoat/allow-scripts` を導入する。`package.json` の `lavamoat.allowScripts` にパッケージごとの許可設定を記述する。
+
+- [Coinspect: Supply-Chain Guardrails](https://www.coinspect.com/blog/supply-chain-guardrails/)
+- [LavaMoat allow-scripts](https://lavamoat.github.io/guides/allow-scripts/)
+
+### yarn.lock の整合性検証
+
+CI では `yarn install --frozen-lockfile` を必ず使用する。`yarn.lock` と `package.json` が不整合の場合にインストールを失敗させる。`yarn check --integrity` でインストール済みパッケージのハッシュ値をロックファイルと照合できる。
+
+過去に yarn.lock の integrity/hash チェックロジックに欠陥が見つかり（CVE-2019-15608）、細工された yarn.lock でキャッシュ汚染が可能だった。Yarn v1 を使用する場合は1.22.x の最新版に更新すべきだ。
+
+- [HackerOne Report #703138](https://hackerone.com/reports/703138)
+
+### yarn audit
+
+`yarn audit` は npm advisory database に照会して脆弱性を検出する。`--json` で JSON 出力、`--level` で深刻度フィルタリングが可能。ただし `yarn audit fix` に相当するコマンドが存在せず、脆弱性の自動修正はできない。手動で `resolutions` を設定するか、`yarn-audit-fix` パッケージを別途導入する必要がある。
+
+- [Yarn Classic Docs: yarn audit](https://classic.yarnpkg.com/lang/en/docs/cli/audit/)
+
+### resolutions による推移的依存の修正
+
+`package.json` の `resolutions` フィールドで推移的依存のバージョンを強制上書きできる。
+
+```json
+{
+  "resolutions": {
+    "lodash": "4.17.21",
+    "package-a/**/minimist": "1.2.6"
+  }
+}
+```
+
+- [Yarn Classic Docs: Selective Version Resolutions](https://classic.yarnpkg.com/lang/en/docs/selective-version-resolutions/)
+
+### Yarn v1 のセキュリティ上の限界
+
+`minimumReleaseAge` や `trustPolicy` に相当する機能がなく、Yarn Berry にある `enableHardenedMode` や `dependenciesMeta` によるパッケージ単位のスクリプト制御もない。メンテナンスが停止しているため新たな脆弱性が発見されても修正される見込みが低い。短期的には `--frozen-lockfile` + `--ignore-scripts` + `@lavamoat/allow-scripts` + Renovate/Dependabot で防御を固めつつ、移行を計画すべきだ。
+
+## pnpm の対策
+
+pnpm は2025年に「セキュリティ・バイ・デフォルト」へ大きく舵を切り、npm や Yarn にはないクライアントサイドの多層防御を実装した。
+
+### ライフサイクルスクリプトのデフォルト無効化
+
+pnpm v10（2025年1月）で `preinstall` / `postinstall` スクリプトがデフォルトで実行されなくなった。これは npm サプライチェーン攻撃の最大の攻撃経路を根本から遮断する変更であり、3つのパッケージマネージャの中で pnpm だけがデフォルト無効化を実現している。
+
+スクリプト実行が必要なパッケージは `allowBuilds`（v10.26 以降）で明示的に許可する。`pnpm approve-builds` コマンドで対話的に選択し設定に書き込める。`strictDepBuilds: true` を設定すれば、未レビューのビルドスクリプトがある場合にインストール自体を失敗させることもできる。
+
+```yaml
+# pnpm-workspace.yaml
+allowBuilds:
+  esbuild: true
+  sharp: true
+strictDepBuilds: true
+```
+
+- [pnpm: Mitigating supply chain attacks](https://pnpm.io/supply-chain-security)
+- [pnpm: approve-builds](https://pnpm.io/cli/approve-builds)
+
+### minimumReleaseAge
+
+pnpm v10.16（2025年9月）で導入。パッケージの公開から指定分数が経過するまでインストールをブロックする。npm の `min-release-age` より先に実装され、単位が「分」で細かく制御可能な点と、`minimumReleaseAgeExclude` で例外パッケージを指定できる点が異なる。
+
+```yaml
+# pnpm-workspace.yaml
+minimumReleaseAge: 10080  # 7日（分単位）
+minimumReleaseAgeExclude:
+  - critical-security-patch
+```
+
+- [pnpm: Settings](https://pnpm.io/settings)
+
+### trustPolicy と blockExoticSubdeps
+
+`trustPolicy: no-downgrade`（v10.21、2025年10月）は、過去に Trusted Publishing で公開されていたパッケージが基本認証で公開された場合にインストールをブロックする。Nx s1ngularity 攻撃では CI を経由せず公開されたため provenance が欠落しており、この制御で検出可能だった。
+
+`blockExoticSubdeps` は推移的依存の git URL や tarball URL ソースをブロックする。攻撃者が推移的依存を外部ソースに差し替える手法への対策になる。
+
+```yaml
+# pnpm-workspace.yaml
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+```
+
+- [pnpm Blog: pnpm in 2025](https://pnpm.io/blog/2025/12/29/pnpm-in-2025)
+
+### 厳格な node_modules 構造
+
+npm や Yarn v1 はフラットな `node_modules` を作り、`package.json` に宣言していない依存（ファントム依存）も `require()` できてしまう。pnpm はシンボリックリンクベースの構造により、宣言した直接依存のみがアクセス可能になる。攻撃者がサブ依存に悪意あるパッケージを紛れ込ませても、宣言していない限りアプリケーションコードから直接アクセスされない。
+
+- [pnpm: Symlinked node_modules structure](https://pnpm.io/symlinked-node-modules-structure)
+
+### Content-Addressable Store
+
+全パッケージファイルを SHA-512 ハッシュで Content-Addressable File System に格納し、プロジェクトの `node_modules` にはハードリンクで配置する。`pnpm store status` でストア内ファイルのハッシュを再計算し、改ざんを検出できる。
+
+- [pnpm: Motivation](https://pnpm.io/motivation)
+
+### pnpm の推奨設定（2026年4月時点）
+
+```yaml
+# pnpm-workspace.yaml
+allowBuilds:
+  esbuild: true
+  # 必要なパッケージのみ明示的に許可
+strictDepBuilds: true
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+```
+
+## エコシステム横断のツールとベストプラクティス
+
+### Socket
+
+パッケージの振る舞いを静的解析し、ネットワークアクセス、シェル実行、環境変数アクセス、コード難読化など70以上のリスクシグナルを検出する。CVE ベースの従来型スキャンとは異なり、未知の攻撃パターンを検出できる点が強みだ。Socket Firewall はパッケージマネージャのプロキシとして動作し、悪意ある依存をインストール時にブロックする。2026年3月の axios 侵害では6分で検知した。
+
+- [Socket.dev](https://socket.dev/)
+
+### OpenSSF Scorecard
+
+オープンソースプロジェクトのセキュリティ姿勢を自動評価するツール。ブランチ保護、CI テスト、コード署名など複数チェックでスコアを生成する。`--npm=<package-name>` で npm パッケージを直接スキャンできる。npm パッケージの85%以上が GitHub 上でメンテナンスされておらず、Branch-Protection を通過するのはわずか10%という実態が明らかになっている。
+
+- [OpenSSF Scorecard](https://scorecard.dev/)
+
+### lockfile-lint
+
+npm や Yarn のロックファイルを事前定義されたセキュリティポリシーと照合して検証する。許可されていないレジストリの検出、HTTPS 使用の強制、パッケージの整合性チェックを行う。pnpm は tarball ソースをロックファイルに保持しないため、この種の攻撃ベクターは存在しない。
+
+```bash
+npx lockfile-lint --path yarn.lock --allowed-hosts npm yarn --validate-https
+```
+
+- [lockfile-lint on GitHub](https://github.com/lirantal/lockfile-lint)
+
+### GitHub Dependabot
+
+2026年3月に npm の悪意あるパッケージを検出するマルウェアアラート機能が追加された。CVE ベースのアラートとは別カテゴリで GitHub Advisory Database のマルウェアアドバイザリと照合する。
+
+- [GitHub Blog: Dependabot now detects malware in npm dependencies](https://github.blog/changelog/2026-03-17-dependabot-now-detects-malware-in-npm-dependencies/)
+
+### GitHub Actions の SHA 固定
+
+タグ（`@v1`）ではなくフルコミット SHA への固定が推奨される。2025年の tj-actions/changed-files 攻撃や Nx s1ngularity 攻撃では、GitHub Actions 経由でシークレットが漏洩した。2025年8月に GitHub Actions ポリシーが SHA 固定の強制に対応した。
+
+- [GitHub Blog: GitHub Actions policy supports SHA pinning](https://github.blog/changelog/2025-08-15-github-actions-policy-now-supports-blocking-and-sha-pinning-actions/)
+
+## パッケージマネージャ比較
+
+| 観点 | npm | Yarn v1 | pnpm |
+|---|---|---|---|
+| ライフサイクルスクリプト | デフォルト実行 | デフォルト実行 | **v10でデフォルト無効** |
+| スクリプトの粒度制御 | なし | なし（`@lavamoat/allow-scripts` で補完） | **`allowBuilds` でパッケージ+バージョン単位** |
+| リリースエイジ遅延 | `min-release-age`（日単位、除外なし） | なし | **`minimumReleaseAge`（分単位、除外あり）** |
+| 信頼ポリシー | なし | なし | **`trustPolicy: no-downgrade`** |
+| エキゾチック依存ブロック | なし | なし | **`blockExoticSubdeps`** |
+| ファントム依存の防止 | なし（フラット構造） | なし（フラット構造） | **シンボリックリンク構造で防止** |
+| audit fix | `npm audit fix` | なし | `pnpm audit --fix` |
+| ロックファイル強制 | `npm ci` | `--frozen-lockfile` | `--frozen-lockfile` |
+| メンテナンス状況 | 活発 | 事実上停止 | 活発 |
