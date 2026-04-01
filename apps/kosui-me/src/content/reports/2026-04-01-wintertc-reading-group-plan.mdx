@@ -1,0 +1,138 @@
+---
+title: "WinterTC (TC55) サーバサイドエンジニア向け輪読会 企画書"
+date: "2026-04-01T12:00:00+09:00"
+slug: "2026/04/01/wintertc-reading-group-plan"
+description: "WinterTC (Ecma TC55) の仕様群をサーバサイドエンジニアが楽しみながら読み解くための輪読会企画。対象仕様の選定、進行フォーマット、エンゲージメント設計をまとめた。"
+tags: ["WinterTC", "JavaScript", "ServerSide"]
+---
+
+サーバサイド JavaScript ランタイム間の API 相互運用性を標準化する [WinterTC (Ecma TC55)](https://wintertc.org/) は、2025年12月に初の公式標準 ECMA-429 (Minimum Common Web API) を発行した。Node.js、Deno、Bun、Cloudflare Workers といったランタイムが日常的に使う API の標準化が進む今、仕様を読むことはサーバサイドエンジニアにとって実務に直結する学びになる。本企画書では、楽しさと理解の両立を重視した輪読会の設計を提案する。
+
+## WinterTC とは何か
+
+WinterTC の正式名称は Ecma International Technical Committee 55: Web-interoperable Server Runtimes だ。前身は2022年5月に設立された W3C Community Group の [WinterCG](https://blog.cloudflare.com/introducing-the-wintercg/) で、W3C Community Group では標準を公式に発行する権限がなかったため、2024年12月に Ecma International の TC55 として再設立された。議長は Luca Casonato (Deno)、副議長は Andreu Botella (Igalia)。Bloomberg、Cloudflare、Deno、Igalia、Node.js が主要メンバーとして参加している。
+
+核心的な思想は「ブラウザが基準」であり、サーバ向けに新しい独自標準を作るのではなく、ブラウザの Web Platform API をサーバサイドランタイムにも採用させるアプローチを取る。TC39 (JavaScript 言語仕様) と同じ種類の Technical Committee であり、年次スナップショットで標準を発行する方針だ。
+
+参考: [Goodbye WinterCG, welcome WinterTC (Deno Blog)](https://deno.com/blog/wintertc), [WinterTC FAQ](https://wintertc.org/faq), [Ecma International TC55](https://ecma-international.org/technical-committees/tc55/)
+
+## 輪読対象の仕様と推奨順序
+
+WinterTC の仕様群を、読みやすさ・議論の盛り上がりやすさ・サーバサイドとの関連度で分類し、輪読会の回に割り当てる。全8回構成を想定する。
+
+### 第1回: import.meta Registry — 命名の不一致を体感する
+
+[import.meta Registry](https://github.com/WinterTC55/import-meta-registry) は `import.meta` のプロパティ名の衝突を防ぐためのレジストリで、登録済みのプロパティは `url`, `resolve`, `main`, `dirname`, `filename`, `dir`, `file`, `path` など。ドキュメントが短く、初回に最適だ。
+
+読みどころは Bun と Node.js の命名の不一致だ。Node.js は `import.meta.dirname` / `import.meta.filename` を採用した一方、Bun は `import.meta.dir` / `import.meta.file` / `import.meta.path` を先行実装しており、互換性問題が可視化されている。CommonJS の `__dirname` / `__filename` からの移行も含め、全員が実体験を持つ話題で議論が盛り上がる。
+
+### 第2回: CLI API — process.argv 問題に決着をつける
+
+[CLI API](https://github.com/WinterTC55/proposal-cli-api) はコマンドライン引数、環境変数、終了コード、ターミナルメタデータを標準化する提案だ。現状ランタイムごとにバラバラな API (`process.argv` / `Deno.args` / `Bun.argv`) を統一する。
+
+Explainer 形式で書かれているため読みやすい。環境変数を ES 仕様の Exotic Object (`[[Get]]` / `[[Set]]` / `[[Delete]]`) として定義している箇所は、ES 仕様の内部メソッド記法の入門にもなる。`process.argv` の先頭2要素 (バイナリパスとスクリプトパス) をランタイム固有の引数として除外する設計判断は、設計議論の題材として面白い。
+
+なお、2026年3月にはこの CLI API を発展させた [Environment Access API](https://tc55-proposal-from-ohio.deno.dev/) が提案されている。`globalThis.environment` を通じて環境変数 (`variables`)、引数 (`parameters`)、I/O ストリーム (`channels`) を統一的に公開する設計で、こちらも合わせて読むと議論が深まる。
+
+### 第3回: navigator Registry — サーバに navigator は必要か
+
+[navigator Registry](https://github.com/WinterTC55/navigator-registry) は、サーバサイドランタイムにおける `navigator` オブジェクトの各プロパティについて、実装すべき / すべきでないを規定するガイドラインだ。`userAgent` は実装すべき、`cookieEnabled` / `plugins` は実装すべきでない、`hardwareConcurrency` は Web Workers 対応時のみ、といった判断基準が明示されている。
+
+ドキュメント自体は短いが、「そもそもサーバで `navigator` を公開する意義は何か」「`navigator.language` / `navigator.languages` はサーバでどう扱うべきか」といった哲学的な議論ができる。ブラウザ API をサーバに持ち込む WinterTC の基本思想を問い直す回になる。
+
+### 第4回: Functions API — サーバレスのベンダーロックインに切り込む
+
+[Functions API](https://github.com/WinterTC55/proposal-functions-api) はサーバレス関数のインタフェースを標準化する提案だ。AWS Lambda、Cloudflare Workers、Netlify Edge Functions、Vercel Edge Functions の実装比較を含んでおり、各ベンダーの関数シグネチャ、イベント受信方法、ログ、エラー報告、エクスポート方法の差異が整理されている。
+
+Explainer 形式で具体的なシナリオ付きのため読みやすい。「関数シグネチャの統一は現実的か」「CloudEvents との統合は」「フレームワーク層 (Hono, Express) との棲み分けは」といった論点は、サーバレス開発者全員に関わる。
+
+### 第5回: Sockets API — TCP/TLS を Streams で抽象化する
+
+[Sockets API](https://sockets-api.proposal.wintertc.org/) は非ブラウザ JS ランタイム向けの TCP ソケット API だ。`connect()` で Socket を生成し、ReadableStream / WritableStream でデータを送受信する。TLS と StartTLS に対応し、SNI / ALPN 設定を含む。
+
+DB クライアントやプロトコル実装に直結する仕様であり、Cloudflare Workers では既にプロダクションで使用されている。Streams API の知識が前提になるため難度は中程度だが、「StartTLS の設計」「half-open 接続の挙動」「Streams の byte mode 採用有無が未決定」といった設計上の未解決問題があり、議論の余地が大きい。
+
+参考: [Sockets API 仕様書](https://sockets-api.proposal.wintertc.org/), [WinterTC55/proposal-sockets-api](https://github.com/WinterTC55/proposal-sockets-api)
+
+### 第6回: Minimum Common Web API (前編) — 全体像の把握
+
+[ECMA-429 Minimum Common Web API](https://min-common-api.proposal.wintertc.org/) は WinterTC の中核仕様であり、サーバサイドランタイムが実装すべき Web Platform API の最小セットを定義する。対象は AbortController、fetch、Streams、URL、WebCrypto、TextEncoder/Decoder、CompressionStream、structuredClone、setTimeout/setInterval、console、navigator.userAgent など広範囲にわたる。
+
+1回で全体を読むのはボリューム的に困難なので、前編では仕様の構造と「何が含まれていて何が含まれていないか」の全体像を把握する。各 API への要求レベル (MUST / SHOULD / MAY) の違いや、グローバルスコープの設計差異 (Node.js の `process` イベント vs EventTarget) に注目する。
+
+### 第7回: Minimum Common Web API (後編) — ランタイム間の準拠度を検証する
+
+後編では、前編で気になった API を実際に各ランタイム (Node.js, Deno, Bun, Cloudflare Workers) で動かし、準拠度の差異を検証する。WPT (Web Platform Tests) の対応テストを実行するのも有効だ。
+
+仕様通りに動かない箇所や、ランタイム独自の拡張がある箇所を発見するアクティビティは、仕様を読むだけでは得られない理解をもたらす。Cloudflare のブログでは、URL の解析で `https://a//b//c//` を標準仕様では `https://a//b//c/` と処理すべきところ、旧実装では `https://a/b/c` と処理していた差異が[紹介されている](https://blog.cloudflare.com/standards-compliant-workers-api/)。
+
+### 第8回: Fetch Workstream — サーバサイド Fetch の未解決問題
+
+[Fetch Workstream](https://github.com/WinterTC55/fetch-workstream) は WHATWG Fetch 仕様をサーバサイドランタイム向けに適応させるための議論の場だ。Fetch 仕様のフォークではなく、WHATWG への上流フィードバックが目的となっている。
+
+CORS などブラウザ固有のセキュリティ制約をサーバでどう扱うか、`multipart/form-data` のパース仕様、リダイレクトの挙動差異など、HTTP クライアントとしての fetch() の奥深さに触れる回だ。WHATWG Fetch 仕様の理解が必要なため難度は高いが、最終回にふさわしい深さがある。
+
+## 進行フォーマット
+
+週1回60分、全8回（約2ヶ月）の構成を推奨する。
+
+### 基本の流れ (60分)
+
+1. **モク読 (15分)**: 対象仕様を当日その場で黙読する。事前準備を不要にすることで参加障壁を下げる。[LayerX](https://tech.layerx.co.jp/entry/2023/10/25/174051) や[カミナシ](https://kaminashi-developer.hatenablog.jp/entry/yurufuwa-reading-circle) の「ゆるい輪読会」方式
+2. **ディスカッション (15分)**: 疑問点・気づき・「ここの設計判断が面白い」を共有する
+3. **ランタイム検証チャレンジ (20分)**: 仕様の挙動を確認するコードを Node.js / Deno / Bun で書き、差異を発見する。ペアまたはモブで取り組む
+4. **振り返り・発見共有 (10分)**: 発見を Slack チャンネルに投稿し、非同期でも参照できるようにする
+
+### なぜこの形式か
+
+事前に読んで発表する形式は担当者の負担が大きく、読んでこなかった参加者が受動的になりやすい。モク読方式は[アカツキゲームスの事例](https://zenn.dev/dtgunso/articles/eff285a6366459)でも脱落防止に有効とされており、仕様書のような短いドキュメントとの相性が良い。ランタイム検証チャレンジを組み込むことで、読んで終わりではなく手を動かす時間を確保する。
+
+## エンゲージメント設計
+
+### 挙動予測クイズ
+
+各回の冒頭または検証チャレンジの前に、仕様に基づく挙動予測クイズを出す。例えば以下のような問題だ。
+
+- 「`import.meta.dirname` は Bun でどういうプロパティ名になるか」
+- 「`new URL('https://a//b//c//')` の pathname は仕様上何になるか」
+- 「`navigator.userAgent` をサーバサイドランタイムが返す場合、何を返すべきか」
+
+正解発表後に仕様の該当箇所を読むことで、仕様書の記述と実装の関係が明確になる。
+
+### ランタイム間互換性バトル
+
+検証チャレンジの時間に、同じコードを複数のランタイムで実行して差異を見つける。差異の数が多いほど「仕様と実装の乖離」が大きいことを意味し、仕様標準化の意義を実感できる。発見した差異は GitHub Issue として WinterTC に報告できるため、OSS コントリビューションの入口にもなる。
+
+### WPT (Web Platform Tests) の活用
+
+[WPT](https://web-platform-tests.org/) は56,000以上のテスト (180万サブテスト) を持つテストスイートで、仕様ごとにサブディレクトリが分かれている。輪読対象の仕様に対応する WPT テストを各ランタイムで実行し、パス率を比較する。[wpt.fyi](https://wpt.fyi/about) のダッシュボードでブラウザの実装状況を視覚的に確認することもできる。
+
+### Slack チャンネル運営
+
+専用の Slack チャンネルを作成し、以下を運用する。
+
+- 前日・当日のリマインダー配信
+- 各回の発見・差異レポートのストック
+- 次回の対象仕様の事前告知
+- 非同期での質問・議論
+
+[GameWith の事例](https://tech.gamewith.co.jp/entry/2019/02/27/133823)では、Slack リマインドと「業務の一環として参加して良い」という公式な許可が参加率向上に寄与したと報告されている。
+
+## 想定スケジュール
+
+| 回 | 対象仕様 | 難度 | テーマ |
+|---|---|---|---|
+| 1 | import.meta Registry | 初級 | ランタイム間の命名問題 |
+| 2 | CLI API + Environment Access API | 初〜中級 | argv/env の標準化 |
+| 3 | navigator Registry | 初級 | サーバに navigator は必要か |
+| 4 | Functions API | 初級 | サーバレスのロックイン |
+| 5 | Sockets API | 中級 | TCP/TLS を Streams で扱う |
+| 6 | Minimum Common Web API (前編) | 中級 | 全体像と設計思想 |
+| 7 | Minimum Common Web API (後編) | 中級 | ランタイム検証ハンズオン |
+| 8 | Fetch Workstream | 上級 | サーバサイド Fetch の深淵 |
+
+初級から始めて徐々に難度を上げることで、仕様書を読むことへの心理的障壁を段階的に下げる。第7回はハンズオン主体にすることで、後半の中だるみを防ぐ。
+
+## まとめ
+
+WinterTC の仕様群は、サーバサイド JavaScript エンジニアが日常的に使う API の標準化文書であり、抽象的な仕様ではなく「自分のコードに直結する」仕様だ。モク読 + ランタイム検証チャレンジの形式で進めることで、事前準備の負担なく楽しめる設計にした。ランタイム間の挙動差異を発見するアクティビティは、仕様を読む動機付けと実務への還元を両立させる。
