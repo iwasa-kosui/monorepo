@@ -1,0 +1,215 @@
+---
+title: "TypeScript と ECMAScript の class の歴史: prototype から decorators まで"
+date: "2026-04-04T12:00:00+09:00"
+slug: "2026/04/04/typescript-ecmascript-class-history"
+description: "JavaScript の prototype ベース OOP から ES2015 class、TypeScript の独自拡張、ES2022 の private fields、そして decorators の10年越しの標準化まで、class を巡る歴史と設計思想の変遷を整理した。"
+tags: ["TypeScript", "ECMAScript", "JavaScript"]
+---
+
+JavaScript は1995年の誕生時から prototype ベースのオブジェクト指向言語として設計された。Brendan Eich は Self 言語のプロトタイプ継承と Scheme の関数型要素を組み合わせつつ、Netscape の要求で Java 風の構文を被せた。この二重性が、20年以上にわたる class を巡る議論の出発点になっている。
+
+本レポートでは ES3 時代の prototype パターンから ES2015 class の導入、TypeScript の先行実装と独自拡張、ES2022 での private fields 標準化、decorators の10年越しの策定、そして現在のエコシステムにおける class の位置づけまでを時系列で整理する。
+
+## ECMAScript class の標準化の歴史
+
+### ES3/ES5 時代の prototype ベース OOP
+
+ES3（1999年）時代、オブジェクト指向はコンストラクタ関数と `prototype` プロパティの組み合わせで実現されていた。継承にはプロトタイプチェーンを手動で構築する必要があり、定型コードが冗長だった。ES5（2009年）で `Object.create()` と `Object.defineProperty()` が追加されたが、本質的な改善には至らなかった。
+
+Douglas Crockford や John Resig が `Class.extend()` パターンを整備し、これが ES6 登場前のデファクトスタンダードとなった。
+
+- [Crockford: Classical Inheritance in JavaScript](https://www.crockford.com/javascript/inheritance.html)
+- [John Resig: Simple JavaScript Inheritance](https://johnresig.com/blog/simple-javascript-inheritance/)
+
+### ES4 の挫折
+
+ES3 策定後、TC39 は class 宣言・強い型付け・namespace などを含む野心的な ES4 の策定に着手した。Mozilla/Adobe/Opera 陣営が推進したが、Microsoft が「後方互換性の破壊」と「言語の複雑化」を理由に強硬に反対し、2008年に正式に廃棄された。代わりに「Harmony」プロセスが発足し、ES5 では控えめな改善にとどめ、class 構文は次世代へ持ち越された。
+
+ES4 の失敗は class 構文だけでなく、静的型付けや複雑な型システムへの反発が大きかった点が重要だ。
+
+- [ECMAScript version history - Wikipedia](https://en.wikipedia.org/wiki/ECMAScript_version_history)
+
+### ES2015 (ES6) での class 構文の導入
+
+ES4 廃棄後の Harmony プロセスで複数の競合プロポーザルが出されたが、最終的に採用されたのは **"maximally minimal classes"** というアプローチだ。Allen Wirfs-Brock（Microsoft）が中心的に推進し、「全 TC39 メンバーが合意できる最小限の設計」を目指した。
+
+この方針の結果、private フィールド・static フィールド・decorators といった高度な機能はすべて後回しにされた。一方で、`Array` や `Error` などの組み込みコンストラクタのサブクラス化が可能になった点は ES5 では実現できなかった重要な前進だった。
+
+ES6 class は内部的には prototype チェーンそのものであり、`typeof` で評価すると `'function'` が返る。メソッドは `prototype` オブジェクトに定義され、`instanceof` は既存のプロトタイプチェーン検索で動作する。「シンタックスシュガー」と呼ばれる所以だが、`new` なしの呼び出しが TypeError になる点やホイスティングされない点など、コンストラクタ関数との差異もある。
+
+- [Dr. Axel Rauschmayer: ES6 classes final](https://2ality.com/2015/02/es6-classes-final.html)
+- [Mozilla Hacks: ES6 In Depth - Classes](https://hacks.mozilla.org/2015/07/es6-in-depth-classes/)
+- [MDN: Classes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes)
+
+## TypeScript における class の実装と進化
+
+### ES6 より3年早い class サポート
+
+TypeScript は2012年10月のバージョン 0.8 初公開時から class 構文をサポートしていた。ES2015 より約3年前のことだ。設計者 Anders Hejlsberg（C# の設計者でもある）の影響で、`public`/`private` アクセス修飾子、継承、コンストラクタなどを初版から備えていた。コンパイル時には ES5 互換のプロトタイプベースのコードに変換された。
+
+TypeScript は TC39 の仕様が固まる前から ES6 class 提案を先取りして実装し、ES5 へのトランスパイルで実現するというアプローチを取った。
+
+### コンパイルターゲットによる出力の違い
+
+`tsconfig.json` の `target` オプションにより class のコンパイル出力は大きく異なる。ES5 ターゲットでは IIFE でクラスをエミュレートし `__extends` ヘルパーが挿入される。ES2015 以降では型アノテーションを除去するだけで `class` 構文がそのまま出力される。
+
+### TypeScript 独自の class 機能
+
+TypeScript は ECMAScript にない独自の class 機能を多数実装してきた。
+
+- **Parameter Properties**: コンストラクタ引数に `public`/`private`/`protected`/`readonly` を付けることでプロパティ宣言と代入を1行で済ませる糖衣構文
+- **Abstract Class**（TS 1.6）: 直接インスタンス化できない基底クラス。C#/Java の影響が明確
+- **Access Modifiers**: `public`/`private`/`protected` の3種類。コンパイル時のみの制約で JavaScript 出力には含まれない
+- **readonly**（TS 2.0）: コンストラクタ内でのみ代入可能なプロパティ
+- **override + `--noImplicitOverride`**（TS 4.3）: 基底クラスメソッドの意図的なオーバーライドを明示
+
+- [TypeScript Handbook: Classes](https://www.typescriptlang.org/docs/handbook/2/classes.html)
+
+### TypeScript `private` と ECMAScript `#private` の共存
+
+TypeScript 3.8（2020年2月）で ECMAScript の `#` プライベートフィールドのサポートが追加された。Bloomberg のエンジニアが実装を主導した。
+
+TypeScript の `private` はコンパイル時のみ有効で、`any` キャストやブラケット記法で回避可能な「ソフトプライバシー」だ。一方 `#` フィールドは JavaScript エンジンレベルで強制される「ハードプライバシー」で、`Reflect.ownKeys()` でも発見できない。TypeScript チームは `private` キーワードを廃止する予定はなく、両者は共存している。
+
+- [TypeScript 3.8 Release Notes](https://devblogs.microsoft.com/typescript/announcing-typescript-3-8/)
+
+### `useDefineForClassFields` 問題
+
+TypeScript が ES2022 以前にクラスフィールドを実装した際、`[[Set]]` セマンティクス（`this.x = value` 相当）で実装した。しかし ES2022 標準は `[[Define]]` セマンティクス（`Object.defineProperty` 相当）を採用し、セッターをバイパスする挙動が異なる。TypeScript 3.7 で `useDefineForClassFields` フラグが導入され、`target: ES2022` 以上ではデフォルトで `true`（ES 標準準拠）になるが、既存コードが壊れるケースがある。仕様より早く実装することの「コスト」を示す教訓だ。
+
+- [TypeScript: useDefineForClassFields](https://www.typescriptlang.org/tsconfig/useDefineForClassFields.html)
+
+## Class Fields と Private Fields の標準化
+
+### Class Fields Proposal の経緯
+
+2016年7月に "Private State" として TC39 に初提示され、2017年7月に Stage 3 に到達、ES2022 で Stage 4 として標準化された。チャンピオンは Daniel Ehrenberg と Kevin Gibbons。
+
+### `[[Define]]` vs `[[Set]]` semantics の論争
+
+Public fields の初期化方法を巡り、TC39 内外で激しい議論が起きた。`[[Set]]` セマンティクスはスーパークラスのセッターを呼び出す直感的な挙動だが、最終的に TC39 は「フィールドが定義されたクラスはスーパークラスの実装詳細に依存すべきでない」という理由で `[[Define]]` セマンティクスを採用した。この決定はフレームワークでセッターを活用していたコードを壊すケースがあり、今も賛否が分かれている。
+
+- [2ality: Public class fields](https://2ality.com/2019/07/public-class-fields.html)
+- [tc39/proposal-class-fields](https://github.com/tc39/proposal-class-fields)
+
+### Private Fields に `#` 記号が選ばれた理由
+
+`#` は「理想的だから」ではなく消去法の結果だ。private フィールドへのアクセスを構文的に区別する必要があるが、`@` は decorators が使用済み、`_` は慣例的プライベートとして広く使われ互換性の問題、`%`・`^`・`&` などは中置演算子として ASI ハザードが生じる。結果として `#` が残った。
+
+`#` フィールドは `Reflect.ownKeys()` でも `Object.getOwnPropertySymbols()` でも発見できず、ブラケット記法 `this['#x']` でもアクセスできない真のハードプライバシーを実現した。
+
+- [Private Syntax FAQ](https://github.com/tc39/proposal-class-fields/blob/main/PRIVATE_SYNTAX_FAQ.md)
+
+## Decorators の10年越しの標準化
+
+### Legacy Decorators の時代
+
+2014年に Yehuda Katz が TC39 に提案し、2015年に Stage 1 に到達。同年 TypeScript 1.5 が `--experimentalDecorators` フラグで Stage 1 decorators を実装した。Angular、NestJS、MobX がこの legacy decorators に大きく依存し、広く普及した。API は `(target, name, descriptor) => descriptor` という直感的な形式だった。
+
+### Stage 2 の複数回リデザイン
+
+Class fields / private methods との相互作用、パフォーマンス、静的解析可能性を巡って設計が何度も見直された。2018〜2019年頃の "Static Decorators" 提案は「複雑すぎて使いにくい」として破棄された。Babel の実装バージョン名を辿ると "legacy" → "2018-09" → "2021-12" → "2022-03" と複数世代にわたる変遷が確認できる。
+
+### 2022年3月 Stage 3 到達
+
+Daniel Ehrenberg と Chris Garrett の主導で Stage 3 に到達。最終設計の根本的な変更点は以下の通り。
+
+- decorator が要素の種類を変えることを禁止（メソッド decorator はメソッドを返す）
+- `auto-accessor` キーワードの導入（内部にプライベートスロット + getter/setter ペアを自動生成）
+- `(value, context)` 形式の統一された API
+- 式の評価 → decorator 呼び出し → 変更の原子的適用、という3フェーズ実行
+
+- [2ality: JavaScript decorators](https://2ality.com/2022/10/javascript-decorators.html)
+- [tc39/proposal-decorators](https://github.com/tc39/proposal-decorators)
+
+### TypeScript 5.0 での標準 Decorators サポート
+
+TypeScript 5.0（2023年3月）が Stage 3 decorators をサポートした。legacy decorators とは互換性がなく、`--emitDecoratorMetadata` やパラメータデコレータが非対応。`--experimentalDecorators` フラグは後方互換のため存続するが、フラグなしで書いた場合は新仕様が適用される。
+
+- [TypeScript 5.0 Release Notes](https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/)
+
+## その他の ES2022 以降の class 関連機能
+
+### Class Static Blocks（ES2022）
+
+Ron Buckton が提案。複数の static フィールドの一括初期化、try-catch を伴う初期化、クラス外への private アクセス付与（Friend パターン）を可能にする。
+
+- [tc39/proposal-class-static-block](https://github.com/tc39/proposal-class-static-block)
+
+### Ergonomic Brand Checks（ES2022）
+
+`#field in obj` で private fields の存在確認が可能に。従来の try-catch による確認が不要になった。
+
+- [tc39/proposal-private-fields-in-in](https://github.com/tc39/proposal-private-fields-in-in)
+
+### Explicit Resource Management（Stage 3）
+
+`Symbol.dispose` / `Symbol.asyncDispose` プロトコルと `using` 宣言の組み合わせで、スコープを抜ける際にリソースを自動解放する。TypeScript 5.2 で対応済み。
+
+- [tc39/proposal-explicit-resource-management](https://github.com/tc39/proposal-explicit-resource-management)
+
+## Class を巡る設計思想の議論
+
+### "JavaScript に class は不要" という立場
+
+Douglas Crockford は「プロトタイプベースの継承はクラスベースより表現力が高い」と長年主張してきた。Eric Elliott は "`class` keyword is now the most harmful feature in JavaScript" と述べ、ゴリラ・バナナ問題（単一継承の設計分類の破綻）、脆弱な基底クラス問題（親子クラスの密結合）、必然的な重複問題を指摘した。代替案として Factory 関数と Object Composition を推奨し、「Pure functions > factories > functional mixins > classes」という優先順位を示している。
+
+- [Eric Elliott: The Two Pillars of JavaScript](https://medium.com/javascript-scene/the-two-pillars-of-javascript-ee6f3281e7f3)
+
+### React の class → function 移行
+
+React 16.8（2019年2月）で Hooks が導入され、class コンポーネントから関数コンポーネントへの移行が始まった。Dan Abramov と React チームが示した class の問題点は3つ。`this` の複雑性（イベントハンドラのバインドが必要）、ロジックの再利用性の低さ（HOC / render props による「ラッパー地獄」）、ライフサイクルメソッドへの無関係ロジックの混在。加えて class はミニファイアによる最適化が難しくバンドルサイズが増大する問題もあった。
+
+React 19 と Create React App の廃止（2025年2月）により、関数コンポーネント + Hooks が唯一の推奨パスとなっている。
+
+- [React Hooks Introduction](https://legacy.reactjs.org/docs/hooks-intro.html)
+
+### class を積極的に活用するパターン
+
+一方で class が中心的役割を果たすフレームワークも健在だ。Angular は依存性注入・デコレータベースの設計で class が不可欠。NestJS は Angular の思想を Node.js バックエンドに持ち込んだ。MobX はリアクティブな状態管理を class ベースで実現する。Web Components は `class extends HTMLElement` が仕様上の必須パターンであり、2026年現在も変わっていない。
+
+## 現在のエコシステムにおける class の位置づけ
+
+### フレームワーク別の状況（2026年）
+
+- **React**: class コンポーネントは Legacy セクションに移動。Error Boundary のみ class が必要
+- **Vue 3**: `vue-class-component` は2023年3月に deprecated。Composition API が唯一の推奨パス
+- **Angular**: 依然として class + decorator が中心だが、Signals API の導入で一部デコレータが不要に
+- **Svelte 5**: Runes による関数的リアクティビティが中心。ただし shared reactive state では class が有効
+- **NestJS**: class + decorator が設計の基盤。エンタープライズ向けで健在
+- **Hono / Elysia**: 関数ベース。class 不使用
+
+### 関数型の台頭と class の共存
+
+Zod・Valibot などのスキーマライブラリは class を使わない純粋な関数合成スタイルで設計されている。fp-ts・Ramda も関数型アプローチを推進する。一方で Effect は `Data.TaggedError` を使ったクラスベースのエラー型定義を積極的に採用しており、「関数型 + class」の共存パターンを示している。
+
+typescript-eslint の `no-extraneous-class` ルールは「static メンバーのみのクラスはモジュールレベルの関数エクスポートに置き換えよ」という姿勢を明示している。
+
+### TC39 とTypeScript の今後
+
+TC39 では Decorators（Stage 3）、Decorator Metadata（Stage 3）、Class Method Parameter Decorators（Stage 1）が進行中。TypeScript は2025-2026年にかけてコンパイラの Go 移植（TypeScript 7.0 / Project Corsa）に注力しており、class 構文の新機能追加より性能・互換性が優先されている。
+
+- [TC39 Proposals](https://github.com/tc39/proposals)
+- [Progress on TypeScript 7](https://devblogs.microsoft.com/typescript/progress-on-typescript-7-december-2025/)
+
+## 年表
+
+| 年 | 出来事 |
+|------|--------|
+| 1995 | Brendan Eich が JavaScript を設計。Self の prototype 継承を採用 |
+| 1999 | ES3 策定。コンストラクタ関数 + prototype パターンが標準に |
+| 2008 | ES4 廃棄。Harmony プロセス発足 |
+| 2009 | ES5 策定。`Object.create()` 追加 |
+| 2012 | TypeScript 0.8 公開。ES6 より3年早く class をサポート |
+| 2014 | Decorators proposal が TC39 に初提出 |
+| 2015 | ES2015 策定。"maximally minimal" な class 構文が標準化 |
+| 2015 | TypeScript 1.5 が `--experimentalDecorators` を実装 |
+| 2015 | TypeScript 1.6 が abstract class を導入 |
+| 2016 | Private Fields proposal が TC39 に初提示 |
+| 2019 | React 16.8 が Hooks を導入。class → function 移行の始まり |
+| 2020 | TypeScript 3.8 が ECMAScript `#` private fields をサポート |
+| 2022 | ES2022 で private fields・static fields・static blocks が標準化 |
+| 2022 | Decorators が Stage 3 に到達 |
+| 2023 | TypeScript 5.0 が Stage 3 decorators をサポート |
+| 2023 | Vue `vue-class-component` deprecated |
+| 2025 | React 19 リリース。class コンポーネントは Legacy 扱いに |
