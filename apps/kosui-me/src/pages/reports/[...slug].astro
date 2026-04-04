@@ -31,7 +31,7 @@ function formatDate(dateStr: string): string {
 ---
 
 <BaseLayout
-  ogTitle={report.data.title}
+  ogTitle={`生成AIレポート: ${report.data.title}`}
   ogDescription={`[AI生成] ${report.data.description}`}
   ogImage={ogImage}
   ogUrl={pageUrl}
@@ -50,14 +50,18 @@ function formatDate(dateStr: string): string {
         class="text-3xl font-bold mt-2 mb-4"
         transition:name={`report-title-${report.data.slug}`}
       >
-        🤖 {report.data.title}
+        生成AIレポート: {report.data.title}
       </h1>
       <AuthorCard />
     </header>
     <aside class="mb-6 p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-400 rounded-r-lg text-sm text-amber-900 dark:text-amber-200">
       <p class="font-bold mb-1">本記事は生成AIによって作成されたものです</p>
-      <p class="mb-1">内容の正確性は保証されません。事実関係や技術的な記述については、必ず一次情報源をご確認ください。</p>
-      <p>また、本記事をSNS等で共有・拡散する際は、AI生成コンテンツである旨を併記するなど、誤解を招かないようご配慮ください。</p>
+      <p class="mb-1">
+        内容の正確性は保証されません。事実関係や技術的な記述については、必ず一次情報源をご確認ください。
+      </p>
+      <p>
+        また、本記事をSNS等で共有・拡散する際は、AI生成コンテンツである旨を併記するなど、誤解を招かないようご配慮ください。
+      </p>
     </aside>
     <div class="prose">
       <Content />

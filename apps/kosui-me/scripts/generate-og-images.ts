@@ -591,22 +591,23 @@ const createReportOgImage = (report: PostMeta): SatoriNode => {
                       type: 'div',
                       props: {
                         style: {
-                          fontSize: '96px',
-                          lineHeight: 1,
-                          flexShrink: 0,
-                        },
-                        children: '🤖',
-                      },
-                    },
-                    {
-                      type: 'div',
-                      props: {
-                        style: {
                           display: 'flex',
                           flexDirection: 'column',
-                          flex: 1,
+                          width: '100%',
                         },
                         children: [
+                          {
+                            type: 'div',
+                            props: {
+                              style: {
+                                fontSize: '36px',
+                                fontWeight: 'bold',
+                                color: COLORS.accent,
+                                marginBottom: '16px',
+                              },
+                              children: '🤖 生成AIレポート:',
+                            },
+                          },
                           {
                             type: 'div',
                             props: {
@@ -617,17 +618,6 @@ const createReportOgImage = (report: PostMeta): SatoriNode => {
                                 lineHeight: 1.4,
                               },
                               children: displayTitle,
-                            },
-                          },
-                          {
-                            type: 'div',
-                            props: {
-                              style: {
-                                fontSize: '20px',
-                                color: COLORS.subtitle,
-                                marginTop: '8px',
-                              },
-                              children: 'AI Generated Report',
                             },
                           },
                         ],
