@@ -1,5 +1,13 @@
 [
   {
+    "title": "サーバーサイドTypeScriptの型システムをどう教えるか — 他言語経験者に向けたオンボーディング事例",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2026/03/31/110000",
+    "date": "2026-03-31",
+    "publisher": "KAKEHASHI Tech Blog",
+    "description": "Python出身・Elixir出身のエンジニアにTypeScriptをオンボーディングした事例を紹介。「型検査とランタイムの境界を理解する」ことが言語背景を問わず最重要だと論じる。",
+    "tags": ["TypeScript", "オンボーディング"]
+  },
+  {
     "title": "TypeScriptのテストにはas const satisfiesが便利です",
     "url": "https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000",
     "date": "2025-12-14",
