@@ -1,0 +1,98 @@
+---
+title: "ECMAScript Pipeline Operator: 9年越しの停滞はなぜ起きたのか"
+date: "2026-04-04T12:00:00+09:00"
+slug: "2026/04/04/ecmascript-pipeline-operator"
+description: "TC39 の pipeline operator 提案が 2015 年の発案から 9 年以上経っても Stage 2 に留まり続ける理由を、構文論争・エンジン実装者の抵抗・JS0/JSSugar 構想の影響・チャンピオンの現状から調査した。"
+tags: ["ECMAScript", "TC39", "JavaScript"]
+---
+
+ECMAScript の pipeline operator (`|>`) は、関数呼び出しのネストを左から右への線形なデータフローに変換する構文だ。2015 年に最初のアイデアが投稿され、2017 年に TC39 で Stage 1 に到達し、2021 年に Hack style として Stage 2 に進んだ。しかし 2026 年 4 月現在、Stage 2 のまま 4 年 8 ヶ月が経過しており、リポジトリのメインブランチへのコミットは 2023 年 11 月を最後に停止している。本レポートでは、この提案がなぜ生まれ、なぜ難航し、今どういう状態にあるのかを整理する。
+
+## 提案の動機と初期の歴史
+
+### 原点: Gilbert Garza の es-discuss 投稿（2015 年）
+
+2015 年 11 月、[Gilbert Garza が es-discuss メーリングリスト](https://esdiscuss.org/topic/the-pipeline-operator-making-multiple-function-calls-look-great)に pipeline operator の提案を投稿した。動機は明快で、`exclaim(capitalize(doubleSay("hello")))` のようなネストした関数呼び出しを `"hello" |> doubleSay |> capitalize |> exclaim` と書きたい、というものだ。F#、Elixir、Elm といった関数型言語からの直接的な影響を受けている。
+
+解決しようとした問題は 3 つある。深いネストによる可読性の低下、ネスト回避のための一時変数の乱用、そしてメソッドチェーンがプロトタイプに依存するため任意の関数に対して使えないという制約だ。
+
+### TC39 での立ち上がり（2017 年）
+
+[Daniel Ehrenberg（Igalia）がチャンピオンとなり、2017 年 9 月の TC39 第 60 回会合で F#/Elixir スタイルの pipeline operator を Stage 1 に昇格](https://github.com/tc39/notes/blob/main/meetings/2017-09/sept-26.md)させた。ただし、当時並行して議論されていた bind operator (`::`) との機能重複を懸念する条件が付された。
+
+同年 11 月に Ehrenberg が Stage 2 昇格を試みたが、`await` との統合問題と自動セミコロン挿入の予期しない挙動が発覚し、[失敗に終わった](https://github.com/tc39/notes/blob/main/meetings/2017-11/nov-29.md)。
+
+## 構文論争: F# style vs Hack style
+
+### 3 つの競合案
+
+Stage 1 到達後、構文をめぐって提案が分裂した。
+
+**F# style** (`value |> f`) は右辺を単項関数として暗黙に呼び出す方式で、ポイントフリースタイルとの親和性が高い。しかし多引数関数を pipe するには部分適用構文（PFA）が不可欠であり、PFA 自体が V8 チームのメモリ性能懸念により Stage 2 に進めなかった。`await` が関数ではなく構文キーワードであるため、`promise |> await` とは書けないという根本的な制約もあった。
+
+**[Smart Pipelines](https://github.com/tc39/proposal-smart-pipelines)**（J. S. Choi 提案）は F# と Hack の自動切り替えを目指したが、構文が複雑すぎるとの批判を受けて取り下げられた。
+
+**Hack style** (`value |> f(%)`) は右辺でプレースホルダートークンを使い、値の挿入位置を明示する。任意の式を右辺に書けるため `await` も `promise |> await %` で自然に統合できる。PFA への依存もない。
+
+### F# style の 2 度の敗北と Hack style への収束
+
+F# style は 2017 年 11 月と 2018 年 3 月の 2 回、Stage 2 昇格を試みていずれも失敗した。V8 チームの Shu-yu Guo が F# + PFA の組み合わせに対し「クロージャ割り当て増加」への strong reservations を表明したことが決定的だった。
+
+2019〜2020 年は実質的に停滞した。[State of JS 2020 の調査](https://stateofjs.com/)で pipeline operator が最も要望の多い機能に選ばれたことを受け、Ehrenberg が新チャンピオンを募集。[Tab Atkins-Bittner（Google）](https://www.xanthir.com/b5Gd0)と Ron Buckton（Microsoft）が就任した。
+
+[2021 年 8 月 31 日の TC39 第 85 回会合](https://dev.to/hemanth/updates-from-the-85th-meeting-of-tc39-2kep)で、Tab Atkins がチャンピオングループの暫定合意として Hack style を提示し、Stage 2 に到達した。F# style の最大の推進者だった Ron Buckton ですら「F# に戻そうとすれば、pipeline operator 自体が永遠に実現しない」と認めた形だった。
+
+### `await` 統合問題の決着
+
+`await` の扱いは構文論争の核心だった。F# style では `await` は関数ではなくキーワードなので特別な構文拡張が必要になり、Minimal Proposal は `|> await f` を早期エラーとして禁止していた。Hack style は右辺が任意の式なので `promise |> await %` と書ける。async/await が JS のコアパターンとなっている現状で、pipeline が await を自然に扱えないのは致命的だという意見が多く、これが Hack style 採用の主要な技術的根拠となった。
+
+## Stage 2 以降の停滞
+
+### トピックトークンの未決定
+
+Hack style ではプレースホルダーとなるトピックトークンが必要だが、`%`、`^`、`^^`、`@@`、`#` などの候補が乱立し、[未だに確定していない](https://github.com/tc39/proposal-pipeline-operator/issues/91)。Tab Atkins は `#` を最も好むと述べているが、composites proposal との競合可能性がある。Stage 3 昇格にはトークンの確定が前提条件とされている。
+
+### エンジン実装者の懐疑的姿勢
+
+V8（Google）はメモリパフォーマンス懸念を一貫して表明しており、フラグ付き実装すら存在しない。SpiderMonkey（Mozilla）は Stage 1 時代に F# style の実験的パッチが存在したが、Hack style への変更後は対応していない。@codehag（Mozilla）は「パイプ演算子全般に懐疑的」と述べている。JavaScriptCore（Apple）は公式な立場表明すらない。3 エンジンとも未実装だ。
+
+### JS0/JSSugar 構想の影響
+
+2024 年 10 月の TC39 で Google/V8 チームが提案した [JS0/JSSugar](https://github.com/nicolo-ribaudo/tc39-proposal-js0) は、JavaScript を「エンジンが実装するコア（JS0）」と「ツールチェインでコンパイルする拡張（JSSugar）」に分割する構想だ。pipeline operator のような構文拡張が JS0 に入るのか JSSugar に分類されるのかは提案の将来に直接影響する。チャンピオンの J.S. Choi 自身が [Issue #312](https://github.com/tc39/proposal-pipeline-operator/issues/312) で「JSSugar 提案があるため、より複雑なパイプを進める見込みがない」と認めている。
+
+### TC39 の新構文に対する保守化
+
+委員会は近年、新しい構文の追加に対してより保守的になっている。pipeline operator、bind-this、extensions、PFA など「dataflow 系提案」の重複に対し「すべてを承認するだけの構文予算がない」という共通認識がある。Tab Atkins は [Holistic Review of TC39 Dataflow Proposals](https://www.xanthir.com/b5Gd0) でこれらの提案の関係を整理しているが、整理が進むほど個別の提案は動きにくくなる構造だ。
+
+### TypeScript チームの態度
+
+TypeScript は [Stage 3 到達まで実装しないと明言](https://github.com/microsoft/TypeScript/issues/17718)している。コミュニティから提出された 2 つの PR（[#22816](https://github.com/microsoft/TypeScript/pull/22816)、[#38305](https://github.com/microsoft/TypeScript/pull/38305)）はいずれもクローズされた。「Stage 1 の機能に対する PR は受け付けない。パイプライン演算子はまだ大きく変動しており、基本構文すら未確定」というのが TypeScript チームの一貫した立場だ（なお pipeline operator は Stage 2 だが、TypeScript は Stage 3 未満を一律に対象外としている）。
+
+## チャンピオンは今何をしているのか
+
+### リポジトリの活動状況
+
+[tc39/proposal-pipeline-operator](https://github.com/tc39/proposal-pipeline-operator) のメインブランチへの最終コミットは 2023 年 11 月 30 日（README のタイポ修正）。2023 年以降、TC39 プレナリーのアジェンダに pipeline operator が載ったことはない。公式変更スレッド（[Issue #232](https://github.com/tc39/proposal-pipeline-operator/issues/232)）にも 2022 年以降の Stage 変更は記録されていない。
+
+### 各チャンピオンの動向
+
+現在のチャンピオンは **J. S. Choi**、**James DiGioia**、**Ron Buckton**、**Tab Atkins-Bittner** の 4 名。
+
+**J. S. Choi** は 2025 年 4 月に [Issue #312](https://github.com/tc39/proposal-pipeline-operator/issues/312) でモナドパイプ / コンテキストパイプの将来構想を投稿したが、本人が「far-future add-on proposal」であり現時点で進める意図はないと明記している。他の提案では Array.fromAsync が Stage 4 に到達し ES2026 に含まれることが確定しており、そちらが 2025 年の主要な成果となった。
+
+**Tab Atkins-Bittner** は [Issue #306](https://github.com/tc39/proposal-pipeline-operator/issues/306) で 2024 年 8 月に「取り組む」と約束したが、2026 年 4 月時点で目に見える進展はない。CSS WG のエディタとしての活動が主になっている。
+
+**Ron Buckton** は Microsoft での TypeScript / Decorators 関連の作業が中心とみられ、pipeline operator に関する直近の発信は確認できなかった。
+
+### コミュニティの反応
+
+2025〜2026 年も Issue での要望は継続している。[#311](https://github.com/tc39/proposal-pipeline-operator/issues/311) では深いネスト `A(B(C(D(E(param)))))` に苦しむユーザーの訴え、[#317](https://github.com/tc39/proposal-pipeline-operator/issues/317)（2026 年 4 月 4 日開設）では F# と Hack 両スタイルの同時サポートという折衷案の提案がある。需要は存在するが、委員会側の動きに結びついていない。
+
+Babel の `@babel/plugin-proposal-pipeline-operator` は週間約 17 万ダウンロードで一定の利用がある。`"hack"` バリアントがデフォルトとなり、`"minimal"` と `"smart"` は非推奨で Babel 8 で削除予定だ。
+
+## 関連提案の現状
+
+- [proposal-partial-application](https://github.com/tc39/proposal-partial-application)（Stage 1）: F# pipes の前提条件だった部分適用構文。エンジン実装者の抵抗により停滞中
+- [proposal-function-pipe-flow](https://github.com/tc39/proposal-function-pipe-flow): `Function.pipe` / `Function.flow` のライブラリレベル代替案。2022 年 7 月に Stage 1 を拒否され撤回。委員会は `|>` 演算子に集中すべきとの判断だった
+- [proposal-call-this](https://github.com/tc39/proposal-call-this)（旧 bind operator）: J.S. Choi / Ron Buckton / Tab Atkins がチャンピオン。pipeline operator と dataflow 系の構文予算を共有しており、2025〜2026 年のアジェンダには見当たらない
+- [proposal-do-expressions](https://github.com/tc39/proposal-do-expressions)（Stage 1）: 停滞中。Hack pipes 内で複雑な式を書く際の補完的提案だが、単体での進展もない
