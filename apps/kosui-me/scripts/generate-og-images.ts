@@ -84,12 +84,11 @@ const loadFont = async (): Promise<ArrayBuffer> => {
   return fontArrayBuffer;
 };
 
-const loadPosts = (): PostMeta[] => {
-  const postsDir = path.join(process.cwd(), 'src', 'content', 'posts');
-  const files = fs.readdirSync(postsDir).filter((f) => f.endsWith('.mdx'));
+const loadMdxFiles = (dir: string): PostMeta[] => {
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.mdx'));
 
   return files.flatMap((file) => {
-    const content = fs.readFileSync(path.join(postsDir, file), 'utf-8');
+    const content = fs.readFileSync(path.join(dir, file), 'utf-8');
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
     if (!frontmatterMatch) return [];
 
@@ -102,6 +101,14 @@ const loadPosts = (): PostMeta[] => {
 
     return [{ title, ogTitle, slug, ogIcon, ogSvg }];
   });
+};
+
+const loadPosts = (): PostMeta[] => {
+  return loadMdxFiles(path.join(process.cwd(), 'src', 'content', 'posts'));
+};
+
+const loadReports = (): PostMeta[] => {
+  return loadMdxFiles(path.join(process.cwd(), 'src', 'content', 'reports'));
 };
 
 const getTitleFontSize = (title: string): number => {
@@ -503,6 +510,162 @@ const createOgImage = (post: PostMeta): SatoriNode => {
   };
 };
 
+const createReportOgImage = (report: PostMeta): SatoriNode => {
+  const displayTitle = report.ogTitle ?? report.title;
+  const fontSize = getTitleFontSize(displayTitle);
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.background,
+        fontFamily: 'Noto Sans JP',
+        position: 'relative',
+      },
+      children: [
+        createCornerSwirl('top-right'),
+        createCornerSwirl('bottom-left'),
+        createCornerSwirl('bottom-right'),
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              top: '28px',
+              left: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+            },
+            children: [
+              createShrimpIcon(64),
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    fontSize: '48px',
+                    fontWeight: 'bold',
+                    color: COLORS.accent,
+                  },
+                  children: 'kosui.me',
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: COLORS.card,
+              borderRadius: '16px',
+              padding: '40px 50px',
+              margin: '80px 60px 0 60px',
+              width: '1080px',
+              minHeight: '360px',
+              maxHeight: '420px',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
+              justifyContent: 'center',
+            },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: '24px',
+                    width: '100%',
+                  },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: {
+                          fontSize: '96px',
+                          lineHeight: 1,
+                          flexShrink: 0,
+                        },
+                        children: '🤖',
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: {
+                          display: 'flex',
+                          flexDirection: 'column',
+                          flex: 1,
+                        },
+                        children: [
+                          {
+                            type: 'div',
+                            props: {
+                              style: {
+                                fontSize: `${fontSize}px`,
+                                fontWeight: 'bold',
+                                color: COLORS.title,
+                                lineHeight: 1.4,
+                              },
+                              children: displayTitle,
+                            },
+                          },
+                          {
+                            type: 'div',
+                            props: {
+                              style: {
+                                fontSize: '20px',
+                                color: COLORS.subtitle,
+                                marginTop: '8px',
+                              },
+                              children: 'AI Generated Report',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              justifyContent: 'flex-end',
+              width: '1080px',
+              marginTop: '16px',
+              paddingRight: '8px',
+            },
+            children: {
+              type: 'div',
+              props: {
+                style: {
+                  fontSize: '18px',
+                  color: COLORS.subtitle,
+                },
+                children: 'by kosui',
+              },
+            },
+          },
+        },
+      ],
+    },
+  };
+};
+
 const createDefaultOgImage = (): SatoriNode => ({
   type: 'div',
   props: {
@@ -650,7 +813,15 @@ const main = async (): Promise<void> => {
     fs.writeFileSync(path.join(outputDir, fileName), png);
   }
 
-  console.log(`Done! Generated ${posts.length + 1} OG images.`);
+  const reports = loadReports();
+  for (const report of reports) {
+    const fileName = `${slugToFileName(report.slug)}.png`;
+    console.log(`Generating report ${fileName}...`);
+    const png = await generateImage(createReportOgImage(report), font);
+    fs.writeFileSync(path.join(outputDir, fileName), png);
+  }
+
+  console.log(`Done! Generated ${posts.length + reports.length + 1} OG images.`);
 };
 
 main().catch(console.error);

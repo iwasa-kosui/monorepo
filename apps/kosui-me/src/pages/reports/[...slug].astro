@@ -16,6 +16,10 @@ export async function getStaticPaths() {
 const { report } = Astro.props as { report: ReportEntry };
 const { Content } = await render(report);
 
+const slugFileName = report.data.slug.replace(/\//g, '-');
+const ogImage = `https://kosui.me/og/${slugFileName}.png`;
+const pageUrl = `https://kosui.me/reports/${report.data.slug}`;
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
@@ -29,6 +33,9 @@ function formatDate(dateStr: string): string {
 <BaseLayout
   ogTitle={report.data.title}
   ogDescription={`[AI生成] ${report.data.description}`}
+  ogImage={ogImage}
+  ogUrl={pageUrl}
+  ogType="article"
   noindex={true}
 >
   <article class="article-paper">
