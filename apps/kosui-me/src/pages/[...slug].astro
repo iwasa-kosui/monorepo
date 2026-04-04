@@ -54,7 +54,10 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       >
         {post.data.title}
       </h1>
-      <AuthorCard />
+      <div class="flex items-center justify-between gap-4">
+        <AuthorCard compact />
+        {!isPrivate && <ShareButtons title={post.data.title} url={pageUrl} />}
+      </div>
     </header>
     {
       isPrivate && (

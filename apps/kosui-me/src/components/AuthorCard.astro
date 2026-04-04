@@ -1,5 +1,9 @@
 ---
-// Compact author introduction card
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
 ---
 
 <div class="flex items-center gap-4">
@@ -18,8 +22,12 @@
     <p class="text-sm text-accent dark:text-accent-light font-medium">
       テックリード @ 株式会社カケハシ
     </p>
-    <p class="text-xs text-subtle dark:text-[#9ca3af] mt-1 leading-relaxed">
-      医療SaaSの共通基盤を開発。TypeScriptと関数型プログラミングで堅牢なシステム設計を実践。
-    </p>
+    {
+      !compact && (
+        <p class="text-xs text-subtle dark:text-[#9ca3af] mt-1 leading-relaxed">
+          医療SaaSの共通基盤を開発。TypeScriptと関数型プログラミングで堅牢なシステム設計を実践。
+        </p>
+      )
+    }
   </div>
 </div>
