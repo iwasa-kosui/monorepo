@@ -93,11 +93,15 @@ const loadMdxFiles = (dir: string): PostMeta[] => {
     if (!frontmatterMatch) return [];
 
     const fm = frontmatterMatch[1];
-    const title = fm.match(/^title:\s*"(.+)"$/m)?.[1] ?? '';
-    const slug = fm.match(/^slug:\s*"(.+)"$/m)?.[1] ?? '';
-    const ogTitle = fm.match(/^ogTitle:\s*"(.+)"$/m)?.[1]?.replace(/\\n/g, '\n');
-    const ogIcon = fm.match(/^ogIcon:\s*"(.+)"$/m)?.[1];
-    const ogSvg = fm.match(/^ogSvg:\s*"(.+)"$/m)?.[1];
+    const title = fm.match(/^title:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null) ?? '';
+    const slug = fm.match(/^slug:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null) ?? '';
+    const ogTitle = fm
+      .match(/^ogTitle:\s*(?:"(.+)"|'(.+)'|(.+))$/m)
+      ?.slice(1)
+      .find((v) => v != null)
+      ?.replace(/\\n/g, '\n');
+    const ogIcon = fm.match(/^ogIcon:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null);
+    const ogSvg = fm.match(/^ogSvg:\s*(?:"(.+)"|'(.+)'|(.+))$/m)?.slice(1).find((v) => v != null);
 
     return [{ title, ogTitle, slug, ogIcon, ogSvg }];
   });
