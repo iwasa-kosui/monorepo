@@ -1,0 +1,101 @@
+---
+title: 'functional-ts-principles: TypeScriptの関数型ドメインモデリングをエージェントスキルにした'
+date: '2026-04-08T12:10:20+09:00'
+slug: posts/2026/04/08/functional-ts-principles
+description: サーバーサイドTypeScriptで関数型ドメインモデリングを実践するための原則を、コーディングエージェント向けスキルプラグインとして公開した。
+tags:
+  - TypeScript
+  - agent-skills
+ogIcon: ts
+private: false
+---
+## 何を作ったか
+
+[functional-ts-principles](https://github.com/iwasa-kosui/functional-ts-principles) というコーディングエージェント向けスキルプラグインを公開しました。サーバーサイドTypeScriptで関数型ドメインモデリングを実践するための原則を、Claude CodeやCodexなどのエージェントに教え込むためのものです。
+
+インストールは1コマンドで済みます。
+
+```bash
+npx skills add iwasa-kosui/functional-ts-principles
+```
+
+スキルは2つ構成になっています。コード生成用の `functional-ts` はドメインモデルや状態遷移ロジックを書く際にエージェントが従うべき原則を定義します。レビュー用の `functional-ts-review` は既存コードを原則に照らして検証します。
+
+また、それぞれ英語版と日本語版があります。日本語版は `functional-ts-ja`と`functional-ts-review`として提供されます。
+
+## なぜスキルという形にしたか
+
+私はカケハシの認証基盤・ID基盤を担うチームのテックリードとして、3年間ほど精力的にチーム内でオンボーディングやレビューを実行し、無事にチーム内にも関数型ドメインモデリングの知見が蓄積されてきました。
+
+例えば、Discriminated Unionによる状態のモデリング、Companion Objectパターン、Railway Oriented Programming、Zodなどのスキーマライブラリを使ったAlways-Valid Domain Modelの実践、Sensitive型によるPII保護など、これらの原則やプラクティスを社内外で広く使ってもらいたいと考えていました。
+
+そこで、これまでブログ記事を書いたり社内ドキュメントを整備したり、積極的に社内外へ発信を続けてきました。しかし、以下のブログ記事を全部読んで理解して実践してもらうのはコストが高すぎます。
+
+* [複雑な状態遷移: クラスではなく関数とDiscriminated Unionで状態の定義と遷移を表現する](https://kosui.me/posts/2025/02/20/005900)
+* [Discriminated Unionを利用したStateパターンの実現](https://kosui.me/posts/2025/02/25/021320)
+* [TypeScriptでドメインイベントを容易に記録できるコード設計を考える](https://kosui.me/posts/2025/05/06/142842)
+* [なぜTypeScriptでメソッド記法を避けるべきか？](https://kosui.me/posts/2025/06/02/221656)
+* [私がTypeScriptで interface よりも type を好む理由](https://kosui.me/posts/2025/10/23/214710)
+* [ログのPII漏洩を防止する: TypeScriptの型推論とランタイムの境界](https://kosui.me/posts/2026/03/16/typescript-pii-logging-defense)
+* [サーバーサイドTypeScriptの型システムをどう教えるか](https://kakehashi-dev.hatenablog.com/entry/2026/03/31/110000)
+* [TypeScriptのテストにはas const satisfiesが便利です](https://kakehashi-dev.hatenablog.com/entry/2025/12/14/110000)
+* [TypeScriptの宣言的な配列操作](https://kakehashi-dev.hatenablog.com/entry/2025/11/19/110000)
+* [他言語経験者が知っておきたいTypeScriptのクラスの注意点](https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000)
+
+それに、コーディングエージェントへの期待が高まっている中で、開発者コミュニティではこうしたナレッジに対する関心が薄れているように感じます。ビジネスとしての価値を生み出すには機能・品質・デリバリーの3つを両立させる必要があるのに、コーディングエージェントが生み出すデリバリー速度への関心があまりにも高くなっていて、こうしたナレッジによる品質の担保について関心が相対的に減っているように見えるのです。
+
+そこで、エージェントスキルとして提供すれば、開発者が原則の詳細を把握していなくても、エージェントがコード生成時に原則を適用できると考えました。リンター・フォーマッターやCI、CodeRabbitなどのソリューションはあくまで実装後に違反を検出しますが、スキルは実装する時点で原則に沿ったコードを生成できます。
+
+それに、レビュースキルを実行して対話していくことで、開発者が再び品質の担保について意識するきっかけを作れるかもしれません。さらに、GitHubのIssueやPRを通じたこのスキルへのフィードバックを踏まえて、より洗練された原則をコミュニティが適用できるようになるかもしれません。
+
+## 含まれる原則の概要
+
+スキルが教える原則は大きく4つの領域に分かれます。
+
+状態モデリングでは、Discriminated Unionで各状態を `kind` フィールドで区別される独立した型として定義し、純粋関数で状態遷移を表現します。引数型と戻り値型が有効な遷移のみを許可するので、無効な遷移はコンパイルエラーになります。型とその関連関数はCompanion Objectパターンでグループ化します。
+
+エラーハンドリングでは、ドメイン層から `throw` を排除し、Result型で成功と失敗を表現します。エラーもDiscriminated Unionで定義し、`assertNever` による網羅性チェックを必須にします。また、手続き的なエラーハンドリング `if (Result.isOk(res) { … }` ではなく、`neverthrow`であればメソッドチェーンによるパイプライン化、`byethrow`や `fp-ts`であれば`pipe`関数を利用したdo記法風のパイプライン化を推奨します。
+
+```typescript
+Result.pipe(
+  result,
+  Result.map((value) => transform(value)),         // 成功値を変換
+  Result.mapError((error) => transformErr(error)),  // エラー値を変換
+  Result.andThen((value) => nextResult(value)),     // 成功値から次のResultへ（flatMap）
+  Result.orElse((error) => recover(error)),         // エラーから回復
+);
+```
+
+境界防御では、外部入力をZodスキーマでバリデーションし、内部では型を信頼します。`as` 型アサーションはBranded Typeのファクトリに限定します。
+
+```typescript
+// Bad
+const user = data as User;
+
+// Good
+const user = UserSchema.parse(data);
+```
+
+PII保護では、個人情報をクロージャベースの `Sensitive<T>` 型でラップし、ログ出力時に自動マスクします。
+
+```typescript
+const sensitiveString = z.string().transform(Sensitive.of);
+
+const PatientSchema = z.object({
+  id: z.string().uuid(),
+  name: sensitiveString,
+  email: sensitiveString,
+  diagnosis: sensitiveString,
+  role: z.string(), // PIIではない
+});
+
+const patient = PatientSchema.parse(rawData);
+console.log(JSON.stringify(patient));
+// {"id":"...","name":"[REDACTED]","email":"[REDACTED]","diagnosis":"[REDACTED]","role":"doctor"}
+```
+
+レビュースキルはこれらの原則に対する違反を8つの観点で検出し、重大度付きで指摘します。
+
+## 今後
+
+業務への本格的な適用はこれからです。スキルの原則自体はチーム内で実践してきたものですが、スキルという配布形態での運用はまだ始まったばかりです。実際に使ってみたフィードバックや、原則自体への改善提案があれば [GitHub](https://github.com/iwasa-kosui/functional-ts-principles) に寄せていただけると嬉しいです。
