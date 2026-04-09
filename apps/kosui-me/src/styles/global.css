@@ -422,4 +422,27 @@ pre.mermaid {
     padding: 0.25rem 0 !important;
     box-shadow: none !important;
   }
+
+  .rirekisho {
+    max-width: 100% !important;
+    font-size: 10pt;
+  }
+
+  .rirekisho-table th {
+    background-color: transparent !important;
+  }
+
+  .rirekisho-table,
+  .rirekisho-table th,
+  .rirekisho-table td {
+    border-color: black !important;
+  }
+
+  .rirekisho-page-break {
+    height: 0;
+    margin: 0;
+    border: none;
+    page-break-before: always;
+    break-before: page;
+  }
 }
