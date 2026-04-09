@@ -390,3 +390,16 @@ pre.mermaid {
     transition: none;
   }
 }
+
+/* ===== Print styles ===== */
+@media print {
+  header,
+  footer,
+  .bottom-nav {
+    display: none !important;
+  }
+
+  main {
+    padding-bottom: 0 !important;
+  }
+}
