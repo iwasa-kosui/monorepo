@@ -402,4 +402,24 @@ pre.mermaid {
   main {
     padding-bottom: 0 !important;
   }
+
+  body {
+    background-color: white !important;
+    background-image: none !important;
+  }
+
+  .article-paper {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  .article-paper a[class*="border"] {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0.25rem 0 !important;
+    box-shadow: none !important;
+  }
 }
