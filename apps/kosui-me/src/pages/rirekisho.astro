@@ -15,6 +15,7 @@ const commuteTime = import.meta.env.RIREKISHO_COMMUTE_TIME ?? '';
 const dependents = import.meta.env.RIREKISHO_DEPENDENTS ?? '';
 const spouse = import.meta.env.RIREKISHO_SPOUSE ?? '';
 const spouseDependency = import.meta.env.RIREKISHO_SPOUSE_DEPENDENCY ?? '';
+const motivation = import.meta.env.RIREKISHO_MOTIVATION ?? '';
 
 const birth = birthDate ? new Date(birthDate) : null;
 const today = new Date();
@@ -299,7 +300,7 @@ const paddedCerts = padRows(certifications, 6);
             <th>志望の動機、特技、好きな学科、アピールポイントなど</th>
           </tr>
           <tr>
-            <td class="rirekisho-empty-lg"></td>
+            <td class="rirekisho-motivation">{motivation}</td>
           </tr>
         </tbody>
       </table>
@@ -444,8 +445,12 @@ const paddedCerts = padRows(certifications, 6);
   margin: 1.5rem 0;
 }
 
-.rirekisho-empty-lg {
-  height: 6rem;
+.rirekisho-motivation {
+  min-height: 6rem;
+  vertical-align: top;
+  padding-top: 0.5rem !important;
+  white-space: pre-line;
+  line-height: 1.8;
 }
 
 .rirekisho-wishes {
