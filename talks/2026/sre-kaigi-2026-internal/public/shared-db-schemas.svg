@@ -1,0 +1,94 @@
+<svg viewBox="0 0 420 320" width="420" height="320" xmlns="http://www.w3.org/2000/svg" style="font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="a" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,2.5 L0,5" fill="#1a1a2e"/>
+    </marker>
+    <marker id="ag" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,2.5 L0,5" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- DB外枠 -->
+  <rect x="10" y="8" width="400" height="302" rx="12" fill="#f8fafc" stroke="#1a1a2e" stroke-width="1.8"/>
+  <text x="210" y="30" text-anchor="middle" fill="#1a1a2e" style="font-size:13px;font-weight:700">単一 PostgreSQL</text>
+
+  <!-- ===== authスキーマ ===== -->
+  <rect x="22" y="42" width="120" height="115" rx="6" fill="#dbeafe" stroke="#1e74bb" stroke-width="1.2"/>
+  <text x="82" y="60" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">auth</text>
+  <text x="82" y="73" text-anchor="middle" fill="#1e74bb" style="font-size:8px">スキーマ</text>
+  <rect x="32" y="82" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="82" y="97" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">sessions</text>
+  <rect x="32" y="110" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="82" y="125" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">tokens</text>
+
+  <!-- ===== directoryスキーマ ===== -->
+  <rect x="150" y="42" width="120" height="115" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="210" y="60" text-anchor="middle" fill="#16a34a" style="font-size:11px;font-weight:700">directory</text>
+  <text x="210" y="73" text-anchor="middle" fill="#16a34a" style="font-size:8px">スキーマ</text>
+  <rect x="160" y="82" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="210" y="97" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">users</text>
+  <rect x="160" y="110" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="210" y="125" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">orgs</text>
+
+  <!-- ===== assetスキーマ ===== -->
+  <rect x="278" y="42" width="120" height="115" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="1.2"/>
+  <text x="338" y="60" text-anchor="middle" fill="#d97706" style="font-size:11px;font-weight:700">asset</text>
+  <text x="338" y="73" text-anchor="middle" fill="#d97706" style="font-size:8px">スキーマ</text>
+  <rect x="288" y="82" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="338" y="97" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">licenses</text>
+  <rect x="288" y="110" width="100" height="22" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="338" y="125" text-anchor="middle" fill="#1a1a2e" style="font-size:10px">devices</text>
+
+  <!-- ===== サービス（DB内部の下段） ===== -->
+  <!-- 認証サービス -->
+  <rect x="22" y="190" width="120" height="42" rx="6" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.4"/>
+  <text x="82" y="216" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">認証サービス</text>
+
+  <!-- IDサービス -->
+  <rect x="150" y="190" width="120" height="42" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.4"/>
+  <text x="210" y="216" text-anchor="middle" fill="#16a34a" style="font-size:11px;font-weight:700">IDサービス</text>
+
+  <!-- ライセンスサービス -->
+  <rect x="278" y="190" width="120" height="42" rx="6" fill="#fffbeb" stroke="#d97706" stroke-width="1.4"/>
+  <text x="338" y="216" text-anchor="middle" fill="#d97706" style="font-size:11px;font-weight:700">ライセンスサービス</text>
+
+  <!-- ===== R/W接続（サービス→所有スキーマ） ===== -->
+  <line x1="82" y1="190" x2="82" y2="159" stroke="#1a1a2e" stroke-width="2" marker-end="url(#a)"/>
+  <text x="93" y="180" fill="#1a1a2e" style="font-size:9px;font-weight:700">R/W</text>
+
+  <line x1="210" y1="190" x2="210" y2="159" stroke="#1a1a2e" stroke-width="2" marker-end="url(#a)"/>
+  <text x="221" y="180" fill="#1a1a2e" style="font-size:9px;font-weight:700">R/W</text>
+
+  <line x1="338" y1="190" x2="338" y2="159" stroke="#1a1a2e" stroke-width="2" marker-end="url(#a)"/>
+  <text x="349" y="180" fill="#1a1a2e" style="font-size:9px;font-weight:700">R/W</text>
+
+  <!-- ===== SELECT参照線 ===== -->
+  <!-- 認証サービス → directoryスキーマ -->
+  <path d="M110,190 Q110,170 170,159" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#ag)"/>
+
+  <!-- IDサービス → authスキーマ -->
+  <path d="M183,190 Q183,170 130,159" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#ag)"/>
+
+  <!-- IDサービス → assetスキーマ -->
+  <path d="M237,190 Q237,170 290,159" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#ag)"/>
+
+  <!-- ライセンスサービス → directoryスキーマ -->
+  <path d="M310,190 Q310,170 250,159" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#ag)"/>
+
+  <!-- ===== 凡例 ===== -->
+  <line x1="30" y1="270" x2="60" y2="270" stroke="#1a1a2e" stroke-width="2"/>
+  <text x="66" y="274" fill="#1a1a2e" style="font-size:9px">読み書き（所有スキーマ）</text>
+
+  <line x1="220" y1="270" x2="250" y2="270" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3"/>
+  <text x="256" y="274" fill="#1a1a2e" style="font-size:9px">読み取りのみ（SELECT）</text>
+
+  <!-- 色とスキーマの対応 -->
+  <rect x="30" y="286" width="12" height="12" rx="2" fill="#dbeafe" stroke="#1e74bb" stroke-width="0.8"/>
+  <text x="48" y="296" fill="#1a1a2e" style="font-size:8px">認証サービスが所有</text>
+
+  <rect x="155" y="286" width="12" height="12" rx="2" fill="#dcfce7" stroke="#16a34a" stroke-width="0.8"/>
+  <text x="173" y="296" fill="#1a1a2e" style="font-size:8px">IDサービスが所有</text>
+
+  <rect x="280" y="286" width="12" height="12" rx="2" fill="#fef3c7" stroke="#d97706" stroke-width="0.8"/>
+  <text x="298" y="296" fill="#1a1a2e" style="font-size:8px">ライセンスサービスが所有</text>
+</svg>
