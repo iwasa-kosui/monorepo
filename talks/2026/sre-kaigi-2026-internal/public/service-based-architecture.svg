@@ -1,0 +1,87 @@
+<svg viewBox="0 0 480 330" width="480" height="330" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,2.5 L0,5" fill="#1a1a2e"/>
+    </marker>
+    <marker id="arw-g" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,2.5 L0,5" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- ===== サービス群（上段） ===== -->
+  <!-- 認証サービス (center x=80) -->
+  <rect x="15" y="8" width="130" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="80" y="29" text-anchor="middle" fill="#1e74bb" style="font-size:12px;font-weight:700">認証サービス</text>
+  <text x="80" y="50" text-anchor="middle" fill="#64748b" style="font-size:9px">独立デプロイ可能</text>
+
+  <!-- ライセンスサービス (center x=240) -->
+  <rect x="175" y="8" width="130" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="240" y="29" text-anchor="middle" fill="#1e74bb" style="font-size:12px;font-weight:700">ライセンスサービス</text>
+  <text x="240" y="50" text-anchor="middle" fill="#64748b" style="font-size:9px">独立デプロイ可能</text>
+
+  <!-- IDサービス (center x=400) -->
+  <rect x="335" y="8" width="130" height="55" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="400" y="29" text-anchor="middle" fill="#1e74bb" style="font-size:12px;font-weight:700">IDサービス</text>
+  <text x="400" y="50" text-anchor="middle" fill="#64748b" style="font-size:9px">独立デプロイ可能</text>
+
+  <!-- ===== サービス間API通信の禁止 ===== -->
+  <line x1="145" y1="35" x2="173" y2="35" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="159" y="28" text-anchor="middle" fill="#e53e3e" style="font-size:14px;font-weight:700">✗</text>
+  <line x1="305" y1="35" x2="333" y2="35" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="319" y="28" text-anchor="middle" fill="#e53e3e" style="font-size:14px;font-weight:700">✗</text>
+
+  <!-- ===== R/W接続線（サービス→所有スキーマ） ===== -->
+  <line x1="80" y1="63" x2="85" y2="175" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="62" y="120" fill="#1a1a2e" style="font-size:10px;font-weight:700">R/W</text>
+
+  <line x1="240" y1="63" x2="240" y2="175" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="222" y="120" fill="#1a1a2e" style="font-size:10px;font-weight:700">R/W</text>
+
+  <line x1="400" y1="63" x2="395" y2="175" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw)"/>
+  <text x="402" y="120" fill="#1a1a2e" style="font-size:10px;font-weight:700">R/W</text>
+
+  <!-- ===== SELECT参照線 ===== -->
+  <path d="M108,63 L108,135 L365,135 L365,175" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arw-g)"/>
+  <text x="300" y="130" text-anchor="middle" fill="#1a1a2e" style="font-size:9px;font-weight:600">SELECT のみ</text>
+
+  <path d="M268,63 L268,145 L375,145 L375,175" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arw-g)"/>
+
+  <!-- ===== 共有DB（下段） ===== -->
+  <rect x="10" y="155" width="460" height="168" rx="10" fill="#f8fafc" stroke="#1a1a2e" stroke-width="1.5"/>
+  <text x="240" y="173" text-anchor="middle" fill="#1a1a2e" style="font-size:12px;font-weight:700">単一 PostgreSQL</text>
+
+  <!-- authスキーマ -->
+  <rect x="22" y="182" width="140" height="90" rx="6" fill="#dbeafe" stroke="#1e74bb" stroke-width="1.2"/>
+  <text x="92" y="199" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">auth スキーマ</text>
+  <rect x="32" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="59" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">sessions</text>
+  <rect x="95" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="122" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">tokens</text>
+  <text x="92" y="258" text-anchor="middle" fill="#1e74bb" style="font-size:9px;font-weight:600">所有: 認証サービス</text>
+
+  <!-- assetスキーマ -->
+  <rect x="170" y="182" width="140" height="90" rx="6" fill="#dbeafe" stroke="#1e74bb" stroke-width="1.2"/>
+  <text x="240" y="199" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">asset スキーマ</text>
+  <rect x="180" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="207" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">licenses</text>
+  <rect x="243" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="270" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">devices</text>
+  <text x="240" y="258" text-anchor="middle" fill="#1e74bb" style="font-size:9px;font-weight:600">所有: ライセンスサービス</text>
+
+  <!-- directoryスキーマ -->
+  <rect x="318" y="182" width="140" height="90" rx="6" fill="#dbeafe" stroke="#1e74bb" stroke-width="1.2"/>
+  <text x="388" y="199" text-anchor="middle" fill="#1e74bb" style="font-size:11px;font-weight:700">directory スキーマ</text>
+  <rect x="328" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="355" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">users</text>
+  <rect x="391" y="207" width="55" height="20" rx="3" fill="#fff" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="418" y="221" text-anchor="middle" fill="#1a1a2e" style="font-size:9px">orgs</text>
+  <text x="388" y="258" text-anchor="middle" fill="#1e74bb" style="font-size:9px;font-weight:600">所有: IDサービス</text>
+
+  <!-- 凡例 -->
+  <line x1="22" y1="305" x2="52" y2="305" stroke="#1a1a2e" stroke-width="1.5"/>
+  <text x="58" y="309" fill="#1a1a2e" style="font-size:9px">読み書き (R/W)</text>
+  <line x1="150" y1="305" x2="180" y2="305" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="186" y="309" fill="#1a1a2e" style="font-size:9px">読み取りのみ (SELECT)</text>
+  <line x1="330" y1="305" x2="360" y2="305" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="366" y="309" fill="#1a1a2e" style="font-size:9px">API通信禁止</text>
+</svg>

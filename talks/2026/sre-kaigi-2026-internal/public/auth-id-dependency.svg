@@ -1,0 +1,36 @@
+<svg viewBox="0 0 480 220" width="480" height="220" xmlns="http://www.w3.org/2000/svg" style="font-size:1px;font-family:ui-sans-serif,system-ui,sans-serif">
+  <defs>
+    <marker id="arw2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#1a1a2e"/>
+    </marker>
+    <marker id="arw2-r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6" fill="#ef4444"/>
+    </marker>
+  </defs>
+  <!-- プロダクト群 (左上) -->
+  <rect x="10" y="10" width="130" height="45" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="75" y="39" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">プロダクト群</text>
+  <!-- データ基盤 (右上) -->
+  <rect x="340" y="10" width="130" height="45" rx="8" fill="#eef2f7" stroke="#1e74bb" stroke-width="1.5"/>
+  <text x="405" y="39" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">データ基盤</text>
+  <!-- データ基盤→プロダクト群 (参照) -->
+  <line x1="340" y1="25" x2="142" y2="25" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw2)"/>
+  <text x="230" y="20" fill="#1a1a2e" style="font-size:12px;font-weight:600">参照</text>
+  <!-- プラットフォーム枠 -->
+  <rect x="10" y="90" width="460" height="120" rx="10" fill="none" stroke="#1e74bb" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="28" y="110" fill="#1e74bb" style="font-size:13px;font-weight:700">プラットフォーム</text>
+  <!-- 認証基盤 (赤ハイライト) -->
+  <rect x="30" y="120" width="120" height="45" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <text x="90" y="148" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">認証基盤</text>
+  <!-- ID基盤 (赤ハイライト) -->
+  <rect x="330" y="120" width="120" height="45" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <text x="390" y="148" text-anchor="middle" fill="#1a1a2e" style="font-size:14px;font-weight:700">ID基盤</text>
+  <!-- プロダクト群→認証基盤 (OIDC) -->
+  <line x1="75" y1="55" x2="75" y2="118" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw2)"/>
+  <text x="46" y="90" fill="#1a1a2e" style="font-size:12px;font-weight:600">OIDC</text>
+  <!-- 認証基盤→ID基盤 (参照, 赤) -->
+  <line x1="150" y1="142" x2="328" y2="142" stroke="#ef4444" stroke-width="2.5" marker-end="url(#arw2-r)"/>
+  <text x="230" y="136" fill="#ef4444" style="font-size:12px;font-weight:600">参照</text>
+  <!-- ID基盤→データ基盤 -->
+  <line x1="405" y1="120" x2="405" y2="57" stroke="#1a1a2e" stroke-width="1.5" marker-end="url(#arw2)"/>
+</svg>
