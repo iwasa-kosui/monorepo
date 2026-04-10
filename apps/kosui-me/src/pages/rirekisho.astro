@@ -1,0 +1,480 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+const name = import.meta.env.RIREKISHO_FULL_NAME ?? '';
+const furigana = import.meta.env.RIREKISHO_FURIGANA ?? '';
+const birthDate = import.meta.env.RIREKISHO_BIRTH_DATE ?? '';
+const postalCode = import.meta.env.RIREKISHO_ADDRESS_POSTAL ?? '';
+const address = import.meta.env.RIREKISHO_ADDRESS ?? '';
+const addressFurigana = import.meta.env.RIREKISHO_ADDRESS_FURIGANA ?? '';
+const phone = import.meta.env.RIREKISHO_PHONE ?? '';
+const email = import.meta.env.RIREKISHO_EMAIL ?? '';
+const gender = import.meta.env.RIREKISHO_GENDER ?? '';
+const photoUrl = '/photo.png';
+const commuteTime = import.meta.env.RIREKISHO_COMMUTE_TIME ?? '';
+const dependents = import.meta.env.RIREKISHO_DEPENDENTS ?? '';
+const spouse = import.meta.env.RIREKISHO_SPOUSE ?? '';
+const spouseDependency = import.meta.env.RIREKISHO_SPOUSE_DEPENDENCY ?? '';
+const motivation = import.meta.env.RIREKISHO_MOTIVATION ?? '';
+
+const birth = birthDate ? new Date(birthDate) : null;
+const today = new Date();
+let age = '';
+if (birth) {
+  let a = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    a--;
+  }
+  age = String(a);
+}
+
+const birthYear = birth ? birth.getFullYear() : '';
+const birthMonth = birth ? birth.getMonth() + 1 : '';
+const birthDay = birth ? birth.getDate() : '';
+
+const formattedToday = `${today.getFullYear()}年${
+  today.getMonth() + 1
+}月${today.getDate()}日`;
+
+type Entry = { year: number; month: number; content: string };
+
+const education: Entry[] = [
+  { year: 2013, month: 4, content: '東京農工大学 工学部 情報工学科 入学' },
+  { year: 2017, month: 3, content: '東京農工大学 工学部 情報工学科 卒業' },
+  {
+    year: 2017,
+    month: 4,
+    content: '東京農工大学大学院 工学府 情報工学専攻 入学',
+  },
+  {
+    year: 2019,
+    month: 3,
+    content: '東京農工大学大学院 工学府 情報工学専攻 修了',
+  },
+];
+
+const work: Entry[] = [
+  { year: 2019, month: 4, content: '株式会社ディー・エヌ・エー 入社' },
+  { year: 2022, month: 8, content: '株式会社ディー・エヌ・エー 退社' },
+  { year: 2022, month: 8, content: '株式会社カケハシ 入社' },
+  { year: 0, month: 0, content: '現在に至る' },
+];
+
+const certifications: Entry[] = [];
+
+function padRows(entries: Entry[], totalRows: number): (Entry | null)[] {
+  const result: (Entry | null)[] = [...entries];
+  while (result.length < totalRows) {
+    result.push(null);
+  }
+  return result;
+}
+
+const historyRows = [
+  null,
+  ...education,
+  null,
+  ...work,
+];
+const PAGE1_HISTORY_ROWS = 18;
+const PAGE2_HISTORY_ROWS = 7;
+
+const allHistory = historyRows.map(
+  (e) => e ?? { year: 0, month: 0, content: '' },
+);
+const paddedPage1History = padRows([...allHistory], PAGE1_HISTORY_ROWS);
+const page2HistoryStart = allHistory.length > PAGE1_HISTORY_ROWS
+  ? allHistory.slice(PAGE1_HISTORY_ROWS)
+  : [];
+const paddedPage2History = padRows(
+  page2HistoryStart,
+  PAGE2_HISTORY_ROWS,
+);
+const paddedCerts = padRows(certifications, 6);
+---
+
+<BaseLayout title="履歴書 - kosui" noindex={true}>
+  <article class="article-paper">
+    <div class="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 print:hidden">
+      <p>
+        本ページの内容はSNS等での共有・転載はご遠慮ください。採用選考における参考資料としてのみご利用ください。
+      </p>
+    </div>
+
+    <div class="rirekisho">
+      <div class="rirekisho-header">
+        <h1>履 歴 書</h1>
+        <p class="rirekisho-date">{formattedToday} 現在</p>
+      </div>
+
+      <!-- 個人情報 -->
+      <table class="rirekisho-table">
+        <tbody>
+          <tr>
+            <th class="rirekisho-label-sm">ふりがな</th>
+            <td colspan={3}>{furigana}</td>
+            <td rowspan={4} class="rirekisho-photo">
+              {
+                photoUrl ? (
+                  <img
+                    src={photoUrl}
+                    alt="証明写真"
+                    class="rirekisho-photo-img"
+                  />
+                ) : <span>写真を貼る位置<br />(縦4cm×横3cm)</span>
+              }
+            </td>
+          </tr>
+          <tr>
+            <th>氏名</th>
+            <td colspan={3} class="rirekisho-name">{name}</td>
+          </tr>
+          <tr>
+            <th>生年月日</th>
+            <td colspan={2}>
+              {birthYear}年 {birthMonth}月 {birthDay}日 （満{age}歳）
+            </td>
+            <td class="rirekisho-center">{gender}</td>
+          </tr>
+          <tr>
+            <th class="rirekisho-label-sm">ふりがな</th>
+            <td colspan={3} class="rirekisho-label-sm">{addressFurigana}</td>
+          </tr>
+          <tr>
+            <th>現住所</th>
+            <td colspan={4}>〒{postalCode}<br />{address}</td>
+          </tr>
+          <tr>
+            <th>電話</th>
+            <td>{phone}</td>
+            <th>E-mail</th>
+            <td colspan={2}>{email}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 学歴・職歴 -->
+      <table class="rirekisho-table rirekisho-history">
+        <thead>
+          <tr>
+            <th class="rirekisho-col-year">年</th>
+            <th class="rirekisho-col-month">月</th>
+            <th>学歴・職歴</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            paddedPage1History.map((entry, i) => {
+              const isEducationHeader = i === 0;
+              const isWorkHeader = i === education.length + 1;
+              if (isEducationHeader) {
+                return (
+              <tr>
+                <td />
+                <td />
+                <td class="rirekisho-section-header">学歴</td>
+              </tr>
+            );
+              }
+              if (isWorkHeader) {
+                return (
+              <tr>
+                <td />
+                <td />
+                <td class="rirekisho-section-header">職歴</td>
+              </tr>
+            );
+              }
+              if (
+                !entry || (entry.year === 0 && entry.content === '')
+              ) {
+                return (
+              <tr>
+                <td />
+                <td />
+                <td />
+              </tr>
+            );
+              }
+              return (
+              <tr>
+                <td class="rirekisho-center">
+                  {entry.year !== 0 ? entry.year : ''}
+                </td>
+                <td class="rirekisho-center">
+                  {entry.month !== 0 ? entry.month : ''}
+                </td>
+                <td>{entry.content}</td>
+              </tr>
+            );
+            })
+          }
+        </tbody>
+      </table>
+
+      <!-- 2ページ目 -->
+      <div class="rirekisho-page-break"></div>
+
+      <!-- 学歴・職歴（続き） -->
+      <table class="rirekisho-table rirekisho-history">
+        <thead>
+          <tr>
+            <th class="rirekisho-col-year">年</th>
+            <th class="rirekisho-col-month">月</th>
+            <th>学歴・職歴</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            paddedPage2History.map((entry) => {
+              if (
+                !entry || (entry.year === 0 && entry.content === '')
+              ) {
+                return (
+              <tr>
+                <td />
+                <td />
+                <td />
+              </tr>
+            );
+              }
+              return (
+              <tr>
+                <td class="rirekisho-center">
+                  {entry.year !== 0 ? entry.year : ''}
+                </td>
+                <td class="rirekisho-center">
+                  {entry.month !== 0 ? entry.month : ''}
+                </td>
+                <td>{entry.content}</td>
+              </tr>
+            );
+            })
+          }
+          <tr>
+            <td></td>
+            <td></td>
+            <td class="rirekisho-right">以上</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 免許・資格 -->
+      <table class="rirekisho-table rirekisho-history">
+        <thead>
+          <tr>
+            <th class="rirekisho-col-year">年</th>
+            <th class="rirekisho-col-month">月</th>
+            <th>免許・資格</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            paddedCerts.map((entry) => {
+              if (!entry) {
+                return (
+              <tr>
+                <td />
+                <td />
+                <td />
+              </tr>
+            );
+              }
+              return (
+              <tr>
+                <td class="rirekisho-center">{entry.year}</td>
+                <td class="rirekisho-center">{entry.month}</td>
+                <td>{entry.content}</td>
+              </tr>
+            );
+            })
+          }
+        </tbody>
+      </table>
+
+      <!-- 志望動機 -->
+      <table class="rirekisho-table">
+        <tbody>
+          <tr>
+            <th>志望の動機、特技、好きな学科、アピールポイントなど</th>
+          </tr>
+          <tr>
+            <td class="rirekisho-motivation">{motivation}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 通勤時間・扶養家族・配偶者・配偶者の扶養義務 -->
+      <table class="rirekisho-table">
+        <tbody>
+          <tr>
+            <th>通勤時間</th>
+            <th>扶養家族（配偶者を除く）</th>
+            <th>配偶者</th>
+            <th>配偶者の扶養義務</th>
+          </tr>
+          <tr>
+            <td class="rirekisho-center">{commuteTime}</td>
+            <td class="rirekisho-center">{dependents}</td>
+            <td class="rirekisho-center">{spouse}</td>
+            <td class="rirekisho-center">{spouseDependency}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 本人希望記入欄 -->
+      <table class="rirekisho-table">
+        <tbody>
+          <tr>
+            <th>
+              本人希望記入欄（特に給料・職種・勤務時間・勤務地・その他についての希望などがあれば記入）
+            </th>
+          </tr>
+          <tr>
+            <td class="rirekisho-wishes">勤務条件は貴社の規定に従います。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+.rirekisho {
+  max-width: 720px;
+  margin: 0 auto;
+  font-family: "Noto Serif JP", "Yu Mincho", "游明朝", serif;
+}
+
+.rirekisho-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+}
+
+.rirekisho-header h1 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  letter-spacing: 0.5em;
+}
+
+.rirekisho-date {
+  font-size: 0.875rem;
+}
+
+.rirekisho-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 2px solid #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.rirekisho-table th,
+.rirekisho-table td {
+  border: 1px solid #333;
+  padding: 0.375rem 0.5rem;
+  vertical-align: middle;
+}
+
+.rirekisho-table th {
+  background-color: #f9f9f9;
+  font-weight: normal;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rirekisho-label-sm {
+  font-size: 0.75rem;
+}
+
+.rirekisho-name {
+  font-size: 1.25rem;
+  font-weight: bold;
+  padding: 0.5rem !important;
+}
+
+.rirekisho-photo {
+  width: 3cm;
+  height: 4cm;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 0.625rem;
+  color: #999;
+  padding: 0 !important;
+}
+
+.rirekisho-photo-img {
+  width: 3cm;
+  height: 4cm;
+  object-fit: cover;
+  display: block;
+}
+
+.rirekisho-history th,
+.rirekisho-history td {
+  height: 1.75rem;
+}
+
+.rirekisho-col-year {
+  width: 4rem;
+}
+
+.rirekisho-col-month {
+  width: 2.5rem;
+}
+
+.rirekisho-center {
+  text-align: center;
+}
+
+.rirekisho-right {
+  text-align: right;
+}
+
+.rirekisho-section-header {
+  text-align: center;
+  font-weight: bold;
+}
+
+.rirekisho-page-break {
+  height: 2rem;
+  border-top: 1px dashed #ccc;
+  margin: 1.5rem 0;
+}
+
+.rirekisho-motivation {
+  min-height: 6rem;
+  vertical-align: top;
+  padding-top: 0.5rem !important;
+  white-space: pre-line;
+  line-height: 1.8;
+}
+
+.rirekisho-wishes {
+  height: 4rem;
+  vertical-align: top;
+  padding-top: 0.5rem !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rirekisho-table {
+    border-color: #666;
+  }
+
+  .rirekisho-table th,
+  .rirekisho-table td {
+    border-color: #666;
+  }
+
+  .rirekisho-table th {
+    background-color: #2a2a32;
+  }
+
+  .rirekisho-photo {
+    color: #666;
+  }
+}
+</style>
