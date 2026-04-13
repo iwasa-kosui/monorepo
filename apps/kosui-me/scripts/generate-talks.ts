@@ -8,6 +8,7 @@ type TalkMetadata = {
   description?: string;
   tags?: string[];
   duration?: string;
+  unlisted?: boolean;
 };
 
 type SlideType = 'local' | 'speakerdeck' | 'slideshare' | 'google-slides' | 'docswell';
@@ -80,6 +81,7 @@ const main = (): void => {
         const content = fs.readFileSync(slidesPath, 'utf-8');
         const frontmatter = parseFrontmatter(content);
         if (!frontmatter?.talk?.date) continue;
+        if (frontmatter.talk.unlisted) continue;
 
         entries.push({
           title: frontmatter.title ?? talkDir.name,
@@ -97,6 +99,7 @@ const main = (): void => {
           const content = fs.readFileSync(metadataPath, 'utf-8');
           const metadata = yaml.load(content) as MetadataYaml;
           if (!metadata?.talk?.date) continue;
+          if (metadata.talk.unlisted) continue;
 
           const externalType = metadata.external?.type;
           const slideType: SlideType =
