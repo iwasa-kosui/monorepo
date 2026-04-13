@@ -4,7 +4,9 @@ import ProfileSection from '@/components/ProfileSection.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { findPresentations } from '@/utils/presentations';
 
-const presentations = findPresentations();
+const presentations = findPresentations().filter(
+  (presentation) => !presentation.talk?.unlisted,
+);
 ---
 
 <BaseLayout title="Talks - kosui.me">

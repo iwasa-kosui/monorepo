@@ -14,6 +14,7 @@ export interface TalkMetadata {
   tags?: string[];
   duration?: string;
   eventUrl?: string;
+  unlisted?: boolean;
 }
 
 export interface OgpData {

@@ -6,7 +6,9 @@ import {
   findPresentations,
 } from '@/utils/presentations';
 
-const presentations = findPresentations();
+const presentations = findPresentations().filter(
+  (presentation) => !presentation.talk?.unlisted,
+);
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
