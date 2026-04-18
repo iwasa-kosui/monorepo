@@ -349,11 +349,13 @@ const navItems = [
           },
         );
 
-        document.querySelectorAll('[data-search-trigger]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('open-search'));
-          });
-        });
+        document.querySelectorAll('[data-search-trigger]').forEach(
+          (btn) => {
+            btn.addEventListener('click', () => {
+              document.dispatchEvent(new CustomEvent('open-search'));
+            });
+          },
+        );
       });
     </script>
     <SearchModal client:idle />

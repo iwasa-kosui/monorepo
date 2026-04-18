@@ -1,10 +1,7 @@
 // src/components/SearchModal/usePagefind.ts
 import { useCallback, useRef, useState } from 'react';
 
-import type {
-  PagefindInstance,
-  PagefindSearchData,
-} from '../../types/pagefind';
+import type { PagefindInstance, PagefindSearchData } from '../../types/pagefind';
 
 export type SearchResult = {
   url: string;
@@ -28,9 +25,10 @@ export function usePagefind() {
     if (pagefindRef.current) return pagefindRef.current;
 
     try {
-      const pf = await import(
-        /* @vite-ignore */ '/pagefind/pagefind.js'
-      ) as unknown as PagefindInstance;
+      // pagefind.js は Pagefind ビルド時に生成されるランタイム専用ファイル
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const pf = (await import(/* @vite-ignore */ '/pagefind/pagefind.js')) as unknown as PagefindInstance;
       pagefindRef.current = pf;
       return pf;
     } catch {
