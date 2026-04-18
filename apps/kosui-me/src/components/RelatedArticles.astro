@@ -1,0 +1,66 @@
+---
+import ThemeBadge from '@/components/ThemeBadge.astro';
+import { type CollectionEntry, getCollection } from 'astro:content';
+
+interface Props {
+  currentSlug: string;
+  themes: string[];
+  maxCount?: number;
+}
+
+const { currentSlug, themes, maxCount = 3 } = Astro.props;
+
+const allPosts: CollectionEntry<'posts'>[] = await getCollection('posts');
+const candidates = allPosts.filter(
+  (post) => !post.data.private && post.data.slug !== currentSlug && post.data.themes && post.data.themes.length > 0,
+);
+
+const scored = candidates.map((post) => {
+  const overlap = post.data.themes!.filter((t) => themes.includes(t)).length;
+  return { post, overlap };
+}).filter(({ overlap }) => overlap > 0);
+
+scored.sort((a, b) => {
+  if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+  return new Date(b.post.data.date).getTime() - new Date(a.post.data.date).getTime();
+});
+
+const related = scored.slice(0, maxCount).map(({ post }) => post);
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+---
+
+{related.length > 0 && (
+  <section class="mt-8">
+    <h3 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
+      関連記事
+    </h3>
+    <div class="space-y-3">
+      {related.map((post) => (
+        <a
+          href={`/${post.data.slug}`}
+          class="block p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <time class="text-xs text-subtle dark:text-[#9ca3af]" datetime={post.data.date}>
+              {formatDate(post.data.date)}
+            </time>
+            {post.data.themes!.map((theme) => (
+              <ThemeBadge theme={theme} linked={false} />
+            ))}
+          </div>
+          <div class="text-sm font-semibold text-charcoal dark:text-gray-100">
+            {post.data.title}
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+)}

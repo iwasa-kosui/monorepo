@@ -1,6 +1,8 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
+import RelatedArticles from '@/components/RelatedArticles.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
+import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
@@ -83,6 +85,16 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       </section>
     )
   }
+
+  {!isPrivate && post.data.themes && post.data.themes.length > 0 && (
+    <section class="mt-8 mb-8">
+      <ThemeHubLinks themes={post.data.themes} />
+    </section>
+  )}
+
+  {!isPrivate && post.data.themes && post.data.themes.length > 0 && (
+    <RelatedArticles currentSlug={post.data.slug} themes={post.data.themes} />
+  )}
 
   <section class="p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
     <AuthorCard />
