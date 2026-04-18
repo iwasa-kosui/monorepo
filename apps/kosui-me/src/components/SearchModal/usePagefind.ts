@@ -26,10 +26,10 @@ export function usePagefind() {
     if (pagefindRef.current) return pagefindRef.current;
 
     try {
-      // pagefind.js は Pagefind ビルド時に生成されるランタイム専用ファイル
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      const pf = (await import(/* @vite-ignore */ '/pagefind/pagefind.js')) as unknown as PagefindInstance;
+      // pagefind.js は Pagefind ビルド時に dist/pagefind/ に生成されるランタイム専用ファイル。
+      // 変数経由にすることで Vite の静的解析によるインポート解決を回避する。
+      const pagefindPath = '/pagefind/pagefind.js';
+      const pf = (await import(/* @vite-ignore */ pagefindPath)) as unknown as PagefindInstance;
       pagefindRef.current = pf;
       return pf;
     } catch {
