@@ -42,6 +42,7 @@ const pageUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}/`;
   ogType="article"
   oembedUrl={`${siteUrl}/api/oembed/${presentation.year}/${presentation.name}.json`}
 >
+  <div data-pagefind-body data-pagefind-meta="type:talk">
   <nav class="mb-6">
     <a
       href="/talks"
@@ -199,4 +200,5 @@ const pageUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}/`;
     </h3>
     <ShareButtons title={presentation.title} url={pageUrl} />
   </section>
+  </div>
 </BaseLayout>
