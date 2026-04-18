@@ -15,12 +15,7 @@ const themeData = themes.map((slug) => getTheme(slug)).filter(Boolean);
       <a
         href={`/themes/${theme!.slug}`}
         class="inline-flex items-center gap-2 px-4 py-3 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
-        style={`border: 1px solid ${theme!.color}44`}
       >
-        <span
-          class="w-1 h-6 rounded-full flex-shrink-0"
-          style={`background-color: ${theme!.color}`}
-        />
         <div>
           <div class="text-sm font-semibold text-charcoal dark:text-gray-100">
             {theme!.name}
