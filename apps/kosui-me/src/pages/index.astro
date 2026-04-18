@@ -166,22 +166,24 @@ const kindConfig = {
       テーマ別に読む
     </h2>
     <div class="grid grid-cols-2 gap-3">
-      {allThemes.map((theme) => (
-        <a
-          href={`/themes/${theme.slug}`}
-          class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-        >
-          <div class="font-semibold text-charcoal dark:text-gray-100 text-sm">
-            {theme.name}
-          </div>
-          <div class="text-xs text-subtle dark:text-[#9ca3af] mt-1">
-            {theme.description}
-          </div>
-          <div class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
-            {countByTheme(theme.slug)} articles →
-          </div>
-        </a>
-      ))}
+      {
+        allThemes.map((theme) => (
+          <a
+            href={`/themes/${theme.slug}`}
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <div class="font-semibold text-charcoal dark:text-gray-100 text-sm">
+              {theme.name}
+            </div>
+            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-1">
+              {theme.description}
+            </div>
+            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
+              {countByTheme(theme.slug)} articles →
+            </div>
+          </a>
+        ))
+      }
     </div>
   </section>
 
@@ -225,9 +227,14 @@ const kindConfig = {
               )
             }
             {
-              item.data.themes && item.data.themes.length > 0 && (
+              item.data.themes && item.data.themes.length > 0
+            && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.themes.map((theme) => <ThemeBadge theme={theme} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }
@@ -280,7 +287,11 @@ const kindConfig = {
             {
               item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.themes.map((theme) => <ThemeBadge theme={theme} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }
@@ -328,7 +339,11 @@ const kindConfig = {
             {
               item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.themes.map((theme) => <ThemeBadge theme={theme} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }
