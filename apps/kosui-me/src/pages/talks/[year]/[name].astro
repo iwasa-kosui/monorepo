@@ -42,7 +42,13 @@ const pageUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}/`;
   ogType="article"
   oembedUrl={`${siteUrl}/api/oembed/${presentation.year}/${presentation.name}.json`}
 >
-  <div data-pagefind-body data-pagefind-meta="type:talk">
+  <div
+    data-pagefind-body
+    data-pagefind-meta="type:talk"
+    {...(presentation.talk?.unlisted
+    ? { 'data-pagefind-ignore': 'all' }
+    : {})}
+  >
     <nav class="mb-6">
       <a
         href="/talks"
