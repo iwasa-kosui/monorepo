@@ -1,6 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
+import { SearchModal } from '@/components/SearchModal/SearchModal';
 
 interface Props {
   title?: string;
@@ -170,6 +171,27 @@ const navItems = [
               ))
             }
           </div>
+          <button
+            type="button"
+            class="hidden md:inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors"
+            aria-label="検索を開く"
+            data-search-trigger
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
         </nav>
       </header>
       <main
@@ -270,6 +292,28 @@ const navItems = [
             </a>
           ))
         }
+        <button
+          type="button"
+          class="flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-all text-subtle dark:text-[#9ca3af] active:scale-95"
+          aria-label="検索を開く"
+          data-search-trigger
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span>Search</span>
+        </button>
       </div>
     </nav>
     <script>
@@ -304,7 +348,16 @@ const navItems = [
             section.style.animationDelay = `${150 + index * 100}ms`;
           },
         );
+
+        document.querySelectorAll('[data-search-trigger]').forEach(
+          (btn) => {
+            btn.addEventListener('click', () => {
+              document.dispatchEvent(new CustomEvent('open-search'));
+            });
+          },
+        );
       });
     </script>
+    <SearchModal client:idle />
   </body>
 </html>

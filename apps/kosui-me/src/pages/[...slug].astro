@@ -42,7 +42,12 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
   ogType="article"
   noindex={isPrivate}
 >
-  <article class="article-paper">
+  <article
+    class="article-paper"
+    data-pagefind-body
+    data-pagefind-meta={`type:post`}
+    {...(isPrivate ? { 'data-pagefind-ignore': 'all' } : {})}
+  >
     <header class="mb-8">
       <time
         class="text-sm text-accent dark:text-accent-light"
