@@ -1,5 +1,5 @@
 ---
-import TagBadge from '@/components/TagBadge.astro';
+import ThemeBadge from '@/components/ThemeBadge.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import {
   type ExternalSlideType,
@@ -100,9 +100,9 @@ const platformNames: Record<ExternalSlideType, string> = {
             )
           }
           {
-            talk?.tags && talk.tags.length > 0 && (
+            talk?.themes && talk.themes.length > 0 && (
               <div class="relative z-10 flex flex-wrap gap-1.5 mt-3">
-                {talk.tags.map((tag) => <TagBadge tag={tag} />)}
+                {talk.themes.map((theme) => <ThemeBadge theme={theme} />)}
               </div>
             )
           }
