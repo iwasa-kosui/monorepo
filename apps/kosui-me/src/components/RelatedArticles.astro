@@ -16,7 +16,7 @@ const candidates = allPosts.filter(
 );
 
 const scored = candidates.map((post) => {
-  const overlap = post.data.themes!.filter((t) => themes.includes(t)).length;
+  const overlap = post.data.themes!.filter((t: string) => themes.includes(t)).length;
   return { post, overlap };
 }).filter(({ overlap }) => overlap > 0);
 
@@ -52,7 +52,7 @@ function formatDate(dateStr: string): string {
             <time class="text-xs text-subtle dark:text-[#9ca3af]" datetime={post.data.date}>
               {formatDate(post.data.date)}
             </time>
-            {post.data.themes!.map((theme) => (
+            {post.data.themes!.map((theme: string) => (
               <ThemeBadge theme={theme} linked={false} />
             ))}
           </div>
