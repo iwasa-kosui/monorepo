@@ -11,7 +11,7 @@ export interface TalkMetadata {
   date?: string;
   event?: string;
   description?: string;
-  tags?: string[];
+  themes?: string[];
   duration?: string;
   eventUrl?: string;
   unlisted?: boolean;

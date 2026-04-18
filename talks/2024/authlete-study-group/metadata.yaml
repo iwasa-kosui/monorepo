@@ -6,11 +6,8 @@ talk:
   description: |
     医療SaaS企業カケハシが、複数プロダクト向けに統一認証基盤を構築した事例。
     Authleteを活用したアーキテクチャと、プロダクトチームとの移行戦略を紹介。
-  tags:
-    - OAuth
-    - OpenID Connect
-    - Authlete
-    - AWS
+  themes:
+    - architecture
   duration: "20min"
   speaker: "岩佐 幸翠, すてにゃん"
 external:

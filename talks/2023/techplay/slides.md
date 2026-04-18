@@ -12,9 +12,8 @@ talk:
   event: "SmartHR・カケハシ・リクルートのエンジニアが語る「複雑化するプラットフォーム開発をスムーズに進めるための方法」"
   description: |
     大規模SaaSにおけるプラットフォームシステム開発で、要求分析とアジャイル開発を小さく反復する方法論を紹介します。
-  tags:
-    - プラットフォーム
-    - アーキテクチャ
+  themes:
+    - architecture
   duration: "15min"
   speaker: "岩佐 幸翠"
 ---

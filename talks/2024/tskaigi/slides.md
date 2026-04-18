@@ -18,10 +18,8 @@ talk:
   event: "TSKaigi 2024"
   description: |
     fp-tsの柔軟な関数合成・エラー合成機能を活用し、Excel入稿機能の複雑なバリデーションで正確性と効率性を両立させた事例を紹介します。
-  tags:
-    - TypeScript
-    - fp-ts
-    - 関数型プログラミング
+  themes:
+    - typescript
   duration: "20min"
   speaker: "岩佐 幸翠"
 ---

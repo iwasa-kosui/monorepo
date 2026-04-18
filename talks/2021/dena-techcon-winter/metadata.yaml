@@ -6,10 +6,6 @@ talk:
   description: |
     Chrome の User-Agent 文字列削減がウェブサービスに与える影響と、
     User-Agent Client Hints を使った対策について解説するライトニングトーク。
-  tags:
-    - ブラウザ
-    - User-Agent
-    - Chrome
   duration: "5min"
 external:
   type: speakerdeck

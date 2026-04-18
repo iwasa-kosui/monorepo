@@ -6,10 +6,22 @@ const postSchema = {
   date: fields.text({ label: 'Date' }),
   slug: fields.text({ label: 'Slug' }),
   description: fields.text({ label: 'Description', multiline: true }),
-  tags: fields.array(fields.text({ label: 'Tag' }), {
-    label: 'Tags',
-    itemLabel: (props) => props.value,
-  }),
+  themes: fields.array(
+    fields.select({
+      label: 'Theme',
+      options: [
+        { label: 'TypeScript', value: 'typescript' },
+        { label: 'アーキテクチャ', value: 'architecture' },
+        { label: 'SRE・運用', value: 'sre' },
+        { label: 'チーム開発', value: 'team' },
+      ],
+      defaultValue: 'typescript',
+    }),
+    {
+      label: 'Themes',
+      itemLabel: (props) => props.value,
+    },
+  ),
   image: fields.text({ label: 'Image' }),
   ogIcon: fields.text({ label: 'OG Icon' }),
   ogSvg: fields.text({ label: 'OG SVG' }),

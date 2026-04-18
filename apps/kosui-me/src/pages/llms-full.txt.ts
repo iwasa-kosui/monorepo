@@ -10,7 +10,7 @@ type TalkMeta = {
   title: string;
   date: string;
   event: string;
-  tags: string[];
+  themes: string[];
   duration: string;
   description: string;
   year: string;
@@ -23,7 +23,7 @@ type ExternalArticleMeta = {
   date: string;
   publisher: string;
   description?: string;
-  tags: string[];
+  themes: string[];
 };
 
 export const GET: APIRoute = async () => {
@@ -65,8 +65,8 @@ export const GET: APIRoute = async () => {
     lines.push(`- Event: ${talk.event}`, '');
     lines.push(`- Date: ${talk.date}`, '');
     lines.push(`- Duration: ${talk.duration}`, '');
-    if (talk.tags.length > 0) {
-      lines.push(`- Tags: ${talk.tags.join(', ')}`, '');
+    if (talk.themes.length > 0) {
+      lines.push(`- Themes: ${talk.themes.join(', ')}`, '');
     }
     lines.push(`- URL: ${siteUrl}/talks/${talk.year}/${talk.name}`, '');
     lines.push(talk.description, '');
@@ -78,8 +78,8 @@ export const GET: APIRoute = async () => {
     lines.push(`- Publisher: ${article.publisher}`, '');
     lines.push(`- Date: ${article.date}`, '');
     lines.push(`- URL: ${article.url}`, '');
-    if (article.tags.length > 0) {
-      lines.push(`- Tags: ${article.tags.join(', ')}`, '');
+    if (article.themes.length > 0) {
+      lines.push(`- Themes: ${article.themes.join(', ')}`, '');
     }
     if (article.description) {
       lines.push(article.description, '');

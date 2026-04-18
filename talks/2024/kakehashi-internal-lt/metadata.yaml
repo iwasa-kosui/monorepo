@@ -5,9 +5,8 @@ talk:
   description: |
     プロダクトマネージャー向けに、ソフトウェアエンジニアリングの基礎と、
     PdMとエンジニアが協働するためのアプローチを解説する。
-  tags:
-    - ソフトウェアエンジニアリング
-    - プロダクトマネジメント
+  themes:
+    - team
   duration: "10min"
 external:
   type: speakerdeck

@@ -1,12 +1,10 @@
 ---
 import ThemeBadge from '@/components/ThemeBadge.astro';
-import { getAllThemes } from '@/config/themes';
+import { getAllThemes, getTheme } from '@/config/themes';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection } from 'astro:content';
-import externalArticlesData from '../content/external-articles/data.json';
-import talksData from '../content/talks/data.json';
-
-type PostEntry = CollectionEntry<'posts'>;
+import externalArticlesData from '../../content/external-articles/data.json';
+import talksData from '../../content/talks/data.json';
 
 type TalkMeta = {
   title: string;
@@ -43,43 +41,49 @@ type TimelineItem =
   | { kind: 'talk'; date: string; data: TalkMeta }
   | { kind: 'external-article'; date: string; data: ExternalArticleMeta };
 
-const allPosts: PostEntry[] = await getCollection('posts');
+export function getStaticPaths() {
+  return getAllThemes().map((theme) => ({
+    params: { slug: theme.slug },
+  }));
+}
+
+const { slug } = Astro.params;
+const theme = getTheme(slug!)!;
+const otherThemes = getAllThemes().filter((t) => t.slug !== slug);
+
+const allPosts: CollectionEntry<'posts'>[] = await getCollection('posts');
 const posts = allPosts.filter((post) => !post.data.private);
 const talks = talksData as TalkMeta[];
 const externalArticles = externalArticlesData as ExternalArticleMeta[];
 
 const timeline: TimelineItem[] = [
-  ...posts.map((post): TimelineItem => ({
-    kind: 'post',
-    date: post.data.date,
-    data: {
-      title: post.data.title,
-      slug: post.data.slug,
-      description: post.data.description,
-      themes: post.data.themes,
-    },
-  })),
-  ...talks.map((talk): TimelineItem => ({
-    kind: 'talk',
-    date: talk.date,
-    data: talk,
-  })),
-  ...externalArticles.map((article): TimelineItem => ({
-    kind: 'external-article',
-    date: article.date,
-    data: article,
-  })),
+  ...posts
+    .filter((post) => post.data.themes?.includes(slug!))
+    .map((post): TimelineItem => ({
+      kind: 'post',
+      date: post.data.date,
+      data: {
+        title: post.data.title,
+        slug: post.data.slug,
+        description: post.data.description,
+        themes: post.data.themes,
+      },
+    })),
+  ...talks
+    .filter((talk) => talk.themes?.includes(slug!))
+    .map((talk): TimelineItem => ({
+      kind: 'talk',
+      date: talk.date,
+      data: talk,
+    })),
+  ...externalArticles
+    .filter((article) => article.themes?.includes(slug!))
+    .map((article): TimelineItem => ({
+      kind: 'external-article',
+      date: article.date,
+      data: article,
+    })),
 ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-const allThemes = getAllThemes();
-
-function countByTheme(slug: string): number {
-  return timeline.filter((item) => {
-    if (item.kind === 'post') return item.data.themes?.includes(slug);
-    if (item.kind === 'talk') return item.data.themes.includes(slug);
-    return item.data.themes.includes(slug);
-  }).length;
-}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -109,87 +113,34 @@ const kindConfig = {
 } as const;
 ---
 
-<BaseLayout>
-  <section class="mb-12">
-    <div class="flex items-start gap-5">
-      <img
-        src="https://icon.kosui.me"
-        alt="kosui"
-        width="72"
-        height="72"
-        class="rounded-full ring-2 ring-accent/20 flex-shrink-0"
-        transition:name="site-logo"
-      />
-      <div>
-        <h1 class="text-2xl font-bold text-charcoal dark:text-gray-100">
-          岩佐 幸翠 <span
-            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
-          >/ kosui</span>
-        </h1>
-        <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
-          テックリード @ 株式会社カケハシ
-        </p>
-        <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 leading-relaxed">
-          医療SaaSの共通基盤を開発しています。認証認可基盤・組織管理・テナント分離などのプラットフォーム領域を担当。TypeScriptと関数型プログラミングを軸に、堅牢で型安全なシステム設計を実践しています。TSKaigi、関数型まつり、SRE
-          Kaigiなどのカンファレンスで登壇。
-        </p>
-        <div class="flex flex-wrap gap-2 mt-3">
-          <a
-            href="https://github.com/iwasa-kosui"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-            </svg>
-            GitHub
-          </a>
-          <a
-            href="https://x.com/kosui_me"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            X
-          </a>
-        </div>
-      </div>
-    </div>
-  </section>
+<BaseLayout title={`${theme.name} - kosui`} ogTitle={theme.name}>
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">
+      <span class="heading-accent">{theme.name}</span>
+    </h1>
+    <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+      {theme.description}
+    </p>
+    <p class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
+      {timeline.length} articles
+    </p>
+  </header>
 
-  <section class="mb-12">
-    <h2 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
-      テーマ別に読む
-    </h2>
-    <div class="grid grid-cols-2 gap-3">
-      {
-        allThemes.map((theme) => (
-          <a
-            href={`/themes/${theme.slug}`}
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-          >
-            <div class="font-semibold text-charcoal dark:text-gray-100 text-sm">
-              {theme.name}
-            </div>
-            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-1">
-              {theme.description}
-            </div>
-            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
-              {countByTheme(theme.slug)} articles →
-            </div>
-          </a>
-        ))
-      }
-    </div>
-  </section>
+  <nav class="mb-8 flex flex-wrap gap-2">
+    <span class="text-xs text-subtle dark:text-[#9ca3af] py-1"
+    >他のテーマ:</span>
+    {
+      otherThemes.map((t) => (
+        <a
+          href={`/themes/${t.slug}`}
+          class="text-xs px-3 py-1 rounded-full border border-border dark:border-[#2a2a32] text-subtle dark:text-[#9ca3af] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+        >
+          {t.name}
+        </a>
+      ))
+    }
+  </nav>
 
-  <h2 class="text-2xl font-bold mb-6">
-    <span class="heading-accent">Timeline</span>
-  </h2>
   <ul class="space-y-4">
     {
       timeline.map((item) => {
@@ -230,11 +181,7 @@ const kindConfig = {
               item.data.themes && item.data.themes.length > 0
             && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.themes.map((theme) => (
-                      <ThemeBadge theme={theme} />
-                    ))
-                  }
+                  {item.data.themes.map((t) => <ThemeBadge theme={t} />)}
                 </div>
               )
             }
@@ -287,11 +234,7 @@ const kindConfig = {
             {
               item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.themes.map((theme) => (
-                      <ThemeBadge theme={theme} />
-                    ))
-                  }
+                  {item.data.themes.map((t) => <ThemeBadge theme={t} />)}
                 </div>
               )
             }
@@ -339,11 +282,7 @@ const kindConfig = {
             {
               item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {
-                    item.data.themes.map((theme) => (
-                      <ThemeBadge theme={theme} />
-                    ))
-                  }
+                  {item.data.themes.map((t) => <ThemeBadge theme={t} />)}
                 </div>
               )
             }
