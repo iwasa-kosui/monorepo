@@ -19,6 +19,7 @@ type SearchState =
 
 export function usePagefind() {
   const pagefindRef = useRef<PagefindInstance | null>(null);
+  const searchIdRef = useRef(0);
   const [state, setState] = useState<SearchState>({ status: 'idle' });
 
   const loadPagefind = useCallback(async (): Promise<PagefindInstance | null> => {
@@ -43,14 +44,18 @@ export function usePagefind() {
       return;
     }
 
+    const currentId = ++searchIdRef.current;
     setState({ status: 'loading' });
 
     const pf = await loadPagefind();
     if (!pf) return;
+    if (searchIdRef.current !== currentId) return;
 
     const response = await pf.search(query);
     const top = response.results.slice(0, 10);
     const dataResults = await Promise.all(top.map((r) => r.data()));
+
+    if (searchIdRef.current !== currentId) return;
 
     const results: SearchResult[] = dataResults.map(
       (d: PagefindSearchData) => ({
