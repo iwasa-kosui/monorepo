@@ -73,18 +73,17 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
     <div class="prose">
       <Content />
     </div>
+    {
+      !isPrivate && (
+        <section class="mt-12">
+          <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
+            Share
+          </h3>
+          <ShareButtons title={post.data.title} url={pageUrl} />
+        </section>
+      )
+    }
   </article>
-
-  {
-    !isPrivate && (
-      <section class="mt-12 mb-8">
-        <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
-          Share
-        </h3>
-        <ShareButtons title={post.data.title} url={pageUrl} />
-      </section>
-    )
-  }
 
   {
     !isPrivate && post.data.themes && post.data.themes.length > 0
