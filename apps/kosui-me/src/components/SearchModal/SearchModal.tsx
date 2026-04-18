@@ -120,7 +120,7 @@ export function SearchModal() {
       role='presentation'
     >
       {/* Backdrop */}
-      <div className='absolute inset-0 bg-charcoal/30 dark:bg-black/50 backdrop-blur-sm' />
+      <div className='absolute inset-0 bg-charcoal/30 dark:bg-black/50 backdrop-blur-sm pointer-events-none' />
 
       {/* Dialog */}
       <div
