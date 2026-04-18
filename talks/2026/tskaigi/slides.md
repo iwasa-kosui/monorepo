@@ -15,10 +15,8 @@ talk:
   event: "TSKaigi 2026"
   description: |
     TypeScriptのclassが今の形になった歴史を紐解き、落とし穴を根本原因から整理し、対策を提示します。
-  tags:
-    - TypeScript
-    - ECMAScript
-    - class
+  themes:
+    - typescript
   duration: "30min"
   speaker: "岩佐 幸翠"
   unlisted: true

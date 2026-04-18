@@ -5,9 +5,6 @@ talk:
   description: |
     Go言語の「iota」という言語機能に焦点を当て、
     Goコンパイラのソースコードを読み解きながら内部実装を探索する。
-  tags:
-    - Go
-    - コンパイラ
   duration: "15min"
 external:
   type: speakerdeck

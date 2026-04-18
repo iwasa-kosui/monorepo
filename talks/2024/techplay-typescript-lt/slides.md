@@ -12,9 +12,8 @@ talk:
   event: "Findy様 TypeScript 開発言語を統一 〜フロントからバックまで活用〜 Lunch LT" 
   description: |
     TypeScriptの柔軟な型システムをバックエンドで活用し、品質とスピードを両立させるための実践的なテクニックを紹介します。
-  tags:
-    - TypeScript
-    - バックエンド
+  themes:
+    - typescript
   duration: "10min"
   speaker: "岩佐 幸翠"
 ---

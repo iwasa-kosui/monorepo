@@ -3,7 +3,7 @@ title: "TC39 proposal-error-stack-accessor: 長年の非標準を最小限の仕
 date: "2026-03-31T12:00:00+09:00"
 slug: "2026/03/31/error-stack-accessor"
 description: "Error.prototype.stack を accessor property として標準化する TC39 提案の技術仕様、議論経緯、エンジン間の実装差異、SES セキュリティ動機を調査した。"
-tags: ["JavaScript", "TC39", "ECMAScript"]
+themes: ["JavaScript", "TC39", "ECMAScript"]
 ---
 
 `Error.prototype.stack` はすべての主要 JavaScript エンジンが提供しているにもかかわらず、ECMAScript 仕様に含まれたことがない。エンジンごとにプロパティの種別（データプロパティか accessor か）、文字列フォーマット、非 Error オブジェクトへの振る舞いが異なり、相互運用性の問題を抱えてきた。[proposal-error-stack-accessor](https://github.com/tc39/proposal-error-stack-accessor) はこの状況に対し、スタック文字列の内容には一切踏み込まず、`stack` プロパティの存在と accessor としての振る舞いだけを規定するという最小スコープの標準化を目指している。
