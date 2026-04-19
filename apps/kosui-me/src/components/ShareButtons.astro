@@ -160,7 +160,7 @@ function initShareButtons() {
   );
 }
 
-function fetchHatenaBookmarkCount() {
+async function fetchHatenaBookmarkCount() {
   const containers = document.querySelectorAll<HTMLElement>(
     '[data-share-buttons]',
   );
@@ -169,36 +169,27 @@ function fetchHatenaBookmarkCount() {
     if (c.dataset.pageUrl) urls.add(c.dataset.pageUrl);
   });
 
-  for (const pageUrl of urls) {
-    const callbackName = `__hatenaCount_${Date.now()}_${
-      Math.random().toString(36).slice(2)
-    }`;
-    Object.assign(window, {
-      [callbackName]: (count: number) => {
-        Reflect.deleteProperty(window, callbackName);
-        if (typeof count !== 'number' || count <= 0) return;
-        containers.forEach((container) => {
-          if (container.dataset.pageUrl !== pageUrl) return;
-          container
-            .querySelectorAll<HTMLElement>('[data-hatena-count]')
-            .forEach((badge) => {
-              badge.textContent = String(count);
-              badge.classList.remove('hidden');
-            });
-        });
-      },
-    });
-    const script = document.createElement('script');
-    script.src = `https://bookmark.hatenaapis.com/count/entry?url=${
-      encodeURIComponent(pageUrl)
-    }&callback=${callbackName}`;
-    document.body.appendChild(script);
-    script.onload = () => script.remove();
-    script.onerror = () => {
-      Reflect.deleteProperty(window, callbackName);
-      script.remove();
-    };
-  }
+  await Promise.allSettled(
+    [...urls].map(async (pageUrl) => {
+      const res = await fetch(
+        `https://bookmark.hatenaapis.com/count/entry?url=${
+          encodeURIComponent(pageUrl)
+        }`,
+      );
+      if (!res.ok) return;
+      const count = Number(await res.text());
+      if (!Number.isFinite(count) || count <= 0) return;
+      containers.forEach((container) => {
+        if (container.dataset.pageUrl !== pageUrl) return;
+        container
+          .querySelectorAll<HTMLElement>('[data-hatena-count]')
+          .forEach((badge) => {
+            badge.textContent = String(count);
+            badge.classList.remove('hidden');
+          });
+      });
+    }),
+  );
 }
 
 document.addEventListener('astro:page-load', () => {
