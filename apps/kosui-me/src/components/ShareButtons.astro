@@ -160,6 +160,29 @@ function initShareButtons() {
   );
 }
 
+function jsonp(url: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const name = `__jsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement('script');
+    const cleanup = () => {
+      script.remove();
+      // @ts-expect-error JSONP requires dynamic global properties
+      delete window[name];
+    };
+    // @ts-expect-error JSONP requires dynamic global properties
+    window[name] = (data: number) => {
+      cleanup();
+      resolve(data);
+    };
+    script.src = `${url}&callback=${name}`;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`JSONP failed: ${url}`));
+    };
+    document.body.appendChild(script);
+  });
+}
+
 async function fetchHatenaBookmarkCount() {
   const containers = document.querySelectorAll<HTMLElement>(
     '[data-share-buttons]',
@@ -171,14 +194,12 @@ async function fetchHatenaBookmarkCount() {
 
   await Promise.allSettled(
     [...urls].map(async (pageUrl) => {
-      const res = await fetch(
+      const count = await jsonp(
         `https://bookmark.hatenaapis.com/count/entry?url=${
           encodeURIComponent(pageUrl)
         }`,
       );
-      if (!res.ok) return;
-      const count = Number(await res.text());
-      if (!Number.isFinite(count) || count <= 0) return;
+      if (count <= 0) return;
       containers.forEach((container) => {
         if (container.dataset.pageUrl !== pageUrl) return;
         container
