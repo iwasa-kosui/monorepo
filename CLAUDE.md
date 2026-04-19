@@ -10,6 +10,9 @@
 # ワークスペースパッケージのビルド（初回または依存変更時）
 pnpm --filter result run build
 
+# kosui-me の型検査前に talks データを生成（未生成だと型エラーになる）
+pnpm --filter kosui-me generate:talks
+
 pnpm --filter '*' build
 pnpm --filter '*' tsc --noEmit
 pnpm --filter '*' lint:fix
