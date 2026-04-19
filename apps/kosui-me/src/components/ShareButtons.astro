@@ -173,19 +173,21 @@ function fetchHatenaBookmarkCount() {
     const callbackName = `__hatenaCount_${Date.now()}_${
       Math.random().toString(36).slice(2)
     }`;
-    (window as Record<string, unknown>)[callbackName] = (count: number) => {
-      delete (window as Record<string, unknown>)[callbackName];
-      if (typeof count !== 'number' || count <= 0) return;
-      containers.forEach((container) => {
-        if (container.dataset.pageUrl !== pageUrl) return;
-        container.querySelectorAll<HTMLElement>('[data-hatena-count]').forEach(
-          (badge) => {
-            badge.textContent = String(count);
-            badge.classList.remove('hidden');
-          },
-        );
-      });
-    };
+    Object.assign(window, {
+      [callbackName]: (count: number) => {
+        Reflect.deleteProperty(window, callbackName);
+        if (typeof count !== 'number' || count <= 0) return;
+        containers.forEach((container) => {
+          if (container.dataset.pageUrl !== pageUrl) return;
+          container
+            .querySelectorAll<HTMLElement>('[data-hatena-count]')
+            .forEach((badge) => {
+              badge.textContent = String(count);
+              badge.classList.remove('hidden');
+            });
+        });
+      },
+    });
     const script = document.createElement('script');
     script.src = `https://bookmark.hatenaapis.com/count/entry?url=${
       encodeURIComponent(pageUrl)
@@ -193,7 +195,7 @@ function fetchHatenaBookmarkCount() {
     document.body.appendChild(script);
     script.onload = () => script.remove();
     script.onerror = () => {
-      delete (window as Record<string, unknown>)[callbackName];
+      Reflect.deleteProperty(window, callbackName);
       script.remove();
     };
   }
