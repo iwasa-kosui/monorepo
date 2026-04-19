@@ -160,7 +160,30 @@ function initShareButtons() {
   );
 }
 
-function fetchHatenaBookmarkCount() {
+function jsonp(url: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const name = `__jsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement('script');
+    const cleanup = () => {
+      script.remove();
+      // @ts-expect-error JSONP requires dynamic global properties
+      delete window[name];
+    };
+    // @ts-expect-error JSONP requires dynamic global properties
+    window[name] = (data: number) => {
+      cleanup();
+      resolve(data);
+    };
+    script.src = `${url}&callback=${name}`;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`JSONP failed: ${url}`));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function fetchHatenaBookmarkCount() {
   const containers = document.querySelectorAll<HTMLElement>(
     '[data-share-buttons]',
   );
@@ -169,34 +192,25 @@ function fetchHatenaBookmarkCount() {
     if (c.dataset.pageUrl) urls.add(c.dataset.pageUrl);
   });
 
-  for (const pageUrl of urls) {
-    const callbackName = `__hatenaCount_${Date.now()}_${
-      Math.random().toString(36).slice(2)
-    }`;
-    (window as Record<string, unknown>)[callbackName] = (count: number) => {
-      delete (window as Record<string, unknown>)[callbackName];
-      if (typeof count !== 'number' || count <= 0) return;
+  await Promise.allSettled(
+    [...urls].map(async (pageUrl) => {
+      const count = await jsonp(
+        `https://bookmark.hatenaapis.com/count/entry?url=${
+          encodeURIComponent(pageUrl)
+        }`,
+      );
+      if (count <= 0) return;
       containers.forEach((container) => {
         if (container.dataset.pageUrl !== pageUrl) return;
-        container.querySelectorAll<HTMLElement>('[data-hatena-count]').forEach(
-          (badge) => {
+        container
+          .querySelectorAll<HTMLElement>('[data-hatena-count]')
+          .forEach((badge) => {
             badge.textContent = String(count);
             badge.classList.remove('hidden');
-          },
-        );
+          });
       });
-    };
-    const script = document.createElement('script');
-    script.src = `https://bookmark.hatenaapis.com/count/entry?url=${
-      encodeURIComponent(pageUrl)
-    }&callback=${callbackName}`;
-    document.body.appendChild(script);
-    script.onload = () => script.remove();
-    script.onerror = () => {
-      delete (window as Record<string, unknown>)[callbackName];
-      script.remove();
-    };
-  }
+    }),
+  );
 }
 
 document.addEventListener('astro:page-load', () => {

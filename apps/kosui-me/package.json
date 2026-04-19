@@ -66,6 +66,7 @@
     "test": "vitest",
     "test:ci": "vitest --run",
     "tsc": "astro check",
+    "typecheck": "astro check",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "dprint fmt",

@@ -120,3 +120,37 @@ jobs:
 
       - name: Test
         run: pnpm --filter nen-diagnosis run test:ci
+
+  kosui-me:
+    name: "apps/kosui-me"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate talks data
+        run: pnpm --filter kosui-me run generate:talks
+
+      - name: Lint
+        run: pnpm --filter kosui-me run lint
+
+      - name: Format check
+        run: pnpm --filter kosui-me run format:check
+
+      - name: Type check
+        run: pnpm --filter kosui-me run typecheck
+
+      - name: Test
+        run: pnpm --filter kosui-me run test:ci
