@@ -1,5 +1,6 @@
 ---
-import TagBadge from '@/components/TagBadge.astro';
+import ThemeBadge from '@/components/ThemeBadge.astro';
+import { getAllThemes } from '@/config/themes';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection } from 'astro:content';
 import externalArticlesData from '../content/external-articles/data.json';
@@ -11,7 +12,7 @@ type TalkMeta = {
   title: string;
   date: string;
   event: string;
-  tags: string[];
+  themes: string[];
   duration: string;
   description: string;
   year: string;
@@ -25,7 +26,7 @@ type ExternalArticleMeta = {
   date: string;
   publisher: string;
   description?: string;
-  tags: string[];
+  themes: string[];
 };
 
 type TimelineItem =
@@ -36,7 +37,7 @@ type TimelineItem =
       title: string;
       slug: string;
       description?: string;
-      tags?: string[];
+      themes?: string[];
     };
   }
   | { kind: 'talk'; date: string; data: TalkMeta }
@@ -55,7 +56,7 @@ const timeline: TimelineItem[] = [
       title: post.data.title,
       slug: post.data.slug,
       description: post.data.description,
-      tags: post.data.tags,
+      themes: post.data.themes,
     },
   })),
   ...talks.map((talk): TimelineItem => ({
@@ -69,6 +70,16 @@ const timeline: TimelineItem[] = [
     data: article,
   })),
 ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+const allThemes = getAllThemes();
+
+function countByTheme(slug: string): number {
+  return timeline.filter((item) => {
+    if (item.kind === 'post') return item.data.themes?.includes(slug);
+    if (item.kind === 'talk') return item.data.themes.includes(slug);
+    return item.data.themes.includes(slug);
+  }).length;
+}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -150,6 +161,32 @@ const kindConfig = {
     </div>
   </section>
 
+  <section class="mb-12">
+    <h2 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
+      テーマ別に読む
+    </h2>
+    <div class="grid grid-cols-2 gap-3">
+      {
+        allThemes.map((theme) => (
+          <a
+            href={`/themes/${theme.slug}`}
+            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+          >
+            <div class="font-semibold text-charcoal dark:text-gray-100 text-sm">
+              {theme.name}
+            </div>
+            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-1">
+              {theme.description}
+            </div>
+            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
+              {countByTheme(theme.slug)} articles →
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
   <h2 class="text-2xl font-bold mb-6">
     <span class="heading-accent">Timeline</span>
   </h2>
@@ -190,9 +227,14 @@ const kindConfig = {
               )
             }
             {
-              item.data.tags && item.data.tags.length > 0 && (
+              item.data.themes && item.data.themes.length > 0
+            && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }
@@ -243,9 +285,13 @@ const kindConfig = {
               )
             }
             {
-              item.data.tags.length > 0 && (
+              item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }
@@ -291,9 +337,13 @@ const kindConfig = {
               )
             }
             {
-              item.data.tags.length > 0 && (
+              item.data.themes.length > 0 && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {item.data.tags.map((tag) => <TagBadge tag={tag} />)}
+                  {
+                    item.data.themes.map((theme) => (
+                      <ThemeBadge theme={theme} />
+                    ))
+                  }
                 </div>
               )
             }

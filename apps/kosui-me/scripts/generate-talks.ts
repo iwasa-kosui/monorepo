@@ -6,7 +6,7 @@ type TalkMetadata = {
   date?: string;
   event?: string;
   description?: string;
-  tags?: string[];
+  themes?: string[];
   duration?: string;
   unlisted?: boolean;
 };
@@ -17,7 +17,7 @@ type TalkEntry = {
   title: string;
   date: string;
   event: string;
-  tags: string[];
+  themes: string[];
   duration: string;
   description: string;
   year: string;
@@ -87,7 +87,7 @@ const main = (): void => {
           title: frontmatter.title ?? talkDir.name,
           date: frontmatter.talk.date,
           event: frontmatter.talk.event ?? '',
-          tags: frontmatter.talk.tags ?? [],
+          themes: frontmatter.talk.themes ?? [],
           duration: frontmatter.talk.duration ?? '',
           description: frontmatter.talk.description?.trim() ?? '',
           year: yearDir.name,
@@ -111,7 +111,7 @@ const main = (): void => {
             title: metadata.title ?? talkDir.name,
             date: metadata.talk.date,
             event: metadata.talk.event ?? '',
-            tags: metadata.talk.tags ?? [],
+            themes: metadata.talk.themes ?? [],
             duration: metadata.talk.duration ?? '',
             description: metadata.talk.description?.trim() ?? '',
             year: yearDir.name,

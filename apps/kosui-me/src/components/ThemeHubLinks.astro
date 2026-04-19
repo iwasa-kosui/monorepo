@@ -1,0 +1,34 @@
+---
+import { getTheme } from '@/config/themes';
+
+interface Props {
+  themes: string[];
+}
+
+const { themes } = Astro.props;
+const themeData = themes.map((slug) => getTheme(slug)).filter(Boolean);
+---
+
+{
+  themeData.length > 0 && (
+    <div class="flex flex-wrap gap-3">
+      {
+        themeData.map((theme) => (
+          <a
+            href={`/themes/${theme!.slug}`}
+            class="inline-flex items-center gap-2 px-4 py-3 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
+          >
+            <div>
+              <div class="text-sm font-semibold text-charcoal dark:text-gray-100">
+                {theme!.name}
+              </div>
+              <div class="text-xs text-subtle dark:text-[#9ca3af]">
+                このテーマの記事をもっと読む →
+              </div>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  )
+}

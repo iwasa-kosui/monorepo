@@ -5,7 +5,7 @@
     "date": "2026-03-31",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "Python出身・Elixir出身のエンジニアにTypeScriptをオンボーディングした事例を紹介。「型検査とランタイムの境界を理解する」ことが言語背景を問わず最重要だと論じる。",
-    "tags": ["TypeScript", "オンボーディング"]
+    "themes": ["typescript", "team"]
   },
   {
     "title": "TypeScriptのテストにはas const satisfiesが便利です",
@@ -13,7 +13,7 @@
     "date": "2025-12-14",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "テストでダミーデータを定義する際の型検査エラーを、as const satisfies の組み合わせで解決する方法を紹介。Discriminated Unionやオプショナルプロパティを持つ型でも、型安全性を保ちながらリテラル型推論を活用できる。",
-    "tags": ["TypeScript", "テスト"]
+    "themes": ["typescript"]
   },
   {
     "title": "TypeScriptの宣言的な配列操作 - ビジネスロジックを明確にする",
@@ -21,7 +21,7 @@
     "date": "2025-11-19",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "配列操作を手続き的スタイルから宣言的スタイルへ移行するメリットを解説。filterやmapなどの高階関数とカリー化を組み合わせ、ビジネスロジックの意図を明確にするコーディング手法を提案。",
-    "tags": ["TypeScript"]
+    "themes": ["typescript"]
   },
   {
     "title": "カケハシのマルチプロダクト インフラアーキテクチャ",
@@ -29,7 +29,7 @@
     "date": "2025-09-25",
     "publisher": "Findy Tools",
     "description": "医療SaaSを支えるマルチプロダクト基盤のアーキテクチャを紹介。OpenID Connectによる認証基盤、アカウント・アセット管理、Databricksを用いたデータ基盤、API・イベントドリブンによるプロダクト間連携の設計思想を解説。",
-    "tags": ["アーキテクチャ", "認証", "データ基盤"]
+    "themes": ["architecture"]
   },
   {
     "title": "日本の医療に本気で向き合う。認証・権限管理基盤チームの決意",
@@ -37,7 +37,7 @@
     "date": "2025-08-29",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "複数プロダクト間で共通する認証・権限管理を一元化する基盤の役割や、厚生労働省ガイドラインに基づく二要素認証必須化への対応など、医療DXを支える基盤チームの取り組みと展望を紹介。",
-    "tags": ["チーム", "認証"]
+    "themes": ["team"]
   },
   {
     "title": "他言語経験者が知っておきたいTypeScriptのクラスの注意点",
@@ -45,7 +45,7 @@
     "date": "2025-08-19",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "Java/C#経験者がTypeScriptのクラスを使う際の4つの落とし穴を解説。構造的部分型によるドメインオブジェクトの混同、thisの動的束縛、private修飾子の実行時の限界などについて代替アプローチとともに紹介。",
-    "tags": ["TypeScript"]
+    "themes": ["typescript"]
   },
   {
     "title": "目的別データベースの実践: PostgreSQL 行レベルセキュリティと DynamoDB Outboxパターン",
@@ -53,7 +53,7 @@
     "date": "2024-09-19",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "PostgreSQLの行レベルセキュリティによるテナント間データ分離と、DynamoDBのOutboxパターンによるイベント配信を紹介。医療SaaSにおける個人情報保護と高可用性の要件に応じた目的別データベース選定の実践例。",
-    "tags": ["PostgreSQL", "DynamoDB", "データベース"]
+    "themes": ["architecture"]
   },
   {
     "title": "社内ドキュメントはなぜ更新されないのか？情報の鮮度を最小限の運用負荷で維持する「イミュータブルドキュメントモデル」のススメ",
@@ -61,7 +61,7 @@
     "date": "2023-10-16",
     "publisher": "KAKEHASHI Tech Blog",
     "description": "情報を可変的なリソース情報と不変的なイベント情報に分類し、イベントの積み重ねとしてリソースを表現することで、最小限の運用負荷でドキュメントの鮮度を維持するアプローチを提案。",
-    "tags": ["ドキュメント", "チームプラクティス"]
+    "themes": ["team"]
   },
   {
     "title": "AWS ECS on Fargate + FireLens で大きなログが扱いやすくなった話",
@@ -69,6 +69,6 @@
     "date": "2022-08-12",
     "publisher": "DeNA Engineering Blog",
     "description": "ECS on Fargate環境でFireLensを使用した際に、16KB以上のログが分割されてJSONパースが失敗する問題の原因と、FluentBitのMultilineフィルタによるログ結合の解決策を解説。",
-    "tags": ["AWS", "ECS", "Fargate", "FireLens"]
+    "themes": ["sre"]
   }
 ]

@@ -12,9 +12,8 @@ talk:
   event: "Findy様 ドキュメント管理を制する 陳腐化を防ぐための実践事例 Lunch LT"
   description: |
     ドキュメントを更新し続ける代わりに、意思決定を記録する「イミュータブルドキュメントモデル」の実運用について紹介します。
-  tags:
-    - ドキュメント
-    - チームプラクティス
+  themes:
+    - team
   duration: "20min"
   speaker: "岩佐 幸翠"
 ---

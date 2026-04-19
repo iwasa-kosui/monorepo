@@ -1,5 +1,5 @@
 ---
-import TagBadge from '@/components/TagBadge.astro';
+import ThemeBadge from '@/components/ThemeBadge.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection } from 'astro:content';
 
@@ -60,12 +60,12 @@ function formatDate(dateStr: string): string {
               )
             }
             {
-              report.data.tags && report.data.tags.length > 0
+              report.data.themes && report.data.themes.length > 0
             && (
                 <div class="relative z-10 mt-2 flex flex-wrap gap-1.5">
                   {
-                    report.data.tags.map((tag: string) => (
-                      <TagBadge tag={tag} />
+                    report.data.themes.map((theme: string) => (
+                      <ThemeBadge theme={theme} />
                     ))
                   }
                 </div>

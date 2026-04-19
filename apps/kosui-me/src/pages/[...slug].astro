@@ -1,6 +1,8 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
+import RelatedArticles from '@/components/RelatedArticles.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
+import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
@@ -40,7 +42,12 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
   ogType="article"
   noindex={isPrivate}
 >
-  <article class="article-paper">
+  <article
+    class="article-paper"
+    data-pagefind-body
+    data-pagefind-meta={`type:post`}
+    {...(isPrivate ? { 'data-pagefind-ignore': 'all' } : {})}
+  >
     <header class="mb-8">
       <time
         class="text-sm text-accent dark:text-accent-light"
@@ -71,16 +78,28 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
     <div class="prose">
       <Content />
     </div>
+    {
+      !isPrivate && (
+        <section class="mt-12">
+          <ShareButtons title={post.data.title} url={pageUrl} />
+        </section>
+      )
+    }
   </article>
 
   {
-    !isPrivate && (
-      <section class="mt-12 mb-8">
-        <h3 class="text-sm font-medium text-charcoal dark:text-gray-100 mb-3 text-center">
-          Share
-        </h3>
-        <ShareButtons title={post.data.title} url={pageUrl} />
+    !isPrivate && post.data.themes && post.data.themes.length > 0
+      && (
+      <section class="mt-8 mb-8">
+        <ThemeHubLinks themes={post.data.themes} />
       </section>
+    )
+  }
+
+  {
+    !isPrivate && post.data.themes && post.data.themes.length > 0
+      && (
+      <RelatedArticles currentSlug={post.data.slug} themes={post.data.themes} />
     )
   }
 

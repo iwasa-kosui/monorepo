@@ -7,7 +7,7 @@ type TalkMeta = {
   title: string;
   date: string;
   event: string;
-  tags: string[];
+  themes: string[];
   duration: string;
   description: string;
   year: string;
@@ -21,7 +21,7 @@ type ExternalArticleMeta = {
   date: string;
   publisher: string;
   description?: string;
-  tags: string[];
+  themes: string[];
 };
 
 const talks = (talksData as TalkMeta[])
