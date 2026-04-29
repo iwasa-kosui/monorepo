@@ -1,0 +1,178 @@
+---
+title: "Architect Digest: 2026-04-28"
+date: "2026-04-28T12:00:00+09:00"
+slug: "2026/04/28/architect-digest"
+description: "Technology Radar Vol.34が「認知的債務」と「ハーネス・エンジニアリング」でAI時代のエンジニアリング原則回帰を宣言、Kubernetes v1.36 Haru リリースとIngress NGINX退役、Google Cloud Next '26とWhat's Next with AWS 2026でエージェント基盤の本番化競争が本格化、Grafana 13がGrafanaCONで動的ダッシュボードとAIアシスタントを発表した1ヶ月。"
+themes: ["Architect"]
+---
+
+今月の通底テーマは「実験から規律へ」だった。ThoughtWorks Technology Radar Vol.34はAIが生み出す複雑性への反動として「エンジニアリングの原則への回帰」を全面に打ち出し、Claude CodeとCursorをAdoptに昇格させる一方で、コーディングスループットを生産性指標にすることやMCPの無条件採用をCautionに配置した。クラウドベンダー側ではGoogle Cloud Next '26とWhat's Next with AWS 2026がほぼ同時期に開催され、エージェント基盤の本番化競争が鮮明になっている。インフラ層ではKubernetes v1.36 "Haru"がIngress NGINXを退役させGateway APIへの移行を促し、Grafana 13がGrafanaCONでOTelネイティブ統合と動的ダッシュボードを発表した。
+
+## ThoughtWorks Technology Radar Vol.34
+
+### 概要と全体テーマ
+
+[Technology Radar Vol.34](https://www.thoughtworks.com/radar)（4月15日公開）
+
+今回から「Hold」リングの名称が**Caution**に変更された。ブリップ総数は118。CTO Rachel Laycockは「この転換点は技術ではなく、テクニックに関するものだ」とコメントしている。全体テーマは以下の3つ。
+
+- **認知的債務（Cognitive Debt）**: AIが生成するコード量の増大と、開発者がコードを理解・管理できる量の乖離がリスクとして明文化された
+- **ハーネス・エンジニアリング**: 「モデル + ハーネス = エージェント」という考え方。コンパイラ・リンタ・型検査・テストスイートをエージェントワークフローに組み込み、失敗時に自動修正させる設計思想
+- **セマンティック拡散（Semantic Diffusion）**: "spec-driven development"や"harness engineering"のような用語が業界で一貫しない意味で使われており、技術評価を難しくしていると警告
+
+### Techniques: 注目のブリップ
+
+- **Adopt**: Context Engineering、Curated shared instructions for software teams、DORA Metrics（エージェント時代でも有効と再強調）、Passkeys、Structured output from LLMs、Zero Trust Architecture（エージェント展開の基盤として再掲）
+- **Trial**: Agent Skills、Feedback sensors for coding agents、Mutation testing（AI生成テストの論理的空洞を見抜く最も正直な指標として）、Sandboxed execution for coding agents、Server-driven UI
+- **Assess**: Architecture drift reduction with LLMs、Code intelligence as agentic tooling、Context graph、Feedback flywheel、LLM evaluation using semantic entropy、Measuring collaboration quality with coding agents（タスク当たりの反復サイクル・マージ後の手戻り・ビルド失敗数を代替指標に）、Team of coding agents、Vision language models for end-to-end document parsing
+- **Caution**: Agent instruction bloat、AI-accelerated shadow IT、**Codebase cognitive debt**（新規）、Coding agent swarms、**Coding throughput as a measure of productivity**（コード生成量を生産性指標にすることへの明確な警告）、Ignoring durability in agent workflows、**MCP by default**（MCPを無条件に採用することへの警戒）、Pixel-streamed development environments
+
+### Platforms / Tools / Languages & Frameworks: 注目のブリップ
+
+- **Tools Adopt**: **Claude Code**（新規）、**Cursor**（新規）、Axe-core、mise
+- **Tools Trial**: Dev Containers、Figma Make、OpenAI Codex、Typst
+- **Tools Assess**: CDK Terrain（CDKTFの後継）、CodeScene、OpenSpec、SGLang、ty（Rust製Python型チェッカー）
+- **Platforms Trial**: AG-UI Protocol（UIとAIエージェントバックエンド間の通信標準化）、AWS Bedrock AgentCore、Graphiti（時系列知識グラフエンジン）、Langfuse
+- **Platforms Assess**: ClickStack（ClickHouseベースOTel互換Observability）、Coder、DuckLake、Port（内部デベロッパーポータル）、SigNoz、Sprites（エージェント実行用ステートフルサンドボックス）
+- **Languages Adopt**: Apache Iceberg、Svelte、Typer
+- **Languages Trial**: Agent Development Kit（ADK）、LangGraph、LiteLLM、Modern.js（Module Federationの推奨フレームワークとして浮上）、Superpowers、TanStack Start
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: Harness Engineering for Coding Agent Users
+
+[Harness engineering for coding agent users](https://martinfowler.com/articles/harness-engineering.html)（4月2日）
+
+コーディングエージェント制御の設計思想を体系化した記事。「ガイド（フィードフォワード）」と「センサー（フィードバック）」の二軸で制御を整理し、「計算的制御」（コンパイラ・テスト）と「推論的制御」（LLMレビュー）を使い分ける枠組みを提示した。Tech Radar Vol.34のハーネス・エンジニアリングのテーマと直結する内容。
+
+### Martin Fowler: Feedback Flywheel / SPDD / Mechanical Sympathy
+
+[Feedback Flywheel](https://martinfowler.com/articles/reduce-friction-ai/feedback-flywheel.html)（4月8日）/ [Structured-Prompt-Driven Development](https://martinfowler.com/articles/reduce-friction-ai/)（4月28日）/ [Principles of Mechanical Sympathy](https://martinfowler.com/)（4月7日）
+
+- Feedback Flywheelは、AI支援開発における個人の学びをチーム全体の能力改善につなげる構造化フィードバックプラクティス
+- SPDDは、プロンプトをバージョン管理対象の「ファーストクラス成果物」として扱うワークフロー
+- Mechanical Sympathyは、ハードウェア特性を意識したソフトウェア設計原則（Caer Sanders著）
+
+### InfoQ: Stateful Continuation for AI Agents
+
+[Stateful Continuation for AI Agents: Why Transport Layers Now Matter](https://www.infoq.com/articles/stateful-continuation-ai-agents/)（4月8日）
+
+MCPなどのトランスポートレイヤーがエージェントアーキテクチャで重要になる理由を解説。マルチターン・ツール多用ループでは転送コストが無視できない水準になり、サーバーサイドコンテキストキャッシュでクライアント送信データを80%以上削減・実行時間15〜29%改善したデータを示す。
+
+### InfoQ: When a Cloud Region Fails
+
+[When a Cloud Region Fails: Rethinking High Availability in a Geopolitically Unstable World](https://www.infoq.com/articles/cloud-region-fails/)（4月22日）
+
+ソブリンフォールトドメインと地政学的不安定性を考慮した高可用性の再設計を論じた記事。
+
+## Cloud Native / CNCF
+
+### Kubernetes v1.36 "Haru" リリース
+
+[Kubernetes v1.36 Release](https://kubernetes.io/blog/2026/04/22/kubernetes-v1-36-release/)（4月22日）
+
+リリースリードは日本コミュニティのRyota Sawada。コードネームは「春・晴れ・遥か」を意味する"Haru"。70エンハンスメント（安定18・ベータ25・アルファ25）、106社・491名が貢献。
+
+- **GA**: Fine-grained kubelet API authorization、User Namespaces for Pods、SELinuxボリュームマウント最適化（Pod起動遅延を大幅改善）、MutatingAdmissionPolicy（Webhook不要のネイティブ変更ポリシー、デフォルト有効化）、OCI VolumeSource（OCIイメージをボリュームとして直接マウント、モデルウェイト配布に有効）、HPAScaleToZero（デフォルト有効化）
+- **削除**: `gitRepo`ボリュームプラグイン（root実行リスク）、Ingress NGINX（3月24日に非推奨・メンテナンス終了、Gateway APIへの移行を推奨）
+- **非推奨**: Service.spec.externalIPs（CVE-2020-8554対応、v1.43で完全削除予定）
+
+### Istio: AI推論トラフィック統合
+
+[Istio at KubeCon EU 2026](https://www.infoq.com/news/2026/04/istio-ai-multicluster/)（4月、KubeCon EUアムステルダム）
+
+- **Ambient Multicluster ベータ**: サイドカープロキシなしの複数クラスタ間トラフィック・セキュリティ・可観測性を一元管理
+- **Gateway API Inference Extension**: AI推論トラフィックをメッシュ内に統合し、一貫したルーティングを実現
+- **agentgateway（実験的）**: 動的なAIエージェント型トラフィックパターンへの対応。「66%の組織がKubernetes上でGenerative AIを実行」する状況に対応し、メッシュをAIワークロード基盤として再定義
+- パッチリリース: v1.29.2 / v1.28.6（4月13日）
+
+### OpenTelemetry: OBI ベータ / K8sセマンティックコンベンションRC
+
+[OBI Goals 2026](https://opentelemetry.io/blog/2026/obi-goals/) / [K8s Semantic Conventions RC](https://opentelemetry.io/blog/2026/k8s-semconv-rc/)
+
+- OpenTelemetry eBPF Instrumentation（OBI、旧Grafana Beyla）がKubeCon EU 2026でベータ版を正式発表。2026年の主要目標は安定版1.0リリース、プロトコルサポート拡大（MQTT・AMQP・NATS・Redis等）、.NET対応
+- Kubernetes属性がセマンティックコンベンションのリリース候補（RC）安定性レベルに到達。`k8sattributes`プロセッサがフィーチャーゲートで新スキーマへ事前切り替え可能
+
+## Platform Engineering / SRE / Observability
+
+### Grafana 13 — GrafanaCON 2026
+
+[GrafanaCON 2026 Announcements](https://grafana.com/blog/grafanacon-2026-announcements/)（4月21日）
+
+- **動的ダッシュボード GA**: 変数・コンテキストに応じて適応し、大量の静的コピー問題を解消。DORA/USE/REDメソッド対応レイアウトテンプレートも提供
+- **Loki再設計**: 新クエリプランナーが並列パーティション処理を実現、集計クエリで最大20倍のデータスキャン削減・10倍の高速化。全文検索スタートアップ「Logline」を買収
+- **Grafana Assistant**: AIエージェントをOSS・Enterprise向けに公開。Assistant Workspace（全画面チャット）・Assistant API・Cloud CLIを提供。Claude Code・Cursor等との連携もサポート
+- **OpenTelemetry Engine mode**: AlloyでOTel Collector YAMLをそのまま使用可能に。OTelネイティブパイプラインとGrafanaをシームレスに統合
+- **Pyroscope 2.0**: 書き込みパスのレプリケーション廃止でコスト・複雑性を大幅削減。プロファイルからメトリクス生成機能追加
+- **k6 2.0**: AI支援テスト作成、Assertions API対応
+- **Grafana Marketplace**: プラグイン販売プラットフォームをパイロット公開
+
+### Prometheus v3.11.0
+
+[Prometheus v3.11.0](https://github.com/prometheus/prometheus/releases/tag/v3.11.0)（4月2日）
+
+- PromQLに`histogram_quantiles`関数（複数分位数を一度に計算）とネイティブヒストグラム用トリミング演算子を追加
+- ディスク使用率ベースの保持設定`storage.tsdb.retention.percentage`を追加
+- AWS SDにElasticache/RDSロールを追加、Azure SDにWorkload Identity認証を追加
+- セキュリティ修正: Stored XSS脆弱性（CVE-2026-40179）を修正。distroless Dockerイメージバリアントを追加
+
+### IaC: Terraform / OpenTofu / Pulumi
+
+- **Terraform**: v1.15.0-rc4（4月28日）、v1.14.9（4月20日）。AWS Provider v6.0.0が破壊的変更を含むためリリース。Terraform Enterprise Replicated Native Scheduler サポートが4月1日に終了
+- **OpenTofu**: v1.11.6（4月8日）。悪意あるリモートTLSサーバによるデッドロック攻撃防止、tarスパースファイルのメモリ消費攻撃防止のセキュリティ修正
+- **Pulumi**: v3.232.0（4月22日）。**Pulumi Neo**（AI Platform Engineer）がパブリックプレビュー。IaCの実行・ガバナンス・最適化を自動化するAIエージェント。CLIに実験的`pulumi neo`コマンドを追加。**Pulumi Agent Skills**でClaude Code・Cursor・Gemini CLI向けにインフラ専門知識を提供
+
+### SREcon26 Americas
+
+[SREcon26 Americas](https://www.usenix.org/conference/srecon26americas)（3月24〜26日、シアトル）
+
+テーマは「コンバージェンス（収束）」。注目セッションとして、GPU大規模フリート運用の実践知見（Tens of Thousands of GPUs on Hyperscalers）、Netflixのブランケット型デプロイ凍結をサービスリスク分類に基づく継続的デリバリーへ置き換えるアプローチ、GoogleのCAST/STPAシステム安全工学手法によるインシデント分析が発表された。
+
+## クラウドベンダー・業界動向
+
+### Google Cloud Next '26
+
+[Google Cloud Next 2026 Wrap Up](https://cloud.google.com/blog/topics/google-cloud-next/google-cloud-next-2026-wrap-up)（4月22〜24日、ラスベガス）
+
+260本の発表。キーテーマは「エージェンティック・エンタープライズ」。Googleは75%の新規コードがAI生成・エンジニア承認済みと公表（昨秋は50%）。
+
+- **Gemini Enterprise Agent Platform**: Agent Studio・Agent-to-Agent Orchestration・Agent Registry・Agent Identity・Agent Gateway・Agent Observabilityを統合したエンドツーエンドのエージェント基盤
+- **TPU v8**: TPU 8t（Sunfish、訓練特化、134,000 TPUを単一ファブリックに接続可能）とTPU 8i（Zebrafish、推論特化、前世代比で価格性能比80%向上）
+- **Cross-Cloud Lakehouse**: Apache Icebergを標準化し、AWSやAzureのデータをデータ移動なしにクエリ可能
+- **Spanner Columnar Engine**: ライブ運用データに対する分析クエリを最大200倍高速化。ベクトル化実行を採用
+- **GDC Sovereign AI**: Kubernetesベースのサードパーティプロバイダーと連携し、エージェントワークフロー全体を顧客組織の境界内で完結させる設計
+
+### What's Next with AWS 2026
+
+[Top Announcements](https://aws.amazon.com/blogs/aws/top-announcements-of-the-whats-next-with-aws-2026/)（4月28日）
+
+- AWSとOpenAIの戦略的提携を拡大。GPT-5.5・GPT-5.4をAmazon Bedrockで利用可能に（限定プレビュー）。Codex on Amazon Bedrockも発表
+- AnthropicはAWS Trainium/Graviton上でモデルを訓練、Metaは数千万コアのGravitonを採用してエージェント系CPUワークロードに投入
+- **Bedrock AgentCore新機能**: Managed Harness（モデル・プロンプト・ツール指定だけでエージェント即起動、マイクロVM隔離）、AgentCore CLI（ローカルからデプロイまで同一ターミナルで完結）
+- **AWS Interconnect GA**: AWS VPCとGoogle Cloud間のLayer 3プライベート接続。MACsec暗号化・CloudWatch監視組み込み。仕様をApache 2.0でGitHub公開
+
+### Meta: KernelEvolve / Capacity Efficiency AI
+
+[KernelEvolve](https://engineering.fb.com/2026/04/02/developer-tools/kernelevolve-how-metas-ranking-engineer-agent-optimizes-ai-infrastructure/)（4月2日）/ [Capacity Efficiency](https://engineering.fb.com/2026/04/16/developer-tools/capacity-efficiency-at-meta-how-unified-ai-agents-optimize-performance-at-hyperscale/)（4月16日）
+
+- **KernelEvolve**: NVIDIA GPU・AMD GPU・MTIAなど異種ハードウェア上で最適カーネルを自動合成するエージェント。LLMシンセサイザー + グラフ探索エンジン + RAG知識ベース + 自動評価の四層構成。NVIDIA GPUで推論スループット60%向上、MTIAで訓練25%向上。ISCA 2026で論文発表予定
+- **Capacity Efficiency AI**: シニアエンジニアの知見をMCPツールとスキルにカプセル化した統合AIエージェント基盤。FBDetectが0.005%以上のパフォーマンス回帰を検知するとAIが自動で原因分析・PR生成。約10時間の手作業を30分に圧縮し、数百MWの電力消費を削減
+
+### Spotify: Agentic Development with Anthropic
+
+[Agentic Development: Spotify x Anthropic](https://engineering.atspotify.com/2026/4/anthropic-agentic-development)（4月）
+
+2025年11月25日（Claude Opus 4.5リリース日）が社内チャートに明確な変曲点として現れ、エンジニアがIDE中心からターミナル中心へ移行したと報告。Slackメッセージで依頼するだけで数千リポジトリを横断する複雑な移行作業を実行するバックグラウンドコーディングエージェント「Honk」を運用。コード生成者が誰（何）かより「アウトカムへの説明責任」が重要という文化的転換を強調している。
+
+### Uber: 知的負荷管理 / LLM訓練基盤
+
+[From Static Rate Limiting to Intelligent Load Management](https://www.uber.com/il/en/blog/from-static-rate-limiting-to-intelligent-load-management/)（4月20日）/ [Open Source and In-House: How Uber Optimizes LLM Training](https://www.uber.com/us/en/blog/open-source-and-in-house-how-uber-optimizes-llm-training/)（4月14日）
+
+- Docstore・Schemalessで静的クォータ方式から知的負荷管理へ移行。Redisへの追加ホップと単一障害点を生んだクォータ方式を廃棄し、Scorecardエンジン（テナント別同時実行制限のルールベース制御）を導入
+- Meta Llama 2・Mistral Mixtralとクローズドモデルを併用し、RAG + 継続事前訓練 + 指示ファインチューニングを実施。DeepSpeed・PyTorch FSDP・Ray・vLLMの大規模訓練基盤を構築
+
+### QCon London 2026
+
+[QCon London 2026](https://qconlondon.com/)（3月16〜19日）
+
+75名超のスピーカー・15トラック。AIエージェントの本番信頼性の低さが最大の課題として浮上。MCPがエージェント間通信の標準として評価され、「エージェント工学は制御された環境では機能するが、動的な本番環境では頻繁に失敗する」という問題意識が共有された。QCon San Francisco 2026（11月予定）では12トラック中4トラックがAI特化で、「Architecting for Agents」が新設される。
