@@ -1,0 +1,168 @@
+---
+title: "AIエージェント直近の進化: Codex / Claude Code 競合と Cerebras 等の専用チップ"
+date: "2026-04-30T12:00:00+09:00"
+slug: "2026/04/30/ai-agent-evolution"
+description: "Codex の GPT-5.3-Codex 投入と料金体系刷新、Claude Code の Managed Agents・Opus 4.7、Cursor 3.x の並列エージェント、Cerebras IPO 再申請と NVIDIA による Groq 買収など、2026年初頭のAIエージェント動向を整理した。"
+themes: ["AI", "AIエージェント", "開発ツール"]
+---
+
+2026年に入ってから、AIコーディングエージェント領域は「複数エージェントの並列・非同期実行」と「専用推論チップによる高速化」が同時に進む段階に入った。OpenAI Codex は GPT-5.3-Codex / 5.4 / 5.5 と短期間にモデルを更新しトークンベース課金へ移行、Anthropic Claude Code は Opus 4.7 と Managed Agents によりエンタープライズ運用基盤を整え、Cursor は 3.x で並列サブエージェントを実装した。同時に Cerebras が IPO 再申請を完了し、NVIDIA が Groq を 200億ドルで買収するなど推論アクセラレータ側でも大きな再編が進んでいる。
+
+本レポートでは2026年1〜4月のAIコーディングエージェントと推論アクセラレータの主要動向を、Codex・Claude Code・Cursor 等のフロントエンド側と Cerebras・Groq・SambaNova 等のハードウェア側に分けて整理する。
+
+## OpenAI Codex の進化
+
+### モデル世代の急速な交代
+
+2025年5月の codex-1 / codex-mini-latest からの変化が大きい。GPT-5.2-Codex が2026年1月14日にリリースされ大規模リファクタ向けのコンテキスト圧縮を強化、GPT-5.3-Codex が2月5日に登場し25%高速化と Codex トレーニングスタックと GPT-5 推論スタックの統合を実現した。3月リリースの GPT-5.4 は1Mコンテキストとネイティブなコンピュータユースを搭載し汎用化、4月時点では GPT-5.5 が Codex アプリのモデルセレクタから選択可能になっている。GitHub Copilot で展開されていた GPT-5.1-Codex 系は2026年4月1日に廃止された。
+
+- [Introducing GPT-5.3-Codex](https://openai.com/index/introducing-gpt-5-3-codex/)
+- [Introducing GPT-5.2-Codex](https://openai.com/index/introducing-gpt-5-2-codex/)
+- [GitHub Changelog: GPT-5.1-Codex 廃止](https://github.blog/changelog/2026-04-03-gpt-5-1-codex-gpt-5-1-codex-max-and-gpt-5-1-codex-mini-deprecated/)
+
+### Codex CLI とプラグインシステム
+
+CLI は引き続き Node.js 製で（最新は v0.126.0-alpha.17、2026年4月30日）、Rust への完全移行は確認できず。1月にチーム共有設定（`.codex/config.toml`、`rules/`、`skills/` の階層読み込み）が導入されカスタムプロンプトはスキルに一本化された。3月にはプラグインシステムが追加され、スキル・アプリ連携・MCPサーバー設定をパッケージとして配布できるようになった。4月には AWS Bedrock のネイティブサポートと Windows サンドボックスでのプロキシ強制ネットワーク制御が加わった。
+
+- [Codex Changelog](https://developers.openai.com/codex/changelog)
+- [openai/codex Releases](https://github.com/openai/codex/releases)
+
+### Codex デスクトップアプリの並列実行
+
+macOS 版が2026年2月2日、Windows 版が3月4日に正式リリース。バックグラウンドコンピュータユース機能で複数エージェントが Mac 上のアプリを並行操作でき、ユーザーの作業を妨げずに進む。インアップブラウザによりローカル開発サーバーの UI を Codex が直接検証できるようになった。Atlassian Rovo・CircleCI・CodeRabbit・GitLab Issues・Microsoft Suite など90以上の新プラグインが追加されている。
+
+- [Codex for (almost) everything](https://openai.com/index/codex-for-almost-everything/)
+
+### 料金体系のトークンベース移行
+
+2026年4月2日に Plus・Pro・Business・新規 Enterprise プランがトークンベース課金へ移行、4月23日に既存 Enterprise・Edu・Health・Gov・Teachers プランへ拡大した。$8/月の Go プラン、Free プランが新設され、Pro は $100/月。GPT-5-Codex-Mini は使用量が90%に達すると自動切替を提案する仕組みになっている。
+
+- [Codex Pricing](https://developers.openai.com/codex/pricing)
+- [Codex Rate Card](https://help.openai.com/en/articles/20001106-codex-rate-card)
+
+### エンタープライズガバナンス
+
+ChatGPT Enterprise 経由ではワークスペースの SSO ポリシーと MFA 要件が自動適用される。`requirements.toml` ポリシーで MCP サーバー許可リスト・サンドボックスモード・Web 検索動作を制御可能、OpenTelemetry によるオプトイン監査ログにも対応する。Global Admin Console（admin.openai.com）が2026年に新設された一方、メモリガバナンスや規制業種向けの完全対応は「Coming Soon」のままだ。
+
+- [Codex Admin Setup](https://developers.openai.com/codex/enterprise/admin-setup)
+- [Codex Agent Approvals & Security](https://developers.openai.com/codex/agent-approvals-security)
+
+## Claude Code / Anthropic の進化
+
+### Claude Opus 4.7 / Sonnet 4.6 / Opus 4.6 の投入
+
+2026年2月5日に Claude Opus 4.6 がリリースされ、1Mトークンコンテキスト（ベータ）、最大128k出力、アダプティブシンキング、コンテキストコンパクションを実装した。2月17日には Sonnet 4.6 が Claude Code の新デフォルトに、4月16日には Opus 4.7 が GA となり `xhigh` エフォートレベルが新設された。価格は $5/$25 per MTok のまま。Bedrock でも27リージョンで自己サービス利用可能になった。同時期に Claude Sonnet 3.7 / Haiku 3.5 / Haiku 3 が退役している。
+
+- [Claude Platform Release Notes](https://platform.claude.com/docs/en/release-notes/overview)
+- [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)
+
+### Claude Agent SDK へのリネーム
+
+旧 Claude Code SDK は Claude Agent SDK に改名され、ターミナル特化ツールから汎用エージェントランタイムへ位置づけが変わった。Subagents は `.claude/agents/` 配下のマークダウン定義で並列実行でき各サブエージェントが独立コンテキストで動作する。Hooks は `PreToolUse` / `PostToolUse` / `SessionStart` などで安全ポリシーを差し込め、`PostToolUse` フックは全ツールのアウトプット置換に拡張された。MCP サーバー設定の `alwaysLoad: true` で常時利用が可能になった。
+
+- [Subagents in the SDK](https://platform.claude.com/docs/en/agent-sdk/subagents)
+
+### Claude Managed Agents（パブリックベータ）
+
+2026年4月8日に Claude Managed Agents が公開された。インフラ構築不要で本番運用できる完全マネージド型エージェント実行基盤で、gVisor 隔離コンテナ上で動作しネットワークはデフォルト拒否、ファイルシステムは `/workspace` と `/source` にスコープされる。料金は標準トークン料金 + アクティブ実行時間 $0.08/セッション時間、Web 検索 $10/1,000件。Notion・Rakuten・Sentry・Allianz が採用を表明している。同日 `ant` CLI もリリースされ YAML で API リソースをバージョン管理できるようになった。
+
+- [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview)
+- [VentureBeat: Claude Managed Agents](https://venturebeat.com/orchestration/anthropics-claude-managed-agents-gives-enterprises-a-new-one-stop-shop-but)
+
+### サンドボックスとセキュリティ
+
+2025年10月にファイルシステム隔離（Linux: bubblewrap、macOS: seatbelt）とネットワーク隔離の2層サンドボックスが導入され、内部使用でパーミッションプロンプトを84%削減した。2026年2月20日には Claude Code Security のリサーチプレビューが公開され、コードベースの脆弱性スキャンとパッチ提案が可能になった。Web 版（Claude Code on the web）では完全隔離サンドボックスをブラウザから利用できる。
+
+- [Claude Code Sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing)
+- [Claude Code Security](https://www.anthropic.com/news/claude-code-security)
+
+### IDE 拡張とターミナル UI
+
+VS Code 拡張は2026年初頭時点で520万インストール、評価4.0/5。チェックポイント（編集前状態のリワインド）、複数タブのマルチ会話、@メンションでの行範囲指定、Chrome 連携によるブラウザテスト自動化が追加された。JetBrains プラグイン（ベータ）は IntelliJ・PyCharm・Android Studio・WebStorm などに対応し、`/ide` コマンドで外部ターミナルから JetBrains セッションに接続できる。`/recap` コマンドでセッション再開時にコンテキスト要約を提示、`claude ultrareview` サブコマンドで CI から非インタラクティブにレビューを実行できる。
+
+- [Claude Code on VS Code](https://code.claude.com/docs/en/vs-code)
+- [Claude Code JetBrains Plugin](https://plugins.jetbrains.com/plugin/27310-claude-code-beta-)
+- [Enabling Claude Code to work more autonomously](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously)
+
+## その他のエージェントツールと業界再編
+
+### Cursor 3.x の並列サブエージェント
+
+Cursor 3.0（2026年4月2日）でローカル・worktree・クラウド・SSH 上の多数エージェントを並列実行できる新インターフェースを導入。3.2（4月24日）で非同期サブエージェントとクロスリポジトリ対応のマルチルートワークスペースを追加した。Self-Hosted Cloud Agents で自社インフラ上のエージェント実行が可能、ローカル↔クラウドのセッション引き継ぎにも対応する。ARR は $500M を突破し評価額は $10B。
+
+- [Cursor 3.0 Changelog](https://cursor.com/changelog/3-0)
+
+### GitHub Copilot Agent Mode の GA
+
+2026年3月に Agent Mode が VS Code・JetBrains 両方で GA となり、マルチファイル編集・ターミナル実行・エラー修正ループを自律実行できるようになった。GitHub イシューを Copilot にアサインするとバックグラウンドで PR を作成する非同期ワークフローも提供されている。4月29日に Visual Studio から直接クラウドエージェントセッションを起動できる統合がリリース、4月にはランタイム動作と照合してバグを修正する Debugger Agent が追加された。コードレビューは2026年6月1日から AI Credits と GitHub Actions minutes の両方を消費する課金に変更される。Pro/Pro+ プランの新規申込は2026年4月20日から一時停止中。
+
+- [GitHub Copilot Changelog](https://github.blog/changelog/label/copilot/)
+
+### Cognition / Devin と Windsurf 買収
+
+2025年7月に Google が Windsurf 創業者と上級エンジニア約40名をアクワイアハイヤーした後、残存IP・プロダクト・210名のチームを Cognition が約 $250M で買収した。Cognition の評価額は2025年9月時点で $10.2B、2026年4月には Founders Fund 主導の $400M 超調達後の $25B 評価額での新規調達交渉が報じられている。Devin 2.2 / 3.0 系は起動速度3倍、Devin v3 API の正式公開、デスクトップサポートのデフォルト有効化を実装した。Windsurf は Devin エージェント基盤と統合され、SWE-1.5（950トークン/秒、Sonnet 4.5 比13倍速）と SWE-grep + Fast Context（関連ファイル発見が最大20倍高速）を提供する。
+
+- [Cognition: Devin 2.2](https://cognition.ai/blog/introducing-devin-2-2)
+- [TechFundingNews: Cognition $25B 調達交渉](https://techfundingnews.com/cognition-ai-25b-valuation-funding-talks-devin-software-engineer/)
+
+### Roo Code・Cline・Replit Agent・Google Jules
+
+Roo Code は3,000,000インストールを達成し、Orchestrator モードで数時間規模のタスクをサブエージェントに分割して実行する。GPT-5.5・Claude Opus 4.7（Vertex AI）対応を追加した。Cline は GitHub スター 58k 超で SSO・監査証跡・VPC 対応などエンタープライズ機能を拡充。Replit は Agent 4 を投入しタスクの自動シーケンス化、独自テストシステムによるセルフテスト＆修正ループ、Security Agent による脆弱性スキャン、CVE Auto-Protect、React Native ネイティブモバイル対応を提供する。Google は Jules に Gemini 3 Pro を統合、Gemini Code Assist を2026年3月に個人開発者向けに無料化、Agent Mode を GA、Next Edit Predictions（次の編集予測）を Preview リリースした。
+
+- [Roo Code vs Cline](https://www.qodo.ai/blog/roo-code-vs-cline/)
+- [Replit Docs Changelog](https://docs.replit.com/updates/2026/04/03/changelog)
+- [Google Developers Blog: Jules + Gemini 3](https://developers.googleblog.com/jules-gemini-3/)
+
+### SWE-bench スコアの急騰と汚染問題
+
+SWE-bench Verified トップスコアは2025年初頭の約65%から2026年4月に Claude Opus 4.7 が87.6%へ急上昇し、GPT-5.3-Codex が85.0% で続く。一方で汚染耐性ベンチマーク SWE-bench Pro では Opus 4.7 が64.3%にとどまり、Verified との乖離からデータ汚染問題が顕在化した。Terminal-Bench 2.0 では ForgeCode + Opus 4.6 / GPT-5.4 が81.8%でトップ。エージェントフレームワーク選択でスコアが5〜15ポイント変動する。
+
+- [SWE-bench Leaderboard](https://www.swebench.com/)
+- [SWE-bench Pro 解説](https://www.morphllm.com/swe-bench-pro)
+
+## 推論アクセラレータの大型再編
+
+### Cerebras Inference のスループット記録
+
+Llama 4 Maverick 400B で2,522トークン/秒、Qwen3 Coder 480B で2,000トークン/秒、Llama 4 Scout で2,600トークン/秒（無料枠）を達成。独立検証機関 Artificial Analysis により NVIDIA Blackwell の推論記録を上回ることが確認された。GPT-OSS-120B では「Claude Sonnet 4.5 比でコードエージェントが10倍高速」と主張する。2026年3月に AWS とのパートナーシップを発表し、AWS Trainium3 がプリフィル・Cerebras CS-3 がデコードを担当する分散推論アーキテクチャを Amazon Bedrock で提供予定だ。
+
+- [Cerebras 2026 Insights](https://www.cerebras.ai/blog/2026Insights)
+- [AWS × Cerebras プレスリリース](https://press.aboutamazon.com/aws/2026/3/aws-and-cerebras-collaboration-aims-to-set-a-new-standard-for-ai-inference-speed-and-performance-in-the-cloud)
+
+### Cerebras IPO 再申請
+
+2024年9月の S-1 提出後、UAE 系投資会社 G42 の持分を巡る CFIUS 審査により一度撤回された。G42 持分を議決権なし株式に再構成することで2025年10月に規制問題が解消し、2026年4月17日に再度 S-1 を提出。ティッカー「CRBS」で Nasdaq への2026年5月中旬上場を目指す。2025年通期売上は5億1,000万ドル（前年比76%増）、純利益8,790万ドル。バリュエーションは230億ドル（5か月前の81億ドルから184%上昇）。OpenAI との750MW・20億ドル超の長期供給契約も確定済みだ。
+
+- [CNBC: Cerebras IPO 再申請](https://www.cnbc.com/2026/04/17/cerebras-new-ipo-ai-chips.html)
+- [TechCrunch: Cerebras IPO](https://techcrunch.com/2026/04/18/ai-chip-startup-cerebras-files-for-ipo/)
+
+### NVIDIA による Groq 買収と Groq 3 LPU
+
+2025年12月に NVIDIA が Groq を200億ドルでアクイハイアした。創業者 Jonathan Ross を含む技術陣の約80%が NVIDIA に移籍し、新設の「リアルタイム推論部門」を率いる。2026年3月の GTC 2026 で NVIDIA は Groq 3 LPU を発表、128基の LPU を搭載した Groq 3 LPX サーバーラックと Vera Rubin CPU-GPU スーパーラックの組み合わせで「メガワット当たり35倍のスループット」と「10倍の収益ポテンシャル」を主張した。GroqCloud は独立運営として継続し、Llama 4 Scout を入力 $0.11/M トークン・TTFT 300ms 未満で提供している。
+
+- [The Next Platform: Cerebras × OpenAI と Groq 動向](https://www.nextplatform.com/2026/01/15/cerebras-inks-transformative-10-billion-inference-deal-with-openai/)
+- [DataCenter Dynamics: NVIDIA Groq 買収](https://www.datacenterdynamics.com/en/news/nvidia-builds-out-lpu-chip-team-following-20bn-groq-acquihire-announcement-rumored-for-gtc/)
+
+### SambaNova SN50 RDU（エージェント特化）
+
+2026年2月24日に第5世代チップ SN50 RDU を発表。最大10兆パラメータのモデルをサポートし、コンテキスト長は1,000万トークンまで対応する。SRAM + HBM + 大容量メモリの三層メモリによる高速モデルスワップが、複数モデル間を頻繁に切り替えるエージェントワークロードに最適化されている。16基を束ねた SambaRack SN50 は前世代比5倍のコンピュート、GPT-OSS-120B で600トークン/秒超。Intel との多年度戦略提携により「GPU for Prefill + SambaNova RDU for Decode + Intel Xeon 6 CPU for Agentic Tools」という分散推論アーキテクチャを2026年下半期に提供予定だ。
+
+- [SambaNova SN50 RDU 発表](https://sambanova.ai/blog/introducing-the-sn50-rdu-purpose-built-for-agentic-inference)
+- [HPCwire: Intel × SambaNova 提携](https://www.hpcwire.com/2026/04/09/sambanova-and-intel-in-latest-ai-inference-chip-tie-up/)
+
+### AWS Trainium3 と NVIDIA Blackwell Ultra
+
+Trainium3（3nm、2025年12月出荷開始）は1チップ2.52ペタフロップス FP8、144GB HBM3e、Trn3 UltraServer（144チップ）合計で362FP8ペタフロップス。Trainium4 は FP4 スループット6倍を目標にしており、NVIDIA NVLink Fusion 対応でハイブリッドクラスタ構成が可能になる。Project Rainier では約50万基の Trainium2 が Anthropic の Claude 学習に投入された。NVIDIA Blackwell Ultra（GB300）は FP8で15ペタフロップス、288GB HBM3e で2026年1月から出荷開始。データセンター売上は Q1 2026 で441億ドル（前年比69%増）。Cerebras の独立ベンチマークでは Llama 4 Maverick 400B で 2,522 vs. 1,038 トークン/秒と Cerebras が Blackwell を上回る結果が示されている。
+
+- [Introl: Trainium3 解説](https://introl.com/blog/aws-trainium-inferentia-silicon-ecosystem-guide-2025)
+- [NVIDIA: Blackwell Ultra 発表](https://nvidianews.nvidia.com/news/nvidia-blackwell-ultra-ai-factory-platform-paves-way-for-age-of-ai-reasoning)
+
+### 高速推論がエージェント UX にもたらす変化
+
+2,000トークン/秒超のスループットは単なる性能指標を超え、具体的な体験変化を生んでいる。Claude Code や Codex のマルチエージェントワークフローでは複数タスクが同時実行され、1回のユーザー操作で複数の tool call をほぼ即時に完結できるためエージェントが「止まって見える」時間が消える。Groq LPU の TTFT 300ms 未満は音声エージェントや対話型コパイロットの体験品質を引き上げる。Cerebras は主要クラウド LLM 比で最大70%のコスト削減を主張し、無料枠（100万トークン/日）で個人開発者の利用障壁も下げている。
+
+- [Best Inference Providers for AI Agents 2026](https://fast.io/resources/best-inference-providers-ai-agents/)
+
+## まとめ
+
+2026年初頭の動向で目立つのは、フロントエンド側（Codex・Claude Code・Cursor 等）と推論アクセラレータ側（Cerebras・SambaNova・NVIDIA Groq 統合）が同時に「並列・非同期エージェント」を志向した変化を起こしている点だ。SWE-bench Verified が65%→87%へ急騰した一方で SWE-bench Pro との乖離からデータ汚染問題が顕在化しており、ベンチマーク自体も Terminal-Bench 2.0 等への移行が進んでいる。Cognition の Windsurf 買収と $25B 評価額での調達交渉、NVIDIA の Groq 買収、Cerebras IPO 再申請という業界再編が同時進行する局面となっている。
