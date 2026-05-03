@@ -10,9 +10,15 @@ draft: true
 
 ## 降ってくる要件
 
-「求人応募の最低限の管理アプリを作って」というたった一言の指示から、本書の物語は始まります。
+物語はたった一行の依頼から始まります。
+
+> 求人応募の最低限の管理アプリを作って。応募者・職種・選考ステータスを一覧して進められるように。
+
+採用業務を始めて間もない人事チームから、社内のエンジニアに対して投げられた依頼です。期日は短く、要件は曖昧で、最初に動くものが欲しい。あなたは Claude Code を立ち上げ、いま手元で一番手近な道具で実装を始めます。出てきたのが、本章で起点とする `step-00-end` のコードです。
 
 ## 既存コードを動かしてみる
+
+サンプルコードは `growing-ts-apps-job-application` リポジトリで管理しています。本章末の状態は `step-00-end` タグで固定されています。
 
 ```bash
 git checkout step-00-end
@@ -20,28 +26,130 @@ pnpm install
 pnpm test
 ```
 
-テストはすべて通ります。要件は最低限満たされています。
+5 件のテストはすべて緑になります。応募の作成、一覧、書類選考、面接予定、採用、不採用 ── 業務の最低限の流れは「動いて」います。
+
+```
+ ✓ test/jobApplications.test.ts (5 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+```
+
+一見、何も問題ないように見えます。これがこの教材の出発点です。
 
 ## 素朴にエージェントに依頼してみる
 
-本章は執筆中です。AIエージェントへの依頼プロンプトと、生成された素朴な実装の要点を掲載予定です。
+そもそも、このコードはどう生まれたのでしょうか。書籍執筆者が「最初の動くもの」を作る役で、Claude Code に対して次の依頼を投げたと想定してください。
+
+```
+求人応募の最低限の管理アプリを作って。
+HonoでHTTP APIを生やして、応募者・職種・選考ステータスを管理したい。
+状態は applied / screening / interview-scheduled / hired / rejected の5段階。
+Vitestのテストもざっくり書いて。
+```
+
+エージェントが返してくる素朴な実装の核は、おおむね次のような形になります。
+
+```ts
+// src/jobApplications.ts
+export type JobApplication = {
+  id: string;
+  applicantName: string;
+  applicantEmail: string;
+  jobId: string;
+  status: string;
+  appliedAt: string;
+  screenedAt?: string;
+  interviewDate?: string;
+  interviewerEvaluation?: string;
+  rejectedAt?: string;
+  hiredAt?: string;
+};
+
+export const updateStatus = (
+  id: string,
+  newStatus: string,
+  extra?: { interviewDate?: string; interviewerEvaluation?: string },
+): JobApplication => {
+  const current = store.get(id);
+  if (!current) throw new Error(`application not found: ${id}`);
+
+  const updated = { ...current, status: newStatus } as JobApplication;
+  if (newStatus === "screening") {
+    updated.screenedAt = new Date().toISOString();
+  } else if (newStatus === "interview-scheduled") {
+    if (!extra?.interviewDate) {
+      throw new Error("interviewDate is required for interview-scheduled");
+    }
+    updated.interviewDate = extra.interviewDate;
+    if (extra.interviewerEvaluation) {
+      updated.interviewerEvaluation = extra.interviewerEvaluation;
+    }
+  } else if (newStatus === "rejected") {
+    updated.rejectedAt = new Date().toISOString();
+  } else if (newStatus === "hired") {
+    updated.hiredAt = new Date().toISOString();
+  }
+
+  store.set(id, updated);
+  logger.info("application status updated", updated);
+  return updated;
+};
+```
+
+「動かす」ことには成功しています。テストも通ります。レビューでも、人事チームのデモでも、この実装を止める理由は見つかりません。
 
 ## 何が痛いのか
 
-- 単一の `JobApplication` 型に `status: string` と全フィールドを詰め込んでいる
-- `throw` だらけ、`as JobApplication` だらけ、巨大関数
-- ロガーに応募者をまるごと渡している
+それでも、このコードはすでに四つの罠を抱えています。本書の章を進めるごとに一つずつ顕在化させていく罠です。
 
-これらは「動いてしまう」ため一見問題なく見えますが、次の要件が降ってきた瞬間に破綻が広がります。
+**1. `status` は `string` で、不正な状態の組み合わせがいくらでも作れる**
+
+`status: "interview-scheuled"` というタイポも、`status: "applied"` のまま `interviewDate` を埋め込んだレコードも、型レベルでは何も止めてくれません。`screenedAt` `interviewDate` `rejectedAt` `hiredAt` がすべて optional なので、**どの状態にどのフィールドが必要か**は型ではなく実装者の頭の中だけにあります。
+
+**2. `as JobApplication` で型を黙らせている**
+
+`{ ...current, status: newStatus } as JobApplication` の `as` は、型システムに「これは `JobApplication` だと思っておいてくれ」と言っているだけで、実態の保証は何もありません。optional フィールドが増えるたびにこの `as` は嘘の度合いを増やしていきます。
+
+**3. `throw` で制御フローを作っている**
+
+`updateStatus` は「見つからない」「日付がない」を `Error` で表現しています。呼び出し側はキャッチするか落ちるかの二択で、どんなエラーが起きうるかは型に出てきません。エラーの種類が増えてくると `try/catch` がネストし、どの層が何を補足すべきかがすぐに分からなくなります。
+
+**4. ロガーが応募者をまるごと出している**
+
+```ts
+logger.info("application status updated", updated);
+```
+
+応募者の氏名・メールアドレス・社内ID がそのままアプリケーションログに流れています。テスト出力を眺めると、`yamada@example.com` が JSON にそのまま乗っているのが見えるはずです。これは PII (Personally Identifiable Information) の事故予備軍です。
+
+これらは「動いてしまう」ため、最初のリリースでは誰も気づきません。**次の要件が降ってきた瞬間に、この四つの罠は順に手元に返ってきます**。
 
 ## どう直すか — 原則の紹介
 
-本章ではまだ原則を導入しません。次章以降で、降ってくる要件を起点に原則を一つずつ導入していきます。
+本章ではまだ何も直しません。「直そう」という意思を持つことが、本書の出発点です。
+
+代わりに次の問いを抱えてください。
+
+- いまのコードのどこが、次の要件で痛むのだろう？
+- 同じ要件を、原則を持たないままエージェントにもう一度依頼したら、どこが直り、どこが温存されるだろう？
+
+この二つの問いを抱えたまま、第1章に進みます。
 
 ## リファクタを進める
 
-本章は出発点の確認に留めます。
+リファクタは第1章以降で章ごとに進めます。本章は「いまの姿を見る」ことに専念してください。
+
+`pnpm test` を一度緑で見ておく。`src/jobApplications.ts` を上から下まで一度読んでおく。これだけで十分です。コードの長さは200行に届きません。**動くアプリの全部が、いまあなたの目に映る大きさである**ことを覚えておいてください。
+
+第3章でこのアプリは外部ATS（採用管理システム）と接続し、第6章でログから応募者のメールアドレスが流出するインシデントを起こします。最終章で同じコードを振り返ったとき、出発点がいかに小さく、いかに罠が温存されたまま育っていったかを実感できるようにするための、意図的な「小さな悪い実装」です。
 
 ## 章末の姿と次章への布石
 
-次章では「不採用にした応募が、なぜか面接予定に戻った」という不正な状態遷移バグを起点に、Discriminated Union による状態モデリングを導入します。
+`step-00-end` の状態では、5 件のテストすべてが通り、不正な状態遷移を防ぐコードはどこにも存在しません。`rejected` の応募を `interview-scheduled` に戻す呼び出しも、コードは何の文句も言わず処理してしまいます。
+
+次章で、この「黙って動いてしまう」性質が引き起こす最初のインシデントを扱います。
+
+> 不採用にした応募が、なぜか面接予定に戻ってしまう。
+
+人事チームから降ってくるこのバグ報告を起点に、Discriminated Union による状態モデリングを導入します。

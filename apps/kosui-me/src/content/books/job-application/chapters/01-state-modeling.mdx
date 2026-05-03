@@ -10,35 +10,290 @@ draft: true
 
 ## 降ってくる要件
 
-「不採用にした応募が、なぜか面接予定に戻ってしまうバグがある。不正な状態遷移を防ぎたい」という要件が降ってきます。
+リリースから 2 週間。人事マネージャーから Slack に連絡が入ります。
+
+> 一度不採用にした応募者が、なぜか面接予定に戻ってしまうみたい。本人にも面接調整のメールが行ってしまった。原因を調べて、二度と起きないようにしてほしい。
+
+調べてみると、応募一覧の管理画面で「ステータスを変更する」プルダウンが応募者の現在の状態に関係なく**全選択肢を出していた**ことが原因でした。`rejected` の応募者から `interview-scheduled` を選び直すと、API がそのまま受け付け、ステータスが書き換わっていました。
+
+人事側の UI を直すだけでも当面のインシデントは止まりますが、本質的な原因は API 側にあります。**そもそも `rejected` から `interview-scheduled` に戻る呼び出しを受け付けるべきではない**。型レベルでもランタイムでも、不正な状態遷移を起こせない構造に直すのが本章のゴールです。
 
 ## 既存コードを動かしてみる
 
+第0章末（= 第1章開始時）の状態を確認します。
+
 ```bash
 git checkout step-01-start
+pnpm install
 pnpm test
 ```
 
+5 件のテストはすべて緑です。バグを再現するテストはまだ存在しません。
+
+試しに、現状のコードでバグを再現する一行を `node --input-type=module` で実行してみます。
+
+```ts
+import { apply, updateStatus } from "./src/jobApplications.ts";
+
+const app = apply({
+  applicantName: "山田 太郎",
+  applicantEmail: "yamada@example.com",
+  jobId: "job_001",
+});
+updateStatus(app.id, "rejected");
+const restored = updateStatus(app.id, "interview-scheduled", {
+  interviewDate: "2026-06-01T10:00:00Z",
+});
+console.log(restored.status); // "interview-scheduled"
+```
+
+**何のエラーも出ません**。`status` は黙って書き換わり、`rejectedAt` は残ったまま、`interviewDate` が追加されます。型システムは `string` の中身までは見ていません。
+
 ## 素朴にエージェントに依頼してみる
 
-本章は執筆中です。
+要件をそのまま Claude Code に投げると、原則を知らないエージェントは**既存パターンを忠実に踏襲する**方向へ倒れます。書籍執筆者によるシミュレーションを `agent-attempts/step-01/response.md` に保存していますが、要点はこうです。
+
+エージェントは `JobApplication` 型と `status: string` 構造をそのまま温存し、`updateStatus` の入口に**遷移ホワイトリスト**を if 連鎖で詰め込みます。
+
+```ts
+const allowedTransitions: Record<string, string[]> = {
+  applied: ["screening", "rejected"],
+  screening: ["interview-scheduled", "rejected"],
+  "interview-scheduled": ["hired", "rejected"],
+  hired: [],
+  rejected: [],
+};
+
+export const updateStatus = (
+  id: string,
+  newStatus: string,
+  extra?: { interviewDate?: string; interviewerEvaluation?: string },
+): JobApplication => {
+  const current = store.get(id);
+  if (!current) throw new Error(`application not found: ${id}`);
+
+  const allowed = allowedTransitions[current.status] ?? [];
+  if (!allowed.includes(newStatus)) {
+    throw new Error(
+      `invalid transition: ${current.status} -> ${newStatus}`,
+    );
+  }
+  // ... 以下、既存の if 連鎖がそのまま続く
+};
+```
+
+そして、バグを再現するテストを追加して通します。
+
+```ts
+test("不採用にした応募は面接予定に戻せない", () => {
+  const created = apply({ ... });
+  updateStatus(created.id, "rejected");
+  expect(() =>
+    updateStatus(created.id, "interview-scheduled", {
+      interviewDate: "2026-06-01T10:00:00Z",
+    }),
+  ).toThrow(/invalid transition/);
+});
+```
+
+「降ってきたバグは直りました」。テストも緑です。レビューでも止められないでしょう。
 
 ## 何が痛いのか
 
-`status: string` と関連フィールドの組み合わせが指数的に増え、型は通るのにランタイムで落ちます。
+しかしこの実装は、**第0章で挙げた四つの罠を一つも解いていません**。
+
+- `status` は依然 `string`。`"interview-scheuled"` のタイポは `allowedTransitions[current.status]` が `undefined` を返した時点で検出できますが、それは「テーブルが空」という意味で、「タイポ」だとはコードのどこにも書かれていません
+- `screenedAt` `interviewDate` `rejectedAt` `hiredAt` はすべて optional のまま。`hired` になった応募が `interviewDate` を持たないことを型は保証していません
+- `as JobApplication` も巨大な if 連鎖もそのまま温存
+- ロガーは応募者をまるごと出し続ける
+
+さらに、第2章で「面接日程と面接官評価を保持したい」という要件が降ってきたとき、この `updateStatus` はどうなるでしょうか。`interview-scheduled` ブランチの分岐がさらに膨らみ、`evaluatedAt` `evaluator` 等の optional フィールドが増え、`allowedTransitions` テーブルも長くなります。**雑に動いてしまう実装は、雑なまま育っていく**ことが、ここで実感できます。
+
+第1章のゴールは、ホワイトリストを差し込むことではなく、**そもそも不正な状態遷移を呼び出せない構造**にすることです。
 
 ## どう直すか — 原則の紹介
 
-本章で導入する原則:
+本章で導入する原則は三つです。
 
-- Discriminated Union による状態モデリング
-- 純粋関数による状態遷移
-- `assertNever` による網羅性チェック
+### 1. Discriminated Union による状態モデリング
+
+「ステータスによって持つべきフィールドが違う」という事実を、型で表現します。`status` を `string` ではなくリテラル型の判別子にし、各バリアントに固有のフィールドだけを持たせます。
+
+```ts
+type Applied = Identity & { status: "applied" };
+type Screening = Identity & { status: "screening"; screenedAt: string };
+type InterviewScheduled = Identity & {
+  status: "interview-scheduled";
+  screenedAt: string;
+  interviewDate: string;
+  interviewerEvaluation?: string;
+};
+type Hired = Identity & {
+  status: "hired";
+  screenedAt: string;
+  interviewDate: string;
+  hiredAt: string;
+};
+type Rejected = Identity & { status: "rejected"; rejectedAt: string };
+
+type JobApplication =
+  | Applied
+  | Screening
+  | InterviewScheduled
+  | Hired
+  | Rejected;
+```
+
+これだけで、`hired` の応募から `interviewDate` が消えていることが**型で保証**されるようになります。`status: "applied"` のレコードに `interviewDate` を埋め込もうとすると、コンパイルが通りません。
+
+### 2. 純粋関数による状態遷移
+
+状態遷移を「現在の状態（型）」から「次の状態（型）」への純粋関数として書きます。入力型を制限することで、**呼び出し側のミスを型エラーにできます**。
+
+```ts
+export const startScreening = (
+  application: Applied,
+  now: string,
+): Screening => ({
+  ...application,
+  status: "screening",
+  screenedAt: now,
+});
+
+export const scheduleInterview = (
+  application: Screening,
+  interviewDate: string,
+): InterviewScheduled => ({
+  ...application,
+  status: "interview-scheduled",
+  interviewDate,
+});
+```
+
+`scheduleInterview` は `Screening` しか受け付けません。`Applied` を渡そうとするとコンパイラが拒否します。`Rejected` を渡すなど論外です。
+
+### 3. `assertNever` による網羅性チェック
+
+ディスパッチ箇所では `switch` で全バリアントを扱い、`default` で `assertNever` を呼びます。これにより、新しいバリアントを追加した瞬間に**型エラーで気づける**安全網を張れます。
+
+```ts
+export const assertNever = (value: never): never => {
+  throw new Error(`Unhandled discriminated union member: ${JSON.stringify(value)}`);
+};
+
+const requireRejectable = (
+  application: JobApplication,
+): Applied | Screening | InterviewScheduled => {
+  switch (application.status) {
+    case "applied":
+    case "screening":
+    case "interview-scheduled":
+      return application;
+    case "hired":
+    case "rejected":
+      throw new InvalidTransitionError(application.status, "rejected");
+    default:
+      return assertNever(application);
+  }
+};
+```
+
+第7章でドメインイベントを足したり、新しい状態を追加したりする際、`assertNever` が**未対応のバリアントを残したまま走らない**安全網になります。
 
 ## リファクタを進める
 
-本章は執筆中です。
+実際のコードを `step-01-start` から `step-01-end` まで進めます。差分は次のとおりです。
+
+```bash
+git diff step-01-start..step-01-end
+```
+
+ファイル単位の変化:
+
+- `src/jobApplications.ts` ── 削除。単一ファイルに詰め込んでいた構造を分解する
+- `src/jobApplications/types.ts` ── Discriminated Union を定義
+- `src/jobApplications/transitions.ts` ── 純粋な状態遷移関数を集約
+- `src/jobApplications/store.ts` ── インメモリストアの責務を切り出す
+- `src/jobApplications/service.ts` ── ストア参照と遷移を組み合わせる公開 API
+- `src/utils/assertNever.ts` ── 網羅性チェックのヘルパ
+- `src/index.ts` ── Hono ルートを更新。ステータス文字列を受け取る `PATCH /status` をやめ、遷移ごとのエンドポイント（`POST /screening`, `POST /interview`, `POST /hire`, `POST /reject`）に分ける
+
+公開 API では、ストアからロードした `JobApplication` を「いまの状態」に応じて `Applied | Screening | ...` のいずれかに narrow したうえで純粋関数に渡します。narrow に失敗した場合（= 不正遷移）は `InvalidTransitionError` を投げます。
+
+```ts
+export const scheduleInterview = (
+  id: string,
+  interviewDate: string,
+): InterviewScheduled => {
+  const next = transitions.scheduleInterview(
+    requireScreening(load(id), "interview-scheduled"),
+    interviewDate,
+  );
+  store.save(next);
+  logger.info("interview scheduled", next);
+  return next;
+};
+```
+
+`requireScreening` のような小さな narrowing 関数を置くことで、**ストアから読み出した瞬間の型の不確かさ**と、**遷移関数が要求する型の確かさ**の境界が一箇所に集まります。第3章で Zod による境界防御を導入するとき、この境界線が活きてきます。
+
+### 純粋関数の型レベル契約をテストで固定する
+
+リファクタの最後に、純粋関数の入力型契約を `@ts-expect-error` で固定します。
+
+```ts
+test("scheduleInterview は Screening のみ受け付ける（型レベルの保証）", () => {
+  const applied = baseApplied();
+  // @ts-expect-error Applied は Screening ではないため、型レベルで弾かれる
+  transitions.scheduleInterview(applied, "2026-06-01T10:00:00Z");
+});
+
+test("reject は Hired を受け付けない（型レベルの保証）", () => {
+  const hired = { ...baseApplied(), status: "hired" as const, /* ... */ };
+  // @ts-expect-error Hired は reject の入力型に含まれない
+  transitions.reject(hired, "2026-05-03T00:00:00Z");
+});
+```
+
+`@ts-expect-error` は「ここで型エラーが起きることを期待する」コメントです。誰かが将来 `scheduleInterview` の入力型を `Applied | Screening` に広げてしまうと、このテストは**型エラーが起きないことで失敗**します。型を緩める変更が無自覚に通らない安全網になります。
+
+### バグを再現するテスト
+
+人事マネージャーから来たバグの再発防止テストを書きます。
+
+```ts
+test("不採用にした応募を面接予定に戻すことはできない", () => {
+  const created = apply({ ... });
+  reject(created.id);
+  expect(() => startScreening(created.id)).toThrow(InvalidTransitionError);
+  expect(() => scheduleInterview(created.id, "2026-06-01T10:00:00Z")).toThrow(
+    InvalidTransitionError,
+  );
+});
+```
+
+8 件のテスト（既存 5 + 不正遷移 3）と、純粋関数の型レベルテスト 3 件、計 11 件すべて緑になります。
+
+```
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+```
 
 ## 章末の姿と次章への布石
 
-次章では「面接日程と面接官評価を保持したい」という要件を起点に、Discriminated Union の各バリアントへの固有フィールドと Companion Object パターンを導入します。
+`step-01-end` で、第1章のゴールに到達します。
+
+- `status` は文字列ではなく判別子。タイポは型エラーで止まる
+- 状態固有のフィールドは各バリアントに乗り、optional フィールドの組み合わせ爆発が消える
+- 純粋関数の入力型が呼び出し側のミスを型エラーで弾く
+- `assertNever` が未対応バリアントの取りこぼしを止める
+- ロガーは応募者をまるごと出し続けている（**第6章で扱う**）
+- `throw` による制御フローは残っている（**第5章で Result に置き換える**）
+
+降ってきたバグに対し、ホワイトリストを差し込んで動かすこともできました。しかし、この章で選んだのは**型で構造を直す**選択肢です。**動いてしまう実装と、動くべき実装の違い**を、いま手元のコードで体感できているはずです。
+
+次章で、もう一段のプレッシャーが降ってきます。
+
+> 面接予定の応募について、面接日程に加えて面接官の評価コメントも保持したい。状態ごとに必要なデータが違うので、どう扱うか整理してほしい。
+
+Discriminated Union の各バリアントに固有フィールドを足していく流れと、各バリアントごとに「作成・遷移の入口」を集約する Companion Object パターンを次章で導入します。
