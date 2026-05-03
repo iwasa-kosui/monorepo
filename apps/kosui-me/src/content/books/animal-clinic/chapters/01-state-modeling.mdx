@@ -1,0 +1,333 @@
+---
+bookSlug: "animal-clinic"
+chapterSlug: "01-state-modeling"
+order: 1
+title: "「会計済みの来院が、なぜか診察中に戻った」"
+summary: "業務インパクトの大きい不正な状態遷移を起点に、Discriminated Union による状態モデリング、純粋関数による状態遷移、assertNever による網羅性を導入します。"
+codeTag: "step-01-end"
+draft: true
+---
+
+## 降ってくる要件
+
+院長から二つ目の依頼が降ってきます。
+
+> 「会計まで済んだ来院が、なぜかさっき『診察中』に戻ってたんだ。レジ締めが合わなくて気づいた。**会計済みのカルテは、もう動かないようにしてほしい**。それと、まだ診察を始めていない来院をいきなり『診察中』にされても困る。**業務上ありえない状態遷移は、コードの段階で弾いてほしい**」
+
+要件を整理すると次の通りです。
+
+- 会計済み（`paid`）と キャンセル済み（`canceled`）は **終端**。再遷移を許さない
+- 診察中（`in-examination`）への遷移は、必ず `checked-in` 経由でなければならない
+- キャンセルは `scheduled` または `checked-in` からのみ許す（診察中・会計済みからのキャンセルは別の業務フロー）
+
+正規の遷移を改めて図にすると次のようになります。
+
+```mermaid
+flowchart LR
+    scheduled["scheduled"]
+    checkedIn["checked-in"]
+    inExamination["in-examination"]
+    paid["paid"]
+    canceled["canceled"]
+    scheduled --> checkedIn
+    checkedIn --> inExamination
+    inExamination --> paid
+    scheduled --> canceled
+    checkedIn --> canceled
+```
+
+## 既存コードを動かしてみる
+
+第0章末のコードがそのまま第1章開始です。
+
+```bash
+git checkout step-01-start
+pnpm test
+```
+
+5 件のテストが通ります。事故が起きたコードは、テストが通る状態で本番へ出ています。
+
+事故を再現する手で書いた呼び出しは、たとえばこうなっています。
+
+```ts
+const created = bookAppointment(input);
+updateStatus(created.id, "checked-in");
+updateStatus(created.id, "in-examination", { veterinarianId: "vet_007" });
+updateStatus(created.id, "paid", {
+  diagnosis: "皮膚炎",
+  treatment: "外用薬塗布",
+  amount: 4800,
+});
+
+// 事故: 会計済みから「診察中」に戻ってしまう
+updateStatus(created.id, "in-examination", { veterinarianId: "vet_007" });
+```
+
+最後の行が **そのまま通ります**。`updateStatus` は引数の `newStatus` 文字列を見て分岐するだけで、現在の状態が何かを気にしません。型は通り、テストでは検出されませんでした。
+
+## 素朴にエージェントに依頼してみる
+
+院長の依頼文を、原則の話を一切せずに AI エージェントへ投げると、よく出てくる回答は **「`enum` と遷移テーブルでバリデーションを足しましょう」** です。実出力の保存版は `agent-attempts/step-01/` にあります。エージェントの応答を要約すると次のような提案です。
+
+```ts
+export enum AppointmentStatus {
+  Scheduled = "scheduled",
+  CheckedIn = "checked-in",
+  InExamination = "in-examination",
+  Paid = "paid",
+  Canceled = "canceled",
+}
+
+const ALLOWED_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
+  [AppointmentStatus.Scheduled]: [
+    AppointmentStatus.CheckedIn,
+    AppointmentStatus.Canceled,
+  ],
+  [AppointmentStatus.CheckedIn]: [
+    AppointmentStatus.InExamination,
+    AppointmentStatus.Canceled,
+  ],
+  [AppointmentStatus.InExamination]: [AppointmentStatus.Paid],
+  [AppointmentStatus.Paid]: [],
+  [AppointmentStatus.Canceled]: [],
+};
+
+export const updateStatus = (
+  id: string,
+  newStatus: AppointmentStatus,
+  extra?: { /* ... */ },
+): Appointment => {
+  const current = store.get(id);
+  if (!current) throw new Error(`appointment not found: ${id}`);
+  const allowed = ALLOWED_TRANSITIONS[current.status as AppointmentStatus];
+  if (!allowed.includes(newStatus)) {
+    throw new Error(`invalid transition: ${current.status} -> ${newStatus}`);
+  }
+  // 既存の if 分岐はそのまま
+};
+```
+
+これも **動きます**。事故の再現コードはランタイムで `Error` を投げるようになります。テストも追加すれば緑になります。
+
+しかし、よく見ると次のことが起きていません。
+
+- `Appointment` 型はまだ `status: string` のまま、optional フィールドが全部並んでいます。`paid` 状態の値から `diagnosis` を取り出すコードは依然として **「if で絞り込む」か「`!` で殴る」しかありません**
+- `paid` 状態の `Appointment` の値を、関数の引数として `in-examination` 用の処理に渡しても、**型エラーにはなりません**。コンパイラはまだ「会計済みの来院」と「診察中の来院」を区別できていません
+- 不正な遷移はランタイムで `Error` になります。型は何も保証しません
+- `current.status as AppointmentStatus` という `as` が一つ増えました。runtime に enum 値以外が入っていないことを誰も保証していません
+
+エージェントの提案は **「動かないようにする」要件は満たしますが、「業務上ありえない状態を、そもそもコード上で表現できないようにする」要件は満たしていません**。
+
+## 何が痛いのか
+
+この章で本当に潰したい痛みは、`status: string` と optional プロパティの組み合わせが生む **「型は通るのにランタイムで落ちる」構造そのもの** です。
+
+- **状態と必要データの対応が型に書かれていない**: `paid` のときに `diagnosis` がある、という不変条件は if 文とテストだけが知っています。新しいフィールド（処方薬の処方履歴など）を追加するときに、どの状態に乗るべきかをコンパイラが教えてくれません
+- **状態遷移が「文字列の比較」で書かれている**: `current.status === "checked-in"` の typo はランタイムまで生き残ります。enum を導入してもこの構造は本質的には変わりません。enum は名前を一箇所に集めるだけで、遷移の妥当性は依然としてテーブル内の if/in での実行時チェックです
+- **網羅性が効いていない**: `if (newStatus === "checked-in") ... else if (newStatus === "in-examination") ...` の連鎖は、新しい状態を足したときにコンパイラが警告してくれません。「キャンセル料を取れるようにしたい」「保留状態を追加したい」のような要件が降ってきた瞬間、漏れが温存されます
+
+## どう直すか — 原則の紹介
+
+本章で導入する原則は次の3つです。
+
+### 1. Discriminated Union による状態モデリング
+
+`status` の値ごとに **別の型** に分け、共通のキー（ここでは `status` 自体）を判別子とします。状態ごとに必要なフィールドだけを必須として持たせます。
+
+```ts
+export type Scheduled = AppointmentBase & {
+  status: "scheduled";
+};
+
+export type CheckedIn = AppointmentBase & {
+  status: "checked-in";
+  checkedInAt: string;
+};
+
+export type InExamination = AppointmentBase & {
+  status: "in-examination";
+  checkedInAt: string;
+  examStartedAt: string;
+  veterinarianId: string;
+};
+
+export type Paid = AppointmentBase & {
+  status: "paid";
+  checkedInAt: string;
+  examStartedAt: string;
+  veterinarianId: string;
+  diagnosis: string;
+  treatment: string;
+  prescription?: string;
+  amount: number;
+  paidAt: string;
+};
+
+export type Canceled = AppointmentBase & {
+  status: "canceled";
+  canceledAt: string;
+  canceledFrom: "scheduled" | "checked-in";
+  cancelReason?: string;
+};
+
+export type Appointment =
+  | Scheduled
+  | CheckedIn
+  | InExamination
+  | Paid
+  | Canceled;
+```
+
+`paid` 状態の値からは `diagnosis` を直接取り出せます。逆に `Scheduled` の値から `diagnosis` を取ろうとすればコンパイルエラーになります。**不正な状態の組み合わせは、もう型として存在できなくなります**。
+
+### 2. 純粋関数による状態遷移
+
+各遷移を、入力の状態の型を引数に取り、出力の状態の型を返す **純粋関数** として書きます。
+
+```ts
+export const checkIn = (current: Scheduled, now: string): CheckedIn => ({
+  /* ... */
+  status: "checked-in",
+  checkedInAt: now,
+});
+
+export const startExamination = (
+  current: CheckedIn,
+  veterinarianId: string,
+  now: string,
+): InExamination => ({ /* ... */ });
+
+export const recordPayment = (
+  current: InExamination,
+  payload: RecordPaymentInput,
+  now: string,
+): Paid => ({ /* ... */ });
+
+export const cancel = (
+  current: Scheduled | CheckedIn,
+  reason: string | undefined,
+  now: string,
+): Canceled => ({ /* ... */ });
+```
+
+「会計済みから診察中に戻る」ような呼び出しは、**そもそもコンパイルが通りません**。`startExamination` の第1引数は `CheckedIn` のみを受け付けるからです。
+
+```ts
+const paid: Paid = /* ... */;
+startExamination(paid, "vet_007", now);
+//                ^^^^ Argument of type 'Paid' is not assignable to parameter of type 'CheckedIn'.
+```
+
+### 3. `assertNever` による網羅性チェック
+
+未知の状態に対する分岐の漏れを、コンパイラに検出させるための定型関数です。
+
+```ts
+export const assertNever = (value: never): never => {
+  throw new Error(`unexpected value: ${JSON.stringify(value)}`);
+};
+```
+
+`switch` の `default` で呼ぶことで、新しい状態を `Appointment` に追加した瞬間にコンパイルエラーが発生し、対応漏れが必ず可視化されます。
+
+```ts
+switch (current.status) {
+  case "scheduled":
+  case "checked-in":
+    return cancel(current, reason, now);
+  case "in-examination":
+  case "paid":
+  case "canceled":
+    throw new InvalidTransitionError(current.status, "canceled");
+  default:
+    return assertNever(current);
+}
+```
+
+## リファクタを進める
+
+実際の書き換えは段階的に進めます。詳細はリポジトリの `git log step-00-end..step-01-end` で追えます。
+
+### ステップ1: 型を分割する
+
+`src/appointments/types.ts` を新設し、`Appointment` を5つの型の判別共用体として書き直します。`status: string` も `"scheduled" | "checked-in" | "in-examination" | "paid" | "canceled"` のリテラル型を取るようになります。
+
+### ステップ2: 遷移を純粋関数として切り出す
+
+`src/appointments/transitions.ts` で、`book / checkIn / startExamination / recordPayment / cancel` を **時刻も依存も外から受け取る純粋関数** として書きます。`new Date()` は呼ばず、引数の `now: string` をそのまま使います（テスト容易性のためでもあり、章末の不変条件確認をしやすくするためでもあります）。
+
+### ステップ3: service 層に状態ガードを集める
+
+`src/appointments/service.ts` で、ID から取り出した `Appointment` の現在の状態を `switch` で見て、許可された遷移のみ呼ぶ薄い層を作ります。不正遷移は `InvalidTransitionError`、未知IDは `NotFoundError` として独自エラー型に分けます。**ドメイン層は throw を持たず**、サービス層が境界として throw を担当します（throw を完全になくすのは第5章 Result の仕事です）。
+
+### ステップ4: 回帰テストを書く
+
+事故そのものを回帰テストとして固定します。
+
+```ts title="test/appointments.test.ts"
+test("会計済みから診察中へは戻れない", () => {
+  const created = bookAppointment(sampleInput);
+  checkInAppointment(created.id, NOW);
+  startExaminationFor(created.id, "vet_007", NOW);
+  recordPaymentFor(
+    created.id,
+    { diagnosis: "皮膚炎", treatment: "外用薬塗布", amount: 4800 },
+    NOW,
+  );
+  expect(() => startExaminationFor(created.id, "vet_007", NOW)).toThrow(
+    InvalidTransitionError,
+  );
+});
+```
+
+加えて、**型レベルの契約**も `@ts-expect-error` で固定します。
+
+```ts title="test/transitions.test.ts"
+const paid = recordPayment(/* ... */);
+
+// @ts-expect-error 会計済みからは診察開始へ戻せない
+startExamination(paid, "vet_007", NOW);
+
+// @ts-expect-error 会計済みは再度 recordPayment できない
+recordPayment(paid, { diagnosis: "x", treatment: "y", amount: 1 }, NOW);
+
+// @ts-expect-error 会計済みはキャンセルできない
+cancel(paid, "やっぱり", NOW);
+```
+
+このテストは、誰かが将来 `cancel` の引数の型を `Appointment` に広げてしまった瞬間、`@ts-expect-error` が **「期待されたエラーが起きていません」** で失敗してくれます。型契約を回帰テストに固定する常套手段です。
+
+### ステップ5: 入口（Hono ルート）を書き直す
+
+`PATCH /appointments/:id/status` の単一エンドポイントから、状態遷移ごとの単独エンドポイントに分けます。リクエストボディがリテラル型に紐づくので、外側からも遷移ごとに必要なデータが明確になります。
+
+```
+POST /appointments
+POST /appointments/:id/check-in
+POST /appointments/:id/examination     { veterinarianId }
+POST /appointments/:id/payment         { diagnosis, treatment, prescription?, amount }
+POST /appointments/:id/cancel          { cancelReason? }
+```
+
+## 章末の姿と次章への布石
+
+```bash
+git checkout step-01-end
+pnpm test
+```
+
+13 件のテストが通ります。9 件は appointments の遷移ガード、4 件は transitions の純粋関数と型契約のテストです。
+
+```ts
+const paid = recordPayment(/* ... */);
+startExamination(paid, "vet_007", NOW);
+//                ^^^^ Argument of type 'Paid' is not assignable to parameter of type 'CheckedIn'.
+```
+
+このコンパイルエラーが出るようになったこと自体が、**「会計済みの来院が、なぜか診察中に戻った」事故が二度と起きえない**という不変条件をコードで証明したことになります。
+
+次章では獣医から新しい要件が降ってきます。
+
+> 「診察ごとに、**処方薬・所見・次回予約日**を紐づけて記録したい。同じカルテ番号で診察を重ねる慢性疾患の子もいるから、後から見返したときにどの診察で何を出したか追えるようにしてくれ」
+
+`InExamination` と `Paid` の固有フィールドを、Companion Object パターンで状態と一緒に育てていきます。Discriminated Union の各バリアントが、固有のロジックを抱え込み始めます。

@@ -1,0 +1,146 @@
+---
+bookSlug: "animal-clinic"
+chapterSlug: "00-broken-app"
+order: 0
+title: "動くけれど壊れやすいアプリ"
+summary: "「うちのクリニック向けに、予約とカルテをまとめて管理できる最低限のアプリを作って」という素朴な指示でAIエージェントに依頼して生まれた、動くけれど壊れやすい初期実装を起点に置きます。"
+codeTag: "step-00-end"
+draft: true
+---
+
+## 降ってくる要件
+
+舞台は、ある動物病院です。院長から最初の依頼が降ってきます。
+
+> 「うちのクリニック向けに、予約とカルテをまとめて管理できる最低限のアプリを作って。受付したら担当獣医を割り当てて、診察が終わったら診断・処置・処方薬・金額を記録して会計まで進められるようにしてほしい。来院前のキャンセルにも対応してね」
+
+要件は明確です。来院（appointment）の状態は次の5つです。
+
+- `scheduled` 予約済み
+- `checked-in` 受付済み
+- `in-examination` 診察中
+- `paid` 会計済み（診断名・処方薬・処置内容・金額がここで確定する）
+- `canceled` キャンセル済み
+
+正規の遷移は `scheduled → checked-in → in-examination → paid` の流れと、`scheduled` または `checked-in` から `canceled` への分岐です。`paid` と `canceled` は終端です。
+
+## 既存コードを動かしてみる
+
+第0章の出発点コードはタグ `step-00-end` に固定されています。手元で動かすときは、別リポジトリ [`growing-ts-apps-animal-clinic`](https://github.com/iwasa-kosui/growing-ts-apps-animal-clinic) を clone してから次のコマンドを実行してください。
+
+```bash
+git checkout step-00-end
+pnpm install
+pnpm test
+```
+
+5 件のテストが通ります。要件は最低限満たされている、ように見えます。
+
+## 素朴にエージェントに依頼してみる
+
+物語上、このコードはあなたが手で書いたものではありません。冒頭の依頼文を、原則の話を一切せずに AI エージェントへ投げた結果として降ってきたものです。エージェントは「動く」「テストが通る」を満たす最短経路でコードを生成します。実出力の保存版は同リポジトリの `agent-attempts/step-00/` 配下にあります。
+
+エージェントが生成した中心の型と関数は次のような形をしています。
+
+```ts title="src/appointments.ts"
+export type Appointment = {
+  id: string;
+  petId: string;
+  petName: string;
+  ownerId: string;
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail: string;
+  scheduledAt: string;
+  reason: string;
+  status: string;
+  checkedInAt?: string;
+  examStartedAt?: string;
+  veterinarianId?: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescription?: string;
+  paidAt?: string;
+  amount?: number;
+  canceledAt?: string;
+  cancelReason?: string;
+};
+
+export const updateStatus = (
+  id: string,
+  newStatus: string,
+  extra?: { /* ... 全状態の optional フィールドが並ぶ ... */ },
+): Appointment => {
+  const current = store.get(id);
+  if (!current) throw new Error(`appointment not found: ${id}`);
+
+  const updated = { ...current, status: newStatus } as Appointment;
+  if (newStatus === "checked-in") {
+    updated.checkedInAt = new Date().toISOString();
+  } else if (newStatus === "in-examination") {
+    if (!extra?.veterinarianId) {
+      throw new Error("veterinarianId is required for in-examination");
+    }
+    updated.examStartedAt = new Date().toISOString();
+    updated.veterinarianId = extra.veterinarianId;
+  } else if (newStatus === "paid") {
+    /* diagnosis / treatment / amount を必須として throw、prescription は optional */
+  } else if (newStatus === "canceled") {
+    updated.canceledAt = new Date().toISOString();
+  }
+
+  store.set(id, updated);
+  logger.info("appointment status updated", updated);
+  return updated;
+};
+```
+
+ロガーのほうも素朴です。
+
+```ts title="src/logger.ts"
+export const logger = {
+  info: (message: string, payload?: unknown) => {
+    if (payload === undefined) {
+      console.log(`[INFO] ${message}`);
+      return;
+    }
+    console.log(`[INFO] ${message}`, JSON.stringify(payload));
+  },
+  // ...
+};
+```
+
+このコードは「動いて」います。テストも通ります。それでも、原則を持たないままエージェントに依頼した結果として、いくつもの罠が温存されています。
+
+## 何が痛いのか
+
+短く列挙します。詳細は次章以降の要件追加で順に痛みとして顕在化します。
+
+- **単一の `Appointment` 型に `status: string` と全状態のフィールドを詰め込んでいる**: 状態と必要データの対応が型レベルでは表現されていません。`status === "paid"` のときに `diagnosis` が必ずある、というのはコメントと if 文だけが知っています
+- **`updateStatus` の中で `throw` と `as Appointment` が散らばっている**: バリデーション失敗・状態遷移違反・必須フィールド欠落が、すべて `Error` として同じ口から飛び出します
+- **ロガーが `Appointment` を丸ごと吐いている**: 飼い主の連絡先、ペットの病歴、診断名、処置内容まで、すべてのフィールドがアプリケーションログに出ます
+- **状態遷移の正当性をコードが知らない**: `paid` → `in-examination` のような業務上ありえない遷移を防ぐ仕組みがありません。`updateStatus(id, "in-examination")` を呼べば、引数の `extra.veterinarianId` さえ渡しておけば素直に通ります
+
+これらは「動いてしまう」ため一見問題なく見えます。次の要件が降ってきた瞬間に、それぞれ別の方向から牙を剥き始めます。
+
+## どう直すか — 原則の紹介
+
+本章ではまだ原則を導入しません。**動くけれど壊れやすい**という出発点を、自分の目で確認することがこの章のゴールです。
+
+第1章以降、降ってくる要件を起点に原則を一つずつ導入していきます。それぞれの原則は、「いま気持ち悪いから直す」のではなく、「**次の要件が降ってきたときに、原則がないとこう破綻する**」という形で導入されます。
+
+## リファクタを進める
+
+本章は出発点の確認に留めます。コードを書き換える前に、もう一度テストとコードを眺めて、どこに罠が潜んでいるか自分の目で確認しておいてください。
+
+```bash
+pnpm test
+```
+
+すべて通ります。これが本書の出発点です。
+
+## 章末の姿と次章への布石
+
+次章では「**会計済みの来院が、なぜか診察中に戻った**」という、業務インパクトの大きい不正な状態遷移バグが降ってきます。
+
+このバグを「もう一段階バリデーションを足す」で塞ぐのか、それとも**型システムに不正な状態自体を表現させない**のか。Discriminated Union による状態モデリング、純粋関数による状態遷移、`assertNever` による網羅性チェックを導入し、`status: string` と optional プロパティの組み合わせを根本から畳み直していきます。
