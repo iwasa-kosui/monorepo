@@ -1,0 +1,89 @@
+---
+import { type CollectionEntry, getCollection } from 'astro:content';
+
+interface Props {
+  bookSlug: string;
+  currentChapterSlug?: string;
+  bookTitle: string;
+}
+
+const { bookSlug, currentChapterSlug, bookTitle } = Astro.props;
+
+type ChapterEntry = CollectionEntry<'bookChapters'>;
+
+const allChapters = await getCollection('bookChapters');
+const chapters: ChapterEntry[] = allChapters
+  .filter((c: ChapterEntry) => c.data.bookSlug === bookSlug)
+  .sort(
+    (a: ChapterEntry, b: ChapterEntry) => a.data.order - b.data.order,
+  );
+
+function chapterLabel(order: number): string {
+  if (order === 99) return '最終章';
+  return `第${order}章`;
+}
+---
+
+<nav
+  class="book-sidebar"
+  aria-label={`${bookTitle} 目次`}
+>
+  <div class="book-sidebar-inner bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4">
+    <p class="text-xs text-subtle dark:text-[#9ca3af] mb-2">目次</p>
+    <a
+      href={`/books/${bookSlug}`}
+      class={`block text-sm font-semibold mb-3 ${
+        currentChapterSlug === undefined
+          ? 'text-accent dark:text-accent-light'
+          : 'text-charcoal dark:text-gray-100 hover:text-accent dark:hover:text-accent-light'
+      } transition-colors`}
+    >
+      {bookTitle}
+    </a>
+    <ol class="space-y-2">
+      {
+        chapters.map((chapter: ChapterEntry) => {
+          const isCurrent =
+            currentChapterSlug === chapter.data.chapterSlug;
+          return (
+          <li>
+            <a
+              href={`/books/${bookSlug}/${chapter.data.chapterSlug}`}
+              class={`block text-sm leading-snug ${
+                isCurrent
+                  ? 'text-accent dark:text-accent-light font-semibold'
+                  : 'text-charcoal dark:text-gray-100 hover:text-accent dark:hover:text-accent-light'
+              } transition-colors`}
+              aria-current={isCurrent ? 'page' : undefined}
+            >
+              <span class="text-xs text-subtle dark:text-[#9ca3af] block">
+                {chapterLabel(chapter.data.order)}
+                {chapter.data.draft ? ' · 執筆中' : ''}
+              </span>
+              {chapter.data.title}
+            </a>
+          </li>
+        );
+        })
+      }
+    </ol>
+  </div>
+</nav>
+
+<style>
+.book-sidebar {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .book-sidebar {
+    width: 18rem;
+    flex-shrink: 0;
+  }
+  .book-sidebar-inner {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+  }
+}
+</style>

@@ -1,0 +1,44 @@
+---
+bookSlug: "job-application"
+chapterSlug: "03-boundary-defense"
+order: 3
+title: "「外部ATSから応募者を取り込みたい」"
+summary: "外部APIの戻り値を as でキャストしていたら本番で undefined 参照で落ちた事故を起点に、Zod スキーマによる境界防御と Always-Valid Domain Model を導入します。"
+codeTag: "step-03-end"
+draft: true
+---
+
+## 降ってくる要件
+
+「外部ATSから応募者を取り込みたい」という要件に対し、当初は `as JobApplication` で型を黙らせて実装していました。本番で `undefined` 参照によりサービスが落ちます。
+
+## 既存コードを動かしてみる
+
+```bash
+git checkout step-03-start
+pnpm test
+```
+
+## 素朴にエージェントに依頼してみる
+
+本章は執筆中です。
+
+## 何が痛いのか
+
+型検査は通るのに、ランタイムで構造が前提と違う値を受け取って落ちます。これは型検査の境界を理解せずに `as` を使ったときに起こる典型的な事故です。
+
+## どう直すか — 原則の紹介
+
+本章で導入する原則:
+
+- Zod スキーマによる境界防御
+- Always-Valid Domain Model
+- `as` から `safeParse` への移行
+
+## リファクタを進める
+
+本章は執筆中です。
+
+## 章末の姿と次章への布石
+
+次章では「応募者ID と求人ID を取り違えた」という要件を起点に、Branded Type を導入します。

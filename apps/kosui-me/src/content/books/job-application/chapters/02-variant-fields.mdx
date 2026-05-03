@@ -1,0 +1,43 @@
+---
+bookSlug: "job-application"
+chapterSlug: "02-variant-fields"
+order: 2
+title: "「面接日程と面接官評価を保持したい」"
+summary: "状態ごとに必要なデータが違うことを起点に、Discriminated Union の各バリアントへの固有フィールドと Companion Object パターンを導入します。"
+codeTag: "step-02-end"
+draft: true
+---
+
+## 降ってくる要件
+
+「面接予定の応募には日程を、面接後の応募には面接官評価を保持したい」という要件が降ってきます。状態ごとに必要なデータが違うことが顕在化します。
+
+## 既存コードを動かしてみる
+
+```bash
+git checkout step-02-start
+pnpm test
+```
+
+## 素朴にエージェントに依頼してみる
+
+本章は執筆中です。
+
+## 何が痛いのか
+
+オプショナルプロパティが増え続け、状態とデータの整合性をコメントとロジックで担保するしかなくなります。
+
+## どう直すか — 原則の紹介
+
+本章で導入する原則:
+
+- Discriminated Union の各バリアントへの固有フィールド
+- Companion Object パターンによる状態に紐づくロジックの一体管理
+
+## リファクタを進める
+
+本章は執筆中です。
+
+## 章末の姿と次章への布石
+
+次章では「外部ATSから応募者を取り込みたい」という要件を起点に、Zod スキーマによる境界防御と Always-Valid Domain Model を導入します。
