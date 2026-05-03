@@ -39,4 +39,35 @@ const resume = defineCollection({
   }),
 });
 
-export const collections = { posts, reports, resume };
+const books = defineCollection({
+  loader: glob({ pattern: '*/index.mdx', base: './src/content/books' }),
+  schema: z.object({
+    bookSlug: z.string(),
+    seriesTitle: z.string(),
+    seriesSlug: z.string(),
+    title: z.string(),
+    subtitle: z.string().optional(),
+    description: z.string(),
+    author: z.string().optional(),
+    updatedDate: z.string(),
+    draft: z.boolean().optional(),
+  }),
+});
+
+const bookChapters = defineCollection({
+  loader: glob({
+    pattern: '*/chapters/*.mdx',
+    base: './src/content/books',
+  }),
+  schema: z.object({
+    bookSlug: z.string(),
+    chapterSlug: z.string(),
+    order: z.number(),
+    title: z.string(),
+    summary: z.string().optional(),
+    codeTag: z.string().optional(),
+    draft: z.boolean().optional(),
+  }),
+});
+
+export const collections = { posts, reports, resume, books, bookChapters };

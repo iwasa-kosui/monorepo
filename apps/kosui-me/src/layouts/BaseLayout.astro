@@ -13,6 +13,7 @@ interface Props {
   ogType?: string;
   oembedUrl?: string;
   noindex?: boolean;
+  wide?: boolean;
 }
 
 const {
@@ -26,7 +27,10 @@ const {
   ogType = 'website',
   oembedUrl,
   noindex = false,
+  wide = false,
 } = Astro.props;
+
+const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
@@ -195,7 +199,7 @@ const navItems = [
         </nav>
       </header>
       <main
-        class="flex-1 max-w-3xl mx-auto px-4 py-8 pb-20 md:pb-8 w-full"
+        class={`flex-1 ${mainMaxWidth} mx-auto px-4 py-8 pb-20 md:pb-8 w-full`}
         transition:animate={slideUpFade}
       >
         <slot />

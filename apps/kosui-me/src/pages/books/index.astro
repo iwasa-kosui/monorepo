@@ -1,0 +1,85 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { type CollectionEntry, getCollection } from 'astro:content';
+
+type BookEntry = CollectionEntry<'books'>;
+
+const books: BookEntry[] = await getCollection('books');
+const sortedBooks: BookEntry[] = books.sort(
+  (a: BookEntry, b: BookEntry) =>
+    new Date(b.data.updatedDate).getTime()
+    - new Date(a.data.updatedDate).getTime(),
+);
+
+const seriesGroups = new Map<
+  string,
+  { seriesTitle: string; seriesSlug: string; books: BookEntry[] }
+>();
+for (const book of sortedBooks) {
+  const existing = seriesGroups.get(book.data.seriesSlug);
+  if (existing === undefined) {
+    seriesGroups.set(book.data.seriesSlug, {
+      seriesTitle: book.data.seriesTitle,
+      seriesSlug: book.data.seriesSlug,
+      books: [book],
+    });
+  } else {
+    existing.books.push(book);
+  }
+}
+---
+
+<BaseLayout
+  ogTitle="Books"
+  ogDescription="kosui.me で公開している学習教材シリーズ「育てるTypeScriptアプリケーション」の書籍一覧です。"
+>
+  <h1 class="text-3xl font-bold mb-2">
+    <span class="heading-accent">Books</span>
+  </h1>
+  <p class="text-sm text-subtle dark:text-[#9ca3af] mb-8">
+    リファクタ駆動でサーバサイドTypeScriptを学ぶための学習教材シリーズです。
+  </p>
+
+  {
+    Array.from(seriesGroups.values()).map((series) => (
+      <section class="mb-10">
+        <h2 class="text-lg font-semibold mb-4 text-charcoal dark:text-gray-100">
+          {series.seriesTitle}
+        </h2>
+        <ul class="space-y-4">
+          {
+            series.books.map((book: BookEntry) => (
+              <li>
+                <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+                  <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100">
+                    <a
+                      href={`/books/${book.data.bookSlug}`}
+                      class="card-link-overlay"
+                    >
+                      {book.data.title}
+                      {
+                        book.data.subtitle
+                  ? `: ${book.data.subtitle}`
+                  : ''
+                      }
+                    </a>
+                  </h3>
+                  {
+                    book.data.draft && (
+                      <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        執筆中
+                      </p>
+                    )
+                  }
+                  <p class="mt-2 text-sm text-subtle dark:text-[#9ca3af]">
+                    {book.data.description}
+                  </p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    ))
+  }
+</BaseLayout>

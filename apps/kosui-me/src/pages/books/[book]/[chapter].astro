@@ -1,0 +1,157 @@
+---
+import BookLayout from '@/layouts/BookLayout.astro';
+import { type CollectionEntry, getCollection, render } from 'astro:content';
+
+type BookEntry = CollectionEntry<'books'>;
+type ChapterEntry = CollectionEntry<'bookChapters'>;
+
+export async function getStaticPaths() {
+  const chapters = await getCollection('bookChapters');
+  const books = await getCollection('books');
+  const bookByMap = new Map<string, BookEntry>(
+    books.map((b: BookEntry) => [b.data.bookSlug, b] as const),
+  );
+
+  return chapters.flatMap((chapter: ChapterEntry) => {
+    const book = bookByMap.get(chapter.data.bookSlug);
+    if (book === undefined) return [];
+    return [
+      {
+        params: {
+          book: chapter.data.bookSlug,
+          chapter: chapter.data.chapterSlug,
+        },
+        props: { book, chapter },
+      },
+    ];
+  });
+}
+
+const { book, chapter } = Astro.props as {
+  book: BookEntry;
+  chapter: ChapterEntry;
+};
+const { Content } = await render(chapter);
+
+const allChapters = await getCollection('bookChapters');
+const siblingChapters: ChapterEntry[] = allChapters
+  .filter((c: ChapterEntry) => c.data.bookSlug === book.data.bookSlug)
+  .sort(
+    (a: ChapterEntry, b: ChapterEntry) => a.data.order - b.data.order,
+  );
+
+const currentIndex = siblingChapters.findIndex(
+  (c: ChapterEntry) => c.data.chapterSlug === chapter.data.chapterSlug,
+);
+const previousChapter = currentIndex > 0
+  ? siblingChapters[currentIndex - 1]
+  : undefined;
+const nextChapter =
+  currentIndex >= 0 && currentIndex < siblingChapters.length - 1
+    ? siblingChapters[currentIndex + 1]
+    : undefined;
+
+const pageUrl =
+  `https://kosui.me/books/${book.data.bookSlug}/${chapter.data.chapterSlug}`;
+const ogTitle = `${chapter.data.title} - ${book.data.title}`;
+const ogDescription = chapter.data.summary ?? book.data.description;
+const noindex = book.data.draft === true || chapter.data.draft === true;
+
+function chapterLabel(order: number): string {
+  if (order === 99) return '最終章';
+  return `第${order}章`;
+}
+---
+
+<BookLayout
+  bookSlug={book.data.bookSlug}
+  bookTitle={book.data.title}
+  currentChapterSlug={chapter.data.chapterSlug}
+  ogTitle={ogTitle}
+  ogDescription={ogDescription}
+  ogUrl={pageUrl}
+  noindex={noindex}
+>
+  <article class="article-paper">
+    <header class="mb-8">
+      <p class="text-xs text-subtle dark:text-[#9ca3af]">
+        <a
+          href={`/books/${book.data.bookSlug}`}
+          class="hover:text-accent dark:hover:text-accent-light transition-colors"
+        >
+          {book.data.title}
+        </a>
+      </p>
+      <p class="mt-2 text-sm text-accent dark:text-accent-light">
+        {chapterLabel(chapter.data.order)}
+      </p>
+      <h1 class="text-3xl font-bold mt-1 mb-2">
+        {chapter.data.title}
+      </h1>
+      {
+        chapter.data.draft && (
+          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            執筆中
+          </p>
+        )
+      }
+    </header>
+    <div class="prose">
+      <Content />
+    </div>
+
+    <nav
+      class="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4"
+      aria-label="章ナビゲーション"
+    >
+      {
+        previousChapter && (
+          <a
+            href={`/books/${book.data.bookSlug}/${previousChapter.data.chapterSlug}`}
+            class="block p-4 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
+          >
+            <span class="block text-xs text-subtle dark:text-[#9ca3af]">
+              ← 前の章
+            </span>
+            <span
+              class="block text-sm font-semibold mt-1 text-charcoal dark:text-gray-100"
+            >
+              {chapterLabel(previousChapter.data.order)}
+              {previousChapter.data.title}
+            </span>
+          </a>
+        )
+      }
+      {
+        nextChapter && (
+          <a
+            href={`/books/${book.data.bookSlug}/${nextChapter.data.chapterSlug}`}
+            class="block p-4 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow sm:text-right sm:col-start-2"
+          >
+            <span class="block text-xs text-subtle dark:text-[#9ca3af]">
+              次の章 →
+            </span>
+            <span
+              class="block text-sm font-semibold mt-1 text-charcoal dark:text-gray-100"
+            >
+              {chapterLabel(nextChapter.data.order)} {nextChapter.data.title}
+            </span>
+          </a>
+        )
+      }
+    </nav>
+  </article>
+
+  <script>
+  document.addEventListener('astro:page-load', async () => {
+    const mermaidElements = document.querySelectorAll<HTMLPreElement>(
+      'pre.mermaid',
+    );
+    if (mermaidElements.length > 0) {
+      const { default: mermaid } = await import('mermaid');
+      mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+      await mermaid.run({ nodes: mermaidElements });
+    }
+  });
+  </script>
+</BookLayout>

@@ -1,0 +1,47 @@
+---
+import BookSidebar from '@/components/Book/BookSidebar.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+interface Props {
+  bookSlug: string;
+  bookTitle: string;
+  currentChapterSlug?: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage?: string;
+  ogUrl: string;
+  noindex?: boolean;
+}
+
+const {
+  bookSlug,
+  bookTitle,
+  currentChapterSlug,
+  ogTitle,
+  ogDescription,
+  ogImage,
+  ogUrl,
+  noindex = false,
+} = Astro.props;
+---
+
+<BaseLayout
+  ogTitle={ogTitle}
+  ogDescription={ogDescription}
+  ogImage={ogImage}
+  ogUrl={ogUrl}
+  ogType="article"
+  noindex={noindex}
+  wide
+>
+  <div class="flex flex-col lg:flex-row gap-6 lg:gap-8">
+    <BookSidebar
+      bookSlug={bookSlug}
+      bookTitle={bookTitle}
+      currentChapterSlug={currentChapterSlug}
+    />
+    <div class="flex-1 min-w-0">
+      <slot />
+    </div>
+  </div>
+</BaseLayout>
