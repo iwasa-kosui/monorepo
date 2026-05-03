@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 260" font-family="'Caveat', 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1f2937" />
+    </marker>
+  </defs>
+
+  <rect width="560" height="260" fill="#faf8f1" rx="10" />
+
+  <!-- ignored newer ADRs with different conclusion symbols (triangle / square) -->
+  <g opacity="0.35">
+    <g transform="translate(150,62) rotate(-12)">
+      <g stroke="#1f2937" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="-34" y="-44" width="68" height="88" rx="3" />
+        <line x1="-22" y1="-30" x2="22" y2="-30" />
+        <!-- conclusion: triangle -->
+        <path d="M0,-12 L14,14 L-14,14 z" />
+      </g>
+      <text x="0" y="-50" text-anchor="middle" font-size="18" fill="#1f2937">v2</text>
+    </g>
+    <g transform="translate(220,52) rotate(8)">
+      <g stroke="#1f2937" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="-34" y="-44" width="68" height="88" rx="3" />
+        <line x1="-22" y1="-30" x2="22" y2="-30" />
+        <!-- conclusion: square -->
+        <rect x="-12" y="-10" width="24" height="24" />
+      </g>
+      <text x="0" y="-50" text-anchor="middle" font-size="18" fill="#1f2937">v3</text>
+    </g>
+  </g>
+
+  <!-- Old ADR v1 being read (conclusion: circle) -->
+  <g transform="translate(120,170)">
+    <g stroke="#1f2937" stroke-width="2.4" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-58" y="-66" width="116" height="132" rx="4" />
+      <line x1="-40" y1="-44" x2="40" y2="-44" />
+      <!-- conclusion: circle (big) -->
+      <circle cx="0" cy="6" r="24" />
+    </g>
+    <text x="0" y="-46" text-anchor="middle" font-size="22" fill="#1f2937">v1</text>
+    <text x="0" y="86" text-anchor="middle" font-size="14" fill="#6b7280">最古の ADR</text>
+  </g>
+
+  <!-- arrow: v1 -> AI -->
+  <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <line x1="184" y1="170" x2="282" y2="170" marker-end="url(#ar)" />
+  </g>
+
+  <!-- AI robot -->
+  <g transform="translate(340,170)">
+    <g stroke="#1f2937" stroke-width="2.4" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-38" y="-44" width="76" height="64" rx="6" />
+      <line x1="0" y1="-58" x2="0" y2="-44" />
+      <circle cx="0" cy="-58" r="4" />
+      <circle cx="-14" cy="-22" r="5" />
+      <circle cx="14" cy="-22" r="5" />
+      <line x1="-12" y1="-2" x2="12" y2="-2" />
+    </g>
+    <text x="0" y="42" text-anchor="middle" font-size="14" fill="#6b7280">AI エージェント</text>
+  </g>
+
+  <!-- speech bubble pointing back to AI (tail on the left), conclusion: circle (= same as v1) -->
+  <g transform="translate(478,170)">
+    <g stroke="#1f2937" stroke-width="2.4" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M-30,-30 L40,-30 L40,30 L-30,30 L-30,10 L-46,0 L-30,-10 z" />
+      <circle cx="6" cy="0" r="16" />
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300" font-family="'Caveat', 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive">
+  <defs>
+  </defs>
+
+  <rect width="560" height="300" fill="#faf8f1" rx="10" />
+
+  <!-- ground line -->
+  <g stroke="#1f2937" stroke-width="2" fill="none">
+    <line x1="40" y1="262" x2="520" y2="262" />
+  </g>
+
+  <!-- towering pile of docs/code on the right, leaning -->
+  <g transform="translate(380,262)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linejoin="round">
+      <!-- bottom thick stack -->
+      <rect x="-90" y="-22" width="180" height="22" />
+      <rect x="-86" y="-44" width="172" height="22" />
+      <!-- middle papers leaning slightly -->
+      <rect x="-72" y="-66" width="156" height="22" />
+      <rect x="-78" y="-88" width="160" height="22" />
+      <rect x="-66" y="-110" width="148" height="22" />
+      <!-- code lines on a couple of layers -->
+      <line x1="-60" y1="-32" x2="60" y2="-32" />
+      <line x1="-60" y1="-22" x2="40" y2="-22" />
+      <line x1="-50" y1="-54" x2="60" y2="-54" />
+      <line x1="-50" y1="-76" x2="20" y2="-76" />
+      <line x1="-50" y1="-98" x2="50" y2="-98" />
+      <!-- tilting tower top -->
+      <g transform="rotate(-6)">
+        <rect x="-58" y="-132" width="138" height="22" />
+        <rect x="-46" y="-154" width="124" height="22" />
+        <rect x="-32" y="-176" width="106" height="22" />
+        <rect x="-16" y="-198" width="80" height="22" />
+        <rect x="-2" y="-218" width="50" height="20" />
+      </g>
+    </g>
+  </g>
+
+  <!-- onlookers: human, human, robot - tiny, looking up -->
+  <!-- human 1 -->
+  <g transform="translate(110,262)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="0" cy="-58" r="10" />
+      <line x1="0" y1="-48" x2="0" y2="-18" />
+      <line x1="0" y1="-38" x2="-12" y2="-22" />
+      <line x1="0" y1="-38" x2="12" y2="-22" />
+      <line x1="0" y1="-18" x2="-10" y2="0" />
+      <line x1="0" y1="-18" x2="10" y2="0" />
+    </g>
+  </g>
+
+  <!-- human 2 -->
+  <g transform="translate(150,262)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="0" cy="-54" r="9" />
+      <line x1="0" y1="-45" x2="0" y2="-16" />
+      <line x1="0" y1="-36" x2="-10" y2="-22" />
+      <line x1="0" y1="-36" x2="10" y2="-22" />
+      <line x1="0" y1="-16" x2="-9" y2="0" />
+      <line x1="0" y1="-16" x2="9" y2="0" />
+    </g>
+  </g>
+
+  <!-- robot -->
+  <g transform="translate(192,262)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="-10" y="-62" width="20" height="18" rx="2" />
+      <line x1="0" y1="-66" x2="0" y2="-62" />
+      <circle cx="0" cy="-68" r="2" />
+      <rect x="-9" y="-44" width="18" height="22" />
+      <line x1="-9" y1="-32" x2="-18" y2="-22" />
+      <line x1="9" y1="-32" x2="18" y2="-22" />
+      <line x1="-6" y1="-22" x2="-6" y2="0" />
+      <line x1="6" y1="-22" x2="6" y2="0" />
+    </g>
+  </g>
+
+  <!-- "..." above the onlookers -->
+  <g fill="#1f2937">
+    <circle cx="142" cy="172" r="3" />
+    <circle cx="155" cy="172" r="3" />
+    <circle cx="168" cy="172" r="3" />
+  </g>
+
+  <!-- ascending soul: a burned-out autonomous human rising to the sky -->
+  <g transform="translate(150,70)">
+    <g stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- halo -->
+      <ellipse cx="0" cy="-22" rx="13" ry="4.5" />
+      <!-- head -->
+      <circle cx="0" cy="-12" r="8" />
+      <!-- body -->
+      <line x1="0" y1="-4" x2="0" y2="20" />
+      <!-- arms gently up -->
+      <line x1="0" y1="4" x2="-12" y2="-4" />
+      <line x1="0" y1="4" x2="12" y2="-4" />
+      <!-- legs trailing -->
+      <line x1="0" y1="20" x2="-7" y2="34" />
+      <line x1="0" y1="20" x2="7" y2="34" />
+      <!-- wings -->
+      <path d="M-8,2 Q-22,-8 -28,8 Q-18,12 -8,8" />
+      <path d="M8,2 Q22,-8 28,8 Q18,12 8,8" />
+    </g>
+    <!-- shimmer dots around -->
+    <g fill="#1f2937">
+      <circle cx="-22" cy="-26" r="1.5" />
+      <circle cx="20" cy="-30" r="1.5" />
+      <circle cx="-30" cy="20" r="1.5" />
+      <circle cx="28" cy="22" r="1.5" />
+      <circle cx="0" cy="-40" r="1.5" />
+    </g>
+  </g>
+
+</svg>
