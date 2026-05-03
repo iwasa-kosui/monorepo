@@ -24,12 +24,14 @@ draft: true
 
 ```mermaid
 stateDiagram-v2
+  state "checked-in" as checkedIn
+  state "in-examination" as inExamination
   [*] --> scheduled
-  scheduled --> checked-in
-  checked-in --> in-examination
-  in-examination --> paid
+  scheduled --> checkedIn
+  checkedIn --> inExamination
+  inExamination --> paid
   scheduled --> canceled
-  checked-in --> canceled
+  checkedIn --> canceled
   paid --> [*]
   canceled --> [*]
 ```
