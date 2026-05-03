@@ -22,12 +22,16 @@ draft: true
 
 正規の遷移を改めて図にすると次のようになります。
 
-```
-scheduled ──→ checked-in ──→ in-examination ──→ paid
-   │              │
-   └─────┬────────┘
-         ↓
-      canceled
+```mermaid
+stateDiagram-v2
+  [*] --> scheduled
+  scheduled --> checked-in
+  checked-in --> in-examination
+  in-examination --> paid
+  scheduled --> canceled
+  checked-in --> canceled
+  paid --> [*]
+  canceled --> [*]
 ```
 
 ## 既存コードを動かしてみる
