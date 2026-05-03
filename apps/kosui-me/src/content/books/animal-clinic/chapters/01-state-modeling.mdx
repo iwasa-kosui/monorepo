@@ -23,17 +23,17 @@ draft: true
 正規の遷移を改めて図にすると次のようになります。
 
 ```mermaid
-stateDiagram-v2
-  state "checked-in" as checkedIn
-  state "in-examination" as inExamination
-  [*] --> scheduled
-  scheduled --> checkedIn
-  checkedIn --> inExamination
-  inExamination --> paid
-  scheduled --> canceled
-  checkedIn --> canceled
-  paid --> [*]
-  canceled --> [*]
+flowchart LR
+    scheduled["scheduled"]
+    checkedIn["checked-in"]
+    inExamination["in-examination"]
+    paid["paid"]
+    canceled["canceled"]
+    scheduled --> checkedIn
+    checkedIn --> inExamination
+    inExamination --> paid
+    scheduled --> canceled
+    checkedIn --> canceled
 ```
 
 ## 既存コードを動かしてみる
