@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 280" font-family="'Caveat', 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1f2937" />
+    </marker>
+  </defs>
+
+  <rect width="560" height="280" fill="#faf8f1" rx="10" />
+
+  <!-- top concept bubble -->
+  <g transform="translate(280,46)">
+    <g stroke="#1f2937" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="0" cy="0" rx="100" ry="30" />
+    </g>
+    <text x="0" y="8" text-anchor="middle" font-size="24" fill="#1f2937">「ユーザー名」</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <line x1="220" y1="70" x2="105" y2="135" marker-end="url(#ar)" />
+    <line x1="280" y1="78" x2="280" y2="135" marker-end="url(#ar)" />
+    <line x1="340" y1="70" x2="455" y2="135" marker-end="url(#ar)" />
+  </g>
+
+  <!-- product A: email -> "@" symbol -->
+  <g transform="translate(105,200)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-72" y="-50" width="144" height="100" rx="6" />
+      <!-- envelope -->
+      <rect x="-40" y="-22" width="80" height="50" rx="3" />
+      <path d="M-40,-22 L0,12 L40,-22" />
+    </g>
+    <text x="0" y="76" text-anchor="middle" font-size="16" fill="#6b7280">プロダクト A</text>
+  </g>
+
+  <!-- product B: display name -->
+  <g transform="translate(280,200)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-72" y="-50" width="144" height="100" rx="6" />
+    </g>
+    <text x="0" y="10" text-anchor="middle" font-size="34" fill="#1f2937">田中</text>
+    <text x="0" y="76" text-anchor="middle" font-size="16" fill="#6b7280">プロダクト B</text>
+  </g>
+
+  <!-- product C: handle id -> # number -->
+  <g transform="translate(455,200)">
+    <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-72" y="-50" width="144" height="100" rx="6" />
+    </g>
+    <text x="0" y="10" text-anchor="middle" font-size="30" fill="#1f2937">u_001234</text>
+    <text x="0" y="76" text-anchor="middle" font-size="16" fill="#6b7280">プロダクト C</text>
+  </g>
+</svg>

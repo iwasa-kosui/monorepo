@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 260" font-family="'Caveat', 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive">
+  <rect width="560" height="260" fill="#faf8f1" rx="10" />
+
+  <!-- Row 1 -->
+  <g transform="translate(80,80)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">機能適合性</text>
+  </g>
+  <g transform="translate(200,80)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">性能効率性</text>
+  </g>
+  <g transform="translate(320,80)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="#fde68a" stroke="#1f2937" stroke-width="2.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#1f2937" font-weight="bold">信頼性</text>
+  </g>
+  <g transform="translate(440,80)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">互換性</text>
+  </g>
+
+  <!-- Row 2 -->
+  <g transform="translate(80,170)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">使用性</text>
+  </g>
+  <g transform="translate(200,170)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="#fde68a" stroke="#1f2937" stroke-width="2.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#1f2937" font-weight="bold">セキュリティ</text>
+  </g>
+  <g transform="translate(320,170)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">保守性</text>
+  </g>
+  <g transform="translate(440,170)">
+    <rect x="-50" y="-26" width="100" height="52" rx="4" fill="none" stroke="#9ca3af" stroke-width="1.6" />
+    <text x="0" y="6" text-anchor="middle" font-size="14" fill="#9ca3af">移植性</text>
+  </g>
+</svg>
+

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" font-family="'Caveat', 'Comic Sans MS', 'Marker Felt', 'Bradley Hand', cursive">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1f2937" />
+    </marker>
+    <marker id="ar2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" fill="#1f2937" />
+    </marker>
+  </defs>
+
+  <rect width="640" height="220" fill="#faf8f1" rx="10" />
+
+  <!-- baseline arrow -->
+  <g stroke="#1f2937" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <line x1="60" y1="180" x2="580" y2="180" marker-end="url(#ar)" />
+  </g>
+  <text x="60" y="206" font-size="16" fill="#6b7280">低</text>
+  <text x="572" y="206" text-anchor="end" font-size="16" fill="#6b7280">デリバリ性能：高 →</text>
+
+  <!-- pathological: rigid lattice grid -->
+  <g transform="translate(130,80)">
+    <rect x="-65" y="-50" width="130" height="100" rx="6" fill="none" stroke="#1f2937" stroke-width="2.2" />
+    <g stroke="#1f2937" stroke-width="1.6" fill="none">
+      <line x1="-43.3" y1="-50" x2="-43.3" y2="50" />
+      <line x1="-21.7" y1="-50" x2="-21.7" y2="50" />
+      <line x1="0" y1="-50" x2="0" y2="50" />
+      <line x1="21.7" y1="-50" x2="21.7" y2="50" />
+      <line x1="43.3" y1="-50" x2="43.3" y2="50" />
+      <line x1="-65" y1="-30" x2="65" y2="-30" />
+      <line x1="-65" y1="-10" x2="65" y2="-10" />
+      <line x1="-65" y1="10" x2="65" y2="10" />
+      <line x1="-65" y1="30" x2="65" y2="30" />
+    </g>
+    <text x="0" y="74" text-anchor="middle" font-size="22" fill="#1f2937">病的</text>
+  </g>
+
+  <!-- bureaucratic: octagons packed with small gaps -->
+  <g transform="translate(330,80)">
+    <rect x="-65" y="-50" width="130" height="100" rx="6" fill="none" stroke="#1f2937" stroke-width="2.2" />
+    <g stroke="#1f2937" stroke-width="1.5" fill="none" stroke-linejoin="round">
+      <!-- row 1 y=-37.5, apothem 11, t=4.56 -->
+      <path d="M-56.44,-48.5 L-47.56,-48.5 L-41,-42.94 L-41,-32.06 L-47.56,-26.5 L-56.44,-26.5 L-63,-32.06 L-63,-42.94 Z" />
+      <path d="M-30.44,-48.5 L-21.56,-48.5 L-15,-42.94 L-15,-32.06 L-21.56,-26.5 L-30.44,-26.5 L-37,-32.06 L-37,-42.94 Z" />
+      <path d="M-4.44,-48.5 L4.44,-48.5 L11,-42.94 L11,-32.06 L4.44,-26.5 L-4.44,-26.5 L-11,-32.06 L-11,-42.94 Z" />
+      <path d="M21.56,-48.5 L30.44,-48.5 L37,-42.94 L37,-32.06 L30.44,-26.5 L21.56,-26.5 L15,-32.06 L15,-42.94 Z" />
+      <path d="M47.56,-48.5 L56.44,-48.5 L63,-42.94 L63,-32.06 L56.44,-26.5 L47.56,-26.5 L41,-32.06 L41,-42.94 Z" />
+      <!-- row 2 y=-12.5 -->
+      <path d="M-56.44,-23.5 L-47.56,-23.5 L-41,-17.94 L-41,-7.06 L-47.56,-1.5 L-56.44,-1.5 L-63,-7.06 L-63,-17.94 Z" />
+      <path d="M-30.44,-23.5 L-21.56,-23.5 L-15,-17.94 L-15,-7.06 L-21.56,-1.5 L-30.44,-1.5 L-37,-7.06 L-37,-17.94 Z" />
+      <path d="M-4.44,-23.5 L4.44,-23.5 L11,-17.94 L11,-7.06 L4.44,-1.5 L-4.44,-1.5 L-11,-7.06 L-11,-17.94 Z" />
+      <path d="M21.56,-23.5 L30.44,-23.5 L37,-17.94 L37,-7.06 L30.44,-1.5 L21.56,-1.5 L15,-7.06 L15,-17.94 Z" />
+      <path d="M47.56,-23.5 L56.44,-23.5 L63,-17.94 L63,-7.06 L56.44,-1.5 L47.56,-1.5 L41,-7.06 L41,-17.94 Z" />
+      <!-- row 3 y=12.5 -->
+      <path d="M-56.44,1.5 L-47.56,1.5 L-41,7.06 L-41,17.94 L-47.56,23.5 L-56.44,23.5 L-63,17.94 L-63,7.06 Z" />
+      <path d="M-30.44,1.5 L-21.56,1.5 L-15,7.06 L-15,17.94 L-21.56,23.5 L-30.44,23.5 L-37,17.94 L-37,7.06 Z" />
+      <path d="M-4.44,1.5 L4.44,1.5 L11,7.06 L11,17.94 L4.44,23.5 L-4.44,23.5 L-11,17.94 L-11,7.06 Z" />
+      <path d="M21.56,1.5 L30.44,1.5 L37,7.06 L37,17.94 L30.44,23.5 L21.56,23.5 L15,17.94 L15,7.06 Z" />
+      <path d="M47.56,1.5 L56.44,1.5 L63,7.06 L63,17.94 L56.44,23.5 L47.56,23.5 L41,17.94 L41,7.06 Z" />
+      <!-- row 4 y=37.5 -->
+      <path d="M-56.44,26.5 L-47.56,26.5 L-41,32.06 L-41,42.94 L-47.56,48.5 L-56.44,48.5 L-63,42.94 L-63,32.06 Z" />
+      <path d="M-30.44,26.5 L-21.56,26.5 L-15,32.06 L-15,42.94 L-21.56,48.5 L-30.44,48.5 L-37,42.94 L-37,32.06 Z" />
+      <path d="M-4.44,26.5 L4.44,26.5 L11,32.06 L11,42.94 L4.44,48.5 L-4.44,48.5 L-11,42.94 L-11,32.06 Z" />
+      <path d="M21.56,26.5 L30.44,26.5 L37,32.06 L37,42.94 L30.44,48.5 L21.56,48.5 L15,42.94 L15,32.06 Z" />
+      <path d="M47.56,26.5 L56.44,26.5 L63,32.06 L63,42.94 L56.44,48.5 L47.56,48.5 L41,42.94 L41,32.06 Z" />
+    </g>
+    <text x="0" y="74" text-anchor="middle" font-size="22" fill="#1f2937">官僚的</text>
+  </g>
+
+  <!-- generative: spacious octagons with motion -->
+  <g transform="translate(530,80)">
+    <rect x="-65" y="-50" width="130" height="100" rx="6" fill="none" stroke="#1f2937" stroke-width="2.2" />
+    <g stroke="#1f2937" stroke-width="1.5" fill="none" stroke-linejoin="round">
+      <!-- 7 octagons, apothem 10, t=4.14 -->
+      <path d="M-46.14,-38 L-37.86,-38 L-32,-32.14 L-32,-23.86 L-37.86,-18 L-46.14,-18 L-52,-23.86 L-52,-32.14 Z" />
+      <path d="M-2.14,-40 L5.86,-40 L12,-33.86 L12,-25.86 L5.86,-20 L-2.14,-20 L-8,-25.86 L-8,-33.86 Z" />
+      <path d="M37.86,-30 L46.14,-30 L52,-23.86 L52,-15.86 L46.14,-10 L37.86,-10 L32,-15.86 L32,-23.86 Z" />
+      <path d="M-26.14,-4 L-17.86,-4 L-12,2.14 L-12,10.14 L-17.86,16 L-26.14,16 L-32,10.14 L-32,2.14 Z" />
+      <path d="M21.86,2 L30.14,2 L36,8.14 L36,16.14 L30.14,22 L21.86,22 L16,16.14 L16,8.14 Z" />
+      <path d="M-42.14,24 L-33.86,24 L-28,30.14 L-28,38.14 L-33.86,44 L-42.14,44 L-48,38.14 L-48,30.14 Z" />
+      <path d="M9.86,28 L18.14,28 L24,34.14 L24,42.14 L18.14,48 L9.86,48 L4,42.14 L4,34.14 Z" />
+    </g>
+    <!-- motion vectors -->
+    <g stroke="#1f2937" stroke-width="1.4" fill="none" stroke-linecap="round">
+      <line x1="-42" y1="-28" x2="-26" y2="-20" marker-end="url(#ar2)" />
+      <line x1="2" y1="-30" x2="18" y2="-24" marker-end="url(#ar2)" />
+      <line x1="42" y1="-20" x2="32" y2="-6" marker-end="url(#ar2)" />
+      <line x1="-22" y1="6" x2="-6" y2="14" marker-end="url(#ar2)" />
+      <line x1="26" y1="12" x2="42" y2="22" marker-end="url(#ar2)" />
+      <line x1="-38" y1="34" x2="-24" y2="44" marker-end="url(#ar2)" />
+      <line x1="14" y1="38" x2="30" y2="32" marker-end="url(#ar2)" />
+    </g>
+    <text x="0" y="74" text-anchor="middle" font-size="22" fill="#1f2937">生成的</text>
+  </g>
+</svg>
