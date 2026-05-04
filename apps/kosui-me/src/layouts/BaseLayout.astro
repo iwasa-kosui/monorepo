@@ -12,6 +12,7 @@ interface Props {
   ogUrl?: string;
   ogType?: string;
   oembedUrl?: string;
+  authorUrl?: string;
   noindex?: boolean;
   wide?: boolean;
 }
@@ -26,6 +27,7 @@ const {
   ogUrl,
   ogType = 'website',
   oembedUrl,
+  authorUrl,
   noindex = false,
   wide = false,
 } = Astro.props;
@@ -114,6 +116,7 @@ const navItems = [
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <link rel="canonical" href={canonicalUrl} />
+    {authorUrl && <link rel="author" href={authorUrl} />}
     {ogUrl && <meta property="og:url" content={ogUrl} />}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={displayOgTitle} />
