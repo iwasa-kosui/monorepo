@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180" width="200" height="180"
+     font-family="'Caveat','Comic Sans MS',cursive"
+     stroke-linecap="round" stroke-linejoin="round">
+  <defs>
+    <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="3" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.8"/>
+    </filter>
+    <filter id="rough-soft" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#rough-soft)">
+    <text x="135" y="38" font-size="36" font-weight="bold" fill="#e03131" transform="rotate(8 145 32)">?</text>
+    <text x="162" y="78" font-size="26" font-weight="bold" fill="#e03131" transform="rotate(-15 170 72)">?</text>
+    <text x="5" y="42" font-size="30" font-weight="bold" fill="#e03131" transform="rotate(-10 19 36)">?</text>
+    <text x="2" y="120" font-size="22" font-weight="bold" fill="#e03131" transform="rotate(15 14 114)">?</text>
+  </g>
+
+  <g filter="url(#rough)">
+    <path d="M 30 88
+             C 26 58, 50 36, 78 36
+             C 106 35, 124 58, 125 88
+             C 125 116, 100 135, 72 134
+             C 46 132, 28 116, 30 88 Z"
+          fill="none" stroke="#1e1e1e" stroke-width="2.5"/>
+
+    <path d="M 54 76
+             C 53 72, 61 72, 63 76
+             C 65 81, 60 84, 56 82
+             C 53 80, 53 78, 54 76 Z"
+          fill="#1e1e1e"/>
+    <path d="M 88 76
+             C 87 72, 95 72, 96 76
+             C 98 81, 93 84, 89 82
+             C 86 80, 86 78, 88 76 Z"
+          fill="#1e1e1e"/>
+
+    <path d="M 48 108
+             C 54 102, 60 104, 65 110
+             C 70 116, 75 116, 79 110
+             C 84 103, 89 102, 94 108
+             C 99 113, 102 113, 104 110"
+          fill="none" stroke="#1e1e1e" stroke-width="2.8"/>
+
+    <g transform="translate(142, 132)">
+      <path d="M 0 9
+               C 2 6, 4 5, 7 5
+               C 16 3, 30 3, 38 6
+               C 41 7, 43 8, 42 11
+               C 41 22, 40 32, 38 39
+               C 37 43, 34 45, 30 45
+               L 12 45
+               C 8 45, 5 43, 4 39
+               C 2 32, 1 22, 0 9 Z"
+            fill="#ffffff" stroke="#1e1e1e" stroke-width="2"/>
+      <path d="M 4 10
+               C 12 7, 24 6, 38 10
+               C 28 13, 14 14, 4 10 Z"
+            fill="#3d2817" stroke="#1e1e1e" stroke-width="1.5"/>
+      <path d="M 42 18
+               C 51 17, 58 22, 58 30
+               C 58 38, 51 41, 42 39"
+            fill="none" stroke="#1e1e1e" stroke-width="2"/>
+      <text x="11" y="30" font-size="12" font-weight="bold" fill="#1e1e1e">Java</text>
+      <path d="M 13 1
+               C 16 -4, 11 -8, 13 -13
+               C 14 -16, 12 -19, 13 -22"
+            fill="none" stroke="#888" stroke-width="1.5"/>
+      <path d="M 28 1
+               C 31 -4, 26 -8, 28 -13
+               C 29 -16, 27 -19, 28 -22"
+            fill="none" stroke="#888" stroke-width="1.5"/>
+    </g>
+  </g>
+</svg>
