@@ -64,12 +64,12 @@ const markdownUrl = `/${post.data.slug}.md`;
       >
         {post.data.title}
       </h1>
-      <div class="mb-4">
-        <MarkdownSourceLink href={markdownUrl} />
-      </div>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <AuthorCard compact />
         {!isPrivate && <ShareButtons title={post.data.title} url={pageUrl} />}
+      </div>
+      <div class="mt-4">
+        <MarkdownSourceLink href={markdownUrl} />
       </div>
     </header>
     {
