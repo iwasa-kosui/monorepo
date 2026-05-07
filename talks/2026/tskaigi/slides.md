@@ -74,14 +74,181 @@ X: @kosui_me
 
 ---
 
+# 本題の前に、3問のクイズ
+
+- Java や C# 経験者の直感を試す3問
+- 答えは30分の中で出る
+
+<!--
+本題に入る前に、ウォームアップとして3問のクイズを出します。短いコードを3つお見せしますので、JavaやC#の経験を思い出しながら、想定通りか、何か違うかを心の中で答えてみてください。3問の答えはこの後の30分ですべて明かされます。
+-->
+
+---
+
+# Q1. このコード、コンパイルは通る？
+
+```typescript
+class User { name = "" }
+class Product { name = "" }
+
+const greet = (u: User) => `Hello, ${u.name}`;
+
+console.log(greet(new Product()));
+```
+
+<div class="mt-4 text-base">
+
+- **A.** コンパイル時に型エラー
+- **B.** コンパイルも実行も通る
+- **C.** 実行時に TypeError
+
+</div>
+
+<!--
+1問目です。UserとProductは別のクラスですが、Userを受け取る関数greetにProductを渡しています。JavaやC#なら確実にコンパイルエラーですが、TypeScriptはA・B・Cのどれでしょうか。
+-->
+
+---
+
+# Q1の答え: B. 通る
+
+```text
+Hello, 
+```
+
+<div class="grid grid-cols-[1fr_auto] gap-8 mt-6 items-center">
+
+<MessageBox>
+
+同じ構造でも別クラスは別の型のはず。<br/>なぜ TypeScript は通すんだ？
+
+</MessageBox>
+
+<img src="./puzzled-java-dev.svg" class="w-32" alt="不思議がる Java 開発者" />
+
+</div>
+
+<!--
+答えはBです。型エラーは出ず、実行も通って Hello, 空文字 と出力されます。同じ構造の異なるクラスを、TypeScriptは区別しません。Java開発者なら誰しもが「えっ？」となるところです。
+-->
+
+---
+
+# Q2. このコード、実行すると何が起きる？
+
+```typescript
+class Uploader {
+  storage = "/tmp";
+  upload() { console.log(this.storage) }
+}
+
+const fn = new Uploader().upload;
+fn();
+```
+
+<div class="mt-4 text-base">
+
+- **A.** 正常に出力される
+- **B.** undefined と表示される
+- **C.** TypeError で実行時エラー
+
+</div>
+
+<!--
+2問目です。Uploaderクラスのuploadメソッドを変数fnに代入してから呼び出しています。コールバックに渡す場面で日常的に発生するパターンです。実行すると何が起きるでしょうか。
+-->
+
+---
+
+# Q2の答え: C. TypeError
+
+```text
+TypeError: Cannot read properties of undefined (reading 'storage')
+```
+
+<div class="grid grid-cols-[1fr_auto] gap-8 mt-6 items-center">
+
+<MessageBox>
+
+メソッドを変数に入れても this は固定のはず。<br/>なぜ undefined になる？
+
+</MessageBox>
+
+<img src="./puzzled-java-dev.svg" class="w-32" alt="不思議がる Java 開発者" />
+
+</div>
+
+<!--
+答えはCです。実行するとTypeErrorが投げられます。メソッドを変数経由で呼んだだけで this が消える、Java開発者にとっては想像もしない挙動です。
+-->
+
+---
+
+# Q3. このコード、`"setter!"` は表示される？
+
+```typescript
+class Base {
+  set x(v: number) {
+    console.log("setter!", v);
+  }
+}
+
+class Sub extends Base {
+  x = 42;
+}
+
+new Sub();
+```
+
+<div class="mt-4 text-base">
+
+- **A.** 親の setter が呼ばれる
+- **B.** 親の setter は呼ばれない
+- **C.** tsconfig の設定で変わる
+
+</div>
+
+<!--
+3問目です。BaseクラスにxのsetterがあるところをSubクラスでフィールドとして上書きしています。JavaやC#ならsetterが呼ばれそうですが、TypeScriptはどうでしょうか。なぜそうなるのかが本丸です。
+-->
+
+---
+
+# Q3の答え: C. 設定で変わる
+
+| `useDefineForClassFields` | 結果 |
+|---|---|
+| `false` | 親の setter が呼ばれる |
+| `true` | 呼ばれない |
+
+<div class="grid grid-cols-[1fr_auto] gap-8 mt-6 items-center">
+
+<MessageBox>
+
+コンパイラ設定で同じコードの挙動が変わる？<br/>言語仕様としてどうなんだ
+
+</MessageBox>
+
+<img src="./puzzled-java-dev.svg" class="w-32" alt="不思議がる Java 開発者" />
+
+</div>
+
+<!--
+答えはCです。useDefineForClassFieldsというtsconfigフラグで挙動が変わります。同じコードがコンパイラ設定で別の動きをする、Java開発者なら受け入れがたい状況です。なぜこんな状況になったのでしょうか。
+-->
+
+---
+
 # 本日の構成
 
-1. **歴史篇** — TypeScriptとECMAScriptのclassの「追いかけっこ」
-2. **落とし穴篇** — 4つの落とし穴がなぜ生まれるのか
+1. **歴史篇** — TypeScriptとECMAScriptのclassの「追いかけっこ」（Q3の答え）
+2. **落とし穴篇** — 4つの落とし穴がなぜ生まれるのか（Q1・Q2の答え）
 3. **対策篇** — classと付き合う現実的な方法
 
 <!--
-本日は3部構成です。まず歴史篇でTypeScriptのclassがなぜ今の形になったかを追います。次に落とし穴篇で、開発者が遭遇する4つの落とし穴がなぜ生まれるのか、その仕組みを根本原因から整理します。最後に対策篇で、フレームワークがclassを要求する現実の中で、各落とし穴にどう対処するかを示します。
+本日は3部構成です。まず歴史篇でTypeScriptのclassがなぜ今の形になったかを追います。ここでQ3の答えが出ます。
+次に落とし穴篇で、開発者が遭遇する4つの落とし穴がなぜ生まれるのか、その仕組みを根本原因から整理します。Q1とQ2の答えはここで出ます。
+最後に対策篇で、フレームワークがclassを要求する現実の中で、各落とし穴にどう対処するかを示します。
 -->
 
 ---
