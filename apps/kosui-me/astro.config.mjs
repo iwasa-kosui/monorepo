@@ -14,7 +14,7 @@ const integrations = [
   }),
   react(),
   sitemap({
-    filter: (page) => !page.includes('/reports'),
+    filter: (page) => !page.includes('/reports') && !page.endsWith('.md'),
   }),
 ];
 

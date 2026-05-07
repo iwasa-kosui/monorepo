@@ -1,5 +1,6 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
+import MarkdownSourceLink from '@/components/MarkdownSourceLink.astro';
 import RelatedArticles from '@/components/RelatedArticles.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
 import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
@@ -32,6 +33,7 @@ function formatDate(dateStr: string): string {
 const slugFileName = post.data.slug.replace(/\//g, '-');
 const ogImage = `https://kosui.me/og/${slugFileName}.png`;
 const pageUrl = `https://kosui.me/${post.data.slug}`;
+const markdownUrl = `/${post.data.slug}.md`;
 ---
 
 <BaseLayout
@@ -64,7 +66,10 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
       </h1>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <AuthorCard compact />
-        {!isPrivate && <ShareButtons title={post.data.title} url={pageUrl} />}
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+          <MarkdownSourceLink href={markdownUrl} />
+          {!isPrivate && <ShareButtons title={post.data.title} url={pageUrl} />}
+        </div>
       </div>
     </header>
     {
@@ -81,8 +86,16 @@ const pageUrl = `https://kosui.me/${post.data.slug}`;
     </div>
     {
       !isPrivate && (
-        <section class="mt-12">
+        <section class="mt-12 flex flex-col items-center gap-4">
           <ShareButtons title={post.data.title} url={pageUrl} />
+          <MarkdownSourceLink href={markdownUrl} />
+        </section>
+      )
+    }
+    {
+      isPrivate && (
+        <section class="mt-12 flex justify-center">
+          <MarkdownSourceLink href={markdownUrl} />
         </section>
       )
     }
