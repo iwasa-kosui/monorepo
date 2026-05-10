@@ -1,0 +1,197 @@
+---
+title: "AIエージェントスキル管理の最新動向: gh skills / Microsoft Waza / Anthropic Skills"
+date: "2026-05-10T12:00:00+09:00"
+slug: "2026/05/10/ai-agent-skills-management"
+description: "GitHub CLI の gh skill、Microsoft Waza、Anthropic Skills が SKILL.md オープン仕様 (agentskills.io) のもとで連携し、AIエージェントのスキル配布・評価・ガバナンス基盤が2026年4〜5月にかけて急速に整備された動向を整理した。"
+themes: ["AI", "AIエージェント", "Skills"]
+---
+
+2026年4〜5月にかけて、AIエージェントの「スキル」管理は大きな転換点を迎えた。Anthropic 発の `SKILL.md` 形式が agentskills.io オープン仕様としてGitHub・Microsoft・OpenAI などに採用され、`gh skill` という GitHub 公式CLI、Microsoft の評価フレームワーク Waza、Anthropic 公式 skill-creator の eval 機能が同時期にリリースされた。スキル配布のパッケージマネージャ化と、CIによる品質ゲート、エンタープライズガバナンスが揃いつつあるのが現在地である。
+
+本レポートは、Agent Skills 標準仕様、`gh skill` CLI、Microsoft Waza、Claude Code エコシステム、レジストリとガバナンスの5軸で2026年5月時点の最新動向を整理する。
+
+## Agent Skills オープン仕様
+
+### SKILL.md フォーマットの事実上の標準化
+
+スキルは YAML フロントマターを持つ Markdown ファイル `SKILL.md` を中心とするディレクトリで構成される。Anthropic が提唱したフォーマットが、Claude Code・OpenAI Codex・Cursor・Gemini CLI・Mastra など30以上のツールに採用され、agentskills.io がオープンスタンダードとして公開されている。エージェントはまず description 等のメタデータのみ読み込み、必要時に本文を展開するプログレッシブ・ディスクロージャー方式でコンテキスト消費を最小化する。
+
+- [Agent Skills Specification](https://agentskills.io/specification)
+- [Claude Agent Skills 概要](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+- [agentskills/agentskills 仕様リポジトリ](https://github.com/agentskills/agentskills)
+
+### 関連スキーマと協調
+
+AGENTS.md / CLAUDE.md がリポジトリ全体の挙動を定義するのに対し、SKILL.md は個別スキルの指示書というスコープの違いがある。AGNTCY が管理する OASF (Open Agentic Schema Framework) はスキルのケイパビリティをスキーマ化し、A2A や MCP と組み合わせてエージェント間のスキル発見を可能にする上位レイヤである。
+
+- [AGNTCY OASF](https://github.com/agntcy/oasf)
+- [Open Agent Format (OAF)](https://openagentformat.com/)
+
+## gh skill (GitHub CLI)
+
+### パブリックプレビュー開始
+
+GitHub CLI v2.90.0 で `gh skill` コマンドがコア機能として追加され、2026年4月16日にパブリックプレビューになった。`npm install` 相当の体験を Agent Skills に持ち込むことを掲げている。
+
+- [Manage agent skills with GitHub CLI (2026-04-16)](https://github.blog/changelog/2026-04-16-manage-agent-skills-with-github-cli/)
+- [gh skill 公式マニュアル](https://cli.github.com/manual/gh_skill)
+- [GitHub Release v2.90.0](https://github.com/cli/cli/releases/tag/v2.90.0)
+
+### サブコマンドと運用機能
+
+| サブコマンド | 役割 |
+|---|---|
+| `gh skill install OWNER/REPO SKILL` | 任意リポジトリからのインストール |
+| `gh skill search <query>` | パブリックスキル検索 |
+| `gh skill preview` | インストール前の内容確認（セキュリティチェック推奨） |
+| `gh skill update` | 更新 |
+| `gh skill publish` | agentskills.io 仕様への準拠検証＋公開 |
+
+`--pin v1.2.0` または commit SHA でバージョン固定でき、固定済みは `update` でスキップされる。インストール時に SKILL.md フロントマターに「リポジトリ・ref・tree SHA」のプロベナンス情報が書き込まれ、差分検知と監査に利用される。`--agent claude-code` などで配置先（`.claude/skills/`、`.github/skills/`、`.agents/skills/`）を切り替える。
+
+スキルは GitHub 側の検証を経ていないため、プロンプトインジェクションや悪意ある命令を含む可能性があり、`gh skill preview` での内容確認が公式に推奨されている。
+
+- [About agent skills (GitHub Docs)](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)
+- [gh skill install マニュアル](https://cli.github.com/manual/gh_skill_install)
+
+## Microsoft Waza
+
+### コンセプトと位置付け
+
+Waza は MIT ライセンスの Go 製 CLI で、スキルの作成・テスト・評価・改善を担うフレームワークである。LangGraph や CrewAI のようなエージェント実行基盤ではなく、スキルの「品質保証・テスト基盤」というレイヤに特化している点が独自性で、Microsoft 公式スキルカタログ `microsoft/skills` の CI 品質ゲートとしても運用されている。
+
+- [microsoft/waza](https://github.com/microsoft/waza)
+- [microsoft/skills (Agent Skills カタログ)](https://github.com/microsoft/skills)
+
+### 主要コマンドと機能
+
+- `waza init` でプロジェクト雛形（`skills/`、`evals/` 構造）を生成
+- `waza run <skill>` で評価実行（code/text/behavior/tool_calls 等のグレーダー）
+- `waza quality` で LLM-as-Judge によるスキル品質採点（v0.30.0〜）
+- `waza serve` で MCP サーバを内包起動
+- `waza models` で対応モデル一覧表示
+- `--baseline` フラグで A/B 比較、ペアワイズ LLM ジャッジに対応
+
+GitHub Actions 連携では `waza run eval/eval.yaml --verbose` で終了コード 0/1/2 が CI 判定に使える。
+
+### 直近1か月のリリース
+
+2026年4月21〜28日の1週間で v0.27 から v0.31 まで5バージョンが連続リリースされている。
+
+- v0.31.0 (4/28): カスタムエージェント（`.agent.md`）評価サポート、`BenchmarkSpec → EvalSpec` への用語変更
+- v0.30.0 (4/22): `waza quality`（LLM-as-Judge 採点）追加
+- v0.29.0 (4/22): タスク単位のスキルディレクトリ設定、`--keep-workspace` デバッグフラグ
+- v0.28.0 (4/21): `waza models`、フォローアッププロンプト（マルチターン評価）
+- v0.27.0 (4/21): `tool_calls` グレーダー、`max_response_time_ms`
+
+対応モデルは `claude-sonnet-4.6`（デフォルト）、`claude-sonnet-4.5`、`gpt-4o`、`gpt-4-turbo` 等が明記されている。Visual Studio 2026 v18.5（2026年4月）で Copilot がワークスペース内 SKILL.md を6箇所スキャンする機能とも組み合わさる。
+
+- [Waza Releases](https://github.com/microsoft/waza/releases)
+- [SKILLS_CI_INTEGRATION.md](https://github.com/microsoft/waza/blob/main/docs/SKILLS_CI_INTEGRATION.md)
+- [Visual Studio 2026 Copilot Agent Skills 解説](https://startdebugging.net/2026/04/visual-studio-2026-copilot-agent-skills/)
+
+## Claude Code / Anthropic Skills
+
+### SKILL.md フロントマターの拡張
+
+Claude Code のスキル仕様は2026年5月時点で次のフィールドが整理されている（全フィールドはオプション）。
+
+- `name` / `description` / `when_to_use`（自動発火トリガー、合計1,536文字上限）
+- `disable-model-invocation: true` で Claude による自動発火を禁止（`/deploy` 等の副作用操作向け）
+- `user-invocable: false` で `/` メニューから非表示
+- `allowed-tools` で実行中のツール事前承認
+- `context: fork` でサブエージェント隔離コンテキスト実行（`agent` フィールドで `Explore` / `Plan` / `general-purpose` 等を指定）
+- `paths` で glob による自動適用範囲限定
+- `model` / `effort` / `hooks` / `arguments` のスキルスコープ上書き
+- `` !`git diff HEAD` `` でシェル出力、`${CLAUDE_SKILL_DIR}` でディレクトリ参照を埋め込める
+
+既存の `.claude/commands/` ファイルはそのままスキルと同一視される後方互換が保たれている。
+
+- [Claude Code slash-commands ドキュメント](https://code.claude.com/docs/en/slash-commands)
+
+### 配布チャネル
+
+| チャネル | 形式 |
+|---|---|
+| プラグイン（推奨） | `marketplace.json` を持つ Git リポジトリ |
+| npm | プラグインを npm パッケージとして配布 |
+| Git / GitHub shorthand | `owner/repo`、SSH URL 等 |
+| ZIP アーカイブ | v2.1.128（2026/5/4-8）から `--plugin-dir` が `.zip`、`--plugin-url` を受け付け |
+| Managed settings | エンタープライズ向け一括展開 |
+| 公式ディレクトリ | `claude-plugins-official` から `/plugin install <name>@claude-plugins-official` |
+
+プラグイン配下のスキルは `plugin-name:skill-name` の名前空間で衝突回避され、モノレポでは `packages/frontend/.claude/skills/` のようなネスト検索も自動で行われる。
+
+- [Plugin Marketplaces](https://code.claude.com/docs/en/plugin-marketplaces)
+- [anthropics/skills](https://github.com/anthropics/skills)
+- [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official)
+
+### 直近1か月のアップデート
+
+- Week 19（5/4-8）: プラグインの `.zip` / URL ロード、hook が `$CLAUDE_EFFORT` 受信
+- Week 18（4/27-5/1）: `claude ultrareview` の CI 対応、Git Bash 不要化（PowerShell サポート）
+- Week 17（4/20-24）: `/ultrareview` のパブリックリサーチプレビュー、カスタムテーマプラグイン配布
+- Week 16（4/13-17）: Opus 4.7 デフォルト化、`xhigh` effort、Web 版 Routines（スケジュール実行クラウドエージェント）
+- Week 15（4/6-10）: Ultraplan 早期プレビュー、`/loop` の自己ペーシング対応
+
+- [Claude Code What's New](https://code.claude.com/docs/en/whats-new)
+
+### eval / 品質測定
+
+Anthropic 公式 skill-creator が Create / Eval / Improve / Benchmark の4モードを内包し、テストプロンプトと「良い出力の条件」を定義すれば合格率・トークン数・完了時間を自動測定する。description のトリガー精度を 60/40 の評価セット分割で最大5イテレーション自動最適化し、並列エージェントが独立コンテキストで eval を同時実行して結果汚染を防ぐ。
+
+- [Improving skill-creator: test, measure and refine agent skills](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
+
+### サードパーティ: superpowers
+
+obra/superpowers は GitHub スター約137,000のクロスプラットフォームスキルフレームワーク（最終更新 2026年4月7日）。Claude Code・Codex CLI・Gemini CLI・Cursor・GitHub Copilot CLI 等に対応し、`superpowers-lab`（実験的スキル）、`superpowers-skills`（コミュニティ編集）、`superpowers-marketplace`（キュレーテッド版）の派生リポジトリを持つ。
+
+- [obra/superpowers](https://github.com/obra/superpowers)
+
+## レジストリとマーケットプレイス
+
+### MCP / Smithery
+
+MCP 公式レジストリ（registry.modelcontextprotocol.io）が運営される一方、Smithery は MCP サーバーの DockerHub に相当する位置で7,000以上のサーバーを登録している。ただし2025年10月にパストラバーサル脆弱性が開示され、3,000以上のサーバーで API キー露出、上位100サーバーの22%にセキュリティ所見があるとの調査が出ており、レジストリ自体のサプライチェーン安全性が課題として浮上している。
+
+- [MCP Public Registry](https://registry.modelcontextprotocol.io/)
+- [Smithery](https://smithery.ai/)
+
+### JFrog Agent Skills Registry（2026年4月 GA）
+
+JFrog が Artifactory の延長として Agent Skills Registry を一般提供開始した。アップロード時にスキルをスキャン・署名し、脆弱性・悪意あるペイロード・コンプライアンスリスクを検出する。NVIDIA Agent Toolkit や NemoClaw との統合、ClawHub・OpenShell 互換も発表されている。
+
+- [JFrog Agent Skills Registry 紹介](https://jfrog.com/blog/agent-skills-new-ai-packages/)
+- [Cyber Technology Insights 紹介記事](https://cybertechnologyinsights.com/aiops/jfrog-launches-agent-skills-registry-to-secure-enterprise-ai-workflows/)
+
+### Continue Hub
+
+Continue.dev が提供するチーム向けプラットフォーム。モデル・ルール・プロンプト・MCP ツールを一元管理し、共通定義をチームに展開する。
+
+- [Continue Hub](https://www.continue.dev/hub)
+
+## エンタープライズガバナンス
+
+### GitHub Enterprise AI Controls（2026年2月 GA）
+
+エージェントのAI利用に対し、アドミンが権限管理・監査ログ・エージェントコントロールプレーンを操作できる機能が一般提供開始した。
+
+- [Enterprise AI Controls GA](https://github.blog/changelog/2026-02-26-enterprise-ai-controls-agent-control-plane-now-generally-available/)
+
+### 可視化と監視のギャップ
+
+2026年の Gravitee 調査ではエージェント間通信を完全可視化している組織は24.4%にとどまり、半数以上のエージェントがセキュリティ監視ゼロで稼働していると指摘されている。ツール呼び出し層のポリシー強制・リスクスコアリング・監査証跡が最大の欠落箇所で、ServiceNow Autonomous Security & Risk や Okta Secure Agentic Enterprise のようなエージェントID統合の動きが続く。
+
+- [ServiceNow AI Agent Governance (2026)](https://www.cxtoday.com/security-privacy-compliance/servicenow-ai-agent-governance-knowledge-2026/)
+- [Okta Secure Agentic Enterprise](https://www.okta.com/newsroom/press-releases/showcase-2026/)
+
+### エージェント間相互運用プロトコル
+
+2026年Q1時点で MCP（Anthropic→Linux Foundation）、A2A（Google→LF、JSON-RPC 2.0 over HTTPS、Agent Cards）、ACP（IBM BeeAI→LF、REST ベース）、ANP の4プロトコルが LF 傘下に集約されつつある。MCP/A2A の合同仕様が Q3 2026 に予定されており、これがプロトコル間ブリッジの最初の正式ステップとなる見込みである。現状、A2A エージェントから ACP エージェントへのネイティブ委譲は未整備。
+
+- [A2A Protocol 公式](https://a2a-protocol.org/latest/)
+- [MCP/A2A/ACP/ANP 比較サーベイ論文](https://arxiv.org/html/2505.02279v1)
+
+## まとめ
+
+2026年5月時点での AI エージェントスキル管理は、SKILL.md オープン仕様という共通土台のうえで「配布（gh skill / プラグインマーケットプレイス）・品質評価（Microsoft Waza / Anthropic skill-creator eval）・レジストリ（JFrog / Smithery / MCP公式）・ガバナンス（GitHub Enterprise AI Controls / Continue Hub）」が同時に立ち上がる構図にある。一方で Smithery 脆弱性事例や Gravitee 調査が示すとおり、レジストリのサプライチェーン安全性とランタイム可視化はまだ追いついていない。スキルを `gh skill install` で気軽に取り込める世界では、`gh skill preview` のような事前検証と Waza のような CI 品質ゲートの整備が、個人開発者にもチームにも要求されつつある。
