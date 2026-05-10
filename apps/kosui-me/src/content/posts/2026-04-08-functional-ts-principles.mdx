@@ -9,17 +9,19 @@ private: false
 ---
 ## 何を作ったか
 
-[functional-ts-principles](https://github.com/iwasa-kosui/functional-ts-principles) というコーディングエージェント向けスキルプラグインを公開しました。サーバーサイドTypeScriptで関数型ドメインモデリングを実践するための原則を、Claude CodeやCodexなどのエージェントに教え込むためのものです。
+[kamae-ts](https://github.com/iwasa-kosui/kamae-ts) というコーディングエージェント向けスキルプラグインを公開しました。サーバーサイドTypeScriptで関数型ドメインモデリングを実践するための原則を、Claude CodeやCodexなどのエージェントに教え込むためのものです。
 
 インストールは1コマンドで済みます。
 
 ```bash
-npx skills add iwasa-kosui/functional-ts-principles
+# gh の場合
+gh skill install iwasa-kosui/kamae-ts
+
+# npx の場合
+npx skills add iwasa-kosui/kamae-ts
 ```
 
-スキルは2つ構成になっています。コード生成用の `functional-ts` はドメインモデルや状態遷移ロジックを書く際にエージェントが従うべき原則を定義します。レビュー用の `functional-ts-review` は既存コードを原則に照らして検証します。
-
-また、それぞれ英語版と日本語版があります。日本語版は `functional-ts-ja`と`functional-ts-review`として提供されます。
+スキルは2つ構成になっています。コード生成用の `kamae` はドメインモデルや状態遷移ロジックを書く際にエージェントが従うべき原則を定義します。レビュー用の `kamae-review` は既存コードを原則に照らして検証します。
 
 ## なぜスキルという形にしたか
 
@@ -96,4 +98,4 @@ console.log(JSON.stringify(patient));
 
 ## 今後
 
-業務への本格的な適用はこれからです。スキルの原則自体はチーム内で実践してきたものですが、スキルという配布形態での運用はまだ始まったばかりです。実際に使ってみたフィードバックや、原則自体への改善提案があれば [GitHub](https://github.com/iwasa-kosui/functional-ts-principles) に寄せていただけると嬉しいです。
+業務への本格的な適用はこれからです。スキルの原則自体はチーム内で実践してきたものですが、スキルという配布形態での運用はまだ始まったばかりです。実際に使ってみたフィードバックや、原則自体への改善提案があれば [GitHub](https://github.com/iwasa-kosui/kamae-ts) に寄せていただけると嬉しいです。
