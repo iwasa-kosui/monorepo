@@ -1,0 +1,200 @@
+---
+title: "TypeScript / サーバサイド最新動向: TypeScript 7.0 Beta / Node.js 26 / Vite 8 / Drizzle v1"
+date: "2026-05-13T12:00:00+09:00"
+slug: "2026/05/13/typescript-server-side"
+description: "TypeScript 7.0 BetaのGoネイティブ実装、Node.js 26とBun 1.3 / Deno 2.7のランタイム競争、Vite 8 + Rolldownによるビルド刷新、Drizzle v1 RC / Prisma 7のRust-freeエンジンなど、2026年4〜5月のTSサーバサイド技術動向を整理した。"
+themes: ["TypeScript"]
+---
+
+2026年4〜5月は、TypeScriptサーバサイドにとって地殻変動の重なる時期となった。Goで書き直された TypeScript 7.0 Beta、Temporal API をデフォルト有効化した Node.js 26、Rolldown を統合した Vite 8、Rustエンジンを廃した Prisma 7、Drizzle ORM v1 RC、Hono v4.12 系のセキュリティ修正など、主要レイヤーが同時並行で大きな節目を通過している。横断的なトピックとして、Rust/Go 製ツールチェーンへの置き換えと、ランタイム標準への Temporal / Type Stripping の取り込みが特に目立つ。
+
+本レポートは TypeScript本体・型システム / JSランタイム / Webフレームワーク / ORM・データアクセス / API・ビルドツールの5軸で、2026年5月13日時点の動向を整理する。
+
+## TypeScript本体・型システム
+
+### TypeScript 7.0 Beta（tsgo / typescript-go）
+
+コンパイラ全体を Go で書き直したネイティブ実装が 2026年4月21日に Beta 公開された。型チェックロジックを 6.0 と構造的に同一に保ったまま約10倍の高速化を公称し、Bloomberg / Canva / Figma / Google / Notion / Slack / Vercel など大規模コードベースでの検証を経ている。`--checkers` / `--builders` フラグでファイル単位／プロジェクト単位の並列度を制御でき、`--singleThreaded` でデバッグ用の直列実行も可能。インストールは `npm install -D @typescript/native-preview@beta` で、コマンドは `tsgo`。
+
+- [Announcing TypeScript 7.0 Beta](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-beta/)
+- [Visual Studio Magazine](https://visualstudiomagazine.com/articles/2026/04/21/typescript-7-0-beta-arrives-on-go-based-foundation-with-10x-speed-claim.aspx)
+
+### TypeScript 6.0（最後の JS 実装）
+
+2026年3月23日リリース。7.0 への橋渡しと位置づけられ、`strict: true` / `module: esnext` / `target: es2025` / `types: []` がデフォルト化、Temporal API・`RegExp.escape`・`Map.getOrInsert` の型定義が追加された。`target: es5` / `--downlevelIteration` / `--moduleResolution node` / `--outFile` / `--baseUrl` 等は廃止扱いとなり、7.0 で完全削除される予定。移行支援用に `--stableTypeOrdering` フラグが用意されている。
+
+- [Announcing TypeScript 6.0](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/)
+
+### TC39 周辺
+
+Temporal API と Upsert（`Map.getOrInsert` 等）は2026年初頭に Stage 4 到達し、ランタイム側の取り込みが本格化した。一方 Types-as-Comments（Type Annotations proposal）は依然 Stage 1 のまま、2026年5月のTC39アジェンダにも掲載がない。Decorators は Stage 2.7 への進展を目指して 5月19-21日の会合で議論予定。
+
+- [tc39/proposals](https://github.com/tc39/proposals)
+- [TC39 2026/05 agenda](https://github.com/tc39/agendas/blob/main/2026/05.md)
+
+### ESLint v10 / typescript-eslint
+
+ESLint v10.0.0 は 2026年2月6日リリース（現行は v10.3.0）。`.eslintrc.*` と `.eslintignore` を完全廃止し flat config のみに、Node.js v20.19.0 未満を非サポート化、JSX 参照のスコープ分析対応で `no-unused-vars` の誤検出が解消した。typescript-eslint は v8.59.3（5月11日）で ESLint v8 / v9 / v10 を同時サポート。
+
+- [ESLint v10.0.0 released](https://eslint.org/blog/2026/02/eslint-v10.0.0-released/)
+- [typescript-eslint releases](https://github.com/typescript-eslint/typescript-eslint/releases)
+
+### Biome 2.4
+
+2026年2月10日リリース。styled-components / Emotion などCSS-in-JSのテンプレートリテラル内CSS・GraphQLの lint/format に対応し、Vue / Svelte の HTML パース精度を大幅改善。24個の nursery ルールが安定化した。2026年ロードマップでは SCSS 対応とクロス言語リント（JSX 内の未使用 CSS クラス検出等）が掲げられている。
+
+- [Biome v2.4](https://biomejs.dev/blog/biome-v2-4/)
+- [Biome Roadmap 2026](https://biomejs.dev/blog/roadmap-2026/)
+
+## JSランタイム
+
+### Node.js 26（Current、2026年5月5日）
+
+V8 14.6 と Undici 8.0.2 を搭載し、Temporal API がフラグ不要でデフォルト有効に。`Iterator.concat()` や `[Weak]Map.prototype.getOrInsert()` も取り込まれた。LTS 移行は2026年10月予定で、それまでの本番推奨は v24 系（Active LTS「Krypton」、2028年4月までサポート）。
+
+- [Node.js v26.0.0](https://nodejs.org/en/blog/release/v26.0.0)
+- [Node.js Releases](https://nodejs.org/en/about/previous-releases)
+
+### Node.js のTypeScript Type Stripping
+
+`--experimental-strip-types` は v22.6 以降デフォルト有効で、Stability 2（Stable）に到達した。Node.js 26 ではトランスフォーム前提だった `--experimental-transform-types` フラグが削除され、Enum / namespace（値あり）/ パラメータプロパティ / デコレータは引き続き tsx 等の外部ツールが必要となる。公式は `erasableSyntaxOnly: true` と `verbatimModuleSyntax: true` を推奨。`.tsx` と `tsconfig.json` の `paths` は非対応。
+
+- [Node.js TypeScript Support](https://nodejs.org/api/typescript.html)
+
+### Bun 1.3.12 / 1.3.13
+
+4月9日の v1.3.12 で `Bun.WebView`（内蔵ヘッドレスブラウザ）と `Bun.cron()` を追加。4月20日の v1.3.13 で `bun test` に `--isolate` / `--parallel` / `--shard` / `--changed` を導入し、`bun install` が tarball ストリーミング処理によりメモリ使用量を 1/17 に削減、`--linker=isolated` でモノレポ install 時間を 20.5秒 → 2.4秒に短縮した。gzip は zlib-ng 採用で5.5倍高速化、`node:crypto` と WebCrypto が SHA3 を、`Bun.serve()` が RFC 9110 準拠 Range リクエストをサポート。
+
+- [Bun v1.3.12](https://bun.sh/blog/bun-v1.3.12)
+- [Bun v1.3.13](https://bun.sh/blog/bun-v1.3.13)
+
+### Deno 2.7 系
+
+2.7（2月25日）で Temporal API を安定化、Windows ARM 公式バイナリ提供、`package.json` の `overrides` サポートを追加。4月のパッチでは `node:repl` 実装と `node:http` の llhttp + ネイティブ TCPWrap への書き直しで HTTP パーサーを高速化し、Node.js 互換性（http2 / tls / fs / crypto）の改善が継続中。なお Deno 2.6（2025年12月）で取り込まれた Go 製 tsgo 統合は型チェック約2倍速をすでに実現している。
+
+- [Deno 2.7](https://deno.com/blog/v2.7)
+- [Deno Releases](https://github.com/denoland/deno/releases)
+
+### パフォーマンス比較
+
+合成 HTTP ベンチで Bun ≈52,000 req/s ＞ Deno ≈29,000 req/s ＞ Node.js ≈14,000 req/s。ただしルーティング+DB を含む実用シナリオでは Bun と Node.js の差は3%未満に収束する報告もあり、コールドスタートでは Bun（8〜31ms）が依然優位。
+
+- [Bun vs Deno vs Node.js 2026 Benchmarks](https://dev.to/jsgurujobs/bun-vs-deno-vs-nodejs-in-2026-benchmarks-code-and-real-numbers-2l9d)
+
+## Webフレームワーク
+
+### Hono v4.12 系
+
+最新は v4.12.18（5月6日）。直近5週間で v4.12.14〜18 と連続リリースされており、特に v4.12.18 ではキャッシュミドルウェアの `Vary: Authorization` / `Vary: Cookie` 無視問題、JSX SSR の CSS インジェクション、JWT の `exp` / `nbf` / `iat` 検証不備の3件、v4.12.16 では JSX タグ名のHTMLインジェクションと `bodyLimit()` バイパスの2件と、セキュリティ修正が連続している。Hono RPC（`hc` typed client）はコード生成不要で Cloudflare Workers・Vercel Edge で動作し、週次ダウンロードは2000万超。
+
+- [Hono Releases](https://github.com/honojs/hono/releases)
+- [oRPC vs tRPC vs Hono RPC](https://www.pkgpulse.com/blog/orpc-vs-trpc-vs-hono-rpc-type-safe-apis-2026)
+
+### NestJS v11
+
+2025年1月リリース後、現在は保守リリース中心。Express v5 / Fastify v5 対応、モジュール opaque key 生成のオブジェクト参照ベース化による起動時間短縮、SWC をデフォルトコンパイラに（20倍高速ビルド）、テストハーネスのデフォルトを Vitest に変更といった更新がベースラインになっている。`ConsoleLogger` の JSON ログ出力対応も追加。
+
+- [Announcing NestJS 11](https://trilon.io/blog/announcing-nestjs-11-whats-new)
+
+### Elysia 1.4 系
+
+v1.4.28（2026年3月16日）が現行。Pull-based backpressure を持つストリームレスポンス、range ヘッダのファイル/Blob 対応、guard の dynamic import 修正など。1.4 "Supersymmetry" で Standard Validator 対応、マクロのスキーマ機能、型推論パフォーマンス10%向上が加わり、Bun ネイティブで2M+ req/s（公称）。Eden Treaty 2 はコード生成不要のエンドツーエンド型安全クライアントを提供。
+
+- [Elysia Releases](https://github.com/elysiajs/elysia/releases)
+- [Elysia Blog](https://elysiajs.com/blog)
+
+### Fastify v5.8 系
+
+最新は v5.8.5（4月14日）。v5.8.5 は CVE-2026-33806、v5.8.0 は CVE-2026-3419（content-type 検証）を修正し、ハンドラーレベルのタイムアウト機能、Pino v9/v10 対応が追加された。公認プラグインは合計296件。
+
+- [Fastify Releases](https://releasebot.io/updates/fastify)
+- [Fastify Ecosystem](https://fastify.dev/ecosystem/)
+
+### Effect v4 Beta（Platform / HttpServer）
+
+`HttpApiTest` モジュールが追加され、サーバを起動せずに HttpApi ハンドラをテスト可能になった。4月24日週には HttpApi スキーマエラーを明示変換なき限り defect として扱う変更、5月8日週には `HttpApiBuilder` の空ボディデコーディング修正と OpenTelemetry 重大度マッピング改善。`Rpc.custom` でリクエスト/レスポンスのライフサイクル全制御が可能になり、`Effect.acquireDisposable` で TC39 Explicit Resource Management に対応。
+
+- [This Week in Effect 2026-05-08](https://effect.website/blog/this-week-in-effect/2026/05/08/)
+- [Effect v4 Beta](https://effect.website/blog/releases/effect/40-beta/)
+
+## ORM・データアクセス
+
+### Drizzle ORM v1.0 RC
+
+4月30日に v1.0.0-rc.1、5月5日に rc.2 がリリースされた。JIT マッパー導入によりクエリパイプラインの row mapping を25〜30%レイテンシ削減・RPS 14,500→15,300 に高速化。新 Casing API（`snakeCase` / `camelCase`）をテーブル・ビュー・スキーマ単位で適用可能、Effect v4 ネイティブサポートと Netlify Database ドライバを新規追加。SQLite 移行の競合検出機能も rc.2 で追加された。`drizzle-zod` は非推奨化され、バリデータ機能は drizzle-orm 本体へ統合される方針。
+
+- [Drizzle Releases](https://github.com/drizzle-team/drizzle-orm/releases)
+- [drizzle-zod](https://orm.drizzle.team/docs/zod)
+
+### Prisma 7 系（Rust-free エンジン）
+
+Prisma 7 で Rust 製クエリエンジンを完全廃止し、クエリコンパイラを WASM モジュールとして JS メインスレッド上で実行する新アーキテクチャに移行。バンドルサイズ90%削減、クエリ実行3倍高速化、TypeScript 型チェック70%高速化を達成（v6.16.0 で GA、Prisma 7 で標準）。直近の v7.7.0（4月7日）では `prisma bootstrap` コマンドが追加され、Prisma Postgres の初期化・接続・依存・マイグレーション・シードがインタラクティブに完結する。Accelerate はキャッシュ専用レイヤーとして再整理。
+
+- [Rust-free Prisma ORM](https://www.prisma.io/blog/rust-free-prisma-orm-is-ready-for-production)
+- [Announcing Prisma 7.0](https://www.prisma.io/blog/announcing-prisma-orm-7-0-0)
+
+### Kysely v0.29 系
+
+v0.29.0（2025年5月）以降は安定メンテナンスフェーズ。`ReadonlyKysely<DB>` でコンパイル時に write 操作を禁止、`$pickTables` / `$omitTables` によるテーブルビュー絞り込みで型チェック計算量を削減、AbortSignal によるクエリキャンセル、`SafeNullComparisonPlugin` による NULL 比較の自動 `IS` 変換、JSON path の SQL インジェクション対策強化が組み込まれている。MikroORM が `MikroKyselyPlugin` で Kysely をクエリランナーとして採用するなど、エコシステムへの組み込みも拡大中。
+
+- [Kysely Releases](https://github.com/kysely-org/kysely/releases)
+- [PowerSync Kysely integration](https://releases.powersync.com/announcements/kysely-orm-integration-for-react-native-and-js-web-beta-release)
+
+### Zod v4
+
+v4.4.3（5月4日時点）。文字列パース14.7倍・配列7.4倍・オブジェクト6.5倍の高速化、バンドルサイズはZod通常版で57%削減（Zod Mini で85%削減）、TypeScript 型インスタンス化を100倍削減して IDE 応答性が改善された。メタデータレジストリ、JSON Schema 自動変換、テンプレートリテラル型、ファイルスキーマ検証など API が拡張されている。
+
+- [Zod v4](https://zod.dev/v4)
+
+### postgres.js / Slonik
+
+postgres.js は v3.4.8（1月6日）で停止しており、Cloudflare Workers での接続数上限最適化と `sslnegotiation=direct` オプションが直近の変更点。Slonik は v48.14.0 が最新で継続メンテナンス中。いずれも2026年4〜5月の新規リリースは確認できず。
+
+- [postgres.js Releases](https://github.com/porsager/postgres/releases)
+
+## API / RPC・ビルドツール
+
+### tRPC v11.17 / ts-rest / oRPC
+
+tRPC は v11.17.0（4月28日）が最新で、v12 のリリースは確認できず。サブスクリプション型推論ヘルパー、React 19 のプロキシ強制変換対応、ストリーミングエラーハンドリングの改善などが続く。ts-rest は v3.53.0-rc.1 で Standard Schema（Zod 4 / Valibot / ArkType 等）と Express v5 をサポート。新興の **oRPC** は v1.14.2（5月時点直近）で、OpenAPI 自動生成、React Server Actions 対応、TanStack Query 統合、SSE/ストリーミングの完全型安全対応、Cloudflare Workers / Deno / Bun / Node.js のマルチランタイム対応を打ち出し、tRPC / Hono RPC への対抗軸として急速に台頭している。
+
+- [tRPC Releases](https://github.com/trpc/trpc/releases)
+- [ts-rest Releases](https://github.com/ts-rest/ts-rest/releases)
+- [oRPC](https://orpc.dev/)
+
+### Vite 8 + Rolldown + oxc
+
+Vite 8（2026年3月12日）が当期最大のビルドツール刷新となった。Rolldown（Rust 製バンドラー）を esbuild + Rollup の代替として単一バンドラーに統合し、ビルドが10〜30倍高速化。`@vitejs/plugin-react` v6 では oxc が React Refresh 変換を担い Babel 依存を排除した。Linear で46秒→6秒、Beehiiv で64%削減などの実績が報告されており、Node.js 20.19+/22.12+ が必須要件。
+
+- [Announcing Vite 8](https://vite.dev/blog/announcing-vite8)
+
+### tsdown（ライブラリバンドラ）
+
+Rolldown + oxc ベースのライブラリ向けバンドラ。tsup からの移行互換性を持ち、Evan You が公式に推奨する立ち位置にある。Vite が「アプリケーション側」、tsdown が「ライブラリ側」というツール分担が定着しつつある。
+
+- [tsdown](https://tsdown.dev/)
+
+### Turborepo 2.9 / Nx 22.7
+
+Turborepo 2.9（3月30日）は "Time to First Task" を最大96%短縮、`turbo query`（GraphQL でモノレポを検索）を GA 化し、OpenTelemetry 対応と構造化 JSON ログを実験投入。Nx 22.7（4月27日）は **Task Sandboxing** で未宣言依存を実 I/O 監視により検出、デーモンメモリを 1.5GB → 200MB に削減、**Worktree-Aware Caching** で git worktree 横断キャッシュを実現してキャッシュ復元を1110タスクで約17秒→1.16秒に短縮。Nx の2026年ロードマップは AIエージェント統合（Self-Healing CI 等）を中核に据えている。
+
+- [Turborepo 2.9](https://turborepo.dev/blog/2-9)
+- [Nx 22.7](https://nx.dev/blog/nx-22-7-release)
+- [Nx 2026 Roadmap](https://nx.dev/blog/nx-2026-roadmap)
+
+### GraphQL / OpenAPI 周辺
+
+GraphQL Yoga は v5.21.0（4月18日頃）が最新で v6 は確認できず。新規プロジェクトでは Yoga + Pothos の組み合わせが Apollo Server に対する優位として定着しつつある。OpenAPI 側では Scalar が継続リリースされ、`@hono/zod-openapi` が Hono 公式 middleware として、`hono-openapi`（バリデータ非依存）が既存ルートへの後付け OpenAPI 対応として注目される。
+
+- [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server)
+- [Scalar](https://scalar.com/)
+
+### Vitest 3.2
+
+3.2（2025年6月）でアノテーション API（テストへの任意メッセージ・添付ファイル付与）、fixture スコープ（`file` / `worker`）が追加され、`vitest.workspace` ファイルは非推奨化、`projects` オプションに統一。直近1ヶ月での新メジャーは確認できないが、Vitest を NestJS 11 のデフォルトテストハーネスとする流れが他フレームワークへも波及している。
+
+- [Vitest 3.2](https://vitest.dev/blog/vitest-3-2.html)
+
+## まとめ
+
+2026年5月時点で、TypeScript サーバサイドは「Rust/Go 製ツールチェーンによるビルドと型チェックの高速化（TS 7.0 Beta / Rolldown / oxc / tsdown / Vite 8）」と「ランタイム標準への取り込み（Temporal / Type Stripping / Iterator helpers の Node.js 26・Deno 2.7・Bun 1.3 への展開）」という2つの大きな潮流が同時に走っている。フレームワーク層では Hono の連続セキュリティ修正、ORM 層では Drizzle v1 RC と Prisma 7 の Rust-free エンジンが対照的なアプローチで競い合い、API 層では oRPC が tRPC・Hono RPC への新しい対抗軸として浮上した。型システムでは Types-as-Comments が依然 Stage 1 に留まる一方で、TypeScript 6.0 が `target: es5` をはじめ多くの旧オプションを廃止して 7.0 のクリーンな出発点を整えており、移行コストを払うタイミングが現実的に視野に入ってきた局面にある。
