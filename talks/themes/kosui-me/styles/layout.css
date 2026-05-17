@@ -1,0 +1,526 @@
+/* ===========================================
+   kosui-me Slidev Theme
+   Mirrors the design system of apps/kosui-me:
+   warm cream background, charcoal text,
+   coral accent, clay-textured cards.
+   =========================================== */
+
+:root {
+  /* Core palette — mapped from apps/kosui-me/src/styles/global.css */
+  --theme-text: #1a1a2e;           /* charcoal */
+  --theme-text-secondary: #6b7280; /* subtle */
+  --theme-bg: #ffffff;             /* default slide background (clean white for legibility) */
+  --theme-bg-paper: #faf5f4;       /* warm cream — used for cover/intro/section "chapter" slides */
+  --theme-card: #ffffff;
+  --theme-primary: #e05e52;        /* accent (coral) */
+  --theme-primary-dark: #c04a40;
+  --theme-primary-light: #f0887e;
+  --theme-accent: #c04a40;         /* accent-dark, used for em/strong-like roles */
+  --theme-accent-bg: #f0f0f2;      /* tag-bg, used for neutral cards */
+  --theme-border: #e5e5ea;
+  --theme-negative: #c04a40;       /* aligned with accent-dark for warm palette */
+
+  /* Paper-like background image (subtle SVG noise from apps/kosui-me) */
+  --theme-bg-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  --theme-card-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='0.03'/%3E%3C/svg%3E");
+
+  /* Clay shadows (multi-layer inset/outset for tactile feel) */
+  --theme-shadow-sm: 0 1px 2px rgba(60, 50, 45, 0.05);
+  --theme-shadow:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.02),
+    inset 0 2px 8px rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 2px 8px rgba(60, 50, 45, 0.04),
+    0 4px 16px rgba(60, 50, 45, 0.06);
+  --theme-shadow-lg:
+    inset 0 -2px 6px rgba(0, 0, 0, 0.02),
+    inset 0 2px 8px rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 4px 12px rgba(60, 50, 45, 0.06),
+    0 8px 24px rgba(60, 50, 45, 0.08);
+
+  /* Component padding */
+  --card-padding-sm: 0.75rem;
+  --card-padding-md: 1rem;
+  --card-padding-lg: 1.25rem;
+
+  /* Clay border radius */
+  --radius-clay: 16px;
+
+  font-size: 17px;
+}
+
+
+/* ===========================================
+   Base Layout Styles
+   =========================================== */
+
+.slidev-page {
+  background-color: var(--theme-bg);
+}
+
+.slidev-layout {
+  @apply px-14 py-10;
+  color: var(--theme-text);
+  font-feature-settings: "palt";
+  position: relative;
+}
+
+/* ===========================================
+   Default content layout — footer pinned to
+   the bottom with absolute positioning so it
+   never depends on content height.
+   =========================================== */
+
+.slidev-layout.kosui-default {
+  @apply h-full;
+  padding: 2.5rem 3.5rem 3rem;
+  position: relative;
+}
+
+.kosui-footer {
+  position: absolute;
+  left: 3.5rem;
+  right: 3.5rem;
+  bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--theme-primary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+.kosui-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kosui-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--theme-accent-bg);
+}
+
+.kosui-name {
+  line-height: 1;
+}
+
+.kosui-page {
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================
+   Cover & Intro Layouts
+   Cream background with a left accent rail —
+   keeps the warm paper feel without flooding red.
+   =========================================== */
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+  @apply h-full grid px-14 py-12;
+  background-color: #e15e52;
+  color: var(--theme-text);
+  position: relative;
+}
+
+/* Soft "clay paper" enclosure — fuzzy multi-layer shadow, no hard outline.
+   Sits on the coral slide background as a floating white paper card. */
+.slidev-layout.cover::before,
+.slidev-layout.intro::before {
+  content: "";
+  position: absolute;
+  top: 1.75rem;
+  right: 1.75rem;
+  bottom: 1.75rem;
+  left: 1.75rem;
+  border-radius: var(--radius-clay);
+  pointer-events: none;
+  background-color: #ffffff;
+  background-image: var(--theme-card-noise);
+  background-repeat: repeat;
+  box-shadow:
+    inset 0 -2px 8px rgba(0, 0, 0, 0.03),
+    inset 0 2px 10px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 2px 10px rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.12);
+  z-index: 0;
+}
+
+/* Keep cover/intro content above the ::before card */
+.slidev-layout.cover > *,
+.slidev-layout.intro > * {
+  position: relative;
+  z-index: 1;
+}
+
+.slidev-layout.cover,
+.slidev-layout.intro {
+
+  h1 {
+    @apply text-3xl leading-tight font-bold;
+    border: none;
+    color: var(--theme-text);
+    background-image: none;
+  }
+
+  h1 + p {
+    @apply -mt-2 mb-6 text-lg;
+    color: var(--theme-text-secondary);
+    font-weight: 400;
+  }
+
+  p + h2,
+  ul + h2,
+  table + h2 {
+    @apply mt-10;
+  }
+
+  a {
+    color: var(--theme-primary);
+    border-bottom: 1px solid color-mix(in srgb, var(--theme-primary) 50%, transparent);
+
+    &:hover {
+      border-bottom-color: var(--theme-primary);
+    }
+  }
+}
+
+/* ===========================================
+   Section Layout
+   Cream background with accent heading and
+   accent underline. No full-bleed red.
+   =========================================== */
+
+.slidev-layout.section {
+  @apply h-full flex flex-col items-center justify-center px-14 py-12;
+  background-color: var(--theme-bg-paper);
+  background-image: var(--theme-bg-noise);
+  background-repeat: repeat;
+  color: var(--theme-text);
+  position: relative;
+
+  h1 {
+    @apply text-4xl leading-tight font-bold text-center;
+    color: var(--theme-primary);
+    border: none;
+    display: inline-block;
+    background-image: linear-gradient(var(--theme-primary), var(--theme-primary));
+    background-size: 100% 4px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    padding-bottom: 0.5rem;
+  }
+
+  h2 {
+    @apply text-2xl text-center mt-4;
+    color: var(--theme-text-secondary);
+  }
+
+  p {
+    @apply text-center;
+    color: var(--theme-text-secondary);
+  }
+}
+
+/* ===========================================
+   Typography
+   =========================================== */
+
+.slidev-layout {
+  h1 {
+    @apply text-2xl font-bold mb-4;
+    color: var(--theme-text);
+    border-bottom: none;
+    padding-bottom: 0.25rem;
+    position: relative;
+    display: inline-block;
+    background-image: linear-gradient(var(--theme-primary), var(--theme-primary));
+    background-size: 100% 3px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+  }
+
+  h2 {
+    @apply text-xl font-semibold mb-3;
+    color: var(--theme-text);
+  }
+
+  h3 {
+    @apply text-lg font-semibold mb-2;
+    color: var(--theme-text-secondary);
+  }
+
+  p {
+    @apply mb-4 leading-relaxed;
+    color: var(--theme-text);
+  }
+
+  strong {
+    color: var(--theme-text);
+    font-weight: 700;
+  }
+
+  em {
+    color: var(--theme-primary);
+    font-style: normal;
+    background-image: linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--theme-primary) 25%, white) 0%,
+      color-mix(in srgb, var(--theme-primary) 25%, white) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 40%;
+    background-position: 0 90%;
+    padding: 0 2px;
+  }
+}
+
+/* Cover/intro typography overrides: keep paper feel, use accent only for emphasis */
+.slidev-layout.cover,
+.slidev-layout.intro {
+  strong {
+    color: var(--theme-text);
+  }
+
+  em {
+    color: var(--theme-primary);
+    background-image: linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--theme-primary) 22%, white) 0%,
+      color-mix(in srgb, var(--theme-primary) 22%, white) 100%
+    );
+    background-size: 100% 40%;
+    background-position: 0 90%;
+  }
+}
+
+/* ===========================================
+   Lists
+   =========================================== */
+
+.slidev-layout {
+  ul, ol {
+    @apply my-4 pl-6;
+  }
+
+  ul {
+    list-style: none;
+
+    li {
+      @apply mb-2 relative pl-6;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.7em;
+        width: 8px;
+        height: 8px;
+        background-color: var(--theme-primary);
+        border-radius: 50%;
+      }
+    }
+
+    ul li::before {
+      background-color: color-mix(in srgb, var(--theme-primary) 50%, white);
+      width: 6px;
+      height: 6px;
+    }
+  }
+
+  ol {
+    list-style: none;
+    counter-reset: item;
+
+    li {
+      @apply mb-2 relative pl-8;
+      counter-increment: item;
+
+      &::before {
+        content: counter(item);
+        position: absolute;
+        left: 0;
+        top: 0.4em;
+        width: 24px;
+        height: 24px;
+        background-color: var(--theme-primary);
+        color: #ffffff;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow:
+          inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+          inset 0 1px 2px rgba(255, 255, 255, 0.2),
+          0 1px 3px rgba(60, 50, 45, 0.15);
+      }
+    }
+  }
+}
+
+/* ===========================================
+   Code Blocks
+   =========================================== */
+
+.slidev-layout {
+  code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded text-sm font-mono;
+    background-color: var(--theme-accent-bg);
+    color: var(--theme-text);
+  }
+
+  pre {
+    @apply rounded-2xl my-4 overflow-hidden;
+    background-color: #1a1a2e;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 2px 8px rgba(60, 50, 45, 0.08),
+      0 4px 16px rgba(60, 50, 45, 0.06);
+
+    code {
+      @apply block p-6 text-base;
+      font-family: 'Fira Code', monospace;
+    }
+  }
+}
+
+/* ===========================================
+   Blockquotes
+   =========================================== */
+
+.slidev-layout {
+  blockquote {
+    @apply my-4 pl-4 py-2 italic;
+    border-left: 4px solid var(--theme-primary);
+    background-color: color-mix(in srgb, var(--theme-primary) 5%, var(--theme-card));
+    border-radius: 0 var(--radius-clay) var(--radius-clay) 0;
+    color: var(--theme-text);
+
+    p {
+      @apply mb-0;
+    }
+  }
+}
+
+/* ===========================================
+   Tables
+   =========================================== */
+
+.slidev-layout {
+  table {
+    @apply w-full my-4;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--radius-clay);
+    overflow: hidden;
+    box-shadow: var(--theme-shadow);
+    background-color: var(--theme-card);
+
+    th {
+      @apply px-4 py-3 text-left font-semibold;
+      background-color: var(--theme-primary);
+      color: #ffffff;
+    }
+
+    td {
+      @apply px-4 py-3;
+      border-bottom: 1px solid var(--theme-border);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:nth-child(even) {
+      background-color: color-mix(in srgb, var(--theme-primary) 4%, var(--theme-card));
+    }
+  }
+}
+
+/* ===========================================
+   Links
+   =========================================== */
+
+.slidev-layout {
+  a {
+    color: var(--theme-primary);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+
+    &:hover {
+      border-bottom-color: var(--theme-primary);
+    }
+  }
+}
+
+/* ===========================================
+   Utility Classes
+   =========================================== */
+
+.slidev-layout {
+  .highlight {
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--theme-primary) 30%, white) 0%,
+      color-mix(in srgb, var(--theme-primary) 30%, white) 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 40%;
+    background-position: 0 90%;
+  }
+
+  .card {
+    @apply p-6;
+    background-color: var(--theme-card);
+    background-image: var(--theme-card-noise);
+    background-repeat: repeat;
+    border-radius: var(--radius-clay);
+    box-shadow: var(--theme-shadow);
+  }
+
+  .badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
+    background-color: var(--theme-primary);
+    color: #ffffff;
+  }
+
+  .badge-outline {
+    @apply px-3 py-1 rounded-full text-sm font-medium inline-block;
+    background-color: transparent;
+    border: 2px solid var(--theme-primary);
+    color: var(--theme-primary);
+  }
+}
+
+/* ===========================================
+   Slide Number & Navigation
+   =========================================== */
+
+.slidev-page-number {
+  color: var(--theme-primary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  bottom: 0.75rem;
+  right: 3.5rem;
+  letter-spacing: 0.02em;
+}
+
+/* ===========================================
+   Transitions
+   =========================================== */
+
+.slidev-layout {
+  * {
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+}
