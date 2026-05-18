@@ -3,6 +3,7 @@ import { findThreadedReply, isOwnPost } from './domain/threaded-reply.ts';
 import { chatPostMessage } from './slack/chat.ts';
 import type { SlackApiError, SlackClient } from './slack/client.ts';
 import { conversationsInfo } from './slack/conversations.ts';
+import { extractThreadTsFromPermalink } from './slack/permalink.ts';
 import type { SearchMessageMatch, SlackMessage } from './slack/schema.ts';
 import { searchMessages } from './slack/search.ts';
 
@@ -24,10 +25,12 @@ export type Clients = {
   user: SlackClient;
 };
 
+// search.messages のマッチは、スレッド返信であっても thread_ts を返さないことがある。
+// その場合は permalink (`...?thread_ts=...&cid=...`) から復元してフォールバックする。
 const matchToMessage = (match: SearchMessageMatch): SlackMessage => ({
   type: 'message',
   ts: match.ts,
-  thread_ts: match.thread_ts,
+  thread_ts: match.thread_ts ?? extractThreadTsFromPermalink(match.permalink),
   subtype: match.subtype,
   user: match.user,
   bot_id: match.bot_id,
