@@ -15,13 +15,13 @@
 
 ## 制約と決定
 
-| 論点                | 決定                                              | 理由                                                                                                |
-| ------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 通信方式            | 1 分毎の時間トリガー + `conversations.history`    | GAS は WebSocket を扱えず Socket Mode 不可。Events API 公開も避けたい                               |
-| 対象チャンネル      | Script Properties `TARGET_CHANNELS` に明示       | Bot 全参加チャンネルを舐めると `conversations.history` (Tier 3: 50req/min) を圧迫する               |
-| カーソル管理        | チャンネル別 `LAST_TS_<channel>` を Script Props | シンプル。初回は `now()` で初期化（過去遡及なし）                                                  |
-| 開発スタイル        | TypeScript + esbuild バンドル + clasp push        | monorepo の他パッケージと型/テストワークフローを揃える                                              |
-| 配置場所            | `apps/slack-thread-expander`                      | pnpm workspace のメンバーとして lint/format/test を統一                                            |
+| 論点           | 決定                                             | 理由                                                                                  |
+| -------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| 通信方式       | 1 分毎の時間トリガー + `conversations.history`   | GAS は WebSocket を扱えず Socket Mode 不可。Events API 公開も避けたい                 |
+| 対象チャンネル | Script Properties `TARGET_CHANNELS` に明示       | Bot 全参加チャンネルを舐めると `conversations.history` (Tier 3: 50req/min) を圧迫する |
+| カーソル管理   | チャンネル別 `LAST_TS_<channel>` を Script Props | シンプル。初回は `now()` で初期化（過去遡及なし）                                     |
+| 開発スタイル   | TypeScript + esbuild バンドル + clasp push       | monorepo の他パッケージと型/テストワークフローを揃える                                |
+| 配置場所       | `apps/slack-thread-expander`                     | pnpm workspace のメンバーとして lint/format/test を統一                               |
 
 ## アーキテクチャ
 
@@ -98,25 +98,42 @@ permalink 投稿には `thread_ts` が付かないので通常は `findThreadedR
 
 vitest で以下を検証（元実装の Rust テストと 1:1 対応）:
 
-| ケース                                      | 期待                            |
-| ------------------------------------------- | ------------------------------- |
-| plain_message                               | null                            |
-| threaded_message                            | `{channel, ts: '1644939337…'}`  |
-| threaded_message_changed                    | null (subtype=message_changed)  |
-| broadcasted_threaded_message                | null (subtype=thread_broadcast) |
-| broadcasted_threaded_message_changed        | null                            |
-| threaded_file_upload                        | `{channel, ts: '1644940789…'}`  |
-| broadcasted_threaded_file_upload            | null                            |
+| ケース                               | 期待                            |
+| ------------------------------------ | ------------------------------- |
+| plain_message                        | null                            |
+| threaded_message                     | `{channel, ts: '1644939337…'}`  |
+| threaded_message_changed             | null (subtype=message_changed)  |
+| broadcasted_threaded_message         | null (subtype=thread_broadcast) |
+| broadcasted_threaded_message_changed | null                            |
+| threaded_file_upload                 | `{channel, ts: '1644940789…'}`  |
+| broadcasted_threaded_file_upload     | null                            |
 
 Slack クライアントは UrlFetchApp 依存のため統合テストは行わず、GAS Editor 上の手動実行で動作確認する。
 
 ## デプロイ
 
-1. Slack App を `app_manifest.yml` から作成し Bot Token を取得
-2. `pnpm install && pnpm exec clasp login && pnpm exec clasp create --type standalone --rootDir ./dist`
-3. Script Properties に `SLACK_BOT_TOKEN`, `TARGET_CHANNELS`, 任意で `SELF_BOT_ID` を設定
-4. `pnpm deploy`（= `pnpm build && pnpm clasp:push`）
-5. GAS Editor で `installTrigger` を 1 度手動実行 → 1 分毎の `main` トリガーが登録される
+**通常運用は GitHub Actions による CI デプロイ**。
+`.github/workflows/deploy-slack-thread-expander.yml` が `main` への push をトリガーに
+tsc → test → build → `clasp push -f` を実行する。
+
+初回のみ手動セットアップ:
+
+1. `pnpm install && pnpm exec clasp login --no-localhost && pnpm exec clasp create --type standalone --rootDir ./dist`
+2. 生成された `~/.clasprc.json` と `apps/slack-thread-expander/.clasp.json` を Secret に登録:
+   - `SLACK_THREAD_EXPANDER_CLASPRC_JSON`
+   - `SLACK_THREAD_EXPANDER_CLASP_JSON`
+3. Slack App を `app_manifest.yml` から作成 → Bot Token を取得
+4. GAS Editor の Script Properties に `SLACK_BOT_TOKEN`, `TARGET_CHANNELS`, 任意で `SELF_BOT_ID` を設定
+5. main にマージ → CI が `clasp push` 実行
+6. GAS Editor で `installTrigger` を 1 度手動実行 → 1 分毎の `main` トリガー登録
+
+### CI ワークフローの設計
+
+- トリガー: `apps/slack-thread-expander/**`, `packages/result/**`, ワークフロー自身, `pnpm-lock.yaml` の変更
+- 手動キック: `workflow_dispatch`
+- 並行制御: `concurrency.group: deploy-slack-thread-expander`, `cancel-in-progress: false`（push 競合を避ける）
+- ジョブ: install → result build → tsc → test → build → secret 復元 → `clasp push -f`
+- Secret 未設定時は `::error::` で fail-fast
 
 ## 元実装との差分まとめ
 
