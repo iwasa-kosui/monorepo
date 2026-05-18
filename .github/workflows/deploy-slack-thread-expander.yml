@@ -1,0 +1,66 @@
+name: Deploy slack-thread-expander
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/slack-thread-expander/**"
+      - "packages/result/**"
+      - ".github/workflows/deploy-slack-thread-expander.yml"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-slack-thread-expander
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace deps
+        run: pnpm --filter @iwasa-kosui/result run build
+
+      - name: Type check
+        run: pnpm --filter @iwasa-kosui/slack-thread-expander tsc
+
+      - name: Test
+        run: pnpm --filter @iwasa-kosui/slack-thread-expander test:ci
+
+      - name: Build bundle
+        run: pnpm --filter @iwasa-kosui/slack-thread-expander build
+
+      - name: Restore clasp credentials
+        working-directory: apps/slack-thread-expander
+        env:
+          CLASPRC_JSON: ${{ secrets.SLACK_THREAD_EXPANDER_CLASPRC_JSON }}
+          CLASP_JSON: ${{ secrets.SLACK_THREAD_EXPANDER_CLASP_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$CLASP_JSON" ]; then
+            echo "::error::SLACK_THREAD_EXPANDER_CLASPRC_JSON / SLACK_THREAD_EXPANDER_CLASP_JSON secrets are required"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '%s' "$CLASP_JSON" > .clasp.json
+
+      - name: Push to GAS
+        working-directory: apps/slack-thread-expander
+        run: pnpm exec clasp push -f
