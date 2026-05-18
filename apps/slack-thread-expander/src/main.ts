@@ -17,10 +17,13 @@ export const main = (): void => {
       );
       return;
     }
-    const client = { token: config.botToken };
+    const clients = {
+      bot: { token: config.botToken },
+      user: { token: config.userToken },
+    };
     for (const channel of config.targetChannels) {
       try {
-        const summary = expandChannel(client, channel, config.selfBotId);
+        const summary = expandChannel(clients, channel, config.selfBotId);
         console.log(
           `[${channel}] fetched=${summary.fetched} expanded=${summary.expanded} errors=${summary.errors.length}`,
         );

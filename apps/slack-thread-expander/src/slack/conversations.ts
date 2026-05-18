@@ -1,26 +1,15 @@
 import type { Result } from '@iwasa-kosui/result';
 
 import { callSlack, type SlackApiError, type SlackClient } from './client.ts';
-import { type ConversationsHistoryResponse, ConversationsHistoryResponseSchema } from './schema.ts';
+import { type ConversationsInfoResponse, ConversationsInfoResponseSchema } from './schema.ts';
 
-export type HistoryParams = {
-  channel: string;
-  oldest: string;
-  limit?: number;
-};
-
-export const conversationsHistory = (
+export const conversationsInfo = (
   client: SlackClient,
-  params: HistoryParams,
-): Result<ConversationsHistoryResponse, SlackApiError> =>
+  channel: string,
+): Result<ConversationsInfoResponse, SlackApiError> =>
   callSlack(
     client,
-    'conversations.history',
-    {
-      channel: params.channel,
-      oldest: params.oldest,
-      inclusive: false,
-      limit: params.limit ?? 200,
-    },
-    ConversationsHistoryResponseSchema,
+    'conversations.info',
+    { channel },
+    ConversationsInfoResponseSchema,
   );
