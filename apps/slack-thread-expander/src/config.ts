@@ -1,31 +1,38 @@
 const KEY_BOT_TOKEN = 'SLACK_BOT_TOKEN';
+const KEY_USER_TOKEN = 'SLACK_USER_TOKEN';
 const KEY_TARGET_CHANNELS = 'TARGET_CHANNELS';
 const KEY_SELF_BOT_ID = 'SELF_BOT_ID';
 const KEY_LAST_TS_PREFIX = 'LAST_TS_';
 
 export type Config = {
   botToken: string;
+  userToken: string;
   targetChannels: readonly string[];
   selfBotId: string | undefined;
 };
 
 const properties = (): GoogleAppsScript.Properties.Properties => PropertiesService.getScriptProperties();
 
-export const loadConfig = (): Config => {
-  const props = properties();
-  const botToken = props.getProperty(KEY_BOT_TOKEN);
-  if (!botToken) {
+const requireProperty = (key: string): string => {
+  const value = properties().getProperty(key);
+  if (!value) {
     throw new Error(
-      `Script Property "${KEY_BOT_TOKEN}" is required. Set it via スクリプトのプロパティ in GAS editor.`,
+      `Script Property "${key}" is required. Set it via スクリプトのプロパティ in GAS editor.`,
     );
   }
-  const rawChannels = props.getProperty(KEY_TARGET_CHANNELS) ?? '';
+  return value;
+};
+
+export const loadConfig = (): Config => {
+  const botToken = requireProperty(KEY_BOT_TOKEN);
+  const userToken = requireProperty(KEY_USER_TOKEN);
+  const rawChannels = properties().getProperty(KEY_TARGET_CHANNELS) ?? '';
   const targetChannels = rawChannels
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const selfBotId = props.getProperty(KEY_SELF_BOT_ID) ?? undefined;
-  return { botToken, targetChannels, selfBotId };
+  const selfBotId = properties().getProperty(KEY_SELF_BOT_ID) ?? undefined;
+  return { botToken, userToken, targetChannels, selfBotId };
 };
 
 export const getLastTs = (channelId: string): string | null =>
