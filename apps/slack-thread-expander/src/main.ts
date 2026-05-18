@@ -9,6 +9,7 @@ export const main = (): void => {
     console.log('previous tick still running; skip');
     return;
   }
+  const tickStartMs = Date.now();
   try {
     const config = loadConfig();
     if (config.targetChannels.length === 0) {
@@ -17,22 +18,40 @@ export const main = (): void => {
       );
       return;
     }
+    console.log(
+      `tick start: channels=[${config.targetChannels.join(',')}] selfBotId=${config.selfBotId ?? 'unset'}`,
+    );
     const clients = {
       bot: { token: config.botToken },
       user: { token: config.userToken },
     };
+    let totalFetched = 0;
+    let totalExpanded = 0;
+    let totalErrors = 0;
+    let totalSkippedOwn = 0;
+    let totalSkippedNoReply = 0;
     for (const channel of config.targetChannels) {
       try {
         const summary = expandChannel(clients, channel, config.selfBotId);
+        totalFetched += summary.fetched;
+        totalExpanded += summary.expanded;
+        totalErrors += summary.errors.length;
+        totalSkippedOwn += summary.skippedOwn;
+        totalSkippedNoReply += summary.skippedNoReply;
         console.log(
-          `[${channel}] fetched=${summary.fetched} expanded=${summary.expanded} errors=${summary.errors.length}`,
+          `[${channel}] summary: fetched=${summary.fetched} candidates=${summary.candidates} expanded=${summary.expanded} skippedOwn=${summary.skippedOwn} skippedNoReply=${summary.skippedNoReply} errors=${summary.errors.length}`,
         );
       } catch (e) {
+        totalErrors += 1;
         console.error(
           `[${channel}] unexpected error: ${e instanceof Error ? e.stack ?? e.message : String(e)}`,
         );
       }
     }
+    const elapsedMs = Date.now() - tickStartMs;
+    console.log(
+      `tick end: channels=${config.targetChannels.length} fetched=${totalFetched} expanded=${totalExpanded} skippedOwn=${totalSkippedOwn} skippedNoReply=${totalSkippedNoReply} errors=${totalErrors} elapsedMs=${elapsedMs}`,
+    );
   } finally {
     lock.releaseLock();
   }
