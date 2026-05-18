@@ -1,0 +1,16 @@
+{
+  "name": "slidev-theme-kosui-me",
+  "slidev": {
+    "colorSchema": "light",
+    "defaults": {
+      "fonts": {
+        "sans": "Noto Sans JP",
+        "serif": "Noto Serif JP",
+        "mono": "Fira Code"
+      },
+      "themeConfig": {
+        "primary": "#e05e52"
+      }
+    }
+  }
+}

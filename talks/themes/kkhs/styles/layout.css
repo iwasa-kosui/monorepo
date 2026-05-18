@@ -251,7 +251,7 @@
     background-color: #111e29;
 
     code {
-      @apply block p-4 text-sm;
+      @apply block p-4 text-base;
       font-family: 'Fira Code', monospace;
     }
   }
