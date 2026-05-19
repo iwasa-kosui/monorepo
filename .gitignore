@@ -1,6 +1,5 @@
 .DS_Store
 .wrangler
-dist-astro/
 
 # Logs
 logs
