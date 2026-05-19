@@ -373,7 +373,7 @@
 
 .slidev-layout {
   code:not(pre code) {
-    @apply px-1.5 py-0.5 rounded text-sm font-mono;
+    @apply px-1.5 py-0.5 rounded text-xs font-mono;
     background-color: var(--theme-accent-bg);
     color: var(--theme-text);
   }
