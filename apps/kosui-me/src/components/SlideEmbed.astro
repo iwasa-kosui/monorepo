@@ -7,7 +7,8 @@ interface Props {
 
 const { presentation } = Astro.props;
 
-const embedUrl = presentation.slideType === 'local'
+const isLocal = presentation.slideType === 'local';
+const embedUrl = isLocal
   ? `/slides${presentation.basePath}?embedded=true&controls=true`
   : presentation.external.embedUrl;
 ---
@@ -19,5 +20,38 @@ const embedUrl = presentation.slideType === 'local'
     class="w-full h-full border-0"
     loading="lazy"
     allowfullscreen
+    data-slidev-embed={isLocal ? 'true' : undefined}
   ></iframe>
 </div>
+
+<script>
+// Slidev の embed モードでは nav controls が hover 時のみ表示されるため、
+// 同一オリジン iframe にスタイルを注入して常時表示にする。
+const PERSIST_CONTROLS_CSS = `
+    #page-root .absolute.bottom-0.left-0 {
+      opacity: 1 !important;
+    }
+  `;
+
+function persistSlidevControls(iframe: HTMLIFrameElement) {
+  const inject = () => {
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    if (doc.querySelector('style[data-slidev-persist-controls]')) return;
+    const style = doc.createElement('style');
+    style.setAttribute('data-slidev-persist-controls', '');
+    style.textContent = PERSIST_CONTROLS_CSS;
+    doc.head.appendChild(style);
+  };
+  iframe.addEventListener('load', inject);
+  if (iframe.contentDocument?.readyState === 'complete') inject();
+}
+
+function initSlidevEmbeds() {
+  document
+    .querySelectorAll<HTMLIFrameElement>('iframe[data-slidev-embed="true"]')
+    .forEach(persistSlidevControls);
+}
+
+document.addEventListener('astro:page-load', initSlidevEmbeds);
+</script>
