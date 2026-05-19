@@ -19,7 +19,6 @@ talk:
     - typescript
   duration: "30min"
   speaker: "岩佐 幸翠"
-  unlisted: true
 ---
 
 <div class="text-sm opacity-80 mb-16">TSKaigi 2026</div>
