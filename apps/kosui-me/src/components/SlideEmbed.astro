@@ -27,9 +27,13 @@ const embedUrl = isLocal
 <script>
 // Slidev の embed モードでは nav controls が hover 時のみ表示されるため、
 // 同一オリジン iframe にスタイルを注入して常時表示にする。
+// あわせて既定の左下配置を右下へ移し、スライド本文左下のフッター類と
+// 干渉しないようにする。
 const PERSIST_CONTROLS_CSS = `
     #page-root .absolute.bottom-0.left-0 {
       opacity: 1 !important;
+      left: auto !important;
+      right: 0 !important;
     }
   `;
 
