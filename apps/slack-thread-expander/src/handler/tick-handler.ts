@@ -1,3 +1,5 @@
+import { Result } from '@praha/byethrow';
+
 import { loadGasBootstrap } from '../adaptor/gas/gas-bootstrap.ts';
 import { GasClock } from '../adaptor/gas/gas-clock.ts';
 import { GasConsoleLogger } from '../adaptor/gas/gas-console-logger.ts';
@@ -10,11 +12,11 @@ import { runTick } from '../usecase/run-tick.ts';
 export const tickHandler = (): void => {
   const logger = GasConsoleLogger.create();
   const bootRes = loadGasBootstrap();
-  if (!bootRes.ok) {
-    logger.error(`failed to load config: ${ConfigError.format(bootRes.err)}`);
+  if (Result.isFailure(bootRes)) {
+    logger.error(`failed to load config: ${ConfigError.format(bootRes.error)}`);
     return;
   }
-  const { slackCredentials, config } = bootRes.val;
+  const { slackCredentials, config } = bootRes.value;
   const slack = SlackHttpClient.create(slackCredentials);
   const cursor = GasPropertiesCursorStore.create();
   const clock = GasClock.create();

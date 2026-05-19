@@ -1,13 +1,23 @@
+import { Result } from '@praha/byethrow';
+
 import type { BotId } from '../domain/bot-id.ts';
 import type { ChannelId } from '../domain/channel-id.ts';
-import type { ChannelTickOutcome } from '../domain/channel-tick-outcome.ts';
+import type {
+  ChannelInfoFailed,
+  ChannelNameMissing,
+  ChannelTickOutcome,
+  HistoryFailed,
+  InitializedTick,
+  ProcessedTick,
+  SearchFailed,
+} from '../domain/channel-tick-outcome.ts';
 import type { ClockPort } from '../domain/clock-port.ts';
 import type { CursorPort } from '../domain/cursor-port.ts';
 import type { LoggerPort } from '../domain/logger-port.ts';
 import { MessageClassification } from '../domain/message-classification.ts';
 import { SlackApiError } from '../domain/slack-api-error.ts';
 import type { SlackMessage } from '../domain/slack-message.ts';
-import type { SlackPort } from '../domain/slack-port.ts';
+import type { ChannelTopLevelTsResult, SearchMessagesResult, SlackPort } from '../domain/slack-port.ts';
 import { SlackTs } from '../domain/slack-ts.ts';
 import { assertNever } from '../util/assert-never.ts';
 
@@ -22,186 +32,236 @@ export type ExpandChannelDeps = Readonly<{
   logger: LoggerPort;
 }>;
 
+// 早期 return される outcome は ROP の Failure 軌道に流して短絡させる。
+type EarlyOutcome =
+  | InitializedTick
+  | ChannelInfoFailed
+  | ChannelNameMissing
+  | SearchFailed
+  | HistoryFailed;
+
+type LoopState = Readonly<{
+  cursorTo: SlackTs;
+  expanded: number;
+  skippedOwn: number;
+  skippedNoReply: number;
+  skippedBroadcast: number;
+  errors: ReadonlyArray<SlackApiError>;
+}>;
+
 const filterAndSort = (
   matches: ReadonlyArray<SlackMessage>,
   channel: ChannelId,
   lastTs: SlackTs,
 ): ReadonlyArray<SlackMessage> =>
   matches
-    .filter((m) => m.channel === channel)
-    .filter((m) => SlackTs.isAfter(m.ts, lastTs))
+    .filter((m) => m.channel === channel && SlackTs.isAfter(m.ts, lastTs))
     .slice()
     .sort((a, b) => SlackTs.compareAsc(a.ts, b.ts));
 
-export const expandChannel = (deps: ExpandChannelDeps) =>
-(
+const loadCursor = (
+  deps: ExpandChannelDeps,
   channel: ChannelId,
-  selfBotId: BotId | undefined,
-): ChannelTickOutcome => {
-  const { slack, cursor, clock, logger } = deps;
-  const lastTs = cursor.get(channel);
-  if (lastTs == null) {
-    const initial = clock.nowSlackTs();
-    cursor.set(channel, initial);
-    logger.info(
-      `[${channel}] initial run; set last_ts=${initial} and skip this tick`,
-    );
-    return { kind: 'Initialized', channel, initialTs: initial };
+): Result.Result<SlackTs, EarlyOutcome> => {
+  const lastTs = deps.cursor.get(channel);
+  if (lastTs != null) {
+    deps.logger.info(`[${channel}] tick start: lastTs=${lastTs}`);
+    return Result.succeed(lastTs);
   }
+  const initial = deps.clock.nowSlackTs();
+  deps.cursor.set(channel, initial);
+  deps.logger.info(
+    `[${channel}] initial run; set last_ts=${initial} and skip this tick`,
+  );
+  return Result.fail({ kind: 'Initialized', channel, initialTs: initial });
+};
 
-  logger.info(`[${channel}] tick start: lastTs=${lastTs}`);
+const resolveChannelName = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+): Result.Result<string, EarlyOutcome> =>
+  Result.pipe(
+    deps.slack.getChannelName(channel),
+    Result.mapError((error): EarlyOutcome => {
+      deps.logger.warn(
+        `[${channel}] conversations.info failed: ${SlackApiError.format(error)}`,
+      );
+      return { kind: 'ChannelInfoFailed', channel, error };
+    }),
+    Result.andThen((name): Result.Result<string, EarlyOutcome> => {
+      if (name != null) return Result.succeed(name);
+      deps.logger.warn(`[${channel}] channel name missing in conversations.info`);
+      return Result.fail({ kind: 'ChannelNameMissing', channel });
+    }),
+  );
 
-  const infoRes = slack.getChannelName(channel);
-  if (!infoRes.ok) {
-    logger.warn(
-      `[${channel}] conversations.info failed: ${SlackApiError.format(infoRes.err)}`,
-    );
-    return { kind: 'ChannelInfoFailed', channel, error: infoRes.err };
-  }
-  const channelName = infoRes.val;
-  if (channelName == null) {
-    logger.warn(`[${channel}] channel name missing in conversations.info`);
-    return { kind: 'ChannelNameMissing', channel };
-  }
-
+const runSearch = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+  channelName: string,
+  lastTs: SlackTs,
+): Result.Result<SearchMessagesResult, EarlyOutcome> => {
   const label = `[${channel} #${channelName}]`;
   const afterDate = SlackTs.toAfterDate(lastTs, SEARCH_LOOKBACK_DAYS);
-  logger.info(
+  deps.logger.info(
     `${label} search.messages query="in:${channelName} after:${afterDate}" (lookback=${SEARCH_LOOKBACK_DAYS}d from lastTs=${lastTs})`,
   );
-
-  const searchRes = slack.searchMessages({ channelName, afterDate });
-  if (!searchRes.ok) {
-    logger.warn(
-      `${label} search.messages failed: ${SlackApiError.format(searchRes.err)}`,
-    );
-    return {
-      kind: 'SearchFailed',
-      channel,
-      channelName,
-      error: searchRes.err,
-    };
-  }
-
-  const allMatches = searchRes.val.matches;
-  // 同名・別チャンネルが紛れる可能性に備えて channel.id で再フィルタしてから昇順にソート。
-  const inChannel = allMatches.filter((m) => m.channel === channel);
-  const sorted = filterAndSort(allMatches, channel, lastTs);
-
-  logger.info(
-    `${label} search result: apiTotal=${
-      searchRes.val.apiTotal ?? 'n/a'
-    } matches=${allMatches.length} inChannel=${inChannel.length} newSinceLastTs=${sorted.length}`,
+  return Result.pipe(
+    deps.slack.searchMessages({ channelName, afterDate }),
+    Result.mapError((error): EarlyOutcome => {
+      deps.logger.warn(
+        `${label} search.messages failed: ${SlackApiError.format(error)}`,
+      );
+      return { kind: 'SearchFailed', channel, channelName, error };
+    }),
   );
+};
 
-  // search.messages はブロードキャスト投稿で subtype を欠落させることがあるため、
-  // チャンネル本流の ts 集合との突き合わせで thread_broadcast を補完的に除外する。
-  const historyRes = slack.getChannelTopLevelTs({ channel, oldest: lastTs });
-  if (!historyRes.ok) {
-    logger.warn(
-      `${label} conversations.history failed: ${SlackApiError.format(historyRes.err)}`,
-    );
-    return {
-      kind: 'HistoryFailed',
-      channel,
-      channelName,
-      error: historyRes.err,
-    };
-  }
-  const topLevelTs = new Set<SlackTs>(historyRes.val.topLevelTs);
-  logger.info(
-    `${label} conversations.history result: topLevelTs=${topLevelTs.size}${
-      historyRes.val.truncated ? ' (truncated)' : ''
-    }`,
+// search.messages はブロードキャスト投稿で subtype を欠落させることがあるため、
+// チャンネル本流の ts 集合との突き合わせで thread_broadcast を補完的に除外する。
+const loadTopLevelTs = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+  channelName: string,
+  lastTs: SlackTs,
+): Result.Result<ChannelTopLevelTsResult, EarlyOutcome> => {
+  const label = `[${channel} #${channelName}]`;
+  return Result.pipe(
+    deps.slack.getChannelTopLevelTs({ channel, oldest: lastTs }),
+    Result.mapError((error): EarlyOutcome => {
+      deps.logger.warn(
+        `${label} conversations.history failed: ${SlackApiError.format(error)}`,
+      );
+      return { kind: 'HistoryFailed', channel, channelName, error };
+    }),
   );
+};
 
-  const errors: SlackApiError[] = [];
-  let expanded = 0;
-  let skippedOwn = 0;
-  let skippedNoReply = 0;
-  let skippedBroadcast = 0;
-  let cursorTo = lastTs;
+const advanceCursor = (state: LoopState, ts: SlackTs): LoopState => ({
+  ...state,
+  cursorTo: SlackTs.max(state.cursorTo, ts),
+});
 
-  const advance = (ts: SlackTs): void => {
-    const next = SlackTs.max(cursorTo, ts);
-    if (next !== cursorTo) {
-      cursorTo = next;
-      cursor.set(channel, cursorTo);
-    }
-  };
-
-  const summaryLine = (): string =>
-    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${expanded} skippedOwn=${skippedOwn} skippedNoReply=${skippedNoReply} skippedBroadcast=${skippedBroadcast} errors=${errors.length} cursor ${lastTs}->${cursorTo}`;
-
-  for (const message of sorted) {
-    const classification = MessageClassification.classify(message, {
-      selfBotId,
-      topLevelTs,
-    });
-    switch (classification.kind) {
-      case 'OwnPost':
-        skippedOwn += 1;
-        logger.info(`${label} skip ts=${message.ts} reason=own-post`);
-        advance(message.ts);
-        break;
-      case 'NotThreaded':
-      case 'ThreadRoot':
-      case 'IgnoredSubtype':
-        skippedNoReply += 1;
-        logger.info(
-          `${label} skip ts=${message.ts} reason=${classification.kind} thread_ts=${
-            message.threadTs ?? 'none'
-          } subtype=${message.subtype ?? 'none'}`,
-        );
-        advance(message.ts);
-        break;
-      case 'ThreadBroadcast':
-        skippedBroadcast += 1;
-        logger.info(
-          `${label} skip ts=${message.ts} reason=ThreadBroadcast thread_ts=${message.threadTs ?? 'none'} subtype=${
-            message.subtype ?? 'none'
-          }`,
-        );
-        advance(message.ts);
-        break;
-      case 'ThreadedReply': {
-        const postRes = slack.postMessage({
+const stepMessage = (
+  deps: ExpandChannelDeps,
+  label: string,
+  selfBotId: BotId | undefined,
+  topLevelTs: ReadonlySet<SlackTs>,
+) =>
+(state: LoopState, message: SlackMessage): Result.Result<LoopState, LoopState> => {
+  const classification = MessageClassification.classify(message, {
+    selfBotId,
+    topLevelTs,
+  });
+  switch (classification.kind) {
+    case 'OwnPost':
+      deps.logger.info(`${label} skip ts=${message.ts} reason=own-post`);
+      return Result.succeed(advanceCursor({ ...state, skippedOwn: state.skippedOwn + 1 }, message.ts));
+    case 'NotThreaded':
+    case 'ThreadRoot':
+    case 'IgnoredSubtype':
+      deps.logger.info(
+        `${label} skip ts=${message.ts} reason=${classification.kind} thread_ts=${message.threadTs ?? 'none'} subtype=${
+          message.subtype ?? 'none'
+        }`,
+      );
+      return Result.succeed(
+        advanceCursor({ ...state, skippedNoReply: state.skippedNoReply + 1 }, message.ts),
+      );
+    case 'ThreadBroadcast':
+      deps.logger.info(
+        `${label} skip ts=${message.ts} reason=ThreadBroadcast thread_ts=${message.threadTs ?? 'none'} subtype=${
+          message.subtype ?? 'none'
+        }`,
+      );
+      return Result.succeed(
+        advanceCursor({ ...state, skippedBroadcast: state.skippedBroadcast + 1 }, message.ts),
+      );
+    case 'ThreadedReply':
+      return Result.pipe(
+        deps.slack.postMessage({
           channel: classification.channel,
           text: classification.permalink,
-        });
-        if (!postRes.ok) {
-          logger.warn(
-            `${label} failed to expand ts=${classification.ts}: ${SlackApiError.format(postRes.err)}`,
+        }),
+        Result.map((): LoopState => {
+          deps.logger.info(`${label} expanded ts=${message.ts} -> ${classification.permalink}`);
+          return advanceCursor({ ...state, expanded: state.expanded + 1 }, message.ts);
+        }),
+        // post 失敗時は Failure 軌道に「停止状態」を載せる。
+        // 後続メッセージへの fold が短絡し、cursor を進めずに打ち切られる。
+        Result.mapError((error): LoopState => {
+          deps.logger.warn(
+            `${label} failed to expand ts=${classification.ts}: ${SlackApiError.format(error)}`,
           );
-          errors.push(postRes.err);
-          // 失敗した瞬間に next tick で再試行できるよう、cursor を進めず打ち切る。
-          logger.info(summaryLine());
-          return {
-            kind: 'Processed',
-            channel,
-            channelName,
-            fetched: inChannel.length,
-            candidates: sorted.length,
-            expanded,
-            skippedOwn,
-            skippedNoReply,
-            skippedBroadcast,
-            cursorFrom: lastTs,
-            cursorTo,
-            errors,
-          };
-        }
-        logger.info(`${label} expanded ts=${message.ts} -> ${classification.permalink}`);
-        expanded += 1;
-        advance(message.ts);
-        break;
-      }
-      default:
-        return assertNever(classification);
-    }
+          return { ...state, errors: [...state.errors, error] };
+        }),
+      );
+    default:
+      return assertNever(classification);
   }
+};
 
-  logger.info(summaryLine());
+const foldMessages = (
+  deps: ExpandChannelDeps,
+  label: string,
+  selfBotId: BotId | undefined,
+  topLevelTs: ReadonlySet<SlackTs>,
+  initial: LoopState,
+  messages: ReadonlyArray<SlackMessage>,
+): LoopState => {
+  const step = stepMessage(deps, label, selfBotId, topLevelTs);
+  const folded = messages.reduce<Result.Result<LoopState, LoopState>>(
+    (acc, message) => Result.pipe(acc, Result.andThen((state) => step(state, message))),
+    Result.succeed(initial),
+  );
+  return Result.isSuccess(folded) ? folded.value : folded.error;
+};
+
+const persistCursor = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+  from: SlackTs,
+  to: SlackTs,
+): void => {
+  if (to !== from) deps.cursor.set(channel, to);
+};
+
+const processMatches = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+  channelName: string,
+  lastTs: SlackTs,
+  selfBotId: BotId | undefined,
+  searchResult: SearchMessagesResult,
+  history: ChannelTopLevelTsResult,
+): ProcessedTick => {
+  const inChannel = searchResult.matches.filter((m) => m.channel === channel);
+  const sorted = filterAndSort(searchResult.matches, channel, lastTs);
+  const label = `[${channel} #${channelName}]`;
+  deps.logger.info(
+    `${label} search result: apiTotal=${
+      searchResult.apiTotal ?? 'n/a'
+    } matches=${searchResult.matches.length} inChannel=${inChannel.length} newSinceLastTs=${sorted.length}`,
+  );
+  const topLevelTs = new Set<SlackTs>(history.topLevelTs);
+  deps.logger.info(
+    `${label} conversations.history result: topLevelTs=${topLevelTs.size}${history.truncated ? ' (truncated)' : ''}`,
+  );
+
+  const initial: LoopState = {
+    cursorTo: lastTs,
+    expanded: 0,
+    skippedOwn: 0,
+    skippedNoReply: 0,
+    skippedBroadcast: 0,
+    errors: [],
+  };
+  const final = foldMessages(deps, label, selfBotId, topLevelTs, initial, sorted);
+  persistCursor(deps, channel, lastTs, final.cursorTo);
+
+  deps.logger.info(
+    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${final.expanded} skippedOwn=${final.skippedOwn} skippedNoReply=${final.skippedNoReply} skippedBroadcast=${final.skippedBroadcast} errors=${final.errors.length} cursor ${lastTs}->${final.cursorTo}`,
+  );
 
   return {
     kind: 'Processed',
@@ -209,12 +269,30 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     channelName,
     fetched: inChannel.length,
     candidates: sorted.length,
-    expanded,
-    skippedOwn,
-    skippedNoReply,
-    skippedBroadcast,
+    expanded: final.expanded,
+    skippedOwn: final.skippedOwn,
+    skippedNoReply: final.skippedNoReply,
+    skippedBroadcast: final.skippedBroadcast,
     cursorFrom: lastTs,
-    cursorTo,
-    errors,
+    cursorTo: final.cursorTo,
+    errors: final.errors,
   };
+};
+
+export const expandChannel = (deps: ExpandChannelDeps) =>
+(
+  channel: ChannelId,
+  selfBotId: BotId | undefined,
+): ChannelTickOutcome => {
+  const pipeline = Result.pipe(
+    Result.do(),
+    Result.bind('lastTs', () => loadCursor(deps, channel)),
+    Result.bind('channelName', () => resolveChannelName(deps, channel)),
+    Result.bind('search', ({ channelName, lastTs }) => runSearch(deps, channel, channelName, lastTs)),
+    Result.bind('history', ({ channelName, lastTs }) => loadTopLevelTs(deps, channel, channelName, lastTs)),
+    Result.map(({ lastTs, channelName, search, history }): ProcessedTick =>
+      processMatches(deps, channel, channelName, lastTs, selfBotId, search, history)
+    ),
+  );
+  return Result.isSuccess(pipeline) ? pipeline.value : pipeline.error;
 };

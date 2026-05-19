@@ -1,4 +1,4 @@
-import type { Result } from '@iwasa-kosui/result';
+import type { Result } from '@praha/byethrow';
 
 import type { ChannelId } from './channel-id.ts';
 import type { SlackApiError } from './slack-api-error.ts';
@@ -31,12 +31,12 @@ export type ChannelTopLevelTsResult = Readonly<{
 }>;
 
 export type SlackPort = Readonly<{
-  getChannelName: (channel: ChannelId) => Result<string | undefined, SlackApiError>;
+  getChannelName: (channel: ChannelId) => Result.Result<string | undefined, SlackApiError>;
   searchMessages: (
     query: SearchMessagesQuery,
-  ) => Result<SearchMessagesResult, SlackApiError>;
+  ) => Result.Result<SearchMessagesResult, SlackApiError>;
   getChannelTopLevelTs: (
     query: ChannelTopLevelTsQuery,
-  ) => Result<ChannelTopLevelTsResult, SlackApiError>;
-  postMessage: (input: PostMessageInput) => Result<void, SlackApiError>;
+  ) => Result.Result<ChannelTopLevelTsResult, SlackApiError>;
+  postMessage: (input: PostMessageInput) => Result.Result<void, SlackApiError>;
 }>;
