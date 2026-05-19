@@ -29,8 +29,12 @@ const formatOutcomeSummary = (outcome: ChannelTickOutcome): string => {
       return `[${outcome.channel} #${outcome.channelName}] summary: search.messages failed - ${
         SlackApiError.format(outcome.error)
       }`;
+    case 'HistoryFailed':
+      return `[${outcome.channel} #${outcome.channelName}] summary: conversations.history failed - ${
+        SlackApiError.format(outcome.error)
+      }`;
     case 'Processed':
-      return `[${outcome.channel} #${outcome.channelName}] summary: fetched=${outcome.fetched} candidates=${outcome.candidates} expanded=${outcome.expanded} skippedOwn=${outcome.skippedOwn} skippedNoReply=${outcome.skippedNoReply} errors=${outcome.errors.length}`;
+      return `[${outcome.channel} #${outcome.channelName}] summary: fetched=${outcome.fetched} candidates=${outcome.candidates} expanded=${outcome.expanded} skippedOwn=${outcome.skippedOwn} skippedNoReply=${outcome.skippedNoReply} skippedBroadcast=${outcome.skippedBroadcast} errors=${outcome.errors.length}`;
     default:
       return assertNever(outcome);
   }
@@ -78,10 +82,11 @@ const runBody = (deps: RunTickDeps, config: Config): void => {
   const totalErrors = sum(outcomes, ChannelTickOutcome.errorCount);
   const totalSkippedOwn = sum(outcomes, ChannelTickOutcome.skippedOwnCount);
   const totalSkippedNoReply = sum(outcomes, ChannelTickOutcome.skippedNoReplyCount);
+  const totalSkippedBroadcast = sum(outcomes, ChannelTickOutcome.skippedBroadcastCount);
   const elapsedMs = deps.clock.nowMs() - tickStartMs;
 
   deps.logger.info(
-    `tick end: channels=${config.targetChannels.length} fetched=${totalFetched} expanded=${totalExpanded} skippedOwn=${totalSkippedOwn} skippedNoReply=${totalSkippedNoReply} errors=${totalErrors} elapsedMs=${elapsedMs}`,
+    `tick end: channels=${config.targetChannels.length} fetched=${totalFetched} expanded=${totalExpanded} skippedOwn=${totalSkippedOwn} skippedNoReply=${totalSkippedNoReply} skippedBroadcast=${totalSkippedBroadcast} errors=${totalErrors} elapsedMs=${elapsedMs}`,
   );
 };
 

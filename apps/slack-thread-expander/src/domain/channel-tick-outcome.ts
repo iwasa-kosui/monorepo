@@ -27,6 +27,13 @@ export type SearchFailed = Readonly<{
   error: SlackApiError;
 }>;
 
+export type HistoryFailed = Readonly<{
+  kind: 'HistoryFailed';
+  channel: ChannelId;
+  channelName: string;
+  error: SlackApiError;
+}>;
+
 export type ProcessedTick = Readonly<{
   kind: 'Processed';
   channel: ChannelId;
@@ -36,6 +43,7 @@ export type ProcessedTick = Readonly<{
   expanded: number;
   skippedOwn: number;
   skippedNoReply: number;
+  skippedBroadcast: number;
   cursorFrom: SlackTs;
   cursorTo: SlackTs;
   errors: ReadonlyArray<SlackApiError>;
@@ -46,6 +54,7 @@ export type ChannelTickOutcome =
   | ChannelInfoFailed
   | ChannelNameMissing
   | SearchFailed
+  | HistoryFailed
   | ProcessedTick;
 
 const errorCount = (outcome: ChannelTickOutcome): number => {
@@ -55,6 +64,7 @@ const errorCount = (outcome: ChannelTickOutcome): number => {
       return 0;
     case 'ChannelInfoFailed':
     case 'SearchFailed':
+    case 'HistoryFailed':
       return 1;
     case 'Processed':
       return outcome.errors.length;
@@ -69,6 +79,7 @@ const onlyProcessed = <T>(getter: (p: ProcessedTick) => T, fallback: T) => (outc
     case 'ChannelInfoFailed':
     case 'ChannelNameMissing':
     case 'SearchFailed':
+    case 'HistoryFailed':
       return fallback;
     case 'Processed':
       return getter(outcome);
@@ -81,6 +92,7 @@ const fetchedCount = onlyProcessed((p) => p.fetched, 0);
 const expandedCount = onlyProcessed((p) => p.expanded, 0);
 const skippedOwnCount = onlyProcessed((p) => p.skippedOwn, 0);
 const skippedNoReplyCount = onlyProcessed((p) => p.skippedNoReply, 0);
+const skippedBroadcastCount = onlyProcessed((p) => p.skippedBroadcast, 0);
 
 export const ChannelTickOutcome = {
   errorCount,
@@ -88,4 +100,5 @@ export const ChannelTickOutcome = {
   expandedCount,
   skippedOwnCount,
   skippedNoReplyCount,
+  skippedBroadcastCount,
 } as const;
