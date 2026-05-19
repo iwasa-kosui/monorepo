@@ -1,5 +1,4 @@
-import type { Result } from '@iwasa-kosui/result';
-import { err, ok } from '@iwasa-kosui/result';
+import { Result } from '@praha/byethrow';
 
 import { BotId } from '../../domain/bot-id.ts';
 import { ChannelId } from '../../domain/channel-id.ts';
@@ -20,56 +19,59 @@ export type GasBootstrap = Readonly<{
 const requireProperty = (
   props: GoogleAppsScript.Properties.Properties,
   key: string,
-): Result<string, ConfigError> => {
+): Result.Result<string, ConfigError> => {
   const value = props.getProperty(key);
-  return value ? ok(value) : err({ kind: 'MissingProperty', key });
+  return value
+    ? Result.succeed(value)
+    : Result.fail({ kind: 'MissingProperty', key });
 };
 
-const parseChannels = (raw: string): Result<ReadonlyArray<ChannelId>, ConfigError> => {
-  const tokens = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
-  const parsed: ChannelId[] = [];
-  for (const t of tokens) {
-    const r = ChannelId.parse(t);
-    if (!r.success) {
-      return err({
-        kind: 'InvalidProperty',
-        key: KEY_TARGET_CHANNELS,
-        reason: r.error.message,
-      });
-    }
-    parsed.push(r.data);
-  }
-  return ok(parsed);
+const parseChannelToken = (
+  token: string,
+): Result.Result<ChannelId, ConfigError> => {
+  const parsed = ChannelId.parse(token);
+  return parsed.success
+    ? Result.succeed(parsed.data)
+    : Result.fail({
+      kind: 'InvalidProperty',
+      key: KEY_TARGET_CHANNELS,
+      reason: parsed.error.message,
+    });
 };
+
+const parseChannels = (
+  raw: string,
+): Result.Result<ReadonlyArray<ChannelId>, ConfigError> =>
+  Result.sequence(
+    raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0),
+    parseChannelToken,
+  );
 
 const parseSelfBotId = (
   raw: string | null,
-): Result<BotId | undefined, ConfigError> => {
-  if (raw == null || raw.length === 0) return ok(undefined);
-  const r = BotId.parse(raw);
-  return r.success
-    ? ok(r.data)
-    : err({ kind: 'InvalidProperty', key: KEY_SELF_BOT_ID, reason: r.error.message });
+): Result.Result<BotId | undefined, ConfigError> => {
+  if (raw == null || raw.length === 0) return Result.succeed(undefined);
+  const parsed = BotId.parse(raw);
+  return parsed.success
+    ? Result.succeed(parsed.data)
+    : Result.fail({
+      kind: 'InvalidProperty',
+      key: KEY_SELF_BOT_ID,
+      reason: parsed.error.message,
+    });
 };
 
-export const loadGasBootstrap = (): Result<GasBootstrap, ConfigError> => {
+export const loadGasBootstrap = (): Result.Result<GasBootstrap, ConfigError> => {
   const props = PropertiesService.getScriptProperties();
-  const botTokenRes = requireProperty(props, KEY_BOT_TOKEN);
-  if (!botTokenRes.ok) return botTokenRes;
-  const userTokenRes = requireProperty(props, KEY_USER_TOKEN);
-  if (!userTokenRes.ok) return userTokenRes;
-  const channelsRes = parseChannels(props.getProperty(KEY_TARGET_CHANNELS) ?? '');
-  if (!channelsRes.ok) return channelsRes;
-  const selfBotIdRes = parseSelfBotId(props.getProperty(KEY_SELF_BOT_ID));
-  if (!selfBotIdRes.ok) return selfBotIdRes;
-  return ok({
-    slackCredentials: {
-      botToken: botTokenRes.val,
-      userToken: userTokenRes.val,
-    },
-    config: {
-      targetChannels: channelsRes.val,
-      selfBotId: selfBotIdRes.val,
-    },
-  });
+  return Result.pipe(
+    Result.do(),
+    Result.bind('botToken', () => requireProperty(props, KEY_BOT_TOKEN)),
+    Result.bind('userToken', () => requireProperty(props, KEY_USER_TOKEN)),
+    Result.bind('targetChannels', () => parseChannels(props.getProperty(KEY_TARGET_CHANNELS) ?? '')),
+    Result.bind('selfBotId', () => parseSelfBotId(props.getProperty(KEY_SELF_BOT_ID))),
+    Result.map(({ botToken, userToken, targetChannels, selfBotId }): GasBootstrap => ({
+      slackCredentials: { botToken, userToken },
+      config: { targetChannels, selfBotId },
+    })),
+  );
 };

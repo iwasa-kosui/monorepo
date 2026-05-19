@@ -60,18 +60,11 @@ const runBody = (deps: RunTickDeps, config: Config): void => {
     logger: deps.logger,
   });
 
-  const outcomes: ChannelTickOutcome[] = [];
-  for (const channel of config.targetChannels) {
-    try {
-      const outcome = expand(channel, config.selfBotId);
-      outcomes.push(outcome);
-      deps.logger.info(formatOutcomeSummary(outcome));
-    } catch (e) {
-      deps.logger.error(
-        `[${channel}] unexpected error: ${e instanceof Error ? e.stack ?? e.message : String(e)}`,
-      );
-    }
-  }
+  const outcomes = config.targetChannels.map((channel) => {
+    const outcome = expand(channel, config.selfBotId);
+    deps.logger.info(formatOutcomeSummary(outcome));
+    return outcome;
+  });
 
   const totalFetched = sum(outcomes, ChannelTickOutcome.fetchedCount);
   const totalExpanded = sum(outcomes, ChannelTickOutcome.expandedCount);

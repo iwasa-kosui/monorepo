@@ -1,4 +1,4 @@
-import { err, ok } from '@iwasa-kosui/result';
+import { Result } from '@praha/byethrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BotId } from '../src/domain/bot-id.ts';
@@ -47,14 +47,14 @@ const buildMocks = (
   } = {},
 ): Mocks => {
   const setCursor = vi.fn();
-  const postMessage = vi.fn().mockReturnValue(ok(undefined));
+  const postMessage = vi.fn().mockReturnValue(Result.succeed(undefined));
   const cursor: CursorPort = {
     get: () => (options.lastTs ? ts(options.lastTs) : undefined),
     set: setCursor,
   };
   const slack: SlackPort = {
-    getChannelName: () => ok(options.channelName ?? 'general'),
-    searchMessages: () => ok({ matches: options.matches ?? [], apiTotal: undefined }),
+    getChannelName: () => Result.succeed(options.channelName ?? 'general'),
+    searchMessages: () => Result.succeed({ matches: options.matches ?? [], apiTotal: undefined }),
     postMessage,
   };
   const clock: ClockPort = {
@@ -133,7 +133,7 @@ describe('expandChannel', () => {
       lastTs: '1700000000.000000',
       matches: [a, b],
     });
-    mocks.postMessage.mockReturnValueOnce(err({ kind: 'slack', error: 'rate_limited' }));
+    mocks.postMessage.mockReturnValueOnce(Result.fail({ kind: 'slack', error: 'rate_limited' }));
     const outcome = expandChannel(mocks)(channel, undefined);
     expect(outcome.kind).toBe('Processed');
     if (outcome.kind === 'Processed') {
