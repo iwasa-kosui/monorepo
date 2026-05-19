@@ -19,6 +19,8 @@ export type SlackNetworkError = Readonly<{
   message: string;
 }>;
 
+import { assertNever } from '../util/assert-never.ts';
+
 export type SlackApiError =
   | SlackHttpError
   | SlackResponseError
@@ -36,6 +38,8 @@ export const SlackApiError = {
         return `parse: ${error.message}`;
       case 'network':
         return `network: ${error.message}`;
+      default:
+        return assertNever(error);
     }
   },
 } as const;

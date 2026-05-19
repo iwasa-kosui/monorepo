@@ -1,3 +1,4 @@
+import { assertNever } from '../util/assert-never.ts';
 import type { ChannelId } from './channel-id.ts';
 import type { SlackApiError } from './slack-api-error.ts';
 import type { SlackTs } from './slack-ts.ts';
@@ -57,17 +58,29 @@ const errorCount = (outcome: ChannelTickOutcome): number => {
       return 1;
     case 'Processed':
       return outcome.errors.length;
+    default:
+      return assertNever(outcome);
   }
 };
 
-const fetchedCount = (outcome: ChannelTickOutcome): number => outcome.kind === 'Processed' ? outcome.fetched : 0;
+const onlyProcessed = <T>(getter: (p: ProcessedTick) => T, fallback: T) => (outcome: ChannelTickOutcome): T => {
+  switch (outcome.kind) {
+    case 'Initialized':
+    case 'ChannelInfoFailed':
+    case 'ChannelNameMissing':
+    case 'SearchFailed':
+      return fallback;
+    case 'Processed':
+      return getter(outcome);
+    default:
+      return assertNever(outcome);
+  }
+};
 
-const expandedCount = (outcome: ChannelTickOutcome): number => outcome.kind === 'Processed' ? outcome.expanded : 0;
-
-const skippedOwnCount = (outcome: ChannelTickOutcome): number => outcome.kind === 'Processed' ? outcome.skippedOwn : 0;
-
-const skippedNoReplyCount = (outcome: ChannelTickOutcome): number =>
-  outcome.kind === 'Processed' ? outcome.skippedNoReply : 0;
+const fetchedCount = onlyProcessed((p) => p.fetched, 0);
+const expandedCount = onlyProcessed((p) => p.expanded, 0);
+const skippedOwnCount = onlyProcessed((p) => p.skippedOwn, 0);
+const skippedNoReplyCount = onlyProcessed((p) => p.skippedNoReply, 0);
 
 export const ChannelTickOutcome = {
   errorCount,

@@ -1,3 +1,5 @@
+import { assertNever } from '../util/assert-never.ts';
+
 export type MissingProperty = Readonly<{
   kind: 'MissingProperty';
   key: string;
@@ -18,6 +20,8 @@ export const ConfigError = {
         return `missing Script Property: ${error.key}`;
       case 'InvalidProperty':
         return `invalid Script Property "${error.key}": ${error.reason}`;
+      default:
+        return assertNever(error);
     }
   },
 } as const;

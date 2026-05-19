@@ -6,6 +6,7 @@ import type { LockPort } from '../domain/lock-port.ts';
 import type { LoggerPort } from '../domain/logger-port.ts';
 import { SlackApiError } from '../domain/slack-api-error.ts';
 import type { SlackPort } from '../domain/slack-port.ts';
+import { assertNever } from '../util/assert-never.ts';
 import { expandChannel } from './expand-channel.ts';
 
 export type RunTickDeps = Readonly<{
@@ -30,6 +31,8 @@ const formatOutcomeSummary = (outcome: ChannelTickOutcome): string => {
       }`;
     case 'Processed':
       return `[${outcome.channel} #${outcome.channelName}] summary: fetched=${outcome.fetched} candidates=${outcome.candidates} expanded=${outcome.expanded} skippedOwn=${outcome.skippedOwn} skippedNoReply=${outcome.skippedNoReply} errors=${outcome.errors.length}`;
+    default:
+      return assertNever(outcome);
   }
 };
 
