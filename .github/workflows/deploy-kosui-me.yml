@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/kosui-me/**"
+      - "talks/**"
       - ".github/workflows/deploy-kosui-me.yml"
   workflow_dispatch:
 
