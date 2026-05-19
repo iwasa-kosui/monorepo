@@ -183,8 +183,8 @@ console.log(greet(new Product()));
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -237,8 +237,8 @@ Productを代入してもコンパイルも実行もできる
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -280,8 +280,8 @@ fn();
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -338,8 +338,8 @@ this が undefined になる
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -383,8 +383,8 @@ new Sub();
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -441,8 +441,8 @@ new Sub();
 
 <style>
 code {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 14px;
 }
 </style>
 
@@ -605,7 +605,7 @@ var Greeter = (function () {
 <style>
 code {
   font-size: 14px;
-  line-height: 22px;
+  line-height: 14px;
 }
 </style>
 
