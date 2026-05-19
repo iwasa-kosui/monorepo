@@ -94,10 +94,32 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     } matches=${allMatches.length} inChannel=${inChannel.length} newSinceLastTs=${sorted.length}`,
   );
 
+  // search.messages はブロードキャスト投稿で subtype を欠落させることがあるため、
+  // チャンネル本流の ts 集合との突き合わせで thread_broadcast を補完的に除外する。
+  const historyRes = slack.getChannelTopLevelTs({ channel, oldest: lastTs });
+  if (!historyRes.ok) {
+    logger.warn(
+      `${label} conversations.history failed: ${SlackApiError.format(historyRes.err)}`,
+    );
+    return {
+      kind: 'HistoryFailed',
+      channel,
+      channelName,
+      error: historyRes.err,
+    };
+  }
+  const topLevelTs = new Set<SlackTs>(historyRes.val.topLevelTs);
+  logger.info(
+    `${label} conversations.history result: topLevelTs=${topLevelTs.size}${
+      historyRes.val.truncated ? ' (truncated)' : ''
+    }`,
+  );
+
   const errors: SlackApiError[] = [];
   let expanded = 0;
   let skippedOwn = 0;
   let skippedNoReply = 0;
+  let skippedBroadcast = 0;
   let cursorTo = lastTs;
 
   const advance = (ts: SlackTs): void => {
@@ -108,8 +130,14 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     }
   };
 
+  const summaryLine = (): string =>
+    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${expanded} skippedOwn=${skippedOwn} skippedNoReply=${skippedNoReply} skippedBroadcast=${skippedBroadcast} errors=${errors.length} cursor ${lastTs}->${cursorTo}`;
+
   for (const message of sorted) {
-    const classification = MessageClassification.classify(message, selfBotId);
+    const classification = MessageClassification.classify(message, {
+      selfBotId,
+      topLevelTs,
+    });
     switch (classification.kind) {
       case 'OwnPost':
         skippedOwn += 1;
@@ -127,6 +155,15 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
         );
         advance(message.ts);
         break;
+      case 'ThreadBroadcast':
+        skippedBroadcast += 1;
+        logger.info(
+          `${label} skip ts=${message.ts} reason=ThreadBroadcast thread_ts=${message.threadTs ?? 'none'} subtype=${
+            message.subtype ?? 'none'
+          }`,
+        );
+        advance(message.ts);
+        break;
       case 'ThreadedReply': {
         const postRes = slack.postMessage({
           channel: classification.channel,
@@ -138,9 +175,7 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
           );
           errors.push(postRes.err);
           // 失敗した瞬間に next tick で再試行できるよう、cursor を進めず打ち切る。
-          logger.info(
-            `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${expanded} skippedOwn=${skippedOwn} skippedNoReply=${skippedNoReply} errors=${errors.length} cursor ${lastTs}->${cursorTo}`,
-          );
+          logger.info(summaryLine());
           return {
             kind: 'Processed',
             channel,
@@ -150,6 +185,7 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
             expanded,
             skippedOwn,
             skippedNoReply,
+            skippedBroadcast,
             cursorFrom: lastTs,
             cursorTo,
             errors,
@@ -165,9 +201,7 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     }
   }
 
-  logger.info(
-    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${expanded} skippedOwn=${skippedOwn} skippedNoReply=${skippedNoReply} errors=${errors.length} cursor ${lastTs}->${cursorTo}`,
-  );
+  logger.info(summaryLine());
 
   return {
     kind: 'Processed',
@@ -178,6 +212,7 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     expanded,
     skippedOwn,
     skippedNoReply,
+    skippedBroadcast,
     cursorFrom: lastTs,
     cursorTo,
     errors,

@@ -44,6 +44,8 @@ const buildMocks = (
     lastTs?: string;
     channelName?: string;
     matches?: ReadonlyArray<SlackMessage>;
+    topLevelTs?: ReadonlyArray<string>;
+    historyError?: boolean;
   } = {},
 ): Mocks => {
   const setCursor = vi.fn();
@@ -55,6 +57,13 @@ const buildMocks = (
   const slack: SlackPort = {
     getChannelName: () => ok(options.channelName ?? 'general'),
     searchMessages: () => ok({ matches: options.matches ?? [], apiTotal: undefined }),
+    getChannelTopLevelTs: () =>
+      options.historyError === true
+        ? err({ kind: 'slack', error: 'forbidden' })
+        : ok({
+          topLevelTs: (options.topLevelTs ?? []).map(ts),
+          truncated: false,
+        }),
     postMessage,
   };
   const clock: ClockPort = {
@@ -142,5 +151,34 @@ describe('expandChannel', () => {
       expect(outcome.cursorTo).toBe('1700000000.000000');
     }
     expect(mocks.postMessage).toHaveBeenCalledOnce();
+  });
+
+  it('top-level に存在する候補は ThreadBroadcast として skippedBroadcast にカウントし post しない', () => {
+    const broadcast = buildMessage({ ts: ts('1700000100.000000') });
+    const mocks = buildMocks({
+      lastTs: '1700000000.000000',
+      matches: [broadcast],
+      topLevelTs: ['1700000100.000000'],
+    });
+    const outcome = expandChannel(mocks)(channel, undefined);
+    expect(outcome.kind).toBe('Processed');
+    if (outcome.kind === 'Processed') {
+      expect(outcome.skippedBroadcast).toBe(1);
+      expect(outcome.expanded).toBe(0);
+      expect(outcome.cursorTo).toBe('1700000100.000000');
+    }
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('conversations.history 失敗時は HistoryFailed を返して post しない', () => {
+    const newer = buildMessage({ ts: ts('1700000100.000000') });
+    const mocks = buildMocks({
+      lastTs: '1700000000.000000',
+      matches: [newer],
+      historyError: true,
+    });
+    const outcome = expandChannel(mocks)(channel, undefined);
+    expect(outcome.kind).toBe('HistoryFailed');
+    expect(mocks.postMessage).not.toHaveBeenCalled();
   });
 });
