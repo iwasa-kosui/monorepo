@@ -2,21 +2,15 @@ import type { Result } from '@iwasa-kosui/result';
 import { err, ok } from '@iwasa-kosui/result';
 import type { z } from 'zod';
 
-export type SlackApiError =
-  | { kind: 'http'; status: number; body: string }
-  | { kind: 'slack'; error: string }
-  | { kind: 'parse'; message: string }
-  | { kind: 'network'; message: string };
+import type { SlackApiError } from '../../domain/slack-api-error.ts';
 
 const SLACK_API_BASE = 'https://slack.com/api';
 
-export type SlackClient = {
-  token: string;
-};
+type Payload = Record<string, string | number | boolean | undefined>;
 
 const buildOptions = (
   token: string,
-  payload: Record<string, string | number | boolean | undefined>,
+  payload: Payload,
 ): GoogleAppsScript.URL_Fetch.URLFetchRequestOptions => {
   const cleaned: Record<string, string> = {};
   for (const [key, value] of Object.entries(payload)) {
@@ -33,15 +27,15 @@ const buildOptions = (
 };
 
 export const callSlack = <T extends { ok: boolean; error?: string }>(
-  client: SlackClient,
+  token: string,
   method: string,
-  payload: Record<string, string | number | boolean | undefined>,
+  payload: Payload,
   schema: z.ZodType<T>,
 ): Result<T, SlackApiError> => {
   const url = `${SLACK_API_BASE}/${method}`;
   let response: GoogleAppsScript.URL_Fetch.HTTPResponse;
   try {
-    response = UrlFetchApp.fetch(url, buildOptions(client.token, payload));
+    response = UrlFetchApp.fetch(url, buildOptions(token, payload));
   } catch (e) {
     return err({
       kind: 'network',
@@ -69,13 +63,8 @@ export const callSlack = <T extends { ok: boolean; error?: string }>(
   if (!parsed.success) {
     return err({ kind: 'parse', message: parsed.error.message });
   }
-
   if (!parsed.data.ok) {
-    return err({
-      kind: 'slack',
-      error: parsed.data.error ?? 'unknown',
-    });
+    return err({ kind: 'slack', error: parsed.data.error ?? 'unknown' });
   }
-
   return ok(parsed.data);
 };
