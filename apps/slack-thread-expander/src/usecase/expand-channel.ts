@@ -6,6 +6,7 @@ import type {
   ChannelInfoFailed,
   ChannelNameMissing,
   ChannelTickOutcome,
+  HistoryFailed,
   InitializedTick,
   ProcessedTick,
   SearchFailed,
@@ -16,7 +17,7 @@ import type { LoggerPort } from '../domain/logger-port.ts';
 import { MessageClassification } from '../domain/message-classification.ts';
 import { SlackApiError } from '../domain/slack-api-error.ts';
 import type { SlackMessage } from '../domain/slack-message.ts';
-import type { SearchMessagesResult, SlackPort } from '../domain/slack-port.ts';
+import type { ChannelTopLevelTsResult, SearchMessagesResult, SlackPort } from '../domain/slack-port.ts';
 import { SlackTs } from '../domain/slack-ts.ts';
 import { assertNever } from '../util/assert-never.ts';
 
@@ -32,13 +33,19 @@ export type ExpandChannelDeps = Readonly<{
 }>;
 
 // 早期 return される outcome は ROP の Failure 軌道に流して短絡させる。
-type EarlyOutcome = InitializedTick | ChannelInfoFailed | ChannelNameMissing | SearchFailed;
+type EarlyOutcome =
+  | InitializedTick
+  | ChannelInfoFailed
+  | ChannelNameMissing
+  | SearchFailed
+  | HistoryFailed;
 
 type LoopState = Readonly<{
   cursorTo: SlackTs;
   expanded: number;
   skippedOwn: number;
   skippedNoReply: number;
+  skippedBroadcast: number;
   errors: ReadonlyArray<SlackApiError>;
 }>;
 
@@ -110,6 +117,26 @@ const runSearch = (
   );
 };
 
+// search.messages はブロードキャスト投稿で subtype を欠落させることがあるため、
+// チャンネル本流の ts 集合との突き合わせで thread_broadcast を補完的に除外する。
+const loadTopLevelTs = (
+  deps: ExpandChannelDeps,
+  channel: ChannelId,
+  channelName: string,
+  lastTs: SlackTs,
+): Result.Result<ChannelTopLevelTsResult, EarlyOutcome> => {
+  const label = `[${channel} #${channelName}]`;
+  return Result.pipe(
+    deps.slack.getChannelTopLevelTs({ channel, oldest: lastTs }),
+    Result.mapError((error): EarlyOutcome => {
+      deps.logger.warn(
+        `${label} conversations.history failed: ${SlackApiError.format(error)}`,
+      );
+      return { kind: 'HistoryFailed', channel, channelName, error };
+    }),
+  );
+};
+
 const advanceCursor = (state: LoopState, ts: SlackTs): LoopState => ({
   ...state,
   cursorTo: SlackTs.max(state.cursorTo, ts),
@@ -119,9 +146,13 @@ const stepMessage = (
   deps: ExpandChannelDeps,
   label: string,
   selfBotId: BotId | undefined,
+  topLevelTs: ReadonlySet<SlackTs>,
 ) =>
 (state: LoopState, message: SlackMessage): Result.Result<LoopState, LoopState> => {
-  const classification = MessageClassification.classify(message, selfBotId);
+  const classification = MessageClassification.classify(message, {
+    selfBotId,
+    topLevelTs,
+  });
   switch (classification.kind) {
     case 'OwnPost':
       deps.logger.info(`${label} skip ts=${message.ts} reason=own-post`);
@@ -136,6 +167,15 @@ const stepMessage = (
       );
       return Result.succeed(
         advanceCursor({ ...state, skippedNoReply: state.skippedNoReply + 1 }, message.ts),
+      );
+    case 'ThreadBroadcast':
+      deps.logger.info(
+        `${label} skip ts=${message.ts} reason=ThreadBroadcast thread_ts=${message.threadTs ?? 'none'} subtype=${
+          message.subtype ?? 'none'
+        }`,
+      );
+      return Result.succeed(
+        advanceCursor({ ...state, skippedBroadcast: state.skippedBroadcast + 1 }, message.ts),
       );
     case 'ThreadedReply':
       return Result.pipe(
@@ -165,10 +205,11 @@ const foldMessages = (
   deps: ExpandChannelDeps,
   label: string,
   selfBotId: BotId | undefined,
+  topLevelTs: ReadonlySet<SlackTs>,
   initial: LoopState,
   messages: ReadonlyArray<SlackMessage>,
 ): LoopState => {
-  const step = stepMessage(deps, label, selfBotId);
+  const step = stepMessage(deps, label, selfBotId, topLevelTs);
   const folded = messages.reduce<Result.Result<LoopState, LoopState>>(
     (acc, message) => Result.pipe(acc, Result.andThen((state) => step(state, message))),
     Result.succeed(initial),
@@ -192,6 +233,7 @@ const processMatches = (
   lastTs: SlackTs,
   selfBotId: BotId | undefined,
   searchResult: SearchMessagesResult,
+  history: ChannelTopLevelTsResult,
 ): ProcessedTick => {
   const inChannel = searchResult.matches.filter((m) => m.channel === channel);
   const sorted = filterAndSort(searchResult.matches, channel, lastTs);
@@ -201,19 +243,24 @@ const processMatches = (
       searchResult.apiTotal ?? 'n/a'
     } matches=${searchResult.matches.length} inChannel=${inChannel.length} newSinceLastTs=${sorted.length}`,
   );
+  const topLevelTs = new Set<SlackTs>(history.topLevelTs);
+  deps.logger.info(
+    `${label} conversations.history result: topLevelTs=${topLevelTs.size}${history.truncated ? ' (truncated)' : ''}`,
+  );
 
   const initial: LoopState = {
     cursorTo: lastTs,
     expanded: 0,
     skippedOwn: 0,
     skippedNoReply: 0,
+    skippedBroadcast: 0,
     errors: [],
   };
-  const final = foldMessages(deps, label, selfBotId, initial, sorted);
+  const final = foldMessages(deps, label, selfBotId, topLevelTs, initial, sorted);
   persistCursor(deps, channel, lastTs, final.cursorTo);
 
   deps.logger.info(
-    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${final.expanded} skippedOwn=${final.skippedOwn} skippedNoReply=${final.skippedNoReply} errors=${final.errors.length} cursor ${lastTs}->${final.cursorTo}`,
+    `${label} tick end: fetched=${inChannel.length} candidates=${sorted.length} expanded=${final.expanded} skippedOwn=${final.skippedOwn} skippedNoReply=${final.skippedNoReply} skippedBroadcast=${final.skippedBroadcast} errors=${final.errors.length} cursor ${lastTs}->${final.cursorTo}`,
   );
 
   return {
@@ -225,6 +272,7 @@ const processMatches = (
     expanded: final.expanded,
     skippedOwn: final.skippedOwn,
     skippedNoReply: final.skippedNoReply,
+    skippedBroadcast: final.skippedBroadcast,
     cursorFrom: lastTs,
     cursorTo: final.cursorTo,
     errors: final.errors,
@@ -241,8 +289,9 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
     Result.bind('lastTs', () => loadCursor(deps, channel)),
     Result.bind('channelName', () => resolveChannelName(deps, channel)),
     Result.bind('search', ({ channelName, lastTs }) => runSearch(deps, channel, channelName, lastTs)),
-    Result.map(({ lastTs, channelName, search }): ProcessedTick =>
-      processMatches(deps, channel, channelName, lastTs, selfBotId, search)
+    Result.bind('history', ({ channelName, lastTs }) => loadTopLevelTs(deps, channel, channelName, lastTs)),
+    Result.map(({ lastTs, channelName, search, history }): ProcessedTick =>
+      processMatches(deps, channel, channelName, lastTs, selfBotId, search, history)
     ),
   );
   return Result.isSuccess(pipeline) ? pipeline.value : pipeline.error;

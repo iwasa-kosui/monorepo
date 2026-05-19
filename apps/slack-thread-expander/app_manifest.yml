@@ -12,7 +12,9 @@ oauth_config:
     user:
       - search:read
       - channels:read
+      - channels:history
       - groups:read
+      - groups:history
 settings:
   org_deploy_enabled: false
   socket_mode_enabled: false
