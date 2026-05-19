@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "apps/kosui-me/**"
+      - "talks/**"
       - ".github/workflows/preview-kosui-me.yml"
 
 permissions:
