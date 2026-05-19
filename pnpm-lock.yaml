@@ -540,6 +540,9 @@ importers:
       '@types/node':
         specifier: ^22.15.3
         version: 22.19.7
+      playwright-chromium:
+        specifier: 1.57.0
+        version: 1.57.0
 
   tools/iori-cli:
     dependencies:
@@ -18245,10 +18248,8 @@ snapshots:
   playwright-chromium@1.57.0:
     dependencies:
       playwright-core: 1.57.0
-    optional: true
 
-  playwright-core@1.57.0:
-    optional: true
+  playwright-core@1.57.0: {}
 
   points-on-curve@0.2.0: {}
 

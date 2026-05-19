@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browser for slidev export
+        run: pnpm --filter talks exec playwright install --with-deps chromium-headless-shell
+
       - name: Build kosui-me
         run: pnpm --filter kosui-me run build
 

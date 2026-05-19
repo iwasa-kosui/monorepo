@@ -26,6 +26,7 @@
     "vue": "^3.5.26"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3"
+    "@types/node": "^22.15.3",
+    "playwright-chromium": "1.57.0"
   }
 }
