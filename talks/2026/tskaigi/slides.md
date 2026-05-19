@@ -424,10 +424,10 @@ new Sub();
 
 ### 実行時
 
-| `useDefineForClassFields` | 出力 |
-|---|---|
-| `false` | `setter! 42` |
-| `true` | 出力なし |
+useDefineForClassFieldsが...
+
+- falseの場合: `setter! 42`
+- trueの場合: 出力なし
 
 </div>
 
