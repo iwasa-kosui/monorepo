@@ -724,19 +724,13 @@ layout: section
 layout: center
 ---
 
-# 3つの根本原因
+# 3つの特性
 
 <CardGrid :cols="3">
   <Card title="構造的部分型" description="型の互換性は名前ではなく構造で決まる" />
   <Card title="型消去" description="TypeScriptの型情報は実行時に消える" />
-  <Card title="prototypeの動的this" description="this はメソッドの呼び出し方で変わる" />
+  <Card title="プロトタイプベース" description="プロトタイプOOPであるJSはクラスをシンタックスシュガーで表現" />
 </CardGrid>
-
-<div class="mt-8 text-center">
-
-これから、この3つの原因が**4つの落とし穴**を生む様子を順に見ていく
-
-</div>
 
 <!--
 落とし穴篇に入る前に、根本原因を3つ提示します。構造的部分型、型消去、そしてprototypeの動的thisです。
