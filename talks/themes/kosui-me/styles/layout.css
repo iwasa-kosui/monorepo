@@ -373,9 +373,11 @@
 
 .slidev-layout {
   code:not(pre code) {
-    @apply px-1.5 py-0.5 rounded text-sm font-mono;
+    @apply px-1.5 py-0.5 rounded font-mono;
     background-color: var(--theme-accent-bg);
     color: var(--theme-text);
+    font-size: 16px;
+    line-height: 1.25em;
   }
 
   pre {
@@ -387,8 +389,10 @@
       0 4px 16px rgba(60, 50, 45, 0.06);
 
     code {
-      @apply block p-6 text-base;
+      @apply block p-6;
       font-family: 'Fira Code', monospace;
+      font-size: 16px;
+      line-height: 1.25em;
     }
   }
 }
