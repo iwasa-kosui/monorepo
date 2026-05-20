@@ -848,8 +848,7 @@ function render(item: Drawable) {
 ```
 
 - `interface` / `type` はトランスパイルで**消える**ので `instanceof` の対象にできない
-- TS は「JS に型を追加する」言語で、新しいランタイム構造を入れない原則
-- class に対する `instanceof` でさえ、構造的部分型と組み合わさると当てにならない
+- TS はあくまでランタイムに干渉しない
 
 <!--
 型消去が生む落とし穴の2つ目は instanceof です。interface に対して instanceof を使おうとするとコンパイルエラーになります。interface はトランスパイルで消えるため、実行時には存在しません。
