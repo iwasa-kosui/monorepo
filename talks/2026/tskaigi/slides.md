@@ -738,12 +738,6 @@ layout: center
 
 </div>
 
-<div class="mt-4 text-sm opacity-70 text-center">
-
-構造的部分型 → 1つ ／ 型消去 → 2つ ／ prototype 動的this → 1つ
-
-</div>
-
 <!--
 落とし穴篇に入る前に、根本原因を3つ提示します。構造的部分型、型消去、そしてprototypeの動的thisです。
 構造的部分型とは、型の互換性が名前ではなく構造で決まる仕組みです。型消去とは、TypeScriptの型情報がトランスパイル時に消え、実行時には存在しないことです。prototypeの動的thisは、メソッドの呼び出し方によってthisが変わるJavaScriptランタイム側の仕様です。
