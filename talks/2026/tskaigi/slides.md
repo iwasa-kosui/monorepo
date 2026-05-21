@@ -811,16 +811,22 @@ run({ log: (m) => logs.push(m) });
 <div>
 
 ```typescript
-class User    { constructor(public id: string, public name: string) {} }
-class Product { constructor(public id: string, public name: string) {} }
+class User {
+  constructor(
+    public id: string,
+    public name: string,
+  ) {}
+}
+class Product {
+  constructor(
+    public id: string,
+    public name: string,
+  ) {}
+}
 
-const sortByUserId = (users: ReadonlyArray<User>): ReadonlyArray<User> =>
-  [...users].sort((a, b) => a.id.localeCompare(b.id));
+const sendEmailTo = (user: User) => { /* ... */ };
 
-sortByUserId([
-  new User("1", "田中"),
-  new Product("2", "商品A"),
-]);
+sendEmailTo(new Product("2", "商品A"));
 // ↑ エラーなし!
 ```
 
@@ -843,7 +849,7 @@ code {
 </style>
 
 <!--
-User と Product はクラス名が違いますが、id と name という同じプロパティ構成を持っています。TypeScript は構造で互換を判定するため、sortByUserId に Product を渡してもエラーになりません。Java であればクラスローダーが型のアイデンティティを保持するため別物として扱われますが、TypeScript にはそれがないため、構造が同じものは同じ型として通ります。
+User と Product はクラス名が違いますが、id と name という同じプロパティ構成を持っています。TypeScript は構造で互換を判定するため、sendEmailTo に Product を渡してもエラーになりません。名前的部分型の言語であれば別物として扱われますが、TypeScript には型のアイデンティティが実行時にもコンパイル時にも存在しないため、構造が同じものは同じ型として通ります。
 -->
 
 
