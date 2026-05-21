@@ -806,6 +806,10 @@ run({ log: (m) => logs.push(m) });
 
 # 落とし穴: User と Product を区別できない
 
+<div class="grid grid-cols-2 gap-6 mt-4 items-start">
+
+<div>
+
 ```typescript
 class User    { constructor(public id: string, public name: string) {} }
 class Product { constructor(public id: string, public name: string) {} }
@@ -813,11 +817,30 @@ class Product { constructor(public id: string, public name: string) {} }
 const sortByUserId = (users: ReadonlyArray<User>): ReadonlyArray<User> =>
   [...users].sort((a, b) => a.id.localeCompare(b.id));
 
-sortByUserId([new User("1", "田中"), new Product("2", "商品A")]); // エラーなし!
+sortByUserId([
+  new User("1", "田中"),
+  new Product("2", "商品A"),
+]);
+// ↑ エラーなし!
 ```
+
+</div>
+
+<div>
 
 - `User` と `Product` はクラス名が違うだけでプロパティ構成が同じ
 - TypeScript は構造で互換を判断するため、Product を User として渡しても通る
+
+</div>
+
+</div>
+
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
 
 <!--
 User と Product はクラス名が違いますが、id と name という同じプロパティ構成を持っています。TypeScript は構造で互換を判定するため、sortByUserId に Product を渡してもエラーになりません。Java であればクラスローダーが型のアイデンティティを保持するため別物として扱われますが、TypeScript にはそれがないため、構造が同じものは同じ型として通ります。
