@@ -1,5 +1,6 @@
 import type { Result } from '@praha/byethrow';
 
+import type { BotId } from './bot-id.ts';
 import type { ChannelId } from './channel-id.ts';
 import type { SlackApiError } from './slack-api-error.ts';
 import type { SlackMessage } from './slack-message.ts';
@@ -20,6 +21,11 @@ export type PostMessageInput = Readonly<{
   text: string;
 }>;
 
+export type DeleteMessageInput = Readonly<{
+  channel: ChannelId;
+  ts: SlackTs;
+}>;
+
 export type ChannelTopLevelTsQuery = Readonly<{
   channel: ChannelId;
   oldest: SlackTs;
@@ -27,6 +33,16 @@ export type ChannelTopLevelTsQuery = Readonly<{
 
 export type ChannelTopLevelTsResult = Readonly<{
   topLevelTs: ReadonlyArray<SlackTs>;
+  truncated: boolean;
+}>;
+
+export type ListBotMessagesQuery = Readonly<{
+  channel: ChannelId;
+  botId: BotId;
+}>;
+
+export type ListBotMessagesResult = Readonly<{
+  ts: ReadonlyArray<SlackTs>;
   truncated: boolean;
 }>;
 
@@ -39,4 +55,8 @@ export type SlackPort = Readonly<{
     query: ChannelTopLevelTsQuery,
   ) => Result.Result<ChannelTopLevelTsResult, SlackApiError>;
   postMessage: (input: PostMessageInput) => Result.Result<void, SlackApiError>;
+  listChannelBotMessages: (
+    query: ListBotMessagesQuery,
+  ) => Result.Result<ListBotMessagesResult, SlackApiError>;
+  deleteMessage: (input: DeleteMessageInput) => Result.Result<void, SlackApiError>;
 }>;
