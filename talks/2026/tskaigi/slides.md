@@ -1384,20 +1384,4 @@ class を書く側は、フィールド型に Branded Type を入れる、decora
 どちらの立場でも、基にある原理は同じ「値の世界」です。そこから戦術が分かれます。
 -->
 
----
-
-# 3つの持ち帰りポイント
-
-<CardGrid :cols="3">
-  <SummaryCard :number="1" title="歴史的必然" description="classの複雑さは ECMAScript との長期にわたる整合作業の結果" subdescription="設計ミスではなく、TypeScript と JavaScript の経緯から生まれたもの" />
-  <SummaryCard :number="2" title="3つの特性" description="構造的部分型 / 型消去 / プロトタイプベース" subdescription="個別の落とし穴を暗記するより、この3つを理解する" />
-  <SummaryCard :number="3" title="値で全てを表現する世界" description="Branded Type / Discriminated Union / 関数で、失われたものを値で取り戻せる" subdescription="トランスパイル時にも実行時にも参照できる「値」だけで完結する" />
-</CardGrid>
-
-<!--
-持ち帰りポイントを3つにまとめます。
-1つ目、classの複雑さは歴史的必然です。設計ミスではなく、TypeScript と JavaScript の重なりが生んだ形であり、その歴史を踏まえて付き合うべきものです。
-2つ目、構造的部分型・型消去・プロトタイプベースという3つの特性を理解すれば、個別の落とし穴を暗記しなくても体系的に見えるようになります。
-3つ目、Branded Type / Discriminated Union / 関数によって、class が持っていた「名前」「種別」「振る舞い」を値の世界で取り戻すことができます。「クラスがない世界」とは、トランスパイル時にも実行時にも参照できる「値」だけで全てを表現する世界です。立場ごとの戦術は違っても、基にある原理は同じです。class を書き続ける方も、避けてきた方も、この「値の世界」を共通の語彙として持ち帰っていただきたいと思います。
--->
 
