@@ -620,21 +620,22 @@ code {
 
 `x = 42` を JS の何に変換するかで、**親の setter が走るかどうか**が変わる
 
+```typescript
+class Base { set x(v: number) { console.log("setter!", v); } }
+class Sub extends Base { x = 42 }   // ← この行は何に変換される？
+```
+
 <div class="grid grid-cols-2 gap-6 mt-4">
 
 <div>
 
 ### `[[Set]]`（TypeScript 当初）
 
-代入として展開 → 親の setter が走る
+代入として展開 → `setter! 42` が出力される
 
 ```typescript
-class Sub extends Base {
-  constructor() {
-    super();
-    this.x = 42;
-  }
-}
+// Sub の constructor 内
+this.x = 42;
 ```
 
 </div>
@@ -643,18 +644,14 @@ class Sub extends Base {
 
 ### `[[Define]]`（ES2022 標準）
 
-`Object.defineProperty` として展開 → setter をバイパス
+`Object.defineProperty` として展開 → setter は呼ばれない
 
 ```typescript
-class Sub extends Base {
-  constructor() {
-    super();
-    Object.defineProperty(this, "x", {
-      value: 42, writable: true,
-      enumerable: true, configurable: true,
-    });
-  }
-}
+// Sub の constructor 内
+Object.defineProperty(this, "x", {
+  value: 42, writable: true,
+  enumerable: true, configurable: true,
+});
 ```
 
 </div>
@@ -665,8 +662,9 @@ class Sub extends Base {
 
 <!--
 クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
-左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれます。
-右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされます。
+上のコードのように、Base に setter があって Sub で x = 42 と書くケースを考えます。この x = 42 という1行が JS にどう変換されるかが、左右で違います。
+左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれ、setter! 42 が出力されます。
+右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされ、何も出力されません。
 この食い違いは MobX や TypeORM などのフレームワークに破壊的な影響を与えました。TypeScript 3.7 で useDefineForClassFields フラグが導入され、target が ES2022 以上では既定で標準準拠の Define になります。仕様より早く実装することの「コスト」を示す教訓です。
 -->
 
