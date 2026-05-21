@@ -15,6 +15,7 @@ import type {
 } from '../../domain/slack-port.ts';
 import type { SlackTs } from '../../domain/slack-ts.ts';
 import { callSlack } from './call-slack.ts';
+import { AuthTestResponseSchema } from './schemas/auth-test-response.ts';
 import { ChatDeleteResponseSchema } from './schemas/chat-delete-response.ts';
 import { ChatPostMessageResponseSchema } from './schemas/chat-post-message-response.ts';
 import { ConversationsHistoryResponseSchema } from './schemas/conversations-history-response.ts';
@@ -226,6 +227,19 @@ export const SlackHttpClient = {
         Result.map(() => undefined),
       );
 
+    const authTest: SlackPort['authTest'] = () =>
+      Result.pipe(
+        callSlack(config.botToken, 'auth.test', {}, AuthTestResponseSchema),
+        Result.map((res) => ({
+          botId: res.bot_id,
+          userId: res.user_id,
+          user: res.user,
+          team: res.team,
+          teamId: res.team_id,
+          url: res.url,
+        })),
+      );
+
     return {
       getChannelName,
       searchMessages,
@@ -233,6 +247,7 @@ export const SlackHttpClient = {
       postMessage,
       listChannelBotMessages,
       deleteMessage,
+      authTest,
     };
   },
 } as const;

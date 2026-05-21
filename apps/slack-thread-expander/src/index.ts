@@ -1,1 +1,1 @@
-export { cleanupPosts, installTrigger, main, uninstallTrigger } from './main.ts';
+export { cleanupPosts, installTrigger, main, uninstallTrigger, whoami } from './main.ts';

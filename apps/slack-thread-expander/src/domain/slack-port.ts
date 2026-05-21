@@ -5,6 +5,7 @@ import type { ChannelId } from './channel-id.ts';
 import type { SlackApiError } from './slack-api-error.ts';
 import type { SlackMessage } from './slack-message.ts';
 import type { SlackTs } from './slack-ts.ts';
+import type { UserId } from './user-id.ts';
 
 export type SearchMessagesQuery = Readonly<{
   channelName: string;
@@ -46,6 +47,15 @@ export type ListBotMessagesResult = Readonly<{
   truncated: boolean;
 }>;
 
+export type AuthIdentity = Readonly<{
+  botId: BotId | undefined;
+  userId: UserId | undefined;
+  user: string | undefined;
+  team: string | undefined;
+  teamId: string | undefined;
+  url: string | undefined;
+}>;
+
 export type SlackPort = Readonly<{
   getChannelName: (channel: ChannelId) => Result.Result<string | undefined, SlackApiError>;
   searchMessages: (
@@ -59,4 +69,5 @@ export type SlackPort = Readonly<{
     query: ListBotMessagesQuery,
   ) => Result.Result<ListBotMessagesResult, SlackApiError>;
   deleteMessage: (input: DeleteMessageInput) => Result.Result<void, SlackApiError>;
+  authTest: () => Result.Result<AuthIdentity, SlackApiError>;
 }>;

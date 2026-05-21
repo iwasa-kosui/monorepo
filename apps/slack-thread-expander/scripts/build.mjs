@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { copyFile, mkdir } from 'node:fs/promises';
 
-const exportedNames = ['main', 'installTrigger', 'uninstallTrigger', 'cleanupPosts'];
+const exportedNames = ['main', 'installTrigger', 'uninstallTrigger', 'cleanupPosts', 'whoami'];
 
 await mkdir('dist', { recursive: true });
 

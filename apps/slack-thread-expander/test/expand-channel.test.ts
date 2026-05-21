@@ -67,6 +67,15 @@ const buildMocks = (
     postMessage,
     listChannelBotMessages: () => Result.succeed({ ts: [], truncated: false }),
     deleteMessage: () => Result.succeed(undefined),
+    authTest: () =>
+      Result.succeed({
+        botId: undefined,
+        userId: undefined,
+        user: undefined,
+        team: undefined,
+        teamId: undefined,
+        url: undefined,
+      }),
   };
   const clock: ClockPort = {
     nowMs: () => 0,
