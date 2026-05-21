@@ -96,7 +96,7 @@ describe('expandChannel', () => {
       expect(outcome.expanded).toBe(1);
       expect(outcome.cursorTo).toBe('1700000100.000000');
     }
-    expect(mocks.postMessage).toHaveBeenCalledWith({ channel, text: permalink });
+    expect(mocks.postMessage).toHaveBeenCalledWith({ channel, text: `<${permalink}|リンク>` });
   });
 
   it('selfBotId と一致する bot_id を持つメッセージは skippedOwn としてカウントし post しない', () => {
