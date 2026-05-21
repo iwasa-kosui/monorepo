@@ -811,22 +811,13 @@ run({ log: (m) => logs.push(m) });
 <div>
 
 ```typescript
-class User {
-  constructor(
-    public id: string,
-    public name: string,
-  ) {}
-}
-class Product {
-  constructor(
-    public id: string,
-    public name: string,
-  ) {}
-}
+class User { name = "" }
+class Product { name = "" }
 
-const sendEmailTo = (user: User) => { /* ... */ };
+const greet = (u: User) =>
+  `Hello, ${u.name}`;
 
-sendEmailTo(new Product("2", "商品A"));
+console.log(greet(new Product()));
 // ↑ エラーなし!
 ```
 
@@ -849,7 +840,7 @@ code {
 </style>
 
 <!--
-User と Product はクラス名が違いますが、id と name という同じプロパティ構成を持っています。TypeScript は構造で互換を判定するため、sendEmailTo に Product を渡してもエラーになりません。名前的部分型の言語であれば別物として扱われますが、TypeScript には型のアイデンティティが実行時にもコンパイル時にも存在しないため、構造が同じものは同じ型として通ります。
+Q1 で見せたコードです。User と Product はクラス名が違いますが、name という同じプロパティを持っています。TypeScript は構造で互換を判定するため、greet に Product を渡してもエラーになりません。名前的部分型の言語であれば別物として扱われますが、TypeScript には型のアイデンティティが実行時にもコンパイル時にも存在しないため、構造が同じものは同じ型として通ります。
 -->
 
 
