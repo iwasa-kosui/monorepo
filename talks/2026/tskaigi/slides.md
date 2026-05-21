@@ -1195,9 +1195,10 @@ layout: section
 
 <div>
 
-### class を書かざるを得ない側
+### class を書く側
 
-Angular / NestJS / Web Components / TypeORM
+Angular / NestJS / Web Components / TypeORM の他、  
+Custom Error (`extends Error`) / `Symbol.dispose` (`using` 対応) も class が自然
 
 - フィールド型に **Branded Type** を入れる
 - decorator が要らないメソッドは**アロー関数フィールド**で lexical this に固定する
@@ -1227,8 +1228,8 @@ React / Vue 3 / Hono / Elysia / 自分のドメイン層
 </MessageBox>
 
 <!--
-最後に立場ごとの戦略です。class を使うかどうかは、多くの場合フレームワークが決めます。Angular / NestJS / Web Components / TypeORM では class を書かざるを得ません。
-書かざるを得ない側は、フィールド型に Branded Type を入れる、decorator が要らないメソッドはアロー関数フィールドで lexical this に固定する、ドメインロジックは class の外に関数として切り出す。落とし穴を値で対処して、限定された範囲で class を扱います。
+最後に立場ごとの戦略です。class を使うかどうかは、多くの場合フレームワークが決めます。Angular / NestJS / Web Components / TypeORM では class を書かざるを得ません。それ以外でも、Custom Error クラスや Symbol.dispose で using ライフサイクルを実装する場合は class が自然な選択です。
+class を書く側は、フィールド型に Branded Type を入れる、decorator が要らないメソッドはアロー関数フィールドで lexical this に固定する、ドメインロジックは class の外に関数として切り出す。落とし穴を値で対処して、限定された範囲で class を扱います。
 書かない側は、ID は Branded Type + スキーマ、種別は Discriminated Union、振る舞いは関数、テストはダミー値で。そしてフレームワーク選定の際に、その class 強制度を批評の材料として持っておく。
 どちらの立場でも、基にある原理は同じ「値の世界」です。そこから戦術が分かれます。
 -->
