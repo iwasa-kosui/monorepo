@@ -1117,14 +1117,13 @@ const uploader = new Uploader();
 [1].forEach(uploader.upload);  // TypeError: Cannot read properties of undefined
 ```
 
-- JS のメソッド呼び出しは「プロパティ参照」と「`this` 設定」の**2 ステップ**
-- 変数代入やコールバック渡しは**1 ステップ目だけ**実行され、`this` が切り離される
-- class は今も `prototype` に基づいて構築
+- `uploader.upload()` の形で呼ぶと `this = uploader`
+- 関数を変数経由で呼ぶと `this = undefined`（インスタンスとの紐付けが切れる）
+- class は今も `prototype` に基づいて構築 → メソッドはインスタンスに束縛されず、**呼び出し方**で `this` が決まる
 
 <!--
-プロトタイプベースが引き起こす落とし穴です。メソッドをコールバックとして渡すと this が undefined になり TypeError になります。
-JavaScript のメソッド呼び出しは内部的に2ステップで動きます。プロパティ参照と this 設定です。変数経由で呼ぶと1ステップ目だけが実行され、this が切り離されます。
-歴史編で見た TypeScript 0.8 のトランスパイル後の ES5 を思い出してください。今書いている class の中身は、当時の prototype.greet = function() を class 構文で書き換えただけで、動的 this の挙動はその当時から変わっていません。
+プロトタイプベースが引き起こす落とし穴です。`uploader.upload()` の形で呼べば this は uploader ですが、`[1].forEach(uploader.upload)` のように関数を渡すと、forEach が呼ぶときには this の情報が失われて undefined になり TypeError になります。
+歴史編で見た TS 0.8 のトランスパイル後の ES5 を思い出してください。class は今も prototype 上の関数で、メソッドはインスタンスに束縛されていません。`obj.method()` という呼び方をしている間だけ this = obj が設定される、というのが JS の仕組みです。
 -->
 
 ---
