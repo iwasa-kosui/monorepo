@@ -2,6 +2,7 @@ import { Result } from '@praha/byethrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BotId } from '../src/domain/bot-id.ts';
+import type { ChannelControlPort } from '../src/domain/channel-control-port.ts';
 import { ChannelId } from '../src/domain/channel-id.ts';
 import type { ClockPort } from '../src/domain/clock-port.ts';
 import type { CursorPort } from '../src/domain/cursor-port.ts';
@@ -33,6 +34,7 @@ const buildMessage = (overrides: Partial<SlackMessage>): SlackMessage => ({
 type Mocks = Readonly<{
   slack: SlackPort;
   cursor: CursorPort;
+  channelControl: ChannelControlPort;
   clock: ClockPort;
   logger: LoggerPort;
   postMessage: ReturnType<typeof vi.fn>;
@@ -53,6 +55,13 @@ const buildMocks = (
   const cursor: CursorPort = {
     get: () => (options.lastTs ? ts(options.lastTs) : undefined),
     set: setCursor,
+    clear: vi.fn(),
+  };
+  const channelControl: ChannelControlPort = {
+    isEnabled: () => true,
+    setEnabled: vi.fn(),
+    getControlCursor: () => undefined,
+    setControlCursor: vi.fn(),
   };
   const slack: SlackPort = {
     getChannelName: () => Result.succeed(options.channelName ?? 'general'),
@@ -76,13 +85,14 @@ const buildMocks = (
         teamId: undefined,
         url: undefined,
       }),
+    getChannelRecentMessages: () => Result.succeed({ messages: [], truncated: false }),
   };
   const clock: ClockPort = {
     nowMs: () => 0,
     nowSlackTs: () => ts('1700000000.000000'),
   };
   const logger: LoggerPort = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-  return { slack, cursor, clock, logger, postMessage, setCursor };
+  return { slack, cursor, channelControl, clock, logger, postMessage, setCursor };
 };
 
 describe('expandChannel', () => {

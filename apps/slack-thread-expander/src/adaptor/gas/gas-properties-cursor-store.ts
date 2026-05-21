@@ -20,5 +20,10 @@ export const GasPropertiesCursorStore = {
         ts,
       );
     },
+    clear: (channel) => {
+      PropertiesService.getScriptProperties().deleteProperty(
+        `${KEY_PREFIX}${channel}`,
+      );
+    },
   }),
 } as const;

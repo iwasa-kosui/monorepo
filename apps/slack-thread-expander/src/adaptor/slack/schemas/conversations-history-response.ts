@@ -10,6 +10,8 @@ export const ConversationsHistoryMessageSchema = z.object({
   subtype: z.string().optional(),
   user: UserId.schema.optional(),
   bot_id: BotId.schema.optional(),
+  text: z.string().optional(),
+  thread_ts: SlackTs.schema.optional(),
 });
 
 export type ConversationsHistoryMessage = z.infer<

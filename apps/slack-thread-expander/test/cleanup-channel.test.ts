@@ -47,6 +47,7 @@ const buildMocks = (
     listChannelBotMessages,
     deleteMessage,
     authTest: vi.fn(),
+    getChannelRecentMessages: vi.fn(),
   };
   const logger: LoggerPort = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   return { slack, logger, deleteMessage, listChannelBotMessages };

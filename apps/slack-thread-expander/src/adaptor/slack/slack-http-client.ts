@@ -10,6 +10,9 @@ import type {
   ListBotMessagesQuery,
   ListBotMessagesResult,
   PostMessageInput,
+  RecentMessage,
+  RecentMessagesQuery,
+  RecentMessagesResult,
   SearchMessagesQuery,
   SlackPort,
 } from '../../domain/slack-port.ts';
@@ -152,6 +155,7 @@ export const SlackHttpClient = {
           {
             channel: input.channel,
             text: input.text,
+            thread_ts: input.threadTs,
             unfurl_links: true,
             unfurl_media: true,
           },
@@ -227,6 +231,67 @@ export const SlackHttpClient = {
         Result.map(() => undefined),
       );
 
+    type RecentHistoryPage = Readonly<{
+      pageMessages: ReadonlyArray<RecentMessage>;
+      nextCursor: string | undefined;
+    }>;
+
+    const fetchRecentPage = (
+      query: RecentMessagesQuery,
+      cursor: string | undefined,
+    ): Result.Result<RecentHistoryPage, SlackApiError> =>
+      Result.pipe(
+        callSlack(
+          config.userToken,
+          'conversations.history',
+          {
+            channel: query.channel,
+            oldest: query.oldest,
+            limit: HISTORY_PAGE_SIZE,
+            cursor,
+          },
+          ConversationsHistoryResponseSchema,
+        ),
+        Result.map((res): RecentHistoryPage => {
+          const next = res.response_metadata?.next_cursor ?? '';
+          const nextCursor = res.has_more === true && next !== '' ? next : undefined;
+          const pageMessages: ReadonlyArray<RecentMessage> = (res.messages ?? []).map(
+            (m): RecentMessage => ({
+              ts: m.ts,
+              text: m.text,
+              user: m.user,
+              botId: m.bot_id,
+              subtype: m.subtype,
+              threadTs: m.thread_ts,
+            }),
+          );
+          return { pageMessages, nextCursor };
+        }),
+      );
+
+    const accumulateRecent = (
+      query: RecentMessagesQuery,
+      collected: ReadonlyArray<RecentMessage>,
+      cursor: string | undefined,
+      remainingPages: number,
+    ): Result.Result<RecentMessagesResult, SlackApiError> =>
+      Result.pipe(
+        fetchRecentPage(query, cursor),
+        Result.andThen(({ pageMessages, nextCursor }): Result.Result<RecentMessagesResult, SlackApiError> => {
+          const next: ReadonlyArray<RecentMessage> = [...collected, ...pageMessages];
+          if (nextCursor === undefined) {
+            return Result.succeed({ messages: next, truncated: false });
+          }
+          if (remainingPages <= 1) {
+            return Result.succeed({ messages: next, truncated: true });
+          }
+          return accumulateRecent(query, next, nextCursor, remainingPages - 1);
+        }),
+      );
+
+    const getChannelRecentMessages: SlackPort['getChannelRecentMessages'] = (query) =>
+      accumulateRecent(query, [], undefined, HISTORY_MAX_PAGES);
+
     const authTest: SlackPort['authTest'] = () =>
       Result.pipe(
         callSlack(config.botToken, 'auth.test', {}, AuthTestResponseSchema),
@@ -248,6 +313,7 @@ export const SlackHttpClient = {
       listChannelBotMessages,
       deleteMessage,
       authTest,
+      getChannelRecentMessages,
     };
   },
 } as const;

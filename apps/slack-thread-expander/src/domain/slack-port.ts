@@ -20,6 +20,7 @@ export type SearchMessagesResult = Readonly<{
 export type PostMessageInput = Readonly<{
   channel: ChannelId;
   text: string;
+  threadTs?: SlackTs;
 }>;
 
 export type DeleteMessageInput = Readonly<{
@@ -47,6 +48,25 @@ export type ListBotMessagesResult = Readonly<{
   truncated: boolean;
 }>;
 
+export type RecentMessage = Readonly<{
+  ts: SlackTs;
+  text: string | undefined;
+  user: UserId | undefined;
+  botId: BotId | undefined;
+  subtype: string | undefined;
+  threadTs: SlackTs | undefined;
+}>;
+
+export type RecentMessagesQuery = Readonly<{
+  channel: ChannelId;
+  oldest: SlackTs;
+}>;
+
+export type RecentMessagesResult = Readonly<{
+  messages: ReadonlyArray<RecentMessage>;
+  truncated: boolean;
+}>;
+
 export type AuthIdentity = Readonly<{
   botId: BotId | undefined;
   userId: UserId | undefined;
@@ -70,4 +90,7 @@ export type SlackPort = Readonly<{
   ) => Result.Result<ListBotMessagesResult, SlackApiError>;
   deleteMessage: (input: DeleteMessageInput) => Result.Result<void, SlackApiError>;
   authTest: () => Result.Result<AuthIdentity, SlackApiError>;
+  getChannelRecentMessages: (
+    query: RecentMessagesQuery,
+  ) => Result.Result<RecentMessagesResult, SlackApiError>;
 }>;

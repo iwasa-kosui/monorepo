@@ -1,3 +1,4 @@
+import type { ChannelControlPort } from '../domain/channel-control-port.ts';
 import { ChannelTickOutcome } from '../domain/channel-tick-outcome.ts';
 import type { ClockPort } from '../domain/clock-port.ts';
 import type { Config } from '../domain/config.ts';
@@ -8,10 +9,12 @@ import { SlackApiError } from '../domain/slack-api-error.ts';
 import type { SlackPort } from '../domain/slack-port.ts';
 import { assertNever } from '../util/assert-never.ts';
 import { expandChannel } from './expand-channel.ts';
+import { processControlCommands } from './process-control-commands.ts';
 
 export type RunTickDeps = Readonly<{
   slack: SlackPort;
   cursor: CursorPort;
+  channelControl: ChannelControlPort;
   clock: ClockPort;
   lock: LockPort;
   logger: LoggerPort;
@@ -21,6 +24,8 @@ const formatOutcomeSummary = (outcome: ChannelTickOutcome): string => {
   switch (outcome.kind) {
     case 'Initialized':
       return `[${outcome.channel}] summary: initialized lastTs=${outcome.initialTs}`;
+    case 'Disabled':
+      return `[${outcome.channel}] summary: disabled (awaiting @bot on)`;
     case 'ChannelInfoFailed':
       return `[${outcome.channel}] summary: conversations.info failed - ${SlackApiError.format(outcome.error)}`;
     case 'ChannelNameMissing':
@@ -54,12 +59,29 @@ const runBody = (deps: RunTickDeps, config: Config): void => {
     return;
   }
   deps.logger.info(
-    `tick start: channels=[${config.targetChannels.join(',')}] selfBotId=${config.selfBotId ?? 'unset'}`,
+    `tick start: channels=[${config.targetChannels.join(',')}] selfBotId=${config.selfBotId ?? 'unset'} selfUserId=${
+      config.selfUserId ?? 'unset'
+    }`,
   );
+
+  // expand 前にコントロールコマンド (@bot on/off) を反映する。
+  // off は LAST_TS を消し、その後 on にした時に再展開されないようにする。
+  const controlOutcomes = processControlCommands({
+    slack: deps.slack,
+    cursor: deps.cursor,
+    channelControl: deps.channelControl,
+    clock: deps.clock,
+    logger: deps.logger,
+  })(config.targetChannels, config.selfUserId);
+  const controlApplied = controlOutcomes.reduce((acc, o) => acc + o.applied.length, 0);
+  if (controlApplied > 0) {
+    deps.logger.info(`control commands applied: ${controlApplied}`);
+  }
 
   const expand = expandChannel({
     slack: deps.slack,
     cursor: deps.cursor,
+    channelControl: deps.channelControl,
     clock: deps.clock,
     logger: deps.logger,
   });
