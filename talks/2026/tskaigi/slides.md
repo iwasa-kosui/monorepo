@@ -1348,11 +1348,12 @@ layout: section
 
 ### class を書く側
 
-Angular / NestJS / Web Components / TypeORM
+Angular / NestJS / TypeORM
 
 - フィールド型に **Branded Type** を入れる
-- decorator が要らないメソッドは**アロー関数フィールド**で lexical this に固定する
-- ドメインロジックは class の外に**関数として**切り出す
+- decorator が要らないメソッドは  
+**アロー関数フィールド**で lexical this に固定する
+- ドメインロジックは class 外に**関数として**切り出す
 
 </div>
 
@@ -1365,7 +1366,6 @@ React / Vue 3 / Hono / Elysia / 自分のドメイン層
 - ID は **Branded Type + スキーマ**で値に
 - 種別は **Discriminated Union**で判別
 - 振る舞いは **関数**、テストはダミー値で
-- フレームワーク選定で class 強制度を**批評の材料**に
 
 </div>
 
@@ -1401,25 +1401,3 @@ class を書く側は、フィールド型に Branded Type を入れる、decora
 3つ目、Branded Type / Discriminated Union / 関数によって、class が持っていた「名前」「種別」「振る舞い」を値の世界で取り戻すことができます。「クラスがない世界」とは、トランスパイル時にも実行時にも参照できる「値」だけで全てを表現する世界です。立場ごとの戦術は違っても、基にある原理は同じです。class を書き続ける方も、避けてきた方も、この「値の世界」を共通の語彙として持ち帰っていただきたいと思います。
 -->
 
----
-layout: center
-class: text-center
----
-
-# ご清聴ありがとうございました
-
-<div class="mt-8 space-y-2">
-  <div class="text-lg">X: @kosui_me</div>
-  <div class="text-lg">GitHub: @iwasa-kosui</div>
-  <div class="text-lg">Web: https://kosui.me</div>
-</div>
-
-<div class="mt-8 text-sm opacity-60">
-
-関連記事: [他言語経験者が知っておきたいTypeScriptのクラスの注意点](https://kakehashi-dev.hatenablog.com/entry/2025/08/19/110000)
-
-</div>
-
-<!--
-ご清聴ありがとうございました。関連するブログ記事のリンクも載せていますので、より詳しいコード例はそちらをご覧ください。ご質問があればお気軽にどうぞ。
--->
