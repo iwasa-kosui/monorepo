@@ -753,20 +753,17 @@ class: text-center
 
 # 特性1: 構造的部分型
 
-<MessageBox>
+## 部分型とは
 
-型の互換性は<br/>**型名・継承関係ではなく、構造（プロパティ構成）で**決まる
-
-</MessageBox>
-
-<div class="mt-8 grid grid-cols-2 gap-8 text-base">
+<div class="grid grid-cols-2 gap-8 text-base">
 
 <div>
 
 ### 名前的部分型: Java / C# / Rust
 
-- 型名と明示的に宣言された継承（`extends` / `implements` / trait 実装）で互換性が決まる
-- 同じ構造でも別名のクラスは別物
+型名と明示的に宣言された継承で互換性が決まる
+
+同じ構造でも別名のクラスは別物とみなす
 
 </div>
 
@@ -774,8 +771,9 @@ class: text-center
 
 ### 構造的部分型: TypeScript
 
-- JavaScript には型のアイデンティティが存在しない
-- class でもオブジェクトリテラルでも、同じ構造なら同じ型
+JavaScript には型のアイデンティティが存在しない
+
+class でもオブジェクトリテラルでも、同じ構造なら同じ型
 
 </div>
 
