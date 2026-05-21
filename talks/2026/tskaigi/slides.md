@@ -631,7 +631,7 @@ class Sub extends Base { x = 42 }   // ← この行は何に変換される？
 
 ### `[[Set]]`（TypeScript 当初）
 
-代入として展開 → `setter! 42` が出力される
+代入として展開 → `setter! 42` 出力
 
 ```typescript
 // Sub の constructor 内
@@ -644,14 +644,11 @@ this.x = 42;
 
 ### `[[Define]]`（ES2022 標準）
 
-`Object.defineProperty` として展開 → setter は呼ばれない
+`defineProperty` として展開 → setter バイパス
 
 ```typescript
 // Sub の constructor 内
-Object.defineProperty(this, "x", {
-  value: 42, writable: true,
-  enumerable: true, configurable: true,
-});
+Object.defineProperty(this, "x", { value: 42 });
 ```
 
 </div>
@@ -664,7 +661,7 @@ Object.defineProperty(this, "x", {
 クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
 上のコードのように、Base に setter があって Sub で x = 42 と書くケースを考えます。この x = 42 という1行が JS にどう変換されるかが、左右で違います。
 左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれ、setter! 42 が出力されます。
-右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされ、何も出力されません。
+右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされ、何も出力されません。なお厳密には writable / enumerable / configurable がすべて true の定義になりますが、スライド上は value だけに省略しています。
 この食い違いは MobX や TypeORM などのフレームワークに破壊的な影響を与えました。TypeScript 3.7 で useDefineForClassFields フラグが導入され、target が ES2022 以上では既定で標準準拠の Define になります。仕様より早く実装することの「コスト」を示す教訓です。
 -->
 
