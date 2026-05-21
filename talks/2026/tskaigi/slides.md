@@ -618,24 +618,22 @@ code {
 
 # `[[Define]]` vs `[[Set]]` 論争
 
-ES 仕様の内部メソッド表記。`[[Set]]` は代入相当、`[[Define]]` は `Object.defineProperty` 相当
-
-TypeScriptが先行実装したクラスフィールドのセマンティクスが、後からES標準と食い違った
+`x = 42` を JS の何に変換するかで、**親の setter が走るかどうか**が変わる
 
 <div class="grid grid-cols-2 gap-6 mt-4">
 
 <div>
 
-### `[[Set]]` (TypeScript当初)
+### `[[Set]]`（TypeScript 当初）
+
+代入として展開 → 親の setter が走る
 
 ```typescript
-// this.x = value 相当
-// スーパークラスのsetterを呼ぶ
-class Base {
-  set x(v: number) { console.log("setter!", v); }
-}
 class Sub extends Base {
-  x = 42; // setter!が呼ばれる
+  constructor() {
+    super();
+    this.x = 42;
+  }
 }
 ```
 
@@ -643,16 +641,19 @@ class Sub extends Base {
 
 <div>
 
-### `[[Define]]` (ES2022標準)
+### `[[Define]]`（ES2022 標準）
+
+`Object.defineProperty` として展開 → setter をバイパス
 
 ```typescript
-// Object.defineProperty相当
-// setterをバイパスする
-class Base {
-  set x(v: number) { console.log("setter!", v); }
-}
 class Sub extends Base {
-  x = 42; // setterは呼ばれない!
+  constructor() {
+    super();
+    Object.defineProperty(this, "x", {
+      value: 42, writable: true,
+      enumerable: true, configurable: true,
+    });
+  }
 }
 ```
 
@@ -660,12 +661,13 @@ class Sub extends Base {
 
 </div>
 
-`useDefineForClassFields` フラグで切り替え。`target` が ES2022 以上のとき、フラグ未指定なら `true`
+`useDefineForClassFields` で切り替え。`target: ES2022` 以上なら既定 `true`（= ES 標準準拠）
 
 <!--
-TypeScriptが先行実装したクラスフィールドは、代入に相当するSetセマンティクスでした。しかしTC39はObject.definePropertyに相当するDefineセマンティクスを採用しました。
-違いはスーパークラスにsetterがある場合に顕著です。Setではsetterが呼ばれますが、Defineではバイパスされます。この食い違いはMobXやTypeORMなどのフレームワークに破壊的影響を与えました。
-TypeScript 3.7でuseDefineForClassFieldsフラグが導入され、ES2022以上ではデフォルトでDefine（ES標準準拠）になります。仕様より早く実装することの「コスト」を示す教訓です。
+クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
+左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれます。
+右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされます。
+この食い違いは MobX や TypeORM などのフレームワークに破壊的な影響を与えました。TypeScript 3.7 で useDefineForClassFields フラグが導入され、target が ES2022 以上では既定で標準準拠の Define になります。仕様より早く実装することの「コスト」を示す教訓です。
 -->
 
 ---
