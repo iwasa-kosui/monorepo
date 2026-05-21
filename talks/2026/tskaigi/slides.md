@@ -1247,7 +1247,7 @@ expect(await findUserById(id)).toBeNull();
 
 - 型を満たすダミー値で足りる → **コンストラクタもモックライブラリも不要**
 - Branded Type + スキーマライブラリで、**本番と同じ検証ロジックを通った値**をテストでも使える
-- class なら必要な `new` 組み立て・protected の開放・モック定義などの事前準備が不要
+- class なら必要な `new` 組み立てやモック定義などの事前準備が不要
 
 <MessageBox>
 
