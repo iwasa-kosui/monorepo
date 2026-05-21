@@ -731,15 +731,15 @@ class: text-center
 <div class="mt-12 grid grid-cols-3 gap-6 items-stretch">
   <div class="py-6 px-4 rounded-lg" style="background-color: var(--theme-accent-bg);">
     <div class="text-2xl font-bold mb-2">構造的部分型</div>
-    <div class="text-sm">型の互換性は名前ではなく構造で決まる</div>
+    <div class="text-sm">型の互換性は<br/>名前ではなく構造で決まる</div>
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">型消去</div>
-    <div class="text-sm">TypeScript の型情報は実行時に消える</div>
+    <div class="text-sm">TypeScript の型情報は<br/>実行時に消える</div>
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンのシンタックスシュガー</div>
+    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
   </div>
 </div>
 
@@ -843,15 +843,15 @@ class: text-center
 <div class="mt-12 grid grid-cols-3 gap-6 items-stretch">
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">構造的部分型</div>
-    <div class="text-sm">型の互換性は名前ではなく構造で決まる</div>
+    <div class="text-sm">型の互換性は<br/>名前ではなく構造で決まる</div>
   </div>
   <div class="py-6 px-4 rounded-lg" style="background-color: var(--theme-accent-bg);">
     <div class="text-2xl font-bold mb-2">型消去</div>
-    <div class="text-sm">TypeScript の型情報は実行時に消える</div>
+    <div class="text-sm">TypeScript の型情報は<br/>実行時に消える</div>
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンのシンタックスシュガー</div>
+    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
   </div>
 </div>
 
@@ -996,15 +996,15 @@ class: text-center
 <div class="mt-12 grid grid-cols-3 gap-6 items-stretch">
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">構造的部分型</div>
-    <div class="text-sm">型の互換性は名前ではなく構造で決まる</div>
+    <div class="text-sm">型の互換性は<br/>名前ではなく構造で決まる</div>
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">型消去</div>
-    <div class="text-sm">TypeScript の型情報は実行時に消える</div>
+    <div class="text-sm">TypeScript の型情報は<br/>実行時に消える</div>
   </div>
   <div class="py-6 px-4 rounded-lg" style="background-color: var(--theme-accent-bg);">
     <div class="text-2xl font-bold mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンのシンタックスシュガー</div>
+    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
   </div>
 </div>
 
