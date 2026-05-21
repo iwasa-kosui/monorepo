@@ -965,14 +965,14 @@ class Account { private balance = 10000; }
 ### `Symbol.hasInstance`
 
 ```typescript
-class IsCircle {
+class Circle {
   static [Symbol.hasInstance](v: unknown): v is Circle {
     return typeof v === "object" && v !== null
       && (v as Circle).kind === "circle";
   }
 }
 
-if (shape instanceof IsCircle) { /* Circle に narrowing */ }
+if (shape instanceof Circle) { /* Circle に narrowing */ }
 ```
 
 class の `static` で instanceof を hijack する
