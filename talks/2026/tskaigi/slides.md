@@ -1245,9 +1245,9 @@ const id: UserId = UserId.parse(crypto.randomUUID());
 expect(await findUserById(id)).toBeNull();
 ```
 
-- ダミー値はシグニチャを満たせば十分 → **コンストラクタもモックライブラリも要らない**
-- Branded Type + スキーマライブラリで、**本番と同じ検証ロジックで作った値**をテストにも持ち込める
-- class なら `new` で組み立てて、protected を public に開けて...という事前準備が要らない
+- 型を満たすダミー値で足りる → **コンストラクタもモックライブラリも不要**
+- Branded Type + スキーマライブラリで、**本番と同じ検証ロジックを通った値**をテストでも使える
+- class なら必要な `new` 組み立て・protected の開放・モック定義などの事前準備が不要
 
 <MessageBox>
 
