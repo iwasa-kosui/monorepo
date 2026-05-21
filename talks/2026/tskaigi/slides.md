@@ -542,7 +542,7 @@ TypeScript が **ES2015 より3年先に** class を実装した
 
 - ES4 の反省から、TC39 全員が合意できる**最小限**の class を ES2015 に
 - private / static fields / decorators は**すべて後回し**
-- 中身は prototype チェーンの**シンタックスシュガー**
+- 中身は**プロトタイプに基づいて構築**された構文
 
 <MessageBox>
 
@@ -552,7 +552,7 @@ TypeScript が **ES2015 より3年先に** class を実装した
 
 <!--
 classの歴史は ES4 の挫折から始まります。2008年、class や強い型付けを含む野心的な ES4 は、互換性破壊への懸念から廃棄されました。class 構文を持たない JavaScript を補うため、CoffeeScript などの AltJS が広まります。
-ES2015 でようやく class が標準化されますが、ES4 の反省から「全員が合意できる最小限」だけが入りました。private や static fields、decorators はすべて後回し。中身はあくまで prototype の構文書き換えです。
+ES2015 でようやく class が標準化されますが、ES4 の反省から「全員が合意できる最小限」だけが入りました。private や static fields、decorators はすべて後回し。中身はあくまでプロトタイプに基づいて構築された構文です。
 この「最小限で始めて後から積む」アプローチが、後に TypeScript と ECMAScript を整合させ続けるコストの原因になりました。
 -->
 
@@ -739,13 +739,13 @@ class: text-center
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
+    <div class="text-sm">class は prototype に基づいて<br/>構築されている</div>
   </div>
 </div>
 
 <!--
 ここからは TypeScript の class を形作っている3つの特性を見ていきます。構造的部分型、型消去、プロトタイプベース。
-構造的部分型とは、型の互換性が名前ではなく構造で決まる仕組みです。型消去とは、TypeScript の型情報がトランスパイル時に消え、実行時には存在しないこと。プロトタイプベースとは、class が今も prototype チェーンのシンタックスシュガーで、this が呼び出し方で動的に決まるという JavaScript の仕組みのことです。
+構造的部分型とは、型の互換性が名前ではなく構造で決まる仕組みです。型消去とは、TypeScript の型情報がトランスパイル時に消え、実行時には存在しないこと。プロトタイプベースとは、class は今も prototype に基づいて構築されており、this が呼び出し方で動的に決まるという JavaScript の仕組みのことです。
 それぞれの特性に対応する落とし穴があります。構造的部分型から1つ、型消去から2つ、プロトタイプベースから1つ。まずは1つ目、構造的部分型から見ていきましょう。
 -->
 
@@ -851,7 +851,7 @@ class: text-center
   </div>
   <div class="py-6 px-4 rounded-lg opacity-30">
     <div class="text-2xl mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
+    <div class="text-sm">class は prototype に基づいて<br/>構築されている</div>
   </div>
 </div>
 
@@ -1004,12 +1004,12 @@ class: text-center
   </div>
   <div class="py-6 px-4 rounded-lg" style="background-color: var(--theme-accent-bg);">
     <div class="text-2xl font-bold mb-2">プロトタイプベース</div>
-    <div class="text-sm">class は prototype チェーンの<br/>シンタックスシュガー</div>
+    <div class="text-sm">class は prototype に基づいて<br/>構築されている</div>
   </div>
 </div>
 
 <!--
-構造的部分型と型消去を見てきました。最後の特性はプロトタイプベース。class は今も prototype の構文糖だ、という歴史編の話を思い出しながら聞いてください。
+構造的部分型と型消去を見てきました。最後の特性はプロトタイプベース。class は今も prototype に基づいて構築されている、という歴史編の話を思い出しながら聞いてください。
 -->
 
 ---
@@ -1018,7 +1018,7 @@ class: text-center
 
 <MessageBox>
 
-class は **`prototype` チェーンの構文書き換え** にすぎず<br/>`this` は呼び出し方で動的に決まる
+class は **`prototype` に基づいて構築** されており<br/>`this` は呼び出し方で動的に決まる
 
 </MessageBox>
 
@@ -1064,7 +1064,7 @@ const uploader = new Uploader();
 
 - JS のメソッド呼び出しは「プロパティ参照」と「`this` 設定」の**2 ステップ**
 - 変数代入やコールバック渡しは**1 ステップ目だけ**実行され、`this` が切り離される
-- 歴史編の TS 0.8 → ES5 を思い出してください: class は今も `prototype` の構文書き換え
+- 歴史編の TS 0.8 → ES5 を思い出してください: class は今も `prototype` に基づいて構築
 
 <!--
 プロトタイプベースが引き起こす落とし穴です。メソッドをコールバックとして渡すと this が undefined になり TypeError になります。
