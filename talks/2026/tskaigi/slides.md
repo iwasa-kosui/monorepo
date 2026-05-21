@@ -622,9 +622,24 @@ code {
 `x = 42` を JS の何に変換するかで、**親の setter が走るかどうか**が変わる
 
 ```typescript
-class Base { set x(v: number) { console.log("setter!", v); } }
-class Sub extends Base { x = 42 }   // ← この行は何に変換される？
+class Base {
+  set x(v: number) { console.log("setter!", v); }
+}
+class Sub extends Base {
+  x = 42;   // ← この行は何に変換される？
+}
 ```
+
+TypeScript の当初実装と ECMAScript 標準で、答えが分かれた
+
+<!--
+クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
+Base に setter があって Sub で x = 42 と書くケースを考えてください。この x = 42 という1行が JS にどう変換されるか、そこで TypeScript の当初実装と ECMAScript 標準で答えが食い違いました。次のスライドで2つの解釈を並べます。
+-->
+
+---
+
+# `x = 42` の2つの解釈
 
 <div class="grid grid-cols-2 gap-6 mt-4">
 
@@ -649,7 +664,10 @@ this.x = 42;
 
 ```typescript
 // Sub の constructor 内
-Object.defineProperty(this, "x", { value: 42 });
+Object.defineProperty(this, "x", {
+  value: 42, writable: true,
+  enumerable: true, configurable: true,
+});
 ```
 
 </div>
@@ -659,10 +677,9 @@ Object.defineProperty(this, "x", { value: 42 });
 `useDefineForClassFields` で切り替え。`target: ES2022` 以上なら既定 `true`（= ES 標準準拠）
 
 <!--
-クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
-上のコードのように、Base に setter があって Sub で x = 42 と書くケースを考えます。この x = 42 という1行が JS にどう変換されるかが、左右で違います。
+2つの解釈を並べました。
 左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれ、setter! 42 が出力されます。
-右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされ、何も出力されません。なお厳密には writable / enumerable / configurable がすべて true の定義になりますが、スライド上は value だけに省略しています。
+右は ES2022 で標準化された解釈。Object.defineProperty で新しいプロパティを直接定義するので、継承された setter はバイパスされ、何も出力されません。
 この食い違いは MobX や TypeORM などのフレームワークに破壊的な影響を与えました。TypeScript 3.7 で useDefineForClassFields フラグが導入され、target が ES2022 以上では既定で標準準拠の Define になります。仕様より早く実装することの「コスト」を示す教訓です。
 -->
 
