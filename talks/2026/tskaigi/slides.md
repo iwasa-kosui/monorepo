@@ -951,6 +951,10 @@ item instanceof Drawable;  // Uncaught ReferenceError: Drawable is not defined
 
 # 対策: Discriminated Union でタグを値に置く
 
+<div class="grid grid-cols-2 gap-6 mt-4 items-start">
+
+<div>
+
 ```typescript
 type Shape =
   | { kind: "circle"; radius: number }
@@ -971,9 +975,24 @@ const area = (s: Shape): number => {
 };
 ```
 
+</div>
+
+<div>
+
 - `kind` は**実行時に残る値** → 型消去の影響を受けない
 - `never` の網羅性検証で、case の漏れがコンパイル時に弾ける
 - class を作らずオブジェクトリテラルでも書ける
+
+</div>
+
+</div>
+
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
 
 <!--
 対策は Discriminated Union です。kind というタグフィールドを値として持たせ、switch で判別します。
