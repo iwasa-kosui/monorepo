@@ -181,7 +181,7 @@ const stepMessage = (
       return Result.pipe(
         deps.slack.postMessage({
           channel: classification.channel,
-          text: classification.permalink,
+          text: `<${classification.permalink}|リンク>`,
         }),
         Result.map((): LoopState => {
           deps.logger.info(`${label} expanded ts=${message.ts} -> ${classification.permalink}`);
