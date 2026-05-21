@@ -619,22 +619,24 @@ code {
 
 # `[[Define]]` vs `[[Set]]` 論争
 
-`x = 42` を JS の何に変換するかで、**親の setter が走るかどうか**が変わる
+TypeScriptがclassを先行実装したことで、ECMAScriptとの仕様の
 
 ```typescript
 class Base {
-  set x(v: number) { console.log("setter!", v); }
+  set x(v: number) {
+    console.log("setter!", v);
+  }
 }
+
 class Sub extends Base {
-  x = 42;   // ← この行は何に変換される？
+  // この行はどうトランスパイルされるか
+  x = 42;
 }
 ```
 
-TypeScript の当初実装と ECMAScript 標準で、答えが分かれた
-
 <!--
 クラスフィールド「x = 42」を JS のどんなコードに変換するか、で親の setter を呼ぶかが変わります。これが [[Set]] と [[Define]] の論争です。
-Base に setter があって Sub で x = 42 と書くケースを考えてください。この x = 42 という1行が JS にどう変換されるか、そこで TypeScript の当初実装と ECMAScript 標準で答えが食い違いました。次のスライドで2つの解釈を並べます。
+Base に setter があって Sub で x = 42 と書くケースを考えてください。次のスライドで2つの解釈を並べます。
 -->
 
 ---
