@@ -1117,9 +1117,10 @@ const uploader = new Uploader();
 [1].forEach(uploader.upload);  // TypeError: Cannot read properties of undefined
 ```
 
+- JS では関数の**呼び出し方**で `this` が決まる
 - `uploader.upload()` の形で呼ぶと `this = uploader`
 - 関数を変数経由で呼ぶと `this = undefined`（インスタンスとの紐付けが切れる）
-- class は今も `prototype` に基づいて構築 → メソッドはインスタンスに束縛されず、**呼び出し方**で `this` が決まる
+- class は今も `prototype` に基づいて構築されているため、メソッドはインスタンスに束縛されない
 
 <!--
 プロトタイプベースが引き起こす落とし穴です。`uploader.upload()` の形で呼べば this は uploader ですが、`[1].forEach(uploader.upload)` のように関数を渡すと、forEach が呼ぶときには this の情報が失われて undefined になり TypeError になります。
