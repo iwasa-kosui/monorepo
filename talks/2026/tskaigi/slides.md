@@ -691,6 +691,12 @@ TypeScript 3.7 で `useDefineForClassFields` を導入
 - `target: ES2022` 以上なら既定 `true`（`[[Define]]`）
 - それ以外は既定 `false` (`[[Set]]`)
 
+<div class="mt-4 text-xs opacity-60">
+
+https://github.com/tc39/proposal-class-fields
+
+</div>
+
 <!--
 2つの解釈を並べました。
 左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれ、setter! 42 が出力されます。
@@ -786,7 +792,9 @@ class: text-center
 # 構造的部分型の便利さ
 
 ```typescript
-type Logger = { log(msg: string): void };
+type Logger = {
+  log: (msg: string) => void
+}
 const run = (logger: Logger) => logger.log("running");
 
 // 本番環境: console をそのまま渡す
@@ -851,22 +859,55 @@ Q1 で見せたコードです。User と Product はクラス名が違います
 
 # 対策: Branded Type で「名前」を値に埋め込む
 
+<div class="grid grid-cols-2 gap-6 mt-2 items-start">
+
+<div>
+
+### Branded Type の定義
+
 ```typescript
 declare const brand: unique symbol;
-type Brand<T, B extends string> = T & { readonly [brand]: B };
+type Brand<T, B extends string> =
+  T & { readonly [brand]: B };
 
 type UserId    = Brand<string, "UserId">;
 type ProductId = Brand<string, "ProductId">;
-
-const UserId    = z.uuid().brand<"UserId">();    // Zod なら検証も同時に
 ```
+
+</div>
+
+<div>
+
+### 構造が同じでも型レベルで別物
+
+```typescript
+type User    = { id: UserId;    name: string };
+type Product = { id: ProductId; name: string };
+
+const greet = (u: User) => `Hello, ${u.name}`;
+
+declare const p: Product;
+greet(p); // ❌ 型エラー
+```
+
+</div>
+
+</div>
 
 - 文字列タグでブランドを付与 → 構造が同じでも**型レベルで区別**
 - `unique symbol` を使うのでランタイムコストはゼロ
 - class のフィールド型に使えば NestJS / TypeORM の Entity でも有効
 
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
+
 <!--
-構造的部分型への対策が Branded Type です。ユニークな symbol プロパティと文字列タグで型にブランドを付与し、構造が同じでも異なる型として扱えるようにします。Zod の brand を使えば外部入力のバリデーションとブランド付与を同時にできます。
+構造的部分型への対策が Branded Type です。ユニークな symbol プロパティと文字列タグで型にブランドを付与し、構造が同じでも異なる型として扱えるようにします。
+右側を見てください。UserId を持つ User と ProductId を持つ Product は、id と name という同じ構造を持っていますが、id の Branded Type が違うため、User を受け取る greet に Product を渡すと型エラーで弾けるようになります。Q1 で通ってしまったコードが、ブランドを入れるだけで防げるわけです。
 ここで重要なのは、ブランドは「class の名前」を値の世界に持ち込んだものだ、という点です。class のフィールド型に使えば NestJS や TypeORM の Entity でも効きますし、class を使わない値ベースのコードでも同じように働きます。後半で改めて触れます。
 構造的部分型はここまで。次の特性に進みましょう。
 -->
