@@ -691,6 +691,12 @@ TypeScript 3.7 で `useDefineForClassFields` を導入
 - `target: ES2022` 以上なら既定 `true`（`[[Define]]`）
 - それ以外は既定 `false` (`[[Set]]`)
 
+<div class="mt-4 text-xs opacity-60">
+
+https://github.com/tc39/proposal-class-fields
+
+</div>
+
 <!--
 2つの解釈を並べました。
 左は当初の TypeScript の解釈。constructor 内で this.x = 42 と書くのと等価で、代入なので親の setter が呼ばれ、setter! 42 が出力されます。
@@ -786,7 +792,9 @@ class: text-center
 # 構造的部分型の便利さ
 
 ```typescript
-type Logger = { log(msg: string): void };
+type Logger = {
+  log: (msg: string) => void
+}
 const run = (logger: Logger) => logger.log("running");
 
 // 本番環境: console をそのまま渡す
