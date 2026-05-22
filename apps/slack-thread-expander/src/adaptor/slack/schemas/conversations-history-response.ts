@@ -1,10 +1,17 @@
 import { z } from 'zod';
 
+import { BotId } from '../../../domain/bot-id.ts';
 import { SlackTs } from '../../../domain/slack-ts.ts';
+import { UserId } from '../../../domain/user-id.ts';
 
 export const ConversationsHistoryMessageSchema = z.object({
   type: z.literal('message').optional(),
   ts: SlackTs.schema,
+  subtype: z.string().optional(),
+  user: UserId.schema.optional(),
+  bot_id: BotId.schema.optional(),
+  text: z.string().optional(),
+  thread_ts: SlackTs.schema.optional(),
 });
 
 export type ConversationsHistoryMessage = z.infer<

@@ -4,13 +4,11 @@ import { loadGasBootstrap } from '../adaptor/gas/gas-bootstrap.ts';
 import { GasClock } from '../adaptor/gas/gas-clock.ts';
 import { GasConsoleLogger } from '../adaptor/gas/gas-console-logger.ts';
 import { GasLockService } from '../adaptor/gas/gas-lock-service.ts';
-import { GasPropertiesChannelControlStore } from '../adaptor/gas/gas-properties-channel-control-store.ts';
-import { GasPropertiesCursorStore } from '../adaptor/gas/gas-properties-cursor-store.ts';
 import { SlackHttpClient } from '../adaptor/slack/slack-http-client.ts';
 import { ConfigError } from '../domain/config-error.ts';
-import { runTick } from '../usecase/run-tick.ts';
+import { runCleanup } from '../usecase/run-cleanup.ts';
 
-export const tickHandler = (): void => {
+export const cleanupHandler = (): void => {
   const logger = GasConsoleLogger.create();
   const bootRes = loadGasBootstrap();
   if (Result.isFailure(bootRes)) {
@@ -19,9 +17,7 @@ export const tickHandler = (): void => {
   }
   const { slackCredentials, config } = bootRes.value;
   const slack = SlackHttpClient.create(slackCredentials);
-  const cursor = GasPropertiesCursorStore.create();
-  const channelControl = GasPropertiesChannelControlStore.create();
   const clock = GasClock.create();
   const lock = GasLockService.create();
-  runTick({ slack, cursor, channelControl, clock, lock, logger })(config);
+  runCleanup({ slack, clock, lock, logger })(config);
 };

@@ -9,6 +9,11 @@ export type InitializedTick = Readonly<{
   initialTs: SlackTs;
 }>;
 
+export type DisabledTick = Readonly<{
+  kind: 'Disabled';
+  channel: ChannelId;
+}>;
+
 export type ChannelInfoFailed = Readonly<{
   kind: 'ChannelInfoFailed';
   channel: ChannelId;
@@ -51,6 +56,7 @@ export type ProcessedTick = Readonly<{
 
 export type ChannelTickOutcome =
   | InitializedTick
+  | DisabledTick
   | ChannelInfoFailed
   | ChannelNameMissing
   | SearchFailed
@@ -60,6 +66,7 @@ export type ChannelTickOutcome =
 const errorCount = (outcome: ChannelTickOutcome): number => {
   switch (outcome.kind) {
     case 'Initialized':
+    case 'Disabled':
     case 'ChannelNameMissing':
       return 0;
     case 'ChannelInfoFailed':
@@ -76,6 +83,7 @@ const errorCount = (outcome: ChannelTickOutcome): number => {
 const onlyProcessed = <T>(getter: (p: ProcessedTick) => T, fallback: T) => (outcome: ChannelTickOutcome): T => {
   switch (outcome.kind) {
     case 'Initialized':
+    case 'Disabled':
     case 'ChannelInfoFailed':
     case 'ChannelNameMissing':
     case 'SearchFailed':

@@ -1,6 +1,7 @@
 import { Result } from '@praha/byethrow';
 
 import type { BotId } from '../domain/bot-id.ts';
+import type { ChannelControlPort } from '../domain/channel-control-port.ts';
 import type { ChannelId } from '../domain/channel-id.ts';
 import type {
   ChannelInfoFailed,
@@ -28,6 +29,7 @@ const SEARCH_LOOKBACK_DAYS = 2;
 export type ExpandChannelDeps = Readonly<{
   slack: SlackPort;
   cursor: CursorPort;
+  channelControl: ChannelControlPort;
   clock: ClockPort;
   logger: LoggerPort;
 }>;
@@ -284,6 +286,10 @@ export const expandChannel = (deps: ExpandChannelDeps) =>
   channel: ChannelId,
   selfBotId: BotId | undefined,
 ): ChannelTickOutcome => {
+  if (!deps.channelControl.isEnabled(channel)) {
+    deps.logger.info(`[${channel}] expand disabled; skip`);
+    return { kind: 'Disabled', channel };
+  }
   const pipeline = Result.pipe(
     Result.do(),
     Result.bind('lastTs', () => loadCursor(deps, channel)),

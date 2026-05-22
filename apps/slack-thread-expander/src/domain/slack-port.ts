@@ -1,9 +1,11 @@
 import type { Result } from '@praha/byethrow';
 
+import type { BotId } from './bot-id.ts';
 import type { ChannelId } from './channel-id.ts';
 import type { SlackApiError } from './slack-api-error.ts';
 import type { SlackMessage } from './slack-message.ts';
 import type { SlackTs } from './slack-ts.ts';
+import type { UserId } from './user-id.ts';
 
 export type SearchMessagesQuery = Readonly<{
   channelName: string;
@@ -18,6 +20,12 @@ export type SearchMessagesResult = Readonly<{
 export type PostMessageInput = Readonly<{
   channel: ChannelId;
   text: string;
+  threadTs?: SlackTs;
+}>;
+
+export type DeleteMessageInput = Readonly<{
+  channel: ChannelId;
+  ts: SlackTs;
 }>;
 
 export type ChannelTopLevelTsQuery = Readonly<{
@@ -30,6 +38,44 @@ export type ChannelTopLevelTsResult = Readonly<{
   truncated: boolean;
 }>;
 
+export type ListBotMessagesQuery = Readonly<{
+  channel: ChannelId;
+  botId: BotId;
+}>;
+
+export type ListBotMessagesResult = Readonly<{
+  ts: ReadonlyArray<SlackTs>;
+  truncated: boolean;
+}>;
+
+export type RecentMessage = Readonly<{
+  ts: SlackTs;
+  text: string | undefined;
+  user: UserId | undefined;
+  botId: BotId | undefined;
+  subtype: string | undefined;
+  threadTs: SlackTs | undefined;
+}>;
+
+export type RecentMessagesQuery = Readonly<{
+  channel: ChannelId;
+  oldest: SlackTs;
+}>;
+
+export type RecentMessagesResult = Readonly<{
+  messages: ReadonlyArray<RecentMessage>;
+  truncated: boolean;
+}>;
+
+export type AuthIdentity = Readonly<{
+  botId: BotId | undefined;
+  userId: UserId | undefined;
+  user: string | undefined;
+  team: string | undefined;
+  teamId: string | undefined;
+  url: string | undefined;
+}>;
+
 export type SlackPort = Readonly<{
   getChannelName: (channel: ChannelId) => Result.Result<string | undefined, SlackApiError>;
   searchMessages: (
@@ -39,4 +85,12 @@ export type SlackPort = Readonly<{
     query: ChannelTopLevelTsQuery,
   ) => Result.Result<ChannelTopLevelTsResult, SlackApiError>;
   postMessage: (input: PostMessageInput) => Result.Result<void, SlackApiError>;
+  listChannelBotMessages: (
+    query: ListBotMessagesQuery,
+  ) => Result.Result<ListBotMessagesResult, SlackApiError>;
+  deleteMessage: (input: DeleteMessageInput) => Result.Result<void, SlackApiError>;
+  authTest: () => Result.Result<AuthIdentity, SlackApiError>;
+  getChannelRecentMessages: (
+    query: RecentMessagesQuery,
+  ) => Result.Result<RecentMessagesResult, SlackApiError>;
 }>;

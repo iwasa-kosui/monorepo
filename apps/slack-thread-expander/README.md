@@ -135,12 +135,13 @@ pnpm deploy   # = pnpm build && pnpm clasp:push
 
 GAS Editor の **プロジェクト設定 > スクリプト プロパティ** から登録:
 
-| キー               | 値                                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------- |
-| `SLACK_BOT_TOKEN`  | Bot User OAuth Token (`xoxb-...`) — `chat.postMessage` の投稿用                                       |
-| `SLACK_USER_TOKEN` | User OAuth Token (`xoxp-...`) — `search.messages` / `conversations.info` / `conversations.history` 用 |
-| `TARGET_CHANNELS`  | 監視対象のチャンネル ID をカンマ区切り (例: `C0123ABC,C0456DEF`)                                      |
-| `SELF_BOT_ID`      | (任意) Bot 自身が投稿した permalink を二重展開しないためのガード。`auth.test` で取得する ID           |
+| キー               | 値                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `SLACK_BOT_TOKEN`  | Bot User OAuth Token (`xoxb-...`) — `chat.postMessage` の投稿用                                                                 |
+| `SLACK_USER_TOKEN` | User OAuth Token (`xoxp-...`) — `search.messages` / `conversations.info` / `conversations.history` 用                           |
+| `TARGET_CHANNELS`  | 監視対象のチャンネル ID をカンマ区切り (例: `C0123ABC,C0456DEF`)                                                                |
+| `SELF_BOT_ID`      | Bot 自身が投稿した permalink を二重展開しないためのガード。GAS Editor で `whoami` を実行してログから取得する。on/off 機能で必須 |
+| `SELF_USER_ID`     | on/off メンションを認識するための Bot User ID (`U...`)。GAS Editor で `whoami` を実行してログから取得する                       |
 
 ### 4. トリガーを登録
 
@@ -152,6 +153,58 @@ GAS Editor で関数 `installTrigger` を 1 度だけ手動実行すると、
 
 GAS Editor から `main` を手動実行し、実行ログでチャンネルごとの `fetched=N expanded=N` を確認する。
 初回実行時は `last_ts` を「現在時刻」で初期化するだけで、過去のスレッドは遡及しない。
+
+## チャンネル単位の on/off 制御
+
+各チャンネルでの展開動作は、Bot へのメンションで切り替えられる。
+時間トリガーで通常の expand 処理を回す前に、各 `TARGET_CHANNELS` の本流（トップレベル）メッセージを
+`conversations.history` で取得し、`@thread-expander on` などのメンションを検出してチャンネル状態に反映する。
+
+### 動作仕様
+
+- `TARGET_CHANNELS` に含まれているだけでは展開は始まらない。各チャンネルで明示的に `on` メンションが必要 (**デフォルト disabled**)
+- 認識するキーワード（大文字小文字は無視）
+  - 有効化: `on` / `オン`
+  - 無効化: `off` / `オフ`
+- それ以外のテキストでメンションされた場合は「コマンドを認識できませんでした」とスレッド返信する
+- on/off 反映時には、対象メッセージにスレッド返信で結果通知を返す
+- **`off` を受け付けた時点で `LAST_TS_<channel>` を削除する**。これにより再度 `on` にした際、その時点より新しい投稿のみが展開対象となる
+- コントロールコマンドの検出スコープは **チャンネル本流のみ**（スレッド内のメンションは検出しない）
+
+### 前提
+
+- `SELF_USER_ID` と `SELF_BOT_ID` の両方を Script Properties に設定すること
+  - `SELF_USER_ID` はメンションテキスト `<@U...>` のマッチングに必要
+  - `SELF_BOT_ID` がないと、Bot がスレッド返信した結果通知自体が「スレッド返信」として再帰的に展開される
+- 既に運用中で本機能を導入する場合、移行期間中は各チャンネルで一度 `@thread-expander on` を投げる必要がある
+
+## Bot 自身の ID を確認する
+
+`SELF_BOT_ID` に何を入れるべきかを GAS から確認できる `whoami` 関数を提供する。
+GAS Editor で `whoami` を 1 度実行すると、Bot Token に対する `auth.test` の結果が
+実行ログに `SELF_BOT_ID: B0xxxxxxx` の形で出る。この値を Script Properties の `SELF_BOT_ID` に設定する。
+
+## 過去投稿の一括削除
+
+Bot がこれまで `TARGET_CHANNELS` に投稿したメッセージを一括削除する `cleanupPosts` 関数を提供する。
+チャンネルの履歴を整理したい・運用方針を変えて投稿し直したいといったケースで使う。
+
+### 前提
+
+- `SELF_BOT_ID` が設定されていること（Bot 自身の投稿を識別するために必須）。未設定なら何もせず警告ログだけを残す
+- Bot が対象チャンネルにまだ参加していること（チャンネルから外れていると履歴を取得できない）
+- 必要スコープは既存の `chat:write`（自分の投稿の削除は同スコープで可能）
+
+### 実行方法
+
+GAS Editor で関数 `cleanupPosts` を手動実行する。時間トリガーには登録しない。
+実行ログには `cleanup end: channels=N scanned=M deleted=K failed=F` の形でサマリが出る。
+
+挙動の特性:
+
+- 対象チャンネルは `TARGET_CHANNELS`、削除対象は `bot_id === SELF_BOT_ID` のメッセージのみ
+- 履歴のページングは安全側に上限を設定しており、1 回で削除しきれなかった場合は `truncated` をログ出力する。再度 `cleanupPosts` を実行すれば続きから削除できる
+- `LAST_TS_<channel>`（次回展開のカーソル）は **意図的に変更しない**。削除後に未展開のメッセージを遡って展開し直したい場合は、Script Properties からカーソル値を手動で削除する
 
 ## 元実装との差分
 
