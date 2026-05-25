@@ -1083,14 +1083,13 @@ const findUserById: (id: UserId) => Promise<User | null>
 
 # 値で組み立て、値でテストする
 
-<div class="grid grid-cols-5 gap-6 mt-2 items-start">
+<div class="grid grid-cols-5 gap-6 mt-4 items-start">
 
 <div class="col-span-3">
 
 ```typescript
 const OrderId = z.uuid().brand<"OrderId">();
 type OrderId = z.infer<typeof OrderId>;
-
 type Order =
   | { kind: "draft";  id: OrderId }
   | { kind: "placed"; id: OrderId; placedAt: Date };
@@ -1098,27 +1097,19 @@ type Order =
 const place = (o: Order & { kind: "draft" }, now: Date): Order =>
   ({ kind: "placed", id: o.id, placedAt: now });
 
-// テスト: 値を作って関数を呼ぶだけ
+// テスト
 const id = OrderId.parse(crypto.randomUUID());
-expect(place({ kind: "draft", id }, new Date()).kind)
-  .toBe("placed");
+expect(place({ kind: "draft", id }, new Date()).kind).toBe("placed");
 ```
 
 </div>
 
 <div class="col-span-2">
 
-### 3つの道具
-
-- **Discriminated Union** で状態 (`Order`)
-- **関数** で状態遷移 (`place`)
-- **Branded Type** で ID (`OrderId`)
-
-### テスト
-
-- 本番と同じ検証 (`OrderId.parse`) を通った値を使える
-- 型を満たす値を渡すだけ
-- **`new` もモックも不要**
+- **Discriminated Union** — 状態 (`Order`)
+- **関数** — 状態遷移 (`place`)
+- **Branded Type** — ID (`OrderId`)
+- テスト: 値を渡すだけ、**`new` もモックも不要**
 
 </div>
 
@@ -1126,7 +1117,7 @@ expect(place({ kind: "draft", id }, new Date()).kind)
 
 <MessageBox>
 
-3つの道具が噛み合うと、<br/>**class がなくても「値」だけで TypeScript は完結する**
+**3つの道具を使えば値だけで表現できる**
 
 </MessageBox>
 
