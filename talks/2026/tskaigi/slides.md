@@ -1163,17 +1163,17 @@ try {
 
 ---
 
-# リソース管理: `Symbol.dispose` (TS 5.2+)
+# リソース管理: `Symbol.dispose` と `using` (TS 5.2+)
+
+<div class="grid grid-cols-5 gap-6 mt-4 items-start">
+
+<div class="col-span-3">
 
 ```typescript
 class FileHandle {
-  constructor(private path: string) {
-    // open file
-  }
+  constructor(private path: string) { /* open */ }
   read() { /* ... */ }
-  [Symbol.dispose]() {
-    // close file
-  }
+  [Symbol.dispose]() { /* close */ }
 }
 
 {
@@ -1182,9 +1182,82 @@ class FileHandle {
 }  // ブロック終了で [Symbol.dispose]() が自動実行
 ```
 
-- DB 接続・WebSocket・ファイルハンドルなどの**ライフサイクル管理**
-- `using` declaration と組み合わせて自動 dispose
-- `Symbol.dispose` プロトコルは prototype 上の関数として実装する
+</div>
+
+<div class="col-span-2">
+
+- `[Symbol.dispose]()` を持つオブジェクトは `using` の対象
+- DB 接続・WebSocket・ファイルハンドルなどに
+- protocol だけなら object literal でも書ける
+
+</div>
+
+</div>
+
+<MessageBox>
+
+**class が効くのは、複数の dispose 実装を束ねたいとき**
+
+</MessageBox>
+
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
+
+---
+
+# 継承で dispose 実装を束ねる
+
+<div class="grid grid-cols-5 gap-6 mt-4 items-start">
+
+<div class="col-span-3">
+
+```typescript
+abstract class Connection {
+  abstract query(sql: string): Promise<unknown>;
+  abstract [Symbol.dispose](): void;
+}
+
+class PgConnection extends Connection {
+  constructor(private c: PgClient) { super(); }
+  query(sql: string) { return this.c.query(sql); }
+  [Symbol.dispose]() { this.c.end(); }
+}
+class RedisConnection extends Connection {
+  constructor(private c: RedisClient) { super(); }
+  query(sql: string) { return this.c.eval(sql); }
+  [Symbol.dispose]() { this.c.disconnect(); }
+}
+```
+
+</div>
+
+<div class="col-span-2">
+
+- 抽象 class で共通 API (`query` / `[Symbol.dispose]`) を宣言
+- バックエンドごとに dispose を実装差し替え
+- 呼び出し側は `Connection` 型で扱えば `using` で自動 dispose
+- 階層が増えるほど class の表現力が活きる
+
+</div>
+
+</div>
+
+<MessageBox>
+
+**階層と Symbol.dispose が組み合わさるとき、class が自然に効く**
+
+</MessageBox>
+
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
 
 ---
 layout: section
