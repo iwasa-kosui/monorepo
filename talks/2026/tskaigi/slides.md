@@ -1209,7 +1209,7 @@ code {
 
 ---
 
-# 同じ contract なら class の方がシグニチャがシンプル
+# 同じ contract、class でも値でも書ける
 
 ```typescript
 type Connection = { query: (sql: string) => Promise<unknown>; [Symbol.dispose]: () => void };
@@ -1236,9 +1236,7 @@ class PgConnection implements Connection {
 ### object literal + factory
 
 ```typescript
-const createPgConnection = (
-  c: PgClient,
-): Connection => ({
+const createPgConnection = (c: PgClient): Connection => ({
   query: (sql) => c.query(sql),
   [Symbol.dispose]: () => c.end(),
 });
@@ -1248,13 +1246,14 @@ const createPgConnection = (
 
 </div>
 
-- 同じ `Connection` 契約を満たすが、**class は型注釈・factory・戻り値構築が省ける**
-- `implements` で契約遵守が型レベルで保証される
-- 実装数が増えるほど class の簡潔さが効く
+- 行数・型安全性・`using` 対応はほぼ互角
+- class 版は `this` / prototype の上に乗るため **Q2 の this バインディング落とし穴に晒される**
+- 値版は this を持たないため落とし穴を回避
+- **class が圧倒的に勝つわけではない。好み・チームの慣性で選んでよい**
 
 <MessageBox>
 
-**シグニチャの簡潔さを優先したい場面では class を選ぶ**
+**Symbol.dispose 単体に class 必然性はない — 文脈で選ぶ**
 
 </MessageBox>
 
