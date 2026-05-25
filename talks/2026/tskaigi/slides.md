@@ -1307,3 +1307,9 @@ React / Vue 3 / Hono / Elysia / 自分のドメイン層
 
 </MessageBox>
 
+<div class="mt-4 text-xs opacity-60">
+
+※ 厳密には React にも class component が残り、Angular にも Analog のような非 class 寄りの選択肢がある。本資料では各フレームワークで支配的なスタイルで区分けしている
+
+</div>
+
