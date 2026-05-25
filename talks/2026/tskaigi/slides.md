@@ -1194,12 +1194,6 @@ class FileHandle {
 
 </div>
 
-<MessageBox>
-
-**class が効くのは、複数の dispose 実装を束ねたいとき**
-
-</MessageBox>
-
 <style>
 code {
   font-size: 12px;
