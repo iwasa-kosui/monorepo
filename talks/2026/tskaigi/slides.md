@@ -1209,46 +1209,52 @@ code {
 
 ---
 
-# 継承で dispose 実装を束ねる
-
-<div class="grid grid-cols-5 gap-6 mt-4 items-start">
-
-<div class="col-span-3">
+# 同じ contract なら class の方がシグニチャがシンプル
 
 ```typescript
-abstract class Connection {
-  abstract query(sql: string): Promise<unknown>;
-  abstract [Symbol.dispose](): void;
-}
+type Connection = { query: (sql: string) => Promise<unknown>; [Symbol.dispose]: () => void };
+```
 
-class PgConnection extends Connection {
-  constructor(private c: PgClient) { super(); }
+<div class="grid grid-cols-2 gap-6 mt-4 items-start">
+
+<div>
+
+### class
+
+```typescript
+class PgConnection implements Connection {
+  constructor(private c: PgClient) {}
   query(sql: string) { return this.c.query(sql); }
   [Symbol.dispose]() { this.c.end(); }
-}
-class RedisConnection extends Connection {
-  constructor(private c: RedisClient) { super(); }
-  query(sql: string) { return this.c.eval(sql); }
-  [Symbol.dispose]() { this.c.disconnect(); }
 }
 ```
 
 </div>
 
-<div class="col-span-2">
+<div>
 
-- 抽象 class で共通 API (`query` / `[Symbol.dispose]`) を宣言
-- バックエンドごとに dispose を実装差し替え
-- 呼び出し側は `Connection` 型で扱えば `using` で自動 dispose
-- 階層が増えるほど class の表現力が活きる
+### object literal + factory
+
+```typescript
+const createPgConnection = (
+  c: PgClient,
+): Connection => ({
+  query: (sql) => c.query(sql),
+  [Symbol.dispose]: () => c.end(),
+});
+```
 
 </div>
 
 </div>
+
+- 同じ `Connection` 契約を満たすが、**class は型注釈・factory・戻り値構築が省ける**
+- `implements` で契約遵守が型レベルで保証される
+- 実装数が増えるほど class の簡潔さが効く
 
 <MessageBox>
 
-**階層と Symbol.dispose が組み合わさるとき、class が自然に効く**
+**シグニチャの簡潔さを優先したい場面では class を選ぶ**
 
 </MessageBox>
 
