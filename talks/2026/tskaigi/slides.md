@@ -1045,7 +1045,7 @@ layout: section
 
 | 失われたもの | 値で取り戻す |
 |---|---|
-| 名前(アイデンティティ) | **Branded Type** |
+| **同じ構造の区別** | **Branded Type** |
 | 種別の判別 | **Discriminated Union** |
 | 振る舞い | **関数**（this を持たない） |
 
