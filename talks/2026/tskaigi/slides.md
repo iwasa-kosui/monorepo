@@ -1083,25 +1083,46 @@ const findUserById: (id: UserId) => Promise<User | null>
 
 # 値で組み立て、値でテストする
 
+<div class="grid grid-cols-5 gap-6 mt-2 items-start">
+
+<div class="col-span-3">
+
 ```typescript
 const OrderId = z.uuid().brand<"OrderId">();
 type OrderId = z.infer<typeof OrderId>;
 
-type Order =                                                      // 状態: Discriminated Union
+type Order =
   | { kind: "draft";  id: OrderId }
   | { kind: "placed"; id: OrderId; placedAt: Date };
 
-const place = (o: Order & { kind: "draft" }, now: Date): Order => // 状態遷移: 関数
+const place = (o: Order & { kind: "draft" }, now: Date): Order =>
   ({ kind: "placed", id: o.id, placedAt: now });
 
-// テスト: 値を作って関数を呼び、戻り値を比較するだけ
-const draft: Order = { kind: "draft", id: OrderId.parse(crypto.randomUUID()) };
-expect(place(draft, new Date()).kind).toBe("placed");
+// テスト: 値を作って関数を呼ぶだけ
+const id = OrderId.parse(crypto.randomUUID());
+expect(place({ kind: "draft", id }, new Date()).kind)
+  .toBe("placed");
 ```
 
-- **Discriminated Union** で状態、**関数** で状態遷移、**Branded Type** で ID を表現
-- 本番と同じ検証ロジック (`OrderId.parse`) を通った値をテストにも持ち込める
-- 型を満たすダミー値を渡すだけ → **`new` もモックライブラリも不要**
+</div>
+
+<div class="col-span-2">
+
+### 3つの道具
+
+- **Discriminated Union** で状態 (`Order`)
+- **関数** で状態遷移 (`place`)
+- **Branded Type** で ID (`OrderId`)
+
+### テスト
+
+- 本番と同じ検証 (`OrderId.parse`) を通った値を使える
+- 型を満たす値を渡すだけ
+- **`new` もモックも不要**
+
+</div>
+
+</div>
 
 <MessageBox>
 
