@@ -1275,32 +1275,46 @@ const findUserById: (id: UserId) => Promise<User | null>
 
 ---
 
-# テストも値だけで完結する
+# 値で組み立て、値でテストする
 
 ```typescript
-const UserId = z.uuid().brand<"UserId">();
-type UserId = z.infer<typeof UserId>;
+const OrderId = z.uuid().brand<"OrderId">();
+type OrderId = z.infer<typeof OrderId>;
 
-// 本番もテストも、同じ「値の作り方」
-const id: UserId = UserId.parse(crypto.randomUUID());
-expect(await findUserById(id)).toBeNull();
+type Order =                                                      // 状態: Discriminated Union
+  | { kind: "draft";  id: OrderId }
+  | { kind: "placed"; id: OrderId; placedAt: Date };
+
+const place = (o: Order & { kind: "draft" }, now: Date): Order => // 状態遷移: 関数
+  ({ kind: "placed", id: o.id, placedAt: now });
+
+// テスト: 値を作って関数を呼び、戻り値を比較するだけ
+const draft: Order = { kind: "draft", id: OrderId.parse(crypto.randomUUID()) };
+expect(place(draft, new Date()).kind).toBe("placed");
 ```
 
-- 型を満たすダミー値で足りる → **コンストラクタもモックライブラリも不要**
-- Branded Type + スキーマライブラリで、**本番と同じ検証ロジックを通った値**をテストでも使える
-- class なら必要な `new` 組み立てやモック定義などの事前準備が不要
+- **Discriminated Union** で状態、**関数** で状態遷移、**Branded Type** で ID を表現
+- 本番と同じ検証ロジック (`OrderId.parse`) を通った値をテストにも持ち込める
+- 型を満たすダミー値を渡すだけ → **`new` もモックライブラリも不要**
 
 <MessageBox>
 
-class がなくても、<br/>**「値」だけで TypeScript は完結する**
+3つの道具が噛み合うと、<br/>**class がなくても「値」だけで TypeScript は完結する**
 
 </MessageBox>
 
+<style>
+code {
+  font-size: 12px;
+  line-height: 14px;
+}
+</style>
+
 <!--
-シグニチャが契約だということは、テストにも大きな帰結があります。ダミー値はシグニチャを満たせば十分なので、コンストラクタもモックライブラリも要らない。
-さらに Branded Type とスキーマライブラリを組み合わせれば、本番と同じ検証ロジックで作った値をテストにも持ち込めます。Zod の parse を通せば、テストで使う UserId も本番で使う UserId も、同じ「正しい値」です。
-class ベースだとどうしても、new で組み立てたり、テストのために protected を public に開けたり、モックのインターフェースを定義したり、という事前準備が必要になります。値の世界ではそれがありません。
-ここまで来ると、「クラスがない世界」とは、トランスパイル時にも実行時にも参照できる「値」だけで全てを表現する世界だ、ということが見えてきます。Branded Type も Discriminated Union も関数も、すべて値として残るからこそ TypeScript は class なしで完結します。
+3つの道具を1枚で噛み合わせます。OrderId は Branded Type、Order は Discriminated Union、place は関数。draft 状態の Order を place に渡すと placed 状態の Order が返ります。
+テストはダミー値を作って関数を呼び、戻り値の kind を確かめるだけ。OrderId.parse を通すので、本番と同じ検証ロジックを通った値をテストにも持ち込めます。new もモックも要りません。
+class ベースだと Order クラスを作り、状態を内部に持たせ、place メソッドを定義し、テストではコンストラクタの引数を用意したり protected を public に開けたりが必要になりがちです。3つの道具を組み合わせると、それらが全部要らなくなります。
+「クラスがない世界」とは、トランスパイル時にも実行時にも参照できる『値』だけで全てを表現する世界だ、ということが見えてきます。Branded Type も Discriminated Union も関数も、すべて値として残るからこそ TypeScript は class なしで完結します。
 -->
 
 ---
