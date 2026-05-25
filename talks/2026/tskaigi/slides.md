@@ -1215,13 +1215,12 @@ code {
 type Connection = { query: (sql: string) => Promise<unknown>; [Symbol.dispose]: () => void };
 ```
 
-<div class="grid grid-cols-2 gap-6 mt-4 items-start">
+<div class="grid grid-cols-2 gap-6 mt-2 items-start">
 
 <div>
 
-### class
-
 ```typescript
+// class
 class PgConnection implements Connection {
   constructor(private c: PgClient) {}
   query(sql: string) { return this.c.query(sql); }
@@ -1233,9 +1232,8 @@ class PgConnection implements Connection {
 
 <div>
 
-### object literal + factory
-
 ```typescript
+// object literal + factory
 const createPgConnection = (c: PgClient): Connection => ({
   query: (sql) => c.query(sql),
   [Symbol.dispose]: () => c.end(),
@@ -1246,10 +1244,8 @@ const createPgConnection = (c: PgClient): Connection => ({
 
 </div>
 
-- 行数・型安全性・`using` 対応はほぼ互角
-- class 版は `this` / prototype の上に乗るため **Q2 の this バインディング落とし穴に晒される**
-- 値版は this を持たないため落とし穴を回避
-- **class が圧倒的に勝つわけではない。好み・チームの慣性で選んでよい**
+- 行数も型安全性も互角。class 版は **Q2 の this 落とし穴の上に乗る**
+- **class が圧倒的に勝つわけではない**。好み・チームの慣性で選んでよい
 
 <MessageBox>
 
