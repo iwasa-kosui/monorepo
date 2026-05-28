@@ -570,18 +570,30 @@ Object.defineProperty(this, "x", {
 
 </div>
 
-## 仕様差異の吸収
-
-TypeScript 3.7 で `useDefineForClassFields` を導入
-
-- `target: ES2022` 以上なら既定 `true`（`[[Define]]`）
-- それ以外は既定 `false` (`[[Set]]`)
-
 <div class="mt-4 text-xs opacity-60">
 
 https://github.com/tc39/proposal-class-fields
 
 </div>
+
+---
+layout: center
+class: text-center
+---
+
+# 仕様差異の吸収
+
+TypeScript 先行実装では `[[Set]]` を採用したが  
+ES2022では `[[Define]]` を採用している
+
+その差分を吸収するために  
+TypeScript 3.7 で `useDefineForClassFields` を導入
+
+- `target: ES2022` 以上なら既定 `true`（`[[Define]]`）
+- それ以外は既定 `false` (`[[Set]]`)
+
+targetの違いによってデフォルトが変わってしまう (つらい)
+
 
 ---
 layout: center
