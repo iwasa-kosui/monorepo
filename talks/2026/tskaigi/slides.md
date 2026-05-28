@@ -724,26 +724,20 @@ code {
 
 # 対策: Branded Type で名前を値に埋め込む
 
-<div class="grid grid-cols-2 gap-6 mt-2 items-start">
-
-<div>
-
-### Branded Type の定義
-
 ```typescript
 declare const brand: unique symbol;
-type Brand<T, B extends string> =
-  T & { readonly [brand]: B };
+type Brand<T, B extends string> = T & { readonly [brand]: B };
 
 type UserId    = Brand<string, "UserId">;
 type ProductId = Brand<string, "ProductId">;
 ```
 
-</div>
+- 文字列タグでブランドを付与し、構造が同じでも**型レベルで区別**
+- `unique symbol` を使うのでランタイムコストはゼロ
 
-<div>
+---
 
-### 構造が同じでも型レベルで別物
+# Branded Type で構造が同じ型を弾ける
 
 ```typescript
 type User    = { id: UserId;    name: string };
@@ -752,23 +746,11 @@ type Product = { id: ProductId; name: string };
 const greet = (u: User) => `Hello, ${u.name}`;
 
 declare const p: Product;
-greet(p); // ❌ 型エラー
+greet(p); // 型エラー
 ```
 
-</div>
-
-</div>
-
-- 文字列タグでブランドを付与 → 構造が同じでも**型レベルで区別**
-- `unique symbol` を使うのでランタイムコストはゼロ
+- `User` と `Product` は構造的部分型では同じだが、ブランドが違えば別物
 - class のフィールド型に使えば NestJS / TypeORM の Entity でも有効
-
-<style>
-code {
-  font-size: 12px;
-  line-height: 14px;
-}
-</style>
 
 ---
 layout: center
