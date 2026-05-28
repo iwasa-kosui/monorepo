@@ -577,8 +577,7 @@ https://github.com/tc39/proposal-class-fields
 </div>
 
 ---
-layout: center
-class: text-center
+layout: section
 ---
 
 # 仕様差異の吸収
