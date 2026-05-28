@@ -1025,21 +1025,15 @@ layout: section
 
 ---
 
-# 対策はぜんぶ「値」で出来ていた
-
-<div class="grid grid-cols-2 gap-6 mt-2">
-
-<div>
-
-### TypeScript には実行時の型情報がない
+# TypeScript には実行時の型情報がない
 
 - 実行時に型のアイデンティティを問い合わせる手段がない
 - リフレクションで型を辿る、`instanceof` で interface を判別する、といったことはできない
 - 不便だと思いがち
 
-</div>
+---
 
-<div>
+# 対策はぜんぶ「値」で出来ていた
 
 ### 値で表現する3つの道具
 
@@ -1050,10 +1044,6 @@ layout: section
 | 振る舞い | **関数**（this を持たない） |
 
 ここまでの3つの対策はすべてこの組み合わせ
-
-</div>
-
-</div>
 
 <MessageBox>
 
