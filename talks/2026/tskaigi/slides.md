@@ -1001,12 +1001,12 @@ const uploader = new Uploader();
 # 対策: this を持たない関数で表現する
 
 ```typescript
-// 対策a: class 内で対処 — アロー関数フィールドで lexical this
+// 対策a: class 内で対処。アロー関数フィールドで lexical this
 class Uploader {
   upload = (fileName: string) => { console.log(`${fileName} → ${this.storage}`); };
 }
 
-// 対策b: class から離れて関数で扱う — そもそも this を作らない
+// 対策b: class から離れて関数で扱う。そもそも this を作らない
 type Uploader = Readonly<{ storage: string }>;
 const upload = (u: Uploader) => (fileName: string) =>
   console.log(`${fileName} → ${u.storage}`);
@@ -1096,9 +1096,9 @@ expect(place({ kind: "draft", id }, new Date()).kind).toBe("placed");
 
 <div class="col-span-2">
 
-- **Discriminated Union** — 状態 (`Order`)
-- **関数** — 状態遷移 (`place`)
-- **Branded Type** — ID (`OrderId`)
+- **Discriminated Union**: 状態 (`Order`)
+- **関数**: 状態遷移 (`place`)
+- **Branded Type**: ID (`OrderId`)
 - テスト: 値を渡すだけ、**`new` もモックも不要**
 
 </div>
@@ -1233,7 +1233,7 @@ const createPgConnection = (c: PgClient): Connection => ({
 
 <MessageBox>
 
-**Symbol.dispose 単体に class 必然性はない — 文脈で選ぶ**
+**Symbol.dispose 単体に class 必然性はない。文脈で選ぶ**
 
 </MessageBox>
 
