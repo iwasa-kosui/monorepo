@@ -577,8 +577,6 @@ https://github.com/tc39/proposal-class-fields
 </div>
 
 ---
-layout: section
----
 
 # 仕様差異の吸収
 
