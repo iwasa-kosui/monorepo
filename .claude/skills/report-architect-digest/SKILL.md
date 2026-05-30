@@ -5,7 +5,7 @@ description: |
   設計パターン・アーキテクチャ思想、Cloud Native / CNCF、Platform Engineering / SRE、
   クラウドベンダー・業界動向など、ソフトウェアアーキテクトが注視すべき直近1ヶ月の動向を
   サブエージェントで並行調査し、reports コレクションの MDX 記事として出力するスキル。
-  GitHub Actions から呼ばれた場合は Draft PR も作成する。
+  記事を書き終えたらローカル・GitHub Actions のいずれの環境でも Draft PR を作成する。
 allowed-tools: WebSearch, WebFetch, Agent, Write, Read, Glob, Bash
 ---
 
@@ -83,19 +83,23 @@ tags: ["Architect"]
 - 各トピックは ### で見出しをつけ、情報源のリンクを貼り、箇条書きで要点をまとめる
 - 横断的な注目トピックがあれば冒頭の概要に含める
 
-### ステップ3: Draft PR の作成（GitHub Actions 環境の場合のみ）
+### ステップ3: Draft PR の作成
 
-環境変数 `GITHUB_ACTIONS` が設定されている場合のみ実行する。ローカル実行時はスキップする。
+ローカル実行・GitHub Actions のいずれでも Draft PR を作成する。手順は `pr` skill の規約に揃える（draft / Conventional Commits / 一時ファイル経由の `--body-file` / リポジトリ PR テンプレート遵守）。
 
 Bash ツールで以下を実行する:
 
-1. ブランチ `architect-digest/{DATE}` を作成してチェックアウト
-2. 作成したMDXファイルをコミット
-   - メッセージ: `feat(kosui-me): add Architect Digest {DATE}`
-   - `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
-3. リモートにプッシュ
-4. `gh pr create --draft` でDraft PRを作成
-   - タイトル: `feat(kosui-me): Architect Digest {DATE}`
+1. ブランチ名は `architect-digest-{DATE}` 形式（ハイフン区切り）。`architect-digest` という親階層的なブランチが既に存在する場合、`architect-digest/{DATE}` のようなスラッシュ区切り名は ref ロックの衝突で作成できないため避ける
+   - worktree 配下で既にこの名前のブランチが切られている場合はそれをそのまま使う
+2. MDXファイルを `git add <path>` でステージ（`git add -A` / `git add .` は使わない）し、コミットする
+   - メッセージ: `docs(kosui-me): Architect Digest {DATE} を追加`
+   - Co-Authored-By 行はその時点で使っているモデル名に合わせる（例: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`）
+3. `git push -u origin architect-digest-{DATE}` でリモートに upstream tracking 付きでプッシュ
+   - 直後の `gh pr create` が `No commits between main and ...` で失敗する場合は、`git ls-remote origin <branch>` で remote 反映を確認し、必要なら `git push origin <branch>:refs/heads/<branch>` で再プッシュする
+4. リポジトリ PR テンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）を `find . -maxdepth 3 -iname '*pull_request_template*'` で確認し、存在すればその構造を厳守して本文を作る
+5. 本文は一時ファイルに書き出して `gh pr create --draft --base main --head architect-digest-{DATE} --title "docs(kosui-me): Architect Digest {DATE}" --body-file /tmp/pr-body-adigest.md` で Draft PR を作成
+   - 本文の各セクションは記事の中身を羅列するのではなく、月次レポートで採り上げた主要トピックの分類・通底テーマ・補足（ソースの信頼度や注意点など）にとどめる
+6. 作成された PR URL をユーザーに返す
 
 ### ルール
 
