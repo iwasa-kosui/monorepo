@@ -1,0 +1,185 @@
+---
+title: "Weekly Tech Digest: 2026-05-31"
+date: "2026-05-31T12:00:00+09:00"
+slug: "2026/05/31/weekly-tech-digest"
+description: "TC39第114回プレナリーでExplicit Resource Management・Joint Iteration・Atomics.pauseがStage 4昇格、Node.js 26シリーズが連続リリースされTemporalがデフォルト有効化、TypeScript 7.0 Beta（tsgo）公開、Deno 2.8でNode.js互換が76.4%へ、Hono v4.12.21で4件の脆弱性を一括修正。"
+themes: ["Weekly"]
+---
+
+5月19〜21日のTC39第114回プレナリー（アムステルダム）で`using`/`Symbol.dispose`を導入するExplicit Resource ManagementがStage 4に昇格し、ECMAScript 2026への採用が確定的になりました。同プレナリーではJoint Iteration（`Iterator.zip`）とAtomics.pauseもStage 4入りしています。ランタイム側ではNode.js 26.0が5月5日にリリースされTemporal APIがフラグなしで利用可能となり、続けて26.1（`node:ffi`実験追加）と26.2（`stream.compose`安定化）が短期間で投入されました。型システムではGo実装によるTypeScript 7.0 Betaが4月21日に公開され、Visual Studio 2026のInsidersではすでにデフォルト有効化されています。
+
+## 標準化動向
+
+### TC39: 第114回プレナリーでStage 4昇格3件
+
+[tc39/proposals コミット履歴](https://github.com/tc39/proposals/commits/main)
+
+5月19〜21日にアムステルダムで開催された第114回プレナリーで、以下3件がStage 4へ昇格しました。
+
+- **Explicit Resource Management**: `using`宣言と`Symbol.dispose`/`Symbol.asyncDispose`によるリソース管理構文。長年待望されていた仕様で、Test262と仕様PRの最終承認が残る「条件付き」昇格として発表されています
+- **Joint Iteration**: `Iterator.zip`など複数イテレータを同期して走査するユーティリティ
+- **Atomics.pause**: SharedArrayBufferを使う並列処理向けのCPUヒント命令（軽量なスピンウェイト）
+
+第114回プレナリーの公式ミーティングノートは5月31日時点で[tc39/notes](https://github.com/tc39/notes)に未公開です。
+
+### TC39: Stage 3・Stage 2.7も大量昇格
+
+[tc39/proposals コミット履歴](https://github.com/tc39/proposals/commits/main)
+
+同プレナリーでStage 3に6件、Stage 2.7に2件が昇格しました。
+
+- **Stage 3**: Iterator Chunking、Iterator Includes、Iterator Join、Error Stack Accessor、RegExp Buffer Boundaries、Intl Keep Trailing Zeros
+- **Stage 2.7**: Decorators、Decorator Metadata（懸案だったデコレータ構文がStage 3目前まで進みました）
+- **取り下げ**: `Reflect.isTemplateObject`
+
+### TC39: 新規Stage 1・Stage 2の注目提案
+
+[proposal-comparisons](https://github.com/JakobJingleheimer/proposal-comparisons)
+
+- **Comparisons（Stage 1）**: 2つの値を構造的に比較し差分を返す`compare()`の提案
+- **"export all from"（Stage 1）**: モジュール再エクスポート構文の拡張
+- **Amount（Stage 2）**: 数値に単位・通貨・精度を紐付ける`Amount`オブジェクト。Intl統合を前提とした金額・測定値の標準化
+- **Intl Sequence Units / Default Behaviours for some Intl APIs（Stage 1）**: Intl関連の使い勝手改善
+
+### WinterTC: 議長交代プロセス進行とサイト基盤見直し
+
+[WinterTC55/admin Issue #181](https://github.com/WinterTC55/admin/issues/181) / [Issue #190](https://github.com/WinterTC55/admin/issues/190)
+
+- コアコントリビューターのLuca CasonatoがInvited Expertへ移行したことで議長資格を失い、新たな議長選挙が開始されました。EcmaルールによりInvited Expertは議長・副議長になれず、正規メンバー企業からの選出が必要です。Andreu Botella（Apple）が立候補・推薦を受けており5月29日のミーティングで選挙が予定されていました
+- サイトホスティングを現行のFresh（Deno）+ Deno DeployからAstro + Netlify/GitHub Pages等の静的サイト生成へ移行する是非が[#190](https://github.com/WinterTC55/admin/issues/190)で議論されています。TC全体の成果物が静的なためサーバーサイドランタイムは不要という論点です
+- 仕様テキストのレンダリングURLが旧`wintercg.org`のままで、新ドメイン`wintertc.org`への切り替え作業が継続中です（[#186](https://github.com/WinterTC55/admin/issues/186)）
+
+## 言語・ランタイム
+
+### TypeScript 7.0 Beta（tsgo）公開
+
+[Announcing TypeScript 7.0 Beta](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-beta/)
+
+4月21日、コンパイラ実装をJavaScriptからGoへ完全移植したTypeScript 7.0の初のパブリックベータが`@typescript/native-preview@beta`として公開されました（コマンド名`tsgo`）。
+
+- 型チェックのロジックは6.0と構造的に同一で、セマンティクスは変わりません
+- ネイティブコード化とスレッド並列化（`--checkers`はデフォルト4並列）により大規模プロジェクトで約10倍の高速化
+- Bloomberg・Figma・Notion・Slackがベータテストで検証済み
+- 安定版は2ヶ月以内、RCはその数週間前を予定
+
+[7.0 RCマイルストーン](https://github.com/microsoft/typescript-go/milestone/1)は5月30日時点で59%完了（オープン81件、クローズ113件）。Sort Imports・Move to File等のエディタ機能と宣言エミット関連バグの修正が残っています。
+
+### Visual Studio 2026 Insiders 3でTypeScript 7 Betaがデフォルト化
+
+[TypeScript 7 Beta now enabled by default in VS 2026 18.6 Insiders 3](https://devblogs.microsoft.com/visualstudio/typescript-7-beta-now-enabled-by-default-in-visual-studio-2026-18-6-insiders-3/)
+
+4月30日、Visual Studio 2026 18.6 Insiders 3でTypeScript 7 Beta（ネイティブプレビュー）がデフォルト有効化されました。IntelliSense・Find All References・Go to Definitionで最大10倍、プロジェクトロードで約8倍の高速化が報告されています。未実装機能としてクイックフィックス・リファクタリングコマンド・CodeLens参照・JSDoc生成があります。
+
+### TypeScript 6.0.3 パッチ
+
+[v6.0.3 release](https://github.com/microsoft/TypeScript/releases/tag/v6.0.3)
+
+4月16日リリース。JSベースコンパイラ系列としての安定版パッチで、TypeScript 6.1は出さない方針のため次の大きなマイルストーンは7.0 RC/Stableとなります。
+
+### Node.js 26シリーズが5月に3連発リリース
+
+| バージョン | リリース日 | 主な追加・変更 |
+|---|---|---|
+| [v26.0.0](https://nodejs.org/en/blog/release/v26.0.0) | 5月5日 | Temporal APIデフォルト有効化、V8 14.6、`writeHeader()`削除、Python 3.9サポート廃止、GCC 13.2以上必須 |
+| [v26.1.0](https://nodejs.org/en/blog/release/v26.1.0) | 5月7日 | 実験的`node:ffi`追加（`--experimental-ffi`）、`crypto.randomUUIDv7()`、SQLite `serialize()`/`deserialize()`、テストランナーの順序ランダム化 |
+| [v26.2.0](https://nodejs.org/en/blog/release/v26.2.0) | 5月20日 | `fs.Stats`で`Temporal.Instant`サポート、`stream.compose`が安定版に昇格、BoringSSLにML-DSA/ML-KEM/ChaCha20-Poly1305追加 |
+
+26は2026年10月にLTS移行予定です。
+
+### Node.js: 年1回メジャーリリース＋全LTS化へ方針転換
+
+[Evolving the Node.js Release Schedule](https://nodejs.org/en/blog/announcements/evolving-the-nodejs-release-schedule)
+
+2026年10月から**年1回のメジャーリリース**へ変更されます。Node.js 27以降はすべてLTS対象となり、奇数・偶数の区別が廃止されます。LTSサポート期間（30ヶ月）は維持されます。なお[Node.js 20 (Iron)](https://nodejs.org/en/about/previous-releases)は2026年3月24日にEOLを迎えており、現在はv22またはv24 LTSへの移行が必要です。
+
+### Deno 2.8: Node.js互換76.4%へ大幅前進
+
+[Deno 2.8](https://deno.com/blog/v2.8)
+
+5月22日リリース。Node.js互換テストスイートの合格率が42%から**76.4%**（3,405/4,457）へ単一リリース最大の跳躍を見せました。
+
+- `deno audit fix`、`deno pack`、`deno bump-version`、`deno ci`、`deno why`、`deno transpile`の6サブコマンド追加
+- TC39の`import defer`提案を実装。モジュール評価を遅延させ起動時間を短縮可能
+- npm冷インストールが3.66倍高速化（906ms）、`node:http`スループット2.21倍改善
+- TypeScript 6.0.3とV8 14.9へ更新
+
+### Fresh 2.3
+
+[Deno公式ブログ（product-update）](https://deno.com/blog?tag=product-update)
+
+4月24日リリース。アイランドアーキテクチャで不要なJSを完全排除する「真のゼロJS」ページを実現。View Transitions API対応、CSP nonceサポートとIPフィルタリング機能、アイランド内でのTemporal API利用が追加されました。
+
+### Bun v1.3.14: 組み込みの Bun.Image とグローバル仮想ストア
+
+[Bun v1.3.14](https://bun.sh/blog/bun-v1.3.14)
+
+5月13日リリース。
+
+- `Bun.Image` APIを組み込み追加。sharp等のネイティブモジュール不要で画像のリサイズ・変換・回転が可能。`metadata()`はsharp比で70倍高速
+- グローバル仮想ストア（`--linker=isolated` + `globalStore`）でウォームインストールが**7.3倍高速化**（841ms→115ms）
+- `Bun.serve()`に実験的HTTP/3（QUIC）サポート。HTTP/1.1比で約2倍のスループット
+- `fetch()`に実験的HTTP/2クライアントを追加（マルチプレックス、セッションプール対応）
+- `fs.watch()`をOS APIで再実装し、Linuxの再帰監視と動的ディレクトリ追跡を修正
+- LinuxバイナリサイズをLinux x64で8.58MB、Windows x64で17.66MB削減
+
+### V8 14.6: Map.getOrInsert と Iterator.concat
+
+[Node.js 26.0.0リリースノート](https://nodejs.org/en/blog/release/v26.0.0)
+
+Node.js 26.0に同梱されたV8 14.6.202.33（Chromium 146相当）で、`Map.prototype.getOrInsert()`/`getOrInsertComputed()`（WeakMapにも同様）と`Iterator.concat()`が追加されました。後者は中間配列を作らずに複数のイテラブルを遅延評価で連結できます。なお[v8.dev/blog](https://v8.dev/blog)では2026年の新規記事が確認できず、V8チームはリリースブログをv10.0以降廃止しており、主要な機能情報はChromeリリースノートやNode.jsリリースノートから追う形になっています。
+
+## エコシステム
+
+### Hono v4.12.21: 脆弱性4件の一括修正
+
+[Hono v4.12.21](https://github.com/honojs/hono/releases/tag/v4.12.21)
+
+5月19日リリース。4件の脆弱性アドバイザリが同時に公開されました。
+
+- **GHSA-2gcr-mfcq-wcc3**: `app.mount()`のパーセントエンコードパス処理の誤りで、サブアプリが不正パスを受け取る問題
+- **GHSA-xrhx-7g5j-rcj5**: 非正規形IPv6表現（IPマップドIPv4等）によるIP制限バイパス
+- **GHSA-3hrh-pfw6-9m5x**: Cookieヘルパーの`sameSite`/`priority`オプションへのヘッダインジェクション
+- **GHSA-f577-qrjj-4474**: JWTミドルウェアでBearer以外のスキームが通過できていた問題
+
+続く[v4.12.22](https://github.com/honojs/hono/releases/tag/v4.12.22)（5月22日）でcompressミドルウェアの`Accept-Encoding`尊重とWebSocketサブプロトコル対応の改善、[v4.12.23](https://github.com/honojs/hono/releases/tag/v4.12.23)（5月25日）でserve-staticのバックスラッシュ正規化（Windows対応）、`Context`クラスのパブリックエクスポート、compressに`contentTypeFilter`オプション追加が入りました。
+
+### Astro 6.3がHonoルーターを採用
+
+[Astro 6.3 Adopts Hono Router](https://byteiota.com/astro-63-hono-router-advanced-routing/)
+
+5月7日。Cloudflareによる[Astro買収](https://blog.cloudflare.com/cloudflare-acquires-astro/)（2026年1月）を背景に、Astro 6.3が`astro/hono`アダプタを実験的機能として導入しました。Astroの各処理ステージがHonoミドルウェアとしてラップされ、`app.use()`でLogger・CORS・JWT・レートリミット・Zodバリデーション等のHonoミドルウェアをAstroパイプラインで自由に組み合わせ可能になります。
+
+### Effect v4 Beta: バンドル70%減と FebruaryからMayまでのRecap
+
+[Effect v4 Beta Launch to May Recap](https://effect.website/blog/effect-v4beta-launch-to-may-recap/)
+
+5月28日公開のRecap記事で、v4 Betaのこれまでの進展がまとまっています。
+
+- バンドルサイズがv3の約70kBから約20kBへ削減（約70%減）。実プロダクションでgzip後ワーカーバンドルが900KB→779KBに減った事例あり
+- コアFiberランタイムを完全再構築し、メモリオーバーヘッドと実行速度を改善
+- 全エコシステムパッケージのバージョン番号を統一（`effect@4.x.x`と`@effect/sql-pg@4.x.x`が一致）
+- `ServiceMap`を`Context`に改名するなど破壊的変更あり。`effect/unstable/*`経由で17の不安定モジュールを提供開始
+- IndexedDBのストリーミング・トランザクションAPI改善、クロスプラットフォーム暗号化サービス追加
+
+### Effect: HttpApi拡張とSchemaヘルパー復活
+
+[This Week in Effect - 2026-05-29](https://effect.website/blog/this-week-in-effect/2026/05/29/) / [2026-05-15](https://effect.website/blog/this-week-in-effect/2026/05/15/)
+
+- `HttpApiSecurity.http`追加によりカスタムHTTP認証スキームをOpenAPI出力に対応
+- `Schema.Array`と`Schema.NonEmptyArray`に`.value`プロパティを復活させ、他コレクション型との一貫性を回復
+- CLI Promptにデフォルト値サポートを追加
+- 週次ダウンロード数が1,500万を超え、企業採用事例（Mayflower等）が増加
+- 5月15日週には`DurableQueue`が追加され、耐久性のあるキューイングがEffect標準ライブラリで利用可能に
+- OSSコードエディタ「OpenCode」がバックエンドをEffect HttpApiベースに移行
+
+### Zod v4.4.3: 欠落キー処理の不具合修正
+
+[Zod v4.4.3](https://github.com/colinhacks/zod/releases/tag/v4.4.3)
+
+5月4日リリース。
+
+- 存在しないキーに対する`.catch()`処理が正しく動作しない不具合を修正（PR #5937・#5939）
+- `preprocess`が欠落キーに対して実行されない問題を修正（PR #5941）
+- これら2点は v4.4.0〜v4.4.2 で誤って削除された動作の復元
+
+直前の[v4.4.2](https://github.com/colinhacks/zod/releases/tag/v4.4.2)（5月1日）では`z.discriminatedUnion()`の型引数制約を強化し、不正な定義をコンパイル時に検出できるようにしました。[v4.4.1](https://github.com/colinhacks/zod/releases/tag/v4.4.1)（4月29日）ではタプルのホール（省略位置）が必須デフォルト値より前に来る場合を正しく拒否する修正が入っています。
