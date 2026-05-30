@@ -1,0 +1,155 @@
+---
+title: "Architect Digest: 2026-05-31"
+date: "2026-05-31T12:00:00+09:00"
+slug: "2026/05/31/architect-digest"
+description: "OpenTelemetryがCNCF卒業で観測の事実上の標準を確定、Kubernetes v1.36のDRA/User Namespacesが本番化局面に入り、AWS・Google Cloud・Microsoftがエージェント実行基盤の支配権を争う一方で、Martin FowlerはVibeCoding/VibeSec、ThoughtWorksは認知的負債といったAI時代の規律をめぐる議論が前面に出てきた1ヶ月。"
+themes: ["Architect"]
+---
+
+今月の通底テーマは「AI加速の副作用を運用工学で抑える」流れだった。OpenTelemetryがCNCFを卒業し観測領域の事実上の標準として地位を確定させた一方、Martin Fowler は VibeCoding と VibeSec の連作でAI駆動開発のセキュリティ・保守性リスクを正面から扱い、Kubernetes v1.36 "Haru" は User Namespaces と DRA を中心にAIワークロード本番化の足回りを整えた。クラウドベンダー側では AWS の AgentCore 続報、Google I/O '26 の ADK 2.0、Microsoft Build 2026 直前の WSL 3 / Azure Agent Mesh と、エージェント実行基盤の主導権争いが連続して可視化された。
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: VibeCoding と VibeSec の連作
+
+[VibeCoding](https://martinfowler.com/bliki/VibeCoding.html)（5月21日）/ [The VibeSec Reckoning](https://martinfowler.com/articles/vibesec-reckoning.html)（5月27日）/ [Maintainability sensors for coding agents](https://martinfowler.com/articles/sensors-for-coding-agents.html)（5月19日）/ [What is Code](https://martinfowler.com/articles/what-is-code.html)（5月12日）
+
+- VibeCoding は LLM への指示だけでコードを確認せずアプリを作る手法を整理し、プロトタイピング加速の利点と保守性・正確性・セキュリティの劣化を対比した
+- VibeSec はセキュリティリスクの実体験レポートで、セキュリティコンテキストファイルの整備と日次セキュリティインテリジェンスフィードの組み合わせを推奨
+- Maintainability sensors はコーディングエージェント出力を静的解析・リンターで継続計測しフィードバックループに組み込む手法
+- What is Code はコードを「機械への指示」と「問題領域の概念モデル」の2面から再定義し、LLM時代の言語設計を論じている
+
+### Martin Fowler: SPDD（Structured-Prompt-Driven Development）
+
+[Structured-Prompt-Driven Development](https://martinfowler.com/articles/structured-prompt-driven/)（4月28日）
+
+LLMプロンプトをバージョン管理対象の第一級成果物として扱う方法論。要件から実装を体系化する REASONS Canvas（Requirements / Entities / Approach / Structure / Operations / Norms / Safeguards の7要素）を導入し、Abstraction First・Alignment・Iterative Review の3スキルを軸にしている。Tech Radar Vol.34 の Caution「セマンティック拡散」への対抗策にあたる。
+
+### InfoQ: 主権障害ドメインとAdaptive Hedged Requests
+
+[Sovereign Fault Domains](https://www.infoq.com/articles/sovereign-fault-domains-cloud-resilience/)（4月22日）/ [Adaptive Hedged Requests](https://www.infoq.com/articles/adaptive-hedged-requests-p99-latency/)（5月28日）
+
+- Sovereign Fault Domains は地政学的境界（法的管轄・経済制裁・インターネット遮断）を障害境界として設計に組み込み、マルチAZではなくマルチリージョンを既定構成として提案する
+- Adaptive Hedged Requests は失敗リトライではなく遅延中のプライマリと並行してバックアップを走らせ先着優先で p99 を74%削減する手法。DDSketch によるリアルタイム分位数追跡とトークンバケットで負荷増加を抑制する
+
+### InfoQ: Schema Proliferation と Cloud-Native Kafka
+
+[Schema Proliferation 問題](https://www.infoq.com/articles/schema-proliferation-problem/)（5月25日）/ [Architecting Cloud-Native Kafka](https://www.infoq.com/articles/architecting-cloud-native-kafka/)（5月26日）
+
+- Kafka-Flink パイプラインで増殖するスキーマを判別子ベースの統合スキーマで吸収する設計を提示。12スキーマを1つに統合し保守コストと後方互換性を両立
+- 階層化ストレージからディスクレス構成へというクラウドネイティブKafkaの設計変化を整理
+
+### Event Sourcing / DDD コミュニティ
+
+[EventStoreDB / Axon / Polecat 比較記事](https://dasroot.net/posts/2026/04/event-sourcing-cqrs-databases-eventstoredb-axon-polecat/)（4月10日）/ [DDD 実践シリーズ Part 3](https://www.endpointdev.com/blog/2026/05/designing-software-architecture-ddd-part-3/)（5月）
+
+- Axon 5.1.0-RC2 でバッチ処理最適化によりリプレイ速度が260→4,000イベント/秒に。EventStoreDB は Kurrent に改称
+- DDD 実践シリーズ Part 3 はレイヤード・ポーツ＆アダプター・CQRS・Outbox・Saga/Process Manager を一体的に扱う
+
+## Cloud Native / CNCF
+
+### Kubernetes v1.36 "Haru" 続報
+
+[v1.36 リリース](https://kubernetes.io/blog/2026/04/22/kubernetes-v1-36-release/)以降、GA機能の詳細解説と v1.37 準備が進んだ。
+
+- [User Namespaces GA](https://kubernetes.io/blog/2026/04/23/kubernetes-v1-36-userns-ga/): Linuxカーネルの user namespaces で Pod を隔離し rootless 化の実用性が向上
+- [Fine-Grained Kubelet Authorization GA](https://kubernetes.io/blog/2026/04/24/kubernetes-v1-36-fine-grained-kubelet-authorization-ga/)（KEP-4193、v1.32 Alpha → v1.33 Beta → v1.36 GA）
+- [DRA 大幅拡充](https://kubernetes.io/blog/2026/05/07/kubernetes-v1-36-dra-136-updates/): Prioritized list が Stable、Partitionable devices・Device taints・Device binding conditions・Resource health status が Beta 昇格。GPU だけでなくネットワークハードウェアにも対応
+- [Server-Side Sharded List and Watch](https://kubernetes.io/blog/2026/05/06/kubernetes-v1-36-server-side-sharded-list-and-watch/) Alpha（KEP-5866）。大規模クラスタでコントローラレプリカが FNV ハッシュで担当オブジェクトを分割受信
+- [ワークロードアウェアスケジューリング再設計](https://kubernetes.io/blog/2026/05/13/kubernetes-v1-36-advancing-workload-aware-scheduling/): Workload API と PodGroup API を分離し AI/ML バッチ向けアトミックスケジューリングへ
+- パッチリリース: v1.36.2（5月13日）、v1.35.6・v1.34.9・v1.33.12（5月12日、v1.33 はメンテナンスモード入り）
+- [v1.37](https://github.com/kubernetes/sig-release/tree/master/releases/release-1.37) は Enhancement Freeze 6月16日、リリース目標 8月26日
+
+### Microcks がインキュベーティング昇格
+
+[Microcks becomes a CNCF incubating project](https://www.cncf.io/blog/2026/05/07/microcks-becomes-a-cncf-incubating-project/)（5月7日）
+
+2023年6月にサンドボックス入りした API モック・テストプラットフォームが TOC 投票でインキュベーティング入り。REST・AsyncAPI・gRPC・GraphQL・SOAPを横断したモックが主機能で、2025年のコンテナイメージDL数は250万超、645名のコントリビューターを擁する。ロードマップに MCP サポートが含まれる。
+
+### OpenTelemetry
+
+[OpenTelemetry が CNCF を卒業](https://www.cncf.io/announcements/2026/05/21/cloud-native-computing-foundation-announces-opentelemetrys-graduation-solidifying-status-as-the-de-facto-observability-standard/)（5月21日、Minneapolis Observability Summit）
+
+- Kubernetes に次ぐプロジェクト活動量。2,800社超・12,000名超の貢献者。JavaScript・Python の API パッケージは各13億ダウンロードを突破し、観測の事実上の標準として地位を確定
+- [OBI v0.9.0](https://opentelemetry.io/docs/zero-code/obi/)（5月13日）: NATS・AMQP 1.0・MSSQL のプロトコル追加、GenAI 拡張（Qwen・MCP over JSON-RPC・埋め込み/リランク）、TCP接続失敗メトリクス追加。1.0 GA は2026年後半目標で現状は約60%
+- [Stable Declarative Configuration 1.0.0](https://opentelemetry.io/blog/2026/stable-declarative-config/): `OTEL_CONFIG_FILE` 環境変数が標準化、C++・Go・Java・JavaScript・PHP で実装可
+- [Profiles がパブリックアルファ](https://opentelemetry.io/blog/2026/profiles-alpha/): OTLP Proto v1.10.0・OTel 仕様 v1.55.0 時点。Go・Node.js・.NET・Ruby・BEAM 向け eBPF プロファイラを同梱
+
+### Service Mesh / eBPF
+
+- [Istio: Ambient Multicluster ベータ / Gateway API Inference Extension ベータ](https://www.cncf.io/announcements/2026/03/25/istio-brings-future-ready-service-mesh-to-the-ai-era-with-new-ambient-multicluster-gateway-api-inference-extension-and-more/)（3月25日、KubeCon EU 振り返り）。実験的 `agentgateway` 統合も披露
+- [Cilium v1.19.4・v1.18.10・v1.17.16 一斉パッチリリース](https://github.com/cilium/cilium/releases)（5月13日）。v1.20.0-pre.2 は5月4日公開
+- Linkerd は4〜5月に固有の重要発表は確認できず
+
+## Platform Engineering / SRE / Observability
+
+### Grafana 13 続報
+
+[GrafanaCON 2026 Announcements](https://grafana.com/blog/grafanacon-2026-announcements/)（4月21日、バルセロナ）
+
+- Loki 新アーキテクチャ（Kafka ベースインジェスション、クエリエンジン刷新）でスキャンデータを従来比20分の1、集計クエリを10倍高速化
+- Git Sync による Observability as Code サポート追加
+- ログ検索特化スタートアップ Logline を買収し、特定ID・エラー識別子の検索性能を強化予定
+
+### Observability ベンダー: Honeycomb / Datadog
+
+- [Honeycomb Agent Observability](https://www.honeycomb.io/blog/honeycomb-launches-agent-observability-full-visibility-agentic-workflows)（5月12日）: Agent Timeline が LLM 呼び出し・ツール呼び出し・エージェント間ハンドオフを単一ビューで可視化。OpenTelemetry GenAI セマンティック規約 v1.40.0 をファーストクラスでサポート
+- [Datadog 5月リリース](https://www.datadoghq.com/about/latest-news/press-releases/): MCP Server・Bits AI Security Agent・GPU Monitoring・Experiments を GA。Experiments は A/B テスト結果を APM・RUM・ログと結びつけ、製品変更のシステム影響をリアルタイム評価。FedRAMP High 認定取得
+
+### IaC
+
+- [OpenTofu 1.12.0](https://www.infoq.com/news/2026/05/opentofu-release-terraform/)（5月14日）: `prevent_destroy` を変数で制御可能に、prod/dev で同一モジュール使い分け。`tofu init` 一発で `zh:` と `h1:` 両形式のチェックサム取得、`destroy = false` メタ引数でステートからのデタッチも簡潔化
+- [Pulumi Service Provider v1.0](https://www.pulumi.com/blog/pulumi-release-notes-117/)（5月28日）: Pulumi Cloud 自体をコードで管理できる範囲が拡大し、fine-grained RBAC や IdP 設定を IaC で表現可能に。同日 `pulumi do` コマンド発表（プロジェクト/ステートを作らずターミナルからクラウドリソースを直接 CRUD）
+- [Pulumi Neo に外部ツール連携追加](https://www.prnewswire.com/news-releases/pulumi-closes-the-ai-deployment-gap-with-agent-native-infrastructure-and-superintelligence-partnerships-302776114.html): Datadog・GitHub・Linear・Sentry・kubectl 操作。ドリフト検出や依存更新を定期実行し PR として出力
+
+### Platform Engineering コミュニティ
+
+- [State of Platform Engineering Vol. 4](https://platformengineering.org/blog/announcing-the-state-of-platform-engineering-vol-4): 94%の組織が AI をプラットフォームエンジニアリングに不可欠と回答する一方、自社プラットフォームの成功を測定できていないチームが約30%
+- [PlatformCon 2026](https://platformcon.com/) は6月22〜26日（バーチャル＋ロンドン/ニューヨーク現地）、150本超のセッションと30時間超のワークショップ
+- IDP 市場では Backstage がシェア約89%との分析。論点が「何を使うか」から「どうゴールデンパスを定義し開発者に自発的に使わせるか」へ移行
+
+### SRE プラクティス
+
+- [PagerDuty Spring 2026](https://incident.io/blog/sre-tools-reliability-practices-2026): SRE Agent を発表。オンコールスケジュールにバーチャル responder を追加し、スタック全体のシグナルを収集・トリアージ・診断して人間へのアラートを抑制
+- OpenSLO による宣言的 SLO の採用拡大。SLO 定義を YAML でバージョン管理・レビュー対象にしてプロプライエタリ UI へのロックインを回避する動き
+
+## クラウドベンダー・業界動向
+
+### AWS — AgentCore の継続展開と耐障害性
+
+What's Next with AWS 2026（4月28日）の続報が5月を通じて展開された。
+
+- [Amazon Bedrock AgentCore Payments プレビュー](https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-bedrock-agentcore-payments-preview/)（5月7日）: AI エージェントが Coinbase・Stripe と連携し API 利用料や他エージェントへの報酬を自律的に支払える。São Paulo リージョン（5月1日）、GovCloud US-West（5月5日）へ展開
+- [OpenAI × AWS 続報](https://aws.amazon.com/blogs/aws/top-announcements-of-the-whats-next-with-aws-2026/): GPT-5.5 と Codex が Amazon Bedrock 経由で利用可能（limited preview）
+- [サイバーレジリエンス参照アーキテクチャ](https://aws.amazon.com/blogs/architecture/cyber-resilience-on-aws-a-reference-approach-for-recovery-from-ransomware-and-destructive-events/)（5月20日）: 本番・復旧・隔離復旧環境（IRE）を3アカウント構造で分離し「Rebuild-Restore-Rotate」で復旧
+- [ハイブリッドマルチテナント](https://aws.amazon.com/blogs/architecture/building-hybrid-multi-tenant-architecture-for-stateful-services-on-aws/)（5月12日）: テナント専用 ECS クラスタを共有 AWS アカウント内に構築、Route 53 加重ルーティングと PrivateLink でテナントオンボーディング期間を52日から7日に短縮
+- [AWS Resilience Hub 次世代 GA](https://aws.amazon.com/about-aws/whats-new/2026/05/aws-announces-next-gen-aws-resilience-hub/)（5月28日）: 生成 AI による障害モード分析とモジュラー型レジリエンスポリシー
+- [EC2 M8in/R8in GA](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-aws-local-zones-in-istanbul-open-source-extenddb-kiro-web-and-more-may-25-2026/)（5月）: 第6世代 Intel Xeon Scalable と Nitro カードで M8in が 600 Gbps ネットワーク帯域、前世代比43%性能向上
+
+### Google Cloud — Virgo Network と Google I/O '26
+
+- [Virgo Network 詳細公開](https://cloud.google.com/blog/products/networking/data-center-and-global-networks-built-for-ai-era)（5月26日）: AI ワークロード専用データセンターファブリック。134,000個の TPU 8t チップを単一ファブリックで接続、二分帯域幅 47 Pbps（前世代比4倍）。フラット2層ノンブロッキングトポロジー、サブミリ秒テレメトリによる自律的障害検出
+- [Google I/O '26 エージェント基盤発表](https://cloud.google.com/blog/topics/developers-practitioners/io26-news-for-agent-developers-on-google-cloud)（5月）: ADK 2.0（グラフベースエンジン + 動的ワークフロー）、Managed Agents API（エフェメラルサンドボックス付き Agent-as-a-Service）、Skill Registry（パブリックプレビュー）。A2A プロトコルが相互運用性の基盤層として位置づけられる
+- [TPU 第8世代 続報](https://cloud.google.com/blog/products/compute/ai-infrastructure-at-next26): 推論コスト80%削減、学習スループット3倍
+- [GKE Hypercluster / Ambient Networking](https://cloud.google.com/blog/products/compute/cross-cloud-infrastructure-at-next26): 複数リージョンを単一コントロールプレーンで管理する GKE Hypercluster と、サイドカー不要のサービスメッシュ Ambient Networking
+
+### Microsoft Build 2026（6月2〜3日）直前プレビュー
+
+- [WSL 3 発表予定](https://windowsnews.ai/article/build-2026-microsoft-makes-windows-an-agent-platform-for-ai-developers.420496): Linux カーネルを軽量 VM に移し、Windows の GPU・NPU へのパラバーチャル化アクセスを提供。Qualcomm Snapdragon X Elite と Intel Meteor Lake/Lunar Lake で NPU パススルー先行
+- [Azure Agent Mesh 発表予定](https://chatforest.com/reviews/microsoft-build-2026-preview/): オンプレ Windows サーバー・Windows 365 Cloud PC・Azure Arc エッジデバイスをまたぐエージェント実行フェデレーション。タスクをレイテンシと GPU 可用性で最寄りノードにルーティング、GA は Q4 2026 予定
+
+### テック企業エンジニアリングブログ
+
+- [Uber: AIエージェントのアイデンティティ管理](https://www.uber.com/us/en/blog/solving-the-agent-identity-crisis/)（5月21日）: SPIRE によるワークロード認証と STS による短命 JWT の組み合わせで、マルチホップのエージェント委任チェーン全体を追跡可能に
+- [Uber: グラフ対応トランスフォーマーによるリアルタイム交通予測](https://www.uber.com/us/en/blog/scaling-real-time-traffic/)（5月19日）: 道路ネットワークの空間構造を学習に反映するモデルでスケーリング
+- [Uber: クラウドコミットメントの5レイヤー](https://www.uber.com/us/en/blog/five-layers-cloud/)（5月4日）: リージョン構成・電力インフラ・カスタム計算環境・SKU選択・ネットワークトポロジーを5層整理し、下位の決定が上位設計を制約する構造を解説
+- [Spotify: 広告向けマルチエージェントアーキテクチャ](https://engineering.atspotify.com/2026/2/our-multi-agent-architecture-for-smarter-advertising): 専門エージェントを並行実行し、メディアプラン作成時間を15〜30分から5〜10秒に短縮
+
+### カンファレンス・論文動向
+
+- [QCon SF 2026 トラック発表](https://www.infoq.com/news/2026/04/qconsf-2026-tracks-announced/)（11月16〜18日、4月発表）: 「Architecting for Agents」「Guardrails & Safety Nets（Evals）」「Data Platforms Reimagined」など12トラック。分散システムの本番レジリエンスとエージェント対応設計が2大テーマ
+- [ISCA 2026](https://iscaconf.org/isca2026/program/)（6月27日〜7月1日、ノースカロライナ州ローリー）: LLM推論に5セッション、MLアクセラレータに2セッション、PIM/PNMに複数セッション。推論コスト最適化（KVキャッシュ・重み圧縮・MoE最適化）が主要論文テーマ
+
+## まとめ
+
+エージェント実行基盤（認証・決済・サンドボックス・ガバナンス）の整備が AWS（AgentCore）・Google Cloud（ADK 2.0 + Agent Registry）・Microsoft（Azure Agent Mesh）の3社共通テーマとなり、ランタイム層・オーケストレーション層・エッジ分散実行層と棲み分けが見え始めた。Uber のエージェントアイデンティティ管理や Spotify の広告マルチエージェントのように、エージェントを本番インフラの一部として扱う事例も具体化している。一方で Martin Fowler の VibeSec や ThoughtWorks の認知的負債が示すとおり、AI加速の副作用を観測可能性（OpenTelemetry GenAI 規約・Honeycomb Agent Observability）と運用工学で抑える方向の議論が同時進行している。
