@@ -1,0 +1,118 @@
+---
+title: "Weekly Tech Digest: 2026-06-12"
+date: "2026-06-12T12:00:00+09:00"
+slug: "2026/06/12/weekly-tech-digest"
+description: "BunがコアのZig約100万行をRustへ書き換えたPRをマージ、ES2026は6月末のEcma総会で正式採択予定、Node.js 26.3.0リリースと6月17日のセキュリティリリース予告、Hono v4.12.25で5件の脆弱性を修正、Chrome 149でWasm custom descriptorsのOrigin Trial開始。"
+themes: ["Weekly"]
+---
+
+今回の最大のトピックはBunのコア書き換えです。Zig約100万行をRustへ移植する6,755コミットのPRが5月14日にmainへマージされ、既存テストスイートをパスしたままメモリ安全性の向上とバイナリサイズ削減を達成しました。標準化動向ではES2026が6月30日〜7月1日のEcma第131回総会で正式採択される予定で、`Math.sumPrecise`や`Iterator.concat`などが確定します。ランタイム側ではNode.js 26.3.0が6月1日にリリースされ、6月17日には深刻度HIGHのセキュリティリリースが予告されています。
+
+## 標準化動向
+
+### ES2026: 6月末のEcma総会で正式採択予定
+
+[tc39/ecma262 リリース](https://github.com/tc39/ecma262/releases) / [Ecma ミーティングカレンダー](https://ecma-international.org/meeting-calendar/)
+
+TC39は3月31日にES2026の候補タグを設定済みで、6月30日〜7月1日にジュネーブで開催されるEcma第131回総会で正式採択される予定です。
+
+- 収録予定の主要機能: `Math.sumPrecise`、`Iterator.concat`、`Array.fromAsync`、`RegExp.escape`、`Float16Array`、`Set`の集合演算メソッド群、`Promise.try`、`Map`/`WeakMap`のupsert操作
+- Temporal、`using`宣言によるExplicit Resource Management、`import defer`はES2026スナップショットの締め切りに間に合わず、ES2027収録予定です
+- 第114回プレナリー（5月19〜21日）の公式ミーティングノートは6月12日時点で[tc39/notes](https://github.com/tc39/notes)に未公開です。同プレナリーの昇格内容は[前回のDigest](/reports/2026/05/31/weekly-tech-digest)を参照してください
+
+### WinterTC: 定例ミーティング継続とECMA-429年次更新
+
+[WinterTC55/admin Issue #188](https://github.com/WinterTC55/admin/issues/188) / [Issue #191](https://github.com/WinterTC55/admin/issues/191)
+
+- 5月29日と6月12日に隔週の定例ミーティングが開催されました。公開アジェンダは固定項目のみで、審議内容の詳細は非公開です
+- Minimum Common API（ECMA-429）は2025年12月の採択後も年次更新サイクルに向けた改訂が継続中で、[リポジトリ](https://github.com/WinterTC55/proposal-minimum-common-api)には34件のopen Issueがあります
+- サイトホスティングをFresh + Deno Deployから静的サイト生成へ移行する議論（[#190](https://github.com/WinterTC55/admin/issues/190)）が前回から継続しています
+
+## 言語・ランタイム
+
+### Bun: コアのZig約100万行をRustへ書き換え
+
+[PR #30412: Rewrite Bun in Rust](https://github.com/oven-sh/bun/pull/30412)
+
+5月14日、BunのコアをZigからRustへ移植するPR #30412がmainにマージされました。`claude/phase-a-port`ブランチで6,755コミット・約100万行の追加という規模で、Claudeのコーディングエージェント群が変換の大部分を担っています。
+
+- 主な動機はパフォーマンスではなくメモリ安全性の向上です。use-after-freeやdouble-freeをコンパイル時に検出できるようになります
+- 既存テストスイートを全プラットフォームでパスし、いくつかのメモリリークとflakyテストも修正されました
+- バイナリサイズは3〜8MB削減、ベンチマークは同等か高速化
+- 一方で生成されたRustコードには約13,000箇所の`unsafe`ブロックが含まれるという[指摘](https://byteiota.com/bun-rust-rewrite-merged-the-13000-unsafe-block-problem/)もあり、「Rustだからメモリ安全」と言い切れるかは今後の整理次第です
+
+なお6月のBun新リリースは確認できず、5月13日の[v1.3.14](https://bun.com/blog/bun-v1.3.14)が調査時点の最新です。
+
+### Node.js 26.3.0
+
+[v26.3.0 リリースノート](https://nodejs.org/en/blog/release/v26.3.0)
+
+6月1日リリース。
+
+- `Buffer.poolSize`のデフォルト値を16KiBから64KiBに拡大
+- 実行時に権限を放棄する`permission.drop()` APIを追加
+- WebCryptoのプロトタイプ汚染対策、ルート証明書のNSS 3.123.1への更新
+- macOS Universal Binaryについて、Intel Macサポートを将来継続できない可能性があると事前告知されました
+
+### Node.js 24.16.0 LTSと6月セキュリティリリース予告
+
+[v24.16.0 リリースノート](https://nodejs.org/en/blog/release/v24.16.0) / [June 2026 Security Releases](https://nodejs.org/en/blog/vulnerability/june-2026-security-releases)
+
+- 5月21日リリースのv24.16.0で`crypto.randomUUIDv7()`がLTSラインにバックポートされました。OpenSSL 3.5.6、npm 11.13.0への更新、`util.styleText()`のHEXカラー対応も含まれます
+- 6月17日に26.x・24.x・22.xの全ラインを対象とした深刻度HIGHの脆弱性修正リリースが予告されています。CVEの詳細は調査時点で未公開です
+
+### Deno 2.8.1 / 2.8.2
+
+[denoland/deno リリース](https://github.com/denoland/deno/releases)
+
+5月22日の[Deno 2.8](https://deno.com/blog/v2.8)（前回Digest参照）に続き、5月27日に2.8.1、6月3日に2.8.2のバグ修正パッチがリリースされました。5〜6月のFresh新リリースは確認できませんでした。
+
+### Chrome 149: Wasm custom descriptorsのOrigin Trial開始
+
+[Chrome 149 リリースノート](https://developer.chrome.com/release-notes/149)
+
+6月2日リリースのChrome 149に同梱されたV8で、以下が利用可能になりました。
+
+- **WebAssembly custom descriptors**のOrigin Trialが開始。Wasm型にJSプロトタイプを設定し、JS側からラッパーなしで直接メソッドを呼び出せるようになります
+- `Intl.Locale.prototype.variants`をサポート（ECMA-402準拠）
+- ブラウザ内のツール呼び出しを標準化するWebMCPのOrigin Trialも開始されています
+
+[v8.dev/blog](https://v8.dev/blog)には引き続き2026年の新規記事がなく、V8の機能情報はChromeリリースノート経由で追う状況が続いています。
+
+### TypeScript: tsgoは7.0 RCに向け開発継続
+
+[microsoft/typescript-go](https://github.com/microsoft/typescript-go)
+
+4月21日の[7.0 Beta公開](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-beta/)以降、5〜6月の新しいリリースアナウンスは確認できませんでした。`--build`サポートと宣言ファイル生成（`--declaration`）が実装中で、TypeScriptテストスイートの95%以上をパスしています。Beta発表時のスケジュールでは安定版はBeta公開から2ヶ月以内、RCはその数週間前とされており、RC公開が近い時期です。
+
+## エコシステム
+
+### Hono v4.12.25: 脆弱性5件の一括修正
+
+[Hono v4.12.25](https://github.com/honojs/hono/releases/tag/v4.12.25)
+
+6月9日リリース。5月19日の[v4.12.21](https://github.com/honojs/hono/releases/tag/v4.12.21)（4件修正、前回Digest参照）に続き、再び複数の脆弱性が一括修正されました。
+
+- CORSミドルウェア: ワイルドカードオリジンが認証情報付きリクエストへ適用される際の問題を修正
+- Body Limitミドルウェア: AWS Lambdaで`Content-Length`の不正宣言によりサイズ制限をバイパスできる問題を修正
+- serve-static: Windowsでエンコードされたバックスラッシュ`%5C`を使ったパストラバーサルを修正
+- AWS Lambdaアダプタ: 複数の`Set-Cookie`ヘッダーが単一値に結合される問題、Lambda@Edgeの重複ヘッダー処理を修正
+
+直前の[v4.12.24](https://github.com/honojs/hono/releases/tag/v4.12.24)（6月8日）ではBearer認証のエラーメッセージ改善とIPv6アドレス処理の修正が入っています。Honoは5月以降セキュリティ修正の頻度が高く、利用中のプロジェクトは追従をおすすめします。
+
+### Effect: OTLP標準設定レイヤー追加
+
+[This Week in Effect - 2026-06-05](https://effect.website/blog/this-week-in-effect/2026/06/05/)
+
+- OTLP環境変数による標準設定レイヤーが追加され、OpenTelemetryコレクターとの接続設定を環境変数だけで構成できるようになりました
+- SchemaのGUID/UUID検証強化とJSONエンコーディング修正
+- `Workflow.make`をRPCスタイルに統一、HttpApiのBearer認証デコーディング修正
+- ゲームサーバ基盤Rivet 2.3.0とのEffect統合が近日公開予定とアナウンスされています
+
+v4 Betaの全体像は5月28日公開の[Recap記事](https://effect.website/blog/effect-v4beta-launch-to-may-recap/)（前回Digest参照）にまとまっています。
+
+### Zod: 新リリースなし
+
+[colinhacks/zod リリース](https://github.com/colinhacks/zod/releases)
+
+5月中旬〜6月12日の新規リリースは確認できませんでした。5月4日の[v4.4.3](https://github.com/colinhacks/zod/releases/tag/v4.4.3)が最新で、v4系はパッチ修正フェーズが続いています。
