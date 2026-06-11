@@ -1,0 +1,129 @@
+---
+title: "Architect Digest: 2026-06-12"
+date: "2026-06-12T12:00:00+09:00"
+slug: "2026/06/12/architect-digest"
+description: "Martin FowlerのAgentic Programming定義とInfoQのアーキテクチャ変更ケース、KurrentのEvent Sourcing×エージェントメモリ論、OpenTelemetry Blueprints始動、QCon AI BostonとDDD Europe 2026の開催と、AIエージェントを本番システムの一部として設計し直す議論が一斉に具体化した2週間。"
+themes: ["Architect"]
+---
+
+今回の通底テーマは「AIエージェントを本番システムの構成要素として設計し直す」動きの具体化だった。Martin Fowler が Agentic Programming を Vibe Coding と区別して定義し、Kurrent は Event Sourcing の不変ログをエージェントメモリの基盤に据える3層分離を提言、Uber・LinkedIn・DoorDash・Spotify は QCon AI Boston や自社ブログでエージェントの認証・コンテキスト注入・LLMプロキシ共通化といった運用設計を公開した。Cloud Native 側では CNCF 卒業直後の OpenTelemetry が導入ガイド集「Blueprints」を始動し、観測標準の次の課題が「仕様」から「大規模導入の定石」へ移っている。
+
+## 設計パターン・アーキテクチャ思想
+
+### Martin Fowler: Agentic Programming
+
+[Agentic Programming](https://martinfowler.com/bliki/AgenticProgramming.html)（5月21日）
+
+- LLM にコードを生成させつつ人間が詳細にレビュー・監督する開発スタイルを Agentic Programming として定義し、コードを確認しない Vibe Coding とレビューの有無で区別した
+- エージェントはターミナル環境で動作し、ガイドラインドキュメントを参照しながらソース操作とテスト実行を繰り返す
+- 求められるスキルがコーディングそのものから、LLM を指導する「ハーネスエンジニアリング」へ移行していると指摘する
+- 5月の連作（[VibeSec Reckoning](https://martinfowler.com/articles/vibesec-reckoning.html)・[Maintainability sensors](https://martinfowler.com/articles/sensors-for-coding-agents.html)）の語彙を束ねる基礎概念にあたる
+
+### InfoQ: Architectural Change Cases
+
+[Architectural Change Cases](https://www.infoq.com/articles/architectural-change-cases/)（6月4日）
+
+- 将来の変化がアーキテクチャに与える影響を事前に特定する「変更ケース」を、過去の決定を記録する ADR と対になるツールとして位置づける
+- 技術・人員スキル・ビジネス環境の不可避な変化に対し、衰退を事前に計画する手法として整理した
+- AI 生成コードに固有のリスク、たとえばモデル変更による再現性の喪失やベンダー消滅に対応する変更ケースの整備を提案する
+- 小規模な実験で仮説を検証し、推測的な議論を減らして実装コストを正確に把握することを推奨する
+
+### Kurrent: エージェントの「メモリ」はトランスクリプトに過ぎない
+
+[Your Agent Has a Transcript, Not Memory](https://www.kurrent.io/blog/your-agent-has-a-transcript-not-memory/)（5月31日）
+
+- AI エージェントのメモリと呼ばれるものの多くはベクター DB に投入されたセッショントランスクリプトであり、永続的メモリではないと批判する
+- 不変・順序付きの行動記録を持つレコード層、エージェント間のイベント順序を扱うシグナル層、再現可能な意思決定のリーズン層という3層分離を提言
+- Event Sourcing のイベント不変ログをエージェントインフラの基盤に据える構成で、旧 EventStoreDB（現 KurrentDB）の立場からの主張である点は割り引いて読む必要がある
+
+### DDD Europe 2026 開催
+
+[DDD Europe 2026](https://2026.dddeurope.com/)（6月10〜12日、アントワープ）
+
+- Eric Evans の開幕キーノートと Martin Fowler との対談セッションを実施
+- Alberto Brandolini のイベントストーミングマスタークラスに加え、戦略的設計と LLM の融合を扱うセッションが複数登場
+- MCP サーバー設計で Bounded Context や Anti-Corruption Layer が再発見されているという議論がコミュニティ内で定着しつつある
+
+## Cloud Native / CNCF
+
+### OpenTelemetry Blueprints 始動
+
+[OpenTelemetry Blueprints](https://www.infoq.com/news/2026/06/opentelemetry-blueprints-launch/)（6月、InfoQ）
+
+- CNCF 卒業（[5月21日発表](https://www.cncf.io/announcements/2026/05/21/cloud-native-computing-foundation-announces-opentelemetrys-graduation-solidifying-status-as-the-de-facto-observability-standard/)）直後の動きとして、大規模運用時の導入複雑性を下げる規範的アーキテクチャガイド集を発表
+- 最初の対象は Kubernetes オブザーバビリティ、Kubernetes 外インフラのインストゥルメンテーション、中央集権型テレメトリプラットフォームの3領域
+- Adobe・Mastodon・Skyscanner が実世界のリファレンス実装を提供する
+- Collector は v0.154.0（6月9日）まで更新が継続している
+
+### Kubernetes v1.37 に向けた準備
+
+- [v1.37 リリースサイクル](https://github.com/kubernetes/sig-release/tree/master/releases/release-1.37)は Enhancement Freeze が6月16日、リリース目標が8月26日
+- v1.36 "Haru" の GA 機能（User Namespaces・Mutating Admission Policies・Fine-Grained Kubelet Authorization）の本番採用が進む段階にある
+- Ingress NGINX は3月24日に廃止が決定しており、以降のパッチ・セキュリティ修正は提供されない。Gateway API への移行計画を立てていないクラスタは対応が必要
+
+### Service Mesh / eBPF
+
+- Istio は [Ambient Multicluster ベータと Gateway API Inference Extension ベータ](https://www.cncf.io/announcements/2026/03/25/istio-brings-future-ready-service-mesh-to-the-ai-era-with-new-ambient-multicluster-gateway-api-inference-extension-and-more/)の本番検証が進む段階。直近2週間の新規メジャー発表は確認できず
+- Cilium 1.20 は2026年夏リリース予定で pre-release が公開中。Linkerd の新リリースも該当期間内には確認できず
+- Grafana Labs が Beyla のコア計装エンジンを OpenTelemetry に寄贈した OBI（OpenTelemetry eBPF Instrumentation）の標準化が進み、コード変更なしで HTTP/gRPC のトレースと RED メトリクスを取得するゼロインストゥルメンテーションが普及しつつある
+
+## Platform Engineering / SRE / Observability
+
+### Prometheus v3.12.0
+
+[Prometheus v3.12.0](https://github.com/prometheus/prometheus/releases/tag/v3.12.0)（5月28日）
+
+- Remote Write 経由の snappy 圧縮リクエストで宣言デコード長が 32MB を超える場合を拒否するセキュリティ修正を含む
+- `rate()`・`irate()`・`increase()` の start timestamp 処理を改善し、実験的関数 `start()`・`end()`・`range()`・`step()` を追加
+- head chunk 参照の計算方式を変更して mmap 操作を最適化し、CPU 使用率を削減
+- 時系列削除と tombstone 清掃用の Web UI を新規追加
+
+### SRE Report 2026: 信頼性の定義が「稼働率」から「体感速度」へ
+
+[SRE Report 2026](https://www.catchpoint.com/learn/sre-report-2026)（1月22日公開。期間外だが該当期間内に新規の SRE 一次レポートは確認できなかったため収録）
+
+- 400名超の調査で、67% が「パフォーマンス劣化はダウンタイムと同等の深刻さ」と回答。2年連続の傾向で、信頼性の定義が稼働率から体感速度へ広がっている
+- AI への姿勢が変化し、懐疑的回答が前年の 44% から 21% に低下、楽観的回答が 60% に上昇
+- 一方で toil の中央値は稼働時間の 34% のままで、AI によるトイル削減を実感しているのは 49% にとどまる
+- ダウンタイムのコストを財務モデルで定量化している組織は 22% のみで、信頼性投資の説明責任に課題が残る
+
+### IaC: Pulumi のエージェントネイティブ化
+
+- [Pulumi は AI エージェント「Neo」を CLI・GitHub・Slack へ展開](https://www.prnewswire.com/news-releases/pulumi-closes-the-ai-deployment-gap-with-agent-native-infrastructure-and-superintelligence-partnerships-302776114.html)（5月19日）。ドリフト検出・依存関係更新・コンプライアンス監査を定期タスクとして設定し、結果を PR として受け取れる
+- NVIDIA AI Cluster Runtime 向けの IaC プロバイダーを提供開始し、GPU ドライバー・OS カーネル・Kubernetes バージョンの組み合わせをコードで固定できる
+- OpenTofu は [1.12](https://www.infoq.com/news/2026/05/opentofu-release-terraform/)（5月14日）で `prevent_destroy` の変数制御に対応済み。直近2週間の新規リリースは確認できず
+
+## クラウドベンダー・業界動向
+
+### AWS Architecture Blog
+
+- [Snowflake と AWS の Well-Architected カスタムレンズ](https://aws.amazon.com/blogs/architecture/introducing-the-snowflake-and-aws-custom-lens-for-the-aws-well-architected-framework/)（6月10日）: 両サービスが本番環境で相互作用する際のベストプラクティスを Well-Architected の枠組みに統合した
+- [医療記録デジタル化パイプライン](https://aws.amazon.com/blogs/architecture/automate-medical-record-digitization-with-amazon-bedrock-data-automation-and-aws-healthlake/)（6月9日）: スキャン PDF を FHIR R4 準拠データへ変換するサーバーレス構成。Bedrock Data Automation と HealthLake を中核に据え、非構造化データ処理と生成 AI の組み合わせを示す事例
+
+### Netflix: リアルタイムサービスマップ
+
+[From Silos to Service Topology](https://netflixtechblog.com/from-silos-to-service-topology-why-netflix-built-a-real-time-service-map-0165ba13a7bc)（5月29日）
+
+- 分散インフラのサービス間依存関係をリアルタイムに可視化するサービストポロジー基盤を構築
+- チームごとにサイロ化していた依存関係の知識を一元化し、障害影響範囲の即時把握を可能にした
+
+### Spotify: データアシスタントのコンテキスト層
+
+[Encoding Your Domain Expert](https://engineering.atspotify.com/2026/6/encoding-your-domain-expert-the-context-layer-behind-spotifys-data-assistant)（6月10日）
+
+- データ質問に答える AI アシスタントの背後にある「コンテキスト層」の設計を公開
+- ダッシュボード検索や散在するドキュメントへの依存を脱却し、ドメイン知識をモデルへ体系的に注入する仕組みを構築した
+- LinkedIn が QCon AI Boston で発表した MCP ベースの企業コンテキストレイヤー「CAPT」と同型の課題設定で、ドメイン知識の注入が各社共通の設計課題になっている
+
+### QCon AI Boston 2026
+
+[QCon AI Boston 2026](https://www.infoq.com/news/2026/05/qconai-boston-2026-talks/)（6月1〜2日、ボストン）
+
+- OpenAI はエージェント時代の低レイテンシ設計を解説。GPU だけでなくクライアント処理からストリーミングまで多層でボトルネックに対処する
+- LinkedIn は MCP ベースの企業コンテキストレイヤー「CAPT」で AI エージェントに社内ドメイン知識を注入し、課題トリアージを70%高速化した
+- DoorDash は LLM プロキシ共通化プラットフォームでリトライロジック・コスト追跡・プロンプトバージョン管理を一元化
+- Roblox は「生成コードの増加は配信の高速化を意味しない」という課題を提起し、エージェント主導の保守と品質測定の設計を論じた
+
+## まとめ
+
+前回（5月31日号）はエージェント実行基盤をめぐるクラウド3社の主導権争いが軸だったが、この2週間は議論が一段具体化し、エージェントを本番システムに組み込むための個別の設計課題が出揃ってきた。語彙の整理は Martin Fowler の Agentic Programming、メモリ設計は Kurrent の3層分離、ドメイン知識の注入は Spotify のコンテキスト層と LinkedIn の CAPT、運用の共通化は DoorDash の LLM プロキシが対応する。InfoQ のアーキテクチャ変更ケースが示すとおり、モデル変更による再現性喪失のような AI 固有の変化要因をアーキテクチャ設計の入力として扱う方法論も整い始めており、エージェント前提のシステム設計は「実験」から「設計規律の適用対象」へ移行しつつある。
