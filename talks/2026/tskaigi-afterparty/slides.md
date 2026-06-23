@@ -136,20 +136,11 @@ Q. `r1` はRectangle classのインスタンスだが
 
 # TSKaigi 2026のおさらい
 
-### TypeScriptのclassの歴史
-
-ES4で導入されるはずだったclassを  
-TSが先駆けて実装したのち、ES2015が3年遅れで実装した
-
-TypeScript が class を先行実装したことで、ECMAScript との仕様の差異が生じた
-
 ### TypeScriptのclassでつまづくポイント
 
-- 構造的部分型だから  
-  classのインスタンス以外も型検査時は通る
+- 構造的部分型だから classのインスタンス以外も型検査時は通る
 - 型消去によって型検査時の情報は実行時にアクセスできない
-- プロトタイプベース言語の上に構築されたsyntax sugarだから  
-  `this` の指す先がインスタンスとは限らない
+- `this` の指す先がインスタンスとは限らない
 
 詳しくは本編をみてね！
 
@@ -185,7 +176,41 @@ TypeScriptのclassを使わない世界もあるよ
 
 ---
 
-# 方針
+# 全てを値で表現する
+
+- UserId, ClientId  
+  Branded Typeで表現する
+- ログインセッションやトークンの検証状態  
+  Discriminated Unionで表現する
+- UserやClientなどのエンティティ  
+  kind付きの単なるオブジェクトとして表現する
+
+単なるオブジェクトでありclassのインスタンスではないので、  
+テストのフィクスチャ、DBのデータモデル、HTTP リクエスト/レスポンスの  
+いずれでも同じデータ構造でエンティティを扱える
+
+---
+
+# 全てを値で表現する: コード例
+
+```typescript
+// 認証フローの状態を Discriminated Union で表現
+type Started          = { step: 'Started' }
+type AccountSelected  = { step: 'AccountSelected'; userId: UserId }
+type LoggedIn         = { step: 'LoggedIn'; userId: UserId; method: 'Password' | 'Passkey' }
+type Consented        = { step: 'Consented'; userId: UserId; method: 'Password' | 'Passkey'; consentedAt: Date }
+
+type AuthFlow = Started | AccountSelected | LoggedIn | Consented
+
+// 状態遷移は単なる関数
+const login = (flow: AccountSelected, method: 'Password' | 'Passkey'): LoggedIn => ({
+  ...flow, step: 'LoggedIn', method,
+})
+```
+
+---
+
+# 全ての値を検証する
 
 <div class="grid grid-cols-2 gap-4 mt-2 items-center">
 
@@ -210,20 +235,6 @@ TypeScriptのclassを使わない世界もあるよ
 </div>
 
 </div>
-
----
-
-# ドメインモデルの世界
-
-- UserId, ClientId  
-  Branded Typeで表現する
-- ログインセッションやトークンの検証状態  
-  Discriminated Unionで表現する
-- UserやClientなどのエンティティ  
-  kind付きの単なるオブジェクトとして表現する
-
-prototypeに依存しないため、テストのフィクスチャ、DBのデータモデル、  
-HTTP リクエスト/レスポンスのいずれでも同じデータ構造でエンティティを扱える
 
 ---
 
