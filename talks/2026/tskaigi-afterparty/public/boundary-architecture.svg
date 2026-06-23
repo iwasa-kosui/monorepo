@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 340" fill="none">
+  <defs>
+    <style>
+      text { font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif; }
+      .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+    </style>
+  </defs>
+
+  <!-- Schema boundary layer -->
+  <rect x="40" y="70" width="320" height="230" rx="4"
+        fill="#e8e8e8" stroke="#333" stroke-width="2"/>
+
+  <!-- Domain layer -->
+  <rect x="70" y="130" width="260" height="150" rx="4"
+        fill="#fff" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Entry points on boundary -->
+  <rect x="60" y="58" width="80" height="28" rx="2" fill="#333"/>
+  <text x="100" y="77" text-anchor="middle" font-size="10" fill="#fff" class="mono">parse()</text>
+
+  <rect x="260" y="58" width="80" height="28" rx="2" fill="#333"/>
+  <text x="300" y="77" text-anchor="middle" font-size="10" fill="#fff" class="mono">parse()</text>
+
+  <!-- Arrows into domain -->
+  <line x1="100" y1="86" x2="100" y2="126" stroke="#333" stroke-width="2"/>
+  <polygon points="94,124 100,134 106,124" fill="#333"/>
+
+  <line x1="300" y1="86" x2="300" y2="126" stroke="#333" stroke-width="2"/>
+  <polygon points="294,124 300,134 306,124" fill="#333"/>
+
+  <!-- External sources (above boundary) -->
+  <text x="100" y="30" text-anchor="middle" font-size="10" fill="#333">HTTP Request</text>
+  <text x="100" y="44" text-anchor="middle" font-size="10" fill="#666" class="mono">unknown</text>
+
+  <text x="300" y="30" text-anchor="middle" font-size="10" fill="#333">DB / 外部API</text>
+  <text x="300" y="44" text-anchor="middle" font-size="10" fill="#666" class="mono">unknown</text>
+
+  <!-- Domain contents -->
+  <text x="200" y="175" text-anchor="middle" font-size="12" fill="#333" class="mono">LoginReq</text>
+  <text x="200" y="210" text-anchor="middle" font-size="12" fill="#333" class="mono">User</text>
+  <text x="200" y="245" text-anchor="middle" font-size="12" fill="#333" class="mono">Session</text>
+  <text x="200" y="268" text-anchor="middle" font-size="10" fill="#999">...</text>
+
+  <!-- Labels -->
+  <text x="380" y="102" font-size="10" fill="#333">Schema 検証</text>
+  <text x="380" y="200" font-size="10" fill="#333">ドメイン</text>
+</svg>
