@@ -150,7 +150,8 @@ Q. `r1` はRectangle classのインスタンスだが
 
 TypeScriptのclassを使わない世界もあるよ
 
-以下を組み合わせて、全てを値として表現することで、classを使わずにシステムを運用できる
+構造的部分型という型システムを逆手に取り、全てをプレーンなオブジェクトとして表現することで  
+型検査時と実行時のメンタルモデルの違いを減らせる
 
 - Branded Type
 - Discriminated Union
@@ -206,6 +207,39 @@ type AuthFlow = Started | AccountSelected | LoggedIn | Consented
 const login = (flow: AccountSelected, method: 'Password' | 'Passkey'): LoggedIn => ({
   ...flow, step: 'LoggedIn', method,
 })
+```
+
+---
+
+# Branded Type の限界
+
+Branded Type はあくまで型の名前空間上で識別子をつけているだけで、実行時に検証する手段はない
+
+```typescript
+type UserId = string & { readonly [UserIdBrand]: never }
+
+// 実行時には単なる string — 由来を判定する手段がない
+console.log(typeof userId) // "string"
+```
+
+たとえば `UserId` を Branded Type で表現しても、  
+その値がユーザー入力由来なのかDB由来なのかを実行時に判定できない
+
+---
+
+# Discriminated Union で解決する
+
+ステータスやタグを実行時にも参照したいなら `kind` を持たせるのが素直  
+最近の Error オブジェクトが内部的なシンボルで識別情報を持つのと同じ発想
+
+```typescript
+type LoginSession =
+  | { kind: 'Unverified'; userId: UserId; expiresAt: Date }
+  | { kind: 'Verified'; userId: UserId; expiresAt: Date; verifiedAt: Date }
+
+if (session.kind === 'Verified') {
+  // verifiedAt に安全にアクセスできる
+}
 ```
 
 ---
