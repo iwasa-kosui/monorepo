@@ -29,6 +29,13 @@ talk:
 </div>
 
 ---
+layout: center
+class: text-center
+---
+
+# class、使ってますか
+
+---
 
 # クイズ
 
@@ -129,11 +136,20 @@ Q. `r1` はRectangle classのインスタンスだが
 
 # TSKaigi 2026のおさらい
 
+### TypeScriptのclassの歴史
+
+ES4で導入されるはずだったclassを  
+TSが先駆けて実装したのち、ES2015が3年遅れで実装した
+
+TypeScript が class を先行実装したことで、ECMAScript との仕様の差異が生じた
+
 ### TypeScriptのclassでつまづくポイント
 
-- 構造的部分型だから コンストラクタから生まれたオブジェクト以外も型検査は通る
+- 構造的部分型だから  
+  classのインスタンス以外も型検査時は通る
 - 型消去によって型検査時の情報は実行時にアクセスできない
-- `this` の指す先がインスタンスとは限らない
+- プロトタイプベース言語の上に構築されたsyntax sugarだから  
+  `this` の指す先がインスタンスとは限らない
 
 詳しくは本編をみてね！
 
@@ -141,23 +157,19 @@ Q. `r1` はRectangle classのインスタンスだが
 
 # 私の主張
 
-TypeScriptのclassを使わず、**全てを値で表現する**世界もあるよ
+TypeScriptのclassを使わない世界もあるよ
 
-構造的部分型という型システムを逆手に取り、全てをプレーンなオブジェクトとして表現することで  
-型検査時と実行時のメンタルモデルの違いを減らせる
+以下を組み合わせて、全てを値として表現することで、classを使わずにシステムを運用できる
 
-```typescript
-// エンティティは単なるオブジェクト
-const user = { kind: 'User', id: 'u-1', name: 'kosui' } as const satisfies User
-
-// 振る舞いは単なる関数
-const rename = (user: User, name: string): Result<User, SameNameError> =>
-  user.name === name ? err({ kind: 'SameNameError' }) : ok({ ...user, name })
-```
+- Branded Type
+- Discriminated Union
+- Companion Object Pattern
 
 ### しかし...
 
 大規模なプロジェクトで本当にclassを使わずに運用できるのか？
+
+そしてその設計は手間に見合った価値をもたらすのか？
 
 ---
 
@@ -173,36 +185,7 @@ const rename = (user: User, name: string): Result<User, SameNameError> =>
 
 ---
 
-# なぜ全てを値で表現するのか
-
-- アクセストークンとIDトークンを取り違えたら患者情報が漏洩する
-- アカウント選択 → ログイン → 同意 → パスワード変更強制など  
-  状態遷移を一つ間違えたらセキュリティホールになる
-- この領域ではテスタビリティが生命線  
-  全てを値で表現すると `as const satisfies` でフィクスチャが書けてテストしやすい
-
----
-
-# 全てを値で表現する
-
-- UserIdのようなリテラル  
-  Branded Typeで表現する
-- ログインセッションやトークンの検証状態  
-  Discriminated Unionで表現する
-- UserやClientなどのエンティティ  
-  kind付きの単なるオブジェクトとして表現する
-
-単なるオブジェクトでありclassのインスタンスではないので、  
-テストのフィクスチャ、DBのデータモデル、HTTP リクエスト/レスポンスの  
-いずれでも同じデータ構造でエンティティを扱える
-
----
-
-# 全ての値を検証する
-
-<div class="grid grid-cols-2 gap-4 mt-2 items-center">
-
-<div>
+# 方針
 
 ### 外側
 
@@ -210,68 +193,26 @@ const rename = (user: User, name: string): Result<User, SameNameError> =>
 
 ### 内側
 
-スキーマライブラリが実行時と型検査時の双方で  
-検証するため、スキーマライブラリの型をそのまま使える
+スキーマライブラリが実行時と型検査時の双方で検証するため、  
+スキーマライブラリの型をそのまま使用できる
 
 あらゆるエンティティは単なる値として表現され  
 その振る舞いはメソッドではなく単なる関数で表現する
 
-**Always-Valid Domain Model**  
-境界で必ず検証することで、ドメイン内部の値は常に正しい状態が保証されるという考え方
+---
 
-</div>
+# 外側から内側へ
 
-<div>
-  <img src="/boundary-architecture.png" class="w-full" />
-</div>
 
-</div>
 
 ---
 
-# Branded Type の限界
+# ドメインモデルの世界
 
-Branded Type はあくまで型の名前空間上で識別子をつけているだけで、実行時に検証する手段はない
-
-```typescript
-type UserId = string & { readonly [UserIdBrand]: never }
-
-// 実行時には単なる string — 由来を判定する手段がない
-console.log(typeof userId) // "string"
-```
-
-たとえばアクセストークンとリフレッシュトークンを Branded Type で区別しても、  
-実行時にどちらのトークンかを判定して処理を分岐することはできない
-
----
-
-# Discriminated Union で解決する
-
-ステータスやタグを実行時にも参照したいなら `kind` を持たせるのが素直  
-最近の Error オブジェクトが内部的なシンボルで識別情報を持つのと同じ発想
-
-```typescript
-type LoginSession =
-  | { kind: 'Unverified'; userId: UserId; expiresAt: Date }
-  | { kind: 'Verified'; userId: UserId; expiresAt: Date; verifiedAt: Date }
-
-if (session.kind === 'Verified') {
-  // verifiedAt に安全にアクセスできる
-}
-```
-
----
-
-# でもそんな仕組みをゼロから構築できない、というあなたへ
-
-**kamae-ts** というAIエージェントのためのプラグインを用意しました
-
-Claude Code や Codex などのAIエージェントにこの設計パターンを教え込み、  
-コーディングを支援させることができます
-
-```bash
-npx skills add iwasa-kosui/kamae-ts
-```
-
-試してみてね!
+- UserId, ClientId  
+  Branded Typeで表現する
+- ログインセッションやトークンの検証状態  
+  Discriminated Unionで表現する
+- UserやClientなどのエンティティ  
+  kind付きの単なるオブジェクトとして表現する
 
