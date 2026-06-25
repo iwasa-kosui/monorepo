@@ -1,6 +1,6 @@
 ---
 theme: ../../themes/kosui-me
-title: "本当にclassを使わずにシステムを運用できるの？"
+title: "本当にTypeScriptのclassを使わずにシステムを運用できるの？"
 info: |
   TSKaigi 2026
 author: 岩佐 幸翠
@@ -21,7 +21,7 @@ talk:
 
 <div class="text-sm opacity-80 mb-16">TSKaigi 2026 事後勉強会</div>
 
-# 本当にclassを使わずにシステムを運用できるの？
+# 本当にTypeScriptのclassを使わずにシステムを運用できるの？
 
 <div class="mt-16">
   <div class="text-lg">2026年6月24日</div>
