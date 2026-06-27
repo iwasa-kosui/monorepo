@@ -78,18 +78,42 @@ ECMAScriptのclassの表現力は他言語に比べてかなり限定的だ。`#
 こうした特性と4年間向き合った結果、私はclassを使わずに全てを値で表現するアプローチに辿り着いた。TypeScriptが構造的部分型を採用しているのだから、あらゆる情報をプレーンなオブジェクトで表現すれば型検査時と実行時の挙動に悩まされることもほぼない。
 
 ```typescript
+import { z } from 'zod'
+import { UserId } from './userId.js' // Branded Type
+import { UserDisplayName } from './displayName.js' // Branded Type
+
 // エンティティは単なるオブジェクト
-const user = { kind: 'User', id: 'u-1', name: 'kosui' } as const satisfies User
+const userSchema = z.object({
+  kind: z.literal('User'),
+  id: UserId.schema,
+  name: UserDisplayName.schema,
+})
+
+export type User = z.infer<typeof userSchema>
 
 // 振る舞いは単なる関数
 const rename = (user: User, name: string): Result<User, SameNameError> =>
   user.name === name ? err({ kind: 'SameNameError' }) : ok({ ...user, name })
+
+export const User = {
+  schema: userSchema,
+  rename,
+} as const
 ```
 
-Branded Typeで構造が同じ型を区別し、Discriminated Unionで種別を判別し、thisを持たない関数で振る舞いを表現する方法だ。詳細は下記の登壇資料や私が提供するCoding Agent向けスキルを見てほしい。いずれにせよ、TypeScriptの特性を理解した上で、自分たちの領域に合った付き合い方を見つけることが大事だ。
+Branded Typeで構造が同じ型を区別し、Discriminated Unionで種別を判別し、thisを持たない関数で振る舞いを表現する方法だ。ただ、この方法も別に万能でもなんでもないし、注意点もある。詳細は下記の登壇資料や私が提供するCoding Agent向けスキルを見てほしい。
 
-- [本当にTypeScriptのclassを使わずにシステムを運用できるの？ - kosui](https://kosui.me/talks/2026/tskaigi-afterparty)
-- [kamae-ts](https://iwasa-kosui.github.io/kamae-ts/ja/)
+<a href="https://kosui.me/talks/2026/tskaigi-afterparty" target="_blank" alt="本当にTypeScriptのclassを使わずにシステムを運用できるの？ - kosui">
+<img width=400 src="https://kosui.me/og/talks/2026/tskaigi-afterparty.png" />
+</a>
+
+<br>
+
+<a href="https://iwasa-kosui.github.io/kamae-ts/ja/" target="_blank" alt="kamae-ts">
+<img width=400 src="https://iwasa-kosui.github.io/kamae-ts/assets/og-image.png" />
+</a>
+
+いずれにせよ、TypeScriptの特性を理解した上で、自分たちの領域に合った付き合い方を見つけることが大事だ。
 
 ## 実行環境の特性と向き合う
 
