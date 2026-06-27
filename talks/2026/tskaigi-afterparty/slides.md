@@ -6,7 +6,7 @@ info: |
 author: 岩佐 幸翠
 keywords: TypeScript, ECMAScript, class, 構造的部分型, 型消去
 transition: slide-left
-duration: 30min
+duration: 10min
 mdc: true
 
 talk:
@@ -15,7 +15,7 @@ talk:
   description: 実際の運用中のシステムを紹介
   themes:
     - typescript
-  duration: "30min"
+  duration: "10min"
   speaker: "岩佐 幸翠"
 ---
 
