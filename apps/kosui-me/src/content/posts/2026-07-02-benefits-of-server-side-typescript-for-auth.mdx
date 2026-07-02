@@ -15,6 +15,53 @@ private: false
 
 認証基盤を語る上で避けて通れないのがOIDCだ。OIDCはリダイレクトをベースにしたプロトコルであり、認可リクエスト、ユーザー認証、同意画面、コールバックといった一連のフローの中で、サーバサイドで画面を生成して返す必要がある場面が多い。つまり、SSRとの親和性が非常に高い。
 
+SSRで認証基盤を構成した場合、フローは次のようになる。
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant C as Client App
+    participant AS as Auth Server
+
+    B->>C: GET /protected
+    C-->>B: 302 → /authorize
+    B->>AS: GET /authorize
+    AS-->>B: HTML（ログイン画面）
+    B->>AS: POST /login
+    Note over AS: 認証処理
+    AS-->>B: 302 → /callback?code=xxx
+    B->>C: GET /callback?code=xxx
+    C->>AS: POST /token
+    AS-->>C: Access Token + ID Token
+```
+
+HTTPのリダイレクトとフォーム送信という、Webの基本的な仕組みだけでフローが完結する。認証サーバが返すログイン画面や同意画面はサーバサイドで生成されたHTMLであり、ユーザーの操作に対してサーバが次のリダイレクト先を決定する。
+
+一方、もしこれをCSRで構築しようとすると、フローは不自然になる。
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant C as Client App
+    participant AS as Auth Server
+
+    B->>C: GET /protected
+    C-->>B: 302 → /authorize
+    B->>AS: GET /authorize
+    AS-->>B: HTML（空のシェル）
+    B->>AS: GET /bundle.js
+    AS-->>B: JavaScript bundle
+    Note over B: JSを実行し<br/>ログイン画面を描画
+    B->>AS: POST /api/login（XHR）
+    AS-->>B: JSON { redirect: "..." }
+    Note over B: window.location で<br/>リダイレクトを発火
+    B->>C: GET /callback?code=xxx
+    C->>AS: POST /token
+    AS-->>C: Access Token + ID Token
+```
+
+空のHTMLシェルを返してからJavaScriptバンドルを読み込み、クライアントサイドでログイン画面を描画し、フォーム送信の代わりにXHRでAPIを呼び、HTTPリダイレクトの代わりに`window.location`でプログラム的に遷移する。OIDCのリダイレクトベースのプロトコルに対して、わざわざHTTPの仕組みを迂回するレイヤーを挟むことになる。
+
 事実、KeycloakをはじめとするOIDC/OAuth2の著名なOSSも、テンプレートエンジンによるSSRを採用している。認証フローの中で表示されるログイン画面や同意画面は、セキュリティ上の理由からサーバサイドで制御すべきものであり、SPAで構築する積極的な理由がない。
 
 サーバサイドTypeScriptを選んでいたことで、こうした画面のロジックも表示も同じ言語で書くことができた。認証フローのサーバサイドロジックと、そのフローの中で表示される画面を、一つのコードベースでシンプルに構成できたのは大きな恩恵だった。
