@@ -8,43 +8,20 @@ const { isDraft = false } = Astro.props;
 
 <dialog
   id="content-warning-modal"
-  class="m-0 p-0 border-none bg-transparent backdrop:bg-charcoal/30 dark:backdrop:bg-black/50 backdrop:backdrop-blur-sm max-w-md w-[calc(100%-2rem)] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+  class="m-0 p-0 border-none bg-transparent backdrop:bg-charcoal/30 dark:backdrop:bg-black/50 backdrop:backdrop-blur-sm max-w-sm w-[calc(100%-2rem)] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
   data-is-draft={isDraft ? 'true' : undefined}
 >
   <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-    <div class="space-y-3 mb-6">
-      <div
-        id="content-warning-draft"
-        class:list={[
-          'flex items-start gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-clay',
-          { hidden: !isDraft },
-        ]}
-      >
-        <span
-          class="text-amber-600 dark:text-amber-400 text-lg shrink-0"
-          aria-hidden="true"
-        >&#x1F6A7;</span>
-        <p class="text-sm text-amber-800 dark:text-amber-200">
-          この記事はドラフトです。内容は変更される可能性があります。
-        </p>
-      </div>
-      <div
-        id="content-warning-preview"
-        class="hidden flex items-start gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-clay"
-      >
-        <span
-          class="text-blue-600 dark:text-blue-400 text-lg shrink-0"
-          aria-hidden="true"
-        >&#x1F50D;</span>
-        <p class="text-sm text-blue-800 dark:text-blue-200">
-          これはプレビュー環境です。本番環境とは内容が異なる場合があります。
-        </p>
-      </div>
-    </div>
-    <div class="flex justify-end">
+    <ul
+      id="content-warning-messages"
+      class="list-disc list-inside space-y-1 text-sm text-charcoal dark:text-gray-200"
+    >
+      {isDraft && <li>この記事はドラフトです。</li>}
+    </ul>
+    <div class="flex justify-end mt-4">
       <button
         id="content-warning-close"
-        class="px-4 py-2 text-sm font-medium bg-accent dark:bg-accent-light text-white dark:text-charcoal rounded-clay shadow-clay dark:shadow-clay-dark hover:opacity-90 transition-opacity cursor-pointer"
+        class="px-4 py-1.5 text-sm bg-charcoal/10 dark:bg-white/10 rounded-clay hover:bg-charcoal/20 dark:hover:bg-white/20 transition-colors cursor-pointer"
       >
         閉じる
       </button>
@@ -65,8 +42,12 @@ document.addEventListener('astro:page-load', () => {
   if (!isDraft && !isPreview) return;
 
   if (isPreview) {
-    const previewEl = dialog.querySelector('#content-warning-preview');
-    previewEl?.classList.remove('hidden');
+    const list = dialog.querySelector('#content-warning-messages');
+    if (list) {
+      const li = document.createElement('li');
+      li.textContent = 'これはプレビュー環境です。';
+      list.appendChild(li);
+    }
   }
 
   dialog.showModal();
