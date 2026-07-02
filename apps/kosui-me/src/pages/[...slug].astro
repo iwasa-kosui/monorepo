@@ -1,5 +1,6 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
+import ContentWarningModal from '@/components/ContentWarningModal.astro';
 import MarkdownSourceLink from '@/components/MarkdownSourceLink.astro';
 import RelatedArticles from '@/components/RelatedArticles.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
@@ -20,6 +21,7 @@ export async function getStaticPaths() {
 const { post } = Astro.props as { post: PostEntry };
 const { Content } = await render(post);
 const isPrivate = post.data.private === true;
+const isDraft = post.data.draft === true;
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -43,7 +45,7 @@ const markdownUrl = `/${post.data.slug}.md`;
   ogUrl={pageUrl}
   ogType="article"
   authorUrl="https://www.hatena.ne.jp/kosui_me/"
-  noindex={isPrivate}
+  noindex={isPrivate || isDraft}
 >
   <article
     class="article-paper"
@@ -120,6 +122,8 @@ const markdownUrl = `/${post.data.slug}.md`;
   <section class="p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark">
     <AuthorCard />
   </section>
+
+  <ContentWarningModal isDraft={isDraft} />
 
   <script>
   document.addEventListener('astro:page-load', async () => {
