@@ -1,0 +1,58 @@
+---
+interface Props {
+  isDraft?: boolean;
+}
+
+const { isDraft = false } = Astro.props;
+---
+
+<dialog
+  id="content-warning-modal"
+  class="m-0 p-0 border-none bg-transparent backdrop:bg-charcoal/30 dark:backdrop:bg-black/50 backdrop:backdrop-blur-sm max-w-sm w-[calc(100%-2rem)] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+  data-is-draft={isDraft ? 'true' : undefined}
+>
+  <div class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
+    <ul
+      id="content-warning-messages"
+      class="list-disc list-inside space-y-1 text-sm text-charcoal dark:text-gray-200"
+    >
+      {isDraft && <li>この記事はドラフトです。</li>}
+    </ul>
+    <div class="flex justify-end mt-4">
+      <button
+        id="content-warning-close"
+        class="px-4 py-1.5 text-sm border border-charcoal/30 dark:border-white/30 rounded-clay hover:bg-charcoal/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+      >
+        閉じる
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+document.addEventListener('astro:page-load', () => {
+  const dialog = document.querySelector<HTMLDialogElement>(
+    '#content-warning-modal',
+  );
+  if (!dialog) return;
+
+  const isDraft = dialog.dataset.isDraft === 'true';
+  const isPreview = window.location.hostname !== 'kosui.me';
+
+  if (!isDraft && !isPreview) return;
+
+  if (isPreview) {
+    const list = dialog.querySelector('#content-warning-messages');
+    if (list) {
+      const li = document.createElement('li');
+      li.textContent = 'これはプレビュー環境です。';
+      list.appendChild(li);
+    }
+  }
+
+  dialog.showModal();
+
+  const closeBtn = dialog.querySelector('#content-warning-close');
+  closeBtn?.addEventListener('click', () => dialog.close());
+});
+</script>
