@@ -1,5 +1,13 @@
 [
   {
+    "title": "共通基盤の構築にサーバサイドTypeScriptを選んで嬉しかったこと",
+    "url": "https://kakehashi-dev.hatenablog.com/entry/2026/07/08/090000",
+    "date": "2026-07-08",
+    "publisher": "KAKEHASHI Tech Blog",
+    "description": "認証基盤・ID基盤の構築でサーバサイドTypeScriptを採用して得られた利点を紹介。OIDCのSSR実装、Discriminated Unionによる状態遷移管理、構造的型システムを活かした組織単位の設計を論じる。",
+    "themes": ["typescript", "architecture"]
+  },
+  {
     "title": "サーバーサイドTypeScriptの型システムをどう教えるか — 他言語経験者に向けたオンボーディング事例",
     "url": "https://kakehashi-dev.hatenablog.com/entry/2026/03/31/110000",
     "date": "2026-03-31",
