@@ -1,0 +1,148 @@
+---
+title: "認証基盤でサーバサイドTypeScriptを選んで嬉しかったこと"
+date: "2026-07-02T22:00:00+09:00"
+slug: "posts/2026/07/02/benefits-of-server-side-typescript-for-auth"
+description: "前編では向き合うべき特性と覚悟について書いた。本稿では、認証基盤とID基盤という具体的な領域でサーバサイドTypeScriptを選んだことで実際に得られた恩恵を共有する。"
+themes: ["typescript"]
+private: false
+---
+
+前編「[サーバサイドTypeScriptを選ぶ前に向き合ってほしいこと](/posts/2026/06/26/before-choosing-server-side-typescript)」では、TypeScriptの言語特性や実行環境の得意・不得意と向き合う覚悟について書いた。本稿では、その覚悟の先にあったもの——認証基盤という具体的な領域でサーバサイドTypeScriptを選んだことで実際に得られた恩恵について書く。
+
+ただし、ここに書くことは「だからサーバサイドTypeScriptを選ぶべきだ」という主張ではない。私たちの領域と組織の文脈において嬉しかったことを、できるだけ正直に共有するものだ。
+
+## OIDCとSSRの親和性
+
+認証基盤を語る上で避けて通れないのがOIDCだ。OIDCはリダイレクトをベースにしたプロトコルであり、認可リクエスト、ユーザー認証、同意画面、コールバックといった一連のフローの中で、サーバサイドで画面を生成して返す必要がある場面が多い。つまり、SSRとの親和性が非常に高い。
+
+SSRで認証基盤を構成した場合、フローは次のようになる。
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant C as Client App
+    participant AS as Auth Server
+
+    B->>C: GET /protected
+    C-->>B: 302 → /authorize
+    B->>AS: GET /authorize
+    AS-->>B: HTML（ログイン画面）
+    B->>AS: POST /login
+    Note over AS: 認証処理
+    AS-->>B: 302 → /callback?code=xxx
+    B->>C: GET /callback?code=xxx
+    C->>AS: POST /token
+    AS-->>C: Access Token + ID Token
+```
+
+HTTPのリダイレクトとフォーム送信という、Webの基本的な仕組みだけでフローが完結する。認証サーバが返すログイン画面や同意画面はサーバサイドで生成されたHTMLであり、ユーザーの操作に対してサーバが次のリダイレクト先を決定する。
+
+一方、もしこれをCSRで構築しようとすると、フローは不自然になる。
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant C as Client App
+    participant AS as Auth Server
+
+    B->>C: GET /protected
+    C-->>B: 302 → /authorize
+    B->>AS: GET /authorize
+    AS-->>B: HTML（空のシェル）
+    B->>AS: GET /bundle.js
+    AS-->>B: JavaScript bundle
+    Note over B: JSを実行し<br/>ログイン画面を描画
+    B->>AS: POST /api/login（XHR）
+    AS-->>B: JSON { redirect: "..." }
+    Note over B: window.location で<br/>リダイレクトを発火
+    B->>C: GET /callback?code=xxx
+    C->>AS: POST /token
+    AS-->>C: Access Token + ID Token
+```
+
+OIDC Coreは、認可コードフローにおいて認可レスポンスのパラメータをredirect_uriのクエリパラメータとして`application/x-www-form-urlencoded`形式で返さなければならない（MUST）と定めている。CSRでログイン画面をSPAとして構築し、XHRで認証APIを呼ぶ構成では、認可サーバのレスポンスはJSONになる。これはredirect_uriへのクエリパラメータ付与という仕様上の形式を満たさない。
+
+なお、`response_mode=form_post`のようにHTTPリダイレクト以外の配信メカニズムも仕様の枠組みには存在するし、OAuth Security BCPではブラウザ履歴やRefererヘッダ経由の認可コード漏洩対策としてform_postの利用が推奨されている。しかし、form_postもサーバが生成したHTMLフォームをブラウザが自動送信するという仕組みであり、やはりサーバサイドで画面を生成する前提であることに変わりはない。
+
+加えて、認証画面はユーザーが一瞬しか滞在しない一時的なページだ。ログイン画面を表示し、クレデンシャルを送信し、リダイレクトで離脱する。その一瞬のためにSPAを初期化するコストは割に合わない。
+
+事実、KeycloakをはじめとするOIDC/OAuth2の著名なOSSも、テンプレートエンジンによるSSRを採用している。Keycloakの場合、Quarkus上のJAX-RSリソースがリクエストを受け取り、FreeMarkerテンプレートでHTMLを生成してそのまま返すという構成だ。Account Consoleのようなユーザー向け管理画面はReact SPAに移行されたが、ログイン・同意・登録といった認証フローの画面についてはメンテナが明確にSSRの維持を表明しており、FreeMarkerからの移行先としてもLitやHTMXといったプログレッシブエンハンスメントの方向が検討されている。認証フローの画面にCSR/SPAは不要だという判断は、このプロジェクトの規模と歴史を考えれば説得力がある。
+
+ただし、Keycloakのアプローチには課題もある。認証フローのロジックはJavaで書かれ、画面はFreeMarkerのDSLで書かれるという2言語構成になっている。サーバサイドTypeScriptであれば、認証フローのロジックも画面のレンダリングも同じ言語で書ける。テンプレートエンジンのDSLを介さずに型検査が効くJSXやTSXで画面を構成できるのは、認証のようにセキュリティ上のミスが許されない領域では特にありがたかった。
+
+## 代数的データ型による状態遷移の表現
+
+認証は複雑な状態遷移が絡み合う領域だ。ユーザーが未認証なのか、認証済みなのか、MFAの検証待ちなのか、セッションが期限切れなのか。それぞれの状態に応じて取りうるアクションは異なり、状態の組み合わせを間違えればセキュリティホールに直結する。
+
+TypeScriptのDiscriminated Unionを使えば、こうした状態をコンパイル時に網羅的に表現できる。
+
+```typescript
+type AuthSession =
+  | { status: 'unauthenticated' }
+  | { status: 'credentials_verified'; userId: string }
+  | { status: 'mfa_required'; userId: string; challenge: MfaChallenge }
+  | { status: 'authenticated'; userId: string; sessionId: string }
+```
+
+前編で紹介した「全てを値で表現する」アプローチと組み合わせることで、状態遷移の漏れを型検査で検出できる。`switch`文のexhaustiveness checkにより、新しい状態を追加したときに対応漏れのある箇所がコンパイルエラーとして表面化する。認証のようにミスが許されない領域において、この恩恵は大きかった。
+
+### 組織単位の設計で見えた構造的型システムの強み
+
+ID基盤では認証とは別の角度でTypeScriptの型システムに助けられた。組織単位の設計だ。
+
+ID基盤は「部」「課」「チーム」「プロジェクト」といった組織単位を扱う。これらは名前や所属メンバーといった共通の属性を持ちつつ、予算管理の単位なのか、アクセス制御の単位なのか、人員配置の単位なのかによって扱い方が変わる。しかも、その括り方はビジネス要件の変化によって頻繁に変わりうる。
+
+TypeScriptの構造的型システムとDiscriminated Unionの組み合わせは、この問題に対して「概念側に手を入れずに、使う側で括りを定義する」というアプローチを可能にした。
+
+```typescript
+// 組織単位の定義（安定している）
+type Department = { kind: 'department'; name: string; budget: Money; headcount: number }
+type Division = { kind: 'division'; name: string; budget: Money }
+type Team = { kind: 'team'; name: string; members: UserId[] }
+type Project = { kind: 'project'; name: string; members: UserId[]; deadline: Date }
+
+// 使う側が文脈に応じて括りを定義する
+type BudgetUnit = Department | Division
+type StaffUnit = Department | Team | Project
+type AccessControlScope = Department | Division | Team | Project
+```
+
+予算管理のフローは`BudgetUnit`を受け取り、人員配置のフローは`StaffUnit`を受け取る。新しい括り方が必要になったら、新しいunion型を定義するだけだ。組織単位の定義自体には一切触れない。
+
+これがトレイトやインターフェースを明示的に実装する言語だと、事情が異なる。括り方を変えるたびに概念側に`impl`や`implements`を追加する必要があり、概念に振る舞いの宣言が蓄積していく。組織単位のように「概念自体は安定していて、括り方が文脈によって変わる」ドメインでは、概念側への変更が不要なTypeScriptのアプローチが合っていた。
+
+### この設計の限界
+
+もちろん、この設計には弱点もある。
+
+unionの定義は使う側に分散するため、新しい組織単位を追加したとき「どのunionに足すべきか」をコンパイラは教えてくれない。トレイトであれば「この能力を実装せよ」と強制できるが、TypeScriptのunionにはそのような契約の強制力がない。規模が大きくなったとき、ad-hocなunionの増殖を誰が整合性を持って管理するかという問題が生じる。
+
+また、代数的データ型による状態の表現自体はTypeScriptの専売特許ではない。ScalaやKotlinでは以前から可能だったし、最近ではJavaもSealed Classによって同様の表現ができるようになった。TypeScriptを選ぶ理由としてこの点だけを挙げるのは不十分だろう。
+
+それでも、私たちのドメインでは「概念の追加」より「括り方の変更」のほうが圧倒的に頻度が高かった。この変更パターンとTypeScriptの構造的型システムが噛み合ったことが、実感としての恩恵につながっている。
+
+## プラットフォームチームの運用とオンボーディング
+
+私たちのチームは、認証基盤だけでなく、ID基盤、ライセンス基盤、証明書基盤といった複数のプラットフォームシステムを開発・運用している。プラットフォームシステムはシステム間連携が多く、一つのチームが複数のシステムを横断的に理解して運用し続ける必要がある。
+
+こうしたシステムに複雑でリッチなUIはあまり必要ない。それよりもセキュリティや可用性がはるかに重要だ。だからこそ、チームはバックエンドエンジニアを中心に構成し、一人ひとりがインフラからバックエンド、フロントエンドまで一通り見れる状態——SRE的な動き方ができる状態を目指している。
+
+フロントエンドとバックエンドの両方がTypeScriptで書かれていることで、バックエンドエンジニアがフロントエンドのコードに入っていく際の認知的な障壁は確かに下がった。前編では「人材採用における母集団の広さ」を安易に理由にすることへの警鐘を書いたが、私たちの場合は「母集団の広さ」ではなく、「バックエンドエンジニアが全レイヤーを見渡せること」がTypeScriptを同一言語で揃えた実際の恩恵だった。
+
+一方で、フロントエンドに精通したメンバーが少ない構成ゆえの課題もある。アクセシビリティやレガシー環境での動作性については十分な知見を持てておらず、これは正直に課題として認識している。
+
+## プラットフォーム横断の共通ライブラリ
+
+プラットフォームシステムには、システムごとに異なるドメインがありながらも、横断的に必要なロジックが存在する。その代表がドメインイベントの記録だ。誰が、いつ、何を、どう変更したのか。プラットフォームシステムとしての監査性を担保するために、この仕組みはどのシステムにも必要になる。
+
+TypeScriptの型システムはそれなりに表現力があり、こうしたロジックを共通ライブラリとして抽象化し、複数のドメインへ適用するということがやりやすかった。型パラメータやDiscriminated Unionを活用することで、各ドメイン固有のイベント型を定義しつつ、記録・配信のインフラ部分は共通化できた。
+
+ただし、これには注意が必要だ。抽象化を誤れば、責務分界点のずれた自己満足的なライブラリが生まれてしまう。「共通化できるから共通化する」のではなく、本当に共通であるべきロジックを見極める判断が求められる。
+
+## おわりに
+
+前編では、サーバサイドTypeScriptと向き合う覚悟について書いた。本稿では、その覚悟の先にあった恩恵を書いた。
+
+OIDCとSSRの親和性、認証状態の網羅的な表現、組織単位の柔軟な括り方、プラットフォームチームの運用効率、横断的な共通ライブラリ。いずれも、私たちの領域と組織の文脈があってこそ恩恵として実感できたものだ。文脈が変われば、恩恵の重みも変わるだろう。
+
+安易に選ぶのでも安易に辞めるのでもなく、自分たちの文脈と向き合い続けることが大事だという結論は、前編と変わらない。
