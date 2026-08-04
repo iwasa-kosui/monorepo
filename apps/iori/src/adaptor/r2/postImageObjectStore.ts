@@ -1,11 +1,7 @@
 import type { R2Bucket, R2ObjectBody, R2PutOptions } from '@cloudflare/workers-types';
 
 import type { ImageId } from '../../domain/image/imageId.ts';
-import type {
-  PostImageObjectBody,
-  PostImageObjectStore,
-  PutPostImageObjectInput,
-} from '../../ports/postImageObjectStore.ts';
+import type { PostImageObjectStore, PutPostImageObjectInput } from '../../ports/postImageObjectStore.ts';
 
 export type PostImageR2Bucket = Pick<R2Bucket, 'get' | 'put'>;
 

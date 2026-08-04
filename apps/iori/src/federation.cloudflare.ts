@@ -1,3 +1,4 @@
+import type { KVNamespace, MessageBatch, Queue } from '@cloudflare/workers-types';
 import {
   createFederationBuilder,
   type Federation,
@@ -6,7 +7,6 @@ import {
   type MessageQueue,
 } from '@fedify/fedify';
 import { WorkersKvStore, WorkersMessageQueue } from '@fedify/fedify/x/cfworkers';
-import type { KVNamespace, MessageBatch, Queue } from '@cloudflare/workers-types';
 
 import { createContextLoaderFactory } from './federationContext.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
