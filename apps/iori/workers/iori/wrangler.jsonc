@@ -1,0 +1,59 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "iori",
+  "main": "../../src/worker.ts",
+  "workers_dev": true,
+  "preview_urls": true,
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../../dist",
+  },
+  "vars": {
+    "ORIGIN": "https://iori.example.com",
+    "VAPID_SUBJECT": "mailto:admin@example.com",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "iori",
+      "database_id": "ad8702e7-94cc-43f7-a074-4e61c0c2e6c0",
+      "migrations_dir": "../../drizzle-d1",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "iori-uploads",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "FEDIFY_KV",
+      "id": "01fed16a0ee245d4aa78f9d56329eb2c",
+      "preview_id": "511a0af9ccd043ac9d4d0239331aa7e3",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "FEDIFY_QUEUE",
+        "queue": "iori-fedify",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "iori-fedify",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "retry_delay": 30,
+      },
+    ],
+  },
+}

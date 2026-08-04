@@ -45,7 +45,7 @@ importers:
         version: 17.2.3
       drizzle-orm:
         specifier: 0.45.1
-        version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.16.3)(postgres@3.4.7)
+        version: 0.45.1(@cloudflare/workers-types@4.20250604.0)(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.16.3)(postgres@3.4.7)
       hono:
         specifier: 4.11.1
         version: 4.11.1
@@ -80,6 +80,9 @@ importers:
         specifier: 4.2.1
         version: 4.2.1
     devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 4.20250604.0
+        version: 4.20250604.0
       '@eslint/js':
         specifier: 9.39.2
         version: 9.39.2
@@ -91,7 +94,7 @@ importers:
         version: 1.9.0(hono@4.11.1)
       '@hono/vite-dev-server':
         specifier: 0.24.0
-        version: 0.24.0(hono@4.11.1)(miniflare@4.20250604.1)(wrangler@4.20.0)
+        version: 0.24.0(hono@4.11.1)(miniflare@4.20250604.1)(wrangler@4.20.0(@cloudflare/workers-types@4.20250604.0))
       '@types/node':
         specifier: 24.10.4
         version: 24.10.4
@@ -146,6 +149,9 @@ importers:
       vitest:
         specifier: 3.1.2
         version: 3.1.2(@types/debug@4.1.12)(@types/node@24.10.4)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.1)(tsx@4.21.0)(yaml@2.8.2)
+      wrangler:
+        specifier: 4.20.0
+        version: 4.20.0(@cloudflare/workers-types@4.20250604.0)
 
   apps/kosui-me:
     dependencies:
@@ -278,7 +284,7 @@ importers:
         version: 3.1.2(@types/debug@4.1.12)(@types/node@24.10.4)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.30.1)(tsx@4.21.0)(yaml@2.8.2)
       wrangler:
         specifier: 4.20.0
-        version: 4.20.0
+        version: 4.20.0(@cloudflare/workers-types@4.20250604.0)
 
   apps/nen-diagnosis:
     dependencies:
@@ -360,7 +366,7 @@ importers:
         version: 3.1.2(@types/debug@4.1.12)(@types/node@24.10.4)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.1)(tsx@4.21.0)(yaml@2.8.2)
       wrangler:
         specifier: 4.20.0
-        version: 4.20.0
+        version: 4.20.0(@cloudflare/workers-types@4.20250604.0)
 
   apps/slack-thread-expander:
     dependencies:
@@ -975,6 +981,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@cloudflare/workers-types@4.20250604.0':
+    resolution: {integrity: sha512-//sQvI1x8wfd23o41QLF3z1Kj2ULAoUJ59zhIOCNjRRyaVoed/vtSVGo3porvTHXWz7C6E5f3duquCfElIqzKQ==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -9584,6 +9593,8 @@ packages:
 
 snapshots:
 
+  '@cloudflare/workers-types@4.20250604.0': {}
+
   '@0no-co/graphql.web@1.2.0(graphql@16.13.1)':
     optionalDependencies:
       graphql: 16.13.1
@@ -10747,6 +10758,15 @@ snapshots:
     optionalDependencies:
       miniflare: 4.20250604.1
       wrangler: 4.20.0
+
+  '@hono/vite-dev-server@0.24.0(hono@4.11.1)(miniflare@4.20250604.1)(wrangler@4.20.0(@cloudflare/workers-types@4.20250604.0))':
+    dependencies:
+      '@hono/node-server': 1.19.6(hono@4.11.1)
+      hono: 4.11.1
+      minimatch: 9.0.5
+    optionalDependencies:
+      miniflare: 4.20250604.1
+      wrangler: 4.20.0(@cloudflare/workers-types@4.20250604.0)
 
   '@humanfs/core@0.19.1': {}
 
@@ -15258,6 +15278,14 @@ snapshots:
 
   drizzle-orm@0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.16.3)(postgres@3.4.7):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      '@types/pg': 8.16.0
+      pg: 8.16.3
+      postgres: 3.4.7
+
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20250604.0)(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.16.3)(postgres@3.4.7):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20250604.0
       '@opentelemetry/api': 1.9.0
       '@types/pg': 8.16.0
       pg: 8.16.3
@@ -20432,6 +20460,23 @@ snapshots:
       unenv: 2.0.0-rc.17
       workerd: 1.20250604.0
     optionalDependencies:
+      fsevents: 2.3.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  wrangler@4.20.0(@cloudflare/workers-types@4.20250604.0):
+    dependencies:
+      '@cloudflare/kv-asset-handler': 0.4.0
+      '@cloudflare/unenv-preset': 2.3.2(unenv@2.0.0-rc.17)(workerd@1.20250604.0)
+      blake3-wasm: 2.1.5
+      esbuild: 0.25.4
+      miniflare: 4.20250604.1
+      path-to-regexp: 6.3.0
+      unenv: 2.0.0-rc.17
+      workerd: 1.20250604.0
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20250604.0
       fsevents: 2.3.3
     transitivePeerDependencies:
       - bufferutil

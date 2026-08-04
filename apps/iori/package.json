@@ -30,6 +30,7 @@
     "zod": "4.2.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "4.20250604.0",
     "@eslint/js": "9.39.2",
     "@fast-check/vitest": "0.2.0",
     "@hono/vite-build": "1.9.0",
@@ -51,16 +52,24 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.53.0",
     "vite": "7.3.1",
-    "vitest": "3.1.2"
+    "vitest": "3.1.2",
+    "wrangler": "4.20.0"
   },
   "scripts": {
     "dev": "dotenvx run -- vite",
     "prod": "cp .env dist/.env && cd dist && dotenvx run -- node  -r source-map-support/register ./index.js",
     "prebuild": "pnpm --filter result run build",
-    "build": "dotenvx run -- vite build --mode client && NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "build:client": "dotenvx run -- vite build --mode client",
+    "build": "pnpm run build:client && NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "drizzle:push": "dotenvx run -- drizzle-kit push",
     "drizzle:generate": "dotenvx run -- drizzle-kit generate",
     "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
+    "dev:worker": "pnpm run build:client && wrangler dev --config workers/iori/wrangler.jsonc",
+    "types:worker": "wrangler types --config workers/iori/wrangler.jsonc",
+    "deploy:worker": "pnpm run build:client && node scripts/deploy-worker.mjs",
+    "deploy:worker:dry-run": "pnpm run build:client && node scripts/deploy-worker.mjs --dry-run",
+    "d1:migrate:local": "wrangler d1 migrations apply iori --local --config workers/iori/wrangler.jsonc",
+    "d1:migrate:remote": "wrangler d1 migrations apply iori --remote --config workers/iori/wrangler.jsonc",
     "compose:up": "dotenvx run -- docker compose up -d",
     "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans",
     "test": "vitest",
