@@ -1,5 +1,5 @@
-import { Hono } from 'hono';
 import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types';
+import { Hono } from 'hono';
 
 import { createPostImageR2ObjectStore } from './adaptor/r2/postImageObjectStore.ts';
 import { ImageId } from './domain/image/imageId.ts';
