@@ -73,6 +73,18 @@ const putRequiredSecret = (name, deployConfigPath) => {
   );
 };
 
+const deployWorker = (deployConfigPath) => {
+  run('pnpm', [
+    'exec',
+    'wrangler',
+    'deploy',
+    '--config',
+    deployConfigPath,
+    '--minify',
+    ...deployArgs,
+  ]);
+};
+
 const baseConfigPath = join(appRoot, configPath);
 const baseConfig = JSON.parse(stripJsonc(await readFile(baseConfigPath, 'utf8')));
 const configDir = dirname(baseConfigPath);
@@ -103,18 +115,14 @@ const dir = await mkdtemp(join(tmpdir(), 'iori-worker-'));
 const deployConfigPath = join(dir, 'wrangler.json');
 await writeFile(deployConfigPath, JSON.stringify(deployConfig, null, 2) + '\n');
 
+if (!isDryRun) {
+  deployWorker(deployConfigPath);
+}
+
 putRequiredSecret('VAPID_PUBLIC_KEY', deployConfigPath);
 putRequiredSecret('VAPID_PRIVATE_KEY', deployConfigPath);
 
-run('pnpm', [
-  'exec',
-  'wrangler',
-  'deploy',
-  '--config',
-  deployConfigPath,
-  '--minify',
-  ...deployArgs,
-]);
+deployWorker(deployConfigPath);
 
 if (isDryRun) {
   console.log('iori Worker deploy dry-run passed.');
