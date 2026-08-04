@@ -148,6 +148,13 @@ Phase 1-4 scaffolding では、Worker entrypoint は既存 Node app を直接 im
 
 Fedify Cloudflare wiring は Fedify 1.10 互換のため、既存 `@fedify/fedify/x/cfworkers` の `WorkersKvStore` / `WorkersMessageQueue` と Cloudflare Queue consumer の土台を追加した。Fedify 1.10 系の `x/cfworkers` には `WorkersMessageQueue.processMessage()` がないため、orderingKv / processMessage による ordering lock は Fedify 2 系アップグレード後に導入する。既存 Fedify dispatchers は PostgreSQL adapter を参照するため、Worker shell ではまだ ActivityPub HTTP routes に接続していない。
 
+Workers deployment CI として `.github/workflows/deploy-iori-worker.yml` を追加した。既存 Lightsail 向け `deploy-iori.yml` は移行完了まで残し、Worker deploy は別 workflow で実行する。GitHub Actions の `production` environment には次の variables/secrets が必要:
+
+- Variables: `IORI_ORIGIN`, `IORI_VAPID_SUBJECT`
+- Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `IORI_VAPID_PUBLIC_KEY`, `IORI_VAPID_PRIVATE_KEY`
+
+`apps/iori/scripts/deploy-worker.mjs` は `workers/iori/wrangler.jsonc` を元に一時 Wrangler config を生成し、`ORIGIN` と `VAPID_SUBJECT` を CI の environment variables から注入する。実 deploy 時は `VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` を `wrangler secret put` で投入してから `wrangler deploy --minify` を実行する。`--dry-run` 時は secret put をスキップする。
+
 ## Rollback
 
 DNS 切り替え前の rollback は、Lightsail を active origin のままにすればよい。

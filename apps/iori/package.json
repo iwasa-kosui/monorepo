@@ -66,6 +66,8 @@
     "drizzle:migrate": "dotenvx run -- drizzle-kit migrate",
     "dev:worker": "pnpm run build:client && wrangler dev --config workers/iori/wrangler.jsonc",
     "types:worker": "wrangler types --config workers/iori/wrangler.jsonc --env-file /dev/null",
+    "deploy:worker": "pnpm run build:client && node scripts/deploy-worker.mjs",
+    "deploy:worker:dry-run": "pnpm run build:client && node scripts/deploy-worker.mjs --dry-run",
     "d1:migrate:local": "wrangler d1 migrations apply iori --local --config workers/iori/wrangler.jsonc",
     "d1:migrate:remote": "wrangler d1 migrations apply iori --remote --config workers/iori/wrangler.jsonc",
     "compose:up": "dotenvx run -- docker compose up -d",
