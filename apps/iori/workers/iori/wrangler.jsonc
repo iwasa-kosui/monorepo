@@ -22,7 +22,7 @@
     {
       "binding": "DB",
       "database_name": "iori",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "ad8702e7-94cc-43f7-a074-4e61c0c2e6c0",
       "migrations_dir": "../../drizzle-d1",
     },
   ],
@@ -35,8 +35,8 @@
   "kv_namespaces": [
     {
       "binding": "FEDIFY_KV",
-      "id": "00000000000000000000000000000000",
-      "preview_id": "00000000000000000000000000000000",
+      "id": "01fed16a0ee245d4aa78f9d56329eb2c",
+      "preview_id": "511a0af9ccd043ac9d4d0239331aa7e3",
     },
   ],
   "queues": {
