@@ -12,7 +12,7 @@
   },
   "assets": {
     "binding": "ASSETS",
-    "directory": "../../dist/client",
+    "directory": "../../dist",
   },
   "vars": {
     "ORIGIN": "https://iori.example.com",
