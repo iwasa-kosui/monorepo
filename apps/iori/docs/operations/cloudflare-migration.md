@@ -29,8 +29,8 @@ Workers 化の主なブロッカー:
 - アプリDB: Lightsail PostgreSQL -> Cloudflare D1。
 - アップロード: ローカルディスク -> Cloudflare R2 bucket。
 - 静的ファイル: Node `serveStatic` -> Workers static assets binding。
-- Fedify KV: PostgreSQL -> `@fedify/cfworkers` 経由の Cloudflare KV。
-- Fedify queue: PostgreSQL -> `@fedify/cfworkers` 経由の Cloudflare Queues。
+- Fedify KV: PostgreSQL -> `@fedify/fedify/x/cfworkers` 経由の Cloudflare KV。
+- Fedify queue: PostgreSQL -> `@fedify/fedify/x/cfworkers` 経由の Cloudflare Queues。
 - Secrets: `.env`/systemd -> Wrangler secrets。
 - Durable Objects: なし -> actor 単位の逐次化や entity 単位の調整が必要になった場合のみ導入。
 
@@ -88,7 +88,7 @@ Durable Objects を追加する条件:
 
 ### Phase 4: Fedify on Cloudflare
 
-1. `@fedify/cfworkers` を追加する。
+1. 既存 `@fedify/fedify/x/cfworkers` の Cloudflare adapter を使う。
 2. `PostgresKvStore` を `WorkersKvStore` に置き換える。
 3. `PostgresMessageQueue` を `WorkersMessageQueue` に置き換える。
 4. Worker handler 内で Cloudflare bindings から Fedify を構築する。
@@ -140,6 +140,14 @@ Durable Objects を追加する条件:
 - OGP endpoint または置き換え後の image URL が動く。
 - production Worker bundle が `node:fs`, `@hono/node-server`, `pg`, `postgres`, `sharp` を import していない。
 
+## 実装メモ
+
+Phase 1-4 scaffolding では、Worker entrypoint は既存 Node app を直接 import しない migration shell として追加した。既存 `src/app.tsx` は `node:fs`, `@hono/node-server/serve-static`, `sharp`, PostgreSQL adapter を module graph に含むため、Worker の `fetch` handler へそのまま接続していない。
+
+追加済みの Worker 経路は `/healthz`, `/health`, R2-backed `/uploads/:filename` に限定している。既存 `/api/v1/upload` と各 API route は Node/PostgreSQL 経路を維持し、後続 task で use case ごとの D1/R2 adapter 注入に合わせて段階的に移す。
+
+Fedify Cloudflare wiring は Fedify 1.10 互換のため、既存 `@fedify/fedify/x/cfworkers` の `WorkersKvStore` / `WorkersMessageQueue` と Cloudflare Queue consumer の土台を追加した。Fedify 1.10 系の `x/cfworkers` には `WorkersMessageQueue.processMessage()` がないため、orderingKv / processMessage による ordering lock は Fedify 2 系アップグレード後に導入する。既存 Fedify dispatchers は PostgreSQL adapter を参照するため、Worker shell ではまだ ActivityPub HTTP routes に接続していない。
+
 ## Rollback
 
 DNS 切り替え前の rollback は、Lightsail を active origin のままにすればよい。
@@ -154,7 +162,7 @@ DNS 切り替え後:
 
 ## 確認した参照情報
 
-- Fedify deployment guide: Cloudflare Workers support は `@fedify/cfworkers`, Workers KV, Cloudflare Queues を使う。
+- Fedify deployment guide: Cloudflare Workers support は Workers KV と Cloudflare Queues を使う。
 - Cloudflare D1 import/export guide: D1 は Wrangler 経由で SQLite 互換 SQL dump を import する。
 - Cloudflare R2 Workers API reference: Workers は bucket binding の `get` / `put` で R2 を操作する。
 - Cloudflare Workers static assets docs: static assets は binding として Worker から参照できる。

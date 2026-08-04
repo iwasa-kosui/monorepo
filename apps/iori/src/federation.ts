@@ -6,9 +6,7 @@ import {
   Create,
   createFederation,
   Delete,
-  type DocumentLoader,
   Follow,
-  getDocumentLoader,
   Like,
   Note,
   Undo,
@@ -28,72 +26,9 @@ import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
 import { Username } from './domain/user/username.ts';
 import { Env } from './env.ts';
+import { createContextLoaderFactory } from './federationContext.ts';
 import { singleton } from './helper/singleton.ts';
 import { GetUserProfileUseCase } from './useCase/getUserProfile.ts';
-
-/**
- * Mastodon uses http://joinmastodon.org/ns# as a namespace prefix in JSON-LD,
- * but this URL does not serve an actual JSON-LD context document.
- * This map provides the context definitions for such namespaces.
- */
-const PRELOADED_CONTEXTS: Record<string, object> = {
-  'http://joinmastodon.org/ns': {
-    '@context': {
-      'toot': 'http://joinmastodon.org/ns#',
-      'Emoji': 'toot:Emoji',
-      'featured': { '@id': 'toot:featured', '@type': '@id' },
-      'featuredTags': { '@id': 'toot:featuredTags', '@type': '@id' },
-      'discoverable': 'toot:discoverable',
-      'suspended': 'toot:suspended',
-      'memorial': 'toot:memorial',
-      'indexable': 'toot:indexable',
-      'focalPoint': { '@id': 'toot:focalPoint', '@container': '@list' },
-      'blurhash': 'toot:blurhash',
-      'votersCount': 'toot:votersCount',
-    },
-  },
-  'https://joinmastodon.org/ns': {
-    '@context': {
-      'toot': 'http://joinmastodon.org/ns#',
-      'Emoji': 'toot:Emoji',
-      'featured': { '@id': 'toot:featured', '@type': '@id' },
-      'featuredTags': { '@id': 'toot:featuredTags', '@type': '@id' },
-      'discoverable': 'toot:discoverable',
-      'suspended': 'toot:suspended',
-      'memorial': 'toot:memorial',
-      'indexable': 'toot:indexable',
-      'focalPoint': { '@id': 'toot:focalPoint', '@container': '@list' },
-      'blurhash': 'toot:blurhash',
-      'votersCount': 'toot:votersCount',
-    },
-  },
-  'http://litepub.social/ns': {
-    '@context': {
-      'litepub': 'http://litepub.social/ns#',
-      'EmojiReact': 'litepub:EmojiReact',
-    },
-  },
-};
-
-/**
- * Creates a context loader factory that handles namespaces that don't serve actual JSON-LD context documents.
- */
-const createContextLoaderFactory = () => {
-  return (): DocumentLoader => {
-    const baseLoader = getDocumentLoader();
-    return async (url, options) => {
-      const preloadedContext = PRELOADED_CONTEXTS[url];
-      if (preloadedContext) {
-        return {
-          contextUrl: null,
-          document: preloadedContext,
-          documentUrl: url,
-        };
-      }
-      return baseLoader(url, options);
-    };
-  };
-};
 
 const create = () => {
   const env = Env.getInstance();
