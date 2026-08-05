@@ -1,0 +1,126 @@
+---
+title: "サーバサイド TypeScript 関数型ドメインモデリング勉強会 企画書"
+date: "2026-07-17T12:00:00+09:00"
+slug: "2026/07/17/functional-domain-modeling-study-plan"
+description: "サーバサイド TypeScript で、判別共用体、Zod、Result 型、Ports & Adapters を使って業務ルールを型と純粋関数で表現する勉強会企画。"
+themes: ["TypeScript", "DomainModeling", "FunctionalProgramming", "ServerSide"]
+---
+
+サーバサイド TypeScript では、型を「補助的な注釈」として使う段階から、境界・状態遷移・業務エラーを設計する道具として使う段階へ移りつつある。TypeScript 7.0 の高速化、Zod 4 の安定化、Result 型や Effect の普及は、型を強く使うドメイン設計を実務に持ち込みやすくしている。本企画書では、関数型ドメインモデリングをサーバサイド TypeScript の文脈で学ぶ、全8回の勉強会設計を提案する。
+
+## 背景と対象者
+
+### なぜ今やるか
+
+[State of JavaScript 2025 Usage](https://2025.stateofjs.com/en-US/usage/) / [Announcing TypeScript 7.0](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/) / [Domain Modeling Made Functional](https://pragprog.com/titles/swdddf/domain-modeling-made-functional/)
+
+- State of JS 2025 では TypeScript の利用比率が高く、JavaScript/TypeScript の用途として Backend Development も大きい。サーバサイド TypeScript 向けの設計勉強会には十分な参加者層がある
+- 同調査では Code Architecture が主要な悩みとして挙がっており、単に型を付けるだけでなく、境界・状態・エラーをどう設計するかが学習テーマになりやすい
+- 2026年7月8日に公開された TypeScript 7.0 は、公式ブログで高速なネイティブ移植として説明されている。大きめの型モデルを扱う演習でも、型チェックの心理的コストが下がる
+- Scott Wlaschin の *Domain Modeling Made Functional* は、DDD と静的型付き関数型プログラミングを組み合わせ、業務ルールを型に写す考え方を体系化している。TypeScript でも判別共用体と `never` を使えば、この入口を作れる
+
+直近1ヶ月に限定した「サーバサイド TypeScript x 関数型ドメインモデリング」の決定版カリキュラムや日本語勉強会事例は確認できなかった。そのため、本企画では直近の TypeScript/Zod 動向と、既存の関数型ドメインモデリング文献を組み合わせる。
+
+### 対象者と前提知識
+
+[TypeScript Handbook: Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html) / [Zod Basic Usage](https://zod.dev/basics) / [neverthrow](https://www.npmjs.com/package/neverthrow)
+
+- 対象者は、NestJS、Hono、Express、Fastify、Next.js Server Actions、tRPC などでサーバサイド TypeScript を書くエンジニア
+- 入力検証、エラー処理、ドメイン層設計、DB/API 境界の分離に課題を感じている人を主対象にする
+- TypeScript の union、literal type、generics、`strict` 設定への基本的な理解は前提にする
+- DDD や関数型プログラミングの高度な知識は前提にしない。モナドや圏論ではなく、「不正な状態を表現不能にする」「失敗を型で見えるようにする」ことから入る
+- 既に Zod、neverthrow、Effect、fp-ts を断片的に使っている人には、設計方針として整理する場にする
+
+## 学習目標とカリキュラム
+
+### 到達目標
+
+[TypeScript for Functional Programmers](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-func.html) / [AWS Prescriptive Guidance: Hexagonal Architecture](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/hexagonal-architecture.html) / [Martin Fowler: DDD Aggregate](https://martinfowler.com/bliki/DDD_Aggregate.html)
+
+- DDD の「業務知識をコードに写す」考え方を、型と関数で説明できる
+- Product Type / Sum Type を TypeScript の `type`、リテラル型、判別共用体で表現できる
+- `never` による網羅性チェックで、未対応ケースをコンパイル時に検出できる
+- branded type、値オブジェクト、スマートコンストラクタで、不正な値を境界で止められる
+- `Result` / `Either` で、例外ではなく明示的な失敗を設計できる
+- Zod や Effect Schema で外部入力を検証し、検証済みドメイン型へ変換できる
+- ユースケースを純粋関数のパイプラインとして組み、DB/API などの副作用を境界へ追い出せる
+- Ports & Adapters と組み合わせ、テストしやすいサーバサイド TypeScript のドメイン層を設計できる
+
+### 全8回の構成
+
+[Zod 4 Release Notes](https://zod.dev/v4) / [fp-ts Either](https://gcanti.github.io/fp-ts/modules/Either.ts.html) / [Effect](https://effect.website/)
+
+| 回 | テーマ | 演習 |
+|---:|---|---|
+| 1 | DDD x FP x TypeScript の導入 | 注文・予約・請求など、小さな業務ドメインをイベントと状態で分解する |
+| 2 | 型で語彙を作る | `OrderId`、`EmailAddress`、`Money`、`Quantity` を `type` と branded type で表す |
+| 3 | 判別共用体と状態モデリング | `UnvalidatedOrder`、`ValidatedOrder`、`PricedOrder` の状態遷移を作る |
+| 4 | 値オブジェクトとスマートコンストラクタ | 不正なメール、負の金額、範囲外数量を `Result` で拒否する |
+| 5 | Result / Either による失敗設計 | 複数の検証ステップを `map`、`andThen`、`mapErr` で合成する |
+| 6 | 外部入力とランタイム検証 | HTTP request body を Zod で検証し、DTO からドメイン型へ変換する |
+| 7 | ユースケース設計と副作用の分離 | `placeOrder` を検証、価格計算、永続化、イベント発行に分解する |
+| 8 | 総合演習 | API アダプタ、ユースケース、ドメインモデル、インメモリ Repository、単体テストをまとめる |
+
+主教材は TypeScript 標準機能、Zod、Result 型に絞る。Effect は応用回で「同じ題材を Effect で書くと何が変わるか」を扱う位置づけにする。fp-ts は `Either` の概念説明には有用だが、初回の主教材にすると学習面積が広がるため、比較対象に留める。
+
+## 実装演習の題材
+
+### 推奨題材
+
+[Zod Defining Schemas](https://zod.dev/api) / [Effect Schema API](https://effect-ts.github.io/effect/effect/Schema.ts.html) / [TypeScript Handbook: Union Exhaustiveness](https://www.typescriptlang.org/docs/handbook/unions-and-intersections.html)
+
+- **注文受付ドメイン**: `OrderDraft -> ValidatedOrder -> PricedOrder -> PlacedOrder` の状態遷移を判別共用体で表す。初回から最終回まで同じ題材を育てやすい
+- **ユーザー登録**: `Email`、`Username`、`Password` を Zod + branded type で表現し、外部入力とドメイン型を分ける
+- **予約システム**: `Available | Held | Confirmed | Cancelled` の状態モデルを作り、不正遷移を型で表現不能にする
+- **請求書発行**: `DraftInvoice | IssuedInvoice | PaidInvoice | VoidedInvoice` を使い、発行後に編集できない制約を型にする
+- **承認申請**: `Submitted | Approved | Rejected | Withdrawn` を題材に、権限、差し戻し理由、再申請可否を純粋関数で表す
+- **外部 API 連携つき在庫同期**: API レスポンスを Zod または Effect Schema で decode し、ネットワーク失敗、JSON 不正、業務エラーを別のエラー型で扱う
+
+Todo アプリは避ける。状態や制約が薄く、関数型ドメインモデリングの価値が見えにくい。注文、予約、請求、承認のように、状態遷移と業務エラーが自然に出る題材を選ぶ。
+
+### このリポジトリで使える実例
+
+[`@iwasa-kosui/result`](https://github.com/iwasa-kosui/monorepo/tree/main/packages/result) / [`apps/iori/src/domain`](https://github.com/iwasa-kosui/monorepo/tree/main/apps/iori/src/domain)
+
+- `packages/result` には `Result`、`ResultAsync`、`map`、`mapErr`、`andThen`、`combine`、`match` があり、例外を投げないエラー処理の教材として使える
+- `apps/iori/src/domain/user/username.ts` には Zod v4 と branded type による `Username` の実装があり、値オブジェクトの入口として扱える
+- `apps/iori/src/domain/post/post.ts` には `LocalPost | RemotePost` の判別共用体、Zod union、ドメインイベント生成があり、状態とイベントを結びつける例として使える
+- `apps/iori/src/domain/aggregate` には Aggregate、DomainEvent、Store、Resolver の型があり、最終回の Ports & Adapters 演習に接続できる
+
+外部ライブラリをいきなり増やすより、まず既存の `@iwasa-kosui/result` と `apps/iori` のドメイン実装を読み、必要に応じて neverthrow や Effect と比較する方が、このリポジトリの文脈に合う。
+
+## 運営設計
+
+### 90分回の進行
+
+[ITエンジニア勉強会の型の作り方](https://www.miyakodeit.com/blog/study-formats-howto) / [社内で技術書の輪読会を始めた話](https://zenn.dev/wed_engineering/articles/20260118-reading-circle) / [Lesson Development Study Groups](https://carpentries-incubator.github.io/study-groups/aio/index.html)
+
+| 時間 | 内容 | 狙い |
+|---:|---|---|
+| 0-5分 | 今日のゴール確認、役割確認 | 進行役、記録係、発表係をローテーションする |
+| 5-15分 | 前回成果物の振り返り | 共通語彙と設計判断を維持する |
+| 15-30分 | 短い輪読・解説 | 判別共用体、Result、状態遷移、境界の防御など1テーマに絞る |
+| 30-60分 | ペアまたは小グループで実装 | 不正状態を表現不能にする、状態遷移を純粋関数にする |
+| 60-75分 | 共有と設計比較 | 型設計の違い、業務ルールの表現、妥協点を議論する |
+| 75-85分 | 成果物更新 | サンプルコード、設計メモ、用語集、未解決論点を残す |
+| 85-90分 | 次回確認 | 範囲、担当、持ち越し課題を決める |
+
+60分で実施する場合は、共有を10分に圧縮し、成果物更新を非同期に回す。発表資料作成を必須にせず、未読でも参加できる短い入力とハンズオンを中心にする。
+
+### 成果物
+
+[Presenting Workshops to Adults](https://ask.ifas.ufl.edu/publication/WC066) / [TECH PLAY もくもく読書会](https://techplay.jp/event/978460) / [kamae-ts](https://iwasa-kosui.github.io/kamae-ts/)
+
+- `session-notes`: 各回の議論メモ、未解決論点、次回アクション
+- `modeling-kata`: 小さな業務シナリオと、期待する型・関数・テストの練習問題
+- `reference-implementations`: 同じ題材に対する class 版、判別共用体版、Result 版の比較
+- `decision-log`: なぜこの型にしたか、なぜ例外ではなく Result にしたか、なぜ Zod を境界に置いたかの判断記録
+- `glossary`: ドメイン語彙、型名、状態名、禁止語の対応表
+- `review-checklist`: 不正状態、網羅性、型アサーション、境界バリデーション、PII を見る PR レビュー観点
+- `showcase`: 3〜4回ごとの成果発表。最終成果は、1つの業務モデルを型と純粋関数で説明できる資料とコードにする
+
+完走率や学習効果を定量比較した信頼できるデータは確認できなかった。そのため、運営上は「毎回小さな成果物が残ること」「途中参加でも追いつけること」「設計判断が記録されること」を重視する。
+
+## まとめ
+
+この勉強会の狙いは、TypeScript を「型注釈のある JavaScript」としてではなく、業務ルール、状態遷移、失敗、境界を表現する設計言語として使う感覚を身につけることだ。最初は判別共用体と `never`、Zod の `safeParse`、小さな Result 型だけで十分に始められる。最後に Ports & Adapters まで接続すれば、サーバサイド TypeScript の実務でそのまま使える、テストしやすいドメイン層の設計練習になる。
