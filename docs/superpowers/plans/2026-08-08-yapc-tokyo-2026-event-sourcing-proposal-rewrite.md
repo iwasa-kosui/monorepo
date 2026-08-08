@@ -35,7 +35,7 @@
 - Consumes: `ffebc8f7a4bfd1ed2fad561dcf5c0e050f073b7a:talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md` の一次経験と4つの既存データパターン
 - Produces: forteeへ転記できるタイトル、概要、40分のハンズオン構成を持つMarkdown原稿
 
-- [ ] **Step 1: 対象ファイルが現行mainに存在しないことを確認する**
+- [x] **Step 1: 対象ファイルが現行mainに存在しないことを確認する**
 
 Run:
 
@@ -45,7 +45,7 @@ test ! -e talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
 
 Expected: 終了コード0。PR #483の原稿を流用しない。
 
-- [ ] **Step 2: 承認済み設計に沿った応募文を作成する**
+- [x] **Step 2: 承認済み設計に沿った応募文を作成する**
 
 Create `talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md` with exactly:
 
@@ -87,7 +87,7 @@ Create `talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md` with exactly:
 参加者は手元でコードを動かしても、ライブコーディングを見るだけでも内容を追えます。特定のイベントストア製品やフレームワークは使いません。
 ```
 
-- [ ] **Step 3: 概要の長さと意味上の必須要素を検証する**
+- [x] **Step 3: 概要の長さと意味上の必須要素を検証する**
 
 Run:
 
@@ -100,7 +100,7 @@ Expected: `948`。900〜1,100字の範囲内。
 Run:
 
 ```bash
-rg -n '部分的かつ意義のある形|既存プロジェクトにとっては非現実的|自分のプロジェクトでは何を説明可能にしたい' talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
+rg -n '部分的かつ意義のある形|既存プロジェクトにとっては非現実的|自分のプロジェクトで何を説明可能にしたい' talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
 ```
 
 Expected: 3つの認識変化・行動変容を表す文がすべて見つかる。
@@ -113,7 +113,7 @@ rg -n '現在値|社会の礎になるようなプロダクトに関わりたい
 
 Expected: 該当なしで終了コード1。
 
-- [ ] **Step 4: Markdownを整形する**
+- [x] **Step 4: Markdownを整形する**
 
 Run:
 
@@ -124,13 +124,13 @@ apps/iori/node_modules/.bin/dprint check --config dprint.json talks/2026/yapc-to
 
 Expected: 整形後の変更がなく、checkが終了コード0。
 
-- [ ] **Step 5: 元原稿と設計文書に対して最終レビューする**
+- [x] **Step 5: 元原稿と設計文書に対して最終レビューする**
 
 Run:
 
 ```bash
-git diff --check
-git diff -- talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
+git diff main...HEAD --check
+git diff main...HEAD -- talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
 ```
 
 Review every paragraph against:
@@ -140,9 +140,9 @@ Review every paragraph against:
 - 全面移行ではなく、目的に合う手法の部分適用を訴えているか
 - ライブ実装する1パターンと、判断軸として比較する3パターンが区別されているか
 
-Expected: `git diff --check` が終了コード0で、設計文書の成功条件をすべて満たす。
+Expected: `git diff main...HEAD --check` が終了コード0で、設計文書の成功条件をすべて満たす。
 
-- [ ] **Step 6: 応募プロポーザルをコミットする**
+- [x] **Step 6: 応募プロポーザルをコミットする**
 
 ```bash
 git add talks/2026/yapc-tokyo-2026/event-sourcing-auditability.md
@@ -164,7 +164,7 @@ Expected: 設計文書とは別のコミットとして、応募原稿だけが�
 - Consumes: Task 1で作成・検証したプロポーザルと、コミット済みの設計文書
 - Produces: 閉じたPR #483の内容を引き継がない、main向けの新しいDraft PR
 
-- [ ] **Step 1: ブランチと差分を最終確認する**
+- [x] **Step 1: ブランチと差分を最終確認する**
 
 Run:
 
@@ -174,9 +174,9 @@ git diff main...HEAD --stat
 git diff main...HEAD --check
 ```
 
-Expected: ブランチは `docs/yapc-tokyo-2026-proposal-rewrite`、worktreeはclean、差分は設計文書と応募原稿のみ、diff checkは終了コード0。
+Expected: ブランチは `docs/yapc-tokyo-2026-proposal-rewrite`、worktreeはclean、差分は設計書・計画書・応募原稿の3ファイル、diff checkは終了コード0。
 
-- [ ] **Step 2: ブランチをpushする**
+- [x] **Step 2: ブランチをpushする**
 
 Run:
 
@@ -186,7 +186,7 @@ git push -u origin docs/yapc-tokyo-2026-proposal-rewrite
 
 Expected: リモートに同名ブランチが作成される。
 
-- [ ] **Step 3: Draft PRを作成する**
+- [x] **Step 3: Draft PRを作成する**
 
 Create a draft pull request with:
 
@@ -219,7 +219,7 @@ Use `gh pr create --draft`, following the repository rule that GitHub operations
 
 Expected: main向けのDraft PR URLが返る。
 
-- [ ] **Step 4: 作成結果を確認する**
+- [x] **Step 4: 作成結果を確認する**
 
 Run:
 
