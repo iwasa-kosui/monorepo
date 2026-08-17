@@ -52,7 +52,7 @@ function chapterLabel(order: number): string {
       </h1>
       {
         book.data.subtitle && (
-          <p class="text-base text-subtle dark:text-[#9ca3af]">
+          <p class="text-base text-subtle dark:text-[#c9a0b8]">
             {book.data.subtitle}
           </p>
         )
@@ -75,8 +75,8 @@ function chapterLabel(order: number): string {
       <ol class="space-y-3">
         {
           chapters.map((chapter: ChapterEntry) => (
-            <li class="bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover relative">
-              <p class="text-xs text-subtle dark:text-[#9ca3af]">
+            <li class="bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover relative">
+              <p class="text-xs text-subtle dark:text-[#c9a0b8]">
                 {chapterLabel(chapter.data.order)}
                 {chapter.data.draft ? ' · 執筆中' : ''}
               </p>
@@ -90,7 +90,7 @@ function chapterLabel(order: number): string {
               </h3>
               {
                 chapter.data.summary && (
-                  <p class="mt-2 text-sm text-subtle dark:text-[#9ca3af]">
+                  <p class="mt-2 text-sm text-subtle dark:text-[#c9a0b8]">
                     {chapter.data.summary}
                   </p>
                 )

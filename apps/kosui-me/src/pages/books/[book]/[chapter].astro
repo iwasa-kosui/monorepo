@@ -74,7 +74,7 @@ function chapterLabel(order: number): string {
 >
   <article class="article-paper">
     <header class="mb-8">
-      <p class="text-xs text-subtle dark:text-[#9ca3af]">
+      <p class="text-xs text-subtle dark:text-[#c9a0b8]">
         <a
           href={`/books/${book.data.bookSlug}`}
           class="hover:text-accent dark:hover:text-accent-light transition-colors"
@@ -108,9 +108,9 @@ function chapterLabel(order: number): string {
         previousChapter && (
           <a
             href={`/books/${book.data.bookSlug}/${previousChapter.data.chapterSlug}`}
-            class="block p-4 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
+            class="block p-4 rounded-clay bg-card dark:bg-[#241019] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
           >
-            <span class="block text-xs text-subtle dark:text-[#9ca3af]">
+            <span class="block text-xs text-subtle dark:text-[#c9a0b8]">
               ← 前の章
             </span>
             <span
@@ -126,9 +126,9 @@ function chapterLabel(order: number): string {
         nextChapter && (
           <a
             href={`/books/${book.data.bookSlug}/${nextChapter.data.chapterSlug}`}
-            class="block p-4 rounded-clay bg-card dark:bg-[#1c1c22] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow sm:text-right sm:col-start-2"
+            class="block p-4 rounded-clay bg-card dark:bg-[#241019] shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow sm:text-right sm:col-start-2"
           >
-            <span class="block text-xs text-subtle dark:text-[#9ca3af]">
+            <span class="block text-xs text-subtle dark:text-[#c9a0b8]">
               次の章 →
             </span>
             <span

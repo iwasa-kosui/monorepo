@@ -123,13 +123,13 @@ const kindConfig = {
       <div>
         <h1 class="text-2xl font-bold text-charcoal dark:text-gray-100">
           岩佐 幸翠 <span
-            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
+            class="text-subtle dark:text-[#c9a0b8] text-base font-normal"
           >/ kosui</span>
         </h1>
         <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
           テックリード @ 株式会社カケハシ
         </p>
-        <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 leading-relaxed">
+        <p class="text-sm text-subtle dark:text-[#c9a0b8] mt-2 leading-relaxed">
           医療SaaSの共通基盤を開発しています。認証認可基盤・組織管理・テナント分離などのプラットフォーム領域を担当。TypeScriptと関数型プログラミングを軸に、堅牢で型安全なシステム設計を実践しています。TSKaigi、関数型まつり、SRE
           Kaigiなどのカンファレンスで登壇。
         </p>
@@ -138,7 +138,7 @@ const kindConfig = {
             href="https://github.com/iwasa-kosui"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#4a2233] text-charcoal dark:text-[#ffd9ec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
@@ -149,7 +149,7 @@ const kindConfig = {
             href="https://x.com/kosui_me"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#2a2a32] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+            class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#4a2233] text-charcoal dark:text-[#ffd9ec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -162,7 +162,7 @@ const kindConfig = {
   </section>
 
   <section class="mb-12">
-    <h2 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
+    <h2 class="text-sm font-semibold text-subtle dark:text-[#c9a0b8] uppercase tracking-wider mb-4">
       テーマ別に読む
     </h2>
     <div class="grid grid-cols-2 gap-3">
@@ -170,15 +170,15 @@ const kindConfig = {
         allThemes.map((theme) => (
           <a
             href={`/themes/${theme.slug}`}
-            class="block bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+            class="block bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
           >
             <div class="font-semibold text-charcoal dark:text-gray-100 text-sm">
               {theme.name}
             </div>
-            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-1">
+            <div class="text-xs text-subtle dark:text-[#c9a0b8] mt-1">
               {theme.description}
             </div>
-            <div class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
+            <div class="text-xs text-subtle dark:text-[#c9a0b8] mt-2">
               {countByTheme(theme.slug)} articles →
             </div>
           </a>
@@ -197,10 +197,10 @@ const kindConfig = {
         if (item.kind === 'post') {
           return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -221,7 +221,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )
@@ -245,10 +245,10 @@ const kindConfig = {
         if (item.kind === 'talk') {
           return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -279,7 +279,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )
@@ -302,10 +302,10 @@ const kindConfig = {
         // external-article
         return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -331,7 +331,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )

@@ -36,7 +36,7 @@ for (const book of sortedBooks) {
   <h1 class="text-3xl font-bold mb-2">
     <span class="heading-accent">Books</span>
   </h1>
-  <p class="text-sm text-subtle dark:text-[#9ca3af] mb-8">
+  <p class="text-sm text-subtle dark:text-[#c9a0b8] mb-8">
     リファクタ駆動でサーバサイドTypeScriptを学ぶための学習教材シリーズです。
   </p>
 
@@ -50,7 +50,7 @@ for (const book of sortedBooks) {
           {
             series.books.map((book: BookEntry) => (
               <li>
-                <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+                <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
                   <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100">
                     <a
                       href={`/books/${book.data.bookSlug}`}
@@ -71,7 +71,7 @@ for (const book of sortedBooks) {
                       </p>
                     )
                   }
-                  <p class="mt-2 text-sm text-subtle dark:text-[#9ca3af]">
+                  <p class="mt-2 text-sm text-subtle dark:text-[#c9a0b8]">
                     {book.data.description}
                   </p>
                 </div>

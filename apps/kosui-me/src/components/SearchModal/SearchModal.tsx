@@ -124,7 +124,7 @@ export function SearchModal() {
 
       {/* Dialog */}
       <div
-        className={`relative w-full max-w-2xl mx-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay-hover dark:shadow-clay-dark-hover overflow-hidden ${
+        className={`relative w-full max-w-2xl mx-4 bg-card dark:bg-[#241019] rounded-clay shadow-clay-hover dark:shadow-clay-dark-hover overflow-hidden ${
           !prefersReduced ? 'animate-[searchModalIn_0.2s_ease-out]' : ''
         }`}
         role='dialog'
@@ -133,9 +133,9 @@ export function SearchModal() {
         onKeyDown={handleKeyDown}
       >
         {/* Search input */}
-        <div className='flex items-center gap-3 px-4 py-3 border-b border-border dark:border-[#2a2a32]'>
+        <div className='flex items-center gap-3 px-4 py-3 border-b border-border dark:border-[#4a2233]'>
           <svg
-            className='w-5 h-5 text-subtle dark:text-[#9ca3af] shrink-0'
+            className='w-5 h-5 text-subtle dark:text-[#c9a0b8] shrink-0'
             fill='none'
             stroke='currentColor'
             viewBox='0 0 24 24'
@@ -153,9 +153,9 @@ export function SearchModal() {
             value={query}
             onChange={(e) => handleInputChange(e.target.value)}
             placeholder='記事やトークを検索...'
-            className='flex-1 bg-transparent text-charcoal dark:text-[#ececec] placeholder:text-subtle dark:placeholder:text-[#9ca3af] outline-none text-base'
+            className='flex-1 bg-transparent text-charcoal dark:text-[#ffd9ec] placeholder:text-subtle dark:placeholder:text-[#c9a0b8] outline-none text-base'
           />
-          <kbd className='hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-subtle dark:text-[#9ca3af] bg-tag-bg dark:bg-[#2a2a32] rounded font-mono'>
+          <kbd className='hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-subtle dark:text-[#c9a0b8] bg-tag-bg dark:bg-[#4a2233] rounded font-mono'>
             {isMac ? '⌘' : 'Ctrl'}K
           </kbd>
         </div>
@@ -163,19 +163,19 @@ export function SearchModal() {
         {/* Results */}
         <div className='max-h-[50vh] overflow-y-auto'>
           {state.status === 'loading' && (
-            <div className='px-4 py-8 text-center text-subtle dark:text-[#9ca3af] text-sm'>
+            <div className='px-4 py-8 text-center text-subtle dark:text-[#c9a0b8] text-sm'>
               検索中...
             </div>
           )}
 
           {state.status === 'no-results' && (
-            <div className='px-4 py-8 text-center text-subtle dark:text-[#9ca3af] text-sm'>
+            <div className='px-4 py-8 text-center text-subtle dark:text-[#c9a0b8] text-sm'>
               検索結果が見つかりませんでした
             </div>
           )}
 
           {state.status === 'dev-unavailable' && (
-            <div className='px-4 py-8 text-center text-subtle dark:text-[#9ca3af] text-sm'>
+            <div className='px-4 py-8 text-center text-subtle dark:text-[#c9a0b8] text-sm'>
               開発環境では検索を利用できません
             </div>
           )}
@@ -185,36 +185,36 @@ export function SearchModal() {
               <a
                 key={result.url}
                 href={result.url}
-                className={`block px-4 py-3 border-b border-border/50 dark:border-[#2a2a32]/50 last:border-b-0 transition-colors ${
+                className={`block px-4 py-3 border-b border-border/50 dark:border-[#4a2233]/50 last:border-b-0 transition-colors ${
                   index === activeIndex
                     ? 'bg-accent/5 dark:bg-accent/10'
-                    : 'hover:bg-tag-bg dark:hover:bg-[#2a2a32]'
+                    : 'hover:bg-tag-bg dark:hover:bg-[#4a2233]'
                 }`}
                 onMouseEnter={() => setActiveIndex(index)}
               >
                 <div className='flex items-center gap-2 mb-1'>
-                  <span className='text-sm font-medium text-charcoal dark:text-[#ececec]'>
+                  <span className='text-sm font-medium text-charcoal dark:text-[#ffd9ec]'>
                     {result.title}
                   </span>
                   <span
                     className={`shrink-0 px-1.5 py-0.5 text-[10px] rounded-full font-medium ${
                       result.type === 'talk'
                         ? 'bg-accent/10 dark:bg-accent-light/10 text-accent dark:text-accent-light'
-                        : 'bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]'
+                        : 'bg-tag-bg dark:bg-[#4a2233] text-subtle dark:text-[#c9a0b8]'
                     }`}
                   >
                     {result.type === 'talk' ? 'Talk' : 'Post'}
                   </span>
                 </div>
                 <div
-                  className='text-xs text-subtle dark:text-[#9ca3af] line-clamp-2 [&_mark]:bg-accent/20 [&_mark]:text-charcoal dark:[&_mark]:bg-accent/30 dark:[&_mark]:text-[#ececec]'
+                  className='text-xs text-subtle dark:text-[#c9a0b8] line-clamp-2 [&_mark]:bg-accent/20 [&_mark]:text-charcoal dark:[&_mark]:bg-accent/30 dark:[&_mark]:text-[#ffd9ec]'
                   dangerouslySetInnerHTML={{ __html: result.excerpt }}
                 />
               </a>
             ))}
 
           {state.status === 'idle' && query === '' && (
-            <div className='px-4 py-6 text-center text-subtle dark:text-[#9ca3af] text-xs'>
+            <div className='px-4 py-6 text-center text-subtle dark:text-[#c9a0b8] text-xs'>
               キーワードを入力して検索
             </div>
           )}

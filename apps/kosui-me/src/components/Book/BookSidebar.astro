@@ -28,8 +28,8 @@ function chapterLabel(order: number): string {
   class="book-sidebar"
   aria-label={`${bookTitle} 目次`}
 >
-  <div class="book-sidebar-inner bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-4">
-    <p class="text-xs text-subtle dark:text-[#9ca3af] mb-2">目次</p>
+  <div class="book-sidebar-inner bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-4">
+    <p class="text-xs text-subtle dark:text-[#c9a0b8] mb-2">目次</p>
     <a
       href={`/books/${bookSlug}`}
       class={`block text-sm font-semibold mb-3 ${
@@ -56,7 +56,7 @@ function chapterLabel(order: number): string {
               } transition-colors`}
               aria-current={isCurrent ? 'page' : undefined}
             >
-              <span class="text-xs text-subtle dark:text-[#9ca3af] block">
+              <span class="text-xs text-subtle dark:text-[#c9a0b8] block">
                 {chapterLabel(chapter.data.order)}
                 {chapter.data.draft ? ' · 執筆中' : ''}
               </span>

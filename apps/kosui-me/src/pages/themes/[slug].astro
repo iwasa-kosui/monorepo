@@ -118,22 +118,22 @@ const kindConfig = {
     <h1 class="text-3xl font-bold mb-2">
       <span class="heading-accent">{theme.name}</span>
     </h1>
-    <p class="text-sm text-subtle dark:text-[#9ca3af] leading-relaxed">
+    <p class="text-sm text-subtle dark:text-[#c9a0b8] leading-relaxed">
       {theme.description}
     </p>
-    <p class="text-xs text-subtle dark:text-[#9ca3af] mt-2">
+    <p class="text-xs text-subtle dark:text-[#c9a0b8] mt-2">
       {timeline.length} articles
     </p>
   </header>
 
   <nav class="mb-8 flex flex-wrap gap-2">
-    <span class="text-xs text-subtle dark:text-[#9ca3af] py-1"
+    <span class="text-xs text-subtle dark:text-[#c9a0b8] py-1"
     >他のテーマ:</span>
     {
       otherThemes.map((t) => (
         <a
           href={`/themes/${t.slug}`}
-          class="text-xs px-3 py-1 rounded-full border border-border dark:border-[#2a2a32] text-subtle dark:text-[#9ca3af] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+          class="text-xs px-3 py-1 rounded-full border border-border dark:border-[#4a2233] text-subtle dark:text-[#c9a0b8] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
         >
           {t.name}
         </a>
@@ -148,10 +148,10 @@ const kindConfig = {
         if (item.kind === 'post') {
           return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -172,7 +172,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )
@@ -192,10 +192,10 @@ const kindConfig = {
         if (item.kind === 'talk') {
           return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -226,7 +226,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )
@@ -245,10 +245,10 @@ const kindConfig = {
         // external-article
         return (
         <li>
-          <div class="relative bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
+          <div class="relative bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover">
             <div class="flex items-center gap-2">
               <time
-                class="text-xs text-subtle dark:text-[#9ca3af]"
+                class="text-xs text-subtle dark:text-[#c9a0b8]"
                 datetime={item.date}
               >
                 {formatDate(item.date)}
@@ -274,7 +274,7 @@ const kindConfig = {
             </h2>
             {
               item.data.description && (
-                <p class="mt-1 text-sm text-subtle dark:text-[#9ca3af]">
+                <p class="mt-1 text-sm text-subtle dark:text-[#c9a0b8]">
                   {item.data.description}
                 </p>
               )

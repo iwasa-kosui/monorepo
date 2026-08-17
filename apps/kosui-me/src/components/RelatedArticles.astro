@@ -45,7 +45,7 @@ function formatDate(dateStr: string): string {
 {
   related.length > 0 && (
     <section class="mt-8 mb-8">
-      <h3 class="text-sm font-semibold text-subtle dark:text-[#9ca3af] uppercase tracking-wider mb-4">
+      <h3 class="text-sm font-semibold text-subtle dark:text-[#c9a0b8] uppercase tracking-wider mb-4">
         関連記事
       </h3>
       <div class="space-y-3">
@@ -53,11 +53,11 @@ function formatDate(dateStr: string): string {
           related.map((post) => (
             <a
               href={`/${post.data.slug}`}
-              class="block p-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
+              class="block p-4 bg-card dark:bg-[#241019] rounded-clay shadow-clay dark:shadow-clay-dark hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-shadow"
             >
               <div class="flex items-center gap-2 mb-1">
                 <time
-                  class="text-xs text-subtle dark:text-[#9ca3af]"
+                  class="text-xs text-subtle dark:text-[#c9a0b8]"
                   datetime={post.data.date}
                 >
                   {formatDate(post.data.date)}
