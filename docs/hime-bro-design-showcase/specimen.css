@@ -1,0 +1,714 @@
+/*
+ * specimen.css — 2000年代「姫ブロ」の意匠を再現するスタイル。
+ *
+ * すべてのルールは .hime 配下に閉じ込めてあり、ショーケース本体
+ * （chrome.css）へは漏れない。装飾画像は当時は外部素材サイトからの
+ * GIF/PNG だったが、ここでは再配布の問題を避けるため、すべて
+ * インライン SVG / CSS グラデーションで作り直している。
+ */
+
+.hime {
+  /*
+   * コア4スロット。
+   * 当時のブログサービスがユーザーに直接いじらせていた粒度に合わせている
+   * （背景 / 文字 / リンク / 帯）。「帯」＝見出しのベタ塗りバーが
+   * 独立したトークンとして存在するのがこの文化の特徴。
+   */
+  --bg: #ffe9f4;
+  --text: #4a2036;
+  --link: #e4007f;
+  --band: #ff5fae;
+
+  /* スイート系パレット */
+  --pink-shock: #ff69b4;
+  --pink-sugar: #ffc0cb;
+  --pink-white: #fef9fb;
+  --pink-gold: #f5e2db;
+  --pink-deep: #d6006e;
+  --violet: #b57edc;
+  --lace: #fffafc;
+
+  /* 甘辛（ピンク×黒）系 */
+  --noir: #14090f;
+  --noir-soft: #241019;
+  --gold: #c9a227;
+  --gold-hi: #f7e7a1;
+
+  /* 光沢の記号としてのグラデーション */
+  --grad-band: linear-gradient(180deg, #ff92cb 0%, var(--band) 48%, #e0328c 100%);
+  --grad-btn: linear-gradient(180deg, #fff 0%, #ffe3f1 50%, #ffc4e0 100%);
+
+  /* 袋文字（縁取り）。低コントラスト配色を成立させる装置 */
+  --stroke-white: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+  --stroke-pink:
+    -1px -1px 0 var(--pink-shock), 1px -1px 0 var(--pink-shock),
+    -1px 1px 0 var(--pink-shock), 1px 1px 0 var(--pink-shock);
+
+  /* 影＝ラインストーンの再現 */
+  --glow-sparkle: 0 0 6px #fff, 0 0 14px var(--pink-shock);
+  --shadow-card: 0 3px 10px rgb(214 0 110 / 20%);
+
+  /*
+   * 当時の Windows 既定フォント。
+   * MS PGothic は等幅でない全角プロポーショナルで、行間が詰まって見える。
+   */
+  --font: 'MS PGothic', 'MS Pゴシック', Osaka, 'Hiragino Kaku Gothic ProN', sans-serif;
+  --fs: 12px;
+  --lh: 1.7;
+
+  /* デコメ絵文字の実規格（20×20px GIF, 約1KB, アニメーション可） */
+  --emoji: 20px;
+}
+
+/* 甘辛ミックス（ピンク×黒）。コア4スロットの差し替えだけで成立する */
+.hime--kuro {
+  --bg: var(--noir);
+  --text: #ffd9ec;
+  --link: #ff8ac9;
+  --band: #ff2e93;
+  --lace: #3a1a28;
+  --grad-band: linear-gradient(180deg, #ff5fae 0%, #ff2e93 48%, #a3005c 100%);
+  --grad-btn: linear-gradient(180deg, #3a1a28 0%, #241019 100%);
+  --stroke-white: -1px -1px 0 #2a0f1a, 1px -1px 0 #2a0f1a, -1px 1px 0 #2a0f1a, 1px 1px 0 #2a0f1a;
+  --shadow-card: 0 3px 12px rgb(0 0 0 / 55%);
+}
+
+/* パステル（LIZ LISA 的なピンク×紫） */
+.hime--pastel {
+  --bg: #fdf3ff;
+  --text: #5b3b6b;
+  --link: #9b59b6;
+  --band: #c9a0dc;
+  --pink-shock: #e8a8d8;
+  --grad-band: linear-gradient(180deg, #e6c9f2 0%, #c9a0dc 48%, #a074bd 100%);
+}
+
+/* ============================================================
+ * 1. 地の面 — タイル壁紙
+ * ============================================================
+ * 当時は素材配布サイトの小さな GIF を background-repeat で敷き詰めるのが
+ * 基本だった。ここでは同じ「小さい図案の反復」を SVG で再現している。
+ */
+
+.hime {
+  padding: 14px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs);
+  line-height: var(--lh);
+}
+
+.hime a {
+  color: var(--link);
+}
+
+.hime-tile--heart {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Cpath d='M13 20C13 20 5 14.8 5 10.2C5 7.4 7.2 6 9 6C10.5 6 12.4 6.9 13 8.2C13.6 6.9 15.5 6 17 6C18.8 6 21 7.4 21 10.2C21 14.8 13 20 13 20Z' fill='%23ffffff' opacity='.6'/%3E%3C/svg%3E");
+}
+
+.hime-tile--dot {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='4' cy='4' r='2' fill='%23ffffff' opacity='.7'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23ffffff' opacity='.45'/%3E%3C/svg%3E");
+}
+
+/* キルティング（姫系の布地感）。素材配布サイトで独立ジャンル化していた図案 */
+.hime-tile--quilt {
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 55%) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 55%) 75%),
+    linear-gradient(45deg, rgb(255 255 255 / 55%) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 55%) 75%);
+  background-position: 0 0, 14px 14px;
+  background-size: 28px 28px;
+}
+
+.hime-tile--leopard {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cg fill='%23000000' opacity='.28'%3E%3Cellipse cx='11' cy='10' rx='6' ry='4.5'/%3E%3Cellipse cx='33' cy='24' rx='5.5' ry='4'/%3E%3Cellipse cx='18' cy='33' rx='5' ry='4'/%3E%3C/g%3E%3Cg fill='%23ffffff' opacity='.5'%3E%3Cellipse cx='11' cy='10' rx='3' ry='2'/%3E%3Cellipse cx='33' cy='24' rx='2.6' ry='1.8'/%3E%3Cellipse cx='18' cy='33' rx='2.4' ry='1.8'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* 背景を固定してスクロールしても図案が動かない、という定番の小細工 */
+.hime-tile--fixed {
+  background-attachment: fixed;
+}
+
+/* ============================================================
+ * 2. 区切り線 — レース素材
+ * ============================================================ */
+
+.hime-lace {
+  height: 18px;
+  border: 0;
+  margin: 14px 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='18'%3E%3Cpath d='M0 0 H30 V6 A7.5 7.5 0 0 1 15 6 A7.5 7.5 0 0 1 0 6 Z' fill='%23ffffff'/%3E%3Ccircle cx='7.5' cy='3' r='1.6' fill='none' stroke='%23ffb3d9' stroke-width='1'/%3E%3Ccircle cx='22.5' cy='3' r='1.6' fill='none' stroke='%23ffb3d9' stroke-width='1'/%3E%3C/svg%3E") repeat-x center / auto 18px;
+}
+
+.hime-heartline {
+  height: 14px;
+  border: 0;
+  margin: 12px 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='14'%3E%3Cpath d='M11 12C11 12 5 8.4 5 5.4C5 3.6 6.5 2.7 7.7 2.7C8.7 2.7 10.6 3.3 11 4.2C11.4 3.3 13.3 2.7 14.3 2.7C15.5 2.7 17 3.6 17 5.4C17 8.4 11 12 11 12Z' fill='%23ff69b4'/%3E%3C/svg%3E") repeat-x center / auto 14px;
+}
+
+/* ============================================================
+ * 3. 文字まわり
+ * ============================================================ */
+
+/* 帯（見出しのベタ塗りバー）。この文化に固有の第一級コンポーネント */
+.hime-band {
+  display: block;
+  padding: 5px 10px;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 4px;
+  margin: 0 0 8px;
+  background: var(--grad-band);
+  box-shadow: var(--shadow-card);
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+/* 袋文字。ピンク地×白文字という低コントラスト配色を成立させる */
+.hime-fukuro {
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  text-shadow: var(--stroke-pink);
+}
+
+.hime-kirakira {
+  color: var(--pink-shock);
+  font-size: 18px;
+  font-weight: bold;
+  text-shadow: var(--stroke-white), var(--glow-sparkle);
+}
+
+/* <font color> 由来の色文字。1文だけで色が何度も変わる */
+.hime-c1 { color: #ff1493; }
+.hime-c2 { color: #9b59b6; }
+.hime-c3 { color: #ff8c00; }
+.hime-c4 { color: #00b7c3; }
+
+.hime-big { font-size: 17px; }
+.hime-small { font-size: 10px; }
+
+/* 全角スペースによる字下げが常態化していた。ここでは視覚的に等価な再現 */
+.hime-indent {
+  text-indent: 1em;
+}
+
+/* デコメ絵文字。20×20px の GIF をテキストへ直接差し込むのが正だった。
+   結果として「文章の中に小さな画像が大量に並ぶ」独特の見た目になる */
+.hime-emoji {
+  display: inline-block;
+  width: var(--emoji);
+  height: var(--emoji);
+  vertical-align: -5px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.hime-emoji--heart {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 17.5C10 17.5 2.5 12.5 2.5 8C2.5 5.4 4.5 4 6.2 4C7.6 4 9.4 4.8 10 6C10.6 4.8 12.4 4 13.8 4C15.5 4 17.5 5.4 17.5 8C17.5 12.5 10 17.5 10 17.5Z' fill='%23ff3d8a'/%3E%3C/svg%3E");
+}
+
+.hime-emoji--star {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 2L12.4 7.4L18.2 8L13.8 11.9L15.1 17.6L10 14.6L4.9 17.6L6.2 11.9L1.8 8L7.6 7.4Z' fill='%23ffc93c'/%3E%3C/svg%3E");
+}
+
+.hime-emoji--sparkle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1L11.6 8.4L19 10L11.6 11.6L10 19L8.4 11.6L1 10L8.4 8.4Z' fill='%23ffe66d'/%3E%3C/svg%3E");
+}
+
+.hime-emoji--ribbon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 10L3 5.5V14.5ZM10 10L17 5.5V14.5Z' fill='%23ff69b4'/%3E%3Ccircle cx='10' cy='10' r='2.2' fill='%23ff1493'/%3E%3C/svg%3E");
+}
+
+/* 光るGIF の代替。動きを嫌う環境では静止する */
+.hime-emoji--blink {
+  animation: hime-blink 1.1s steps(2, end) infinite;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1L11.6 8.4L19 10L11.6 11.6L10 19L8.4 11.6L1 10L8.4 8.4Z' fill='%23fff35c'/%3E%3C/svg%3E");
+}
+
+@keyframes hime-blink {
+  50% { opacity: 0.25; }
+}
+
+/* <marquee> の代替。当時は要素そのものが存在した */
+.hime-marquee {
+  overflow: hidden;
+  border: 1px dashed var(--pink-shock);
+  background: rgb(255 255 255 / 65%);
+}
+
+.hime-marquee span {
+  display: inline-block;
+  padding-left: 100%;
+  /* 負のdelayで途中から始め、初期表示が空にならないようにする */
+  animation: hime-scroll 11s linear -4s infinite;
+  white-space: nowrap;
+}
+
+@keyframes hime-scroll {
+  to { transform: translateX(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hime-emoji--blink,
+  .hime-marquee span {
+    animation: none;
+  }
+
+  .hime-marquee span {
+    padding-left: 0;
+  }
+}
+
+/* ============================================================
+ * 4. レイアウト — 固定幅2カラム
+ * ============================================================
+ * 800×600 を前提に「本文760px」で組むのが定石だった。
+ * 可変幅という発想がほぼ無く、ブラウザを広げても中身は伸びない。
+ */
+
+.hime-page {
+  width: 760px;
+  margin: 0 auto;
+  background: rgb(255 255 255 / 72%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 80%);
+}
+
+/* ショーケース内では 760px を実寸で見せたいので、狭い画面では横スクロールさせる */
+.hime-scroller {
+  overflow-x: auto;
+}
+
+.hime-header {
+  padding: 22px 16px;
+  border-bottom: 3px double var(--pink-shock);
+  background: var(--grad-band);
+  text-align: center;
+}
+
+.hime-header h1 {
+  margin: 0 0 4px;
+  color: #fff;
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  text-shadow: var(--stroke-pink), 0 2px 4px rgb(0 0 0 / 30%);
+}
+
+.hime-header p {
+  margin: 0;
+  color: #fff;
+  font-size: 11px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.hime-globalnav {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pink-sugar);
+  background: rgb(255 255 255 / 80%);
+  font-size: 11px;
+  text-align: center;
+}
+
+.hime-globalnav a {
+  padding: 0 6px;
+}
+
+.hime-cols {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 10px 20px;
+}
+
+.hime-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hime-side {
+  flex: 0 0 190px;
+  width: 190px;
+}
+
+/* ============================================================
+ * 5. サイドバーの部品
+ * ============================================================ */
+
+.hime-widget {
+  padding: 8px;
+  border: 1px solid var(--pink-sugar);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: rgb(255 255 255 / 88%);
+}
+
+.hime--kuro .hime-widget {
+  border-color: #4a2233;
+  background: rgb(36 16 25 / 88%);
+}
+
+.hime-widget h3 {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin: -8px -8px 8px;
+  background: var(--grad-band);
+  color: #fff;
+  font-size: 11px;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 35%);
+}
+
+.hime-widget ul {
+  padding-left: 1.2em;
+  margin: 0;
+  font-size: 11px;
+}
+
+.hime-widget li {
+  margin-bottom: 3px;
+}
+
+/* プロフィール欄 */
+.hime-profile {
+  text-align: center;
+}
+
+.hime-avatar {
+  width: 84px;
+  height: 84px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  margin: 0 auto 6px;
+  background: var(--grad-btn);
+  box-shadow: var(--shadow-card);
+  color: var(--pink-deep);
+  font-size: 30px;
+  line-height: 78px;
+}
+
+.hime-profile__name {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.hime-profile__bio {
+  margin: 4px 0 0;
+  font-size: 11px;
+  text-align: left;
+}
+
+/* カレンダー */
+.hime-cal {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  text-align: center;
+}
+
+.hime-cal caption {
+  padding-bottom: 4px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.hime-cal th,
+.hime-cal td {
+  padding: 2px 0;
+  border: 1px solid var(--pink-sugar);
+}
+
+.hime-cal th {
+  background: rgb(255 192 203 / 45%);
+}
+
+.hime--kuro .hime-cal th,
+.hime--kuro .hime-cal td {
+  border-color: #4a2233;
+}
+
+.hime-cal .is-sun { color: #e4007f; }
+.hime-cal .is-sat { color: #3b6fd4; }
+
+/* 投稿がある日だけリンクになり、太字で目立つ */
+.hime-cal a {
+  display: block;
+  background: rgb(255 105 180 / 22%);
+  font-weight: bold;
+}
+
+/* アクセスカウンター。7桁のケタ揃えが様式 */
+.hime-counter {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+
+.hime-counter span {
+  width: 15px;
+  border: 1px solid #000;
+  background: #111;
+  color: #4dff4d;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* 相互リンクバナー。88×31px という規格が共有されていた */
+.hime-banner {
+  display: block;
+  width: 88px;
+  height: 31px;
+  border: 1px solid #fff;
+  margin: 0 auto 6px;
+  background: var(--grad-band);
+  box-shadow: var(--shadow-card);
+  color: #fff;
+  font-size: 9px;
+  line-height: 31px;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 40%);
+}
+
+/* ブログパーツ置き場 */
+.hime-parts {
+  padding: 10px 4px;
+  border: 1px dashed var(--pink-shock);
+  background: rgb(255 255 255 / 60%);
+  font-size: 10px;
+  text-align: center;
+}
+
+/* ============================================================
+ * 6. 記事エリア
+ * ============================================================ */
+
+.hime-entry {
+  padding: 10px;
+  border: 1px solid var(--pink-sugar);
+  border-radius: 6px;
+  margin-bottom: 14px;
+  background: rgb(255 255 255 / 90%);
+}
+
+.hime--kuro .hime-entry {
+  border-color: #4a2233;
+  background: rgb(36 16 25 / 90%);
+}
+
+.hime-entry__title {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin: -10px -10px 8px;
+  background: var(--grad-band);
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+.hime-entry__meta {
+  margin-bottom: 8px;
+  color: var(--pink-deep);
+  font-size: 10px;
+}
+
+.hime--kuro .hime-entry__meta {
+  color: #ff8ac9;
+}
+
+.hime-entry__body p {
+  margin: 0 0 0.9em;
+}
+
+/* 本文中の写真。プリクラや自撮りを白フチ＋影で貼るのが定番 */
+.hime-photo {
+  display: block;
+  width: 180px;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  margin: 8px auto;
+  background: var(--grad-btn);
+  box-shadow: var(--shadow-card);
+  color: var(--pink-deep);
+  font-size: 10px;
+  line-height: 130px;
+  text-align: center;
+}
+
+.hime-photo--purikura {
+  border-color: var(--pink-shock);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 30% 30%, rgb(255 255 255 / 90%) 0 12%, transparent 12%),
+    radial-gradient(circle at 72% 62%, rgb(255 255 255 / 75%) 0 8%, transparent 8%),
+    var(--grad-btn);
+}
+
+/* 記事末尾の署名 */
+.hime-sign {
+  margin-top: 10px;
+  font-size: 11px;
+  text-align: right;
+}
+
+.hime-entry__foot {
+  padding-top: 6px;
+  border-top: 1px dotted var(--pink-sugar);
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+/* Web拍手ボタン */
+.hime-clap {
+  display: inline-block;
+  padding: 3px 12px;
+  border: 1px solid var(--pink-shock);
+  border-radius: 3px;
+  background: var(--grad-btn);
+  color: var(--pink-deep);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+/* コメント欄 */
+.hime-comment {
+  padding: 6px 8px;
+  border-bottom: 1px dotted var(--pink-sugar);
+  font-size: 11px;
+}
+
+.hime-comment__name {
+  color: var(--pink-deep);
+  font-weight: bold;
+}
+
+.hime--kuro .hime-comment__name {
+  color: #ff8ac9;
+}
+
+.hime-comment__date {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ============================================================
+ * 7. ガラケー版
+ * ============================================================
+ * 横240px前後・1カラム・画像は横幅いっぱい。装飾は絵文字に集約され、
+ * 画像素材は通信量の都合で絞られる。
+ */
+
+.hime-keitai {
+  width: 240px;
+  padding: 0;
+  border: 10px solid #d8d8d8;
+  border-radius: 6px;
+  margin: 0 auto;
+  background: var(--bg);
+  font-size: 12px;
+}
+
+.hime-keitai__bar {
+  padding: 3px 6px;
+  background: var(--band);
+  color: #fff;
+  font-size: 10px;
+}
+
+.hime-keitai__body {
+  padding: 8px 6px;
+}
+
+.hime-keitai__body img,
+.hime-keitai__photo {
+  display: block;
+  width: 224px;
+  background: var(--grad-btn);
+  color: var(--pink-deep);
+  font-size: 10px;
+  line-height: 90px;
+  text-align: center;
+}
+
+.hime-keitai__nav {
+  padding: 6px;
+  border-top: 1px solid var(--pink-sugar);
+  font-size: 11px;
+}
+
+.hime-keitai__nav a {
+  display: block;
+  padding: 2px 0;
+}
+
+/* ============================================================
+ * 8. 入口ページ（ENTER）
+ * ============================================================
+ * 実体は top.html 側にあり、入口を分ける機能的な必然は無かった。
+ * 「カッコ良いから」という様式として広く共有されていた。
+ */
+
+.hime-enter {
+  padding: 26px 16px;
+  text-align: center;
+}
+
+.hime-enter__title {
+  margin: 0 0 6px;
+  color: var(--pink-shock);
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-shadow: var(--stroke-white), var(--glow-sparkle);
+}
+
+.hime-enter__lead {
+  margin: 0 0 14px;
+  font-size: 11px;
+}
+
+.hime-enter__link {
+  display: inline-block;
+  padding: 6px 26px;
+  border: 2px solid var(--pink-shock);
+  border-radius: 4px;
+  background: var(--grad-btn);
+  color: var(--pink-deep);
+  font-size: 14px;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.hime-enter__notice {
+  margin: 14px 0 0;
+  font-size: 10px;
+  line-height: 1.9;
+}
+
+/* ホムペの固定メニュー */
+.hime-menu {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.hime-menu li {
+  border-bottom: 1px dotted var(--pink-sugar);
+}
+
+.hime-menu a {
+  display: block;
+  padding: 5px 8px;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.hime-menu a::before {
+  content: '≫ ';
+}

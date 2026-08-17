@@ -1,0 +1,1392 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>姫ブロ デザインショーケース</title>
+    <meta
+      name="description"
+      content="2000年代の「姫ブロ」— ガラケー期の姫系・ギャル系個人ブログに共通する視覚言語の分解と再現。"
+    />
+    <link rel="stylesheet" href="./chrome.css" />
+    <link rel="stylesheet" href="./specimen.css" />
+  </head>
+  <body>
+    <div class="doc-shell">
+      <header class="doc-header">
+        <p class="doc-header__eyebrow">Design Showcase</p>
+        <h1>姫ブロ<br />2000年代の視覚言語</h1>
+        <p class="doc-header__lede">
+          ガラケー期の日本で、10代〜20代前半の女性が書いていた「姫系／ギャル系」の個人ブログ。
+          そこには驚くほど強い共通の作法があった。色、文字、装飾、そして画面の組み方を分解し、
+          HTML と CSS で組み直したのがこのページ。装飾はすべて当時の素材を使わず、
+          インライン SVG と CSS グラデーションで作り直している。
+        </p>
+      </header>
+
+      <nav class="doc-nav">
+        <p class="doc-nav__title">Contents</p>
+        <ul class="doc-nav__list">
+          <li><a href="#what">01 姫ブロとは</a></li>
+          <li><a href="#principle">02 設計思想</a></li>
+          <li><a href="#color">03 配色</a></li>
+          <li><a href="#type">04 文字</a></li>
+          <li><a href="#emoji">05 デコメ絵文字</a></li>
+          <li><a href="#material">06 装飾素材</a></li>
+          <li><a href="#layout">07 レイアウト</a></li>
+          <li><a href="#widget">08 サイドバー</a></li>
+          <li><a href="#entry">09 記事の型</a></li>
+          <li><a href="#keitai">10 入口とホムペ</a></li>
+          <li><a href="#demo">11 総合デモ</a></li>
+          <li><a href="#timeline">12 年表</a></li>
+          <li><a href="#sources">13 出典と限界</a></li>
+        </ul>
+      </nav>
+
+      <main>
+        <section class="doc-section" id="what">
+          <h2><span class="doc-num">01</span>姫ブロとは</h2>
+          <p>
+            「姫ブロ」は辞書に載る正式名称ではない。ここで扱うのは、
+            <strong>2000年代半ばから2011年頃にかけて、ガラケーを主戦場に書かれていた
+            女性向け個人ブログ</strong>の一群と、その視覚的な作法である。
+            「姫系」というファッションジャンル（LIZ LISA に代表される、フリル・レース・リボンを
+            まとったスタイル）と地続きで、書き手も読み手も10代〜20代前半の女性が中心だった。
+          </p>
+
+          <div class="spec-scroll">
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th>プラットフォーム</th>
+                  <th>位置づけ</th>
+                  <th>確度</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>DECOLOG（デコログ）</th>
+                  <td>
+                    ミツバチワークス提供、2007年2月開始。2010年3月時点で月間53億8900万PV、
+                    ユーザーの約90%が10代後半〜20代前半の女性。この文化圏の中心地。
+                    「デコメ絵文字を記事内で使える」ことが当時の差別化だった。後にサービス終了。
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>魔法のiらんど</th>
+                  <td>
+                    「ホムペ」文化とケータイ小説の草分け。ブログというより
+                    個人サイト（トップ／自己紹介／日記／BBS）の構成を持つ。
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>前略プロフィール</th>
+                  <td>
+                    質問に答えると自己紹介ページができるサービス。2000年代中盤に10代で大流行。
+                    ブログ本体ではなく「名刺」として機能した。
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>CROOZブログ／アメブロ／FC2 ほか</th>
+                  <td>
+                    汎用ブログサービス側にも同じ視覚言語が流入した。
+                    テンプレート配布とカスタムCSSが装飾の受け皿になった。
+                  </td>
+                  <td><span class="badge badge--guess">推測</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">用語について</span>
+            <p>
+              「姫ブロ」という語そのものは、辞書・用語集の類では裏が取れなかった。
+              当時の当事者間の口語だった可能性が高い。このページでは
+              <strong>上記の文化圏の総称</strong>として扱う。
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="principle">
+          <h2><span class="doc-num">02</span>設計思想 — 引き算をしない</h2>
+          <p>
+            この視覚言語を理解する鍵は、それが<strong>グラフィックデザインの系譜ではなく、
+            ネイルやデコ電といった「物理的に飾る」行為の系譜にある</strong>という点にある。
+            同時代のギャル誌『小悪魔ageha』の誌面づくりを分析した記事は、
+            必要なスキルを「デコる技術（ラインストーンやスワロフスキーで装飾する技術）」と表現し、
+            誌面には「キラキラとした光、ボケ、そしてラインストーン」が全面に散っていると述べている。
+          </p>
+          <p>
+            物理的なデコレーションには「余白を残す」という発想がない。
+            隙間があれば石を置く。その論理がそのまま画面に転写された結果が、
+            <strong>敷き詰められた壁紙、文中に散る絵文字、光る区切り線、そして縦に長いサイドバー</strong>である。
+            現代のWebデザインが引き算で洗練を作るのに対し、姫ブロは<strong>足し算で豊かさを作る</strong>。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">同じ文章 / 装飾なし ↔ 姫ブロ作法</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div style="padding: 14px; background: #fff; border: 1px solid #e2e2dd; font-size: 13px; line-height: 1.9; color: #333;">
+                  今日は友達とカフェに行きました。パンケーキがおいしかったです。
+                  また行きたいな。明日も晴れるといいね。
+                </div>
+                <div class="hime hime-tile--heart">
+                  <p style="margin: 0;">
+                    <span class="hime-emoji hime-emoji--sparkle"></span>
+                    <span class="hime-c1">今日ゎ</span>友達と<span class="hime-c2">ヵフェ</span>行ってきた
+                    <span class="hime-emoji hime-emoji--heart"></span><span class="hime-emoji hime-emoji--heart"></span>
+                    <br />
+                    パンケーキ<span class="hime-c3 hime-big">まぢ</span>ぉぃしかった
+                    <span class="hime-emoji hime-emoji--star"></span>
+                    <br />
+                    <span class="hime-c4">また行きたぃな</span>
+                    <span class="hime-emoji hime-emoji--ribbon"></span>
+                    明日も晴れるとぃぃね
+                    <span class="hime-emoji hime-emoji--blink"></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="preview__note">
+            情報量は同じでも、面積あたりの「刺激の密度」が違う。
+            この密度そのものが、書き手の熱量と読み手への親愛の表明として機能していた。
+          </p>
+        </section>
+
+        <section class="doc-section" id="color">
+          <h2><span class="doc-num">03</span>配色</h2>
+          <p>
+            単一の「ピンク」ではなく、はっきり性格の違う3つのクラスタがある。
+            共通するのは、<strong>彩度を落とさないこと</strong>と、
+            <strong>グラデーションを色の遷移ではなく「光沢の記号」として使うこと</strong>。
+            金属やラメの照り返しを平面で模倣するための道具だった。
+          </p>
+
+          <h3>クラスタ A — スイート／姫系</h3>
+          <ul class="swatches">
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #ffe9f4;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">地の桃色</span>
+                <span class="swatch__value">#ffe9f4</span>
+                <span class="swatch__role">背景。白ではなく必ず色が付く</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #ff69b4;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">ショッキングピンク</span>
+                <span class="swatch__value">#ff69b4</span>
+                <span class="swatch__role">主役。見出し・強調・装飾</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #ffc0cb;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">シュガーピンク</span>
+                <span class="swatch__value">#ffc0cb</span>
+                <span class="swatch__role">罫線・淡い面。CSS標準色名 pink</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #f5e2db;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">ピンクゴールド</span>
+                <span class="swatch__value">#f5e2db</span>
+                <span class="swatch__role">上品側に振るときの中間色</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #d6006e;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">濃ピンク</span>
+                <span class="swatch__value">#d6006e</span>
+                <span class="swatch__role">リンク・日付。文字として読ませる濃度</span>
+              </div>
+            </li>
+          </ul>
+
+          <h3>クラスタ B — 甘辛ミックス（ピンク×黒）</h3>
+          <p>
+            高彩度ピンクを黒地に置く。明度差が最大になるため、
+            装飾を盛っても文字が沈まない。「小悪魔的」と形容された配色で、
+            姫系のなかでは最も強い。
+          </p>
+          <ul class="swatches">
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #14090f;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">黒</span>
+                <span class="swatch__value">#14090f</span>
+                <span class="swatch__role">純黒ではなく赤みを含ませる</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #ff2e93;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">帯ピンク</span>
+                <span class="swatch__value">#ff2e93</span>
+                <span class="swatch__role">見出し帯。黒地で最も映える</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #c9a227;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">金</span>
+                <span class="swatch__value">#c9a227</span>
+                <span class="swatch__role">高級感側へ振るときのアクセント</span>
+              </div>
+            </li>
+          </ul>
+
+          <h3>クラスタ C — パステル（ピンク×紫）</h3>
+          <p>
+            LIZ LISA のショッパーが「パステル調のピンク×紫」だったように、
+            姫系ファッションの署名は隣接色相の組み合わせにある。彩度を落とし、明度を上げる。
+          </p>
+          <ul class="swatches">
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #fdf3ff;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">薄紫の地</span>
+                <span class="swatch__value">#fdf3ff</span>
+                <span class="swatch__role">背景</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #e8a8d8;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">パステルピンク</span>
+                <span class="swatch__value">#e8a8d8</span>
+                <span class="swatch__role">主役</span>
+              </div>
+            </li>
+            <li class="swatch">
+              <div class="swatch__chip" style="background: #b57edc;"></div>
+              <div class="swatch__meta">
+                <span class="swatch__name">ラベンダー</span>
+                <span class="swatch__value">#b57edc</span>
+                <span class="swatch__role">対の色。リンクや帯に</span>
+              </div>
+            </li>
+          </ul>
+
+          <div class="callout">
+            <span class="callout__label">注意</span>
+            <p>
+              上に並べた HEX のうち、一次資料から採れた確定値は
+              <code>#ffc0cb</code>（CSS標準色名 pink）と <code>#f5e2db</code>（ピンクゴールド）だけである。
+              残りは「ショッキングピンク」「ピンク×黒」「パステル調のピンク×紫」といった
+              <strong>言語的記述からの再構成</strong>であり、実在ページからの実測値ではない。
+              調査環境から当時のページへ直接アクセスできなかったためで、
+              詳しくは<a href="#sources">12章</a>に記した。
+            </p>
+          </div>
+
+          <h3>コア4スロット</h3>
+          <p>
+            当時のブログサービスが利用者に触らせていた色の粒度は、おおむね
+            <strong>背景・文字・リンク・帯</strong>の4つだった。とりわけ
+            <strong>「帯」が独立したトークンとして存在する</strong>のがこの文化に固有で、
+            見出しをベタ塗りのバーで表現する慣習がUIレベルで固定化されていたことを意味する。
+            テーマの切り替えも、この4つを差し替えるだけで成立する。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">同一マークアップ / 4スロットのみ差し替え</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div class="hime hime-tile--heart">
+                  <span class="hime-band">A / スイート</span>
+                  <p style="margin: 0 0 6px;">
+                    ぉはょぅ<span class="hime-emoji hime-emoji--heart"></span>
+                    今日も<a href="#color">ぁそぼ</a>ぅね
+                  </p>
+                  <hr class="hime-lace" />
+                </div>
+                <div class="hime hime--kuro hime-tile--leopard">
+                  <span class="hime-band">B / 甘辛</span>
+                  <p style="margin: 0 0 6px;">
+                    ぉはょぅ<span class="hime-emoji hime-emoji--heart"></span>
+                    今日も<a href="#color">ぁそぼ</a>ぅね
+                  </p>
+                  <hr class="hime-lace" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="type">
+          <h2><span class="doc-num">04</span>文字</h2>
+          <p>
+            本文の書体を選ぶという発想はほぼ無い。Windows の既定である MS Pゴシックに乗り、
+            そのうえで<strong>色・サイズ・縁取りを一文のうちに何度も切り替える</strong>ことで表情を作った。
+            <code>&lt;font color&gt;</code> 属性が現役だった時代の作法である。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">文字装飾の語彙</div>
+            <div class="preview__stage">
+              <div class="hime hime-tile--dot">
+                <p style="margin: 0 0 10px;">
+                  <span class="hime-c1">色</span><span class="hime-c2">が</span><span class="hime-c3">一</span><span class="hime-c4">文</span><span class="hime-c1">字</span><span class="hime-c2">ず</span><span class="hime-c3">つ</span><span class="hime-c4">変</span><span class="hime-c1">わ</span><span class="hime-c2">る</span>
+                </p>
+                <p style="margin: 0 0 10px;">
+                  <span class="hime-fukuro">袋文字で縁取る</span>
+                </p>
+                <p style="margin: 0 0 10px;">
+                  <span class="hime-kirakira">発光させる</span>
+                </p>
+                <p style="margin: 0;">
+                  <span class="hime-small">小さい字で本音</span>　
+                  <span class="hime-big hime-c1">大きい字で叫ぶ</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <h3>袋文字は装飾であり、同時に可読性の装置でもある</h3>
+          <p>
+            ピンク地に白文字、という配色は明度差が小さく本来は読みにくい。
+            それを白や濃ピンクの<strong>1px の縁取り</strong>で成立させるのが袋文字である。
+            派手さのための技法に見えて、実際にはコントラスト不足を補償する機構として働いていた。
+          </p>
+
+          <div class="spec-scroll">
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th>語彙</th>
+                  <th>実装</th>
+                  <th>役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>帯</th>
+                  <td><code>background: linear-gradient(...)</code> + 白文字 + 影</td>
+                  <td>見出し。ベタ塗りバーで階層を示す</td>
+                </tr>
+                <tr>
+                  <th>袋文字</th>
+                  <td><code>text-shadow</code> を4方向に1pxずつ</td>
+                  <td>低コントラスト配色の可読性を担保</td>
+                </tr>
+                <tr>
+                  <th>発光</th>
+                  <td><code>text-shadow</code> の多重がけ（縁取り＋にじみ）</td>
+                  <td>ラインストーンの照り返しを平面で模倣</td>
+                </tr>
+                <tr>
+                  <th>色文字</th>
+                  <td>当時は <code>&lt;font color&gt;</code>、現在なら <code>&lt;span&gt;</code></td>
+                  <td>強調というより、リズムと熱量の表現</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>ギャル文字</h3>
+          <p>
+            文字を分解・変形させて表記する遊び。ひらがなやカタカナ、一部の漢字を
+            <strong>偏と旁に分解</strong>して書く。「まじ」を「まぢ」、「超」を「走召」と綴るなど。
+            読みにくさそのものが内輪性の記号であり、読める人だけが読めればよい、という設計だった。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">通常表記 ↔ ギャル文字寄せ</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div style="padding: 14px; background: #fff; border: 1px solid #e2e2dd; font-size: 13px; line-height: 1.9; color: #333;">
+                  おはよう。今日は超楽しかった。また明日ね。
+                </div>
+                <div class="hime hime-tile--dot">
+                  <p style="margin: 0;">ぉはょぅ<span class="hime-emoji hime-emoji--sparkle"></span> 今日ゎ走召楽しかった<span class="hime-emoji hime-emoji--heart"></span> ぉたのしみに<span class="hime-c1">ヽ(´ー｀)ノ</span> ﾏﾀ明日ね</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="preview__note">
+            顔文字が文の切れ目に置かれ、句読点の代わりに機能している点にも注目したい。
+          </p>
+        </section>
+
+        <section class="doc-section" id="emoji">
+          <h2><span class="doc-num">05</span>デコメ絵文字 — 文字ではなく画像</h2>
+          <p>
+            この文化の技術的な核心はここにある。装飾はフォントではなく
+            <strong>画像として本文に差し込まれた</strong>。デコメ絵文字は
+            <strong>20×20ピクセルの GIF、ファイルサイズは1KB前後、この寸法内でアニメーション可能</strong>
+            という明確な規格を持っていた（「デコメ」は NTTドコモの商標）。
+          </p>
+          <p>
+            結果として本文の DOM は、テキストノードと <code>&lt;img&gt;</code> が交互に並ぶ独特の構造になる。
+            CSS に翻訳すれば <code>height: 20px; vertical-align: middle;</code> の画像が
+            文章のいたるところに散在している状態で、これが姫ブロのテキストの見た目を決定づけていた。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">20×20px を実寸で</div>
+            <div class="preview__stage">
+              <div class="hime">
+                <p style="margin: 0 0 12px;">
+                  <span class="hime-emoji hime-emoji--heart"></span>
+                  <span class="hime-emoji hime-emoji--star"></span>
+                  <span class="hime-emoji hime-emoji--sparkle"></span>
+                  <span class="hime-emoji hime-emoji--ribbon"></span>
+                  <span class="hime-emoji hime-emoji--blink"></span>
+                </p>
+                <p style="margin: 0;">
+                  ぉ久しぶりです<span class="hime-emoji hime-emoji--heart"></span>
+                  最近ずっとバタバタしてて<span class="hime-emoji hime-emoji--sparkle"></span>
+                  全然更新できてなかった<span class="hime-emoji hime-emoji--star"></span>
+                  ごめんね<span class="hime-emoji hime-emoji--ribbon"></span>
+                  でもね<span class="hime-emoji hime-emoji--blink"></span>
+                  今日はぃぃ報告がぁります<span class="hime-emoji hime-emoji--heart"></span><span class="hime-emoji hime-emoji--heart"></span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">なぜ Unicode 絵文字ではなかったか</span>
+            <p>
+              キャリアごとに絵文字が異なり、環境依存文字は受け手の端末で「?」に化けた。
+              プラットフォームが配布する GIF 画像を使うことが、
+              <strong>意図した装飾を確実に届ける唯一の方法</strong>だった。
+              この制約が「装飾＝画像」という構造を決定し、
+              素材配布サイトという一大文化圏を生んだ。
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="material">
+          <h2><span class="doc-num">06</span>装飾素材</h2>
+          <p>
+            背景も区切り線もボタンも、自分で描くものではなく<strong>素材配布サイトから貰ってくるもの</strong>だった。
+            配布側は「ハート」「レース」「キルティング」「壁紙」といったジャンルで素材を整理しており、
+            とりわけキルティング柄が独立ジャンルとして成立していたのは、
+            姫系ファッションの布地感がそのまま画面に持ち込まれた証拠と言える。
+          </p>
+
+          <h3>タイル壁紙</h3>
+          <p>
+            小さな図案を <code>background-repeat</code> で敷き詰める。
+            画像が小さいほど通信量が減るため、技術的制約と美意識が一致していた。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">タイル4種</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div class="hime hime-tile--heart" style="min-height: 90px;">
+                  <span class="hime-band">ハート</span>
+                </div>
+                <div class="hime hime-tile--quilt" style="min-height: 90px;">
+                  <span class="hime-band">キルティング</span>
+                </div>
+                <div class="hime hime-tile--dot" style="min-height: 90px;">
+                  <span class="hime-band">ドット</span>
+                </div>
+                <div class="hime hime--kuro hime-tile--leopard" style="min-height: 90px;">
+                  <span class="hime-band">ヒョウ柄</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="preview__note">
+            ヒョウ柄は姫系というより甘辛ミックス側の語彙。
+            <span class="badge badge--guess">推測</span>
+            この文化での実使用について一次資料での裏取りは取れていない。
+          </p>
+
+          <h3>区切り線</h3>
+          <p>
+            <code>&lt;hr&gt;</code> をそのまま使うことはまず無く、レースやハートを横に並べた画像で区切った。
+            記事と記事、本文と署名のあいだに必ず入る。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">区切り線2種</div>
+            <div class="preview__stage">
+              <div class="hime">
+                <p style="margin: 0;">本文がここで終わります</p>
+                <hr class="hime-lace" />
+                <p style="margin: 0;">レースで区切ったあと</p>
+                <hr class="hime-heartline" />
+                <p style="margin: 0;">ハートでも区切れる</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="layout">
+          <h2><span class="doc-num">07</span>レイアウト — ひとつではなく三系統</h2>
+          <p>
+            調査を進めて分かった最も重要なことは、「2000年代の姫系ブログ」が
+            <strong>UI のまったく異なる3つの系統に分かれる</strong>という点である。
+            これを一枚の画面に混ぜると、それはどの時代にも存在しなかった画面になってしまう。
+          </p>
+
+          <div class="spec-scroll">
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th>系統</th>
+                  <th>代表</th>
+                  <th>レイアウト</th>
+                  <th>固有の部品</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>A / PC発レンタルブログ</th>
+                  <td>アメブロ、FC2、ライブドア、JUGEM、忍者、goo、Yahoo!ブログ</td>
+                  <td><strong>2〜3カラム＋サイドバー</strong>／固定幅</td>
+                  <td>カレンダー、カウンター、88×31バナー、ブログパーツ、トラックバック</td>
+                </tr>
+                <tr>
+                  <th>B / ケータイ発ギャルブログ</th>
+                  <td><strong>デコログ</strong>、CROOZブログ</td>
+                  <td><strong>1カラム</strong>／サイドバーの概念が無い</td>
+                  <td>デコメ素材、背景画像、240px写真、ランキング</td>
+                </tr>
+                <tr>
+                  <th>C / ホムペ</th>
+                  <td>魔法のiらんど</td>
+                  <td>「入口」→固定メニュー</td>
+                  <td>日記／BBS／アルバム／プロフィールという部品単位</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">よくある誤解</span>
+            <p>
+              「ギャルブログ＝ごてごてのサイドバー」という像は、実は
+              <strong>系統 A のPC個人サイト文化の記憶</strong>である。
+              ギャル文化の中心地だったデコログは<strong>ケータイ発の1カラムで、サイドバーを持たない</strong>。
+              月間60億PV超を<strong>携帯電話だけで</strong>叩き出していたサービスであり、
+              装飾の密度は横方向ではなく<strong>縦方向に積み上がっていた</strong>。
+            </p>
+          </div>
+
+          <h3>系統 A の骨格</h3>
+          <p>
+            固定幅で、<code>&lt;table&gt;</code> を入れ子にして組む。
+            本文幅はおおむね <strong>700〜770px</strong>（800×600 を配慮した時期）、
+            のちに <strong>950〜1000px</strong>（1024×768 が前提になった時期）へ移る。
+            縦方向には制限がなく、サイドバーが本文より長くなるのが常態だった。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">系統A / 2カラム 760px</div>
+            <div class="preview__stage">
+              <div style="font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.7; white-space: pre; overflow-x: auto; color: var(--doc-text-muted);">┌────────────────────────────────────────┐
+│  ヘッダー画像（ブログタイトル）          │
+├────────────────────────────────────────┤
+│  ナビ（HOME / プロフ / BBS / リンク）   │
+├─────────────────────────┬──────────────┤
+│  記事タイトル（帯）      │  プロフィール │
+│  投稿日時・カテゴリ      │  カレンダー   │
+│  本文（デコ文字＋写真）  │  最新記事     │
+│  区切り線・署名          │  最近のコメント│
+│  Web拍手／応援バナー     │  最近のTB     │
+│  コメント欄              │  カテゴリ     │
+│  トラックバックURL       │  過去ログ     │
+│                          │  カウンター   │
+│                          │  相互リンク   │
+│                          │  ブログパーツ │
+│                          │  RSS          │
+│   ← 約 560px →          │  ← 190px →   │
+└─────────────────────────┴──────────────┘
+              全体 760px 固定 / table 入れ子</div>
+            </div>
+          </div>
+          <p class="preview__note">
+            サイドバーの左右どちらに置かれたかについては、今回一次資料に当たれなかった
+            <span class="badge badge--guess">推測</span>。
+          </p>
+
+          <h3>系統 B の骨格</h3>
+          <p>
+            ガラケーの画面がそのまま設計の制約になる。QVGA <strong>240×320</strong>、
+            iモードブラウザの内部解像度は <strong>240×325</strong>。
+            画像は<strong>横240px以下</strong>、スクロールバーを考慮するなら230px以下に収める。
+            ここにサイドバーを置く余地はない。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">系統B / デコログ型 240px 1カラム</div>
+            <div class="preview__stage preview__stage--device">
+              <div class="hime hime-keitai hime-tile--heart">
+                <div class="hime-keitai__bar">☆ みゅうの日記 ☆</div>
+                <div class="hime-keitai__body">
+                  <p style="margin: 0 0 6px;">
+                    <span class="hime-emoji hime-emoji--heart"></span>2008/06/20 22:14
+                  </p>
+                  <p style="margin: 0 0 6px;">
+                    <span class="hime-c1">ただぃま</span><span class="hime-emoji hime-emoji--star"></span>
+                    今日ゎ<span class="hime-c2">ヵラオヶ</span>行ってきた
+                    <span class="hime-emoji hime-emoji--sparkle"></span>
+                  </p>
+                  <div class="hime-keitai__photo">写真（横224px）</div>
+                  <p style="margin: 6px 0 0;">
+                    <span class="hime-c3">ぁしたも学校だ</span>
+                    <span class="hime-emoji hime-emoji--blink"></span>
+                    ねむぃ<span class="hime-emoji hime-emoji--heart"></span>
+                  </p>
+                  <hr class="hime-heartline" />
+                  <p style="margin: 0; font-size: 11px;">
+                    コメント(12)<br />
+                    <span class="hime-c1">総合ランキング 84位</span>
+                  </p>
+                </div>
+                <div class="hime-keitai__nav">
+                  <a href="#layout">≫ 次のページ</a>
+                  <a href="#layout">≫ イマナニシテル？</a>
+                  <a href="#layout">≫ ぷろふぃーる</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="preview__note">
+            デコログの特筆すべき点は、<strong>デコメ素材や背景画像をメールで送るだけで設定できた</strong>こと。
+            PC を持たない層が、携帯だけで自分のページを飾りきれた。
+            「イマナニシテル？」は同サービスのミニブログ機能「リアル」で、Twitter 以前の一行更新にあたる。
+          </p>
+        </section>
+
+        <section class="doc-section" id="widget">
+          <h2><span class="doc-num">08</span>サイドバーの部品（系統 A）</h2>
+          <p>
+            サイドバーは系統 A のいちばん濃い場所である。ブログサービスの標準機能に加え、
+            外部サービスのブログパーツ、相互リンクのバナー、ランキングサイトへの投票ボタンが積み重なる。
+            それぞれが小さなコミュニティへの接続点であり、
+            <strong>サイドバーの長さはそのまま交友関係の広さを表示していた</strong>。
+            記事本文より縦に長くなるのが常態で、その長さ自体が再現の対象になる。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">サイドバー実物</div>
+            <div class="preview__stage">
+              <div class="hime hime-tile--heart" style="max-width: 230px; margin: 0 auto;">
+                <div class="hime-side" style="width: auto; flex: none;">
+                  <div class="hime-widget hime-profile">
+                    <h3>ぷろふぃーる</h3>
+                    <div class="hime-avatar">♡</div>
+                    <div class="hime-profile__name">みゅう</div>
+                    <p class="hime-profile__bio">
+                      17才<span class="hime-emoji hime-emoji--star"></span>
+                      ぉ菓子作りと猫がすき<span class="hime-emoji hime-emoji--heart"></span>
+                      仲良くしてくれる子だいかんげぃ
+                    </p>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>かれんだー</h3>
+                    <table class="hime-cal">
+                      <caption>2008年6月</caption>
+                      <thead>
+                        <tr>
+                          <th class="is-sun">日</th><th>月</th><th>火</th>
+                          <th>水</th><th>木</th><th>金</th><th class="is-sat">土</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="is-sun">1</td><td><a href="#widget">2</a></td><td>3</td>
+                          <td><a href="#widget">4</a></td><td>5</td><td><a href="#widget">6</a></td><td class="is-sat">7</td>
+                        </tr>
+                        <tr>
+                          <td class="is-sun"><a href="#widget">8</a></td><td>9</td><td><a href="#widget">10</a></td>
+                          <td>11</td><td><a href="#widget">12</a></td><td>13</td><td class="is-sat"><a href="#widget">14</a></td>
+                        </tr>
+                        <tr>
+                          <td class="is-sun">15</td><td><a href="#widget">16</a></td><td>17</td>
+                          <td>18</td><td><a href="#widget">19</a></td><td><a href="#widget">20</a></td><td class="is-sat">21</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>さぃきんの記事</h3>
+                    <ul>
+                      <li><a href="#widget">ぉ久しぶりです</a></li>
+                      <li><a href="#widget">新しぃ髪型<span class="hime-emoji hime-emoji--heart"></span></a></li>
+                      <li><a href="#widget">昨日のこと</a></li>
+                    </ul>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>さぃきんのコメント</h3>
+                    <ul>
+                      <li>ゅき ≫ かわぃぃ<span class="hime-emoji hime-emoji--heart"></span></li>
+                      <li>あゃ ≫ 今度あそぼ〜</li>
+                    </ul>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>さぃきんのトラックバック</h3>
+                    <ul>
+                      <li>ぁいのブログ</li>
+                    </ul>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>過去ログ</h3>
+                    <ul>
+                      <li><a href="#widget">2008年6月 (23)</a></li>
+                      <li><a href="#widget">2008年5月 (31)</a></li>
+                      <li><a href="#widget">2008年4月 (28)</a></li>
+                    </ul>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>ぁくせすかうんたー</h3>
+                    <div class="hime-counter">
+                      <span>0</span><span>0</span><span>1</span><span>4</span><span>8</span><span>3</span><span>2</span>
+                    </div>
+                    <p style="margin: 6px 0 0; font-size: 10px; text-align: center;">
+                      あなたゎ 148,832 人目の訪問者です<br />
+                      <span class="hime-c1">キリ番踏んだら<a href="#widget">BBS</a>に報告してね</span><br />
+                      <span class="hime-small">※踏み逃げ禁止※</span>
+                    </p>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>そうごりんく</h3>
+                    <a class="hime-banner" href="#widget">♡ MY BANNER ♡</a>
+                    <a class="hime-banner" href="#widget">☆ ゅきの部屋 ☆</a>
+                    <a class="hime-banner" href="#widget">＊ あゃ's room ＊</a>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>らんきんぐ</h3>
+                    <a class="hime-banner" href="#widget">人気ブログ<br />ランキング</a>
+                    <p style="margin: 4px 0 0; font-size: 10px; text-align: center;">
+                      ポチっとぉねがぃします<span class="hime-emoji hime-emoji--heart"></span>
+                    </p>
+                  </div>
+
+                  <div class="hime-widget">
+                    <h3>ぶろぐぱーつ</h3>
+                    <div class="hime-parts">
+                      <span class="hime-emoji hime-emoji--sparkle"></span><br />
+                      とけぃ／占ぃ／キャラクター<br />
+                      <span class="hime-small">（貼り付けコードを貼るだけ）</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="spec-scroll">
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th>部品</th>
+                  <th>役割と作法</th>
+                  <th>確度</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>カレンダー</th>
+                  <td>投稿がある日付だけリンクになり、押すとその日の記事が開く。更新の途切れが可視化される装置でもあった</td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>プロフィール</th>
+                  <td>アイコン＋ニックネーム＋自己紹介。ブログサービスの標準ウィジェット</td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>アクセスカウンター</th>
+                  <td>「あなたは○○○人目の訪問者です」。訪問のたび素朴に数字が増える</td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>キリ番</th>
+                  <td>
+                    キリの良い番号を踏んだ人が掲示板に<strong>報告</strong>し、管理人が記録・公表する。
+                    <strong>「踏み逃げ禁止」</strong>という慣習があり、イラストサイトでは
+                    踏んだ人がリクエストできる<strong>「キリリク」</strong>へ発展した
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>Web拍手</th>
+                  <td>
+                    押すとカウンタが増え、<strong>管理人が自由に編集した「お礼画面」</strong>が表示される。
+                    匿名コメントも送れた。「いいね」の祖先にあたる
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>88×31 バナー</th>
+                  <td>
+                    相互リンク用の規格サイズ。起源は1995年頃、Netscape 社が配布した
+                    「Netscape Now」バナーがたまたま 88×31 だったこと。Microsoft が追随して一般化し、
+                    Geocities で個人サイトに普及した
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>ランキングバナー</th>
+                  <td>人気ブログランキング／にほんブログ村。IN（バナーが押される）と OUT（経由で巡回される）の二重計測</td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>ブログパーツ</th>
+                  <td>
+                    貼り付けコードをコピーして好きな場所に貼る方式。
+                    時計／ゲーム／天気予報／ニュース／音楽／掲示板／カレンダー／写真／カウンター／キャラクター／占い
+                    というカテゴリで配布されていた
+                  </td>
+                  <td><span class="badge badge--ok">確認済み</span></td>
+                </tr>
+                <tr>
+                  <th>サイドバーの左右</th>
+                  <td>2カラムなら右、3カラムなら両側、と思われるが裏が取れていない</td>
+                  <td><span class="badge badge--guess">推測</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Web拍手の「お礼画面」</h3>
+          <p>
+            単なるカウンタではなく、押した人にだけ見える<strong>2画面目</strong>があった点が重要である。
+            管理人はそこに手書きのお礼、隠し絵、短い日記を置いた。
+            リアクションが<strong>一方向の数値ではなく、返礼を伴う往復</strong>だったことを示している。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">押す前 → 押した後</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div class="hime hime-tile--dot">
+                  <p style="margin: 0 0 8px; text-align: center;">読んでくれてありがとぅ<span class="hime-emoji hime-emoji--heart"></span></p>
+                  <p style="margin: 0; text-align: center;">
+                    <span class="hime-clap">拍手する（1,204）</span>
+                  </p>
+                </div>
+                <div class="hime hime-tile--heart">
+                  <span class="hime-band">＊ ぉ礼画面 ＊</span>
+                  <p style="margin: 0; text-align: center;">
+                    <span class="hime-kirakira">ぁりがとぅ</span><br />
+                    <span class="hime-emoji hime-emoji--sparkle"></span>
+                    <span class="hime-emoji hime-emoji--heart"></span>
+                    <span class="hime-emoji hime-emoji--sparkle"></span><br />
+                    押してくれてすっごく嬉しぃです<br />
+                    <span class="hime-small">また来てね<span class="hime-emoji hime-emoji--ribbon"></span></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="entry">
+          <h2><span class="doc-num">09</span>記事の型</h2>
+          <p>
+            記事は「タイトル帯 → 日時 → 本文 → 区切り線 → 署名 → 拍手／応援 → コメント → トラックバックURL」
+            という順に積まれる。本文そのものより、その前後に付随する<strong>交流のための部品</strong>のほうが
+            種類が多いのが特徴で、読むためではなく<strong>返事をもらうために</strong>設計されている。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">記事1件</div>
+            <div class="preview__stage">
+              <div class="hime hime-tile--heart">
+                <div class="hime-entry" style="max-width: 460px; margin: 0 auto;">
+                  <span class="hime-entry__title">
+                    <span class="hime-emoji hime-emoji--heart"></span>新しぃ髪型にしたょ<span class="hime-emoji hime-emoji--heart"></span>
+                  </span>
+                  <p class="hime-entry__meta">2008/06/20 (金) 22:14 ｜ カテゴリ: <a href="#entry">ぉしゃれ</a></p>
+                  <div class="hime-entry__body">
+                    <p class="hime-indent">
+                      こんばんゎ<span class="hime-emoji hime-emoji--star"></span>
+                      今日ゎ美容院行ってきました<span class="hime-emoji hime-emoji--sparkle"></span>
+                      <span class="hime-c1">ずっと切りたかったから</span>すっごくすっきりした
+                      <span class="hime-emoji hime-emoji--heart"></span>
+                    </p>
+                    <div class="hime-photo hime-photo--purikura">写真</div>
+                    <p class="hime-indent">
+                      どぅかな<span class="hime-c2">似合ってる</span>かなぁ
+                      <span class="hime-emoji hime-emoji--blink"></span>
+                      感想きかせてね<span class="hime-emoji hime-emoji--ribbon"></span>
+                    </p>
+                    <hr class="hime-lace" />
+                    <p class="hime-sign">
+                      <span class="hime-c3">＊ みゅう ＊</span>
+                    </p>
+                  </div>
+                  <div class="hime-entry__foot">
+                    <p style="margin: 0 0 6px;">
+                      <span class="hime-clap">拍手する</span>
+                      　応援ポチっとぉねがぃします<span class="hime-emoji hime-emoji--heart"></span>
+                    </p>
+                    <div class="hime-comment">
+                      <span class="hime-comment__name">ゅき</span>
+                      <span class="hime-comment__date">2008/06/20 23:02</span>
+                      <div>めっちゃかわぃぃ<span class="hime-emoji hime-emoji--heart"></span>似合ってるょ〜</div>
+                    </div>
+                    <div class="hime-comment">
+                      <span class="hime-comment__name">あゃ</span>
+                      <span class="hime-comment__date">2008/06/21 07:41</span>
+                      <div>今度どこの美容院か教えて<span class="hime-emoji hime-emoji--star"></span></div>
+                    </div>
+                    <p style="margin: 8px 0 0;">
+                      この記事のトラックバックURL:<br />
+                      <span class="hime-small">http://example.jp/tb.php/128</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">年代の指標としてのトラックバック</span>
+            <p>
+              トラックバックは2002年に Movable Type が導入したが、2000年代後半にスパムが激増し、
+              忍者ブログが2011年に廃止、楽天ブログも2011年に受信機能を廃止した。
+              <strong>記事下にトラックバックURLが載っていれば2005年前後、消えていれば2011年以降</strong>という、
+              画面から年代を推定できる数少ないマーカーになっている。
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="keitai">
+          <h2><span class="doc-num">10</span>入口ページとホムペ（系統 C）</h2>
+          <p>
+            ブログ以前、あるいはブログと並行して存在したのが「ホムペ」である。
+            魔法のiらんどは機能を<strong>「オブジェクト」</strong>という単位で呼び、
+            ホームページ／ブログ／アルバム／掲示板／プロフィール／編集局（メルマガ）／投票アンケート／読書ログ
+            を組み合わせて自分のページを作る形をとっていた。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">入口 → TOP</div>
+            <div class="preview__stage">
+              <div class="split">
+                <div class="hime hime-tile--dot">
+                  <div class="hime-enter">
+                    <p class="hime-enter__title">Welcome<span class="hime-emoji hime-emoji--sparkle"></span></p>
+                    <p class="hime-enter__lead">
+                      みゅうの部屋へようこそ<span class="hime-emoji hime-emoji--heart"></span><br />
+                      <span class="hime-small">since 2006.04.01</span>
+                    </p>
+                    <a class="hime-enter__link" href="#keitai">→ ENTER →</a>
+                    <p class="hime-enter__notice">
+                      <span class="hime-c1">禁無断転載（バナーを除く）</span><br />
+                      <span class="hime-small">当サイトゎリンクフリーです<br />相互リンク募集中<span class="hime-emoji hime-emoji--heart"></span></span>
+                    </p>
+                    <div class="hime-counter" style="margin-top: 10px;">
+                      <span>0</span><span>0</span><span>1</span><span>4</span><span>8</span><span>3</span><span>2</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="hime hime-tile--heart">
+                  <span class="hime-band">＊ MENU ＊</span>
+                  <ul class="hime-menu">
+                    <li><a href="#keitai">PROFILE ／ ぷろふぃーる</a></li>
+                    <li><a href="#keitai">DIARY ／ にっき</a></li>
+                    <li><a href="#keitai">BBS ／ けぃじばん</a></li>
+                    <li><a href="#keitai">ALBUM ／ ぁるばむ</a></li>
+                    <li><a href="#keitai">LINK ／ りんく</a></li>
+                    <li><a href="#keitai">MAIL ／ めーる</a></li>
+                  </ul>
+                  <hr class="hime-heartline" />
+                  <p style="margin: 0; font-size: 10px; text-align: center;">
+                    素材ゎ<a href="#keitai">＊素材屋さん＊</a>からお借りしてます
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">入口ページは機能ではなく様式だった</span>
+            <p>
+              入口を <code>index.html</code>、実体を <code>top.html</code> に分ける構成は広く共有されていたが、
+              実際には多くの訪問者が <code>top.html</code> を直接ブックマークしていた。
+              当事者の証言によれば、<strong>入口を分ける意味は「カッコ良いから」以外に無かった</strong>。
+              機能ではなく作法として継承された様式であり、
+              この文化のかなりの部分が同じ性質を持っている。
+            </p>
+          </div>
+
+          <h3>「禁無断転載（バナーを除く）」</h3>
+          <p>
+            転載を禁じつつ、<strong>相互リンク用のバナーだけは例外とする</strong>但し書きが定型だった。
+            自分の作ったものは守りたい、しかし繋がりは広げたい ——
+            分散型の個人サイト網が成立していた時代の力学が、この一行に凝縮されている。
+          </p>
+        </section>
+
+        <section class="doc-section" id="demo">
+          <h2><span class="doc-num">11</span>総合デモ</h2>
+          <p>
+            ここまでの部品を、系統 A の 760px 固定幅ページとして一枚に組み上げたもの。
+            狭い画面では横スクロールする ——
+            <strong>当時のページが可変幅を前提にしていなかったことの、そのままの帰結である</strong>。
+          </p>
+
+          <div class="preview">
+            <div class="preview__bar">系統A / 760px 固定 / 2カラム</div>
+            <div class="preview__stage">
+              <div class="hime-scroller">
+                <div class="hime hime-tile--heart hime-tile--fixed" style="padding: 0;">
+                  <div class="hime-page">
+                    <div class="hime-header">
+                      <h1>♡ みゅうの部屋 ♡</h1>
+                      <p>ぉ菓子と猫とキラキラしたものが好きです</p>
+                    </div>
+                    <div class="hime-globalnav">
+                      <a href="#demo">HOME</a>｜<a href="#demo">ぷろふ</a>｜<a href="#demo">にっき</a>｜<a href="#demo">BBS</a>｜<a href="#demo">りんく</a>｜<a href="#demo">めーる</a>
+                    </div>
+
+                    <div class="hime-marquee" style="margin: 8px 10px 0;">
+                      <span>
+                        <span class="hime-emoji hime-emoji--sparkle"></span>
+                        ぃらっしゃぃませ<span class="hime-emoji hime-emoji--heart"></span>
+                        6/20 にっき更新しました<span class="hime-emoji hime-emoji--star"></span>
+                        相互リンク募集中です<span class="hime-emoji hime-emoji--ribbon"></span>
+                        コメントもらぇると嬉しぃです<span class="hime-emoji hime-emoji--heart"></span>
+                      </span>
+                    </div>
+
+                    <div class="hime-cols">
+                      <div class="hime-main">
+                        <div class="hime-entry">
+                          <span class="hime-entry__title">
+                            <span class="hime-emoji hime-emoji--heart"></span>新しぃ髪型にしたょ<span class="hime-emoji hime-emoji--heart"></span>
+                          </span>
+                          <p class="hime-entry__meta">2008/06/20 (金) 22:14 ｜ カテゴリ: <a href="#demo">ぉしゃれ</a></p>
+                          <div class="hime-entry__body">
+                            <p class="hime-indent">
+                              こんばんゎ<span class="hime-emoji hime-emoji--star"></span>
+                              今日ゎ美容院行ってきました<span class="hime-emoji hime-emoji--sparkle"></span>
+                              <span class="hime-c1">ずっと切りたかったから</span>すっごくすっきりした<span class="hime-emoji hime-emoji--heart"></span>
+                            </p>
+                            <div class="hime-photo hime-photo--purikura">写真</div>
+                            <p class="hime-indent">
+                              どぅかな<span class="hime-c2">似合ってる</span>かなぁ<span class="hime-emoji hime-emoji--blink"></span>
+                              感想きかせてね<span class="hime-emoji hime-emoji--ribbon"></span>
+                            </p>
+                            <hr class="hime-lace" />
+                            <p class="hime-sign"><span class="hime-c3">＊ みゅう ＊</span></p>
+                          </div>
+                          <div class="hime-entry__foot">
+                            <p style="margin: 0;">
+                              <span class="hime-clap">拍手する</span>　コメント(2)　
+                              <a href="#demo">この記事のURL</a>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div class="hime-entry">
+                          <span class="hime-entry__title">
+                            <span class="hime-emoji hime-emoji--star"></span>ぉ久しぶりです<span class="hime-emoji hime-emoji--star"></span>
+                          </span>
+                          <p class="hime-entry__meta">2008/06/16 (月) 19:33 ｜ カテゴリ: <a href="#demo">にちじょう</a></p>
+                          <div class="hime-entry__body">
+                            <p class="hime-indent">
+                              最近ずっとバタバタしてて<span class="hime-emoji hime-emoji--sparkle"></span>
+                              全然更新できてなかった<span class="hime-emoji hime-emoji--heart"></span>ごめんね
+                            </p>
+                            <p class="hime-indent">
+                              <span class="hime-c4">でもね</span><span class="hime-emoji hime-emoji--blink"></span>
+                              今日ゎぃぃ報告がぁります<span class="hime-emoji hime-emoji--heart"></span>
+                              <a href="#demo">≫ 続きを読む</a>
+                            </p>
+                            <hr class="hime-heartline" />
+                            <p class="hime-sign"><span class="hime-c3">＊ みゅう ＊</span></p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="hime-side">
+                        <div class="hime-widget hime-profile">
+                          <h3>ぷろふぃーる</h3>
+                          <div class="hime-avatar">♡</div>
+                          <div class="hime-profile__name">みゅう</div>
+                          <p class="hime-profile__bio">
+                            17才<span class="hime-emoji hime-emoji--star"></span>仲良くしてくれる子だいかんげぃ<span class="hime-emoji hime-emoji--heart"></span>
+                          </p>
+                        </div>
+
+                        <div class="hime-widget">
+                          <h3>かれんだー</h3>
+                          <table class="hime-cal">
+                            <caption>2008年6月</caption>
+                            <thead>
+                              <tr>
+                                <th class="is-sun">日</th><th>月</th><th>火</th>
+                                <th>水</th><th>木</th><th>金</th><th class="is-sat">土</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td class="is-sun">1</td><td><a href="#demo">2</a></td><td>3</td>
+                                <td><a href="#demo">4</a></td><td>5</td><td><a href="#demo">6</a></td><td class="is-sat">7</td>
+                              </tr>
+                              <tr>
+                                <td class="is-sun"><a href="#demo">8</a></td><td>9</td><td><a href="#demo">10</a></td>
+                                <td>11</td><td><a href="#demo">12</a></td><td>13</td><td class="is-sat"><a href="#demo">14</a></td>
+                              </tr>
+                              <tr>
+                                <td class="is-sun">15</td><td><a href="#demo">16</a></td><td>17</td>
+                                <td>18</td><td><a href="#demo">19</a></td><td><a href="#demo">20</a></td><td class="is-sat">21</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div class="hime-widget">
+                          <h3>さぃきんの記事</h3>
+                          <ul>
+                            <li><a href="#demo">新しぃ髪型にしたょ</a></li>
+                            <li><a href="#demo">ぉ久しぶりです</a></li>
+                            <li><a href="#demo">昨日のこと</a></li>
+                          </ul>
+                        </div>
+
+                        <div class="hime-widget">
+                          <h3>ぁくせすかうんたー</h3>
+                          <div class="hime-counter">
+                            <span>0</span><span>0</span><span>1</span><span>4</span><span>8</span><span>3</span><span>2</span>
+                          </div>
+                          <p style="margin: 6px 0 0; font-size: 10px; text-align: center;">
+                            <span class="hime-c1">キリ番報告してね</span><br />
+                            <span class="hime-small">※踏み逃げ禁止※</span>
+                          </p>
+                        </div>
+
+                        <div class="hime-widget">
+                          <h3>そうごりんく</h3>
+                          <a class="hime-banner" href="#demo">♡ MY BANNER ♡</a>
+                          <a class="hime-banner" href="#demo">☆ ゅきの部屋 ☆</a>
+                        </div>
+
+                        <div class="hime-widget">
+                          <h3>ぶろぐぱーつ</h3>
+                          <div class="hime-parts">
+                            <span class="hime-emoji hime-emoji--sparkle"></span><br />
+                            とけぃ／占ぃ
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="preview__note">
+            サイドバーが本文より長い、動くものが同時に複数ある、余白がほとんど無い。
+            現代の基準では欠点として数えられる性質が、ここではすべて<strong>豊かさの表現</strong>として機能している。
+          </p>
+        </section>
+
+        <section class="doc-section" id="timeline">
+          <h2><span class="doc-num">12</span>年表</h2>
+          <p>
+            この視覚言語には、はっきりした始まりと終わりがある。
+            そしてその両端を決めたのは美意識ではなく、<strong>回線と端末の都合</strong>だった。
+          </p>
+
+          <div class="spec-scroll">
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th>時期</th>
+                  <th>出来事</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>1999年12月</th>
+                  <td>魔法のiらんど開始。最盛期には月間33億PV／約600万ユーザーに達する</td>
+                </tr>
+                <tr>
+                  <th>2003年〜</th>
+                  <td>QVGA（240×320）が携帯の主流に。以後「横240px」がレイアウトの絶対的制約になる</td>
+                </tr>
+                <tr>
+                  <th>2004年</th>
+                  <td>
+                    <strong>NTTドコモがパケット定額制を開始</strong>。「パケ死」の恐怖が消え、
+                    画像を大量に読み込む重いページが成立可能になった。
+                    装飾文化を成立させた最大の前提条件
+                  </td>
+                </tr>
+                <tr>
+                  <th>2004年</th>
+                  <td>前略プロフィール開始。アメブロ開始（9月15日）</td>
+                </tr>
+                <tr>
+                  <th>2005年</th>
+                  <td>
+                    CROOZブログ開始。運営会社自身が、ページを<strong>「デコって」</strong>
+                    カスタマイズしたい若い女性に受けたと説明している
+                  </td>
+                </tr>
+                <tr>
+                  <th>2006年頃</th>
+                  <td>ギャルにとってのカリスマが芸能人から<strong>読者モデル</strong>へ移行する</td>
+                </tr>
+                <tr>
+                  <th>2007年2月</th>
+                  <td><strong>デコログ開始</strong>。姫系ギャルブログの本丸</td>
+                </tr>
+                <tr>
+                  <th>2008年10月</th>
+                  <td>デコログ、ブログ開設数200万件超・月間60億PV。ブログ発の雑誌『DECOLOG PAPER』も創刊</td>
+                </tr>
+                <tr>
+                  <th>2010年3月</th>
+                  <td>デコログ月間53億8900万PV。ユーザーの約90%が10代後半〜20代前半の女性</td>
+                </tr>
+                <tr>
+                  <th>2011年前後</th>
+                  <td>
+                    <strong>スマートフォンへの移行が本格化</strong>。画面幅が240pxから解放され、
+                    cHTML とデコメ素材という技術的前提そのものが消滅する
+                  </td>
+                </tr>
+                <tr>
+                  <th>2016年9月</th>
+                  <td>前略プロフィール終了（14年）</td>
+                </tr>
+                <tr>
+                  <th>2020年3月</th>
+                  <td>魔法のiらんど、ホームページ機能・ブログ機能を終了</td>
+                </tr>
+                <tr>
+                  <th>2022年5月</th>
+                  <td>CROOZブログ終了。累計500万人以上・30億件以上の記事</td>
+                </tr>
+                <tr>
+                  <th>2023年8月</th>
+                  <td><strong>デコログ、ブログ機能終了。翌月以降データを削除</strong>。約16年半の歴史が閉じる</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">なぜ消えたのか</span>
+            <p>
+              この様式は<strong>ガラケーの制約と一体だった</strong>。
+              横240px、キャリアごとに非互換な絵文字、表現力の乏しい cHTML。
+              その窮屈さのなかで最大限に自分を飾るための技法として、
+              20×20pxの画像を文中に散らし、袋文字で可読性を確保し、
+              壁紙を敷き詰める作法が磨かれた。
+            </p>
+            <p>
+              スマートフォンが制約を取り払ったとき、技法を支えていた必然も同時に消えた。
+              その後、表現の場は Instagram や Twitter へ移り、
+              ブロガールズのような書き手はそのままインフルエンサー業へ接続していった。
+            </p>
+          </div>
+
+          <div class="callout">
+            <span class="callout__label">そして資料が残っていない</span>
+            <p>
+              デコログも CROOZブログも、サービス終了にあたって<strong>データを完全に削除している</strong>。
+              つまりこの文化の一次資料は、現在ほぼ Internet Archive のスナップショットにしか存在しない。
+              当時を知る人の記憶と、断片的な報道と、消え残ったアーカイブ。
+              このページもまた、そうした二次資料の上に建てられた再構成にすぎない。
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="sources">
+          <h2><span class="doc-num">13</span>出典と、この再現の限界</h2>
+
+          <div class="callout">
+            <span class="callout__label">重要</span>
+            <p>
+              <strong>この調査では、当時のページを一枚も直接開いていない。</strong>
+              作業環境のネットワークが外部サイトへの直接アクセスを遮断しており
+              （Wikipedia すら取得できなかった）、利用できたのは検索エンジンが返す要約のみだった。
+            </p>
+            <p>
+              したがって<strong>ここに載せた HEX 値・寸法・レイアウトは、
+              文章による記述から組み直したものであり、実物からの実測値ではない</strong>。
+              各項目に付けた <span class="badge badge--ok">確認済み</span> は
+              「検索要約に明示的な記述があった」という意味であって、
+              「一次資料を自分の目で確かめた」という意味ではない。
+            </p>
+          </div>
+
+          <h3>とくに確度が低い項目</h3>
+          <ul>
+            <li>
+              <strong>「姫ブロ」という語そのもの</strong> ——
+              2000年代当時の用例を確認できなかった。当事者間の口語か、後年の回顧的な呼び方の可能性が高い
+            </li>
+            <li><strong>色の HEX 値</strong> —— 確定値は <code>#ffc0cb</code> と <code>#f5e2db</code> のみ。他はすべて再構成</li>
+            <li><strong>本文フォント</strong> —— MS Pゴシック等の具体的な指定は裏が取れていない</li>
+            <li><strong>サイドバーの左右配置、ヘッダー画像の様式、点滅・マーキーの実使用頻度</strong></li>
+            <li><strong>ヒョウ柄・ダマスク柄・ティアラ</strong> —— 姫系の語彙としては連想的で、一次資料での確認は取れていない</li>
+            <li><strong>PV等の数値</strong> —— 60億PVと53億PVで集計方法が異なる可能性がある</li>
+          </ul>
+
+          <h3>次にやるべきこと</h3>
+          <p>
+            ネットワーク制限のない環境で <strong>Internet Archive の Wayback Machine</strong> から
+            <code>dclog.jp</code>／<code>blog.crooz.jp</code>／<code>id.maho.jp</code> の
+            2008〜2011年頃のスナップショットを取得すれば、実際の HTML 構造・class 名・
+            table の入れ子・画像サイズ・そして本物の色が一次資料として確定できる。
+            記事URLの形式（<code>dclog.jp/{user}/{article_id}</code>）が判明しているため、
+            CDX API から URL 一覧を引くのが最短経路になる。
+          </p>
+
+          <h3>主要な出典</h3>
+          <ol>
+            <li>MMD研究所／Web担当者Forum — DECOLOG 月間53億8900万PV のプレスリリース（2010年4月）</li>
+            <li>シブヤ経済新聞 — デコログ200万件・月間60億PV、DECOLOG PAPER 創刊</li>
+            <li>ミツバチワークス — Decolog ブログ機能終了のお知らせ（2023年8月）</li>
+            <li>クルーズ株式会社 — CROOZ Blog サービス終了のお知らせ（「デコって」の一次表現）</li>
+            <li>ITmedia NEWS — 「10代女子は"ホムペ作り"に夢中」（2006年12月、当時の一次報道）</li>
+            <li>ITmedia NEWS — 前略プロフ終了（2016年8月）</li>
+            <li>Wikipedia — ギャル文字／デコメール／パケ・ホーダイ／魔法のiらんど／トラックバック</li>
+            <li>ピクシブ百科事典・FreeGif — デコメ絵文字の規格（20×20px GIF）</li>
+            <li>サイボウズラボ — 88×31 バナーの起源（Netscape Now、1995年）</li>
+            <li>webclap.com・Web拍手の解説記事 — お礼画面の仕組み</li>
+            <li>FC2ブログ公式マニュアル — サイドバープラグイン一覧（カレンダー等）</li>
+            <li>ギャルチャー — 姫系ギャル、ブロガールズ、カリスマギャルの変遷</li>
+            <li>ニシザワのブログ — 『小悪魔ageha』誌面分析（「デコる技術」「全ページまぶしい」）</li>
+            <li>はなログ、デイリーポータルZ、note 各記事 — 個人サイト／ホムペ文化の当事者証言</li>
+            <li>qooker.jp、symmetric.jp — ガラケーの画像幅240px、QVGA 240×320、iモード内部解像度240×325</li>
+          </ol>
+        </section>
+      </main>
+
+      <footer class="doc-footer">
+        <p>
+          このページの装飾はすべて、当時の配布素材を使わずインライン SVG と CSS で作り直している。
+          登場する人物名・ブログ名・写真はすべて架空のもので、実在のブログや個人とは関係がない。
+        </p>
+        <p>
+          文字装飾・点滅・スクロールは <code>prefers-reduced-motion</code> を尊重する。
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -302,6 +302,8 @@ code {
 
 .spec {
   width: 100%;
+  /* 狭い画面では列を潰さず、.spec-scroll 側で横スクロールさせる */
+  min-width: 540px;
   margin: 18px 0;
   border-collapse: collapse;
   font-size: 14px;
@@ -338,6 +340,7 @@ code {
 
 .spec-scroll {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 /* ---------- 補足ブロック ---------- */
@@ -466,4 +469,54 @@ code {
 .doc-footer li {
   margin-bottom: 6px;
   overflow-wrap: anywhere;
+}
+
+/* ---------- 確度バッジ ---------- */
+/*
+ * 調査環境の制約で一次情報に当たれなかった項目が多いため、
+ * 記述ごとに裏取りの有無を明示する。
+ */
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-family: var(--doc-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.badge--ok {
+  color: #2f7d4f;
+}
+
+.badge--guess {
+  color: #a8763a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .badge--ok {
+    color: #6dd898;
+  }
+
+  :root:not([data-theme='light']) .badge--guess {
+    color: #e0b070;
+  }
+}
+
+:root[data-theme='dark'] .badge--ok {
+  color: #6dd898;
+}
+
+:root[data-theme='dark'] .badge--guess {
+  color: #e0b070;
+}
+
+.spec td .badge {
+  margin-right: 6px;
 }
