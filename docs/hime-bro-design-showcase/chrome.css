@@ -1,0 +1,469 @@
+/*
+ * chrome.css — ショーケースの「外枠」。
+ * 解説文・見出し・仕様表など、ドキュメントとして読ませる側のスタイル。
+ * 調査対象そのものの意匠は specimen.css 側に隔離している。
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --doc-bg: #fbfbfa;
+  --doc-surface: #ffffff;
+  --doc-surface-sunken: #f4f4f2;
+  --doc-border: #e2e2dd;
+  --doc-border-strong: #c9c9c2;
+  --doc-text: #1c1c1a;
+  --doc-text-muted: #6b6b64;
+  --doc-text-faint: #93938b;
+  --doc-accent: #7a2f52;
+  --doc-accent-soft: #f3e6ec;
+
+  --doc-font: ui-sans-serif, system-ui, -apple-system, 'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
+  --doc-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --doc-radius: 10px;
+  --doc-radius-sm: 6px;
+  --doc-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px -12px rgb(0 0 0 / 14%);
+
+  --doc-measure: 74ch;
+  --doc-gutter: clamp(16px, 4vw, 40px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --doc-bg: #14140f;
+    --doc-surface: #1c1c18;
+    --doc-surface-sunken: #232320;
+    --doc-border: #33332d;
+    --doc-border-strong: #4a4a42;
+    --doc-text: #eeeee8;
+    --doc-text-muted: #a3a39a;
+    --doc-text-faint: #7c7c73;
+    --doc-accent: #f0a8c6;
+    --doc-accent-soft: #3a2430;
+    --doc-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+  }
+}
+
+:root[data-theme='dark'] {
+  --doc-bg: #14140f;
+  --doc-surface: #1c1c18;
+  --doc-surface-sunken: #232320;
+  --doc-border: #33332d;
+  --doc-border-strong: #4a4a42;
+  --doc-text: #eeeee8;
+  --doc-text-muted: #a3a39a;
+  --doc-text-faint: #7c7c73;
+  --doc-accent: #f0a8c6;
+  --doc-accent-soft: #3a2430;
+  --doc-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  font-family: var(--doc-font);
+  font-size: 16px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- レイアウト ---------- */
+
+.doc-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1180px;
+  margin-inline: auto;
+  padding: 0 var(--doc-gutter) 120px;
+}
+
+@media (width >= 1000px) {
+  .doc-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+}
+
+.doc-nav {
+  display: none;
+}
+
+@media (width >= 1000px) {
+  .doc-nav {
+    display: block;
+    position: sticky;
+    top: 32px;
+    padding-top: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.doc-nav__title {
+  margin: 0 0 12px;
+  color: var(--doc-text-faint);
+  font-family: var(--doc-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.doc-nav__list {
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--doc-border);
+  list-style: none;
+}
+
+.doc-nav__list a {
+  display: block;
+  padding: 5px 0 5px 14px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--doc-text-muted);
+  text-decoration: none;
+}
+
+.doc-nav__list a:hover {
+  border-left-color: var(--doc-accent);
+  color: var(--doc-text);
+}
+
+/* ---------- ヘッダー ---------- */
+
+.doc-header {
+  grid-column: 1 / -1;
+  padding: clamp(48px, 9vw, 96px) 0 clamp(32px, 6vw, 64px);
+  border-bottom: 1px solid var(--doc-border);
+  margin-bottom: clamp(40px, 7vw, 72px);
+}
+
+.doc-header__eyebrow {
+  margin: 0 0 18px;
+  color: var(--doc-accent);
+  font-family: var(--doc-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.doc-header h1 {
+  max-width: 20ch;
+  margin: 0 0 20px;
+  font-size: clamp(30px, 6vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.doc-header__lede {
+  max-width: var(--doc-measure);
+  margin: 0;
+  color: var(--doc-text-muted);
+  font-size: clamp(16px, 2.2vw, 18px);
+}
+
+/* ---------- セクション ---------- */
+
+.doc-section {
+  margin-bottom: clamp(56px, 9vw, 96px);
+  scroll-margin-top: 24px;
+}
+
+.doc-section > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0 0 8px;
+  font-size: clamp(22px, 3.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.doc-section > h2 .doc-num {
+  flex: none;
+  color: var(--doc-text-faint);
+  font-family: var(--doc-font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.doc-section > h3 {
+  margin: 44px 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.doc-section p {
+  max-width: var(--doc-measure);
+}
+
+.doc-section p,
+.doc-section li {
+  color: var(--doc-text-muted);
+}
+
+.doc-section strong {
+  color: var(--doc-text);
+  font-weight: 600;
+}
+
+.doc-section a {
+  color: var(--doc-accent);
+  text-underline-offset: 3px;
+}
+
+code {
+  padding: 0.15em 0.45em;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface-sunken);
+  color: var(--doc-text);
+  font-family: var(--doc-font-mono);
+  font-size: 0.86em;
+}
+
+/* ---------- プレビュー枠 ---------- */
+/* 調査対象の意匠は必ずこの枠の中に閉じ込める。枠自体は中立な見た目を保つ。 */
+
+.preview {
+  margin: 20px 0 8px;
+  border: 1px solid var(--doc-border-strong);
+  border-radius: var(--doc-radius);
+  background: var(--doc-surface);
+  box-shadow: var(--doc-shadow);
+  overflow: hidden;
+}
+
+.preview__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--doc-border);
+  background: var(--doc-surface-sunken);
+  color: var(--doc-text-faint);
+  font-family: var(--doc-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preview__bar::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--doc-border-strong);
+}
+
+.preview__stage {
+  padding: 24px;
+  background: var(--doc-surface-sunken);
+}
+
+/* モバイル実機幅での見え方を再現するステージ */
+.preview__stage--device {
+  display: flex;
+  justify-content: center;
+  padding: 28px 16px;
+}
+
+.device {
+  width: 100%;
+  max-width: 375px;
+  border: 1px solid var(--doc-border-strong);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.preview__note {
+  max-width: var(--doc-measure);
+  margin: 10px 0 0;
+  color: var(--doc-text-faint);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* ---------- 仕様表 ---------- */
+
+.spec {
+  width: 100%;
+  margin: 18px 0;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.spec th,
+.spec td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--doc-border);
+  vertical-align: top;
+}
+
+.spec thead th {
+  border-bottom: 1px solid var(--doc-border-strong);
+  color: var(--doc-text-faint);
+  font-family: var(--doc-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.spec tbody th {
+  color: var(--doc-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.spec td {
+  color: var(--doc-text-muted);
+}
+
+.spec-scroll {
+  overflow-x: auto;
+}
+
+/* ---------- 補足ブロック ---------- */
+
+.callout {
+  max-width: var(--doc-measure);
+  padding: 16px 18px;
+  border: 1px solid var(--doc-border);
+  border-left: 3px solid var(--doc-accent);
+  border-radius: 0 var(--doc-radius-sm) var(--doc-radius-sm) 0;
+  margin: 22px 0;
+  background: var(--doc-accent-soft);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.callout p {
+  margin: 0;
+  color: var(--doc-text);
+}
+
+.callout p + p {
+  margin-top: 10px;
+}
+
+.callout__label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--doc-accent);
+  font-family: var(--doc-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---------- 色見本 ---------- */
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.swatch {
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-radius-sm);
+  background: var(--doc-surface);
+  overflow: hidden;
+}
+
+.swatch__chip {
+  height: 68px;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.swatch__meta {
+  padding: 10px 12px;
+}
+
+.swatch__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.swatch__value {
+  display: block;
+  margin-top: 3px;
+  color: var(--doc-text-faint);
+  font-family: var(--doc-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.swatch__role {
+  display: block;
+  margin-top: 7px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ---------- 対比用の2カラム ---------- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin: 22px 0;
+}
+
+@media (width >= 760px) {
+  .split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.split > * {
+  margin: 0;
+}
+
+/* ---------- フッター ---------- */
+
+.doc-footer {
+  grid-column: 1 / -1;
+  padding-top: 32px;
+  border-top: 1px solid var(--doc-border);
+  color: var(--doc-text-faint);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.doc-footer a {
+  color: var(--doc-text-muted);
+}
+
+.doc-footer ol {
+  max-width: var(--doc-measure);
+  padding-left: 1.3em;
+}
+
+.doc-footer li {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
