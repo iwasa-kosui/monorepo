@@ -40,6 +40,48 @@ const setup = async (revision: string | undefined = identity.main_sha) => {
 };
 const command = (op: string, extra = {}) => ({ op, ...identity, ...extra });
 describe('source control', () => {
+  it.each([false, true])(
+    'retains HTTP work until pending body cancellation settles (reject: %s)',
+    async (rejectCancel) => {
+      const { control } = await setup();
+      const cleanup = Promise.withResolvers<void>();
+      const cancellationStarted = Promise.withResolvers<void>();
+      const response = await control.fetch(async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancellationStarted.resolve();
+              return cleanup.promise;
+            },
+          }),
+        )
+      );
+      const reader = response.body!.getReader();
+      const pendingRead = reader.read();
+      await control.command(command('freeze'));
+      let cancellationSettled = false;
+      const cancelling = reader.cancel().then(
+        () => {
+          cancellationSettled = true;
+          return 'resolved';
+        },
+        () => {
+          cancellationSettled = true;
+          return 'rejected';
+        },
+      );
+      await cancellationStarted.promise;
+      expect(await pendingRead).toEqual({ done: true, value: undefined });
+      expect(cancellationSettled).toBe(false);
+      expect((await control.command(command('status'))).http_inflight).toBe(1);
+      await expect(control.command(command('drain', { timeout_ms: 10 }))).rejects.toThrow('drain_timeout');
+      if (rejectCancel) cleanup.reject(new Error('cleanup_failed'));
+      else cleanup.resolve();
+      expect(await cancelling).toBe(rejectCancel ? 'rejected' : 'resolved');
+      expect((await control.command(command('status'))).http_inflight).toBe(0);
+      expect((await control.command(command('drain', { timeout_ms: 100 }))).drained).toBe(true);
+    },
+  );
   it('bounds a drain even if the database depth query never settles', async () => {
     const { control, queue } = await setup();
     await control.command(command('freeze'));

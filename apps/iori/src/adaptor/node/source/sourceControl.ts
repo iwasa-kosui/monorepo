@@ -116,20 +116,26 @@ export class SourceControl {
         return response;
       }
       const reader = response.body.getReader();
+      let cancelling = false;
       const body = new ReadableStream<Uint8Array>({
         async pull(controller) {
           try {
             const { value, done } = await reader.read();
+            // cancel() resolves pending reads before asynchronous source cleanup finishes.
+            // Once cancellation starts, only its finally block owns request release.
+            if (cancelling) return;
             if (done) {
               controller.close();
               release();
             } else controller.enqueue(value);
           } catch (error) {
+            if (cancelling) return;
             controller.error(error);
             release();
           }
         },
         async cancel(reason) {
+          cancelling = true;
           try {
             await reader.cancel(reason);
           } finally {
