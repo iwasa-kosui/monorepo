@@ -15,6 +15,7 @@ import type {
 } from '../../../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import { Username } from '../../../domain/user/username.ts';
+import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
   actorsTable,
@@ -58,7 +59,7 @@ export const createD1TimelineItemsResolverByActorIds = (
           : and(eq(likesTable.postId, postsTable.postId), eq(likesTable.actorId, currentActorId)),
       )
       .where(and(
-        inArray(timelineItemsTable.actorId, actorIds),
+        inArray(timelineItemsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         isNull(timelineItemsTable.deletedAt),
         createdAt === undefined ? undefined : lt(timelineItemsTable.createdAt, new Date(createdAt)),
       ))
