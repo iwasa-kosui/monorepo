@@ -34,6 +34,7 @@ import {
   createManifestExpectedProvider,
   verifyCloudflareImportWithProviders,
 } from './verify-cloudflare-import.mjs';
+import { workflowTimeBudget } from './workflow-context.mjs';
 
 export const executionReservationKey = (input) => {
   const { identity: i } = parseExpectedTarget(input);
@@ -59,9 +60,13 @@ export const executeProtectedMigration = async (options) => {
   const rehearsal = parseMigrationRehearsal(options.rehearsal, target.identity.main_sha);
   await assertExternalMigrationRoot(root);
   if ((await readdir(root)).length) throw new Error('Migration requires an empty private root.');
+  const deadlineMs = options.deadlineMs ?? MIGRATION_DEADLINE_MS;
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > MIGRATION_DEADLINE_MS) {
+    throw new Error('Invalid migration deadline.');
+  }
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
-  const timer = setTimeout(() => controller.abort(new Error('Migration deadline exceeded.')), MIGRATION_DEADLINE_MS);
+  const timer = setTimeout(() => controller.abort(new Error('Migration deadline exceeded.')), deadlineMs);
   const started = performance.now();
   const checkBudget = async () => {
     signal.throwIfAborted();
@@ -72,7 +77,7 @@ export const executeProtectedMigration = async (options) => {
       estimate,
       rehearsal,
       availableBytes: await (options.availableBytes ?? freeBytes)(root),
-      remainingMs: MIGRATION_DEADLINE_MS - (performance.now() - started),
+      remainingMs: deadlineMs - (performance.now() - started),
     });
   };
   const initialHash = targetHash(`${target.identity.main_sha}:${target.identity.run_id}`);
@@ -281,6 +286,10 @@ export const executeProtectedMigration = async (options) => {
 };
 
 const main = async (cliSignal) => {
+  const deadlineMs = process.env.IORI_JOB_STARTED_AT
+    ? workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT)).remainingMs
+    : MIGRATION_DEADLINE_MS;
+  const deadlineAt = Date.now() + deadlineMs;
   const expectedTarget = await loadExpectedTarget(process.env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
   if (
     process.env.MAIN_SHA !== expectedTarget.identity.main_sha
@@ -320,7 +329,7 @@ const main = async (cliSignal) => {
     runId: expectedTarget.identity.run_id,
   });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MIGRATION_DEADLINE_MS);
+  const timer = setTimeout(() => controller.abort(), Math.max(1, deadlineAt - Date.now()));
   const signal = AbortSignal.any([cliSignal, controller.signal]);
   try {
     const storage = transferStorageFromEnvironment(process.env, targetIdentity(expectedTarget), false, signal);
@@ -344,6 +353,7 @@ const main = async (cliSignal) => {
       }),
     );
     await executeProtectedMigration({
+      deadlineMs: deadlineAt - Date.now(),
       expectedTarget,
       root,
       receiptPublicKey,

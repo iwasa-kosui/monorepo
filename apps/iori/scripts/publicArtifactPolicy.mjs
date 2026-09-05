@@ -8,7 +8,7 @@ const fixtureBackendSensitiveDirective =
   /^\s*(?:[a-z0-9_]*endpoint[a-z0-9_]*|[a-z0-9_]*access_key[a-z0-9_]*|[a-z0-9_]*secret_key[a-z0-9_]*|[a-z0-9_]*(?:token|password)[a-z0-9_]*)\s*=/im;
 
 const fixtureBackendSetting =
-  /^(?:bucket\s*=\s*"iori-terraform-state-fixture"|key\s*=\s*"apps\/iori\/cloudflare\/(?:staging|production)\.tfstate"|region\s*=\s*"auto")$/;
+  /^(?:bucket\s*=\s*"iori-terraform-state-fixture"|key\s*=\s*"iori\/(?:staging|production)\/fixture1\/terraform\.tfstate"|region\s*=\s*"auto")$/;
 
 const hasUnsafeFixtureBackendContent = (text) =>
   fixtureBackendSensitiveDirective.test(text)

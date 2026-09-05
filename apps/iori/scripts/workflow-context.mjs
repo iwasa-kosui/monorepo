@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const parseWorkflowInvocation = (env) => {
@@ -43,11 +43,16 @@ export const createWorkflowDirectory = async (runnerTemp) => {
   if (!stat.isDirectory() || stat.uid !== process.getuid?.()) throw new Error('Invalid runner temporary directory.');
   const base = await mkdtemp(join(parent, 'iori-private-'));
   const paths = { base };
-  for (const name of ['keys', 'config', 'logs', 'state', 'tmp', 'root']) {
-    paths[name] = join(base, name);
-    await mkdir(paths[name], { mode: 0o700 });
+  try {
+    for (const name of ['keys', 'config', 'logs', 'state', 'tmp', 'root']) {
+      paths[name] = join(base, name);
+      await mkdir(paths[name], { mode: 0o700 });
+    }
+    return paths;
+  } catch (error) {
+    await rm(base, { recursive: true, force: true });
+    throw error;
   }
-  return paths;
 };
 
 export const writePrivateValue = async (directory, name, value) => {

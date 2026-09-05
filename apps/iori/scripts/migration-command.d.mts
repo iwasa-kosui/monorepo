@@ -7,6 +7,7 @@ export function runMigrationCommand(
     timeout: number;
     maxBuffer: number;
     signal?: AbortSignal;
+    captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void>;
     killGraceMs?: number;
     input?: string | Uint8Array;
   },

@@ -1,8 +1,9 @@
 import type { KeyObject } from 'node:crypto';
-import type { ExpectedTarget, PreparationRecord } from './migration-target-contract.mjs';
+
 import type { MigrationRehearsal } from './migration-budget.mjs';
 import type { MigrationStorage } from './migration-bundle.mjs';
 import type { MigrationObjectWriter } from './migration-r2-writer.mjs';
+import type { ExpectedTarget, PreparationRecord } from './migration-target-contract.mjs';
 import type { createSourceSshAdapter } from './source-control-ssh.mjs';
 import type { createCloudflareImportProvider } from './verify-cloudflare-import.mjs';
 export type ExecutorOptions = {
@@ -16,6 +17,7 @@ export type ExecutorOptions = {
   bucket: MigrationObjectWriter;
   actualProvider: ReturnType<typeof createCloudflareImportProvider>;
   signal?: AbortSignal;
+  deadlineMs?: number;
   maxSqlFileBytes?: number;
   availableBytes?(root: string): Promise<number | bigint>;
   readTarget(

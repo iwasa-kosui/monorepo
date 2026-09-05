@@ -65,6 +65,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -93,19 +95,35 @@ jobs:
           }
           run_guarded pnpm --silent --filter iori run typecheck
           run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap src/worker.task7.test.ts src/worker.task8.test.ts src/smokeWorker.test.ts
-          export WORKER_NAME="iori-worker-fixture"
+          export WORKER_NAME="iori-staging-fixture1"
           export ACCOUNT_ID="$(printf '%032d' 0)"
           export D1_DATABASE_ID="$(printf '%032d' 1)"
           export KV_NAMESPACE_ID="$(printf '%032d' 2)"
-          export R2_BUCKET_NAME="iori-uploads-fixture"
-          export QUEUE_NAME="iori-fedify-fixture"
+          export R2_BUCKET_NAME="iori-staging-fixture1-uploads"
+          export QUEUE_NAME="iori-staging-fixture1-fedify"
           export ORIGIN="https://iori.example.invalid"
+          export IORI_ADMISSION_MODE=sealed
+          iori_fixture_marker="00000000-0000-4000-8000-000000000000"
+          export IORI_ADMISSION_IDENTITY="$(printf '{"environment":"staging","generation":"fixture1","mainSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","runId":"fixture1","hostname":"iori.example.invalid","workerHostname":"iori-staging-fixture1.fixture.workers.dev","smoke":{"username":"iori-smoke","uploadFilename":"%s.png","articleId":"%s"}}' "$iori_fixture_marker" "$iori_fixture_marker")"
           run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
           run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
           run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
           run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap scripts/__tests__/validateCloudflarePlan.test.ts
+
+      - name: Verify credential-free migration fixture chain
+        run: node apps/iori/scripts/run-migration-fixture.mjs
+
+      - name: Prepare bounded PostgreSQL fixture dependency
+        run: |
+          test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          docker pull postgres:16
+
+      - name: Run isolated PostgreSQL fixture
+        env:
+          IORI_RUN_POSTGRES_FIXTURE: "1"
+        run: pnpm --filter iori exec vitest run scripts/__tests__/sourcePostgresIntegration.test.ts
 
       - name: Write redacted Cloudflare validation summary
         shell: bash

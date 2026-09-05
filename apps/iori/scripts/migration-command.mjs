@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
+
+import { createPrivateCommandLog } from './private-command-log.mjs';
 /** Wait for actual process close after abort; timeout is a failure ceiling, not a duration estimate. */
-export const runMigrationCommand = (program, args, options) =>
+const runOwnedCommand = (program, args, options) =>
   new Promise((resolve, reject) => {
     if (
       options.killGraceMs !== undefined
@@ -64,15 +66,32 @@ export const runMigrationCommand = (program, args, options) =>
     child.once('error', () => {
       failed = true;
     });
-    child.once('close', code => {
+    child.once('close', async code => {
       settled = true;
       clearTimeout(timer);
       clearTimeout(force);
       options.signal?.removeEventListener('abort', cancel);
-      if (failed || code !== 0) reject(new Error('Migration command failed; outcome may be uncertain.'));
-      else {resolve({
-          stdout: Buffer.concat(output.stdout).toString(),
-          stderr: Buffer.concat(output.stderr).toString(),
-        });}
+      const result = {
+        stdout: Buffer.concat(output.stdout).toString(),
+        stderr: Buffer.concat(output.stderr).toString(),
+      };
+      try {
+        await options.captureOutput?.(result);
+      } catch {
+        failed = true;
+      }
+      if (failed || code !== 0 || options.signal?.aborted) {
+        reject(new Error('Migration command failed; outcome may be uncertain.'));
+      } else resolve(result);
     });
   });
+
+export const runMigrationCommand = async (program, args, options) => {
+  const directory = (options.env ?? process.env).IORI_PRIVATE_LOG_DIRECTORY;
+  const log = !options.captureOutput && directory ? await createPrivateCommandLog(directory) : undefined;
+  try {
+    return await runOwnedCommand(program, args, { ...options, captureOutput: options.captureOutput ?? log?.capture });
+  } finally {
+    await log?.close();
+  }
+};

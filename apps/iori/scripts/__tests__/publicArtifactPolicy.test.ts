@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { findPublicArtifactViolations } from '../publicArtifactPolicy.mjs';
 
 describe('findPublicArtifactViolations', () => {
@@ -97,4 +98,12 @@ describe('findPublicArtifactViolations', () => {
       'apps/iori/workers/iori/wrangler.template.jsonc contains a production Cloudflare binding ID',
     ]);
   });
+});
+it('allows only the named fresh fixture backend generation and refuses legacy state reuse', () => {
+  const path = 'apps/iori/infra/cloudflare/example.config.s3.tfbackend';
+  expect(findPublicArtifactViolations({ files: [{ path, text: 'key = "iori/staging/fixture1/terraform.tfstate"' }] }))
+    .toEqual([]);
+  for (const key of ['apps/iori/cloudflare/staging.tfstate', 'iori/staging/private1/terraform.tfstate']) {
+    expect(findPublicArtifactViolations({ files: [{ path, text: `key = "${key}"` }] })).toHaveLength(1);
+  }
 });

@@ -1,10 +1,11 @@
-import { admissionFixture } from '../../src/testing/admissionFixture.ts';
 import { execFile } from 'node:child_process';
 import { access, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
+
+import { admissionFixture } from '../../src/testing/admissionFixture.ts';
 
 const execFileAsync = promisify(execFile);
 const appRoot = new URL('../..', import.meta.url).pathname;
@@ -39,7 +40,7 @@ for arg in "$@"; do
   previous="$arg"
 done
 test -f "$config"
-test "$(stat -f '%Lp' "$config")" = 600
+node -e 'if ((require("node:fs").statSync(process.argv[1]).mode & 0o777) !== 0o600) process.exit(1)' "$config"
 grep -q '"IORI_ADMISSION_MODE": "sealed"' "$config"
 grep -q '"preview_urls": false' "$config"
 grep -q 'https://iori.example.invalid' "$config"

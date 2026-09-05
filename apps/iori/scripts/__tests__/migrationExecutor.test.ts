@@ -430,3 +430,13 @@ it.each([2, 3])('rechecks target at mutation boundary %s and stops before the ne
     f.close();
   }
 });
+it('charges hosted setup time before deciding whether source freeze fits', async () => {
+  const f = await fixture();
+  try {
+    await expect(executeProtectedMigration({ ...f.options, deadlineMs: 1000 })).rejects.toThrow('time budget');
+    expect(f.source.freeze).not.toHaveBeenCalled();
+    expect(f.remote.has(executionReservationKey(f.options.expectedTarget))).toBe(false);
+  } finally {
+    f.close();
+  }
+});
