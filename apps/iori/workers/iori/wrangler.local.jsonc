@@ -42,7 +42,7 @@
     "producers": [
       {
         "binding": "FEDIFY_QUEUE",
-        "queue": "iori-fedify-local",
+        "queue": "iori-local-fixture1-fedify",
       },
     ],
   },

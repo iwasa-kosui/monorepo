@@ -7,27 +7,94 @@ const identity = createTargetIdentity({
   accountId: 'a'.repeat(32),
   backendBucket: 'tf-state',
 });
-it('uses only authenticated read APIs and refuses partial freshness inventory', async () => {
+// Exact documented pagination shapes: D1/KV omit total_pages; Queue includes it; R2 uses a cursor.
+const inventoryResponse = (url: URL) => {
+  if (url.pathname.endsWith('/workers/scripts')) return { success: true, result: [] };
+  if (url.pathname.endsWith('/r2/buckets')) {
+    return { success: true, result: { buckets: [] }, result_info: { per_page: 100 } };
+  }
+  return {
+    success: true,
+    result: [],
+    result_info: {
+      count: 0,
+      page: 1,
+      per_page: 100,
+      total_count: 0,
+      ...(url.pathname.endsWith('/queues') ? { total_pages: 0 } : {}),
+    },
+  };
+};
+it('accepts documented complete D1/KV/Queue/R2 response shapes with only authenticated read APIs', async () => {
   const fetchRequest = vi.fn(async (url: URL, init: RequestInit) => {
     expect(init.method).toBe('GET');
     expect(init.redirect).toBe('error');
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer private-token');
-    return Response.json({
-      success: true,
-      result: url.pathname.endsWith('/r2/buckets') ? { buckets: [] } : [],
-      result_info: { per_page: 100, page: 1, total_count: 0, total_pages: 0 },
-    });
+    return Response.json(inventoryResponse(url));
   });
   const api = createTargetControlPlane({ identity, token: 'private-token', fetchRequest });
   await expect(api.assertFresh()).resolves.toEqual({ fresh: true, resourceCount: 0 });
   expect(fetchRequest).toHaveBeenCalledTimes(5);
-  const partial = createTargetControlPlane({
-    identity,
-    token: 'private-token',
-    fetchRequest: async () => Response.json({ success: true, result: [], result_info: { total_pages: 999 } }),
-  });
-  await expect(partial.assertFresh()).rejects.toThrow('Target readback failed');
 });
+it.each(['/d1/database', '/storage/kv/namespaces'])(
+  'accepts a complete nonempty %s page without total_pages',
+  async (endpoint) => {
+    const api = createTargetControlPlane({
+      identity,
+      token: 'private-token',
+      fetchRequest: async (url: URL) =>
+        Response.json(
+          url.pathname.endsWith(endpoint)
+            ? {
+              success: true,
+              result: [
+                endpoint === '/d1/database'
+                  ? { uuid: 'old-unrelated-id', name: 'unrelated-database' }
+                  : { id: 'old-unrelated-id', title: 'unrelated-namespace', supports_url_encoding: true },
+              ],
+              result_info: { count: 1, page: 1, per_page: 100, total_count: 1 },
+            }
+            : inventoryResponse(url),
+        ),
+    });
+    await expect(api.assertFresh()).resolves.toEqual({ fresh: true, resourceCount: 0 });
+  },
+);
+it.each(['/d1/database', '/storage/kv/namespaces', '/queues'])(
+  'rejects incomplete or inconsistent %s pagination',
+  async (endpoint) => {
+    const validInfo = {
+      count: 0,
+      page: 1,
+      per_page: 100,
+      total_count: 0,
+      ...(endpoint === '/queues' ? { total_pages: 0 } : {}),
+    };
+    for (
+      const info of [
+        undefined,
+        { ...validInfo, page: 2 },
+        { ...validInfo, total_count: 1 },
+        { ...validInfo, total_count: undefined },
+        { ...validInfo, per_page: 0 },
+        { ...validInfo, count: 1 },
+        ...(endpoint === '/queues' ? [{ ...validInfo, total_pages: undefined }, { ...validInfo, total_pages: 2 }] : []),
+      ]
+    ) {
+      const api = createTargetControlPlane({
+        identity,
+        token: 'private-token',
+        fetchRequest: async (url: URL) =>
+          Response.json(
+            url.pathname.endsWith(endpoint)
+              ? { success: true, result: [], result_info: info }
+              : inventoryResponse(url),
+          ),
+      });
+      await expect(api.assertFresh()).rejects.toThrow('Target readback failed');
+    }
+  },
+);
 it('rejects identity collisions and private API failures without leaking bodies', async () => {
   for (const result of [[{ id: identity.workerName }], [{ name: identity.names.d1 }]]) {
     const api = createTargetControlPlane({
@@ -58,6 +125,8 @@ const resourceResponses = () => ({
     settings: { delivery_paused: true },
     consumers: [],
     producers: [],
+    consumers_total_count: 0,
+    producers_total_count: 0,
   },
   '/queues/dlq-id': {
     queue_id: ids.dlqId,
@@ -66,6 +135,8 @@ const resourceResponses = () => ({
     settings: { delivery_paused: true },
     consumers: [],
     producers: [],
+    consumers_total_count: 0,
+    producers_total_count: 0,
   },
 });
 const fixtureApi = (responses: Record<string, unknown>) =>
@@ -103,6 +174,7 @@ it('requires the expected paused consumer target and rejects unexpected producer
     consumer_id: 'consumer-id',
     settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
   });
+  responses['/queues/queue-id'].consumers_total_count = 1;
   await expect(fixtureApi(responses).readResources({ ...ids, consumerAttached: true })).resolves.toMatchObject({
     consumerId: 'consumer-id',
   });
@@ -160,3 +232,16 @@ it('verifies deployed version, bindings, preview and route state without exposin
   bindings[0] = { name: 'DB', type: 'd1', id: 'old-db' };
   await expect(api.readSealedWorker(input)).rejects.toThrow();
 });
+
+it.each(['/queues/queue-id', '/queues/dlq-id'])(
+  'rejects incomplete or mismatched Queue consumer/producer totals for %s',
+  async (endpoint) => {
+    for (const field of ['consumers_total_count', 'producers_total_count']) {
+      for (const count of [undefined, 1, -1, '0']) {
+        const responses: Record<string, unknown> = resourceResponses();
+        responses[endpoint] = { ...(responses[endpoint] as Record<string, unknown>), [field]: count };
+        await expect(fixtureApi(responses).readResources(ids)).rejects.toThrow('Target readback failed');
+      }
+    }
+  },
+);

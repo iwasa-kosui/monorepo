@@ -261,14 +261,26 @@ export default {
     env: IoriWorkerEnv,
   ): Promise<void> => {
     const identity = parseAdmission(env);
-    if (!identity || identity.mode !== 'active') {
+    if (
+      !identity || identity.mode !== 'active'
+      || batch.queue !== `iori-${identity.environment}-${identity.generation}-fedify`
+    ) {
       batch.retryAll();
       return;
     }
     const messages = batch.messages.filter((message) => {
-      if (!isSmokeMarker(message.body, identity)) return true;
-      message.ack();
-      return false;
+      if (isSmokeMarker(message.body, identity)) {
+        message.ack();
+        return false;
+      }
+      // Fedify ignores unknown types successfully; reserved malformed markers must never be implicitly acknowledged.
+      if (
+        message.body !== null && typeof message.body === 'object' && Reflect.get(message.body, 'type') === 'iori-smoke'
+      ) {
+        message.retry();
+        return false;
+      }
+      return true;
     });
     if (messages.length > 0) await processCloudflareFedifyQueueBatch({ ...batch, messages }, env);
   },

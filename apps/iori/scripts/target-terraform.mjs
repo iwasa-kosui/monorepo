@@ -16,7 +16,7 @@ const parsePrivateJson = (source) => {
     fail();
   }
 };
-/** Fixed repository Terraform commands; no module/command injection. Caller reserves the run before invoking. */
+/** Fixed repository Terraform commands; no module/command injection. Protected target preparation precedes executor reservation. */
 export const createTargetTerraform = (
   { identity: supplied, backendEndpoint, privateDirectory, zoneId, hostname, runCommand = spawnSync },
 ) => {

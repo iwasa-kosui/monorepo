@@ -383,6 +383,7 @@ describe('Worker fixture', () => {
     }).toJsonLd({ format: 'compact', contextLoader: fetchDocumentLoader });
     const senderKeys = [{ keyId: `${origin}/users/fixture#main-key`, privateKey }];
     await worker.queue({
+      queue: 'iori-production-fixture1-fedify',
       messages: [
         {
           body: {
@@ -424,4 +425,28 @@ describe('Worker fixture', () => {
     expect(queue.ack).toHaveBeenCalledOnce();
     expect(queue.retry).toHaveBeenCalledOnce();
   });
+});
+
+it('retries near smoke markers before the real Fedify adapter can implicitly acknowledge unknown types', async () => {
+  const env = { ...admissionFixture(), DB: {}, FEDIFY_KV: {}, FEDIFY_QUEUE: {} } as unknown as IoriWorkerEnv;
+  const marker = {
+    type: 'iori-smoke',
+    schema: 1,
+    environment: 'production',
+    generation: 'fixture1',
+    mainSha: 'a'.repeat(40),
+    runId: 'fixture-run',
+  };
+  for (
+    const body of [{ ...marker, runId: 'wrong-run' }, { ...marker, generation: 'wrong123' }, { ...marker, schema: 2 }, {
+      ...marker,
+      extra: true,
+    }]
+  ) {
+    const ack = vi.fn();
+    const retry = vi.fn();
+    await worker.queue({ queue: 'iori-production-fixture1-fedify', messages: [{ body, ack, retry }] } as never, env);
+    expect(retry).toHaveBeenCalledOnce();
+    expect(ack).not.toHaveBeenCalled();
+  }
 });

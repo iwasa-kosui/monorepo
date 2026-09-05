@@ -2,7 +2,7 @@ import { createTargetIdentity } from './fresh-target.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
 import { createTargetTerraform } from './target-terraform.mjs';
 
-/** Task 6 must reserve execution before calling. This owns no source export, import, signing, or receipt phases. */
+/** Separate protected target preparation precedes executor reservation. This owns no source export, import, signing, or receipt phases. */
 export const createTargetPreparation = (options) => {
   const identity = createTargetIdentity(options.identity);
   const control = createTargetControlPlane({ identity, token: options.token, fetchRequest: options.fetchRequest });

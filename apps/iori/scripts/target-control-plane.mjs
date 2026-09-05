@@ -42,36 +42,42 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       fail();
     }
   };
-  const list = async (path, bucket = false) => {
+  const list = async (path, pagination) => {
     const body = await get(path);
-    const items = bucket ? body.result.buckets : body.result;
-    if (!path.endsWith('/workers/scripts')) {
-      const info = body.result_info;
-      if (!info || !Number.isInteger(info.per_page) || info.per_page < 1) fail();
-      if (
-        !bucket
-        && (!Number.isInteger(info.total_count) || info.total_count !== items?.length || info.page !== 1
-          || !Number.isInteger(info.total_pages) || info.total_pages > 1)
-      ) fail();
-      if (bucket && items?.length >= info.per_page) fail();
-    }
+    const items = pagination === 'cursor' ? body.result.buckets : body.result;
     if (
-      !Array.isArray(items) || items.length >= 100 || (body.result_info?.total_pages ?? 1) > 1
-      || (body.result_info?.total_count !== undefined && body.result_info.total_count !== items.length)
-      || body.result_info?.cursor || body.result.cursor || body.result.truncated === true
+      !Array.isArray(items) || items.length >= 100 || body.result_info?.cursor || body.result.cursor
+      || body.result.truncated === true
     ) fail();
+    if (pagination !== 'none') {
+      const info = body.result_info;
+      if (!info || !Number.isInteger(info.per_page) || info.per_page < 1 || items.length > info.per_page) fail();
+      if (pagination === 'cursor') {
+        if (items.length >= info.per_page) fail();
+      } else {
+        if (
+          !Number.isInteger(info.total_count) || info.total_count !== items.length || info.page !== 1
+          || (info.count !== undefined && info.count !== items.length)
+        ) fail();
+        // D1 and KV expose count/page/per_page/total_count; total_pages is Queue-specific.
+        if (
+          pagination === 'queue'
+          && (!Number.isInteger(info.total_pages) || info.total_pages < 0 || info.total_pages > 1)
+        ) fail();
+      }
+    }
     return items;
   };
   const assertFresh = async () => {
     const specs = [
-      [`${root}/workers/scripts`, 'id', [identity.workerName]],
-      [`${root}/d1/database?per_page=100&page=1`, 'name', [identity.names.d1]],
-      [`${root}/storage/kv/namespaces?per_page=100&page=1`, 'title', [identity.names.kv]],
-      [`${root}/queues?per_page=100&page=1`, 'queue_name', [identity.names.queue, identity.names.dlq]],
-      [`${root}/r2/buckets?per_page=100`, 'name', [identity.names.uploads, identity.names.transfer]],
+      [`${root}/workers/scripts`, 'id', [identity.workerName], 'none'],
+      [`${root}/d1/database?per_page=100&page=1`, 'name', [identity.names.d1], 'offset'],
+      [`${root}/storage/kv/namespaces?per_page=100&page=1`, 'title', [identity.names.kv], 'offset'],
+      [`${root}/queues?per_page=100&page=1`, 'queue_name', [identity.names.queue, identity.names.dlq], 'queue'],
+      [`${root}/r2/buckets?per_page=100`, 'name', [identity.names.uploads, identity.names.transfer], 'cursor'],
     ];
-    for (const [path, key, names] of specs) {
-      const items = await list(path, key === 'name' && path.includes('/r2/'));
+    for (const [path, key, names, pagination] of specs) {
+      const items = await list(path, pagination);
       if (items.some((item) => typeof item?.[key] !== 'string' || names.includes(item[key]))) fail();
     }
     return { fresh: true, resourceCount: 0 };
@@ -94,6 +100,8 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       if (
         q.queue_id !== id || q.queue_name !== name || q.settings?.delivery_paused !== true
         || !Array.isArray(q.consumers) || !Array.isArray(q.producers)
+        || !Number.isInteger(q.consumers_total_count) || q.consumers_total_count !== q.consumers.length
+        || !Number.isInteger(q.producers_total_count) || q.producers_total_count !== q.producers.length
       ) fail();
       if (!q.created_on || !Number.isFinite(Date.parse(q.created_on))) fail();
     }
