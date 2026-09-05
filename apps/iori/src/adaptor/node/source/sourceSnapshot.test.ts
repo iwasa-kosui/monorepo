@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
+import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { SourceSnapshot } from './sourceSnapshot.ts';
 
 const roots: string[] = [];
@@ -11,7 +12,7 @@ afterEach(async () => {
 const identity = { main_sha: 'a'.repeat(40), run_id: 'fixture' };
 const imageId = '33333333-3333-4333-8333-333333333333';
 const setup = async (url = `/uploads/${imageId}.png`) => {
-  const base = await mkdtemp('/private/tmp/iori-source-files-');
+  const base = await createFixtureDirectory('iori-source-files-');
   roots.push(base);
   const uploadDir = join(base, 'originals');
   await mkdir(uploadDir);

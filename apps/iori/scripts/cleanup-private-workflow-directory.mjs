@@ -20,6 +20,7 @@ export const removePrivateWorkflowDirectory = async ({ directory, runnerTemp }) 
     ]);
     if (
       metadata.isSymbolicLink()
+      || metadata.uid !== process.getuid?.()
       || !metadata.isDirectory()
       || (metadata.mode & 0o077) !== 0
       || !isWithin(realDirectory, realRunnerTemp)

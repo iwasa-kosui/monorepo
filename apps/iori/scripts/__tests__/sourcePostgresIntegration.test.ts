@@ -1,20 +1,22 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Client } from 'pg';
 import { expect, it } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER, exportPostgres } from '../export-postgres.mjs';
+import { createFixtureDirectory } from './fixtureTemp.ts';
 
 const exec = promisify(execFile);
 it.skipIf(process.env.IORI_RUN_POSTGRES_FIXTURE !== '1')(
   'exports an actual PostgreSQL16 repeatable-read snapshot across later-table mutation',
   async () => {
-    const docker = '/Users/kosui/.rd/bin/docker';
+    const docker = process.platform === 'darwin' ? join(homedir(), '.rd/bin/docker') : 'docker';
     const name = `iori-source-fixture-${randomUUID()}`;
-    const root = await mkdtemp('/private/tmp/iori-real-pg-');
+    const root = await createFixtureDirectory('iori-real-pg-');
     let created = false;
     let connection: Client | undefined;
     try {

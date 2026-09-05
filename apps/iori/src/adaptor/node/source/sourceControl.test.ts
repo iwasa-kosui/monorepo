@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { SourceControl } from './sourceControl.ts';
 
 const identity = { main_sha: 'a'.repeat(40), run_id: '12345' };
@@ -10,7 +11,7 @@ afterEach(async () => {
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
 });
 const setup = async (revision: string | undefined = identity.main_sha) => {
-  const base = await mkdtemp('/private/tmp/iori-control-');
+  const base = await createFixtureDirectory('iori-control-', true);
   dirs.push(base);
   let paused = true;
   let depth = 0;

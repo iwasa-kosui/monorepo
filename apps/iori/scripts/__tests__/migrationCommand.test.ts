@@ -1,10 +1,12 @@
-import { expect, it } from 'vitest';
-import { runMigrationCommand } from '../migration-command.mjs';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expect, it } from 'vitest';
+
+import { runMigrationCommand } from '../migration-command.mjs';
+import { createFixtureDirectory } from './fixtureTemp.ts';
 it.each(['direct', 'pnpm'])('awaits actual process group cleanup after abort (%s)', async mode => {
-  const root = await mkdtemp('/private/tmp/iori-command-fixture-');
+  const root = await createFixtureDirectory('iori-command-fixture-');
   const ready = join(root, 'ready');
   const marker = join(root, 'closed');
   const controller = new AbortController();

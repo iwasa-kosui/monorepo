@@ -1,8 +1,9 @@
-import { chmod, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { listenControlSocket } from './controlSocket.ts';
 import { SourceControl } from './sourceControl.ts';
 
@@ -11,7 +12,7 @@ afterEach(async () => {
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
 });
 const setup = async () => {
-  const base = await mkdtemp('/private/tmp/iori-socket-');
+  const base = await createFixtureDirectory('iori-socket-', true);
   dirs.push(base);
   const queue = {
     pause: () => {},

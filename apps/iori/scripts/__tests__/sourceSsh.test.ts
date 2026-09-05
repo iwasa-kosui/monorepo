@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { chmod, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER } from '../export-postgres-lib.mjs';
 import { createSourceSshAdapter } from '../source-control-ssh.mjs';
+import { createFixtureDirectory } from './fixtureTemp.ts';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const native = await importOriginal<typeof import('node:fs/promises')>();
@@ -33,7 +34,7 @@ afterEach(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
 const setup = async () => {
-  const root = await mkdtemp('/private/tmp/iori-ssh-fixture-');
+  const root = await createFixtureDirectory('iori-ssh-fixture-');
   roots.push(root);
   const identityFile = join(root, 'fixture.key');
   const knownHostsFile = join(root, 'known_hosts');

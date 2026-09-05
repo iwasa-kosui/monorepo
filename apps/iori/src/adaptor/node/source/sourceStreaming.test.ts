@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { Readable, Writable } from 'node:stream';
 import { afterEach, expect, it } from 'vitest';
 
+import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { requestSourceControl } from '../../../../scripts/source-control-client.mjs';
 import { listenControlSocket } from './controlSocket.ts';
 import { SourceControl } from './sourceControl.ts';
@@ -13,7 +14,7 @@ afterEach(async () => {
 });
 const identity = { main_sha: 'a'.repeat(40), run_id: 'streaming' };
 it('streams binary bytes with backpressure while resume remains excluded', async () => {
-  const base = await mkdtemp('/private/tmp/iori-binary-');
+  const base = await createFixtureDirectory('iori-binary-', true);
   roots.push(base);
   const blocked = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
@@ -82,7 +83,7 @@ it('streams binary bytes with backpressure while resume remains excluded', async
   }
 });
 it('keeps export exclusive after a real client disconnect until source cleanup settles', async () => {
-  const base = await mkdtemp('/private/tmp/iori-disconnect-');
+  const base = await createFixtureDirectory('iori-disconnect-', true);
   roots.push(base);
   const entered = Promise.withResolvers<void>();
   const cancelled = Promise.withResolvers<void>();

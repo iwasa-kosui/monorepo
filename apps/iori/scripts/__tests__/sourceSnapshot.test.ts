@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -8,13 +8,14 @@ import { afterEach, expect, it } from 'vitest';
 
 import { canonicalRowSummary, sortedCanonicalRecords } from '../canonical-row-sort.mjs';
 import { APPLICATION_TABLE_ORDER, exportPostgres } from '../export-postgres.mjs';
+import { createFixtureDirectory } from './fixtureTemp.ts';
 
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
 const root = async () => {
-  const path = await mkdtemp('/private/tmp/iori-snapshot-');
+  const path = await createFixtureDirectory('iori-snapshot-');
   roots.push(path);
   return path;
 };
