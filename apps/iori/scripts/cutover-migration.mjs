@@ -100,6 +100,7 @@ export const cutoverMigration = async ({ env, startedAt, signal }, {
   await terraform.changeRoute({ establishedBindings: outputs.workerBindings });
   routePresent = true;
   await read();
+  await smoke({ target, hostname: target.admission.hostname, token: env.IORI_SMOKE_QUEUE_TOKEN, signal });
   await gate();
   const activeVersion = await transition({
     ...config,

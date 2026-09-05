@@ -98,6 +98,7 @@ it('freshly verifies in the same invocation and retains the exact version chain 
     'smoke',
     'full-smoke',
     'route',
+    'full-smoke',
     'active',
     'resume-Queue-last',
     'full-smoke',
@@ -155,4 +156,13 @@ it('refuses activation when fresh verification consumes its reserved budget', as
   } finally {
     now.mockRestore();
   }
+});
+it('requires canonical full smoke while still in smoke mode before any active or Queue operation', async () => {
+  mocks.smoke.mockResolvedValueOnce({ checks: 13 }).mockRejectedValueOnce(new Error('canonical fixture failure'));
+  await expect(invoke()).rejects.toThrow('canonical fixture failure');
+  expect(mocks.smoke.mock.calls[1][0].hostname).toBe('blog.test');
+  expect(mocks.transition).toHaveBeenCalledTimes(1);
+  expect(mocks.transition.mock.calls[0][0].mode).toBe('smoke');
+  expect(mocks.route).toHaveBeenCalledTimes(1);
+  expect(mocks.queue).not.toHaveBeenCalled();
 });
