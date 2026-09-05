@@ -314,6 +314,16 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
     const original = await readFile(join(f.options.root, 'contract.json'));
     expect(await readFile(join(fresh, 'contract.json'))).toEqual(original);
     const contract = JSON.parse(original.toString());
+    expect(JSON.parse(await readFile(join(fresh, 'evidence/drain.json'), 'utf8'))).toMatchObject({
+      ingress_frozen: true,
+      http_inflight: 0,
+      enqueue_work: 0,
+      dequeue_work: 0,
+      depth: 0,
+      consumer_paused: true,
+      source_revision: 'a'.repeat(40),
+      identity: { main_sha: 'a'.repeat(40), run_id: 'production-run-001' },
+    });
     const manifest = (name: string) =>
       join(fresh, contract.phases.find((phase: any) => phase.artifacts[name]).artifacts[name].path);
     expect(JSON.parse(await readFile(manifest('d1_import_manifest'), 'utf8')).files.length).toBeGreaterThan(1);

@@ -130,7 +130,7 @@ export const createCloudflareImportTransport = ({
               }
             }
           };
-          const summary = await canonicalRowSummary(rows(), { chunkBytes: sortChunkBytes });
+          const summary = await canonicalRowSummary(rows(), { chunkBytes: sortChunkBytes, signal });
           if (summary.count !== count || await countRows() !== count) throw fail();
           summaries[table] = summary;
         }

@@ -185,7 +185,17 @@ export const executeProtectedMigration = async (options) => {
     await completePhase('drain-queue', {
       queue_drain_report: await writeJson(
         'evidence/drain.json',
-        summary('queue_drain_report', { queue: 'fedify', depth: 0 }),
+        summary('queue_drain_report', {
+          queue: 'fedify',
+          depth: drained.queue_depth,
+          ingress_frozen: drained.ingress_frozen,
+          http_inflight: drained.http_inflight,
+          enqueue_work: drained.enqueue_work,
+          dequeue_work: drained.dequeue_work,
+          consumer_paused: drained.consumer_paused,
+          source_revision: drained.source_revision,
+          identity: drained.identity,
+        }),
       ),
     });
     await checkBudget();

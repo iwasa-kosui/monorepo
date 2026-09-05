@@ -1,6 +1,6 @@
 export function canonicalRowSummary(
   rows: AsyncIterable<string> | Iterable<string>,
-  options?: { chunkBytes?: number },
+  options?: { chunkBytes?: number; spoolParent?: string; signal?: AbortSignal },
 ): Promise<{ count: number; checksum: string }>;
 
 export function sortedCanonicalRecords(

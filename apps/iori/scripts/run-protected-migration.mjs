@@ -253,7 +253,13 @@ const assertPhaseArtifactContent = (phase, name, body, contract, expectedTarget)
     }
   } else if (!isGeneratedManifest()) throw new Error('invalid');
   if (name === 'terraform_target_summary') assertTargetSummary(artifact, expectedTarget);
-  if (name === 'queue_drain_report' && (artifact.depth !== 0 || artifact.queue !== 'fedify')) {
+  if (
+    name === 'queue_drain_report' && (artifact.depth !== 0 || artifact.queue !== 'fedify'
+      || artifact.ingress_frozen !== true || artifact.http_inflight !== 0 || artifact.enqueue_work !== 0
+      || artifact.dequeue_work !== 0 || artifact.consumer_paused !== true
+      || artifact.source_revision !== contract.main_sha
+      || artifact.identity?.main_sha !== contract.main_sha || artifact.identity?.run_id !== contract.run_id)
+  ) {
     throw new Error('invalid');
   }
   if (

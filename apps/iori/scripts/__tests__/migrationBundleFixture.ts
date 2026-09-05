@@ -62,7 +62,19 @@ export const validContract = async (artifactBodies: Record<string, unknown> = {}
             ...(key === 'terraform_target_summary'
               ? targetSummaryFixture()
               : {}),
-            ...(key === 'queue_drain_report' ? { queue: 'fedify', depth: 0 } : {}),
+            ...(key === 'queue_drain_report'
+              ? {
+                queue: 'fedify',
+                depth: 0,
+                ingress_frozen: true,
+                http_inflight: 0,
+                enqueue_work: 0,
+                dequeue_work: 0,
+                consumer_paused: true,
+                source_revision: main_sha,
+                identity: { main_sha, run_id },
+              }
+              : {}),
             ...(key === 'verification_summary'
               ? {
                 manifest_digests: Object.fromEntries([

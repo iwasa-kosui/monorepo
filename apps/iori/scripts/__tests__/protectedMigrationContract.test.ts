@@ -73,7 +73,19 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
             ...(key === 'terraform_target_summary'
               ? targetSummaryFixture()
               : {}),
-            ...(key === 'queue_drain_report' ? { queue: 'fedify', depth: 0 } : {}),
+            ...(key === 'queue_drain_report'
+              ? {
+                queue: 'fedify',
+                depth: 0,
+                ingress_frozen: true,
+                http_inflight: 0,
+                enqueue_work: 0,
+                dequeue_work: 0,
+                consumer_paused: true,
+                source_revision: main_sha,
+                identity: { main_sha, run_id },
+              }
+              : {}),
             ...(key === 'verification_summary'
               ? {
                 manifest_digests: Object.fromEntries([
@@ -437,4 +449,31 @@ describe('protected migration contract', () => {
     await expect(loadReceiptPublicKey(path, digest(key))).resolves.toBeDefined();
     await expect(loadReceiptPublicKey(path, '0'.repeat(64))).rejects.toThrow('receipt key');
   });
+});
+it.each([
+  'ingress_frozen',
+  'http_inflight',
+  'enqueue_work',
+  'dequeue_work',
+  'consumer_paused',
+  'source_revision',
+  'identity',
+])('rejects a signed drain report missing %s', async key => {
+  const artifact: Record<string, unknown> = {
+    schema: 'iori-migration-phase-artifact/v1/queue_drain_report',
+    status: 'completed',
+    queue: 'fedify',
+    depth: 0,
+    ingress_frozen: true,
+    http_inflight: 0,
+    enqueue_work: 0,
+    dequeue_work: 0,
+    consumer_paused: true,
+    source_revision: 'a'.repeat(40),
+    identity: { main_sha: 'a'.repeat(40), run_id: 'production-run-001' },
+  };
+  delete artifact[key];
+  const contract = await validContract({ queue_drain_report: artifact });
+  await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+    .toThrow();
 });
