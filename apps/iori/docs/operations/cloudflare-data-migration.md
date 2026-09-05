@@ -2,16 +2,28 @@
 
 この手順は停止を伴う一回限りの移行用です。二重書き込みは行いません。public repository を維持し、protected Environment の GitHub-hosted runner で実行します。生成される PostgreSQL export、D1 SQL、R2 upload manifest、検証 manifest はすべてリポジトリ外のアクセス制限された作業ディレクトリに置きます。Git、GitHub artifact・cache、Issue、ログには保存しません。
 
-2026-09-05 の方針変更です。現行 workflow の self-hosted runner と事前配置パスへの依存を解消する実装は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の手順 2・3 に記載しています。この文書だけでは本番操作を開始できません。
+2026-09-06 時点では、移行元の凍結・snapshot・限定転送、移行先の準備記録、D1/R2/OGP の実 import、署名付き bundle の保存・復元を実装し、executor 全体の独立レビューを完了しました。hosted workflow への接続と統合検証は継続中です。[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の検証・保護設定・リハーサルを完了するまで本番操作を開始しません。
 
 ## 停止前の準備
 
-1. hosted runner からの SSH・Cloudflare・R2 接続、空き容量と実行時間をリハーサルで確認します。メンテナンス中の旧 deploy によるサービス再起動を抑止します。
-2. メンテナンスを告知し、Lightsail への新規書き込みを停止します。Fedify の PostgreSQL queue を drain し、深さ 0 を確認してから配送処理を停止します。stale queue row は移行しません。
-3. `$RUNNER_TEMP` 配下に mode `0700` の作業ディレクトリを作り、ファイルは `0600` で生成します。
-4. 作業ディレクトリ、`UPLOAD_DIR` のコピー、各 manifest が Git top-level 配下でないことを確認します。失敗時を含め、job 終了時に一時ファイルを削除します。
+1. environment と generation を分離した新しい D1、R2、KV、Queue、DLQ と Worker を準備します。以前のリソースと state は保持します。最初の Worker version は `sealed`、Queue は配送停止、route は未作成とし、実 ID と状態を照合した準備記録を専用 R2 へ保存します。
+2. hosted runner からの SSH・Cloudflare・R2 接続、空き容量と実行時間をリハーサルで確認します。メンテナンス中の旧 deploy による remote 変更を、共有 concurrency と永続的な凍結 marker の検査で抑止します。
+3. `$RUNNER_TEMP` 配下に mode `0700` の新しい作業ディレクトリを作り、ファイルは `0600` で生成します。準備済み R2 bucket で実行 ID を予約してから移行元を凍結します。再利用した実行 ID は拒否します。
+4. メンテナンスを告知し、Lightsail の新規 HTTP を停止します。本文送信・キャンセルを含む受付済み HTTP、enqueue、dequeue、handler transaction が終了し、遅延行を含む Queue の深さが `0` になってから consumer を一時停止します。Node process は private control と export のために起動したままにします。
 
-`cloudflare:export:pg` は `--lightsail-stopped --fedify-queue-drained` の両方を指定しないと開始しない。export は固定順の application table を NDJSON へ書き、schema version、row count、SHA-256 checksum、timestamp だけを含む manifest を最後に complete にする。row contents、connection string、credential column を stdout/stderr に表示しない。
+旧 CLI の `--lightsail-stopped` や `--fedify-queue-drained` という指定だけを静止の証拠にしません。export は同じ排他制御の下で実状態と起動中の build SHA を検査し、既存の source Env/TLS を使います。全 31 application table を同じ read-only repeatable-read transaction から cursor で書き出し、元の row JSON を canonical D1 順に外部ソートした NDJSON を生成します。transaction の commit と DB 接続の close が成功した後にだけ export manifest を確定します。
+
+移行元の保存先は service user の `~/.iori-migration/exports/<main_sha>-<run_id>/` です。固定の table ファイルと manifest、および `post_images` から参照される画像だけを転送します。受信側は新しい private root の `export/` と `uploads/` に保存し、全ファイルの byte size と SHA-256 が一致した後に `source-inventory.json` を確定します。DB 接続情報を runner へコピーしません。SSH adapter は信頼済みの host key と既存 Node 24.12.0 の固定パスを使い、任意の remote command やファイルパスを受け付けません。
+
+source snapshot の上限は row ごとに 8 MiB、画像ごとに 32 MiB、合計 10 GiB、table と manifest を含む 100,000 ファイルです。export は 30 分、各ファイルの転送は 5 分で中断を要求します。切断・timeout 後も実際の stream/DB cleanup が完了するまでは source control の排他を保持します。これらは hosted job 全体の所要時間や容量を保証しません。
+
+停止前の容量検査では source に `table_bytes × 24 + upload_bytes × 2 + 64 MiB`、runner に `table_bytes × 24 + upload_bytes × 3 + 128 MiB` の空きを要求します。並べ替えと SQL 変換中の一時ファイルを含む保守的な見積もりです。各署名対象 JSON と bundle index の 16 MiB 上限も別に検査します。source のファイル数上限内でも manifest が収まるとは限りません。受付済みの書き込みによる増加に備え、drain 後にも容量を再確認します。
+
+executor はさらに renderer・転送 buffer 用の 256 MiB と、記事がある場合は同時に扱う OGP 1 件分の 32 MiB を加算します。OGP を全件ディスクに保持する見積もりにはしません。D1 の容量計画は free の 500,000,000 bytes または paid の 10,000,000,000 bytes を指定し、`table_bytes × 4` が収まることを事前検査します。SQLite/index の実際の増加量は staging で確認します。
+
+`IORI_MIGRATION_REHEARSAL_PATH` の private JSON は `iori-migration-rehearsal/v1` です。レビュー済み `main_sha`、ISO timestamp の `measured_at`、正の有限値である `bytes_per_second`、`rows_per_second`、`files_per_second`、`ogp_per_second` と、上記の `d1_capacity_bytes` を記録します。最初は同じ adapter と runner を使って代表的な匿名化サンプルを測定し、その保守的な値で全体リハーサルを実行します。実測値の代わりに pass flag や timeout の上書きを渡せません。
+
+処理量と実測 rate から計算した時間を 2 倍し、固定 overhead と cleanup の余裕を含めて検査します。executor の期限は 5 時間 45 分で、6 時間の job 上限に cleanup の余裕を残します。各処理の timeout 上限をファイル数倍して通常の所要時間とは扱いません。技術上限内の全データがこの時間内に完了する保証ではなく、時間・空き容量・metadata のいずれかが不足すれば凍結前に失敗します。
 
 ## D1 import
 
@@ -21,26 +33,40 @@
 - timestamp は epoch milliseconds に正規化する。
 - JSON は key を安定ソートした serialized text にする。
 - table は foreign-key-safe な固定順で出力する。
-- Wrangler の 5 GiB import 上限を超える場合、UTF-8 byte size を測定し、deterministic row boundary で次の SQL file に分ける。単一 row が上限を超える場合は SQL file を作成せず失敗する。
+- 各 SQL file は最大 32 MiB とし、UTF-8 byte size を測定して、同じ入力から同じ行境界で分割する。
 
-schema migration を Wrangler で適用してから、生成 SQL を順に import する。SQL の内容や row data は terminal log に出力しない。
+各 INSERT 文の UTF-8 byte size も検査します。D1 の SQL statement 上限は 100,000 bytes で、ファイルの上限とは別です。source export の 8 MiB row 上限内でも、SQL として投入できるとは限りません。対応できない行を切り捨てずに失敗させ、すべての変換と検査が成功してから D1 の変更を始めます。[D1 の制限](https://developers.cloudflare.com/d1/platform/limits/)
+
+全 SQL の変換、schema checksum、manifest と全ファイルの checksum、文ごとの上限検査を完了してから、固定の checked-in schema を Wrangler で適用します。全 31 application table の実 count が `0` であることを確認し、生成した全 SQL を manifest の順に import します。非空の DB の reset や、不確かな失敗後の自動再 import は行いません。SQL の内容や row data は terminal log に出力しません。
 
 ## R2 と OGP
 
-`cloudflare:import:uploads --lightsail-stopped` は export manifest の `/uploads/<uuid>.<gif|jpeg|jpg|png|webp>` だけを読み、存在しない source file または imageId と一致しない UUID があれば中断する。object は content type、cache-control、SHA-256 を保持し、`post-images/<image-id>/original` に格納する。Wrangler 4.20 の object put は custom metadata flag を提供しないため、同じ external `0600` import manifest に加えて、`<key>.metadata.json` sidecar を R2 へ格納する。`post_images.url` は既存の `/uploads/<uuid>.<ext>` を維持し、Worker route mapping で安定 URL と R2 key を対応させる。
+executor は検証済みの `post_images` NDJSON を順に読み、`/uploads/<uuid>.<gif|jpeg|jpg|png|webp>` に対応する原画像だけを import します。source file の不在や UUID の不一致は失敗です。公式 S3 SDK の `PutObjectCommand` で content type、cache-control、SHA-256 の custom metadata を object 本体へ設定し、`post-images/<image-id>/original` に格納します。metadata sidecar は生成しません。`post_images.url` は既存の値を維持し、Worker が安定 URL と R2 key を対応させます。旧 `cloudflare:import:uploads` CLI は protected executor の利用を要求して停止します。
 
-公開済み article の OGP は Worker 内で生成しない。既存の Node image pipeline は PNG bytes を返すため、事前承認済みの offline job で PNG signature を検証し、`og/<article-id>.png` に upload する。Worker は publish 時に OGP を書き込まず、R2 上の PNG を read-only で返す。以前の SVG 方針は Node pipeline の実 bytes と一致しないため、この PNG 方針で置き換える。`sharp` を Worker bundle へ追加しない。
+公開済み article の OGP は、既存の 1,200 × 630 のデザインを使う純粋な Node renderer で生成します。200 文字以下の title から PNG を作り、signature と 32 MiB 上限を検査して `og/<article-id>.png` へ 1 件ずつ upload します。公開記事が 0 件でも空の有効な manifest を生成します。Worker に `sharp` を追加せず、R2 の PNG を読み取ります。
+
+font は凍結前に固定の Google Fonts CSS と許可された `fonts.gstatic.com` から取得します。CSS は 64 KiB / 15 秒、font は 16 MiB / 30 秒に制限し、redirect は拒否します。記事の title はネットワークの URL へ渡しません。upload/OGP manifest は private file へ逐次出力し、各 16 MiB の上限を再確認します。
 
 ## job 間の保存と復元
 
+`prepare-migration-target.mjs` は独立した Terraform output と実状態を照合し、`prepared-target/v1/<environment>/<generation>/record.json` に準備記録を条件付きで保存します。後続 job の `read-migration-target.mjs` は指定済み backend を読み取り専用で開き、`IORI_MIGRATION_EXPECTED_TARGET_PATH` に期待値を生成します。期待値を bundle から組み立てません。account、backend key、generation、各実 ID と consumer の対応、受付 identity を厳密に照合します。
+
 state・アプリ画像用とは別の、Terraform 管理の非公開 R2 bucket を使います。`r2.dev`、custom domain、アプリからの配信を無効にし、移行データ用 credential は state 用から分けます。bundle は environment・main SHA・migration run ID で識別し、全 application table の NDJSON、各 manifest、署名付き証跡と参照する全 artifact を保存します。秘密鍵、接続情報、Terraform state・plan、生成 config は含めません。config は各 job で再生成します。
 
-全ファイルの転送と照合後に完了 marker を保存します。後続 job は完了済み bundle を新しい作業領域へ復元し、同じ run ID の完了済みデータを上書きしません。新しい contract version は相対パスを使い、復元先 root を変更しても署名済み bytes を維持します。絶対パス、`..`、symlink による root 外参照と旧 contract は拒否します。検証には export の実データも必要なため、manifest だけを保存して完了としません。
+`execute-protected-migration.mjs` は実処理の成功後にだけ各 phase の Ed25519 receipt を記録し、最終実データ検証後に `contract.json` と bundle を確定します。`iori-migration/v1/<environment>/<main_sha>/<run_id>/` の下に全ファイルを最大 64 MiB の部分へ分けて転送・照合し、完了 marker を最後に保存します。後続の `restore-protected-migration.mjs` は完了済み bundle を新しい空の private root へ復元します。同じ run ID の上書きは拒否します。
+
+`iori-protected-migration-contract/v3` は相対パスを使い、復元先 root を変更しても署名済み bytes を維持します。絶対パス、`..`、symlink による root 外参照と旧 contract は拒否します。bundle には全 31 table の NDJSON と、参照する全 SQL file を含めます。manifest だけを保存して完了とはしません。
+
+実行予約と bundle 公開時の予約は別です。転送失敗や部分 import があっても予約を解除せず、自動再開・再 import・移行元の自動復帰は行いません。失敗したデータは非公開のまま保持し、job の一時領域だけを検査して cleanup します。移行元の `freeze.json` と `freeze.pending` はプロセスの再起動で解除しません。書き込みの再開は [cutover runbook](./cloudflare-cutover-runbook.md) の明示的な復旧判断に従います。
 
 bundle は cutover 完了から少なくとも 14 日間保持し、進行中・失敗中の run を一律 TTL で削除しません。保持期間と照合結果を確認し、削除承認後に cleanup します。詳細は [cutover runbook](./cloudflare-cutover-runbook.md)に従います。
 
 ## 検証と cutover
 
-`cloudflare:verify:import` は export、変換後の D1 import、upload、OGP manifest から expected state を作り、repository-owned provider contract を通じて actual state を比較する。`IORI_D1_IMPORT_MANIFEST` は `cloudflare:convert:d1` が外部の mode `0700` ディレクトリ内へ生成する mode `0600` の manifest を指し、そこに PostgreSQL の時刻と JSON を D1 表現へ変換した canonical per-table checksum と row count を保持する。現行の外部 `IORI_IMPORT_RUNNER` module は、レビュー済み SHA に含まれる repository 内の provider へ変更します。provider は `getTableSummaries(tableNames)`、`getObject(key)`、`listObjects(prefix, cursor?)` を実装し、接続設定だけを Environment から受け取ります。データ bundle 内の module を実行しません。前者は同じ canonical D1 row 表現の count/checksum を返し、`getObject` は R2 object の bytes/HTTP metadata を返し、`listObjects` は指定 prefix の bounded page（`{ keys, cursor? }`）を返す。runner は Cloudflare のページングを完了させず、cursor がなくなるまで検証側がページを順に取得する。検証は expected key だけでなく list 結果の余分な key、重複、未進行 cursor も検出し、listing API がない/不正なら fail closed する。Wrangler の upload が生成する `<expected-key>.metadata.json` sidecar だけは object 本体との比較から除外し、任意の metadata key は余分な object として失敗させる。ページは最大 1,000 key、検証は最大 100,000 page/ key を受け付け、上限超過も fail closed する。CLI は runner を import するだけで、runner の接続設定・credential・actual data は出力しない。table count と checksum、R2 object、公開 article の OGP object に不一致があれば non-zero で終了する。出力は `table=<name> expected=<count> actual=<count>`、checksum mismatch、R2/OGP の aggregate missing count のみであり、row、token、URL、object identifier、SQL を出力しない。
+repository 内の provider が全 D1 table の実データをページ単位で読み、D1 表現へ正規化した count/checksum を比較します。R2 は object の bytes、HTTP/custom metadata、prefix 全体の listing を照合します。不足だけでなく余分な key、重複、進行しない cursor、API の不正な応答や上限超過も失敗です。外部の `IORI_IMPORT_RUNNER` module や bundle 内のコードは実行しません。出力は table ごとの件数と不一致の集計に限定し、row、token、URL、object identifier、SQL は表示しません。
 
-検証用公開鍵とその digest は Environment から受け取り、bundle に含まれる鍵を信頼元にしません。別 job で同じ bundle を復元し、署名、全ファイル、D1/R2/OGP の実データを再検証します。verification、health check、sign-in、upload、timeline、ActivityPub delivery を確認してから route を切り替えます。Lightsail は確認が終わるまで read-only と backup を保持します。
+新しい runner の restore CLI は `MAIN_SHA`、`IORI_MIGRATION_RUN_ID`、独立した expected target、公開鍵の pin を検査し、全 bundle の署名・hash・ファイルを確認します。その後、準備記録と同じ Worker version が現在も `sealed`、route 未作成、Queue 配送停止であることを API で読み取り、D1/R2/OGP の実データを再検証します。署名用秘密鍵、source SSH、書き込み用 credential はこの job に渡しません。
+
+既存の単独 `cloudflare:verify:import` を使う場合も expected target と完了済み v3 contract が必須です。`IORI_MIGRATION_CONTRACT` と `IORI_EXPORT_MANIFEST`、`IORI_D1_IMPORT_MANIFEST`、`IORI_R2_IMPORT_MANIFEST`、`IORI_OGP_IMPORT_MANIFEST` は同じ private root 内の署名対象へ対応させます。通常の job 間再検証には、復元と検証を固定順で行う restore CLI を使います。
+
+検証用公開鍵とその SHA-256 は Environment を信頼元とし、bundle 内の鍵は採用しません。準備時の sealed version は変更しない履歴として保持し、切替時の `sealed → smoke → active` は別の現在状態として検査します。後から準備記録や署名済み証跡を書き換えません。実データ再検証後、全 workers.dev smoke を通し、`smoke` のまま route を作成してから HTTP、最後に Queue を有効にします。通常操作の確認と復旧判断は [cutover runbook](./cloudflare-cutover-runbook.md)に従います。
