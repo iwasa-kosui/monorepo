@@ -2,8 +2,7 @@ import { Create, Document, isActor, Note, PUBLIC_COLLECTION, type RequestContext
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
-import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
-import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
@@ -15,6 +14,7 @@ import {
   type ReplyNotificationCreatedStore,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
+import type { LocalPostResolverByUri } from '../domain/post/post.ts';
 import {
   type LocalPost,
   Post,
@@ -30,7 +30,6 @@ import type { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Env } from '../env.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -82,6 +81,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  origin: string;
 }>;
 
 const create = ({
@@ -96,6 +96,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -195,7 +196,7 @@ const create = ({
             attachments: images.map(
               (image) =>
                 new Document({
-                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                  url: new URL(image.url, origin),
                   mediaType: getMimeTypeFromUrl(image.url),
                 }),
             ),
@@ -262,7 +263,7 @@ const create = ({
           attachments: images.map(
             (image) =>
               new Document({
-                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                url: new URL(image.url, origin),
                 mediaType: getMimeTypeFromUrl(image.url),
               }),
           ),

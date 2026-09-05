@@ -63,6 +63,9 @@ jobs:
           node-version: "24.12.0"
           cache: "pnpm"
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -75,8 +78,45 @@ jobs:
       - name: Format check
         run: pnpm --filter iori run format:check
 
-      - name: Type check
-        run: pnpm --filter iori run typecheck
+      - name: Run guarded Cloudflare checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_guarded() {
+            local output status=0 guard_status=0
+            output="$(mktemp)"
+            "$@" >"$output" 2>&1 || status=$?
+            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?
+            rm -f "$output"
+            if [ "$guard_status" -ne 0 ]; then return "$guard_status"; fi
+            return "$status"
+          }
+          run_guarded pnpm --filter iori run typecheck
+          run_guarded pnpm --filter iori exec vitest run src/worker.task7.test.ts src/worker.task8.test.ts src/smokeWorker.test.ts
+          export WORKER_NAME="iori-worker-fixture"
+          export ACCOUNT_ID="$(printf '%032d' 0)"
+          export D1_DATABASE_ID="$(printf '%032d' 1)"
+          export KV_NAMESPACE_ID="$(printf '%032d' 2)"
+          export R2_BUCKET_NAME="iori-uploads-fixture"
+          export QUEUE_NAME="iori-fedify-fixture"
+          export ORIGIN="https://iori.example.invalid"
+          run_guarded pnpm --filter iori run deploy:worker:dry-run
+          run_guarded pnpm --filter iori run cloudflare:public-artifacts:check
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
+          run_guarded pnpm --filter iori exec vitest run scripts/__tests__/validateCloudflarePlan.test.ts
+
+      - name: Write redacted Cloudflare validation summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' '## Iori Cloudflare validation'
+            printf '%s\n' '- Public artifact policy: passed'
+            printf '%s\n' '- Workflow-output redaction: passed'
+            printf '%s\n' '- Terraform validation: passed'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: pnpm --filter iori run build

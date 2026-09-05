@@ -2,11 +2,10 @@ import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
-import type { Agg } from '../../../domain/aggregate/index.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
-import { LocalPost, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
+import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
@@ -25,11 +24,6 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
-
-export type LikedPostsResolverByActorId = Agg.Resolver<
-  { actorId: ActorId; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
-  PostWithAuthor[]
->;
 
 const getInstance = singleton((): LikedPostsResolverByActorId => {
   const resolve = async (

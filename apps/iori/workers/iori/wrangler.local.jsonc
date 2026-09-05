@@ -1,0 +1,45 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "iori-local",
+  "account_id": "00000000-0000-4000-8000-000000000001",
+  "main": "../../src/worker.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../../dist",
+  },
+  "vars": {
+    "ORIGIN": "https://iori.example.invalid",
+    "VAPID_SUBJECT": "mailto:admin@example.invalid",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "iori-local",
+      "database_id": "00000000-0000-4000-8000-000000000002",
+      "migrations_dir": "../../drizzle-d1",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "iori-uploads-local",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "FEDIFY_KV",
+      "id": "00000000-0000-4000-8000-000000000003",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "FEDIFY_QUEUE",
+        "queue": "iori-fedify-local",
+      },
+    ],
+  },
+}

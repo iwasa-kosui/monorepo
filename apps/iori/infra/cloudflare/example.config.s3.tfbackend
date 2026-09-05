@@ -1,0 +1,5 @@
+# Fixture only. Copy to the ignored config.s3.tfbackend in a protected runner.
+# Use the production or staging key deliberately; never use Terraform workspaces.
+bucket = "iori-terraform-state-fixture"
+key    = "apps/iori/cloudflare/staging.tfstate"
+region = "auto"

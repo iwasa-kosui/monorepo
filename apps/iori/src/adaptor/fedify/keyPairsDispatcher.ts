@@ -17,6 +17,8 @@ import { instanceActorKeysTable } from '../pg/schema.ts';
 import { FedifyKeyGenerator } from './keyGenerator.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
+export { createKeyPairsDispatcher, type KeyPairsDispatcherDeps } from './keyPairsDispatcherFactory.ts';
+
 const getInstance = () => {
   const keyGenerator = FedifyKeyGenerator.getInstance();
   const keyGeneratedStore = PgKeyGeneratedStore.getInstance();

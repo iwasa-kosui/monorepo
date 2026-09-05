@@ -1,5 +1,5 @@
 import { test as fcTest } from '@fast-check/vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -19,14 +19,6 @@ import {
   createMockTimelineItemCreatedStore,
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
-
-vi.mock('../../env.ts', () => ({
-  Env: {
-    getInstance: () => ({
-      ORIGIN: 'https://example.com',
-    }),
-  },
-}));
 
 describe('CreatePostUseCase', () => {
   const createDeps = () => {
@@ -49,6 +41,7 @@ describe('CreatePostUseCase', () => {
       linkPreviewCreatedStore,
       ogpFetcher,
       acceptedRelaysResolver,
+      origin: 'https://example.com',
     };
   };
 

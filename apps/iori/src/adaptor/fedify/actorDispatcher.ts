@@ -6,6 +6,8 @@ import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
+export { type ActorDispatcherDeps, createActorDispatcher } from './actorDispatcherFactory.ts';
+
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();
 

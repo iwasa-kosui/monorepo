@@ -1,17 +1,13 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, eq, isNull } from 'drizzle-orm';
 
-import type { Agg } from '../../../domain/aggregate/index.ts';
-import type { LocalPost } from '../../../domain/post/post.ts';
+import type { LocalPostResolverByUri } from '../../../domain/post/post.ts';
 import { LocalPost as LocalPostSchema } from '../../../domain/post/post.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { localPostsTable, postsTable } from '../schema.ts';
 
-export type LocalPostResolverByUri = Agg.Resolver<
-  { uri: string },
-  LocalPost | undefined
->;
+export type { LocalPostResolverByUri } from '../../../domain/post/post.ts';
 
 const getInstance = singleton((): LocalPostResolverByUri => {
   const resolve = async ({ uri }: { uri: string }) => {

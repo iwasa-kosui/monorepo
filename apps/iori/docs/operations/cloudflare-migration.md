@@ -53,7 +53,7 @@ Durable Objects を追加する条件:
 ### Phase 1: Cloudflare Runtime Skeleton
 
 1. Worker entrypoint を追加する。例: `src/worker.ts`。
-2. `wrangler.jsonc` を追加する。
+2. `workers/iori/wrangler.template.jsonc` と `workers/iori/wrangler.local.jsonc` を追加する。本番用 config は template を runner の一時ディレクトリへ render し、追跡しない。
    - `compatibility_date`
    - `compatibility_flags: ["nodejs_compat"]`
    - D1 binding。例: `DB`
@@ -100,11 +100,13 @@ Durable Objects を追加する条件:
 1. 静的アセット配信を Workers static assets に移す。
 2. app/API/Fedify の path は Worker first で処理し、通常の静的ファイルは asset binding に任せる。
 3. OGP 生成は置き換える。`sharp` は Worker 本番依存にしない。
-   - 短期: publish 時に OGP 画像を事前生成し、R2 に保存する。
+   - 短期: offline job で OGP PNG を事前生成し、R2 に保存する。Worker publish は R2 へ書き込まない。
    - 代替: consuming client が許容するなら SVG を直接返す。
    - 長期: Cloudflare Images または別 Worker/container による画像生成を検討する。
 
 ### Phase 6: Data Export and Import
+
+実行時の停止・export/import・検証の詳細と公開リポジトリ上で禁止する artifact は [Cloudflare データ移行手順](./cloudflare-data-migration.md) を参照する。
 
 計画停止時の流れ:
 
@@ -151,9 +153,11 @@ Fedify Cloudflare wiring は Fedify 1.10 互換のため、既存 `@fedify/fedif
 Workers deployment CI として `.github/workflows/deploy-iori-worker.yml` を追加した。既存 Lightsail 向け `deploy-iori.yml` は移行完了まで残し、Worker deploy は別 workflow で実行する。GitHub Actions の `production` environment には次の variables/secrets が必要:
 
 - Variables: `IORI_ORIGIN`, `IORI_VAPID_SUBJECT`
-- Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `IORI_VAPID_PUBLIC_KEY`, `IORI_VAPID_PRIVATE_KEY`
+- Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `IORI_VAPID_PUBLIC_KEY`, `IORI_VAPID_PRIVATE_KEY`, `IORI_PUBLIC_HOSTNAME`（Terraform には protected `TF_VAR_public_hostname` として渡す）
 
-`apps/iori/scripts/deploy-worker.mjs` は `workers/iori/wrangler.jsonc` を元に一時 Wrangler config を生成し、`ORIGIN` と `VAPID_SUBJECT` を CI の environment variables から注入する。実 deploy 時は `VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` を `wrangler secret put` で投入してから `wrangler deploy --minify` を実行する。`--dry-run` 時は secret put をスキップする。
+`apps/iori/scripts/deploy-worker.mjs` と remote D1 migration は `workers/iori/wrangler.template.jsonc` を mode `0600` の一時 config に render し、`finally` で消去する。ローカル開発は `workers/iori/wrangler.local.jsonc` を使う。実 deploy 時は `VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` を `wrangler secret put` で投入してから `wrangler deploy --minify` を実行する。`--dry-run` 時は secret put をスキップする。
+
+production deploy は GitHub binding ID/name secret を使わない。Terraform state の sensitive `worker_bindings` output を protected runner の mode `0600` temporary file に materialize し、protected `IORI_WORKER_NAME` と一致しない場合は deploy 前に停止する。binding output、state、temporary Wrangler config は表示・artifact upload・summary を禁止し、job 終了時に削除する。
 
 ## Rollback
 
@@ -166,6 +170,22 @@ DNS 切り替え後:
 3. cutover 後に D1/R2 へ書き込みが発生していた場合は、Lightsail を write 再開する前に該当 row/file を手動で reconcile する。
 
 計画停止が許容されているため、dual-write rollback の複雑さより、短い frozen window を優先する。
+
+## Staging rehearsal と cutover
+
+実行手順、route 作成前の rehearsal gate、rollback、14-day retention、AWS retirement の承認条件は [Cloudflare cutover runbook](./cloudflare-cutover-runbook.md) に従う。staging は fixture D1/R2/KV/Queues のみを使い、Workers preview への smoke は status、content type、JSON structure だけを検証する。response body、production resource ID、secret、export、Terraform state、rendered config は repository または workflow summary に残さない。
+
+OGP は R2 の `og/<article-id>.png` を read-only で返し、content type は `image/png` とする。route 切替は workers.dev validation、D1/R2 import verification、Queue drain rehearsal、staging smoke の pass 後に、保存済みの専用 route plan だけで行う。
+
+multi-GB export の import verification は `iori-production-migration` self-hosted runner だけで実行する。runner は private mounted export、D1/R2/OGP manifest、verification module を保持し、protected path references だけを GitHub environment から受け取る。content を GitHub secret、workflow output、summary、artifact に materialize しない。repository-owned verifier は mounted path safety と manifest completeness を fail-closed で確認する。
+
+## Cutover 後の運用・retirement gate
+
+Cloudflare deploy on-call は Worker `/readyz`、Queue retry/DLQ、D1/R2 error aggregate、ActivityPub delivery、Web Push、日次の D1/R2/OGP aggregate count を監視する。alert と workflow summary には logical resource name、aggregate count、timestamp、pass/fail だけを残し、ID、token、SQL、object key、response body、export/manifest は残さない。
+
+Terraform は D1/R2/KV/Queue/DLQ/consumer/route を所有し、Wrangler は Worker version と Queue producer binding を所有する。Worker deployment/binding/secret は Terraform state に入れず、Wrangler に Queue consumer を定義しない。production の Terraform operation には protected `TF_VAR_public_hostname` を渡し、default hostname を使わない。route は cutover plan 前は absent、approved route plan 後だけ present とする。
+
+この移行変更は AWS retirement を実行しない。14 日分の reviewed operational evidence と明示承認済み destroy plan がそろうまで、Lightsail workflow、AWS definitions、secret references、backups を削除・破棄してはいけない。承認後は、public traffic と background delivery が Cloudflare のみであることを確認してから、別の reviewed cleanup change で削除する。backup の削除には retention approval を追加で必要とする。
 
 ## 確認した参照情報
 

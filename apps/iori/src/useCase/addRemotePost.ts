@@ -2,8 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
-import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
-import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
@@ -18,11 +17,16 @@ import {
   type ReplyNotificationCreatedStore,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
-import { type LocalPost, Post, type PostCreatedStore, type RemotePostCreated } from '../domain/post/post.ts';
+import {
+  type LocalPost,
+  type LocalPostResolverByUri,
+  Post,
+  type PostCreatedStore,
+  type RemotePostCreated,
+} from '../domain/post/post.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
-import { Env } from '../env.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -57,6 +61,7 @@ type Err = never;
 export type AddRemotePostUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
+  origin: string;
   postCreatedStore: PostCreatedStore;
   postImageCreatedStore: PostImageCreatedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
@@ -72,6 +77,7 @@ type Deps = Readonly<{
 }>;
 
 const create = ({
+  origin,
   postCreatedStore,
   postImageCreatedStore,
   remoteActorCreatedStore,
@@ -133,8 +139,7 @@ const create = ({
       }),
       // Fetch and store link previews
       RA.andThrough(async ({ post, content }) => {
-        const env = Env.getInstance();
-        const excludeHost = new URL(env.ORIGIN).host;
+        const excludeHost = new URL(origin).host;
         const urls = extractUrlsFromHtml(content, excludeHost);
 
         if (urls.length === 0) {

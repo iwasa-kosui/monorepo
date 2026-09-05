@@ -7,6 +7,7 @@ import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
+import type { Username } from '../user/username.ts';
 import { ArticleId } from './articleId.ts';
 
 const ArticleStatus = z.enum(['draft', 'published', 'unpublished']);
@@ -116,6 +117,10 @@ export type ArticleDeletedStore = Agg.Store<ArticleDeleted>;
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;
 export type ArticleResolverByRootPostId = Agg.Resolver<{ rootPostId: PostId }, Article | undefined>;
 export type ArticlesResolverByAuthorActorId = Agg.Resolver<{ actorId: ActorId }, Article[]>;
+export type PublishedArticlesWithAuthorResolver = Agg.Resolver<
+  void,
+  Readonly<{ articles: readonly Article[]; authorUsername: Username | null }>
+>;
 
 export type ArticleNotFoundError = Readonly<{
   type: 'ArticleNotFoundError';

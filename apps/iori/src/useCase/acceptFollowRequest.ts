@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
 import { RemoteActor, type RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';

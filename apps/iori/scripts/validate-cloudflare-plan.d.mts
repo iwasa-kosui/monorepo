@@ -1,0 +1,23 @@
+export interface CloudflarePlan {
+  operation: 'reconcile' | 'consumer-replacement' | 'route-cutover';
+  allowProductionRoute?: boolean;
+  requireWorkerBindingsNoop?: boolean;
+  resource_changes?: readonly {
+    address: string;
+    change: { actions: readonly string[] };
+  }[];
+  output_changes?: {
+    worker_bindings?: {
+      actions?: readonly string[];
+      before?: unknown;
+      after?: unknown;
+    };
+  };
+  planned_values?: {
+    outputs?: {
+      worker_bindings?: { value?: unknown };
+    };
+  };
+}
+
+export function validateCloudflarePlan(plan: CloudflarePlan): readonly string[];

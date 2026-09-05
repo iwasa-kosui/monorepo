@@ -43,7 +43,7 @@ type SignInUseCase = UseCase<
   UsernameOrPasswordInvalid
 >;
 
-type Deps = Readonly<{
+export type SignInDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   userPasswordResolver: UserPasswordResolver;
   sessionStartedStore: SessionStartedStore;
@@ -53,7 +53,7 @@ const create = ({
   userResolverByUsername,
   userPasswordResolver,
   sessionStartedStore,
-}: Deps): SignInUseCase => {
+}: SignInDeps): SignInUseCase => {
   const now = Instant.now();
   const resolveUser = (username: Username): RA<User, UsernameOrPasswordInvalid> =>
     RA.flow(
@@ -90,6 +90,8 @@ const create = ({
 
   return { run };
 };
+
+export const createSignInUseCase = (deps: SignInDeps): SignInUseCase => create(deps);
 
 export const SignInUseCase = {
   create,
