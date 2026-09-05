@@ -31,6 +31,9 @@ export function createTargetPreparation(
     {
       resources: TargetResourceReadback;
       worker: Record<string, unknown>;
+      workerBindings: Record<string, string>;
+      targetIdentity: Record<string, unknown>;
+      migrationStorage: Record<string, string>;
       summary: { queuePaused: true; consumerCount: 1; sealedWorker: true };
     }
   >;

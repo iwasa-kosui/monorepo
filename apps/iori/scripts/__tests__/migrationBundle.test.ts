@@ -1,3 +1,4 @@
+import { expectedTargetFixture } from './migrationTargetFixture.js';
 import { describe, expect, it } from 'vitest';
 
 import { publishMigrationBundle } from '../migration-bundle.mjs';
@@ -94,6 +95,7 @@ const fixture = async () => {
     expectedMainSha: contract.main_sha,
     expectedRunId: contract.run_id,
     receiptPublicKey: receiptKeys.publicKey,
+    expectedTarget: expectedTargetFixture(),
     storage,
     chunkSize: 256,
   };

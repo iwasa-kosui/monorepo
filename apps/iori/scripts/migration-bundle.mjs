@@ -1,3 +1,4 @@
+import { migrationRunIdPattern, parseExpectedTarget } from './migration-target-contract.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, statfs } from 'node:fs/promises';
@@ -17,11 +18,16 @@ const digest = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(val
 const fail = () => {
   throw new Error('Migration bundle is invalid or incomplete.');
 };
-const context = ({ environment, expectedMainSha, expectedRunId, contractPath, chunkSize = CHUNK }) => {
+const context = ({ environment, expectedMainSha, expectedRunId, contractPath, chunkSize = CHUNK, expectedTarget }) => {
+  const target = parseExpectedTarget(expectedTarget);
+  if (
+    target.identity.environment !== environment || target.identity.main_sha !== expectedMainSha
+    || target.identity.run_id !== expectedRunId
+  ) fail();
   if (
     !['production', 'staging'].includes(environment)
     || typeof expectedMainSha !== 'string' || !/^[a-f0-9]{40}$/.test(expectedMainSha)
-    || typeof expectedRunId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(expectedRunId)
+    || typeof expectedRunId !== 'string' || !migrationRunIdPattern.test(expectedRunId)
     || !isMigrationArtifactReference(contractPath) || !Number.isSafeInteger(chunkSize) || chunkSize < 1
     || chunkSize > CHUNK
   ) fail();

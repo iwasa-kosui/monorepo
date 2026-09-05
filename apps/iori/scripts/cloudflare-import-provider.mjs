@@ -1,3 +1,4 @@
+import { parseExpectedTarget } from './migration-target-contract.mjs';
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { readFile, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
@@ -191,6 +192,15 @@ export const createCloudflareImportTransportFromEnvironment = async (environment
     await assertPrivateMountedInput(path);
     if ((await stat(path)).size > 65536) throw fail();
     const bindings = JSON.parse(await readFile(path, 'utf8'));
+    const target = parseExpectedTarget(options.expectedTarget);
+    if (
+      target.identity.account_id !== environment.CLOUDFLARE_ACCOUNT_ID
+      || target.identity.worker_name !== environment.WORKER_NAME
+      || bindings.d1_database_id !== target.resources.d1.id || bindings.kv_namespace_id !== target.resources.kv.id
+      || bindings.r2_bucket_name !== target.resources.uploads.name
+      || bindings.queue_name !== target.resources.queue.name
+      || bindings.worker_name !== target.identity.worker_name
+    ) throw fail();
     return createCloudflareImportTransport({
       ...options,
       bindings,

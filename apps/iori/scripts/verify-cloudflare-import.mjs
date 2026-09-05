@@ -1,3 +1,4 @@
+import { validateProtectedInvocation } from './run-protected-migration.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readFile } from 'node:fs/promises';
@@ -377,10 +378,11 @@ export const runVerificationCli = async ({ expectedProvider, actualProvider, wri
 };
 
 const main = async () => {
+  const expectedTarget = await validateProtectedInvocation();
   const exportManifestPath = process.env.IORI_EXPORT_MANIFEST;
   const d1ImportManifestPath = process.env.IORI_D1_IMPORT_MANIFEST;
   if (exportManifestPath === undefined) throw new Error('Export manifest is required.');
-  const transport = await createCloudflareImportTransportFromEnvironment(process.env);
+  const transport = await createCloudflareImportTransportFromEnvironment(process.env, { expectedTarget });
   const expectedProvider = createManifestExpectedProvider({
     exportManifestPath,
     d1ImportManifestPath,

@@ -16,6 +16,13 @@ export function createTargetTerraform(
   changeQueuePause(
     input: { paused: boolean; establishedBindings: Record<string, string>; routeEnabled: boolean },
   ): Promise<{ applied: true }>;
+  initializeEstablished(): Promise<
+    {
+      workerBindings: Record<string, string>;
+      targetIdentity: Record<string, unknown>;
+      migrationStorage: Record<string, string>;
+    }
+  >;
   initializeFresh(): Promise<{ backendKey: string; resourceCount: 0 }>;
   prepare(
     stage: 'resources' | 'consumer',

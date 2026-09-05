@@ -1,3 +1,4 @@
+import { expectedTargetFixture, targetSummaryFixture } from './migrationTargetFixture.js';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,7 +16,7 @@ import {
 } from '../run-protected-migration.mjs';
 
 const phases = [
-  'import-existing-resources',
+  'prepare-target-resources',
   'drain-queue',
   'export-postgres',
   'convert-and-import-d1',
@@ -23,7 +24,7 @@ const phases = [
   'verify-import',
 ];
 const requirementKeys: Record<string, string[]> = {
-  'import-existing-resources': ['terraform_import_summary'],
+  'prepare-target-resources': ['terraform_target_summary'],
   'export-postgres': ['postgres_export_manifest'],
   'convert-and-import-d1': ['d1_import_manifest'],
   'import-r2-and-ogp': ['r2_import_manifest', 'ogp_import_manifest'],
@@ -34,16 +35,8 @@ const digest = (body: string | Buffer) => createHash('sha256').update(body).dige
 const directories: string[] = [];
 const roots = new WeakMap<object, string>();
 const validateProtectedMigrationEvidence = (contract: object, options: Record<string, unknown> = {}) =>
-  validateEvidence(contract, { root: roots.get(contract)!, ...options });
+  validateEvidence(contract, { root: roots.get(contract)!, expectedTarget: expectedTargetFixture(), ...options });
 const receiptKeys = generateKeyPairSync('ed25519');
-const importedAddresses = [
-  'cloudflare_d1_database.iori',
-  'cloudflare_r2_bucket.uploads',
-  'cloudflare_workers_kv_namespace.fedify',
-  'cloudflare_queue.fedify',
-  'cloudflare_queue.fedify_dlq',
-  'cloudflare_queue_consumer.fedify',
-];
 
 const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
   const directory = await mkdtemp(join(await realpath(tmpdir()), 'iori-migration-evidence-'));
@@ -77,8 +70,8 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
           artifactBodies[key] ?? generatedManifestDefaults[key] ?? {
             schema: `iori-migration-phase-artifact/v1/${key}`,
             status: 'completed',
-            ...(key === 'terraform_import_summary'
-              ? { resources: importedAddresses.map((address) => ({ address, status: 'completed' })) }
+            ...(key === 'terraform_target_summary'
+              ? targetSummaryFixture()
               : {}),
             ...(key === 'queue_drain_report' ? { queue: 'fedify', depth: 0 } : {}),
             ...(key === 'verification_summary'
@@ -102,7 +95,7 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
       schema: 'iori-protected-executor-receipt/v1',
       phase: name,
       command: {
-        'import-existing-resources': 'terraform-import-existing-resources',
+        'prepare-target-resources': 'terraform-prepare-target-resources',
         'export-postgres': 'export-postgres',
         'convert-and-import-d1': 'convert-and-import-d1',
         'import-r2-and-ogp': 'import-r2-and-ogp',
@@ -219,7 +212,13 @@ describe('protected migration contract', () => {
     const rootB = await mkdtemp(join(await realpath(tmpdir()), 'iori-restored-'));
     directories.push(rootB);
     const bytes = JSON.stringify(contract);
-    await expect(validateEvidence(contract, { root: rootA, receiptPublicKey: receiptKeys.publicKey })).resolves
+    await expect(
+      validateEvidence(contract, {
+        root: rootA,
+        expectedTarget: expectedTargetFixture(),
+        receiptPublicKey: receiptKeys.publicKey,
+      }),
+    ).resolves
       .toBeDefined();
     await cp(rootA, rootB, { recursive: true });
     for (const phase of contract.phases) {
@@ -228,7 +227,13 @@ describe('protected migration contract', () => {
       );
     }
     await rm(rootA, { recursive: true });
-    await expect(validateEvidence(JSON.parse(bytes), { root: rootB, receiptPublicKey: receiptKeys.publicKey })).resolves
+    await expect(
+      validateEvidence(JSON.parse(bytes), {
+        root: rootB,
+        expectedTarget: expectedTargetFixture(),
+        receiptPublicKey: receiptKeys.publicKey,
+      }),
+    ).resolves
       .toBeDefined();
     expect(JSON.stringify(contract)).toBe(bytes);
   });
@@ -329,7 +334,7 @@ describe('protected migration contract', () => {
     contract.schema = 'iori-protected-migration-contract/v2';
     expect(() => assertProtectedMigrationContract(contract)).toThrow('contract');
     contract.schema = 'iori-protected-migration-contract/v3';
-    contract.phases[0].artifact.schema = 'iori-migration-evidence/v2/import-existing-resources';
+    contract.phases[0].artifact.schema = 'iori-migration-evidence/v2/prepare-target-resources';
     expect(() => assertProtectedMigrationContract(contract)).toThrow('contract');
   });
 
@@ -346,7 +351,11 @@ describe('protected migration contract', () => {
     const contract = await validContract();
     const root = roots.get(contract)!;
     await expect(
-      validateEvidence(contract, { root: undefined as unknown as string, receiptPublicKey: receiptKeys.publicKey }),
+      validateEvidence(contract, {
+        root: undefined as unknown as string,
+        expectedTarget: expectedTargetFixture(),
+        receiptPublicKey: receiptKeys.publicKey,
+      }),
     ).rejects.toThrow('evidence');
     await chmod(root, 0o755);
     await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects

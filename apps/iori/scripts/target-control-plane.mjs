@@ -7,7 +7,7 @@ const fail = () => {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const safeId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id);
 /** REST is used here only by the protected operator, never in the Worker graph. All responses stay private. */
-export const createTargetControlPlane = ({ identity: supplied, token, fetchRequest = fetch }) => {
+export const createTargetControlPlane = ({ identity: supplied, token, fetchRequest = fetch, signal }) => {
   const identity = createTargetIdentity(supplied);
   if (typeof token !== 'string' || token.length === 0) fail();
   const root = `/accounts/${identity.accountId}`;
@@ -17,7 +17,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` },
         redirect: 'error',
-        signal: AbortSignal.timeout(30_000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
       });
       if (!response.ok) fail();
       // Bounded body even when Content-Length is absent or dishonest.

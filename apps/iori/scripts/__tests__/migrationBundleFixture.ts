@@ -1,3 +1,4 @@
+import { targetSummaryFixture } from './migrationTargetFixture.js';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,7 +7,7 @@ import { afterEach } from 'vitest';
 import { canonicalReceiptPayload } from '../run-protected-migration.mjs';
 
 const phases = [
-  'import-existing-resources',
+  'prepare-target-resources',
   'drain-queue',
   'export-postgres',
   'convert-and-import-d1',
@@ -14,7 +15,7 @@ const phases = [
   'verify-import',
 ];
 const requirementKeys: Record<string, string[]> = {
-  'import-existing-resources': ['terraform_import_summary'],
+  'prepare-target-resources': ['terraform_target_summary'],
   'export-postgres': ['postgres_export_manifest'],
   'convert-and-import-d1': ['d1_import_manifest'],
   'import-r2-and-ogp': ['r2_import_manifest', 'ogp_import_manifest'],
@@ -25,14 +26,6 @@ const digest = (body: string | Buffer) => createHash('sha256').update(body).dige
 export const directories: string[] = [];
 export const roots = new WeakMap<object, string>();
 export const receiptKeys = generateKeyPairSync('ed25519');
-const importedAddresses = [
-  'cloudflare_d1_database.iori',
-  'cloudflare_r2_bucket.uploads',
-  'cloudflare_workers_kv_namespace.fedify',
-  'cloudflare_queue.fedify',
-  'cloudflare_queue.fedify_dlq',
-  'cloudflare_queue_consumer.fedify',
-];
 
 export const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
   const directory = await mkdtemp(join(await realpath(tmpdir()), 'iori-migration-evidence-'));
@@ -66,8 +59,8 @@ export const validContract = async (artifactBodies: Record<string, unknown> = {}
           artifactBodies[key] ?? generatedManifestDefaults[key] ?? {
             schema: `iori-migration-phase-artifact/v1/${key}`,
             status: 'completed',
-            ...(key === 'terraform_import_summary'
-              ? { resources: importedAddresses.map((address) => ({ address, status: 'completed' })) }
+            ...(key === 'terraform_target_summary'
+              ? targetSummaryFixture()
               : {}),
             ...(key === 'queue_drain_report' ? { queue: 'fedify', depth: 0 } : {}),
             ...(key === 'verification_summary'
@@ -91,7 +84,7 @@ export const validContract = async (artifactBodies: Record<string, unknown> = {}
       schema: 'iori-protected-executor-receipt/v1',
       phase: name,
       command: {
-        'import-existing-resources': 'terraform-import-existing-resources',
+        'prepare-target-resources': 'terraform-prepare-target-resources',
         'export-postgres': 'export-postgres',
         'convert-and-import-d1': 'convert-and-import-d1',
         'import-r2-and-ogp': 'import-r2-and-ogp',

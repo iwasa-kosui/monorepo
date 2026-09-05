@@ -55,7 +55,7 @@ export const createTargetTerraform = (
     return result.stdout;
   };
   let initialized = false;
-  const initializeFresh = async () => {
+  const initializeBackend = async () => {
     await run([
       'init',
       '-input=false',
@@ -65,6 +65,9 @@ export const createTargetTerraform = (
       `-backend-config=endpoints={s3="${backendEndpoint}"}`,
       '-backend-config=region=auto',
     ]);
+  };
+  const initializeFresh = async () => {
+    await initializeBackend();
     // show -json returns an empty object for a fresh backend. Nonempty state is never adopted/imported.
     const state = parsePrivateJson(await run(['show', '-json']));
     const resources = state.values?.root_module?.resources ?? [];
@@ -110,6 +113,34 @@ export const createTargetTerraform = (
     ) fail();
     return { workerBindings: bindings, targetIdentity: target, migrationStorage: storage };
   };
+  const initializeEstablished = async () => {
+    await initializeBackend();
+    const state = parsePrivateJson(await run(['show', '-json']));
+    if (!state.values?.root_module?.resources?.length) fail();
+    const outputs = parsePrivateJson(await run(['output', '-json']));
+    const result = {
+      workerBindings: outputs.worker_bindings?.value,
+      targetIdentity: outputs.target_identity?.value,
+      migrationStorage: outputs.migration_storage?.value,
+    };
+    const t = result.targetIdentity;
+    if (
+      !result.workerBindings || !result.migrationStorage || t?.account_id !== identity.accountId
+      || t.environment !== identity.environment || t.generation !== identity.generation
+      || t.backend_key !== identity.backendKey || t.worker_name !== identity.workerName
+      || t.d1_database_name !== identity.names.d1 || result.workerBindings.worker_name !== identity.workerName
+      || result.workerBindings.queue_name !== identity.names.queue
+      || result.workerBindings.r2_bucket_name !== identity.names.uploads
+      || !result.workerBindings.d1_database_id || !result.workerBindings.kv_namespace_id
+      || result.migrationStorage.bucket_name !== identity.names.transfer
+      || result.migrationStorage.environment !== identity.environment
+      || !t.queue_id || !t.dlq_id || t.queue_id === t.dlq_id || t.queue_settings?.delivery_paused !== true
+      || t.dlq_settings?.delivery_paused !== true || !Array.isArray(t.consumer) || t.consumer.length !== 1
+      || !t.consumer[0].consumer_id || t.consumer[0].queue_id !== t.queue_id
+      || t.consumer[0].script_name !== identity.workerName || t.consumer[0].dead_letter_queue !== identity.names.dlq
+    ) fail();
+    return result;
+  };
   const changeQueuePause = async ({ paused, establishedBindings, routeEnabled }) => {
     if (typeof paused !== 'boolean' || typeof routeEnabled !== 'boolean' || !establishedBindings) fail();
     const path = join(privateDirectory, 'queue-control.tfplan');
@@ -134,5 +165,5 @@ export const createTargetTerraform = (
     await run(['apply', '-input=false', path]);
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
-  return Object.freeze({ initializeFresh, prepare, changeQueuePause });
+  return Object.freeze({ initializeFresh, initializeEstablished, prepare, changeQueuePause });
 };

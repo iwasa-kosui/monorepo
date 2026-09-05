@@ -31,9 +31,9 @@ export const createTargetPreparation = (options) => {
   const attachSealedConsumer = async ({ admissionEnvironment, zoneId, expectedVersionId }) => {
     if (!resources || !outputs) throw new Error('Target resources have not been established.');
     const worker = await control.readSealedWorker({ resources, admissionEnvironment, zoneId, expectedVersionId });
-    await terraform.prepare('consumer', { establishedBindings: outputs.workerBindings });
+    outputs = await terraform.prepare('consumer', { establishedBindings: outputs.workerBindings });
     resources = await control.readResources({ ...resources, consumerAttached: true });
-    return { resources, worker, summary: { queuePaused: true, consumerCount: 1, sealedWorker: true } };
+    return { ...outputs, resources, worker, summary: { queuePaused: true, consumerCount: 1, sealedWorker: true } };
   };
   return Object.freeze({ prepareResources, attachSealedConsumer });
 };

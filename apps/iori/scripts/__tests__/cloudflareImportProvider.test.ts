@@ -1,3 +1,4 @@
+import { expectedTargetFixture } from './migrationTargetFixture.js';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -151,16 +152,31 @@ describe('live Cloudflare import provider', () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'iori-provider-test-')));
     try {
       const path = join(root, 'bindings.json');
-      await writeFile(path, JSON.stringify(bindings), { mode: 0o600 });
+      const target = expectedTargetFixture();
+      target.resources.d1.id = bindings.d1_database_id;
+      await writeFile(
+        path,
+        JSON.stringify({
+          d1_database_id: target.resources.d1.id,
+          kv_namespace_id: target.resources.kv.id,
+          r2_bucket_name: target.resources.uploads.name,
+          queue_name: target.resources.queue.name,
+          worker_name: target.identity.worker_name,
+        }),
+        { mode: 0o600 },
+      );
       const env = {
         IORI_WORKER_BINDINGS_PATH: path,
-        WORKER_NAME: 'iori',
-        CLOUDFLARE_ACCOUNT_ID: config.accountId,
+        WORKER_NAME: target.identity.worker_name,
+        CLOUDFLARE_ACCOUNT_ID: target.identity.account_id,
         CLOUDFLARE_API_TOKEN: 'fixture',
         IORI_APPLICATION_R2_ACCESS_KEY_ID: 'fixture',
         IORI_APPLICATION_R2_SECRET_ACCESS_KEY: 'fixture',
       };
-      const provider = await createCloudflareImportTransportFromEnvironment(env, { fetchImpl: sourceFetch([]) });
+      const provider = await createCloudflareImportTransportFromEnvironment(env, {
+        fetchImpl: sourceFetch([]),
+        expectedTarget: target,
+      });
       expect((await provider.getTableSummaries(['posts'])).posts.count).toBe(0);
       await expect(createCloudflareImportTransportFromEnvironment({ ...env, WORKER_NAME: 'different' })).rejects
         .toThrow();

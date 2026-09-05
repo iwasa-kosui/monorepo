@@ -1,3 +1,6 @@
+import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
+import { assertTargetSummary, migrationRunIdPattern, parseExpectedTarget } from './migration-target-contract.mjs';
+import { loadExpectedTarget } from './migration-target-input.mjs';
 import { spawnSync } from 'node:child_process';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
@@ -12,7 +15,7 @@ import {
 } from './migration-path-safety.mjs';
 
 export const requiredPhases = Object.freeze([
-  'import-existing-resources',
+  'prepare-target-resources',
   'drain-queue',
   'export-postgres',
   'convert-and-import-d1',
@@ -22,7 +25,7 @@ export const requiredPhases = Object.freeze([
 const contractSchema = 'iori-protected-migration-contract/v3';
 const evidenceSchema = (phase) => `iori-migration-evidence/v3/${phase}`;
 export const phaseArtifactRequirements = Object.freeze({
-  'import-existing-resources': ['terraform_import_summary'],
+  'prepare-target-resources': ['terraform_target_summary'],
   'export-postgres': ['postgres_export_manifest'],
   'convert-and-import-d1': ['d1_import_manifest'],
   'import-r2-and-ogp': ['r2_import_manifest', 'ogp_import_manifest'],
@@ -31,24 +34,16 @@ export const phaseArtifactRequirements = Object.freeze({
 });
 Object.values(phaseArtifactRequirements).forEach(Object.freeze);
 export const protectedPhaseCommands = Object.freeze({
-  'import-existing-resources': 'terraform-import-existing-resources',
+  'prepare-target-resources': 'terraform-prepare-target-resources',
   'export-postgres': 'export-postgres',
   'convert-and-import-d1': 'convert-and-import-d1',
   'import-r2-and-ogp': 'import-r2-and-ogp',
   'drain-queue': 'drain-queue',
   'verify-import': 'verify-import',
 });
-const importedTerraformAddresses = [
-  'cloudflare_d1_database.iori',
-  'cloudflare_r2_bucket.uploads',
-  'cloudflare_workers_kv_namespace.fedify',
-  'cloudflare_queue.fedify',
-  'cloudflare_queue.fedify_dlq',
-  'cloudflare_queue_consumer.fedify',
-];
 const checksum = (body) => createHash('sha256').update(body).digest('hex');
 const digestPattern = /^[a-f0-9]{64}$/i;
-const runIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
+const runIdPattern = migrationRunIdPattern;
 
 const validFileArtifact = (artifact) =>
   artifact !== null
@@ -236,7 +231,7 @@ const expectedManifestDigests = (contract) =>
     ]),
   ]);
 
-const assertPhaseArtifactContent = (phase, name, body, contract) => {
+const assertPhaseArtifactContent = (phase, name, body, contract, expectedTarget) => {
   const artifact = JSON.parse(body.toString('utf8'));
   const isGeneratedManifest = {
     postgres_export_manifest: () =>
@@ -255,13 +250,7 @@ const assertPhaseArtifactContent = (phase, name, body, contract) => {
       throw new Error('invalid');
     }
   } else if (!isGeneratedManifest()) throw new Error('invalid');
-  if (name === 'terraform_import_summary') {
-    const addresses = artifact.resources?.map((resource) => resource?.address);
-    if (
-      !Array.isArray(addresses) || JSON.stringify(addresses) !== JSON.stringify(importedTerraformAddresses)
-      || artifact.resources.some((resource) => resource.status !== 'completed')
-    ) throw new Error('invalid');
-  }
+  if (name === 'terraform_target_summary') assertTargetSummary(artifact, expectedTarget);
   if (name === 'queue_drain_report' && (artifact.depth !== 0 || artifact.queue !== 'fedify')) {
     throw new Error('invalid');
   }
@@ -279,6 +268,7 @@ const assertEvidenceArtifact = async (
   contract,
   receiptPublicKey,
   root,
+  expectedTarget,
 ) => {
   try {
     const body = await assertRegularPrivateFile(artifact, root);
@@ -296,7 +286,7 @@ const assertEvidenceArtifact = async (
     assertSignedReceipt({ name, artifacts, queue_drain_depth }, evidence, contract, receiptPublicKey);
     for (const [artifactName, requiredArtifact] of Object.entries(artifacts)) {
       const artifactBody = await assertRegularPrivateFile(requiredArtifact, root);
-      assertPhaseArtifactContent(name, artifactName, artifactBody, contract);
+      assertPhaseArtifactContent(name, artifactName, artifactBody, contract, expectedTarget);
     }
   } catch {
     throw new Error('Protected migration evidence is invalid.');
@@ -358,12 +348,16 @@ const assertMountedArtifactsMatch = async (phases, expected, root) => {
 };
 
 export const validateProtectedMigrationEvidence = async (contract, expected = {}) => {
+  const expectedTarget = parseExpectedTarget(expected.expectedTarget);
   const validated = assertProtectedMigrationContract(contract, expected);
+  if (validated.main_sha !== expectedTarget.identity.main_sha || validated.run_id !== expectedTarget.identity.run_id) {
+    throw new Error('Protected migration target mismatch.');
+  }
   try {
     const root = await assertExternalMigrationRoot(expected.root);
     await assertMountedArtifactsMatch(validated.phases, expected.expectedMountedArtifacts, root);
     for (const phase of validated.phases) {
-      await assertEvidenceArtifact(phase, validated, expected.receiptPublicKey, root);
+      await assertEvidenceArtifact(phase, validated, expected.receiptPublicKey, root, expectedTarget);
     }
   } catch {
     throw new Error('Protected migration evidence is invalid.');
@@ -371,7 +365,11 @@ export const validateProtectedMigrationEvidence = async (contract, expected = {}
   return validated;
 };
 
-const main = async () => {
+export const validateProtectedInvocation = async () => {
+  const expectedTarget = await loadExpectedTarget(process.env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const zoneId = process.env.CLOUDFLARE_ZONE_ID;
+  if (!token || !/^[a-f0-9]{32}$/.test(zoneId ?? '')) throw new Error('Target readback configuration is required.');
   const root = await assertExternalMigrationRoot(process.env.IORI_MIGRATION_ROOT);
   const contractPath = process.env.IORI_MIGRATION_CONTRACT;
   if (contractPath === undefined) throw new Error('Protected migration contract is required.');
@@ -405,7 +403,16 @@ const main = async () => {
     expectedRunId,
     expectedMountedArtifacts: mountedArtifacts,
     receiptPublicKey,
+    expectedTarget,
   });
+  const descriptor = contract.phases[0].artifacts.terraform_target_summary;
+  const summary = JSON.parse(await assertRegularPrivateFile(descriptor, root));
+  await readSealedMigrationTarget({ expectedTarget, record: summary.preparation.record, token, zoneId });
+  return expectedTarget;
+};
+
+const main = async () => {
+  await validateProtectedInvocation();
   const result = spawnSync('pnpm', ['--silent', '--filter', 'iori', 'run', 'cloudflare:verify:import'], {
     stdio: 'inherit',
     shell: false,

@@ -1,3 +1,4 @@
+import type { ExpectedTarget } from './migration-target-contract.mjs';
 import type { KeyObject } from 'node:crypto';
 export type MigrationStorage = {
   assertPrivate(): Promise<void>;
@@ -5,6 +6,7 @@ export type MigrationStorage = {
   get(key: string, limit: number): Promise<Buffer>;
 };
 export type MigrationBundleOptions = {
+  expectedTarget: ExpectedTarget;
   environment: 'production' | 'staging';
   expectedMainSha: string;
   expectedRunId: string;
