@@ -29,6 +29,7 @@ export const targetSetupConfiguration = (env) => {
     || a.runId !== runId
   ) throw new Error('Target setup invocation is invalid.');
   const { mode: _mode, ...admission } = a;
+  admissionEnvironment.IORI_ADMISSION_IDENTITY = JSON.stringify(admission);
   return {
     identity,
     mainSha,

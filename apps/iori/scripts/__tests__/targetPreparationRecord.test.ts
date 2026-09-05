@@ -94,3 +94,30 @@ it('publishes after resources, sealed deployment and paused consumer readback on
   await expect(prepareMigrationTarget({ config, preparation, deploy, storage })).rejects.toThrow();
   expect(calls).toEqual(['resources', 'deploy']);
 });
+it('normalizes pretty/reordered admission once for preparation deployment and later readback', async () => {
+  const { targetSetupConfiguration } = await import('../migration-target-setup.mjs');
+  const target = expectedTargetFixture();
+  const reordered = Object.fromEntries(Object.entries(target.admission).reverse());
+  const environment = {
+    IORI_ENVIRONMENT: target.identity.environment,
+    IORI_GENERATION: target.identity.generation,
+    CLOUDFLARE_ACCOUNT_ID: target.identity.account_id,
+    IORI_TERRAFORM_BACKEND_BUCKET: target.identity.backend_bucket,
+    MAIN_SHA: target.identity.main_sha,
+    IORI_MIGRATION_RUN_ID: target.identity.run_id,
+    CLOUDFLARE_ZONE_ID: 'b'.repeat(32),
+    IORI_ADMISSION_IDENTITY: JSON.stringify(reordered, null, 2),
+    ORIGIN: `https://${target.admission.hostname}`,
+    CLOUDFLARE_API_TOKEN: 'fixture',
+  };
+  const config = targetSetupConfiguration(environment);
+  expect(config.admissionEnvironment).toEqual(admissionEnvironment(target));
+  const { outputs } = fixture();
+  expect(admissionEnvironment(expectedTargetFromOutputs({ ...config, outputs }))).toEqual(config.admissionEnvironment);
+  expect(() =>
+    targetSetupConfiguration({
+      ...environment,
+      IORI_ADMISSION_IDENTITY: JSON.stringify({ ...target.admission, unknown: true }),
+    })
+  ).toThrow();
+});
