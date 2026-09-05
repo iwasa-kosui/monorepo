@@ -9,6 +9,7 @@ import type { Key } from '../../domain/key/key.ts';
 import { KeyType } from '../../domain/key/keyType.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
+import { settleAll } from '../../helper/settleAll.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 import { DB } from '../pg/db.ts';
 import { PgKeyGeneratedStore } from '../pg/key/keyGeneratedStore.ts';
@@ -124,9 +125,9 @@ const getInstance = () => {
           RA.ok(user.id),
           RA.andThen(keysResolverByUserId.resolve),
           RA.andThen((keys) =>
-            RA.all(
+            settleAll(
               KeyType.values.map((type) => generateIfMissing(keys, type, user.id)),
-            )
+            ).then((values) => RA.all(values.map((value) => Promise.resolve(value))))
           ),
           RA.map((keyPairs): CryptoKeyPair[] => keyPairs),
         )

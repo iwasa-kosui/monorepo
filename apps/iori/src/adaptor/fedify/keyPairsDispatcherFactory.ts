@@ -8,6 +8,7 @@ import type { Key, KeysResolverByUserId } from '../../domain/key/key.ts';
 import { KeyType } from '../../domain/key/keyType.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
+import { settleAll } from '../../helper/settleAll.ts';
 import type { InstanceActorKeyPairsResolver } from '../d1/key/instanceActorKeyPairsResolver.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
@@ -52,7 +53,11 @@ export const createKeyPairsDispatcher = (
           ? RA.err(new Error(`User not found: ${identifier}`))
           : RA.flow(keysResolverByUserId.resolve(user.id), RA.map((keys) => ({ keys, userId: user.id })))
       ),
-      RA.andThen(({ keys, userId }) => RA.all(KeyType.values.map((type) => generateIfMissing(keys, type, userId)))),
+      RA.andThen(({ keys, userId }) =>
+        settleAll(KeyType.values.map((type) => generateIfMissing(keys, type, userId))).then((values) =>
+          RA.all(values.map((value) => Promise.resolve(value)))
+        )
+      ),
       RA.match({
         ok: (keyPairs) => keyPairs,
         err: (error) => {

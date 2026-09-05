@@ -35,6 +35,7 @@ import {
   type TimelineItemDeletedStore,
   type TimelineItemsResolverByPostId,
 } from '../../../domain/timeline/timelineItem.ts';
+import { settleAll } from '../../../helper/settleAll.ts';
 
 export type OnDeleteDeps = Readonly<{
   remotePostResolverByUri: PostResolverByUri;
@@ -152,7 +153,7 @@ async (
     : [];
 
   // Store all events in batch (each store handles its own transaction)
-  await Promise.all([
+  await settleAll([
     deps.timelineItemDeletedStore.store(...timelineItemEvents),
     deps.likeNotificationDeletedStore.store(...likeNotificationEvents),
     deps.emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
