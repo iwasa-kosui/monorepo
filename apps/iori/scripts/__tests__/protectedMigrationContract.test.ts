@@ -3,6 +3,7 @@ import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { convertD1Import } from '../convert-d1-import.mjs';
 import { exportPostgres } from '../export-postgres.mjs';
 import { backfillPublishedOgpImages, importR2Uploads } from '../import-r2-uploads.mjs';
@@ -175,13 +176,12 @@ describe('protected migration contract', () => {
   });
 
   it('accepts raw manifests emitted by the migration generators', async () => {
-    const exportDirectory = await mkdtemp(join(await realpath(tmpdir()), 'iori-generated-export-'));
+    const exportParent = await mkdtemp(join(await realpath(tmpdir()), 'iori-generated-export-'));
+    const exportDirectory = join(exportParent, 'export');
     const importDirectory = await mkdtemp(join(await realpath(tmpdir()), 'iori-generated-import-'));
-    directories.push(exportDirectory, importDirectory);
+    directories.push(exportParent, importDirectory);
     await exportPostgres({
-      connectionString: 'postgres://fixture.invalid/iori',
       outputDir: exportDirectory,
-      queueDrained: true,
       createClient: async () => ({
         connect: async () => undefined,
         end: async () => undefined,

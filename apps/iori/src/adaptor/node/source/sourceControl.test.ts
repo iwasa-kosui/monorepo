@@ -40,6 +40,36 @@ const setup = async (revision: string | undefined = identity.main_sha) => {
 };
 const command = (op: string, extra = {}) => ({ op, ...identity, ...extra });
 describe('source control', () => {
+  it('holds the export lock through cancellation cleanup and forbids resume or unquiescent exports', async () => {
+    const { base, queue } = await setup();
+    const entered = Promise.withResolvers<void>();
+    const cleanup = Promise.withResolvers<void>();
+    const snapshot = {
+      estimate: async () => ({}),
+      inventory: async () => ({}),
+      transfer: async () => {},
+      export: async (_identity: unknown, signal: AbortSignal) => {
+        entered.resolve();
+        await cleanup.promise;
+        signal.throwIfAborted();
+        return {};
+      },
+    };
+    const control = await SourceControl.open({ base, queue, revision: identity.main_sha, snapshot: snapshot as never });
+    await expect(control.command(command('export'))).rejects.toThrow();
+    await control.command(command('freeze'));
+    await control.command(command('drain', { timeout_ms: 100 }));
+    const abort = new AbortController();
+    const exporting = control.command(command('export'), { signal: abort.signal });
+    await Promise.race([entered.promise, exporting]);
+    abort.abort();
+    await expect(control.command(command('resume', { recovery: 'destination_writes_not_enabled' }))).rejects.toThrow(
+      'control_busy',
+    );
+    cleanup.resolve();
+    await expect(exporting).rejects.toThrow();
+    expect((await control.command(command('status'))).ingress_frozen).toBe(true);
+  });
   it.each([false, true])(
     'retains HTTP work until pending body cancellation settles (reject: %s)',
     async (rejectCancel) => {

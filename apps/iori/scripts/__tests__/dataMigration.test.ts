@@ -257,8 +257,10 @@ describe('Cloudflare data migration tooling', () => {
     const manifestPath = await writeFixtureManifest(fixtureDirectory);
 
     await expect(exportPostgres({
-      connectionString: 'postgres://fixture.invalid/iori',
       outputDir: appRoot,
+      createClient: async () => {
+        throw new Error('not reached');
+      },
     })).rejects.toThrow('outside the repository');
     await expect(convertD1Import({
       manifestPath,
@@ -268,22 +270,29 @@ describe('Cloudflare data migration tooling', () => {
   });
 
   it('writes an external PostgreSQL export through an injected fixture client', async () => {
-    const outputDirectory = await temporaryDirectory();
+    const outputDirectory = join(await temporaryDirectory(), 'export');
+    let cursorTable = '';
+    let delivered = false;
     let ended = false;
     const manifest = await exportPostgres({
-      connectionString: 'postgres://fixture.invalid/iori',
       outputDir: outputDirectory,
-      queueDrained: true,
       now: () => new Date('2026-01-02T03:04:05.000Z'),
       createClient: async () => ({
         connect: async () => undefined,
         end: async () => {
           ended = true;
         },
-        query: async (sql) =>
-          sql.includes('FROM "actors"')
-            ? { rows: [{ row: { actorId: '11111111-1111-4111-8111-111111111111', type: 'Person' } }] }
-            : { rows: [] },
+        query: async (sql) => {
+          if (sql.startsWith('DECLARE')) {
+            cursorTable = sql.includes('FROM "actors"') ? 'actors' : '';
+            delivered = false;
+          }
+          if (sql.startsWith('FETCH') && cursorTable === 'actors' && !delivered) {
+            delivered = true;
+            return { rows: [{ row: { actorId: '11111111-1111-4111-8111-111111111111', type: 'Person' } }] };
+          }
+          return { rows: [] };
+        },
       }),
     });
 
@@ -298,7 +307,9 @@ describe('Cloudflare data migration tooling', () => {
   });
 
   it('verifies transformed table checksums from an external D1 manifest', async () => {
-    const exportDirectory = await temporaryDirectory();
+    const exportDirectory = join(await temporaryDirectory(), 'export');
+    let cursorTable = '';
+    let delivered = false;
     const importDirectory = await temporaryDirectory();
     const rows = [
       {
@@ -319,16 +330,21 @@ describe('Cloudflare data migration tooling', () => {
       },
     ];
     const manifest = await exportPostgres({
-      connectionString: 'postgres://fixture.invalid/iori',
       outputDir: exportDirectory,
-      queueDrained: true,
       createClient: async () => ({
         connect: async () => undefined,
         end: async () => undefined,
-        query: async (sql) =>
-          sql.includes('FROM "posts"')
-            ? { rows: rows.map((row) => ({ row })) }
-            : { rows: [] },
+        query: async (sql) => {
+          if (sql.startsWith('DECLARE')) {
+            cursorTable = sql.includes('FROM "posts"') ? 'posts' : '';
+            delivered = false;
+          }
+          if (sql.startsWith('FETCH') && cursorTable === 'posts' && !delivered) {
+            delivered = true;
+            return { rows: rows.map((row) => ({ row })) };
+          }
+          return { rows: [] };
+        },
       }),
     });
     expect(manifest.tables.posts.count).toBe(2);
@@ -465,8 +481,10 @@ describe('Cloudflare data migration tooling', () => {
     await symlink(appRoot, linkedDirectory);
 
     await expect(exportPostgres({
-      connectionString: 'postgres://fixture.invalid/iori',
       outputDir: join(linkedDirectory, 'data'),
+      createClient: async () => {
+        throw new Error('not reached');
+      },
     })).rejects.toThrow('symlink');
   });
 

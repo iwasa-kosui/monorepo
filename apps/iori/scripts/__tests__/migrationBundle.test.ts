@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { publishMigrationBundle } from '../migration-bundle.mjs';
 import { createMigrationR2Storage } from '../migration-r2-storage.mjs';
 
@@ -11,12 +12,13 @@ describe('migration bundle boundary', () => {
   });
 });
 
+import { createHash } from 'node:crypto';
 import { cp, link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
-import { exportPostgres } from '../export-postgres.mjs';
+
 import { convertD1Import } from '../convert-d1-import.mjs';
+import { exportPostgres } from '../export-postgres.mjs';
 import { restoreMigrationBundle } from '../migration-bundle.mjs';
 import { assertMigrationBucketPrivate } from '../migration-r2-storage.mjs';
 import { validateProtectedMigrationEvidence } from '../run-protected-migration.mjs';
@@ -29,26 +31,34 @@ const temp = async () => {
   return dir;
 };
 const fixture = async () => {
-  const data = await temp();
+  const data = join(await temp(), 'data');
+  let actors = false;
+  let sent = false;
   await exportPostgres({
-    connectionString: 'postgres://fixture.invalid/iori',
     outputDir: data,
-    queueDrained: true,
     createClient: async () => ({
       connect: async () => {},
       end: async () => {},
-      query: async (sql: string) => ({
-        rows: sql.includes('FROM "actors"')
-          ? [{
-            row: {
-              actorId: '11111111-1111-4111-8111-111111111111',
-              uri: 'https://fixture.invalid/' + 'x'.repeat(1024),
-              inboxUrl: 'https://fixture.invalid/inbox',
-              type: 'Person',
-            },
-          }]
-          : [],
-      }),
+      query: async (sql: string) => {
+        if (sql.startsWith('DECLARE')) {
+          actors = sql.includes('FROM "actors"');
+          sent = false;
+        }
+        const deliver = sql.startsWith('FETCH') && actors && !sent;
+        if (deliver) sent = true;
+        return {
+          rows: deliver
+            ? [{
+              row: {
+                actorId: '11111111-1111-4111-8111-111111111111',
+                uri: 'https://fixture.invalid/' + 'x'.repeat(1024),
+                inboxUrl: 'https://fixture.invalid/inbox',
+                type: 'Person',
+              },
+            }]
+            : [],
+        };
+      },
     }),
   });
   await convertD1Import({

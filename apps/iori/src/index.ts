@@ -1,14 +1,30 @@
 import { serve } from '@hono/node-server';
+import { join } from 'node:path';
+import { Client } from 'pg';
 import { behindProxy } from 'x-forwarded-fetch';
 
 import { listenControlSocket } from './adaptor/node/source/controlSocket.ts';
-import { SourceControl } from './adaptor/node/source/sourceControl.ts';
+import { defaultControlBase, SourceControl } from './adaptor/node/source/sourceControl.ts';
+import { SourceSnapshot } from './adaptor/node/source/sourceSnapshot.ts';
+import { PgConfig } from './adaptor/pg/pgConfig.ts';
 import app from './app.tsx';
+import { Env } from './env.ts';
 import { Federation } from './federation.ts';
 
 declare const __IORI_SOURCE_REVISION__: string | undefined;
 const revision = typeof __IORI_SOURCE_REVISION__ === 'undefined' ? undefined : __IORI_SOURCE_REVISION__;
-const source = await SourceControl.open({ queue: Federation.getQueue(), revision });
+const sourceBase = defaultControlBase();
+const sourceSnapshot = new SourceSnapshot({
+  base: sourceBase,
+  uploadDir: process.env.UPLOAD_DIR || join(process.cwd(), 'uploads'),
+  createClient: async () =>
+    new Client({
+      connectionString: Env.getInstance().DATABASE_URL,
+      ...PgConfig.getInstance(),
+      connectionTimeoutMillis: 10_000,
+    }),
+});
+const source = await SourceControl.open({ queue: Federation.getQueue(), revision, snapshot: sourceSnapshot });
 const controlSocket = await listenControlSocket(source);
 const queueAbort = new AbortController();
 // Start exactly once; the controlled loop pauses/resumes without restarting Fedify.

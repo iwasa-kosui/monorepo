@@ -4,12 +4,19 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 
+import { SOURCE_LIMITS, type SourceInventory } from '../../../../scripts/source-transfer-protocol.mjs';
+import type { FileTransfer, SourceSnapshot } from './sourceSnapshot.ts';
+
 const identitySchema = z.object({
   main_sha: z.string().regex(/^[a-f0-9]{40}$/),
   run_id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
 }).strict();
 const commandSchema = z.discriminatedUnion('op', [
   identitySchema.extend({ op: z.literal('freeze') }),
+  identitySchema.extend({ op: z.literal('estimate') }),
+  identitySchema.extend({ op: z.literal('export') }),
+  identitySchema.extend({ op: z.literal('inventory') }),
+  identitySchema.extend({ op: z.literal('transfer'), file_id: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/) }),
   identitySchema.extend({ op: z.literal('status') }),
   identitySchema.extend({ op: z.literal('drain'), timeout_ms: z.number().int().min(1).max(300_000) }),
   identitySchema.extend({
@@ -76,12 +83,22 @@ export class SourceControl {
   #drained = false;
   #busy = false;
   #stopping = false;
-  private constructor(readonly base: string, private readonly queue: SourceQueue, private readonly revision?: string) {}
+  private constructor(
+    readonly base: string,
+    private readonly queue: SourceQueue,
+    private readonly revision?: string,
+    private readonly snapshot?: SourceSnapshot,
+  ) {}
   static async open(
-    { base = defaultControlBase(), queue, revision }: { base?: string; queue: SourceQueue; revision?: string },
+    { base = defaultControlBase(), queue, revision, snapshot }: {
+      base?: string;
+      queue: SourceQueue;
+      revision?: string;
+      snapshot?: SourceSnapshot;
+    },
   ) {
     await validatePrivateDirectory(base);
-    const control = new SourceControl(base, queue, revision);
+    const control = new SourceControl(base, queue, revision, snapshot);
     queue.pause();
     try {
       // An interrupted fsync/rename must never reopen admission on restart.
@@ -159,7 +176,7 @@ export class SourceControl {
     this.queue.pause();
     while (!this.idle() || this.#busy) await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  async command(input: unknown) {
+  async command(input: unknown, context: { signal?: AbortSignal; sendFile?: FileTransfer } = {}) {
     if (this.#stopping) throw new Error('source_stopping');
     const parsed = commandSchema.safeParse(input);
     if (!parsed.success) throw new Error('invalid_command');
@@ -172,8 +189,39 @@ export class SourceControl {
     }
     if (this.#busy) throw new Error('control_busy');
     this.#busy = true;
+    const extra: { estimate?: Awaited<ReturnType<SourceSnapshot['estimate']>>; inventory?: SourceInventory } = {};
+    const timeout = command.op === 'export'
+      ? SOURCE_LIMITS.exportMs
+      : command.op === 'transfer'
+      ? SOURCE_LIMITS.transferMs
+      : SOURCE_LIMITS.estimateMs;
+    const signal = AbortSignal.any([AbortSignal.timeout(timeout), ...(context.signal ? [context.signal] : [])]);
     try {
       switch (command.op) {
+        case 'estimate': {
+          if (!this.snapshot) throw new Error('snapshot_unavailable');
+          extra.estimate = await this.snapshot.estimate(signal);
+          break;
+        }
+        case 'export':
+        case 'inventory':
+        case 'transfer': {
+          if (!this.snapshot || !this.#identity) throw new Error('snapshot_unavailable');
+          const marker = await readMarker(join(this.base, 'freeze.json'));
+          if (
+            !marker || marker.main_sha !== command.main_sha || marker.run_id !== command.run_id
+            || !(await this.report()).drained
+          ) throw new Error('source_not_quiescent');
+          signal.throwIfAborted();
+          if (command.op === 'export') extra.inventory = await this.snapshot.export(this.#identity, signal);
+          else if (command.op === 'inventory') extra.inventory = await this.snapshot.inventory(this.#identity);
+          else {
+            if (!context.sendFile) throw new Error('transfer_unavailable');
+            await this.snapshot.transfer(this.#identity, command.file_id, context.sendFile, signal);
+          }
+          signal.throwIfAborted();
+          break;
+        }
         case 'freeze': {
           this.#frozen = true;
           this.#drained = false;
@@ -250,7 +298,10 @@ export class SourceControl {
           this.#frozen = false;
         }
       }
-      return await this.report(command.op === 'drain' ? 0 : undefined);
+      return {
+        ...await this.report(['drain', 'export', 'inventory', 'transfer'].includes(command.op) ? 0 : undefined),
+        ...extra,
+      };
     } catch (error) {
       this.#drained = false;
       if (this.#frozen) this.queue.pause();
