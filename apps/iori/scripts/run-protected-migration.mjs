@@ -386,7 +386,7 @@ const main = async () => {
     expectedMountedArtifacts: mountedArtifacts,
     receiptPublicKey,
   });
-  const result = spawnSync('pnpm', ['--filter', 'iori', 'run', 'cloudflare:verify:import'], {
+  const result = spawnSync('pnpm', ['--silent', '--filter', 'iori', 'run', 'cloudflare:verify:import'], {
     stdio: 'inherit',
     shell: false,
   });

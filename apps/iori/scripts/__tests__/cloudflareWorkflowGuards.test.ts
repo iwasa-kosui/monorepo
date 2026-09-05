@@ -19,7 +19,7 @@ describe('Cloudflare workflow public-artifact gates', () => {
 
     expect(workflow).toContain('public-artifact-gate:');
     expect(workflow).toContain('Verify public artifacts and write redacted summary');
-    expect(workflow).toContain('pnpm --filter iori run cloudflare:public-artifacts:check');
+    expect(workflow).toContain('pnpm --silent --filter iori run cloudflare:public-artifacts:check');
     expect(workflow.match(/needs: public-artifact-gate/g)).toHaveLength(6);
     expect(workflow).toContain('needs: [public-artifact-gate, verify-import, workers-dev-validation]');
     expect(workflow).toContain('## Terraform action summary');
@@ -44,8 +44,16 @@ describe('Cloudflare workflow public-artifact gates', () => {
     expect(workflow).toContain('IORI_IMPORT_RUNNER_SHA256: ${{ secrets.IORI_IMPORT_RUNNER_SHA256 }}');
     expect(workflow).toContain('Validate protected mounted migration contract');
     expect(workflow).toContain('validate-private-mounted-inputs.mjs --require-contract');
-    expect(workflow).toContain('pnpm --filter iori run cloudflare:migrate:protected >"$output" 2>&1');
+    expect(workflow).toContain('pnpm --silent --filter iori run cloudflare:migrate:protected >"$output" 2>&1');
     expect(workflow.match(/run-cloudflare-smoke\.mjs/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('silences every pnpm command whose output is captured for scanning', async () => {
+    const workflow = await readWorkflow('deploy-iori-worker.yml');
+    const capturedPnpmCommands = workflow.match(/^\s*pnpm .*?>"\$output" 2>&1.*$/gm) ?? [];
+
+    expect(capturedPnpmCommands).toHaveLength(4);
+    expect(capturedPnpmCommands.every((command) => command.includes('pnpm --silent '))).toBe(true);
   });
 
   it('materializes protected verification inputs and Terraform-derived Worker bindings on the runner', async () => {

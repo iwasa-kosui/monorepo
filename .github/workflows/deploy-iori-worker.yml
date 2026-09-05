@@ -80,7 +80,7 @@ jobs:
           trap 'rm -f -- "$output"' EXIT
           status=0
           guard_status=0
-          pnpm --filter iori run cloudflare:public-artifacts:check >"$output" 2>&1 || status=$?
+          pnpm --silent --filter iori run cloudflare:public-artifacts:check >"$output" 2>&1 || status=$?
           node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
           [ "$guard_status" -eq 0 ]
           [ "$status" -eq 0 ]
@@ -317,7 +317,7 @@ jobs:
           set -euo pipefail
           output="$(mktemp)"
           trap 'rm -f -- "$output"' EXIT
-          pnpm --filter iori run cloudflare:migrate:protected >"$output" 2>&1
+          pnpm --silent --filter iori run cloudflare:migrate:protected >"$output" 2>&1
           node apps/iori/scripts/assert-workflow-output.mjs <"$output"
 
   migrate-data:
@@ -373,7 +373,7 @@ jobs:
           trap 'rm -f -- "$output"' EXIT
           status=0
           guard_status=0
-          pnpm --filter iori run cloudflare:migrate:protected >"$output" 2>&1 || status=$?
+          pnpm --silent --filter iori run cloudflare:migrate:protected >"$output" 2>&1 || status=$?
           node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
           [ "$guard_status" -eq 0 ]
           [ "$status" -eq 0 ]
@@ -605,7 +605,7 @@ jobs:
         run: |
           set -euo pipefail
           output="$(mktemp)"
-          pnpm --filter iori run deploy:worker >"$output" 2>&1
+          pnpm --silent --filter iori run deploy:worker >"$output" 2>&1
           node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output"
       - name: Remove private temporary directory
