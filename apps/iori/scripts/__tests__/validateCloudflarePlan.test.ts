@@ -127,3 +127,38 @@ describe('validateCloudflarePlan', () => {
     ]);
   });
 });
+
+describe('private migration storage ownership', () => {
+  it('allows dedicated disabled managed domain only', () => {
+    expect(
+      validateCloudflarePlan({
+        operation: 'reconcile',
+        resource_changes: [{
+          address: 'cloudflare_r2_managed_domain.migration',
+          change: { actions: ['create'], after: { enabled: false } },
+        }],
+      }),
+    ).toEqual([]);
+    for (const enabled of [true, undefined]) {
+      expect(
+        validateCloudflarePlan({
+          operation: 'reconcile',
+          resource_changes: [{
+            address: 'cloudflare_r2_managed_domain.migration',
+            change: { actions: ['update'], after: { enabled } },
+          }],
+        }),
+      ).not.toEqual([]);
+    }
+  });
+  it('rejects deletion and replacement of the dedicated bucket', () => {
+    for (const actions of [['delete'], ['delete', 'create']]) {
+      expect(
+        validateCloudflarePlan({
+          operation: 'reconcile',
+          resource_changes: [{ address: 'cloudflare_r2_bucket.migration', change: { actions } }],
+        }),
+      ).not.toEqual([]);
+    }
+  });
+});

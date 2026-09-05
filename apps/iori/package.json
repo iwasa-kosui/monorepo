@@ -31,6 +31,7 @@
     "zod": "4.2.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1127.0",
     "@cloudflare/workers-types": "4.20250604.0",
     "@eslint/js": "9.39.2",
     "@fast-check/vitest": "0.2.0",

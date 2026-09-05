@@ -88,3 +88,23 @@ resource "cloudflare_workers_route" "iori" {
     }
   }
 }
+
+resource "cloudflare_r2_bucket" "migration" {
+  account_id = var.cloudflare_account_id
+  name       = coalesce(var.migration_bucket_name, "iori-migration-${var.environment}")
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition     = coalesce(var.migration_bucket_name, "iori-migration-${var.environment}") != local.r2_bucket_name
+      error_message = "The migration bucket must be separate from the application uploads bucket."
+    }
+  }
+}
+
+resource "cloudflare_r2_managed_domain" "migration" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.migration.name
+  enabled     = false
+}

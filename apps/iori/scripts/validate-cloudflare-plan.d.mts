@@ -4,7 +4,7 @@ export interface CloudflarePlan {
   requireWorkerBindingsNoop?: boolean;
   resource_changes?: readonly {
     address: string;
-    change: { actions: readonly string[] };
+    change: { actions: readonly string[]; after?: { enabled?: boolean }; after_unknown?: { enabled?: boolean } };
   }[];
   output_changes?: {
     worker_bindings?: {

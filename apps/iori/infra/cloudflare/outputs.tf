@@ -8,3 +8,11 @@ output "worker_bindings" {
     worker_name     = var.worker_name
   }
 }
+
+output "migration_storage" {
+  sensitive = true
+  value = {
+    bucket_name = cloudflare_r2_bucket.migration.name
+    environment = var.environment
+  }
+}

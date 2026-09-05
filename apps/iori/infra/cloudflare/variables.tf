@@ -76,3 +76,10 @@ variable "enable_production_worker_route" {
     error_message = "enable_production_worker_route can be true only for production."
   }
 }
+
+variable "migration_bucket_name" {
+  description = "Optional dedicated private migration bucket name override. Never use the Terraform state or uploads bucket."
+  type        = string
+  default     = null
+  nullable    = true
+}

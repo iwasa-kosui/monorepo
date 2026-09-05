@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const terraformOwnedResourceTypes = new Set([
   'cloudflare_d1_database',
   'cloudflare_r2_bucket',
+  'cloudflare_r2_managed_domain',
   'cloudflare_workers_kv_namespace',
   'cloudflare_queue',
   'cloudflare_queue_consumer',
@@ -80,6 +81,16 @@ export const validateCloudflarePlan = (plan) => {
     const { address } = change;
     const actions = change.change.actions;
 
+    if (address === 'cloudflare_r2_managed_domain.migration') {
+      if (
+        change.change.after?.enabled !== false || change.change.after_unknown?.enabled === true
+        || actions.includes('delete')
+      ) {
+        return [`${address} must keep public access disabled`];
+      }
+    } else if (resourceTypeFromAddress(address) === 'cloudflare_r2_managed_domain') {
+      return [`${address} is not Terraform-owned`];
+    }
     if (actions.length === 1 && actions[0] === 'no-op') return [];
 
     const resourceType = resourceTypeFromAddress(address);
