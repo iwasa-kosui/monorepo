@@ -86,13 +86,13 @@ jobs:
             local output status=0 guard_status=0
             output="$(mktemp)"
             "$@" >"$output" 2>&1 || status=$?
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
             rm -f "$output"
             if [ "$guard_status" -ne 0 ]; then return "$guard_status"; fi
             return "$status"
           }
-          run_guarded pnpm --filter iori run typecheck
-          run_guarded pnpm --filter iori exec vitest run src/worker.task7.test.ts src/worker.task8.test.ts src/smokeWorker.test.ts
+          run_guarded pnpm --silent --filter iori run typecheck
+          run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap src/worker.task7.test.ts src/worker.task8.test.ts src/smokeWorker.test.ts
           export WORKER_NAME="iori-worker-fixture"
           export ACCOUNT_ID="$(printf '%032d' 0)"
           export D1_DATABASE_ID="$(printf '%032d' 1)"
@@ -100,12 +100,12 @@ jobs:
           export R2_BUCKET_NAME="iori-uploads-fixture"
           export QUEUE_NAME="iori-fedify-fixture"
           export ORIGIN="https://iori.example.invalid"
-          run_guarded pnpm --filter iori run deploy:worker:dry-run
-          run_guarded pnpm --filter iori run cloudflare:public-artifacts:check
+          run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
+          run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
           run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
-          run_guarded pnpm --filter iori exec vitest run scripts/__tests__/validateCloudflarePlan.test.ts
+          run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap scripts/__tests__/validateCloudflarePlan.test.ts
 
       - name: Write redacted Cloudflare validation summary
         shell: bash

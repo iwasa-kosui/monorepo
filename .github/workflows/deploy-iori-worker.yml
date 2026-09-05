@@ -81,7 +81,7 @@ jobs:
           status=0
           guard_status=0
           pnpm --filter iori run cloudflare:public-artifacts:check >"$output" 2>&1 || status=$?
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
           [ "$guard_status" -eq 0 ]
           [ "$status" -eq 0 ]
           {
@@ -173,18 +173,18 @@ jobs:
           output="$IORI_PRIVATE_DIRECTORY/binding-materialization-output"
           printf 'bucket = "%s"\nkey = "apps/iori/cloudflare/production.tfstate"\nregion = "auto"\nendpoint = "%s"\n' "$R2_STATE_BUCKET" "$R2_STATE_ENDPOINT" > "$backend_config"
           if ! terraform -chdir=apps/iori/infra/cloudflare init -input=false -backend-config="$backend_config" >"$output" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
           if ! terraform -chdir=apps/iori/infra/cloudflare output -json worker_bindings >"$terraform_bindings" 2>>"$output"; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
           if ! node apps/iori/scripts/materialize-worker-bindings.mjs --input "$terraform_bindings" --output "$worker_bindings" --expected-worker-name "$TF_VAR_worker_name" >>"$output" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output" "$terraform_bindings"
           printf 'IORI_WORKER_BINDINGS_PATH=%s\n' "$worker_bindings" >> "$GITHUB_ENV"
           printf '%s\n' 'IORI_REQUIRE_TERRAFORM_BINDINGS=true' >> "$GITHUB_ENV"
@@ -198,18 +198,18 @@ jobs:
           plan_stderr="$IORI_PRIVATE_DIRECTORY/deploy-worker-plan.stderr"
           trap 'rm -f -- "$plan" "$plan_json" "$plan_stderr"' EXIT
           if ! terraform -chdir=apps/iori/infra/cloudflare plan -input=false -out="$plan" >"$plan_stderr" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$plan_stderr" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$plan_stderr" || true
             exit 1
           fi
           if ! terraform -chdir=apps/iori/infra/cloudflare show -json "$plan" >"$plan_json" 2>>"$plan_stderr"; then
             node apps/iori/scripts/assert-workflow-output.mjs --private-terraform-plan "$plan_json" || true
-            pnpm --filter iori run cloudflare:workflow-output:check <"$plan_stderr" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$plan_stderr" || true
             exit 1
           fi
           node apps/iori/scripts/assert-workflow-output.mjs --private-terraform-plan "$plan_json"
-          pnpm --filter iori run cloudflare:workflow-output:check <"$plan_stderr"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$plan_stderr"
           node apps/iori/scripts/validate-cloudflare-plan.mjs --operation reconcile "$plan_json" --require-worker-bindings-no-op >"$IORI_PRIVATE_DIRECTORY/deploy-worker-plan-summary"
-          pnpm --filter iori run cloudflare:workflow-output:check <"$IORI_PRIVATE_DIRECTORY/deploy-worker-plan-summary"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$IORI_PRIVATE_DIRECTORY/deploy-worker-plan-summary"
 
       - name: Build, typecheck, migrate, and deploy without public output
         shell: bash
@@ -219,16 +219,16 @@ jobs:
             local output status=0 guard_status=0
             output="$(mktemp)"
             "$@" >"$output" 2>&1 || status=$?
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
             rm -f "$output"
             if [ "$guard_status" -ne 0 ]; then return "$guard_status"; fi
             return "$status"
           }
-          run_guarded pnpm --filter result run build
-          run_guarded pnpm --filter iori run typecheck
-          run_guarded pnpm --filter iori run build:client
-          run_guarded pnpm --filter iori run d1:migrate:remote
-          run_guarded pnpm --filter iori run deploy:worker
+          run_guarded pnpm --silent --filter result run build
+          run_guarded pnpm --silent --filter iori run typecheck
+          run_guarded pnpm --silent --filter iori run build:client
+          run_guarded pnpm --silent --filter iori run d1:migrate:remote
+          run_guarded pnpm --silent --filter iori run deploy:worker
 
       - name: Run protected smoke tests
         shell: bash
@@ -242,7 +242,7 @@ jobs:
             --allowed-hostname "$IORI_SMOKE_ALLOWED_HOSTNAME" \
             --checks-json "$IORI_SMOKE_CHECKS_JSON" \
             --smoke-queue-token "$IORI_SMOKE_QUEUE_TOKEN" >"$output" 2>&1
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
 
       - name: Remove private temporary directory
         if: always()
@@ -305,10 +305,10 @@ jobs:
           node apps/iori/scripts/validate-private-mounted-inputs.mjs --require-contract
           output="$(mktemp)"
           if ! node --check "$IORI_IMPORT_RUNNER" >"$output" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output"
 
       - name: Verify imports without public output
@@ -318,7 +318,7 @@ jobs:
           output="$(mktemp)"
           trap 'rm -f -- "$output"' EXIT
           pnpm --filter iori run cloudflare:migrate:protected >"$output" 2>&1
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
 
   migrate-data:
     if: inputs.operation == 'migrate-data'
@@ -374,7 +374,7 @@ jobs:
           status=0
           guard_status=0
           pnpm --filter iori run cloudflare:migrate:protected >"$output" 2>&1 || status=$?
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
           [ "$guard_status" -eq 0 ]
           [ "$status" -eq 0 ]
 
@@ -422,7 +422,7 @@ jobs:
             --allowed-hostname "$IORI_WORKERS_DEV_SMOKE_ALLOWED_HOSTNAME" \
             --checks-json "$IORI_WORKERS_DEV_SMOKE_CHECKS_JSON" \
             --smoke-queue-token "$IORI_WORKERS_DEV_SMOKE_QUEUE_TOKEN" >"$output" 2>&1
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output"
 
   reconcile-resources:
@@ -556,18 +556,18 @@ jobs:
           output="$IORI_PRIVATE_DIRECTORY/binding-materialization-output"
           printf 'bucket = "%s"\nkey = "apps/iori/cloudflare/production.tfstate"\nregion = "auto"\nendpoint = "%s"\n' "$R2_STATE_BUCKET" "$R2_STATE_ENDPOINT" > "$backend_config"
           if ! terraform -chdir=apps/iori/infra/cloudflare init -input=false -backend-config="$backend_config" >"$output" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
           if ! terraform -chdir=apps/iori/infra/cloudflare output -json worker_bindings >"$terraform_bindings" 2>>"$output"; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
           if ! node apps/iori/scripts/materialize-worker-bindings.mjs --input "$terraform_bindings" --output "$worker_bindings" --expected-worker-name "$TF_VAR_worker_name" >>"$output" 2>&1; then
-            pnpm --filter iori run cloudflare:workflow-output:check <"$output" || true
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || true
             exit 1
           fi
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output" "$terraform_bindings"
           printf 'IORI_WORKER_BINDINGS_PATH=%s\n' "$worker_bindings" >> "$GITHUB_ENV"
           printf '%s\n' 'IORI_REQUIRE_TERRAFORM_BINDINGS=true' >> "$GITHUB_ENV"
@@ -584,8 +584,8 @@ jobs:
           plan_show_stderr="$temporary_directory/plan-show.stderr"
           umask 077
           printf 'bucket = "%s"\nkey = "apps/iori/cloudflare/production.tfstate"\nregion = "auto"\nendpoint = "%s"\n' "$R2_STATE_BUCKET" "$R2_STATE_ENDPOINT" > "$backend_config"
-          run_guarded() { local output status=0 guard_status=0; output="$(mktemp)"; "$@" >"$output" 2>&1 || status=$?; pnpm --filter iori run cloudflare:workflow-output:check <"$output" || guard_status=$?; rm -f "$output"; [ "$guard_status" -eq 0 ] || return "$guard_status"; return "$status"; }
-          write_plan_summary() { local action_summary="$temporary_directory/action-summary"; if ! node apps/iori/scripts/validate-cloudflare-plan.mjs --operation "$1" "$plan_json" --require-worker-bindings-no-op >"$action_summary"; then pnpm --filter iori run cloudflare:workflow-output:check <"$action_summary" || true; return 1; fi; pnpm --filter iori run cloudflare:workflow-output:check <"$action_summary"; printf '%s\n' '## Terraform action summary' >> "$GITHUB_STEP_SUMMARY"; cat "$action_summary" >> "$GITHUB_STEP_SUMMARY"; }
+          run_guarded() { local output status=0 guard_status=0; output="$(mktemp)"; "$@" >"$output" 2>&1 || status=$?; node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?; rm -f "$output"; [ "$guard_status" -eq 0 ] || return "$guard_status"; return "$status"; }
+          write_plan_summary() { local action_summary="$temporary_directory/action-summary"; if ! node apps/iori/scripts/validate-cloudflare-plan.mjs --operation "$1" "$plan_json" --require-worker-bindings-no-op >"$action_summary"; then node apps/iori/scripts/assert-workflow-output.mjs <"$action_summary" || true; return 1; fi; node apps/iori/scripts/assert-workflow-output.mjs <"$action_summary"; printf '%s\n' '## Terraform action summary' >> "$GITHUB_STEP_SUMMARY"; cat "$action_summary" >> "$GITHUB_STEP_SUMMARY"; }
           run_guarded terraform -chdir=apps/iori/infra/cloudflare init -input=false -backend-config="$backend_config"
           run_guarded terraform -chdir=apps/iori/infra/cloudflare plan -input=false -out="$plan"
           if ! terraform -chdir=apps/iori/infra/cloudflare show -json "$plan" > "$plan_json" 2> "$plan_show_stderr"; then
@@ -597,7 +597,7 @@ jobs:
           node apps/iori/scripts/assert-workflow-output.mjs < "$plan_show_stderr"
           write_plan_summary consumer-replacement
           printf '%s\n' 'IORI_QUEUE_PRODUCER_REMOVED=true' >> "$GITHUB_ENV"
-          run_guarded pnpm --filter iori run deploy:worker -- --without-queue-producer
+          run_guarded pnpm --silent --filter iori run deploy:worker -- --without-queue-producer
           run_guarded terraform -chdir=apps/iori/infra/cloudflare apply -input=false "$plan"
       - name: Restore Wrangler Queue producer binding
         if: always() && env.IORI_QUEUE_PRODUCER_REMOVED == 'true'
@@ -606,7 +606,7 @@ jobs:
           set -euo pipefail
           output="$(mktemp)"
           pnpm --filter iori run deploy:worker >"$output" 2>&1
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output"
       - name: Remove private temporary directory
         if: always()
@@ -693,5 +693,5 @@ jobs:
             --allowed-hostname "$TF_VAR_public_hostname" \
             --checks-json "$IORI_SMOKE_CHECKS_JSON" \
             --smoke-queue-token "$IORI_SMOKE_QUEUE_TOKEN" >"$output" 2>&1
-          pnpm --filter iori run cloudflare:workflow-output:check <"$output"
+          node apps/iori/scripts/assert-workflow-output.mjs <"$output"
           rm -f "$output"

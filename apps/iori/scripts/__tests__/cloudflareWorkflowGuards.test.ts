@@ -9,7 +9,7 @@ describe('Cloudflare workflow public-artifact gates', () => {
   it('keeps the CI Cloudflare checks behind the public-artifact guard and writes a redacted summary', async () => {
     const workflow = await readWorkflow('ci.yml');
 
-    expect(workflow).toContain('run_guarded pnpm --filter iori run cloudflare:public-artifacts:check');
+    expect(workflow).toContain('run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check');
     expect(workflow).toContain('Write redacted Cloudflare validation summary');
     expect(workflow).toContain('GITHUB_STEP_SUMMARY');
   });
