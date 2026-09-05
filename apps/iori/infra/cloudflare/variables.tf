@@ -22,7 +22,7 @@ variable "environment" {
 
 
 variable "public_hostname" {
-  description = "Hostname for the opt-in production Worker route."
+  description = "Protected environment hostname for the opt-in Worker route."
   type        = string
   default     = "blog.example.invalid"
 }
@@ -61,4 +61,14 @@ variable "queue_delivery_paused" {
   description = "Keep true through preparation, import, verification and smoke. Resume last."
   type        = bool
   default     = true
+}
+
+variable "enable_staging_worker_route" {
+  description = "Explicit rehearsal switch for the isolated staging hostname route."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_staging_worker_route || var.environment == "staging"
+    error_message = "enable_staging_worker_route can be true only for staging."
+  }
 }

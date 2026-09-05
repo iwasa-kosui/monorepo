@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import { prepareMigrationTarget } from '../prepare-migration-target.mjs';
+
 import { admissionEnvironment, expectedTargetFromOutputs, targetIdentity } from '../migration-target-contract.mjs';
+import { prepareMigrationTarget } from '../prepare-migration-target.mjs';
 import { expectedTargetFixture } from './migrationTargetFixture.js';
 const fixture = () => {
   const target = expectedTargetFixture();
@@ -120,4 +121,14 @@ it('normalizes pretty/reordered admission once for preparation deployment and la
       IORI_ADMISSION_IDENTITY: JSON.stringify({ ...target.admission, unknown: true }),
     })
   ).toThrow();
+});
+it('keeps paused preparation strict while the separate active-output policy retains immutable identity', async () => {
+  const { activeTargetFromOutputs } = await import('../migration-target-contract.mjs');
+  const { config, outputs, target } = fixture();
+  expect(() => activeTargetFromOutputs({ ...config, outputs })).toThrow();
+  outputs.targetIdentity.queue_settings.delivery_paused = false;
+  expect(() => expectedTargetFromOutputs({ ...config, outputs })).toThrow();
+  expect(activeTargetFromOutputs({ ...config, outputs })).toEqual(target);
+  outputs.targetIdentity.dlq_settings.delivery_paused = false;
+  expect(() => activeTargetFromOutputs({ ...config, outputs })).toThrow();
 });

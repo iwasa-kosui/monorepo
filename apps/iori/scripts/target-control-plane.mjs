@@ -1,5 +1,5 @@
-import { createTargetIdentity } from './fresh-target.mjs';
 import { parseAdmission } from '../src/workerAdmission.ts';
+import { createTargetIdentity } from './fresh-target.mjs';
 
 const fail = () => {
   throw new Error('Target readback failed.');
@@ -82,7 +82,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     }
     return { fresh: true, resourceCount: 0 };
   };
-  const readResources = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }) => {
+  const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }, paused) => {
     if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail();
     const [d1, kv, uploads, transfer, queue, dlq] = await Promise.all([
       get(`${root}/d1/database/${d1Id}`),
@@ -98,7 +98,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ) fail();
     for (const [q, id, name] of [[queue, queueId, identity.names.queue], [dlq, dlqId, identity.names.dlq]]) {
       if (
-        q.queue_id !== id || q.queue_name !== name || q.settings?.delivery_paused !== true
+        q.queue_id !== id || q.queue_name !== name || q.settings?.delivery_paused !== (id === queueId ? paused : true)
         || !Array.isArray(q.consumers) || !Array.isArray(q.producers)
         || !Number.isInteger(q.consumers_total_count) || q.consumers_total_count !== q.consumers.length
         || !Number.isInteger(q.producers_total_count) || q.producers_total_count !== q.producers.length
@@ -132,14 +132,19 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       dlqCreatedOn: dlq.created_on,
       queueSettings: queue.settings,
       consumerId: queue.consumers[0]?.consumer_id ?? null,
-      queuePaused: true,
+      queuePaused: paused,
+      ...(!paused && {
+        queueConfiguration: { settings: queue.settings, consumers: queue.consumers, producers: queue.producers },
+        dlqConfiguration: { settings: dlq.settings, consumers: dlq.consumers, producers: dlq.producers },
+      }),
     };
   };
-  const readWorkerAdmission = async (
+  const readWorkerState = async (
     { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
+    paused,
   ) => {
     if (typeof routePresent !== 'boolean') fail();
-    if (!same(resources?.identity, identity) || resources.queuePaused !== true) fail();
+    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail();
     const admission = parseAdmission(admissionEnvironment);
     if (
       !admission || admission.environment !== identity.environment
@@ -208,8 +213,25 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       mode: admission.mode,
       previewsEnabled: false,
       routeCount: Number(routePresent),
+      ...(paused ? {} : { routeConfiguration: routes.filter(route => route.script === identity.workerName) }),
       bindingCount: bindings.length,
     };
+  };
+  const readResources = (input) => readResourceState(input, true);
+  const readActiveResources = (input) => readResourceState({ ...input, consumerAttached: true }, false);
+  const readWorkerAdmission = (input) => readWorkerState(input, true);
+  const readActiveWorker = (input) => {
+    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'active' || input.routePresent !== true) fail();
+    return readWorkerState(input, false);
+  };
+  const readCurrentVersion = async () => {
+    const deployments = (await get(`${root}/workers/scripts/${identity.workerName}/deployments`)).result;
+    const versions = deployments?.deployments?.[0]?.versions;
+    if (
+      !Array.isArray(versions) || versions.length !== 1 || versions[0].percentage !== 100
+      || !safeId(versions[0].version_id)
+    ) fail();
+    return versions[0].version_id;
   };
   const readSealedWorker = async (input) => {
     if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'sealed') fail();
@@ -224,5 +246,14 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ) fail();
     return { queueId, paused };
   };
-  return Object.freeze({ assertFresh, readResources, readSealedWorker, readWorkerAdmission, readQueuePause });
+  return Object.freeze({
+    assertFresh,
+    readResources,
+    readSealedWorker,
+    readWorkerAdmission,
+    readQueuePause,
+    readActiveResources,
+    readActiveWorker,
+    readCurrentVersion,
+  });
 };

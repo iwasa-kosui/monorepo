@@ -76,3 +76,5 @@ export function expectedTargetFromOutputs(
     };
   },
 ): ExpectedTarget;
+
+export const activeTargetFromOutputs: typeof expectedTargetFromOutputs;

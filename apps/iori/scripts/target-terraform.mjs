@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { assertFreshTargetState, createTargetIdentity, validateFreshTargetPlan } from './fresh-target.mjs';
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
+import { validateRouteCutoverPlan } from './route-cutover-plan.mjs';
 import { validateCloudflarePlan } from './validate-cloudflare-plan.mjs';
 
 const infra = fileURLToPath(new URL('../infra/cloudflare/', import.meta.url));
@@ -100,6 +101,7 @@ export const createTargetTerraform = (
       `-var=attach_queue_consumer=${stage === 'consumer'}`,
       '-var=queue_delivery_paused=true',
       '-var=enable_production_worker_route=false',
+      '-var=enable_staging_worker_route=false',
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
     if (validateFreshTargetPlan(plan, identity, stage).length) fail();
@@ -125,7 +127,7 @@ export const createTargetTerraform = (
     ) fail();
     return { workerBindings: bindings, targetIdentity: target, migrationStorage: storage };
   };
-  const initializeEstablished = async () => {
+  const initializeExisting = async (paused) => {
     await initializeBackend();
     const state = parsePrivateJson(await run(['show', '-json']));
     if (!state.values?.root_module?.resources?.length) fail();
@@ -146,7 +148,7 @@ export const createTargetTerraform = (
       || !result.workerBindings.d1_database_id || !result.workerBindings.kv_namespace_id
       || result.migrationStorage.bucket_name !== identity.names.transfer
       || result.migrationStorage.environment !== identity.environment
-      || !t.queue_id || !t.dlq_id || t.queue_id === t.dlq_id || t.queue_settings?.delivery_paused !== true
+      || !t.queue_id || !t.dlq_id || t.queue_id === t.dlq_id || t.queue_settings?.delivery_paused !== paused
       || t.dlq_settings?.delivery_paused !== true || !Array.isArray(t.consumer) || t.consumer.length !== 1
       || !t.consumer[0].consumer_id || t.consumer[0].queue_id !== t.queue_id
       || t.consumer[0].script_name !== identity.workerName || t.consumer[0].dead_letter_queue !== identity.names.dlq
@@ -163,7 +165,8 @@ export const createTargetTerraform = (
       `-out=${path}`,
       '-var=attach_queue_consumer=true',
       `-var=queue_delivery_paused=${paused}`,
-      `-var=enable_production_worker_route=${routeEnabled}`,
+      `-var=enable_production_worker_route=${routeEnabled && identity.environment === 'production'}`,
+      `-var=enable_staging_worker_route=${routeEnabled && identity.environment === 'staging'}`,
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
     if (
@@ -177,5 +180,35 @@ export const createTargetTerraform = (
     await run(['apply', '-input=false', path]);
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
-  return Object.freeze({ initializeFresh, initializeEstablished, prepare, changeQueuePause });
+  const initializeEstablished = () => initializeExisting(true);
+  const initializeActive = () => initializeExisting(false);
+  const changeRoute = async ({ establishedBindings }) => {
+    if (!establishedBindings) fail();
+    const path = join(privateDirectory, 'route-control.tfplan');
+    await run([
+      'plan',
+      '-input=false',
+      '-lock=true',
+      `-out=${path}`,
+      '-var=attach_queue_consumer=true',
+      '-var=queue_delivery_paused=true',
+      `-var=enable_production_worker_route=${identity.environment === 'production'}`,
+      `-var=enable_staging_worker_route=${identity.environment === 'staging'}`,
+    ]);
+    const plan = parsePrivateJson(await run(['show', '-json', path]));
+    if (
+      JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
+      || validateRouteCutoverPlan(plan, { hostname, workerName: identity.workerName, zoneId }).length
+    ) fail();
+    await run(['apply', '-input=false', path]);
+    return { applied: true };
+  };
+  return Object.freeze({
+    initializeFresh,
+    initializeEstablished,
+    initializeActive,
+    prepare,
+    changeQueuePause,
+    changeRoute,
+  });
 };

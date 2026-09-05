@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { createTargetIdentity } from './fresh-target.mjs';
+
 import { parseAdmission } from '../src/workerAdmission.ts';
+import { createTargetIdentity } from './fresh-target.mjs';
 
 export const TARGET_BYTES = 64 * 1024;
 export const migrationRunIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
@@ -143,7 +144,7 @@ export const assertTargetSummary = (input, expected) => {
   }
 };
 /** Only trusted setup calls this on final outputs from its explicitly selected backend. */
-export const expectedTargetFromOutputs = ({ identity: supplied, mainSha, runId, admission: a, outputs }) => {
+const expectedAtPause = ({ identity: supplied, mainSha, runId, admission: a, outputs }, paused) => {
   const derived = createTargetIdentity(supplied);
   const { workerBindings: b, targetIdentity: t, migrationStorage: s } = outputs;
   if (
@@ -151,7 +152,7 @@ export const expectedTargetFromOutputs = ({ identity: supplied, mainSha, runId, 
     || t.backend_key !== derived.backendKey || t.worker_name !== derived.workerName
     || t.d1_database_name !== derived.names.d1 || b.worker_name !== derived.workerName
     || b.queue_name !== derived.names.queue || s.environment !== derived.environment
-    || t.queue_settings?.delivery_paused !== true || t.dlq_settings?.delivery_paused !== true
+    || t.queue_settings?.delivery_paused !== paused || t.dlq_settings?.delivery_paused !== true
     || !Array.isArray(t.consumer) || t.consumer.length !== 1
   ) fail();
   const c = t.consumer[0];
@@ -184,3 +185,6 @@ export const expectedTargetFromOutputs = ({ identity: supplied, mainSha, runId, 
     admission: a,
   });
 };
+
+export const expectedTargetFromOutputs = input => expectedAtPause(input, true);
+export const activeTargetFromOutputs = input => expectedAtPause(input, false);

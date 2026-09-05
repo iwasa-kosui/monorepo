@@ -249,12 +249,14 @@ export const runCloudflareSmoke = async (
     allowLocalFixture = false,
     fetchRequest = fetch,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    signal,
   },
 ) => {
   const { base } = validateInput({ baseUrl, expectedOrigin, checks, allowedHostname, allowLocalFixture });
   const results = [];
 
   for (const check of checks) {
+    signal?.throwIfAborted();
     if (
       (typeof smokeQueueToken !== 'string' || smokeQueueToken.length === 0)
     ) {
@@ -275,7 +277,7 @@ export const runCloudflareSmoke = async (
         method: check.method ?? 'GET',
         headers,
         redirect: 'error',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]),
       });
       results.push(await checkResponse(response, check));
     } catch {

@@ -24,6 +24,25 @@ export function createTargetControlPlane(
 ): Readonly<{
   readQueuePause(input: { queueId: string; paused: boolean }): Promise<{ queueId: string; paused: boolean }>;
   assertFresh(): Promise<{ fresh: true; resourceCount: 0 }>;
+  readActiveResources(
+    ids: ResourceIds,
+  ): Promise<
+    Omit<TargetResourceReadback, 'queuePaused'> & {
+      queuePaused: false;
+      queueConfiguration: Record<string, unknown>;
+      dlqConfiguration: Record<string, unknown>;
+    }
+  >;
+  readActiveWorker(
+    input: {
+      resources: Omit<TargetResourceReadback, 'queuePaused'> & { queuePaused: false };
+      admissionEnvironment: Record<string, string>;
+      zoneId: string;
+      expectedVersionId: string;
+      routePresent: true;
+    },
+  ): Promise<{ versionId: string; routeConfiguration: unknown[] }>;
+  readCurrentVersion(): Promise<string>;
   readResources(ids: ResourceIds): Promise<TargetResourceReadback>;
   readWorkerAdmission(
     input: {

@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+
 import { createTargetIdentity } from '../fresh-target.mjs';
 import { createTargetControlPlane } from '../target-control-plane.mjs';
 const identity = createTargetIdentity({
@@ -180,6 +181,28 @@ it('requires the expected paused consumer target and rejects unexpected producer
   });
   (responses['/queues/queue-id'].producers as unknown[]).push({ type: 'worker', script: 'old-worker' });
   await expect(fixtureApi(responses).readResources({ ...ids, consumerAttached: true })).rejects.toThrow();
+});
+it('keeps preparation paused while the separate active readback retains complete Queue configuration', async () => {
+  const responses = resourceResponses();
+  responses['/queues/queue-id'].settings.delivery_paused = false;
+  (responses['/queues/queue-id'].consumers as unknown[]).push({
+    type: 'worker',
+    script_name: identity.workerName,
+    dead_letter_queue: identity.names.dlq,
+    consumer_id: 'consumer-id',
+    settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
+  });
+  responses['/queues/queue-id'].consumers_total_count = 1;
+  await expect(fixtureApi(responses).readResources({ ...ids, consumerAttached: true })).rejects.toThrow();
+  const active = await fixtureApi(responses).readActiveResources(ids);
+  expect(active).toMatchObject({
+    queuePaused: false,
+    consumerId: 'consumer-id',
+    queueConfiguration: { settings: { delivery_paused: false } },
+    dlqConfiguration: { settings: { delivery_paused: true } },
+  });
+  responses['/queues/dlq-id'].settings.delivery_paused = false;
+  await expect(fixtureApi(responses).readActiveResources(ids)).rejects.toThrow();
 });
 it('verifies deployed version, bindings, preview and route state without exposing secrets', async () => {
   const admissionEnvironment = {

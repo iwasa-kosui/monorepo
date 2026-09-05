@@ -1,3 +1,4 @@
+import { admissionEnvironment, targetIdentity } from '../migration-target-contract.mjs';
 import { createHash } from 'node:crypto';
 export const expectedTargetFixture = () => ({
   schema: 'iori-migration-expected-target/v1' as const,
@@ -73,4 +74,49 @@ export const targetSummaryFixture = () => {
     preparation: { record_sha256: createHash('sha256').update(body).digest('hex'), record },
     observed: structuredClone(record.observed),
   };
+};
+
+export const targetOutputsFixture = () => {
+  const target = expectedTargetFixture();
+  const identity = targetIdentity(target);
+  const config = {
+    identity,
+    mainSha: target.identity.main_sha,
+    runId: target.identity.run_id,
+    admission: target.admission,
+    admissionEnvironment: admissionEnvironment(target),
+    zoneId: 'b'.repeat(32),
+  };
+  const outputs = {
+    workerBindings: {
+      d1_database_id: 'db',
+      kv_namespace_id: 'kv',
+      worker_name: identity.workerName,
+      queue_name: identity.names.queue,
+      r2_bucket_name: identity.names.uploads,
+    },
+    migrationStorage: { bucket_name: identity.names.transfer, environment: identity.environment },
+    targetIdentity: {
+      account_id: identity.accountId,
+      environment: identity.environment,
+      generation: identity.generation,
+      worker_name: identity.workerName,
+      backend_key: identity.backendKey,
+      d1_database_name: identity.names.d1,
+      queue_id: 'queue',
+      dlq_id: 'dlq',
+      queue_settings: { delivery_paused: true },
+      dlq_settings: { delivery_paused: true },
+      consumer: [{
+        consumer_id: 'consumer',
+        queue_id: 'queue',
+        account_id: identity.accountId,
+        script_name: identity.workerName,
+        type: 'worker',
+        dead_letter_queue: identity.names.dlq,
+        settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
+      }],
+    },
+  };
+  return { config, outputs, target };
 };

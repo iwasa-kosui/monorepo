@@ -159,3 +159,22 @@ it('reads an established backend without plan/apply and rejects a different back
   outputs.target_identity.value.backend_key = 'old';
   await expect(api.initializeEstablished()).rejects.toThrow();
 });
+it('selects the staging route switch without enabling the production switch and rejects missing route proof', async () => {
+  const calls: string[][] = [];
+  const api = createTargetTerraform({
+    identity,
+    backendEndpoint: `https://${identity.accountId}.r2.cloudflarestorage.com`,
+    privateDirectory: await mkdtemp(join(tmpdir(), 'target-route-')),
+    zoneId: 'c'.repeat(32),
+    hostname: 'staging.test',
+    runCommand: async (_program, args) => {
+      calls.push(args);
+      return { status: 0, stdout: '{}', stderr: '' };
+    },
+  });
+  await expect(api.changeRoute({ establishedBindings: { worker_name: identity.workerName } })).rejects.toThrow();
+  expect(calls[0]).toContain('-var=enable_staging_worker_route=true');
+  expect(calls[0]).toContain('-var=enable_production_worker_route=false');
+  expect(calls[0]).toContain('-var=queue_delivery_paused=true');
+  expect(calls.some(args => args.includes('apply'))).toBe(false);
+});

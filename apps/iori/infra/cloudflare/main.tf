@@ -75,7 +75,7 @@ resource "cloudflare_queue_consumer" "fedify" {
 }
 
 resource "cloudflare_workers_route" "iori" {
-  count = var.enable_production_worker_route ? 1 : 0
+  count = (var.enable_production_worker_route || var.enable_staging_worker_route) ? 1 : 0
 
   zone_id = var.zone_id
   pattern = "${var.public_hostname}/*"
@@ -85,8 +85,8 @@ resource "cloudflare_workers_route" "iori" {
     prevent_destroy = true
 
     precondition {
-      condition     = var.environment == "production"
-      error_message = "The Worker route is only available in the production cutover plan."
+      condition     = (var.environment == "production" && var.enable_production_worker_route && !var.enable_staging_worker_route) || (var.environment == "staging" && var.enable_staging_worker_route && !var.enable_production_worker_route)
+      error_message = "The Worker route requires the matching environment cutover switch."
     }
   }
 }

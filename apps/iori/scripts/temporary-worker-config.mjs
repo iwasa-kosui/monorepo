@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { materializeWorkerBindings } from './materialize-worker-bindings.mjs';
 import { createTemporaryWorkerConfig, workerConfigTokens } from './render-worker-config.mjs';
 
@@ -73,7 +74,9 @@ const resolveWorkerPaths = (rendered, { withoutQueueProducer }) => {
   ) + '\n';
 };
 
-export const createDeploymentWorkerConfig = async ({ withoutQueueProducer = false, admissionMode } = {}) => {
+export const createDeploymentWorkerConfig = async (
+  { withoutQueueProducer = false, admissionMode, admissionEnvironment } = {},
+) => {
   const template = await readFile(templatePath, 'utf8');
   const bindings = await readTerraformWorkerBindings();
   const values = Object.fromEntries(workerConfigTokens.map((token) => {
@@ -83,6 +86,10 @@ export const createDeploymentWorkerConfig = async ({ withoutQueueProducer = fals
       bindingKey === undefined || bindings === undefined ? requireEnv(token.slice(2, -2)) : bindings[bindingKey],
     ];
   }));
+  if (admissionEnvironment !== undefined) {
+    values.__IORI_ADMISSION_IDENTITY__ = admissionEnvironment.IORI_ADMISSION_IDENTITY;
+    values.__ORIGIN__ = admissionEnvironment.ORIGIN;
+  }
   if (admissionMode !== undefined) values.__IORI_ADMISSION_MODE__ = admissionMode;
   return createTemporaryWorkerConfig({
     template,
