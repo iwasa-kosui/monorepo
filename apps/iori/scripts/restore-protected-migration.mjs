@@ -1,20 +1,22 @@
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadExpectedTarget } from './migration-target-input.mjs';
-import { targetIdentity } from './migration-target-contract.mjs';
-import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
-import { loadReceiptPublicKey } from './run-protected-migration.mjs';
-import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
-import { restoreMigrationBundle } from './migration-bundle.mjs';
-import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
+
+import { withCliSignal } from './cli-lifetime.mjs';
 import { createCloudflareImportTransport } from './cloudflare-import-provider.mjs';
+import { MIGRATION_DEADLINE_MS } from './migration-budget.mjs';
+import { restoreMigrationBundle } from './migration-bundle.mjs';
+import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
+import { targetIdentity } from './migration-target-contract.mjs';
+import { loadExpectedTarget } from './migration-target-input.mjs';
+import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
+import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
+import { loadReceiptPublicKey } from './run-protected-migration.mjs';
 import {
   createCloudflareImportProvider,
   createManifestExpectedProvider,
   verifyCloudflareImportWithProviders,
 } from './verify-cloudflare-import.mjs';
-import { MIGRATION_DEADLINE_MS } from './migration-budget.mjs';
-const main = async () => {
+const main = async (cliSignal) => {
   const target = await loadExpectedTarget(process.env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
   const required = (key) => {
     if (!process.env[key]) throw new Error('Fresh verification configuration is required.');
@@ -35,7 +37,7 @@ const main = async () => {
   const secretAccessKey = required('IORI_APPLICATION_R2_SECRET_ACCESS_KEY');
   required('IORI_MIGRATION_R2_ACCESS_KEY_ID');
   required('IORI_MIGRATION_R2_SECRET_ACCESS_KEY');
-  const signal = AbortSignal.timeout(MIGRATION_DEADLINE_MS);
+  const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(MIGRATION_DEADLINE_MS)]);
   const storage = transferStorageFromEnvironment(process.env, targetIdentity(target), true, signal);
   await restoreMigrationBundle({
     expectedTarget: target,
@@ -90,7 +92,7 @@ const main = async () => {
   }
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().then(() => console.log('Fresh restored migration verification passed.')).catch(() => {
+  withCliSignal(main).then(() => console.log('Fresh restored migration verification passed.')).catch(() => {
     console.error('Fresh migration verification failed.');
     process.exitCode = 1;
   });

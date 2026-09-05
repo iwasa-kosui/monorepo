@@ -3,6 +3,11 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { runMigrationCommand } from './migration-command.mjs';
+import {
+  inspectSourceDistDirectory,
+  validateSourceBuildManifest,
+  verifySourceBuildManifest,
+} from './source-build-manifest.mjs';
 import { assertSourceDeployAllowed } from './source-deploy-guard.mjs';
 
 const inspectOwnedCheckout = async (home, uid) => {
@@ -13,22 +18,32 @@ const inspectOwnedCheckout = async (home, uid) => {
     }
   }
 };
+export const inspectSourcePnpm = async (path, uid) => {
+  const stat = await lstat(path);
+  if (
+    !stat.isFile() || stat.uid !== uid || !(stat.mode & 0o100) || (stat.mode & 0o022)
+    || await realpath(path) !== path
+  ) throw new Error('Invalid source pnpm executable.');
+};
 export const runSourceDeployStep = async (
-  { phase, sha },
+  { phase, sha, manifest },
   {
     home = homedir(),
     uid = process.getuid?.(),
     guard = assertSourceDeployAllowed,
     inspectCheckout = inspectOwnedCheckout,
+    inspectPnpm = inspectSourcePnpm,
     runCommand = runMigrationCommand,
     signal,
   } = {},
 ) => {
   if (
-    !/^[a-f0-9]{40}$/.test(sha ?? '') || !['check', 'checkout', 'dependencies', 'install', 'restart'].includes(phase)
+    !/^[a-f0-9]{40}$/.test(sha ?? '')
+    || !['check', 'checkout', 'dependencies', 'dist-check', 'verify-dist', 'install', 'restart'].includes(phase)
   ) {
     throw new Error('Invalid source deployment operation.');
   }
+  if (['dist-check', 'verify-dist', 'install', 'restart'].includes(phase)) validateSourceBuildManifest(manifest, sha);
   const check = async () => {
     signal?.throwIfAborted();
     await guard({ home, uid });
@@ -73,29 +88,42 @@ export const runSourceDeployStep = async (
     await exact();
     if (phase === 'dependencies') {
       await check();
+      await inspectPnpm(pnpm, uid);
+      if ((await exec(pnpm, ['--version'])).stdout.trim() !== '10.12.4') throw new Error('Unsupported source pnpm.');
+      await check();
       await exec(pnpm, ['install', '--frozen-lockfile']);
       await check();
       await exact();
-    } else if (phase === 'install') {
-      // Preserve the source-local systemd environment and TLS configuration; never read its bytes.
-      const existing = await lstat('/etc/systemd/system/microblog.service.d/env.conf');
-      if (!existing.isFile() || existing.uid !== 0 || (existing.mode & 0o022)) {
-        throw new Error('Source configuration unavailable.');
-      }
-      for (
-        const [name, destination, mode] of [
-          ['microblog.service', '/etc/systemd/system/microblog.service', '644'],
-          ['microblog.sh', '/usr/local/bin/microblog', '755'],
-          ['nginx.conf', '/etc/nginx/nginx.conf', '644'],
-        ]
-      ) {
-        await check();
-        await exec('sudo', ['-n', 'install', '-m', mode, join(checkout, 'apps/iori', name), destination]);
-      }
     } else {
-      for (const args of [['daemon-reload'], ['enable', 'microblog'], ['restart', 'microblog'], ['restart', 'nginx']]) {
-        await check();
-        await exec('sudo', ['-n', 'systemctl', ...args]);
+      await check();
+      const dist = join(checkout, 'apps/iori/dist');
+      await inspectSourceDistDirectory(dist, uid, phase === 'dist-check');
+      if (phase !== 'dist-check') await verifySourceBuildManifest(dist, manifest, sha, { uid, signal });
+      await check();
+      if (phase === 'dist-check' || phase === 'verify-dist') return;
+      if (phase === 'install') {
+        // Preserve the source-local systemd environment and TLS configuration; never read its bytes.
+        const existing = await lstat('/etc/systemd/system/microblog.service.d/env.conf');
+        if (!existing.isFile() || existing.uid !== 0 || (existing.mode & 0o022)) {
+          throw new Error('Source configuration unavailable.');
+        }
+        for (
+          const [name, destination, mode] of [
+            ['microblog.service', '/etc/systemd/system/microblog.service', '644'],
+            ['microblog.sh', '/usr/local/bin/microblog', '755'],
+            ['nginx.conf', '/etc/nginx/nginx.conf', '644'],
+          ]
+        ) {
+          await check();
+          await exec('sudo', ['-n', 'install', '-m', mode, join(checkout, 'apps/iori', name), destination]);
+        }
+      } else {
+        for (
+          const args of [['daemon-reload'], ['enable', 'microblog'], ['restart', 'microblog'], ['restart', 'nginx']]
+        ) {
+          await check();
+          await exec('sudo', ['-n', 'systemctl', ...args]);
+        }
       }
     }
   }

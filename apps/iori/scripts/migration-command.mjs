@@ -2,6 +2,13 @@ import { spawn } from 'node:child_process';
 /** Wait for actual process close after abort; timeout is a failure ceiling, not a duration estimate. */
 export const runMigrationCommand = (program, args, options) =>
   new Promise((resolve, reject) => {
+    if (
+      options.killGraceMs !== undefined
+      && (!Number.isSafeInteger(options.killGraceMs) || options.killGraceMs <= 0 || options.killGraceMs > 15000)
+    ) {
+      reject(new Error('Invalid command cleanup grace.'));
+      return;
+    }
     if (process.platform === 'win32') {
       reject(new Error('Migration commands require POSIX process groups.'));
       return;
@@ -35,7 +42,7 @@ export const runMigrationCommand = (program, args, options) =>
       if (settled) return;
       failed = true;
       terminateGroup('SIGTERM');
-      force ??= setTimeout(() => terminateGroup('SIGKILL'), 5000);
+      force ??= setTimeout(() => terminateGroup('SIGKILL'), options.killGraceMs ?? 5000);
     };
     const timer = setTimeout(cancel, options.timeout);
     if (options.input !== undefined) {

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { withCliSignal } from './cli-lifetime.mjs';
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
@@ -41,7 +42,7 @@ export const prepareMigrationTarget = async ({ config, preparation, deploy, stor
   };
   return writePreparationRecord({ storage, expectedTarget, record });
 };
-const main = async () => {
+const main = async (cliSignal) => {
   const config = targetSetupConfiguration(process.env);
   for (
     const key of [
@@ -57,7 +58,7 @@ const main = async () => {
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw new Error('Distinct staging credential is required.');
   }
-  const signal = AbortSignal.timeout(30 * 60_000);
+  const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(30 * 60_000)]);
   const storage = transferStorageFromEnvironment(process.env, config.identity, false, signal);
   const privateDirectory = await mkdtemp(join(tmpdir(), 'iori-target-prepare-'));
   const preparation = createTargetPreparation({ ...config, privateDirectory, signal });
@@ -91,7 +92,7 @@ const main = async () => {
   await prepareMigrationTarget({ config, preparation, deploy, storage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().then(() => console.log('Fresh target preparation completed.')).catch(() => {
+  withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch(() => {
     console.error('Target preparation failed; retain generation and any record for reviewed recovery.');
     process.exitCode = 1;
   });

@@ -2,15 +2,23 @@ import { createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { mkdir, readdir, statfs, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { loadNodeOgFont } from '../src/adaptor/node/ogImageFont.ts';
+import { renderNodeOgImage } from '../src/adaptor/node/ogImageRenderer.ts';
+import { withCliSignal } from './cli-lifetime.mjs';
+import { createCloudflareImportTransport } from './cloudflare-import-provider.mjs';
+import { convertD1Import } from './convert-d1-import.mjs';
+import { MIGRATION_DEADLINE_MS, migrationBudget, parseMigrationRehearsal } from './migration-budget.mjs';
+import { publishMigrationBundle } from './migration-bundle.mjs';
+import { importMigrationD1, reviewedD1Schema } from './migration-d1-import.mjs';
+import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
+import { importMigrationOgp, importMigrationUploads } from './migration-object-import.mjs';
 import { assertExternalMigrationRoot, isMigrationArtifactReference } from './migration-path-safety.mjs';
+import { createMigrationR2Writer } from './migration-r2-writer.mjs';
 import { parseExpectedTarget, targetHash, targetIdentity } from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
-import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
-import { readPreparationRecord } from './target-preparation-record.mjs';
+import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
-import { createSourceSshAdapter } from './source-control-ssh.mjs';
-import { validateSourceEstimate, validateSourceInventory, validateSourceState } from './source-transfer-protocol.mjs';
-import { MIGRATION_DEADLINE_MS, migrationBudget, parseMigrationRehearsal } from './migration-budget.mjs';
 import {
   canonicalReceiptPayload,
   loadReceiptPublicKey,
@@ -18,20 +26,14 @@ import {
   requiredPhases,
   validateProtectedMigrationEvidence,
 } from './run-protected-migration.mjs';
-import { convertD1Import } from './convert-d1-import.mjs';
-import { importMigrationD1, reviewedD1Schema } from './migration-d1-import.mjs';
-import { importMigrationOgp, importMigrationUploads } from './migration-object-import.mjs';
-import { createMigrationR2Writer } from './migration-r2-writer.mjs';
-import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
-import { createCloudflareImportTransport } from './cloudflare-import-provider.mjs';
+import { createSourceSshAdapter } from './source-control-ssh.mjs';
+import { validateSourceEstimate, validateSourceInventory, validateSourceState } from './source-transfer-protocol.mjs';
+import { readPreparationRecord } from './target-preparation-record.mjs';
 import {
   createCloudflareImportProvider,
   createManifestExpectedProvider,
   verifyCloudflareImportWithProviders,
 } from './verify-cloudflare-import.mjs';
-import { publishMigrationBundle } from './migration-bundle.mjs';
-import { loadNodeOgFont } from '../src/adaptor/node/ogImageFont.ts';
-import { renderNodeOgImage } from '../src/adaptor/node/ogImageRenderer.ts';
 
 export const executionReservationKey = (input) => {
   const { identity: i } = parseExpectedTarget(input);
@@ -278,7 +280,7 @@ export const executeProtectedMigration = async (options) => {
   }
 };
 
-const main = async () => {
+const main = async (cliSignal) => {
   const expectedTarget = await loadExpectedTarget(process.env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
   if (
     process.env.MAIN_SHA !== expectedTarget.identity.main_sha
@@ -319,7 +321,7 @@ const main = async () => {
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), MIGRATION_DEADLINE_MS);
-  const signal = controller.signal;
+  const signal = AbortSignal.any([cliSignal, controller.signal]);
   try {
     const storage = transferStorageFromEnvironment(process.env, targetIdentity(expectedTarget), false, signal);
     const bucket = createMigrationR2Writer({ expectedTarget, accessKeyId, secretAccessKey, signal });
@@ -362,7 +364,7 @@ const main = async () => {
   }
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().then(() => console.log('Protected migration bundle published.')).catch(() => {
+  withCliSignal(main).then(() => console.log('Protected migration bundle published.')).catch(() => {
     console.error(
       'Protected migration failed; retain source freeze, partial evidence and reservations for reviewed recovery.',
     );

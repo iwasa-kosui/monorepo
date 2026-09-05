@@ -10,6 +10,7 @@ it('blocks before any remote mutation and repeats the guard after setup delay', 
     home: '/fixture',
     uid: 1,
     inspectCheckout: async () => {},
+    inspectPnpm: async () => {},
     guard: async () => {
       throw new Error('frozen');
     },
@@ -24,12 +25,16 @@ it('blocks before any remote mutation and repeats the guard after setup delay', 
     home: '/fixture',
     uid: 1,
     inspectCheckout: async () => {},
+    inspectPnpm: async () => {},
     guard: async () => {
-      if (++guards === 3) throw new Error('frozen');
+      if (++guards === 4) throw new Error('frozen');
     },
     runCommand: async (program, args) => {
       calls.push(`${program}:${args.join(',')}`);
-      return { stdout: args.includes('rev-parse') ? input.sha : '', stderr: '' };
+      return {
+        stdout: args.includes('rev-parse') ? input.sha : args.includes('--version') ? '10.12.4' : '',
+        stderr: '',
+      };
     },
   })).rejects.toThrow();
   expect(calls.some(call => call.includes('install'))).toBe(true);
@@ -46,7 +51,10 @@ it('uses the fixed Node bootstrap before exact checkout, dependency delay, dist 
     identityFile: '/fixture/key',
     knownHostsFile: '/fixture/known_hosts',
   }, {
-    inspectDist: async () => '/fixture/dist',
+    inspectDist: async () => ({
+      root: '/fixture/dist',
+      manifest: { sha, files: [{ path: 'index.js', bytes: 0, sha256: 'a'.repeat(64) }] },
+    }),
     checkMain: async () => {},
     sourceFactory: async () => ({
       status: async () => ({
@@ -84,6 +92,7 @@ it('resets only the reviewed SHA after fetched-main proof and never touches data
     uid: 1,
     guard: async () => {},
     inspectCheckout: async () => {},
+    inspectPnpm: async () => {},
     runCommand: async (program, args) => {
       calls.push({ program, args });
       return {
@@ -104,4 +113,37 @@ it('resets only the reviewed SHA after fetched-main proof and never touches data
     sha,
   ]);
   expect(JSON.stringify(calls)).not.toMatch(/drizzle|DATABASE|env\.conf|clean|secret/);
+});
+it.each(['rsync', 'verify-dist'])('never installs or restarts after %s failure', async failure => {
+  const calls: string[] = [];
+  const sha = 'a'.repeat(40);
+  await expect(
+    deploySource({
+      host: 'source.invalid',
+      user: 'fixture',
+      mainSha: sha,
+      runId: 'deploy_1',
+      identityFile: '/fixture/key',
+      knownHostsFile: '/fixture/known_hosts',
+    }, {
+      inspectDist: async () => ({
+        root: '/fixture/dist',
+        manifest: { sha, files: [{ path: 'index.js', bytes: 0, sha256: 'a'.repeat(64) }] },
+      }),
+      checkMain: async () => {},
+      sourceFactory: async () => ({
+        status: async () => {
+          throw new Error('must not reach readiness');
+        },
+      }),
+      runCommand: async (program, _args, options) => {
+        const phase = program === 'rsync' ? 'rsync' : /"?phase"?: "([a-z-]+)"/.exec(options.input ?? '')?.[1] ?? '';
+        calls.push(phase);
+        if (phase === failure) throw new Error('synthetic failure');
+        return { stdout: '', stderr: '' };
+      },
+    }),
+  ).rejects.toThrow('synthetic failure');
+  expect(calls).not.toContain('install');
+  expect(calls).not.toContain('restart');
 });
