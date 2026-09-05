@@ -1,12 +1,18 @@
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER } from '../export-postgres-lib.mjs';
 import { createSourceSshAdapter } from '../source-control-ssh.mjs';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const native = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...native, open: vi.fn(native.open), rename: vi.fn(native.rename) };
+});
+const nativeFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
 
 const state = {
   source_revision: 'a'.repeat(40),
@@ -22,6 +28,8 @@ const state = {
 };
 const roots: string[] = [];
 afterEach(async () => {
+  vi.mocked(open).mockImplementation(nativeFs.open);
+  vi.mocked(rename).mockImplementation(nativeFs.rename);
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
 const setup = async () => {
@@ -43,7 +51,21 @@ const setup = async () => {
     },
   };
 };
-it.each(['none', 'checksum', 'truncated', 'extra', 'header', 'inventory'])(
+it.each([
+  'none',
+  'checksum',
+  'truncated',
+  'extra',
+  'header',
+  'inventory',
+  'openabort',
+  'writefailure',
+  'syncfailure',
+  'publishabort',
+  'syncabort',
+  'dirsyncfailure',
+  'dirsyncabort',
+])(
   'restores verified raw bytes to a fresh private root (fault: %s)',
   async (fault) => {
     const { options, root } = await setup();
@@ -98,17 +120,56 @@ it.each(['none', 'checksum', 'truncated', 'extra', 'header', 'inventory'])(
       });
       return child;
     };
+    const abort = new AbortController();
+    vi.mocked(open).mockImplementation(async (...args) => {
+      const file = await nativeFs.open(...args);
+      if (String(args[0]).includes('source-inventory.')) {
+        if (fault === 'openabort') abort.abort();
+        if (fault === 'writefailure') {
+          file.writeFile = async () => {
+            throw new Error('fixture write');
+          };
+        }
+        if (fault === 'syncfailure') {
+          file.sync = async () => {
+            throw new Error('fixture sync');
+          };
+        }
+        if (fault === 'syncabort') {
+          file.sync = async () => {
+            abort.abort();
+          };
+        }
+      }
+      if (String(args[0]) === join(root, 'restored')) {
+        if (fault === 'dirsyncfailure') {
+          file.sync = async () => {
+            throw new Error('fixture directory sync');
+          };
+        }
+        if (fault === 'dirsyncabort') {
+          file.sync = async () => {
+            abort.abort();
+          };
+        }
+      }
+      return file;
+    });
+    vi.mocked(rename).mockImplementation(async (...args) => {
+      await nativeFs.rename(...args);
+      if (fault === 'publishabort') abort.abort();
+    });
     const adapter = await createSourceSshAdapter(options, { spawnProcess });
     const output = join(root, 'restored');
     if (fault !== 'none') {
-      await expect(adapter.restore(output)).rejects.toThrow('Source restore failed.');
+      await expect(adapter.restore(output, abort.signal)).rejects.toThrow('Source restore failed.');
       await expect(readFile(join(output, 'source-inventory.json'))).rejects.toThrow();
     } else {
-      const restored = await adapter.restore(output);
+      const restored = await adapter.restore(output, abort.signal);
       expect(await readFile(join(restored.uploadDir, '33333333-3333-4333-8333-333333333333.png'))).toEqual(
         Buffer.from([0, 10, 255, 1]),
       );
-      await expect(adapter.restore(output)).rejects.toThrow();
+      await expect(adapter.restore(output, abort.signal)).rejects.toThrow();
     }
   },
 );

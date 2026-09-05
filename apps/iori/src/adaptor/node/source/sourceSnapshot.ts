@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
-import { constants, createReadStream } from 'node:fs';
 import { lstat, mkdir, open, realpath, statfs, unlink } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
@@ -15,6 +14,7 @@ import {
   assertExternalMigrationPath,
   assertExternalMigrationRoot,
 } from '../../../../scripts/migration-path-safety.mjs';
+import { guardPostgresClient } from '../../../../scripts/postgres-client-lifetime.mjs';
 import {
   logicalFilePath,
   SOURCE_LIMITS,
@@ -25,27 +25,13 @@ import {
   validateSourceInventory,
 } from '../../../../scripts/source-transfer-protocol.mjs';
 import { validatePrivateDirectory } from './sourceControl.ts';
+import { openSourceFile } from './sourceFile.ts';
 
 export type FileTransfer = (metadata: SourceFile, stream: Readable) => Promise<void>;
 const number = z.coerce.number().int().nonnegative().safe();
 const upload = z.object({ imageId: z.string().uuid(), url: z.string() });
-const fileInfo = async (path: string, maxBytes: number, privateFile = true) => {
-  if (await realpath(dirname(path)) !== dirname(path)) throw new Error('unsafe_file');
-  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try {
-    const stat = await file.stat();
-    if (
-      !stat.isFile() || stat.size > maxBytes
-      || (privateFile && (stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o600))
-    ) throw new Error('unsafe_file');
-    return { file, stat };
-  } catch (error) {
-    await file.close();
-    throw error;
-  }
-};
 async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, destination?: string) {
-  const { file, stat } = await fileInfo(path, maxBytes, destination === undefined);
+  const { file, stat } = await openSourceFile(path, maxBytes, destination === undefined);
   let output: Awaited<ReturnType<typeof open>> | undefined;
   let bytes = 0;
   const hash = createHash('sha256');
@@ -88,12 +74,8 @@ export class SourceSnapshot {
     let rows = 0;
     let images = 0;
     let articles = 0;
-    let closing: Promise<void> | undefined;
-    const close = () => closing ??= client.end();
-    const abort = () => {
-      close().catch(() => {});
-    };
-    signal.addEventListener('abort', abort, { once: true });
+    const lifetime = guardPostgresClient(client, signal);
+    signal = lifetime.signal;
     try {
       signal.throwIfAborted();
       await client.connect();
@@ -119,7 +101,7 @@ export class SourceSnapshot {
         if (!page.rows.length) break;
         for (const { row } of page.rows) {
           const path = await this.uploadPath(row);
-          const { file, stat } = await fileInfo(path, SOURCE_LIMITS.uploadBytes, false);
+          const { file, stat } = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false);
           await file.close();
           uploadBytes += stat.size;
           if (++images > SOURCE_LIMITS.inventoryFiles - 32 || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes) {
@@ -132,6 +114,8 @@ export class SourceSnapshot {
       const source_free_bytes = number.parse(fs.bavail * fs.bsize);
       const source_required_bytes = tableBytes * 24 + uploadBytes * 2 + 64 * 1024 ** 2;
       const runner_required_bytes = tableBytes * 24 + uploadBytes * 3 + 128 * 1024 ** 2;
+      await lifetime.close();
+      signal.throwIfAborted();
       return {
         table_bytes: tableBytes,
         upload_bytes: uploadBytes,
@@ -150,8 +134,7 @@ export class SourceSnapshot {
       } catch { /* Abort closes connection. */ }
       throw new Error('source_estimate_failed');
     } finally {
-      signal.removeEventListener('abort', abort);
-      await close();
+      await lifetime.cleanup();
     }
   }
   private async uploadPath(row: unknown) {
@@ -187,7 +170,11 @@ export class SourceSnapshot {
         const path = logicalFilePath(id);
         add({ id, path, ...await hashOrCopy(join(root, path), SOURCE_LIMITS.totalBytes, signal) });
       }
-      const source = createReadStream(join(root, 'export/post_images.ndjson'), { encoding: 'utf8', signal });
+      const { file: imageRows } = await openSourceFile(
+        join(root, 'export/post_images.ndjson'),
+        SOURCE_LIMITS.totalBytes,
+      );
+      const source = imageRows.createReadStream({ encoding: 'utf8', signal });
       const lines = createInterface({ input: source, crlfDelay: Infinity });
       const seen = new Set<string>();
       try {
@@ -204,6 +191,7 @@ export class SourceSnapshot {
       } finally {
         lines.close();
         source.destroy();
+        await imageRows.close();
       }
       const inventory = validateSourceInventory({ schemaVersion: 1, complete: true, identity, totalBytes, files });
       const text = JSON.stringify(inventory);
@@ -232,7 +220,7 @@ export class SourceSnapshot {
     await assertExternalMigrationRoot(root);
     const stat = await lstat(root);
     if (stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o700) throw new Error('unsafe_directory');
-    const { file } = await fileInfo(join(root, 'source-inventory.json'), SOURCE_LIMITS.inventoryBytes);
+    const { file } = await openSourceFile(join(root, 'source-inventory.json'), SOURCE_LIMITS.inventoryBytes);
     try {
       const inventory = validateSourceInventory(JSON.parse(await file.readFile('utf8')));
       if (this.key(inventory.identity) !== key) throw new Error('identity_mismatch');
@@ -247,7 +235,7 @@ export class SourceSnapshot {
     const metadata = this.#cache?.files.get(id);
     if (!metadata) throw new Error('unknown_file');
     const path = join(this.runRoot(identity), logicalFilePath(id));
-    const { file, stat } = await fileInfo(path, metadata.bytes);
+    const { file, stat } = await openSourceFile(path, metadata.bytes);
     const stream = file.createReadStream({ signal });
     let complete = false;
     const checked = Readable.from((async function*() {

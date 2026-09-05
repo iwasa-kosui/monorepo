@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { sortedCanonicalRecords } from './canonical-row-sort.mjs';
 import { canonicalD1RowString } from './data-migration-mapping.mjs';
 import { assertExternalMigrationPath, assertExternalMigrationRoot } from './migration-path-safety.mjs';
+import { guardPostgresClient } from './postgres-client-lifetime.mjs';
 
 export const APPLICATION_TABLE_ORDER = [
   'users',
@@ -73,12 +74,8 @@ export const exportPostgres = async (
   let transaction = false;
   let published = false;
   let totalBytes = 0;
-  let closing;
-  const close = () => closing ??= client.end();
-  const abort = () => {
-    close().catch(() => {});
-  };
-  signal?.addEventListener('abort', abort, { once: true });
+  const lifetime = guardPostgresClient(client, signal);
+  signal = lifetime.signal;
   try {
     signal?.throwIfAborted();
     await client.connect();
@@ -137,7 +134,7 @@ export const exportPostgres = async (
     await client.query('COMMIT');
     transaction = false;
     signal?.throwIfAborted();
-    await close();
+    await lifetime.close();
     signal?.throwIfAborted();
     manifest.complete = true;
     const pending = join(directory, 'export-manifest.pending');
@@ -168,7 +165,6 @@ export const exportPostgres = async (
     }
     throw new Error('PostgreSQL export failed.');
   } finally {
-    signal?.removeEventListener('abort', abort);
-    await close();
+    await lifetime.cleanup();
   }
 };

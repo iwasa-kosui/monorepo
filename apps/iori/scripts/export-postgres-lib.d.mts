@@ -1,6 +1,7 @@
 export const APPLICATION_TABLE_ORDER: readonly string[];
 export const EXPORT_LIMITS: Readonly<{ rowBytes: number; pageRows: number; totalBytes: number; deadlineMs: number }>;
 export type PostgresExportClient = {
+  on?(event: 'error', listener: (error: Error) => void): unknown;
   connect(): Promise<void>;
   end(): Promise<void>;
   query(sql: string): Promise<{ rows: readonly { row?: unknown; [key: string]: unknown }[] }>;

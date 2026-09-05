@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, expect, it } from 'vitest';
@@ -35,6 +36,69 @@ it('loads bundled source snapshot code without executing an export CLI entrypoin
   expect(result.stdout.trim()).toBe('function');
   expect(result.stderr).toBe('');
 });
+it.each(['estimate', 'export'].flatMap((operation) => ['query', 'io', 'end'].map((phase) => ({ operation, phase }))))(
+  'handles asynchronous installed pg.Client error events during $operation/$phase without crashing',
+  async ({ operation, phase }) => {
+    const base = await root();
+    const output = join(base, 'pg-error.mjs');
+    await build({
+      stdin: {
+        contents: `
+        import pg from ${JSON.stringify(createRequire(import.meta.url).resolve('pg'))};
+        import { SourceSnapshot } from './src/adaptor/node/source/sourceSnapshot.ts';
+        import { exportPostgres } from './scripts/export-postgres-lib.mjs';
+        const client = new pg.Client();
+        let closed = false;
+        let triggered = false;
+        const phase = ${JSON.stringify(phase)};
+        const fail = () => client._handleErrorEvent(new Error('synthetic disconnect'));
+        client.connect = async () => {};
+        client.end = async () => {
+          await new Promise(resolve => setImmediate(() => { if (phase === 'end') fail(); resolve(); }));
+          closed = true;
+        };
+        client.query = async (sql) => {
+          if (!triggered && phase === 'query') {
+            triggered = true;
+            await new Promise(resolve => setImmediate(() => {
+              fail();
+              resolve();
+            }));
+          }
+          if (!triggered && phase === 'io' && sql.startsWith('DECLARE')) {
+            triggered = true;
+            setImmediate(fail);
+          }
+          return {rows: sql.startsWith('SELECT') ? [{bytes:'0',count:'0'}] : []};
+        };
+        const createClient = async () => client;
+        const base = ${JSON.stringify(base)};
+        const action = ${JSON.stringify(operation)} === 'export'
+          ? () => exportPostgres({outputDir: base + '/export', createClient})
+          : () => new SourceSnapshot({base, uploadDir:base, createClient}).estimate(new AbortController().signal);
+        action().then(() => { process.exitCode = 2; }, () => {
+          if (!closed) { process.exitCode = 3; return; }
+          client._handleErrorEvent(new Error('synthetic late disconnect'));
+          console.log('handled and closed');
+        });
+      `,
+        resolveDir: process.cwd(),
+      },
+      outfile: output,
+      platform: 'node',
+      format: 'esm',
+      external: [
+        createRequire(import.meta.url).resolve('pg'),
+        new URL('../migration-path-safety.mjs', import.meta.url).pathname,
+      ],
+      bundle: true,
+    });
+    const result = await promisify(execFile)(process.execPath, [output]);
+    expect(result.stdout.trim()).toBe('handled and closed');
+    expect(result.stderr).toBe('');
+    await expect(readFile(join(base, 'export/export-manifest.json'))).rejects.toThrow();
+  },
+);
 it('rejects oversized/partial exports and connection-close failure without a complete manifest', async () => {
   for (const failure of ['size', 'query', 'end']) {
     const outputDir = join(await root(), 'export');

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, open, statfs } from 'node:fs/promises';
+import { lstat, mkdir, open, rename, statfs, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { assertExternalMigrationPath, assertExternalMigrationRoot } from './migration-path-safety.mjs';
@@ -163,6 +163,7 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
         }
       },
       restore: async (outputDir, signal) => {
+        let publishedPath;
         try {
           const root = await assertExternalMigrationPath(outputDir);
           await mkdir(root, { mode: 0o700 });
@@ -218,13 +219,26 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
           }
           signal?.throwIfAborted();
           const inventoryPath = join(root, 'source-inventory.json');
-          const receipt = await open(inventoryPath, 'wx', 0o600);
+          const pendingPath = join(root, 'source-inventory.pending');
+          const receipt = await open(pendingPath, 'wx', 0o600);
           try {
+            signal?.throwIfAborted();
             await receipt.writeFile(JSON.stringify(inventory));
             await receipt.sync();
           } finally {
             await receipt.close();
           }
+          signal?.throwIfAborted();
+          await rename(pendingPath, inventoryPath);
+          publishedPath = inventoryPath;
+          signal?.throwIfAborted();
+          const directory = await open(root, 'r');
+          try {
+            await directory.sync();
+          } finally {
+            await directory.close();
+          }
+          signal?.throwIfAborted();
           return {
             root,
             manifestPath: join(root, 'export/export-manifest.json'),
@@ -232,6 +246,13 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
             inventoryPath,
           };
         } catch {
+          if (publishedPath) {
+            try {
+              await unlink(publishedPath);
+            } catch {
+              throw new Error('Source restore failed.');
+            }
+          }
           throw new Error('Source restore failed.');
         }
       },
