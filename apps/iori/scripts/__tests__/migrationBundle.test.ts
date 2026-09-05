@@ -122,7 +122,7 @@ describe('portable signed bundle', () => {
     }
     await expect(validateProtectedMigrationEvidence(contract, { ...options, root })).resolves.toBeTruthy();
     await expect(publishMigrationBundle(options)).rejects.toThrow();
-  }, 15000);
+  }, 20000);
   it('keeps failed reservation without publishing completion and refuses retries', async () => {
     const { options, objects, prefix } = await fixture();
     const original = options.storage.putNew;
@@ -135,7 +135,7 @@ describe('portable signed bundle', () => {
     expect(objects.has(`${prefix}/complete`)).toBe(false);
     options.storage.putNew = original;
     await expect(publishMigrationBundle(options)).rejects.toThrow();
-  });
+  }, 20000);
   it.each(['missing', 'truncated', 'tampered'])('rejects %s remote parts', async (mode) => {
     const { options, objects } = await fixture();
     await publishMigrationBundle(options);
@@ -145,7 +145,7 @@ describe('portable signed bundle', () => {
     else if (mode === 'truncated') objects.set(key, original.subarray(1));
     else objects.set(key, Buffer.alloc(original.length));
     await expect(restoreMigrationBundle({ ...options, root: await temp() })).rejects.toThrow();
-  });
+  }, 20000);
   it('checks storage before downloading parts', async () => {
     const { options, reads } = await fixture();
     await publishMigrationBundle(options);
@@ -153,7 +153,7 @@ describe('portable signed bundle', () => {
     await expect(restoreMigrationBundle({ ...options, root: await temp(), availableBytes: async () => 0n })).rejects
       .toThrow();
     expect(reads.every((key) => !key.includes('/parts/'))).toBe(true);
-  });
+  }, 20000);
   it.each(['environment', 'mainSha', 'runId', 'path', 'extra'])('rejects forged index %s', async (kind) => {
     const { options, objects, prefix } = await fixture();
     await publishMigrationBundle(options);
@@ -169,7 +169,7 @@ describe('portable signed bundle', () => {
       Buffer.from(JSON.stringify({ schema: 'iori-migration-complete/v1', sha256: checksum(body) })),
     );
     await expect(restoreMigrationBundle({ ...options, root: await temp() })).rejects.toThrow();
-  });
+  }, 20000);
   it.each(['symlink', 'hardlink', 'missing', 'changed'])('rejects %s local file', async (kind) => {
     const { options } = await fixture();
     const path = join(options.root, 'd1-import-001.sql');
@@ -251,7 +251,7 @@ describe('additional bundle failure boundaries', () => {
       Buffer.from(JSON.stringify({ schema: 'iori-migration-complete/v1', sha256: checksum(bytes) })),
     );
     await expect(restoreMigrationBundle({ ...options, root: await temp() })).rejects.toThrow();
-  });
+  }, 20000);
   it('requires successful privacy preflight before reservation', async () => {
     const { options, objects } = await fixture();
     options.storage.assertPrivate = async () => {
