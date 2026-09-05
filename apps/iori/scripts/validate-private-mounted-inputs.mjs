@@ -1,4 +1,5 @@
 import { lstat } from 'node:fs/promises';
+
 import { assertExternalMigrationPath } from './migration-path-safety.mjs';
 
 const requiredInputs = [
@@ -6,7 +7,6 @@ const requiredInputs = [
   'IORI_D1_IMPORT_MANIFEST',
   'IORI_R2_IMPORT_MANIFEST',
   'IORI_OGP_IMPORT_MANIFEST',
-  'IORI_IMPORT_RUNNER',
 ];
 
 export const assertPrivateMountedInput = async (path) => {

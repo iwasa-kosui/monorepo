@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { convertD1Import } from '../convert-d1-import.mjs';
 import { APPLICATION_TABLE_ORDER, exportPostgres } from '../export-postgres.mjs';
 import { backfillPublishedOgpImages, createWranglerBucket, importR2Uploads } from '../import-r2-uploads.mjs';
@@ -364,7 +364,7 @@ describe('Cloudflare data migration tooling', () => {
       { mode: 0o600 },
     );
     const verifyScript = new URL('../verify-cloudflare-import.mjs', import.meta.url).pathname;
-    const { stderr, stdout } = await execFileAsync(process.execPath, [verifyScript], {
+    await expect(execFileAsync(process.execPath, [verifyScript], {
       env: {
         PATH: process.env.PATH,
         TMPDIR: tmpdir(),
@@ -372,9 +372,7 @@ describe('Cloudflare data migration tooling', () => {
         IORI_D1_IMPORT_MANIFEST: d1ImportManifestPath,
         IORI_IMPORT_RUNNER: runnerPath,
       },
-    });
-    expect(stdout).toBe('');
-    expect(stderr).toBe('');
+    })).rejects.toMatchObject({ code: 1, stdout: '', stderr: 'Cloudflare import verification failed.\n' });
   });
 
   it('rejects expected state when the raw export file changes after conversion', async () => {

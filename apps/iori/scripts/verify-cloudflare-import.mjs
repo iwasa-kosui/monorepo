@@ -3,7 +3,9 @@ import { createReadStream } from 'node:fs';
 import { lstat, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+
+import { createCloudflareImportTransportFromEnvironment } from './cloudflare-import-provider.mjs';
 import { canonicalD1RowString } from './data-migration-mapping.mjs';
 import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
 import { assertExternalMigrationPath } from './migration-path-safety.mjs';
@@ -354,8 +356,7 @@ export const createCloudflareActualProvider = ({ d1, r2 }) => ({
 });
 
 /**
- * Repository-owned provider contract. Production runners supply only these two
- * functions; tests inject fakes and no Cloudflare connection is made here.
+ * Repository-owned provider contract with injected read transports for tests.
  */
 export const createCloudflareImportProvider = ({ getTableSummaries, getObject, listObjects }) =>
   createCloudflareActualProvider({
@@ -378,19 +379,15 @@ export const runVerificationCli = async ({ expectedProvider, actualProvider, wri
 const main = async () => {
   const exportManifestPath = process.env.IORI_EXPORT_MANIFEST;
   const d1ImportManifestPath = process.env.IORI_D1_IMPORT_MANIFEST;
-  const runnerPath = process.env.IORI_IMPORT_RUNNER;
-  if (exportManifestPath === undefined || runnerPath === undefined) {
-    throw new Error('Export manifest and import runner are required.');
-  }
-  await assertExternalMigrationPath(runnerPath);
+  if (exportManifestPath === undefined) throw new Error('Export manifest is required.');
+  const transport = await createCloudflareImportTransportFromEnvironment(process.env);
   const expectedProvider = createManifestExpectedProvider({
     exportManifestPath,
     d1ImportManifestPath,
     uploadManifestPath: process.env.IORI_R2_IMPORT_MANIFEST,
     ogpManifestPath: process.env.IORI_OGP_IMPORT_MANIFEST,
   });
-  const { getObject, getTableSummaries, listObjects } = await import(pathToFileURL(runnerPath).href);
-  const actualProvider = createCloudflareImportProvider({ getObject, getTableSummaries, listObjects });
+  const actualProvider = createCloudflareImportProvider(transport);
   process.exitCode = await runVerificationCli({ expectedProvider, actualProvider });
 };
 

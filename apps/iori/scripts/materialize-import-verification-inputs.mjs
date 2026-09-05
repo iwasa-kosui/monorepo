@@ -7,12 +7,11 @@ const manifestNames = {
   d1ImportManifestPath: 'd1-import-manifest.json',
   r2ImportManifestPath: 'r2-import-manifest.json',
   ogpImportManifestPath: 'ogp-import-manifest.json',
-  importRunnerPath: 'import-runner.mjs',
 };
 
 const safeRelativePath = (path) =>
   typeof path === 'string'
-  && path.length > 0
+  && path.endsWith('.ndjson')
   && !path.startsWith('/')
   && path.split('/').every((part) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part) && part !== '.' && part !== '..');
 
@@ -77,7 +76,6 @@ const assertCompleteOgpImport = ({ exportManifest, dataFiles, ogpImportManifestJ
  *   r2ImportManifestJson: string,
  *   ogpImportManifestJson: string,
  *   exportDataFilesJson: string,
- *   importRunnerSource: string,
  * }} input
  */
 export const materializeImportVerificationInputs = async (input) => {
@@ -91,10 +89,8 @@ export const materializeImportVerificationInputs = async (input) => {
   if (
     references.some((path) => !safeRelativePath(path) || reserved.has(path) || typeof dataFiles[path] !== 'string')
     || Object.entries(dataFiles).some(([path, contents]) =>
-      !safeRelativePath(path) || reserved.has(path) || typeof contents !== 'string'
+      !safeRelativePath(path) || !references.includes(path) || reserved.has(path) || typeof contents !== 'string'
     )
-    || typeof input.importRunnerSource !== 'string'
-    || input.importRunnerSource.length === 0
   ) {
     throw new Error('Protected export data-file contract is incomplete.');
   }
@@ -107,7 +103,6 @@ export const materializeImportVerificationInputs = async (input) => {
     writePrivateFile(paths.d1ImportManifestPath, input.d1ImportManifestJson, 0o600),
     writePrivateFile(paths.r2ImportManifestPath, input.r2ImportManifestJson, 0o600),
     writePrivateFile(paths.ogpImportManifestPath, input.ogpImportManifestJson, 0o600),
-    writePrivateFile(paths.importRunnerPath, input.importRunnerSource, 0o700),
     ...Object.entries(dataFiles).map(([path, contents]) => writePrivateFile(join(directory, path), contents, 0o600)),
   ]);
   return paths;
@@ -126,6 +121,5 @@ if (isMain) {
     r2ImportManifestJson: process.env.IORI_R2_IMPORT_MANIFEST_JSON ?? '',
     ogpImportManifestJson: process.env.IORI_OGP_IMPORT_MANIFEST_JSON ?? '',
     exportDataFilesJson: process.env.IORI_EXPORT_DATA_FILES_JSON ?? '',
-    importRunnerSource: process.env.IORI_IMPORT_RUNNER_SOURCE ?? '',
   });
 }

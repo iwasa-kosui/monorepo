@@ -3,6 +3,7 @@ import { createHash, createPublicKey, verify } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import {
   assertExternalMigrationPath,
   assertExternalMigrationRoot,
@@ -385,11 +386,9 @@ const main = async () => {
   const expectedRunId = process.env.IORI_MIGRATION_RUN_ID;
   const receiptKeyPath = process.env.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH;
   const receiptKeyHash = process.env.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256;
-  const importRunnerHash = process.env.IORI_IMPORT_RUNNER_SHA256;
   if (
     expectedMainSha === undefined || expectedRunId === undefined || receiptKeyPath === undefined
-    || receiptKeyHash === undefined || !digestPattern.test(receiptKeyHash) || importRunnerHash === undefined
-    || !digestPattern.test(importRunnerHash)
+    || receiptKeyHash === undefined || !digestPattern.test(receiptKeyHash)
   ) {
     throw new Error('Protected migration invocation is required.');
   }
@@ -399,8 +398,6 @@ const main = async () => {
   } catch {
     throw new Error('Protected migration mounted inputs are invalid.');
   }
-  const importRunner = await mountedFileArtifact(process.env.IORI_IMPORT_RUNNER);
-  if (importRunner.sha256 !== importRunnerHash) throw new Error('Protected migration mounted inputs are invalid.');
   const receiptPublicKey = await loadReceiptPublicKey(receiptKeyPath, receiptKeyHash);
   await validateProtectedMigrationEvidence(contract, {
     root,

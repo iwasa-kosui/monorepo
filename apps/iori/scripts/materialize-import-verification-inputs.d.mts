@@ -3,7 +3,6 @@ export type ImportVerificationPaths = {
   d1ImportManifestPath: string;
   r2ImportManifestPath: string;
   ogpImportManifestPath: string;
-  importRunnerPath: string;
 };
 
 export function materializeImportVerificationInputs(input: {
@@ -13,5 +12,4 @@ export function materializeImportVerificationInputs(input: {
   r2ImportManifestJson: string;
   ogpImportManifestJson: string;
   exportDataFilesJson: string;
-  importRunnerSource: string;
 }): Promise<ImportVerificationPaths>;
