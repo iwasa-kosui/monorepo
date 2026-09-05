@@ -2,13 +2,28 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { createTargetTerraform } from '../target-terraform.mjs';
+
 import { createTargetIdentity } from '../fresh-target.mjs';
+import { createTargetTerraform } from '../target-terraform.mjs';
 const identity = createTargetIdentity({
   environment: 'staging',
   generation: 'fixture1',
   accountId: 'a'.repeat(32),
   backendBucket: 'tf-state',
+});
+it('awaits an asynchronous owned command boundary before consuming Terraform output', async () => {
+  const api = createTargetTerraform({
+    identity,
+    backendEndpoint: `https://${identity.accountId}.r2.cloudflarestorage.com`,
+    privateDirectory: await mkdtemp(join(tmpdir(), 'target-async-')),
+    zoneId: 'c'.repeat(32),
+    hostname: 'staging.test',
+    runCommand: async (_program, args) => {
+      await new Promise(resolve => setTimeout(resolve, 1));
+      return { status: 0, stdout: args.includes('show') ? '{}' : '', stderr: '' };
+    },
+  });
+  await expect(api.initializeFresh()).resolves.toMatchObject({ resourceCount: 0 });
 });
 it('pins actual backend initialization to the generation and rejects old state before plan/apply', async () => {
   const command = vi.fn((_bin, args) => ({

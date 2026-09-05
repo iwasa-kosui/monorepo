@@ -1,11 +1,12 @@
-import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createTargetPreparation } from './prepare-target.mjs';
+
+import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
+import { createTargetPreparation } from './prepare-target.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
 /** Production CLI uses fixed adapters below; injection is only a library testing boundary. */
@@ -56,14 +57,16 @@ const main = async () => {
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw new Error('Distinct staging credential is required.');
   }
-  const storage = transferStorageFromEnvironment(process.env, config.identity);
+  const signal = AbortSignal.timeout(30 * 60_000);
+  const storage = transferStorageFromEnvironment(process.env, config.identity, false, signal);
   const privateDirectory = await mkdtemp(join(tmpdir(), 'iori-target-prepare-'));
-  const preparation = createTargetPreparation({ ...config, privateDirectory });
+  const preparation = createTargetPreparation({ ...config, privateDirectory, signal });
   const deploy = async (bindings) => {
     const bindingsPath = join(privateDirectory, 'bindings.json');
     const resultPath = join(privateDirectory, 'deployment.json');
     await writeFile(bindingsPath, JSON.stringify(bindings), { flag: 'wx', mode: 0o600 });
-    const result = spawnSync(process.execPath, ['scripts/deploy-worker.mjs'], {
+    const result = await runInfrastructureCommand(process.execPath, ['scripts/deploy-worker.mjs'], {
+      signal,
       cwd: appRoot,
       shell: false,
       encoding: 'utf8',

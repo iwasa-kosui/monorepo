@@ -1,8 +1,9 @@
-import { spawnSync } from 'node:child_process';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { assertFreshTargetState, createTargetIdentity, validateFreshTargetPlan } from './fresh-target.mjs';
+import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { validateCloudflarePlan } from './validate-cloudflare-plan.mjs';
 
 const infra = fileURLToPath(new URL('../infra/cloudflare/', import.meta.url));
@@ -18,7 +19,15 @@ const parsePrivateJson = (source) => {
 };
 /** Fixed repository Terraform commands; no module/command injection. Protected target preparation precedes executor reservation. */
 export const createTargetTerraform = (
-  { identity: supplied, backendEndpoint, privateDirectory, zoneId, hostname, runCommand = spawnSync },
+  {
+    identity: supplied,
+    backendEndpoint,
+    privateDirectory,
+    zoneId,
+    hostname,
+    runCommand = runInfrastructureCommand,
+    signal = AbortSignal.timeout(30 * 60_000),
+  },
 ) => {
   const identity = createTargetIdentity(supplied);
   if (
@@ -27,9 +36,11 @@ export const createTargetTerraform = (
     || !privateDirectory || resolve(privateDirectory) !== privateDirectory
   ) fail();
   const run = async (args) => {
+    signal.throwIfAborted();
     await mkdir(privateDirectory, { recursive: true, mode: 0o700 });
     await chmod(privateDirectory, 0o700);
-    const result = runCommand('terraform', [`-chdir=${infra}`, ...args], {
+    const result = await runCommand('terraform', [`-chdir=${infra}`, ...args], {
+      signal,
       shell: false,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -51,6 +62,7 @@ export const createTargetTerraform = (
       { mode: 0o600 },
     );
     await chmod(join(privateDirectory, 'terraform-diagnostic.txt'), 0o600);
+    signal.throwIfAborted();
     if (result.status !== 0) fail();
     return result.stdout;
   };

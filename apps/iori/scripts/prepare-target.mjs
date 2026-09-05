@@ -5,7 +5,12 @@ import { createTargetTerraform } from './target-terraform.mjs';
 /** Separate protected target preparation precedes executor reservation. This owns no source export, import, signing, or receipt phases. */
 export const createTargetPreparation = (options) => {
   const identity = createTargetIdentity(options.identity);
-  const control = createTargetControlPlane({ identity, token: options.token, fetchRequest: options.fetchRequest });
+  const control = createTargetControlPlane({
+    identity,
+    token: options.token,
+    fetchRequest: options.fetchRequest,
+    signal: options.signal,
+  });
   const terraform = createTargetTerraform({ ...options, identity });
   let resources;
   let outputs;

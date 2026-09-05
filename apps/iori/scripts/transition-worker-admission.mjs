@@ -1,7 +1,8 @@
-import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
 import { createDeploymentWorkerConfig } from './temporary-worker-config.mjs';
 
@@ -17,14 +18,16 @@ export const transitionWorkerAdmission = async (
     mode,
     routePresent = false,
     fetchRequest,
-    runCommand = spawnSync,
+    runCommand = runInfrastructureCommand,
+    signal = AbortSignal.timeout(15 * 60_000),
   },
 ) => {
   const from = admissionEnvironment.IORI_ADMISSION_MODE;
   if (!['sealed:smoke', 'smoke:active', 'active:sealed', 'smoke:sealed'].includes(`${from}:${mode}`)) {
     throw new Error('Admission transition is invalid.');
   }
-  const control = createTargetControlPlane({ identity, token, fetchRequest });
+  signal.throwIfAborted();
+  const control = createTargetControlPlane({ identity, token, fetchRequest, signal });
   await control.readWorkerAdmission({ resources, admissionEnvironment, zoneId, expectedVersionId, routePresent });
   await control.readQueuePause({ queueId: resources.queueId, paused: true });
   const config = await createDeploymentWorkerConfig({ admissionMode: mode });
@@ -42,7 +45,9 @@ export const transitionWorkerAdmission = async (
       || rendered.r2_buckets?.[0]?.bucket_name !== identity.names.uploads
       || rendered.queues?.producers?.[0]?.queue !== identity.names.queue
     ) throw new Error('Admission configuration mismatch.');
-    const result = runCommand('pnpm', ['exec', 'wrangler', 'deploy', '--config', config.path, '--minify'], {
+    signal.throwIfAborted();
+    const result = await runCommand('pnpm', ['exec', 'wrangler', 'deploy', '--config', config.path, '--minify'], {
+      signal,
       cwd: new URL('..', import.meta.url).pathname,
       shell: false,
       encoding: 'utf8',
@@ -57,6 +62,7 @@ export const transitionWorkerAdmission = async (
     await writeFile(join(directory, 'diagnostic.txt'), `${result.stdout ?? ''}\n${result.stderr ?? ''}`, {
       mode: 0o600,
     });
+    signal.throwIfAborted();
     if (result.status !== 0) throw new Error('Admission deployment failed.');
     const records = (await readFile(outputPath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
     const deployed = records.filter((record) =>

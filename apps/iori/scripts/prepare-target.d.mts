@@ -1,3 +1,4 @@
+import type { InfrastructureCommand } from './infrastructure-command.mjs';
 import type { TargetIdentity } from './fresh-target.mjs';
 import type { TargetResourceReadback } from './target-control-plane.mjs';
 export function createTargetPreparation(
@@ -9,11 +10,8 @@ export function createTargetPreparation(
     zoneId: string;
     hostname: string;
     fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
-    runCommand?: (
-      command: string,
-      args: string[],
-      options: object,
-    ) => { status: number | null; stdout?: string; stderr?: string };
+    runCommand?: InfrastructureCommand;
+    signal?: AbortSignal;
   },
 ): Readonly<{
   prepareResources(): Promise<

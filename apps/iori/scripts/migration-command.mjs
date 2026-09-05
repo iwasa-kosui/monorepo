@@ -16,11 +16,12 @@ export const runMigrationCommand = (program, args, options) =>
       shell: false,
       // Own a dedicated group so pnpm's descendants share the abort boundary.
       detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     });
     const output = { stdout: [], stderr: [] };
     let bytes = 0;
     let failed = false;
+    let settled = false;
     let force;
     const terminateGroup = (signal) => {
       if (!Number.isSafeInteger(child.pid) || child.pid <= 0) return;
@@ -31,11 +32,16 @@ export const runMigrationCommand = (program, args, options) =>
       }
     };
     const cancel = () => {
+      if (settled) return;
       failed = true;
       terminateGroup('SIGTERM');
       force ??= setTimeout(() => terminateGroup('SIGKILL'), 5000);
     };
     const timer = setTimeout(cancel, options.timeout);
+    if (options.input !== undefined) {
+      child.stdin.on('error', cancel);
+      child.stdin.end(options.input);
+    }
     options.signal?.addEventListener('abort', cancel, { once: true });
     if (options.signal?.aborted) cancel();
     for (const name of ['stdout', 'stderr']) {
@@ -52,6 +58,7 @@ export const runMigrationCommand = (program, args, options) =>
       failed = true;
     });
     child.once('close', code => {
+      settled = true;
       clearTimeout(timer);
       clearTimeout(force);
       options.signal?.removeEventListener('abort', cancel);

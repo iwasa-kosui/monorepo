@@ -1,3 +1,4 @@
+import type { InfrastructureCommand } from './infrastructure-command.mjs';
 import type { TargetIdentity } from './fresh-target.mjs';
 export function createTargetTerraform(
   input: {
@@ -6,11 +7,8 @@ export function createTargetTerraform(
     privateDirectory: string;
     zoneId: string;
     hostname: string;
-    runCommand?: (
-      command: string,
-      args: string[],
-      options: object,
-    ) => { status: number | null; stdout?: string; stderr?: string };
+    runCommand?: InfrastructureCommand;
+    signal?: AbortSignal;
   },
 ): Readonly<{
   changeQueuePause(

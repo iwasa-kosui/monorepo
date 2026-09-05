@@ -1,8 +1,9 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, expect, it, vi } from 'vitest';
+
 import { createTargetIdentity } from '../fresh-target.mjs';
 import { transitionWorkerAdmission } from '../transition-worker-admission.mjs';
 const mocks = vi.hoisted(() => ({ read: vi.fn(), pause: vi.fn(), config: vi.fn() }));
@@ -53,7 +54,7 @@ it('uses the reviewed deployment command and rechecks the actual emitted version
   );
   mocks.config.mockResolvedValue({ path, cleanup: vi.fn() });
   mocks.read.mockResolvedValue({ mode: 'smoke' });
-  const command = vi.fn((bin, args, options) => {
+  const command = vi.fn(async (bin, args, options) => {
     expect(bin).toBe('pnpm');
     expect(args).toEqual(['exec', 'wrangler', 'deploy', '--config', path, '--minify']);
     writeFileSync(

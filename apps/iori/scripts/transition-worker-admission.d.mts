@@ -1,3 +1,4 @@
+import type { InfrastructureCommand } from './infrastructure-command.mjs';
 import type { TargetIdentity } from './fresh-target.mjs';
 import type { TargetResourceReadback } from './target-control-plane.mjs';
 export function transitionWorkerAdmission(
@@ -11,11 +12,8 @@ export function transitionWorkerAdmission(
     mode: 'sealed' | 'smoke' | 'active';
     routePresent?: boolean;
     fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
-    runCommand?: (
-      command: string,
-      args: string[],
-      options: object,
-    ) => { status: number | null; stdout?: string; stderr?: string };
+    runCommand?: InfrastructureCommand;
+    signal?: AbortSignal;
   },
 ): Promise<
   {

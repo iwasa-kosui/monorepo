@@ -15,7 +15,12 @@ export type TargetResourceReadback =
     }
   >;
 export function createTargetControlPlane(
-  input: { identity: TargetIdentity; token: string; fetchRequest?: (url: URL, init: RequestInit) => Promise<Response> },
+  input: {
+    identity: TargetIdentity;
+    token: string;
+    signal?: AbortSignal;
+    fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
+  },
 ): Readonly<{
   readQueuePause(input: { queueId: string; paused: boolean }): Promise<{ queueId: string; paused: boolean }>;
   assertFresh(): Promise<{ fresh: true; resourceCount: 0 }>;
