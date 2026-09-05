@@ -277,3 +277,43 @@ describe('additional bundle failure boundaries', () => {
     },
   );
 });
+
+for (const operation of [publishMigrationBundle, restoreMigrationBundle]) {
+  describe(`${operation.name} invocation types`, () => {
+    for (const field of ['expectedMainSha', 'expectedRunId']) {
+      it.each([undefined, null, 42, { toString: () => field === 'expectedMainSha' ? 'a'.repeat(40) : 'run-001' }])(
+        `rejects non-string ${field} before local or remote access (%s)`,
+        async (invalid) => {
+          let localAccesses = 0;
+          let remoteAccesses = 0;
+          const options = {
+            environment: 'production',
+            expectedMainSha: 'a'.repeat(40),
+            expectedRunId: 'run-001',
+            contractPath: 'contract.json',
+            [field]: invalid,
+            get root() {
+              localAccesses += 1;
+              return '/invalid-fixture-root';
+            },
+            storage: {
+              assertPrivate: async () => {
+                remoteAccesses += 1;
+              },
+              putNew: async () => {
+                remoteAccesses += 1;
+              },
+              get: async () => {
+                remoteAccesses += 1;
+                return Buffer.alloc(0);
+              },
+            },
+          };
+          await expect(operation(options as any)).rejects.toThrow('Migration bundle');
+          expect(localAccesses).toBe(0);
+          expect(remoteAccesses).toBe(0);
+        },
+      );
+    }
+  });
+}

@@ -19,8 +19,9 @@ const fail = () => {
 };
 const context = ({ environment, expectedMainSha, expectedRunId, contractPath, chunkSize = CHUNK }) => {
   if (
-    !['production', 'staging'].includes(environment) || !/^[a-f0-9]{40}$/.test(expectedMainSha)
-    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(expectedRunId)
+    !['production', 'staging'].includes(environment)
+    || typeof expectedMainSha !== 'string' || !/^[a-f0-9]{40}$/.test(expectedMainSha)
+    || typeof expectedRunId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(expectedRunId)
     || !isMigrationArtifactReference(contractPath) || !Number.isSafeInteger(chunkSize) || chunkSize < 1
     || chunkSize > CHUNK
   ) fail();
