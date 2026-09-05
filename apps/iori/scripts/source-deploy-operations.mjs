@@ -25,6 +25,14 @@ export const inspectSourcePnpm = async (path, uid) => {
     || await realpath(path) !== path
   ) throw new Error('Invalid source pnpm executable.');
 };
+// Only the fixed SSH bootstrap enables this transport. Its stderr is captured privately by the runner.
+export const captureSourceCommandOutput = async ({ stdout, stderr }) => {
+  const output = Buffer.concat([Buffer.from(stdout), Buffer.from('\n'), Buffer.from(stderr)]);
+  if (output.length > 8_000_001) throw new Error('Source diagnostic limit exceeded.');
+  await new Promise((resolve, reject) => {
+    process.stderr.write(output, error => error ? reject(new Error('Source diagnostic transport failed.')) : resolve());
+  });
+};
 export const runSourceDeployStep = async (
   { phase, sha, manifest },
   {
@@ -35,6 +43,7 @@ export const runSourceDeployStep = async (
     inspectPnpm = inspectSourcePnpm,
     runCommand = runMigrationCommand,
     signal,
+    captureOutput,
   } = {},
 ) => {
   if (
@@ -61,6 +70,7 @@ export const runSourceDeployStep = async (
       timeout: 10 * 60_000,
       maxBuffer: 8_000_000,
       signal,
+      captureOutput,
     });
   const git = (args) => exec('git', ['-C', checkout, ...args]);
   const clean = async () => {

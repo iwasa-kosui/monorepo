@@ -82,6 +82,7 @@ it('uses the fixed Node bootstrap before exact checkout, dependency delay, dist 
   expect(calls[rsync].args).toContain('--delete');
   expect(calls[rsync].args.join(' ')).toContain('StrictHostKeyChecking=yes');
   expect(calls.at(-1)?.input).toContain('"restart"');
+  expect(calls[0].input).toContain('captureOutput: captureSourceCommandOutput');
   expect(calls.every(call => !call.args.some(arg => /env\.conf|DATABASE|ssh-keyscan/.test(arg)))).toBe(true);
 });
 it('resets only the reviewed SHA after fetched-main proof and never touches database configuration', async () => {

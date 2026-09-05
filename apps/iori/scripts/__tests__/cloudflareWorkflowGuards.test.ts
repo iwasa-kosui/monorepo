@@ -116,6 +116,9 @@ it('shares exact production source serialization and delegates to early guarded 
 it('wires real credential-free fixture execution, explicit portable PostgreSQL opt-in and sealed CI identity', async () => {
   const ci = await readWorkflow('ci.yml');
   const steps = ci.jobs.iori.steps;
+  expect(steps.find(step => step.name === 'Test')?.run).toBe(
+    'pnpm --filter iori run test:ci --maxWorkers=1 --no-file-parallelism',
+  );
   expect(steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(false);
   expect(steps.some(step => step.run === 'node apps/iori/scripts/run-migration-fixture.mjs')).toBe(true);
   expect(steps.some(step => step.run?.includes('docker pull postgres:16'))).toBe(true);

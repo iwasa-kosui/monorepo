@@ -1,9 +1,11 @@
 import type { SourceBuildManifest } from './source-build-manifest.mjs';
+export function captureSourceCommandOutput(output: { stdout: string; stderr: string }): Promise<void>;
 export function inspectSourcePnpm(path: string, uid: number): Promise<void>;
 export function runSourceDeployStep(input: { phase: string; sha: string; manifest?: SourceBuildManifest }, options?: {
   home?: string;
   uid?: number;
   signal?: AbortSignal;
+  captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void>;
   guard?: (input: { home: string; uid: number }) => Promise<void>;
   inspectPnpm?: (path: string, uid: number) => Promise<void>;
   inspectCheckout?: (home: string, uid: number) => Promise<void>;

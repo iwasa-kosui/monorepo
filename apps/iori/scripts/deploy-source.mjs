@@ -65,11 +65,12 @@ export const deploySource = async (options, {
     await checkMain(mainSha, { signal });
     const script = await build({
       stdin: {
-        contents: `import {runSourceDeployStep} from './scripts/source-deploy-operations.mjs';
+        contents:
+          `import {runSourceDeployStep,captureSourceCommandOutput} from './scripts/source-deploy-operations.mjs';
           import {withCliSignal} from './scripts/cli-lifetime.mjs';
           if (process.version !== 'v24.12.0') throw new Error('Unsupported source Node.');
           await withCliSignal(signal => runSourceDeployStep(${JSON.stringify({ phase, sha: mainSha, manifest })},
-            {signal}), {timeoutMs: 15*60*1000});`,
+            {signal,captureOutput:captureSourceCommandOutput}), {timeoutMs: 15*60*1000});`,
         resolveDir: appRoot,
       },
       bundle: true,

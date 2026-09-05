@@ -140,7 +140,7 @@ jobs:
         run: pnpm --filter iori run build
 
       - name: Test
-        run: pnpm --filter iori run test:ci
+        run: pnpm --filter iori run test:ci --maxWorkers=1 --no-file-parallelism
 
   nen-diagnosis:
     name: "apps/nen-diagnosis"
