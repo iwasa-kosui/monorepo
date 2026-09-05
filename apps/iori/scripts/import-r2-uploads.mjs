@@ -5,7 +5,7 @@ import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { assertExternalMigrationPath, prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
 
@@ -223,31 +223,7 @@ export const createWranglerBucket = (bucketName, { executeFile = execFileAsync }
 });
 
 const main = async () => {
-  if (!process.argv.includes('--lightsail-stopped')) throw new Error('The Lightsail stop confirmation is required.');
-  const outputDir = process.env.IORI_MIGRATION_OUTPUT_DIR;
-  const bucketName = process.env.IORI_R2_BUCKET;
-  if (outputDir === undefined || bucketName === undefined) {
-    throw new Error('Required migration environment is missing.');
-  }
-  const bucket = createWranglerBucket(bucketName);
-  if (process.argv.includes('--backfill-ogp')) {
-    const articlesPath = process.env.IORI_OGP_ARTICLES_MANIFEST;
-    const pipelinePath = process.env.IORI_OGP_PIPELINE_MODULE;
-    if (articlesPath === undefined || pipelinePath === undefined) {
-      throw new Error('Required OGP migration environment is missing.');
-    }
-    await assertExternalMigrationPath(articlesPath);
-    const { generate } = await import(pathToFileURL(pipelinePath).href);
-    const articles = JSON.parse(await readFile(articlesPath, 'utf8'));
-    await backfillPublishedOgpImages({ articles, bucket, generate, outputDir });
-    return;
-  }
-  const sourceDir = process.env.IORI_UPLOAD_SOURCE_DIR;
-  const manifestPath = process.env.IORI_EXPORT_MANIFEST;
-  if (sourceDir === undefined || manifestPath === undefined) {
-    throw new Error('Required migration environment is missing.');
-  }
-  await importR2Uploads({ sourceDir, manifestPath, bucket, outputDir });
+  throw new Error('Use the protected migration executor.');
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

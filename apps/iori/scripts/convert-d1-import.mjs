@@ -1,15 +1,16 @@
+import { METADATA_BYTES, privateLines, readPrivateBounded } from './migration-file-stream.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { canonicalD1RowString, d1ColumnForSourceColumn, normalizeD1Value } from './data-migration-mapping.mjs';
-import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
+import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
 import { assertExternalMigrationPath, prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
 
-const MAX_WRANGLER_IMPORT_BYTES = 5 * 1024 * 1024 * 1024;
+const MAX_WRANGLER_IMPORT_BYTES = 32 * 1024 * 1024;
+export const D1_STATEMENT_BYTES = 100_000;
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const quoteIdentifier = (identifier) => `"${identifier.replaceAll('"', '""')}"`;
@@ -54,13 +55,13 @@ const closeWriter = (writer) =>
 
 const sourcePath = (manifestPath, file) => resolve(dirname(manifestPath), file);
 
-const fileChecksum = async (path) => {
+const fileChecksum = async (path, signal) => {
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  for await (const chunk of createReadStream(path, { signal })) hash.update(chunk);
   return hash.digest('hex');
 };
 
-const validateSourceTable = async ({ manifestPath, table, source }) => {
+const validateSourceTable = async ({ manifestPath, table, source, signal }) => {
   if (!Number.isSafeInteger(source?.count) || source.count < 0) {
     throw new Error(`Export manifest count is invalid for table ${table}.`);
   }
@@ -72,11 +73,10 @@ const validateSourceTable = async ({ manifestPath, table, source }) => {
   }
   const path = sourcePath(manifestPath, source.file);
   if ((await lstat(path)).isSymbolicLink()) throw new Error(`Export source file is a symlink for table ${table}.`);
-  const actualChecksum = await fileChecksum(path);
+  const actualChecksum = await fileChecksum(path, signal);
   if (actualChecksum !== source.checksum) throw new Error(`Export checksum mismatch for table ${table}.`);
 
-  const input = createReadStream(path, { encoding: 'utf8' });
-  const lines = createInterface({ input, crlfDelay: Infinity });
+  const lines = privateLines(path, { signal });
   let count = 0;
   let previousCanonical;
   for await (const line of lines) {
@@ -99,14 +99,17 @@ const validateSourceTable = async ({ manifestPath, table, source }) => {
 };
 
 export const convertD1Import = async (
-  { manifestPath, schemaPath, outputDir, maxFileBytes = MAX_WRANGLER_IMPORT_BYTES },
+  { manifestPath, schemaPath, outputDir, maxFileBytes = MAX_WRANGLER_IMPORT_BYTES, signal },
 ) => {
   if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes <= 0) {
     throw new Error('The D1 SQL size limit must be a positive integer.');
   }
   await assertExternalMigrationPath(manifestPath);
   const outputDirectory = await prepareExternalMigrationDirectory(outputDir);
-  const [manifestText, schemaText] = await Promise.all([readFile(manifestPath, 'utf8'), readFile(schemaPath, 'utf8')]);
+  const [manifestText, schemaText] = await Promise.all([
+    readPrivateBounded(manifestPath, METADATA_BYTES, signal),
+    readFile(schemaPath, 'utf8'),
+  ]);
   if (!schemaText.includes('CREATE TABLE')) throw new Error('The SQLite/D1 schema is invalid.');
   const manifest = JSON.parse(manifestText);
   const sourceTables = manifest.tables ?? {};
@@ -118,7 +121,7 @@ export const convertD1Import = async (
     throw new Error('Export manifest does not contain the complete application table set.');
   }
   for (const table of APPLICATION_TABLE_ORDER) {
-    await validateSourceTable({ manifestPath, table, source: sourceTables[table] });
+    await validateSourceTable({ manifestPath, table, source: sourceTables[table], signal });
   }
 
   const files = [];
@@ -141,6 +144,7 @@ export const convertD1Import = async (
   const finishWriter = async () => {
     if (writer === undefined) return;
     await closeWriter(writer);
+    if (manifestFiles.length >= 100_000) throw new Error('Too many SQL chunks.');
     manifestFiles.push({ file: writer.file, checksum: writer.hash.digest('hex'), tables: [...writer.tables] });
     writer = undefined;
   };
@@ -149,8 +153,7 @@ export const convertD1Import = async (
     for (const table of APPLICATION_TABLE_ORDER) {
       const source = sourceTables[table];
       if (source === undefined) continue;
-      const input = createReadStream(sourcePath(manifestPath, source.file), { encoding: 'utf8' });
-      const lines = createInterface({ input, crlfDelay: Infinity });
+      const lines = privateLines(sourcePath(manifestPath, source.file), { signal });
       const transformedChecksum = createHash('sha256');
       let transformedCount = 0;
       let previousCanonical;
@@ -166,6 +169,7 @@ export const convertD1Import = async (
         transformedCount += 1;
         const sql = insertStatement(table, row);
         const bytes = Buffer.byteLength(sql);
+        if (bytes > D1_STATEMENT_BYTES) throw new Error('A SQL statement exceeds the D1 100000-byte limit.');
         if (bytes > maxFileBytes) throw new Error('A SQL row exceeds the D1 import size limit.');
         if (writer !== undefined && writer.bytes + bytes > maxFileBytes) await finishWriter();
         if (writer === undefined) openWriter();
@@ -182,6 +186,10 @@ export const convertD1Import = async (
     throw error;
   }
 
+  if (
+    Buffer.byteLength(JSON.stringify({ tables: transformedTables, files: manifestFiles }, null, 2)) + 1024
+      > METADATA_BYTES
+  ) throw new Error('D1 manifest exceeds metadata bound.');
   await writeFile(
     resolve(outputDirectory, 'd1-import-manifest.json'),
     `${

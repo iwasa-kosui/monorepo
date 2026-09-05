@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 
 import { canonicalRowSummary } from './canonical-row-sort.mjs';
 import { canonicalD1RowString } from './data-migration-mapping.mjs';
-import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
+import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
 import { materializeWorkerBindings } from './materialize-worker-bindings.mjs';
 import { assertPrivateMountedInput } from './validate-private-mounted-inputs.mjs';
 

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, statfs } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
+import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
 import {
   assertExternalMigrationRoot,
   isMigrationArtifactReference,
