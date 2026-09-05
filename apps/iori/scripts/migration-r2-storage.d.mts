@@ -5,6 +5,7 @@ export type PrivacyOptions = {
   accountId: string;
   bucket: string;
   apiToken: string;
+  signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 };
 export function assertMigrationBucketPrivate(options: PrivacyOptions): Promise<void>;
@@ -15,8 +16,14 @@ export function createMigrationR2Storage(options: {
   secretAccessKey: string;
   apiToken?: string;
   readOnly?: boolean;
+  signal?: AbortSignal;
   createClient?: (
     config: S3ClientConfig,
-  ) => { send(command: unknown): Promise<{ Body?: AsyncIterable<Uint8Array> | Buffer }> };
+  ) => {
+    send(
+      command: unknown,
+      options?: { abortSignal: AbortSignal },
+    ): Promise<{ Body?: AsyncIterable<Uint8Array> | Buffer }>;
+  };
   fetchImpl?: typeof fetch;
 }): MigrationStorage;

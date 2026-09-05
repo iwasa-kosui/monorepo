@@ -1,6 +1,6 @@
-import { METADATA_BYTES, privateLines, readPrivateBounded } from './migration-file-stream.mjs';
+import { METADATA_BYTES, privateFileHash, privateLines, readPrivateBounded } from './migration-file-stream.mjs';
 import { createHash } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -47,19 +47,14 @@ const waitForWrite = (stream, value) =>
     });
   });
 
-const closeWriter = (writer) =>
-  new Promise((resolveClose, rejectClose) => {
-    writer.stream.once('error', rejectClose);
-    writer.stream.end(() => resolveClose());
-  });
+const closeWriter = async (writer) => {
+  if (writer.failure) writer.stream.destroy();
+  else writer.stream.end();
+  await writer.closed;
+  if (writer.failure) throw writer.failure;
+};
 
 const sourcePath = (manifestPath, file) => resolve(dirname(manifestPath), file);
-
-const fileChecksum = async (path, signal) => {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path, { signal })) hash.update(chunk);
-  return hash.digest('hex');
-};
 
 const validateSourceTable = async ({ manifestPath, table, source, signal }) => {
   if (!Number.isSafeInteger(source?.count) || source.count < 0) {
@@ -73,7 +68,7 @@ const validateSourceTable = async ({ manifestPath, table, source, signal }) => {
   }
   const path = sourcePath(manifestPath, source.file);
   if ((await lstat(path)).isSymbolicLink()) throw new Error(`Export source file is a symlink for table ${table}.`);
-  const actualChecksum = await fileChecksum(path, signal);
+  const actualChecksum = await privateFileHash(path, signal);
   if (actualChecksum !== source.checksum) throw new Error(`Export checksum mismatch for table ${table}.`);
 
   const lines = privateLines(path, { signal });
@@ -101,7 +96,7 @@ const validateSourceTable = async ({ manifestPath, table, source, signal }) => {
 export const convertD1Import = async (
   { manifestPath, schemaPath, outputDir, maxFileBytes = MAX_WRANGLER_IMPORT_BYTES, signal },
 ) => {
-  if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes <= 0) {
+  if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes <= 0 || maxFileBytes > MAX_WRANGLER_IMPORT_BYTES) {
     throw new Error('The D1 SQL size limit must be a positive integer.');
   }
   await assertExternalMigrationPath(manifestPath);
@@ -139,6 +134,12 @@ export const convertD1Import = async (
       tables: new Set(),
       stream: createWriteStream(path, { flags: 'wx', mode: 0o600 }),
     };
+    const opened = writer;
+    opened.failure = undefined;
+    opened.closed = new Promise((resolveClosed) => opened.stream.once('close', resolveClosed));
+    opened.stream.on('error', (error) => {
+      opened.failure ??= error;
+    });
     files.push(path);
   };
   const finishWriter = async () => {
@@ -173,7 +174,9 @@ export const convertD1Import = async (
         if (bytes > maxFileBytes) throw new Error('A SQL row exceeds the D1 import size limit.');
         if (writer !== undefined && writer.bytes + bytes > maxFileBytes) await finishWriter();
         if (writer === undefined) openWriter();
+        if (writer.failure) throw writer.failure;
         await waitForWrite(writer.stream, sql);
+        if (writer.failure) throw writer.failure;
         writer.bytes += bytes;
         writer.hash.update(sql);
         writer.tables.add(table);
@@ -182,7 +185,10 @@ export const convertD1Import = async (
     }
     await finishWriter();
   } catch (error) {
-    if (writer !== undefined) writer.stream.destroy();
+    if (writer !== undefined) {
+      writer.stream.destroy();
+      await writer.closed;
+    }
     throw error;
   }
 

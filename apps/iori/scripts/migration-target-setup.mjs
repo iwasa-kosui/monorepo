@@ -42,7 +42,7 @@ export const targetSetupConfiguration = (env) => {
     token: required('CLOUDFLARE_API_TOKEN'),
   };
 };
-export const transferStorageFromEnvironment = (env, identity, readOnly = false) =>
+export const transferStorageFromEnvironment = (env, identity, readOnly = false, signal) =>
   createMigrationR2Storage({
     accountId: identity.accountId,
     bucket: identity.names.transfer,
@@ -50,4 +50,5 @@ export const transferStorageFromEnvironment = (env, identity, readOnly = false) 
     accessKeyId: env.IORI_MIGRATION_R2_ACCESS_KEY_ID,
     secretAccessKey: env.IORI_MIGRATION_R2_SECRET_ACCESS_KEY,
     readOnly,
+    signal,
   });

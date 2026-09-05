@@ -91,19 +91,19 @@ const assertCompleteTableManifest = (manifest, name, { requireFiles = false } = 
   return tables;
 };
 
-const fileChecksum = async (path) => {
+const fileChecksum = async (path, signal) => {
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  for await (const chunk of createReadStream(path, { signal })) hash.update(chunk);
   return hash.digest('hex');
 };
 
-const validateExportTable = async ({ exportManifestPath, table, exportTable, d1Table, onRow }) => {
+const validateExportTable = async ({ exportManifestPath, table, exportTable, d1Table, onRow, signal }) => {
   const path = resolve(dirname(exportManifestPath), exportTable.file);
   if ((await lstat(path)).isSymbolicLink()) throw new Error(`Export source file is a symlink for table ${table}.`);
-  if (await fileChecksum(path) !== exportTable.checksum) {
+  if (await fileChecksum(path, signal) !== exportTable.checksum) {
     throw new Error(`Export checksum mismatch for table ${table}.`);
   }
-  const input = createReadStream(path, { encoding: 'utf8' });
+  const input = createReadStream(path, { encoding: 'utf8', signal });
   const lines = createInterface({ input, crlfDelay: Infinity });
   const canonicalChecksum = createHash('sha256');
   let count = 0;
@@ -137,6 +137,7 @@ export const createManifestExpectedProvider = ({
   d1ImportManifestPath,
   uploadManifestPath,
   ogpManifestPath,
+  signal,
 }) => ({
   loadExpected: async () => {
     if (d1ImportManifestPath === undefined) throw new Error('D1 import manifest is required.');
@@ -159,6 +160,7 @@ export const createManifestExpectedProvider = ({
         table,
         exportTable: exportTables[table],
         d1Table: d1Tables[table],
+        signal,
         onRow: table === 'post_images'
           ? (row) => {
             if (typeof row.imageId !== 'string' || row.imageId.length === 0) {
@@ -338,7 +340,8 @@ export const createCloudflareActualProvider = ({ d1, r2 }) => ({
         }
       };
       const workerCount = Math.min(4, objects.length);
-      await Promise.all(Array.from({ length: workerCount }, worker));
+      const settled = await Promise.allSettled(Array.from({ length: workerCount }, worker));
+      if (settled.some(item => item.status === 'rejected')) throw new Error('Object verification failed.');
       return results;
     };
     const tables = await d1.getTableSummaries(Object.keys(expected.tables));

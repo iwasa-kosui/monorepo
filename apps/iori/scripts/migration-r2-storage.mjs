@@ -20,16 +20,21 @@ export const readBoundedObject = async (body, limit) => {
   }
 };
 
-export const assertMigrationBucketPrivate = async ({ accountId, bucket, apiToken, fetchImpl = fetch }) => {
+export const assertMigrationBucketPrivate = async ({ accountId, bucket, apiToken, fetchImpl = fetch, signal }) => {
   try {
     if (!/^[a-f0-9]{32}$/.test(accountId) || !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket) || !apiToken) {
       throw new Error('invalid');
     }
+    signal?.throwIfAborted();
     const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/domains`;
     const request = async (suffix) => {
-      const response = await fetchImpl(`${base}/${suffix}`, { headers: { Authorization: `Bearer ${apiToken}` } });
+      const response = await fetchImpl(`${base}/${suffix}`, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+        redirect: 'error',
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
+      });
       if (!response.ok) throw new Error('invalid');
-      const body = await response.json();
+      const body = JSON.parse((await readBoundedObject(response.body, 2_000_000)).toString());
       if (body.success !== true) throw new Error('invalid');
       return body.result;
     };
@@ -52,6 +57,7 @@ export const createMigrationR2Storage = (
     secretAccessKey,
     apiToken,
     readOnly = false,
+    signal,
     createClient = (config) => new S3Client(config),
     fetchImpl = fetch,
   },
@@ -62,6 +68,8 @@ export const createMigrationR2Storage = (
   ) {
     throw new Error('Migration storage configuration is invalid.');
   }
+  signal?.throwIfAborted();
+  const deadline = () => signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000);
   const client = createClient({
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: 'auto',
@@ -69,10 +77,13 @@ export const createMigrationR2Storage = (
     maxAttempts: 1,
   });
   return {
-    assertPrivate: () => assertMigrationBucketPrivate({ accountId, bucket, apiToken, fetchImpl }),
+    assertPrivate: () => assertMigrationBucketPrivate({ accountId, bucket, apiToken, fetchImpl, signal }),
     async get(key, limit) {
       try {
-        const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+        signal?.throwIfAborted();
+        const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }), {
+          abortSignal: deadline(),
+        });
         return await readBoundedObject(result.Body, limit);
       } catch {
         throw new Error('Migration storage read failed.');
@@ -80,6 +91,7 @@ export const createMigrationR2Storage = (
     },
     async putNew(key, body) {
       try {
+        signal?.throwIfAborted();
         if (readOnly || !Buffer.isBuffer(body)) throw new Error('invalid');
         await client.send(
           new PutObjectCommand({
@@ -90,6 +102,7 @@ export const createMigrationR2Storage = (
             IfNoneMatch: '*',
             ContentType: 'application/octet-stream',
           }),
+          { abortSignal: deadline() },
         );
       } catch {
         throw new Error('Migration storage write failed.');

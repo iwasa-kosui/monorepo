@@ -7,6 +7,7 @@ export type MigrationStorage = {
 };
 export type MigrationBundleOptions = {
   expectedTarget: ExpectedTarget;
+  signal?: AbortSignal;
   environment: 'production' | 'staging';
   expectedMainSha: string;
   expectedRunId: string;

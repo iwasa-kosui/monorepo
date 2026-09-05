@@ -7,6 +7,7 @@ export type ImportTransport = {
 };
 export type ImportTransportOptions = {
   expectedTarget?: ExpectedTarget;
+  signal?: AbortSignal;
   fetchImpl?: typeof fetch;
   createClient?: (config: S3ClientConfig) => { send(command: unknown, options?: unknown): Promise<unknown> };
   pageSize?: number;

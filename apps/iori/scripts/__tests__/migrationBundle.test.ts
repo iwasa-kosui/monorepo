@@ -224,10 +224,10 @@ describe('official SDK adapter', () => {
       accountId: 'a'.repeat(32),
       bucket: 'migration-private',
       apiToken: 'fixture-token',
-      fetchImpl: async (url: string) => ({
-        ok: true,
-        json: async () => ({ success: true, result: url.endsWith('/managed') ? { enabled } : { domains: [] } }),
-      }),
+      fetchImpl: async (url: string) =>
+        new Response(
+          JSON.stringify({ success: true, result: url.endsWith('/managed') ? { enabled } : { domains: [] } }),
+        ),
     };
     if (enabled) await expect(assertMigrationBucketPrivate(input as any)).rejects.toThrow();
     else await expect(assertMigrationBucketPrivate(input as any)).resolves.toBeUndefined();

@@ -41,6 +41,7 @@ export const createCloudflareImportTransport = ({
   createClient = (config) => new S3Client(config),
   pageSize = 100,
   sortChunkBytes,
+  signal,
 }) => {
   let validated;
   try {
@@ -55,6 +56,8 @@ export const createCloudflareImportTransport = ({
   } catch {
     throw fail();
   }
+  signal?.throwIfAborted();
+  const deadline = () => signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
   const client = createClient({
     region: 'auto',
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
@@ -62,12 +65,13 @@ export const createCloudflareImportTransport = ({
     maxAttempts: 1,
   });
   const query = async (sql, params) => {
+    signal?.throwIfAborted();
     const response = await fetchImpl(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${validated.d1_database_id}/query`,
       {
         method: 'POST',
         redirect: 'error',
-        signal: AbortSignal.timeout(30_000),
+        signal: deadline(),
         headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql, params: params.map(String) }),
       },
@@ -137,8 +141,9 @@ export const createCloudflareImportTransport = ({
     },
     getObject: async (key) => {
       try {
+        signal?.throwIfAborted();
         const result = await client.send(new GetObjectCommand({ Bucket: validated.r2_bucket_name, Key: key }), {
-          abortSignal: AbortSignal.timeout(30_000),
+          abortSignal: deadline(),
         });
         if (!result.Body || typeof result.ContentType !== 'string' || !result.ContentType) throw fail();
         const source = result.Body instanceof Readable
@@ -159,6 +164,7 @@ export const createCloudflareImportTransport = ({
     },
     listObjects: async (prefix, cursor) => {
       try {
+        signal?.throwIfAborted();
         const result = await client.send(
           new ListObjectsV2Command({
             Bucket: validated.r2_bucket_name,
@@ -166,7 +172,7 @@ export const createCloudflareImportTransport = ({
             ContinuationToken: cursor,
             MaxKeys: 1000,
           }),
-          { abortSignal: AbortSignal.timeout(30_000) },
+          { abortSignal: deadline() },
         );
         const contents = result.Contents === undefined ? [] : result.Contents;
         if (

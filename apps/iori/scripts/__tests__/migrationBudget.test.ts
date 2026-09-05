@@ -62,3 +62,9 @@ it('requires same-revision rehearsal and rejects timeout/approval overrides', ()
   expect(() => parseMigrationRehearsal(rehearsalFixture(), 'b'.repeat(40))).toThrow();
   expect(() => parseMigrationRehearsal({ ...rehearsalFixture(), bypass: true }, 'a'.repeat(40))).toThrow();
 });
+it('charges one streamed OGP body instead of fictional retained images for every article', () => {
+  const base = { rehearsal: rehearsalFixture(), availableBytes: 14_000_000_000 };
+  const one = migrationBudget({ ...base, estimate: estimateFixture() });
+  const many = migrationBudget({ ...base, estimate: { ...estimateFixture(), article_count: 500 } });
+  expect(many.runnerBytes).toBe(one.runnerBytes);
+});

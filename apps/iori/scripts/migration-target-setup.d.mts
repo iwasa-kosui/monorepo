@@ -18,4 +18,5 @@ export function transferStorageFromEnvironment(
   env: Record<string, string | undefined>,
   identity: TargetIdentity,
   readOnly?: boolean,
+  signal?: AbortSignal,
 ): MigrationStorage;

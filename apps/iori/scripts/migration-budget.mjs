@@ -79,8 +79,8 @@ export const migrationBudget = ({ estimate, rehearsal, availableBytes, remaining
   if ([uploadManifestBytes, ogpManifestBytes, d1ManifestBytes, indexBytes].some(n => n > METADATA_BYTES)) {
     throw new Error('Migration metadata budget exceeds 16 MiB.');
   }
-  const ogpBytes = bounded(e.article_count * OBJECT_BYTES);
-  // Include retained OGP upper bound and bundle read/write buffers beyond Source 6a runner accounting.
+  const ogpBytes = e.article_count ? OBJECT_BYTES : 0;
+  // OGP is generated and uploaded sequentially: charge one body plus renderer/bundle buffers, not all articles.
   const runnerBytes = bounded(e.runner_required_bytes + ogpBytes + 256 * 1024 * 1024);
   if (BigInt(availableBytes) < BigInt(runnerBytes)) throw new Error('Runner migration capacity is insufficient.');
   // Reviewed capacity plan must cover data plus conservative index/SQLite overhead; raw-source cap is not D1 capacity.

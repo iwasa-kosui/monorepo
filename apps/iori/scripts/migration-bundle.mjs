@@ -38,13 +38,13 @@ const json = async (root, path) => {
   if ((await lstat(resolved)).size > METADATA) fail();
   return JSON.parse(await readFile(resolved, 'utf8'));
 };
-const fileDigest = async (root, path) => {
+const fileDigest = async (root, path, signal) => {
   const absolute = await resolveMigrationArtifactPath(root, path);
   const info = await lstat(absolute);
   if (info.nlink !== 1 || (info.mode & 0o077) !== 0) fail();
   const sha = createHash('sha256');
   let size = 0;
-  for await (const bytes of createReadStream(absolute, { highWaterMark: CHUNK })) {
+  for await (const bytes of createReadStream(absolute, { highWaterMark: CHUNK, signal })) {
     sha.update(bytes);
     size += bytes.length;
   }
@@ -89,7 +89,7 @@ const inventory = async (options) => {
   const files = new Map();
   const add = async (path, expected) => {
     if (!isMigrationArtifactReference(path)) fail();
-    const actual = await fileDigest(root, path);
+    const actual = await fileDigest(root, path, options.signal);
     if (
       expected && (actual.sha256 !== expected.sha256 || (expected.size !== undefined && actual.size !== expected.size))
     ) fail();
@@ -123,6 +123,7 @@ const verifiedPut = async (storage, key, body) => {
 /** Resumption is deliberately refused: a reservation permanently consumes its run ID. */
 export const publishMigrationBundle = async (options) => {
   try {
+    options.signal?.throwIfAborted();
     const { prefix, chunkSize } = context(options);
     const files = await inventory(options);
     const { storage, environment, expectedMainSha, expectedRunId, contractPath, root } = options;
@@ -140,11 +141,12 @@ export const publishMigrationBundle = async (options) => {
       files: [],
     };
     for (const [fileIndex, file] of files.entries()) {
+      options.signal?.throwIfAborted();
       const parts = [];
       const fullHash = createHash('sha256');
       let total = 0;
       const path = await resolveMigrationArtifactPath(root, file.path);
-      for await (const bytes of createReadStream(path, { highWaterMark: chunkSize })) {
+      for await (const bytes of createReadStream(path, { highWaterMark: chunkSize, signal: options.signal })) {
         const key = `${prefix}/parts/${fileIndex}/${parts.length}`;
         const part = { size: bytes.length, sha256: hash(bytes) };
         await verifiedPut(storage, key, bytes);
@@ -203,6 +205,7 @@ const validateIndex = (index, options) => {
 
 export const restoreMigrationBundle = async (options) => {
   try {
+    options.signal?.throwIfAborted();
     const { prefix } = context(options);
     const {
       storage,
@@ -215,6 +218,7 @@ export const restoreMigrationBundle = async (options) => {
     await assertExternalMigrationRoot(root);
     const rootInfo = await lstat(root);
     if ((rootInfo.mode & 0o777) !== 0o700 || (await readdir(root)).length !== 0) fail();
+    await storage.assertPrivate();
     const complete = JSON.parse((await get(storage, `${prefix}/complete`, 1024)).toString());
     const indexBody = await get(storage, `${prefix}/index`, METADATA);
     if (complete?.schema !== 'iori-migration-complete/v1' || complete.sha256 !== hash(indexBody)) fail();
@@ -232,6 +236,7 @@ export const restoreMigrationBundle = async (options) => {
       const fullHash = createHash('sha256');
       try {
         for (const [partIndex, part] of file.parts.entries()) {
+          options.signal?.throwIfAborted();
           const body = await get(storage, `${prefix}/parts/${fileIndex}/${partIndex}`, part.size);
           if (body.length !== part.size || hash(body) !== part.sha256) fail();
           await handle.writeFile(body);

@@ -32,6 +32,7 @@ export function createManifestExpectedProvider(input: {
   d1ImportManifestPath?: string;
   uploadManifestPath?: string;
   ogpManifestPath?: string;
+  signal?: AbortSignal;
 }): ExpectedProvider;
 export function createCloudflareActualProvider(input: {
   d1: { getTableSummaries(tables: readonly string[]): Promise<Record<string, { count: number; checksum?: string }>> };

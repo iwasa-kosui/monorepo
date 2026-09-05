@@ -1,3 +1,4 @@
+import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
 import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
 import { assertTargetSummary, migrationRunIdPattern, parseExpectedTarget } from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
@@ -51,6 +52,7 @@ const validFileArtifact = (artifact) =>
   && isMigrationArtifactReference(artifact.path)
   && Number.isSafeInteger(artifact.size)
   && artifact.size > 0
+  && artifact.size <= METADATA_BYTES
   && typeof artifact.sha256 === 'string'
   && digestPattern.test(artifact.sha256);
 
@@ -304,7 +306,7 @@ const mountedManifestLocations = {
 
 const mountedFileArtifact = async (path) => {
   const resolved = await assertExternalMigrationPath(path);
-  const [canonicalPath, body] = await Promise.all([realpath(resolved), readFile(resolved)]);
+  const [canonicalPath, body] = await Promise.all([realpath(resolved), readPrivateBounded(resolved, METADATA_BYTES)]);
   const metadata = await lstat(canonicalPath);
   if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0 || metadata.size === 0) {
     throw new Error('invalid');
@@ -376,7 +378,7 @@ export const validateProtectedInvocation = async () => {
   await assertExternalMigrationPath(contractPath);
   let contract;
   try {
-    contract = JSON.parse(await readFile(contractPath, 'utf8'));
+    contract = JSON.parse(await readPrivateBounded(contractPath, METADATA_BYTES));
   } catch {
     throw new Error('Protected migration contract is invalid.');
   }

@@ -1,5 +1,4 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { runMigrationCommand } from './migration-command.mjs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,10 +8,10 @@ import { METADATA_BYTES, privateFileHash, privateHandle, readPrivateBounded } fr
 import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
 import { D1_STATEMENT_BYTES } from './convert-d1-import.mjs';
 export const reviewedD1Schema = fileURLToPath(new URL('../drizzle-d1/0000_boring_xavin.sql', import.meta.url));
-const executeFile = promisify(execFile);
+
 /** Every SQL file is fully checked before the first schema or data mutation. No automatic retries. */
 export const importMigrationD1 = async (
-  { expectedTarget, manifestPath, apiToken, signal, runCommand = executeFile, fetchRequest = fetch },
+  { expectedTarget, manifestPath, apiToken, signal, runCommand = runMigrationCommand, fetchRequest = fetch },
 ) => {
   const target = parseExpectedTarget(expectedTarget);
   if (!apiToken) throw new Error('D1 credential is required.');
