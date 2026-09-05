@@ -1,3 +1,4 @@
+import { parseAdmission } from '../src/workerAdmission.ts';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -11,6 +12,8 @@ export const workerConfigTokens = [
   '__R2_BUCKET_NAME__',
   '__QUEUE_NAME__',
   '__ORIGIN__',
+  '__IORI_ADMISSION_MODE__',
+  '__IORI_ADMISSION_IDENTITY__',
   '__VAPID_SUBJECT__',
 ];
 
@@ -19,6 +22,15 @@ export const workerConfigTokens = [
  * @returns {string}
  */
 export const renderWorkerConfig = ({ template, values }) => {
+  const identity = parseAdmission({
+    ORIGIN: values.__ORIGIN__,
+    IORI_ADMISSION_MODE: values.__IORI_ADMISSION_MODE__,
+    IORI_ADMISSION_IDENTITY: values.__IORI_ADMISSION_IDENTITY__,
+  });
+  if (
+    !identity || identity.environment === 'local'
+    || values.__WORKER_NAME__ !== `iori-${identity.environment}-${identity.generation}`
+  ) throw new Error('Worker admission configuration is invalid.');
   let rendered = template;
 
   for (const token of workerConfigTokens) {
@@ -32,7 +44,7 @@ export const renderWorkerConfig = ({ template, values }) => {
     if (!rendered.includes(token)) {
       throw new Error(`${token} is missing from the Worker config template`);
     }
-    rendered = rendered.split(token).join(value);
+    rendered = rendered.split(token).join(JSON.stringify(value).slice(1, -1));
   }
 
   const unresolvedToken = rendered.match(/__[A-Z0-9_]+__/);

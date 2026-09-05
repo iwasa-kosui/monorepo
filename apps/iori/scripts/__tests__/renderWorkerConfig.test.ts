@@ -1,3 +1,4 @@
+import { admissionFixture } from '../../src/testing/admissionFixture.ts';
 import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,8 +9,11 @@ import { renderWorkerConfig } from '../render-worker-config.mjs';
 
 const execFileAsync = promisify(execFile);
 
+const fixture = admissionFixture('iori.example.invalid');
 const values = {
-  __WORKER_NAME__: 'iori-fixture',
+  __IORI_ADMISSION_MODE__: 'sealed',
+  __IORI_ADMISSION_IDENTITY__: fixture.IORI_ADMISSION_IDENTITY,
+  __WORKER_NAME__: 'iori-production-fixture1',
   __ACCOUNT_ID__: '00000000-0000-4000-8000-000000000001',
   __D1_DATABASE_ID__: '00000000-0000-4000-8000-000000000002',
   __KV_NAMESPACE_ID__: '00000000-0000-4000-8000-000000000003',
@@ -20,7 +24,7 @@ const values = {
 };
 
 const template =
-  `// Keep this JSONC comment.\n{\n  "name": "__WORKER_NAME__",\n  "account_id": "__ACCOUNT_ID__",\n  "database_id": "__D1_DATABASE_ID__",\n  "namespace_id": "__KV_NAMESPACE_ID__",\n  "bucket_name": "__R2_BUCKET_NAME__",\n  "queue": "__QUEUE_NAME__",\n  "origin": "__ORIGIN__",\n  "subject": "__VAPID_SUBJECT__",\n}\n`;
+  `// Keep this JSONC comment.\n{\n  "name": "__WORKER_NAME__",\n  "account_id": "__ACCOUNT_ID__",\n  "database_id": "__D1_DATABASE_ID__",\n  "namespace_id": "__KV_NAMESPACE_ID__",\n  "bucket_name": "__R2_BUCKET_NAME__",\n  "queue": "__QUEUE_NAME__",\n  "origin": "__ORIGIN__",\n  "mode": "__IORI_ADMISSION_MODE__",\n  "identity": "__IORI_ADMISSION_IDENTITY__",\n  "subject": "__VAPID_SUBJECT__",\n}\n`;
 
 describe('renderWorkerConfig', () => {
   it('replaces every fixture token while preserving JSONC content', () => {
@@ -29,7 +33,7 @@ describe('renderWorkerConfig', () => {
     expect(result).toContain('// Keep this JSONC comment.');
     for (const [token, value] of Object.entries(values)) {
       expect(result).not.toContain(token);
-      expect(result).toContain(value);
+      expect(result).toContain(JSON.stringify(value).slice(1, -1));
     }
   });
 
@@ -49,7 +53,7 @@ describe('renderWorkerConfig', () => {
         template,
         values: { ...values, __ORIGIN__: 'https://iori.example.invalid\nleak' },
       })
-    ).toThrow('__ORIGIN__');
+    ).toThrow();
   });
 
   it('writes a mode 0600 config and prints only its path', async () => {

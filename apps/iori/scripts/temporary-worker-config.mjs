@@ -73,7 +73,7 @@ const resolveWorkerPaths = (rendered, { withoutQueueProducer }) => {
   ) + '\n';
 };
 
-export const createDeploymentWorkerConfig = async ({ withoutQueueProducer = false } = {}) => {
+export const createDeploymentWorkerConfig = async ({ withoutQueueProducer = false, admissionMode } = {}) => {
   const template = await readFile(templatePath, 'utf8');
   const bindings = await readTerraformWorkerBindings();
   const values = Object.fromEntries(workerConfigTokens.map((token) => {
@@ -83,6 +83,7 @@ export const createDeploymentWorkerConfig = async ({ withoutQueueProducer = fals
       bindingKey === undefined || bindings === undefined ? requireEnv(token.slice(2, -2)) : bindings[bindingKey],
     ];
   }));
+  if (admissionMode !== undefined) values.__IORI_ADMISSION_MODE__ = admissionMode;
   return createTemporaryWorkerConfig({
     template,
     values,

@@ -1,6 +1,8 @@
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { admissionFixture } from './testing/admissionFixture.ts';
+
 const runtime = vi.hoisted(() => ({
   auth: { signInUseCase: {} },
   timeline: { getTimelineUseCase: {} },
@@ -68,7 +70,7 @@ describe('Task 8 Worker OGP route', () => {
       body: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer,
       httpMetadata: { contentType: 'image/png', cacheControl: 'public, max-age=60' },
     }));
-    const env = { UPLOADS: { get } } as never;
+    const env = { ...admissionFixture(), UPLOADS: { get } } as never;
 
     const response = await worker.fetch(
       new Request('https://worker.test/api/og/articles/573c7c51-0e4b-453c-bb9f-5dbd15a319a7'),
@@ -84,7 +86,7 @@ describe('Task 8 Worker OGP route', () => {
 
   it('rejects invalid article IDs before reading UPLOADS', async () => {
     const get = vi.fn();
-    const env = { UPLOADS: { get } } as never;
+    const env = { ...admissionFixture(), UPLOADS: { get } } as never;
 
     const response = await worker.fetch(
       new Request('https://worker.test/api/og/articles/not-an-article-id'),

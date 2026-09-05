@@ -20,10 +20,6 @@ variable "environment" {
   }
 }
 
-variable "worker_name" {
-  description = "Existing Wrangler-owned Worker service name."
-  type        = string
-}
 
 variable "public_hostname" {
   description = "Hostname for the opt-in production Worker route."
@@ -31,40 +27,10 @@ variable "public_hostname" {
   default     = "blog.example.invalid"
 }
 
-variable "d1_database_name" {
-  description = "Optional D1 database name override."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
-variable "r2_bucket_name" {
-  description = "Optional R2 bucket name override."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
-variable "kv_namespace_name" {
-  description = "Optional Fedify KV namespace title override."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
-variable "queue_name" {
-  description = "Optional Fedify queue name override."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
-variable "dead_letter_queue_name" {
-  description = "Optional Fedify dead-letter queue name override."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
 variable "enable_production_worker_route" {
   description = "Explicit cutover switch for the production Worker route."
@@ -77,9 +43,22 @@ variable "enable_production_worker_route" {
   }
 }
 
-variable "migration_bucket_name" {
-  description = "Optional dedicated private migration bucket name override. Never use the Terraform state or uploads bucket."
+
+variable "generation" {
+  description = "Fresh isolated generation. Never reuse an old generation or state."
   type        = string
-  default     = null
-  nullable    = true
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]{7,19}$", var.generation))
+    error_message = "generation must be 8-20 lowercase alphanumeric characters starting with a letter."
+  }
+}
+variable "attach_queue_consumer" {
+  description = "Attach only after the first sealed Worker has been deployed and read back."
+  type        = bool
+  default     = false
+}
+variable "queue_delivery_paused" {
+  description = "Keep true through preparation, import, verification and smoke. Resume last."
+  type        = bool
+  default     = true
 }

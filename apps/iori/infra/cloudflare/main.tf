@@ -1,11 +1,10 @@
 locals {
-  environment_suffix = var.environment == "production" ? "" : "-${var.environment}"
-
-  d1_database_name       = coalesce(var.d1_database_name, "iori${local.environment_suffix}")
-  r2_bucket_name         = coalesce(var.r2_bucket_name, "iori-uploads${local.environment_suffix}")
-  kv_namespace_name      = coalesce(var.kv_namespace_name, "iori-fedify${local.environment_suffix}")
-  queue_name             = coalesce(var.queue_name, "iori-fedify${local.environment_suffix}")
-  dead_letter_queue_name = coalesce(var.dead_letter_queue_name, "iori-fedify-dlq${local.environment_suffix}")
+  generation_prefix      = "iori-${var.environment}-${var.generation}"
+  d1_database_name       = local.generation_prefix
+  r2_bucket_name         = "${local.generation_prefix}-uploads"
+  kv_namespace_name      = "${local.generation_prefix}-fedify"
+  queue_name             = "${local.generation_prefix}-fedify"
+  dead_letter_queue_name = "${local.generation_prefix}-dlq"
 }
 
 resource "cloudflare_d1_database" "iori" {
@@ -42,6 +41,7 @@ resource "cloudflare_workers_kv_namespace" "fedify" {
 resource "cloudflare_queue" "fedify_dlq" {
   account_id = var.cloudflare_account_id
   queue_name = local.dead_letter_queue_name
+  settings   = { delivery_paused = true }
 
   lifecycle {
     prevent_destroy = true
@@ -51,6 +51,7 @@ resource "cloudflare_queue" "fedify_dlq" {
 resource "cloudflare_queue" "fedify" {
   account_id = var.cloudflare_account_id
   queue_name = local.queue_name
+  settings   = { delivery_paused = var.queue_delivery_paused }
 
   lifecycle {
     prevent_destroy = true
@@ -58,17 +59,18 @@ resource "cloudflare_queue" "fedify" {
 }
 
 resource "cloudflare_queue_consumer" "fedify" {
-  account_id  = var.cloudflare_account_id
-  queue_id    = cloudflare_queue.fedify.queue_id
-  type        = "worker"
-  script_name = var.worker_name
+  count             = var.attach_queue_consumer ? 1 : 0
+  account_id        = var.cloudflare_account_id
+  queue_id          = cloudflare_queue.fedify.queue_id
+  type              = "worker"
+  script_name       = local.generation_prefix
+  dead_letter_queue = cloudflare_queue.fedify_dlq.queue_name
 
   settings = {
-    batch_size        = 1
-    max_wait_time_ms  = 1000
-    max_retries       = 3
-    retry_delay       = 30
-    dead_letter_queue = cloudflare_queue.fedify_dlq.queue_id
+    batch_size       = 1
+    max_wait_time_ms = 1000
+    max_retries      = 3
+    retry_delay      = 30
   }
 }
 
@@ -77,7 +79,7 @@ resource "cloudflare_workers_route" "iori" {
 
   zone_id = var.zone_id
   pattern = "${var.public_hostname}/*"
-  script  = var.worker_name
+  script  = local.generation_prefix
 
   lifecycle {
     prevent_destroy = true
@@ -91,13 +93,13 @@ resource "cloudflare_workers_route" "iori" {
 
 resource "cloudflare_r2_bucket" "migration" {
   account_id = var.cloudflare_account_id
-  name       = coalesce(var.migration_bucket_name, "iori-migration-${var.environment}")
+  name       = "${local.generation_prefix}-transfer"
 
   lifecycle {
     prevent_destroy = true
 
     precondition {
-      condition     = coalesce(var.migration_bucket_name, "iori-migration-${var.environment}") != local.r2_bucket_name
+      condition     = "${local.generation_prefix}-transfer" != local.r2_bucket_name
       error_message = "The migration bucket must be separate from the application uploads bucket."
     }
   }

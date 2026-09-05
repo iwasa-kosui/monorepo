@@ -71,6 +71,7 @@ const workerBindingOutputIsExplicitNoop = (plan) => {
  * @returns {readonly string[]}
  */
 export const validateCloudflarePlan = (plan) => {
+  if (['queue-pause', 'queue-resume'].includes(plan.operation)) return validateQueuePausePlan(plan);
   if (plan.requireWorkerBindingsNoop && !workerBindingOutputIsExplicitNoop(plan)) {
     return workerBindingOutputChanged(plan)
       ? ['worker_bindings output must not change']
@@ -121,6 +122,30 @@ export const validateCloudflarePlan = (plan) => {
   });
 };
 
+export const validateQueuePausePlan = (plan) => {
+  if (!workerBindingOutputIsExplicitNoop(plan)) return ['worker_bindings output must be an explicit no-op'];
+  const desired = plan.operation === 'queue-pause';
+  const changes = plan.resource_changes;
+  if (!Array.isArray(changes)) return ['Queue state is required'];
+  const queue = changes.find((item) => item.address === 'cloudflare_queue.fedify');
+  if (!queue || queue.change.after?.settings?.delivery_paused !== desired) return ['Queue pause state is required'];
+  return changes.flatMap(({ address, change }) => {
+    if (change.importing || change.actions?.length !== 1) return ['Invalid Queue operation'];
+    if (change.actions[0] === 'no-op' && JSON.stringify(change.before) === JSON.stringify(change.after)) return [];
+    if (address !== 'cloudflare_queue.fedify' || change.actions[0] !== 'update') return ['Unrelated Queue operation'];
+    const before = structuredClone(change.before);
+    const after = structuredClone(change.after);
+    if (
+      typeof before?.settings?.delivery_paused !== 'boolean' || typeof after?.settings?.delivery_paused !== 'boolean'
+    ) return ['Missing Queue pause state'];
+    delete before.settings.delivery_paused;
+    delete after.settings.delivery_paused;
+    return JSON.stringify(before) === JSON.stringify(after)
+      ? []
+      : ['Queue operation must preserve all unrelated settings'];
+  });
+};
+
 const formatActionSummary = ({ address, change }) => `${address}: ${change.actions.join(',')}`;
 
 const parseArguments = (args) => {
@@ -133,7 +158,7 @@ const parseArguments = (args) => {
     && index !== operationIndex && index !== operationIndex + 1
   );
   if (
-    !['reconcile', 'consumer-replacement', 'route-cutover'].includes(operation)
+    !['reconcile', 'consumer-replacement', 'route-cutover', 'queue-pause', 'queue-resume'].includes(operation)
     || planPath === undefined
     || args.length !== 3 + Number(allowProductionRoute) + Number(requireWorkerBindingsNoop)
     || operationIndex === -1

@@ -2,7 +2,10 @@ import type { ExecutionContext, Queue } from '@cloudflare/workers-types';
 import { Create, exportJwk, fetchDocumentLoader, generateCryptoKeyPair } from '@fedify/fedify';
 import { describe, expect, it, vi } from 'vitest';
 
+// @ts-expect-error Node ESM runner has no generated declaration.
+import { DEFAULT_STAGING_SMOKE_CHECKS, runCloudflareSmoke } from '../scripts/run-cloudflare-smoke.mjs';
 import { ImageId } from './domain/image/imageId.ts';
+import { admissionFixture } from './testing/admissionFixture.ts';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
@@ -212,7 +215,7 @@ const makeEnv = (
         ? new Response('{}', { status: 200 })
         : new Response('Not Found', { status: 404 }),
   },
-  ORIGIN: origin,
+  ...admissionFixture(new URL(origin).hostname),
   VAPID_SUBJECT: 'mailto:admin@example.invalid',
   VAPID_PUBLIC_KEY: 'fixture-public',
   VAPID_PRIVATE_KEY: 'fixture-private',
@@ -249,11 +252,75 @@ describe('Worker fixture', () => {
       ),
     ]);
 
-    expect(disabled.status).toBe(404);
-    expect(unauthorized.status).toBe(401);
+    expect(disabled.status).toBe(503);
+    expect(unauthorized.status).toBe(503);
     expect(accepted.status).toBe(200);
     await expect(accepted.json()).resolves.toEqual({ accepted: true, queue: { enqueued: 1 } });
-    expect(send).toHaveBeenCalledWith({ type: 'iori-smoke', marker: 'staging-queue-enqueue' });
+    expect(send).toHaveBeenCalledWith({
+      type: 'iori-smoke',
+      schema: 1,
+      environment: 'production',
+      generation: 'fixture1',
+      mainSha: 'a'.repeat(40),
+      runId: 'fixture-run',
+    });
+  });
+
+  it('runs the unchanged full smoke checklist through real runtime with read-only capabilities', async () => {
+    const db = new FixtureD1(await makeSeed());
+    const prepared = vi.spyOn(db, 'prepare');
+    const env = makeEnv(db, { smokeQueueToken: 'fixture-smoke-token' });
+    const baseIdentity = JSON.parse(env.IORI_ADMISSION_IDENTITY!);
+    const smokeEnv = {
+      ...env,
+      IORI_ADMISSION_MODE: 'smoke',
+      IORI_ADMISSION_IDENTITY: JSON.stringify({
+        ...baseIdentity,
+        smoke: {
+          username: 'fixture',
+          uploadFilename: `${imageId}.webp`,
+          articleId: '00000000-0000-4000-8000-000000000000',
+        },
+      }),
+      UPLOADS: {
+        ...env.UPLOADS,
+        get: async (key: string) =>
+          key.startsWith('og/') || key.startsWith('og-images/')
+            ? { body: new TextEncoder().encode('png').buffer, httpMetadata: { contentType: 'image/png' } }
+            : env.UPLOADS.get(key),
+      },
+      ASSETS: { fetch: async () => Response.json({ name: 'iori' }) },
+    } as unknown as IoriWorkerEnv;
+    const checks = DEFAULT_STAGING_SMOKE_CHECKS.map((check: { name: string; path: string }) => ({
+      ...check,
+      ...(check.name === 'WebFinger'
+        ? { path: '/.well-known/webfinger?resource=acct:fixture@worker.example.invalid' }
+        : {}),
+      ...(check.name === 'actor' ? { path: '/users/fixture' } : {}),
+      ...(check.name === 'outbox' ? { path: '/users/fixture/outbox' } : {}),
+      ...(check.name === 'upload retrieval'
+        ? { path: `/uploads/${imageId}.webp`, expectedContentType: 'image/webp' }
+        : {}),
+    }));
+    const before = JSON.stringify(db.rows);
+    const result = await runCloudflareSmoke({
+      baseUrl: origin,
+      expectedOrigin: origin,
+      allowedHostname: new URL(origin).hostname,
+      checks,
+      smokeQueueToken: 'fixture-smoke-token',
+      fetchRequest: (url: URL, init: RequestInit) =>
+        worker.fetch(new Request(url, init), smokeEnv, {} as ExecutionContext),
+    });
+    expect(result.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'actor', ok: true }),
+        expect.objectContaining({ name: 'outbox', ok: true }),
+      ]),
+    );
+    expect(result.ok, JSON.stringify(result.checks)).toBe(true);
+    expect(JSON.stringify(db.rows)).toBe(before);
+    expect(prepared.mock.calls.length).toBeGreaterThan(3);
   });
 
   it('serves Worker bindings, ActivityPub and WebFinger without DATABASE_URL', async () => {

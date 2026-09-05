@@ -256,7 +256,7 @@ export const runCloudflareSmoke = async (
 
   for (const check of checks) {
     if (
-      check.requiresSmokeQueueToken === true && (typeof smokeQueueToken !== 'string' || smokeQueueToken.length === 0)
+      (typeof smokeQueueToken !== 'string' || smokeQueueToken.length === 0)
     ) {
       results.push({
         name: check.name,
@@ -269,7 +269,8 @@ export const runCloudflareSmoke = async (
     }
     try {
       const headers = new Headers();
-      if (check.requiresSmokeQueueToken === true) headers.set('x-iori-smoke-token', smokeQueueToken);
+      headers.set('x-iori-smoke-token', smokeQueueToken);
+      headers.set('Accept', check.expectedContentType);
       const response = await fetchRequest(new URL(check.path, base), {
         method: check.method ?? 'GET',
         headers,
@@ -308,7 +309,10 @@ export const runCli = async (argv = process.argv.slice(2)) => {
   }
   const checksJson = valueFor(argv, '--checks-json');
   const checks = checksJson === undefined ? DEFAULT_STAGING_SMOKE_CHECKS : JSON.parse(checksJson);
-  const smokeQueueToken = valueFor(argv, '--smoke-queue-token') ?? process.env.IORI_SMOKE_QUEUE_TOKEN;
+  if (argv.some((argument) => argument === '--smoke-queue-token' || argument.startsWith('--smoke-queue-token='))) {
+    throw new Error('Smoke credentials must use the protected environment.');
+  }
+  const smokeQueueToken = process.env.IORI_SMOKE_QUEUE_TOKEN;
   const result = await runCloudflareSmoke({
     baseUrl,
     expectedOrigin,

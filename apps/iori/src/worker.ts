@@ -26,6 +26,14 @@ import { Session } from './domain/session/session.ts';
 import { SessionId } from './domain/session/sessionId.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
+import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
+import {
+  admissionRejected,
+  admitWorkerRequest,
+  isSmokeMarker,
+  parseAdmission,
+  smokeMarker,
+} from './workerAdmission.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 import { createWorkerPageFallback } from './workerPageFallback.ts';
 
@@ -62,11 +70,6 @@ const fetchAsset = async (
   });
 };
 
-const stagingSmokeQueueMarker = Object.freeze({
-  type: 'iori-smoke',
-  marker: 'staging-queue-enqueue',
-});
-
 type IoriWorkerHandler = Readonly<{
   fetch: (
     request: Request,
@@ -85,10 +88,23 @@ export default {
     env: IoriWorkerEnv,
     executionCtx: ExecutionContext,
   ) => {
+    const admission = await admitWorkerRequest(request, env);
+    if (!admission) return admissionRejected();
+    if (new URL(request.url).pathname === '/__smoke__/queue-enqueue') {
+      if (admission.capability !== 'smoke' || request.method !== 'POST' || request.body !== null) {
+        return admissionRejected();
+      }
+      await env.FEDIFY_QUEUE.send(smokeMarker(admission.identity));
+      return Response.json({ accepted: true, queue: { enqueued: 1 } }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+    if (admission.capability === 'smoke') env = readOnlySmokeEnvironment(env);
     const runtime = await createWorkerRuntimePorts(env);
 
     return createIoriApp({
-      federationMiddleware: federation(runtime.federation, () => undefined),
+      federationMiddleware: async (c, next) => {
+        if (c.req.path === '/inbox' && c.req.method === 'GET') return c.json({ error: 'Method Not Allowed' }, 405);
+        return federation(runtime.federation, () => undefined)(c, next);
+      },
       registerRoutes: (app) => {
         app.get('/readyz', async (c) => {
           try {
@@ -122,15 +138,6 @@ export default {
           url.pathname = '/follow';
           return c.redirect(url);
         });
-        if (typeof env.SMOKE_QUEUE_TOKEN === 'string' && env.SMOKE_QUEUE_TOKEN.length > 0) {
-          app.post('/__smoke__/queue-enqueue', async (c) => {
-            if (c.req.header('x-iori-smoke-token') !== env.SMOKE_QUEUE_TOKEN) {
-              return c.json({ error: 'Unauthorized' }, 401);
-            }
-            await env.FEDIFY_QUEUE.send(stagingSmokeQueueMarker);
-            return c.json({ accepted: true, queue: { enqueued: 1 } });
-          });
-        }
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(
@@ -253,6 +260,16 @@ export default {
     batch: MessageBatch<unknown>,
     env: IoriWorkerEnv,
   ): Promise<void> => {
-    await processCloudflareFedifyQueueBatch(batch, env);
+    const identity = parseAdmission(env);
+    if (!identity || identity.mode !== 'active') {
+      batch.retryAll();
+      return;
+    }
+    const messages = batch.messages.filter((message) => {
+      if (!isSmokeMarker(message.body, identity)) return true;
+      message.ack();
+      return false;
+    });
+    if (messages.length > 0) await processCloudflareFedifyQueueBatch({ ...batch, messages }, env);
   },
 } satisfies IoriWorkerHandler;

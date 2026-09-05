@@ -4,7 +4,7 @@
   "account_id": "__ACCOUNT_ID__",
   "main": "../../src/worker.ts",
   "workers_dev": true,
-  "preview_urls": true,
+  "preview_urls": false,
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
@@ -13,16 +13,19 @@
   },
   "assets": {
     "binding": "ASSETS",
+    "run_worker_first": true,
     "directory": "../../dist",
   },
   "vars": {
     "ORIGIN": "__ORIGIN__",
+    "IORI_ADMISSION_MODE": "__IORI_ADMISSION_MODE__",
+    "IORI_ADMISSION_IDENTITY": "__IORI_ADMISSION_IDENTITY__",
     "VAPID_SUBJECT": "__VAPID_SUBJECT__",
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "iori",
+      "database_name": "__WORKER_NAME__",
       "database_id": "__D1_DATABASE_ID__",
       "migrations_dir": "../../drizzle-d1",
     },

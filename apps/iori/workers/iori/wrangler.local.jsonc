@@ -3,15 +3,19 @@
   "name": "iori-local",
   "account_id": "00000000-0000-4000-8000-000000000001",
   "main": "../../src/worker.ts",
-  "workers_dev": true,
+  "workers_dev": false,
+  "preview_urls": false,
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
+    "run_worker_first": true,
     "directory": "../../dist",
   },
   "vars": {
-    "ORIGIN": "https://iori.example.invalid",
+    "ORIGIN": "http://localhost:8787",
+    "IORI_ADMISSION_MODE": "active",
+    "IORI_ADMISSION_IDENTITY": "{\"environment\": \"local\", \"generation\": \"fixture1\", \"mainSha\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"runId\": \"local-fixture\", \"hostname\": \"localhost\", \"workerHostname\": \"iori-local-fixture1.fixture.workers.dev\", \"smoke\": {\"username\": \"iori-smoke\", \"uploadFilename\": \"00000000-0000-4000-8000-000000000000.png\", \"articleId\": \"00000000-0000-4000-8000-000000000000\"}}",
     "VAPID_SUBJECT": "mailto:admin@example.invalid",
   },
   "d1_databases": [

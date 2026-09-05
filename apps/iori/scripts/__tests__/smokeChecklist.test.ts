@@ -15,6 +15,9 @@ const send = (response: ServerResponse, status: number, contentType: string, bod
 };
 
 const respond = (request: IncomingMessage, response: ServerResponse): void => {
+  if (request.headers['x-iori-smoke-token'] !== fixtureSmokeToken) {
+    return send(response, 401, 'application/json', { error: 'Unauthorized' });
+  }
   const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname;
 
   if (path === '/health') return send(response, 200, 'text/plain', fixtureBody);

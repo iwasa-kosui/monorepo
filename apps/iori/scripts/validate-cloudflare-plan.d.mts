@@ -1,5 +1,5 @@
 export interface CloudflarePlan {
-  operation: 'reconcile' | 'consumer-replacement' | 'route-cutover';
+  operation: 'reconcile' | 'consumer-replacement' | 'route-cutover' | 'queue-pause' | 'queue-resume';
   allowProductionRoute?: boolean;
   requireWorkerBindingsNoop?: boolean;
   resource_changes?: readonly {
@@ -21,3 +21,5 @@ export interface CloudflarePlan {
 }
 
 export function validateCloudflarePlan(plan: CloudflarePlan): readonly string[];
+
+export function validateQueuePausePlan(plan: CloudflarePlan): readonly string[];

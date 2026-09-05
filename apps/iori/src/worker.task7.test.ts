@@ -1,6 +1,8 @@
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { admissionFixture } from './testing/admissionFixture.ts';
+
 const runtime = vi.hoisted(() => ({
   auth: { signInUseCase: {} },
   timeline: { getTimelineUseCase: {} },
@@ -64,7 +66,7 @@ import worker from './worker.ts';
 
 describe('Task 7 Worker route mounting', () => {
   it('mounts social, notification, article, mute, and relay API groups', async () => {
-    const env = {} as never;
+    const env = admissionFixture() as never;
     const executionContext = {} as ExecutionContext;
     const responses = await Promise.all([
       worker.fetch(
