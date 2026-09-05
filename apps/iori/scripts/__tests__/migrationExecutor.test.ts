@@ -393,3 +393,30 @@ it('rejects already-aborted execution before storage/source operations', async (
     f.close();
   }
 });
+it.each([2, 3])('rechecks target at mutation boundary %s and stops before the next data write', async boundary => {
+  const f = await fixture();
+  let readbacks = 0;
+  const put = vi.fn(f.options.bucket.put);
+  try {
+    await expect(executeProtectedMigration({
+      ...f.options,
+      bucket: { put },
+      readTarget: async () => {
+        readbacks++;
+        if (readbacks === boundary) throw new Error('target drift');
+      },
+    })).rejects.toThrow('target drift');
+    expect(put).not.toHaveBeenCalled();
+    if (boundary === 2) {
+      expect(f.calls).not.toContain('d1');
+      await expect(access(join(f.options.root, 'evidence/convert-and-import-d1.json'))).rejects.toThrow();
+    } else {
+      expect(f.calls).toContain('d1');
+      await access(join(f.options.root, 'evidence/convert-and-import-d1.json'));
+    }
+    await expect(access(join(f.options.root, 'evidence/import-r2-and-ogp.json'))).rejects.toThrow();
+    await expect(access(join(f.options.root, 'contract.json'))).rejects.toThrow();
+  } finally {
+    f.close();
+  }
+});

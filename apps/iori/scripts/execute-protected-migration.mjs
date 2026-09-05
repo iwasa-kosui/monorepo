@@ -204,8 +204,10 @@ export const executeProtectedMigration = async (options) => {
       maxFileBytes: options.maxSqlFileBytes,
     });
     const d1ManifestPath = join(sqlRoot, 'd1-import-manifest.json');
+    await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     await options.importD1({ expectedTarget: target, manifestPath: d1ManifestPath, signal });
     await completePhase('convert-and-import-d1', { d1_import_manifest: d1ManifestPath });
+    await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     const uploads = await importMigrationUploads({
       sourceDir: restored.uploadDir,
       manifestPath: restored.manifestPath,
