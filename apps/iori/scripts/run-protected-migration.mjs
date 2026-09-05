@@ -1,36 +1,42 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertExternalMigrationPath } from './migration-path-safety.mjs';
+import {
+  assertExternalMigrationPath,
+  assertExternalMigrationRoot,
+  isMigrationArtifactReference,
+  resolveMigrationArtifactPath,
+} from './migration-path-safety.mjs';
 
-const requiredPhases = [
+export const requiredPhases = Object.freeze([
   'import-existing-resources',
   'drain-queue',
   'export-postgres',
   'convert-and-import-d1',
   'import-r2-and-ogp',
   'verify-import',
-];
-const contractSchema = 'iori-protected-migration-contract/v2';
-const evidenceSchema = (phase) => `iori-migration-evidence/v2/${phase}`;
-const phaseArtifactRequirements = {
+]);
+const contractSchema = 'iori-protected-migration-contract/v3';
+const evidenceSchema = (phase) => `iori-migration-evidence/v3/${phase}`;
+export const phaseArtifactRequirements = Object.freeze({
   'import-existing-resources': ['terraform_import_summary'],
   'export-postgres': ['postgres_export_manifest'],
   'convert-and-import-d1': ['d1_import_manifest'],
   'import-r2-and-ogp': ['r2_import_manifest', 'ogp_import_manifest'],
   'drain-queue': ['queue_drain_report'],
   'verify-import': ['verification_summary'],
-};
-const protectedPhaseCommands = {
+});
+Object.values(phaseArtifactRequirements).forEach(Object.freeze);
+export const protectedPhaseCommands = Object.freeze({
   'import-existing-resources': 'terraform-import-existing-resources',
   'export-postgres': 'export-postgres',
   'convert-and-import-d1': 'convert-and-import-d1',
   'import-r2-and-ogp': 'import-r2-and-ogp',
   'drain-queue': 'drain-queue',
   'verify-import': 'verify-import',
-};
+});
 const importedTerraformAddresses = [
   'cloudflare_d1_database.iori',
   'cloudflare_r2_bucket.uploads',
@@ -46,8 +52,7 @@ const runIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 const validFileArtifact = (artifact) =>
   artifact !== null
   && typeof artifact === 'object'
-  && typeof artifact.path === 'string'
-  && artifact.path.length > 0
+  && isMigrationArtifactReference(artifact.path)
   && Number.isSafeInteger(artifact.size)
   && artifact.size > 0
   && typeof artifact.sha256 === 'string'
@@ -157,8 +162,8 @@ export const assertProtectedMigrationContract = (contract, { expectedMainSha, ex
   });
 };
 
-const assertRegularPrivateFile = async (artifact) => {
-  const path = await assertExternalMigrationPath(artifact.path);
+const assertRegularPrivateFile = async (artifact, root) => {
+  const path = await resolveMigrationArtifactPath(root, artifact.path);
   const metadata = await lstat(path);
   if (
     !metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0 || metadata.size !== artifact.size
@@ -268,9 +273,14 @@ const assertPhaseArtifactContent = (phase, name, body, contract) => {
   return artifact;
 };
 
-const assertEvidenceArtifact = async ({ name, artifact, artifacts, queue_drain_depth }, contract, receiptPublicKey) => {
+const assertEvidenceArtifact = async (
+  { name, artifact, artifacts, queue_drain_depth },
+  contract,
+  receiptPublicKey,
+  root,
+) => {
   try {
-    const body = await assertRegularPrivateFile(artifact);
+    const body = await assertRegularPrivateFile(artifact, root);
     const evidence = JSON.parse(body.toString('utf8'));
     if (
       evidence?.schema !== evidenceSchema(name)
@@ -284,7 +294,7 @@ const assertEvidenceArtifact = async ({ name, artifact, artifacts, queue_drain_d
     ) throw new Error('invalid');
     assertSignedReceipt({ name, artifacts, queue_drain_depth }, evidence, contract, receiptPublicKey);
     for (const [artifactName, requiredArtifact] of Object.entries(artifacts)) {
-      const artifactBody = await assertRegularPrivateFile(requiredArtifact);
+      const artifactBody = await assertRegularPrivateFile(requiredArtifact, root);
       assertPhaseArtifactContent(name, artifactName, artifactBody, contract);
     }
   } catch {
@@ -325,16 +335,20 @@ const expectedMountedArtifacts = async (environment) => {
   return expected;
 };
 
-const assertMountedArtifactsMatch = (phases, expected) => {
+const assertMountedArtifactsMatch = async (phases, expected, root) => {
   if (expected === undefined) return;
   for (const phase of phases) {
     const expectedPhaseArtifacts = expected[phase.name];
     if (expectedPhaseArtifacts === undefined) continue;
     for (const [name, expectedArtifact] of Object.entries(expectedPhaseArtifacts)) {
       const actualArtifact = phase.artifacts[name];
+      const reference = isAbsolute(expectedArtifact.path)
+        ? relative(root, expectedArtifact.path)
+        : expectedArtifact.path;
+      await resolveMigrationArtifactPath(root, reference);
       if (
         !validFileArtifact(actualArtifact)
-        || actualArtifact.path !== expectedArtifact.path
+        || actualArtifact.path !== reference
         || actualArtifact.size !== expectedArtifact.size
         || actualArtifact.sha256 !== expectedArtifact.sha256
       ) throw new Error('Protected migration evidence is invalid.');
@@ -344,12 +358,20 @@ const assertMountedArtifactsMatch = (phases, expected) => {
 
 export const validateProtectedMigrationEvidence = async (contract, expected = {}) => {
   const validated = assertProtectedMigrationContract(contract, expected);
-  assertMountedArtifactsMatch(validated.phases, expected.expectedMountedArtifacts);
-  for (const phase of validated.phases) await assertEvidenceArtifact(phase, validated, expected.receiptPublicKey);
+  try {
+    const root = await assertExternalMigrationRoot(expected.root);
+    await assertMountedArtifactsMatch(validated.phases, expected.expectedMountedArtifacts, root);
+    for (const phase of validated.phases) {
+      await assertEvidenceArtifact(phase, validated, expected.receiptPublicKey, root);
+    }
+  } catch {
+    throw new Error('Protected migration evidence is invalid.');
+  }
   return validated;
 };
 
 const main = async () => {
+  const root = await assertExternalMigrationRoot(process.env.IORI_MIGRATION_ROOT);
   const contractPath = process.env.IORI_MIGRATION_CONTRACT;
   if (contractPath === undefined) throw new Error('Protected migration contract is required.');
   await assertExternalMigrationPath(contractPath);
@@ -381,6 +403,7 @@ const main = async () => {
   if (importRunner.sha256 !== importRunnerHash) throw new Error('Protected migration mounted inputs are invalid.');
   const receiptPublicKey = await loadReceiptPublicKey(receiptKeyPath, receiptKeyHash);
   await validateProtectedMigrationEvidence(contract, {
+    root,
     expectedMainSha,
     expectedRunId,
     expectedMountedArtifacts: mountedArtifacts,

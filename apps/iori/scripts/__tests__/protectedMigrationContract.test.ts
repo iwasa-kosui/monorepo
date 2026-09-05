@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +10,7 @@ import {
   assertProtectedMigrationContract,
   canonicalReceiptPayload,
   loadReceiptPublicKey,
-  validateProtectedMigrationEvidence,
+  validateProtectedMigrationEvidence as validateEvidence,
 } from '../run-protected-migration.mjs';
 
 const phases = [
@@ -31,6 +31,9 @@ const requirementKeys: Record<string, string[]> = {
 };
 const digest = (body: string | Buffer) => createHash('sha256').update(body).digest('hex');
 const directories: string[] = [];
+const roots = new WeakMap<object, string>();
+const validateProtectedMigrationEvidence = (contract: object, options: Record<string, unknown> = {}) =>
+  validateEvidence(contract, { root: roots.get(contract)!, ...options });
 const receiptKeys = generateKeyPairSync('ed25519');
 const importedAddresses = [
   'cloudflare_d1_database.iori',
@@ -89,8 +92,8 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
               : {}),
           },
         );
-        const path = join(directory, `${name}-${key}`);
-        await writeFile(path, body, { mode: 0o600 });
+        const path = `${name}-${key}`;
+        await writeFile(join(directory, path), body, { mode: 0o600 });
         return [key, { path, size: Buffer.byteLength(body), sha256: digest(body) }];
       })),
     );
@@ -115,7 +118,7 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
       queue_drain_depth: name === 'drain-queue' ? 0 : null,
     };
     const evidence = {
-      schema: `iori-migration-evidence/v2/${name}`,
+      schema: `iori-migration-evidence/v3/${name}`,
       phase: name,
       status: 'completed',
       main_sha,
@@ -130,13 +133,13 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
       ...(name === 'drain-queue' ? { queue_drain_depth: 0 } : {}),
     };
     const body = JSON.stringify(evidence);
-    const path = join(directory, `${name}.json`);
-    await writeFile(path, body, { mode: 0o600 });
+    const path = `${name}.json`;
+    await writeFile(join(directory, path), body, { mode: 0o600 });
     const artifact = {
       path,
       size: Buffer.byteLength(body),
       sha256: digest(body),
-      schema: `iori-migration-evidence/v2/${name}`,
+      schema: `iori-migration-evidence/v3/${name}`,
       phase: name,
     };
     phaseEntries.push({
@@ -150,13 +153,15 @@ const validContract = async (artifactBodies: Record<string, unknown> = {}) => {
     previous_evidence_hash = artifact.sha256;
   }
 
-  return {
-    schema: 'iori-protected-migration-contract/v2',
+  const contract = {
+    schema: 'iori-protected-migration-contract/v3',
     main_sha,
     run_id,
     previous_evidence_hash: digest(`${main_sha}:${run_id}`),
     phases: phaseEntries,
   };
+  roots.set(contract, directory);
+  return contract;
 };
 
 afterEach(async () => {
@@ -209,10 +214,23 @@ describe('protected migration contract', () => {
       ].map(async ([name, path]) => [name, JSON.parse(await readFile(path, 'utf8'))])),
     );
 
-    await expect(validateProtectedMigrationEvidence(
-      await validContract(rawManifests),
-      { receiptPublicKey: receiptKeys.publicKey },
-    )).resolves.toEqual(expect.objectContaining({ phases: expect.any(Array) }));
+    const contract = await validContract(rawManifests);
+    const rootA = roots.get(contract)!;
+    const rootB = await mkdtemp(join(await realpath(tmpdir()), 'iori-restored-'));
+    directories.push(rootB);
+    const bytes = JSON.stringify(contract);
+    await expect(validateEvidence(contract, { root: rootA, receiptPublicKey: receiptKeys.publicKey })).resolves
+      .toBeDefined();
+    await cp(rootA, rootB, { recursive: true });
+    for (const phase of contract.phases) {
+      expect(await readFile(join(rootB, phase.artifact.path))).toEqual(
+        await readFile(join(rootA, phase.artifact.path)),
+      );
+    }
+    await rm(rootA, { recursive: true });
+    await expect(validateEvidence(JSON.parse(bytes), { root: rootB, receiptPublicKey: receiptKeys.publicKey })).resolves
+      .toBeDefined();
+    expect(JSON.stringify(contract)).toBe(bytes);
   });
 
   it('rejects the former ordering that drains the queue after export', async () => {
@@ -223,7 +241,7 @@ describe('protected migration contract', () => {
 
   it('rejects nonexistent or empty evidence artifacts', async () => {
     const contract = await validContract();
-    contract.phases[0].artifact.path = join(await realpath(tmpdir()), 'missing-migration-evidence.json');
+    contract.phases[0].artifact.path = 'missing-migration-evidence.json';
     await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
       .toThrow('evidence');
   });
@@ -286,7 +304,7 @@ describe('protected migration contract', () => {
   it('rejects empty or malformed phase artifact reports', async () => {
     const contract = await validContract();
     const report = contract.phases.find((phase) => phase.name === 'drain-queue')!.artifacts.queue_drain_report;
-    await writeFile(report.path, '{}', { mode: 0o600 });
+    await writeFile(join(roots.get(contract)!, report.path), '{}', { mode: 0o600 });
     report.size = 2;
     report.sha256 = digest('{}');
     await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
@@ -296,10 +314,105 @@ describe('protected migration contract', () => {
   it('rejects a modified signed executor receipt', async () => {
     const contract = await validContract();
     const artifact = contract.phases.at(-1)!.artifact;
-    const evidence = JSON.parse(await readFile(artifact.path, 'utf8'));
+    const evidence = JSON.parse(await readFile(join(roots.get(contract)!, artifact.path), 'utf8'));
     evidence.executor_receipt.signature = 'A'.repeat(evidence.executor_receipt.signature.length);
     const body = JSON.stringify(evidence);
-    await writeFile(artifact.path, body, { mode: 0o600 });
+    await writeFile(join(roots.get(contract)!, artifact.path), body, { mode: 0o600 });
+    artifact.size = Buffer.byteLength(body);
+    artifact.sha256 = digest(body);
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+  });
+
+  it('rejects legacy v2 contracts and evidence descriptors', async () => {
+    const contract = await validContract();
+    contract.schema = 'iori-protected-migration-contract/v2';
+    expect(() => assertProtectedMigrationContract(contract)).toThrow('contract');
+    contract.schema = 'iori-protected-migration-contract/v3';
+    contract.phases[0].artifact.schema = 'iori-migration-evidence/v2/import-existing-resources';
+    expect(() => assertProtectedMigrationContract(contract)).toThrow('contract');
+  });
+
+  it.each(['/absolute', '../escape', 'a/../b', './file', 'a//b', 'a/', 'C:file', 'a\\b', ''])(
+    'rejects unsafe signed reference %j without I/O',
+    async (path) => {
+      const contract = await validContract();
+      contract.phases[0].artifact.path = path;
+      expect(() => assertProtectedMigrationContract(contract)).toThrow('contract');
+    },
+  );
+
+  it('requires a private explicit root and private nonempty evidence', async () => {
+    const contract = await validContract();
+    const root = roots.get(contract)!;
+    await expect(
+      validateEvidence(contract, { root: undefined as unknown as string, receiptPublicKey: receiptKeys.publicKey }),
+    ).rejects.toThrow('evidence');
+    await chmod(root, 0o755);
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+    await chmod(root, 0o700);
+    const path = join(root, contract.phases[0].artifact.path);
+    await chmod(path, 0o644);
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+    await chmod(path, 0o600);
+    await writeFile(path, '');
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+  });
+
+  it('normalizes mounted absolute paths but rejects same basename at another location', async () => {
+    const contract = await validContract();
+    const root = roots.get(contract)!;
+    const artifact = contract.phases[2].artifacts.postgres_export_manifest;
+    const options = {
+      receiptPublicKey: receiptKeys.publicKey,
+      expectedMountedArtifacts: {
+        'export-postgres': { postgres_export_manifest: { ...artifact, path: join(root, artifact.path) } },
+      },
+    };
+    await expect(validateProtectedMigrationEvidence(contract, options)).resolves.toBeDefined();
+    await mkdir(join(root, 'other'), { mode: 0o700 });
+    await cp(join(root, artifact.path), join(root, 'other', artifact.path));
+    options.expectedMountedArtifacts['export-postgres'].postgres_export_manifest.path = join(
+      root,
+      'other',
+      artifact.path,
+    );
+    await expect(validateProtectedMigrationEvidence(contract, options)).rejects.toThrow('evidence');
+  });
+
+  it('rejects leaf symlinks even when the target bytes match the signed descriptor', async () => {
+    const contract = await validContract();
+    const root = roots.get(contract)!;
+    const path = join(root, contract.phases[0].artifact.path);
+    const target = join(root, 'target');
+    await cp(path, target);
+    await rm(path);
+    await symlink(target, path);
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+  });
+
+  it('rejects changed manifest bytes without trusting the signed filename', async () => {
+    const contract = await validContract();
+    const artifact = contract.phases[2].artifacts.postgres_export_manifest;
+    const path = join(roots.get(contract)!, artifact.path);
+    const bytes = await readFile(path, 'utf8');
+    await writeFile(path, bytes.replace('2026', '2025'));
+    await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects
+      .toThrow('evidence');
+  });
+
+  it('rejects legacy evidence bytes even when the outer checksum is updated', async () => {
+    const contract = await validContract();
+    const artifact = contract.phases.at(-1)!.artifact;
+    const path = join(roots.get(contract)!, artifact.path);
+    const evidence = JSON.parse(await readFile(path, 'utf8'));
+    evidence.schema = 'iori-migration-evidence/v2/verify-import';
+    const body = JSON.stringify(evidence);
+    await writeFile(path, body);
     artifact.size = Buffer.byteLength(body);
     artifact.sha256 = digest(body);
     await expect(validateProtectedMigrationEvidence(contract, { receiptPublicKey: receiptKeys.publicKey })).rejects

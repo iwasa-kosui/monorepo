@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { chmod, lstat, mkdir, realpath } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -9,7 +9,8 @@ const repositoryRoot = () =>
 
 const isWithin = (candidate, parent) => {
   const path = relative(parent, candidate);
-  return path === '' || (!path.startsWith('..') && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`));
+  return path === ''
+    || (!isAbsolute(path) && path !== '..' && !path.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`));
 };
 
 const closestExistingPath = async (path) => {
@@ -71,4 +72,28 @@ export const prepareExternalMigrationDirectory = async (directory) => {
   }
   await chmod(realDirectory, 0o700);
   return realDirectory;
+};
+
+export const isMigrationArtifactReference = (path) =>
+  typeof path === 'string' && path.length > 0 && !path.includes('\\') && !path.includes('\0')
+  && !/^[A-Za-z]:/.test(path)
+  && path.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+
+export const assertExternalMigrationRoot = async (root) => {
+  if (typeof root !== 'string' || root.length === 0 || !isAbsolute(root)) throw new Error('Invalid migration root.');
+  const resolved = await assertExternalMigrationPath(root);
+  const metadata = await lstat(resolved);
+  if (!metadata.isDirectory() || (metadata.mode & 0o077) !== 0) throw new Error('Invalid migration root.');
+  return resolved;
+};
+
+export const resolveMigrationArtifactPath = async (root, reference) => {
+  if (!isMigrationArtifactReference(reference)) throw new Error('Invalid migration artifact reference.');
+  const directory = await assertExternalMigrationRoot(root);
+  const path = resolve(directory, reference);
+  if (!isWithin(path, directory)) throw new Error('Invalid migration artifact reference.');
+  await rejectSymlinkComponents(path);
+  await assertOutsideRepository(path);
+  if (!(await lstat(path)).isFile()) throw new Error('Migration artifact must be a regular file.');
+  return path;
 };

@@ -8,7 +8,8 @@ export function assertProtectedMigrationContract(contract: unknown, expected?: {
 export function canonicalReceiptPayload(receipt: Record<string, unknown>): string;
 export function loadReceiptPublicKey(path: string, expectedSha256: string): Promise<unknown>;
 
-export function validateProtectedMigrationEvidence(contract: unknown, expected?: {
+export function validateProtectedMigrationEvidence(contract: unknown, expected: {
+  root: string;
   expectedMainSha?: string;
   expectedRunId?: string;
   expectedMountedArtifacts?: Record<string, Record<string, unknown>>;
@@ -18,3 +19,7 @@ export function validateProtectedMigrationEvidence(contract: unknown, expected?:
     phases: readonly unknown[];
   }>
 >;
+
+export const requiredPhases: readonly string[];
+export const phaseArtifactRequirements: Readonly<Record<string, readonly string[]>>;
+export const protectedPhaseCommands: Readonly<Record<string, string>>;
