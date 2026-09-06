@@ -16,6 +16,7 @@ import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
+import { Env } from '../../env.ts';
 import { Federation } from '../../federation.ts';
 import { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../useCase/createPost.ts';
@@ -546,6 +547,7 @@ const app = new Hono()
         pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
         webPushSender: WebPushSender.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        origin: Env.getInstance().ORIGIN,
       });
 
       const result = await useCase.run({
@@ -648,6 +650,7 @@ const app = new Hono()
         linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
         ogpFetcher: createOgpFetcher(),
         acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
+        origin: Env.getInstance().ORIGIN,
       });
 
       const { content, imageUrls } = c.req.valid('json');

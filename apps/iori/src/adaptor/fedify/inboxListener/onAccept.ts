@@ -2,18 +2,23 @@ import { type Accept, Follow, type InboxContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
+import type { FollowAcceptedStore, FollowResolver } from '../../../domain/follow/follow.ts';
 import { Follow as AppFollow } from '../../../domain/follow/follow.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
-import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
-import { PgRelayResolverByActorUri } from '../../pg/relay/relayResolverByActorUri.ts';
-import { PgRelaySubscriptionAcceptedStore } from '../../pg/relay/relaySubscriptionAcceptedStore.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
-export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => {
+export type OnAcceptDeps = Readonly<{
+  inboxActorResolver: InboxActorResolver;
+  acceptRelaySubscriptionUseCase: AcceptRelaySubscriptionUseCase;
+  actorResolverByUri: ActorResolverByUri;
+  followResolver: FollowResolver;
+  followAcceptedStore: FollowAcceptedStore;
+}>;
+
+export const createOnAccept = (deps: OnAcceptDeps) => async (ctx: InboxContext<unknown>, activity: Accept) => {
   const actorId = activity.actorId;
   if (!actorId) {
     getLogger().warn('Accept activity has no actorId');
@@ -42,13 +47,8 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
     // This is an Accept for a relay subscription
     getLogger().info(`Processing relay subscription Accept from: ${actorUri}`);
 
-    const useCase = AcceptRelaySubscriptionUseCase.create({
-      relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
-      relaySubscriptionAcceptedStore: PgRelaySubscriptionAcceptedStore.getInstance(),
-    });
-
     return RA.flow(
-      useCase.run({ relayActorUri: actorUri }),
+      deps.acceptRelaySubscriptionUseCase.run({ relayActorUri: actorUri }),
       RA.match({
         ok: (relay) => {
           getLogger().info(`Relay subscription accepted: ${relay.actorUri}`);
@@ -63,7 +63,7 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
   // This is an Accept for a regular follow request
   getLogger().info(`Processing follow Accept from: ${actorUri}`);
 
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
@@ -72,14 +72,10 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
   const { actorIdentity: acceptingActorIdentity } = actorResult.val;
 
   // Find the pending follow request
-  const followResolver = PgFollowResolver.getInstance();
-  const followAcceptedStore = PgFollowedStore.getInstance();
-
   // Get the follower from the Follow object
-  const localActorResolver = PgActorResolverByUri.getInstance();
   const followerUri = followActorId.href;
 
-  const followerResult = await localActorResolver.resolve(followerUri);
+  const followerResult = await deps.actorResolverByUri.resolve(followerUri);
   if (!followerResult.ok || !followerResult.val) {
     getLogger().warn(`Failed to resolve follower: ${followerUri}`);
     return;
@@ -88,7 +84,7 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
   const follower = followerResult.val;
 
   // Resolve the accepting actor from our database
-  const acceptingActorResult = await localActorResolver.resolve(acceptingActorIdentity.uri);
+  const acceptingActorResult = await deps.actorResolverByUri.resolve(acceptingActorIdentity.uri);
   if (!acceptingActorResult.ok || !acceptingActorResult.val) {
     getLogger().warn(`Failed to resolve accepting actor: ${acceptingActorIdentity.uri}`);
     return;
@@ -97,7 +93,7 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
   const acceptingActor = acceptingActorResult.val;
 
   // Check if follow exists
-  const followResult = await followResolver.resolve({
+  const followResult = await deps.followResolver.resolve({
     followerId: follower.id,
     followingId: acceptingActor.id,
   });
@@ -111,6 +107,6 @@ export const onAccept = async (ctx: InboxContext<unknown>, activity: Accept) => 
   const now = Instant.now();
   const event = AppFollow.acceptFollow(follow, now);
 
-  await followAcceptedStore.store(event);
+  await deps.followAcceptedStore.store(event);
   getLogger().info(`Follow accepted: ${follower.id} -> ${acceptingActor.id}`);
 };

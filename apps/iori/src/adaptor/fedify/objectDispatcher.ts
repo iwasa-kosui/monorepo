@@ -15,6 +15,8 @@ import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts'
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 
+export { createObjectDispatcher, type ObjectDispatcherDeps } from './objectDispatcherFactory.ts';
+
 const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
   const useCase = GetPostUseCase.create({
     postResolver: PgPostResolver.getInstance(),

@@ -1,36 +1,39 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createDeploymentWorkerConfig } from './temporary-worker-config.mjs';
 
 const appRoot = new URL('..', import.meta.url).pathname;
-const configPath = 'workers/iori/wrangler.jsonc';
-const wranglerLogPath = process.env.WRANGLER_LOG_PATH ?? join(tmpdir(), 'iori-wrangler-logs');
-
-const parseArgs = (args) => args.filter((arg) => arg !== '--');
-const deployArgs = parseArgs(process.argv.slice(2));
+const privateDirectory = mkdtempSync(join(tmpdir(), 'iori-deploy-'));
+const wranglerLogPath = join(privateDirectory, 'wrangler.log');
+const outputPath = join(privateDirectory, 'deploy.ndjson');
+writeFileSync(outputPath, '', { mode: 0o600 });
+let commandIndex = 0;
+const inputArgs = process.argv.slice(2).filter((arg) => arg !== '--');
+const withoutQueueProducer = inputArgs.includes('--without-queue-producer');
+const deployArgs = inputArgs.filter((arg) => arg !== '--without-queue-producer');
 const isDryRun = deployArgs.includes('--dry-run');
+
+if (deployArgs.some((arg) => arg === '--config' || arg.startsWith('--config='))) {
+  throw new Error('deploy-worker manages its own temporary config and does not accept --config.');
+}
+
+for (let i = 0; i < deployArgs.length; i++) {
+  if (deployArgs[i] === '--dry-run') continue;
+  if (deployArgs[i] === '--outdir' && deployArgs[i + 1] && !deployArgs[i + 1].startsWith('-')) {
+    i++;
+    continue;
+  }
+  throw new Error('Unsupported deployment argument.');
+}
 
 const requireEnv = (name) => {
   const value = process.env[name];
   if (value === undefined || value.length === 0) {
-    console.error(`${name} is required for iori Worker deployment.`);
-    process.exit(1);
+    throw new Error(`${name} is required for iori Worker deployment.`);
   }
   return value;
-};
-
-const stripJsonc = (source) =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1')
-    .replace(/,\s*([}\]])/g, '$1');
-
-const resolveFromBase = (baseDir, path) => {
-  if (path === undefined || isAbsolute(path)) {
-    return path;
-  }
-  return join(baseDir, path);
 };
 
 const run = (command, args, options = {}) => {
@@ -39,93 +42,68 @@ const run = (command, args, options = {}) => {
     env: {
       ...process.env,
       WRANGLER_LOG_PATH: wranglerLogPath,
+      WRANGLER_OUTPUT_FILE_PATH: outputPath,
+      WRANGLER_SEND_METRICS: 'false',
     },
-    stdio: 'inherit',
+    stdio: ['pipe', 'pipe', 'pipe'],
     shell: false,
     ...options,
   });
+  writeFileSync(
+    join(privateDirectory, `command-${commandIndex++}.txt`),
+    `${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+    { mode: 0o600 },
+  );
   if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+    throw new Error(`${command} exited with status ${result.status ?? 1}`);
   }
 };
 
 const putRequiredSecret = (name, deployConfigPath) => {
-  if (isDryRun) {
-    return;
+  if (!isDryRun) {
+    run('pnpm', ['exec', 'wrangler', 'secret', 'put', name, '--config', deployConfigPath], {
+      input: requireEnv(name),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
   }
-  const value = requireEnv(name);
-
-  run(
-    'pnpm',
-    [
-      'exec',
-      'wrangler',
-      'secret',
-      'put',
-      name,
-      '--config',
-      deployConfigPath,
-    ],
-    {
-      input: value,
-      stdio: ['pipe', 'inherit', 'inherit'],
-    },
-  );
 };
 
 const deployWorker = (deployConfigPath) => {
-  run('pnpm', [
-    'exec',
-    'wrangler',
-    'deploy',
-    '--config',
-    deployConfigPath,
-    '--minify',
-    ...deployArgs,
-  ]);
+  run('pnpm', ['exec', 'wrangler', 'deploy', '--config', deployConfigPath, '--minify', ...deployArgs]);
 };
 
-const baseConfigPath = join(appRoot, configPath);
-const baseConfig = JSON.parse(stripJsonc(await readFile(baseConfigPath, 'utf8')));
-const configDir = dirname(baseConfigPath);
-
-const vars = {
-  ...baseConfig.vars,
-  ORIGIN: requireEnv('ORIGIN'),
-  VAPID_SUBJECT: requireEnv('VAPID_SUBJECT'),
+const preflightDeployment = () => {
+  if (requireEnv('IORI_ADMISSION_MODE') !== 'sealed') throw new Error('Deployment must preserve sealed admission.');
+  const identity = JSON.parse(requireEnv('IORI_ADMISSION_IDENTITY'));
+  if (identity.environment === 'staging' && !isDryRun) requireEnv('STAGING_ACCESS_TOKEN');
+  if (process.env.STAGING_ACCESS_TOKEN && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
+    throw new Error('Staging and smoke credentials must be distinct.');
+  }
+  if (isDryRun) return;
+  for (const name of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']) requireEnv(name);
 };
 
-const deployConfig = {
-  ...baseConfig,
-  main: resolveFromBase(configDir, baseConfig.main),
-  vars,
-  assets: baseConfig.assets === undefined
-    ? undefined
-    : {
-      ...baseConfig.assets,
-      directory: resolveFromBase(configDir, baseConfig.assets.directory),
-    },
-  d1_databases: baseConfig.d1_databases?.map((database) => ({
-    ...database,
-    migrations_dir: resolveFromBase(configDir, database.migrations_dir),
-  })),
-};
-
-const dir = await mkdtemp(join(tmpdir(), 'iori-worker-'));
-const deployConfigPath = join(dir, 'wrangler.json');
-await writeFile(deployConfigPath, JSON.stringify(deployConfig, null, 2) + '\n');
-
-if (!isDryRun) {
-  deployWorker(deployConfigPath);
-}
-
-putRequiredSecret('VAPID_PUBLIC_KEY', deployConfigPath);
-putRequiredSecret('VAPID_PRIVATE_KEY', deployConfigPath);
-
-deployWorker(deployConfigPath);
-
-if (isDryRun) {
-  console.log('iori Worker deploy dry-run passed.');
-} else {
-  console.log('iori Worker deployed.');
+preflightDeployment();
+const config = await createDeploymentWorkerConfig({ withoutQueueProducer });
+try {
+  if (!isDryRun) deployWorker(config.path);
+  putRequiredSecret('VAPID_PUBLIC_KEY', config.path);
+  putRequiredSecret('VAPID_PRIVATE_KEY', config.path);
+  putRequiredSecret('SMOKE_QUEUE_TOKEN', config.path);
+  if (process.env.STAGING_ACCESS_TOKEN) putRequiredSecret('STAGING_ACCESS_TOKEN', config.path);
+  deployWorker(config.path);
+  if (!isDryRun && process.env.IORI_DEPLOYMENT_RESULT_PATH) {
+    const records = readFileSync(outputPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    const deployed = records.filter((record) => record.type === 'deploy' && record.version === 1).at(-1);
+    if (!deployed?.version_id) throw new Error('Deployment version evidence is unavailable.');
+    writeFileSync(
+      process.env.IORI_DEPLOYMENT_RESULT_PATH,
+      JSON.stringify({ workerName: deployed.worker_name, versionId: deployed.version_id }) + '\n',
+      { mode: 0o600 },
+    );
+    chmodSync(process.env.IORI_DEPLOYMENT_RESULT_PATH, 0o600);
+  }
+  console.log(isDryRun ? 'iori Worker deploy dry-run passed.' : 'iori Worker deployed.');
+} finally {
+  await config.cleanup();
 }

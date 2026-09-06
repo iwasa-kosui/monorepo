@@ -1,10 +1,9 @@
 import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
-import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { Post, PostNotFoundError, PostResolver, RemotePost } from '../domain/post/post.ts';
+import type { Post, PostNotFoundError, PostResolver, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';

@@ -4,23 +4,10 @@ import webpush from 'web-push';
 import type { PushSubscription } from '../../domain/pushSubscription/pushSubscription.ts';
 import { Env } from '../../env.ts';
 import { singleton } from '../../helper/singleton.ts';
+import type { PushPayload, SendError, WebPushSender as WebPushSenderPort } from './webPush.ts';
 
-export type PushPayload = Readonly<{
-  title: string;
-  body: string;
-  icon?: string;
-  url?: string;
-}>;
-
-export type SendError = Readonly<{
-  type: 'SendError';
-  message: string;
-  statusCode?: number;
-}>;
-
-export type WebPushSender = Readonly<{
-  send: (subscription: PushSubscription, payload: PushPayload) => RA<void, SendError>;
-}>;
+export type { PushPayload, SendError } from './webPush.ts';
+export type WebPushSender = WebPushSenderPort;
 
 const createSender = (): WebPushSender => {
   const env = Env.getInstance();

@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 
 import type { OgpFetcher } from '../../../adaptor/ogp/ogpFetcher.ts';
 import type { LocalPostResolverByUri } from '../../../adaptor/pg/post/localPostResolverByUri.ts';
-import type { WebPushSender } from '../../../adaptor/webPush/webPushSender.ts';
+import type { WebPushSender } from '../../../adaptor/webPush/webPush.ts';
 import type {
   Actor,
   ActorResolverByUri,

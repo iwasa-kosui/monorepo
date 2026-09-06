@@ -1,9 +1,14 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import type { Agg } from '../../../domain/aggregate/index.ts';
 import type { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
-import { LocalPost, type PostImage, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
+import {
+  LocalPost,
+  type PostImage,
+  type PostWithAuthor,
+  RemotePost,
+  type ThreadResolver,
+} from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { Env } from '../../../env.ts';
@@ -23,10 +28,7 @@ import {
   usersTable,
 } from '../schema.ts';
 
-export type ThreadResolver = Agg.Resolver<
-  { postId: PostId },
-  { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
->;
+export type { ThreadResolver } from '../../../domain/post/post.ts';
 
 const getInstance = singleton((): ThreadResolver => {
   const resolve = async ({ postId }: { postId: PostId }) => {

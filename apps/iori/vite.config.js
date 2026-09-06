@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import build from '@hono/vite-build/node';
 import devServer from '@hono/vite-dev-server';
 import { defineConfig } from 'vite';
@@ -35,7 +36,15 @@ export default defineConfig(({ mode }) => {
     };
   }
 
+  // Embed a clean build's revision into the bundle, never reread the checkout at runtime.
+  let sourceRevision;
+  try {
+    const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' });
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    if (dirty.length === 0 && /^[a-f0-9]{40}$/.test(sha)) sourceRevision = sha;
+  } catch { /* Development builds may run without migration capability. */ }
   return {
+    define: { __IORI_SOURCE_REVISION__: JSON.stringify(sourceRevision) ?? 'undefined' },
     plugins: [
       build({
         entry: 'src/index.ts',

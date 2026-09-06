@@ -2,25 +2,29 @@ import { type Announce, type InboxContext, isActor, Note } from '@fedify/fedify'
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type {
+  FederatedTimelineItemCreatedStore,
+  FederatedTimelineItemResolverByPostId,
+} from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItem } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { RemotePostUpserter } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
-import { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgFederatedTimelineItemCreatedStore } from '../../pg/federatedTimeline/federatedTimelineItemCreatedStore.ts';
-import { PgFederatedTimelineItemResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
-import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
-import { PgRelayResolverByActorUri } from '../../pg/relay/relayResolverByActorUri.ts';
-import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
-import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
-import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
+import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
 
-export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce) => {
+export type OnAnnounceDeps = Readonly<{
+  relayResolverByActorUri: RelayResolverByActorUri;
+  inboxActorResolver: InboxActorResolver;
+  addReceivedRepostUseCase: AddReceivedRepostUseCase;
+  remotePostUpserter: RemotePostUpserter;
+  federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
+  federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+}>;
+
+export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxContext<unknown>, activity: Announce) => {
   const actorId = activity.actorId;
   if (!actorId) {
     getLogger().warn('Announce activity has no actorId');
@@ -28,15 +32,14 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   }
 
   // Check if this is from a relay server
-  const relayResolver = PgRelayResolverByActorUri.getInstance();
-  const relayResult = await relayResolver.resolve({ actorUri: actorId.href });
+  const relayResult = await deps.relayResolverByActorUri.resolve({ actorUri: actorId.href });
   if (relayResult.ok && relayResult.val && relayResult.val.status === 'accepted') {
     // This is from a relay server - process as federated timeline item
-    await processRelayAnnounce(ctx, activity, relayResult.val);
+    await processRelayAnnounce(deps, ctx, activity, relayResult.val);
     return;
   }
 
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
@@ -54,17 +57,6 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     return;
   }
 
-  const useCase = AddReceivedRepostUseCase.create({
-    repostCreatedStore: PgRepostCreatedStore.getInstance(),
-    repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
-    postResolver: PgPostResolver.getInstance(),
-    remotePostUpserter: PgRemotePostUpserter.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
-  });
-
   // Check if this is a local Note
   const parsed = ctx.parseUri(objectId);
   if (
@@ -79,7 +71,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     const repostedPostId = postIdResult.val;
 
     return RA.flow(
-      useCase.run({
+      deps.addReceivedRepostUseCase.run({
         type: 'local',
         announceActivityUri,
         repostedPostId,
@@ -130,7 +122,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   const authorIcon = await author.getIcon();
 
   return RA.flow(
-    useCase.run({
+    deps.addReceivedRepostUseCase.run({
       type: 'remote',
       announceActivityUri,
       reposterIdentity,
@@ -170,6 +162,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
 import type { Relay } from '../../../domain/relay/relay.ts';
 
 const processRelayAnnounce = async (
+  deps: OnAnnounceDeps,
   _ctx: InboxContext<unknown>,
   activity: Announce,
   relay: Relay,
@@ -205,10 +198,8 @@ const processRelayAnnounce = async (
   const authorIcon = await author.getIcon();
 
   // Upsert the remote post using the existing upserter
-  const remotePostUpserter = PgRemotePostUpserter.getInstance();
-
   // Use the remote post upserter to create/get the post
-  const postResult = await remotePostUpserter.resolve({
+  const postResult = await deps.remotePostUpserter.resolve({
     uri: note.id.href,
     content: contentText,
     authorIdentity: {
@@ -231,8 +222,7 @@ const processRelayAnnounce = async (
   const post = postResult.val;
 
   // Check if this post already exists in federated timeline
-  const federatedTimelineItemResolver = PgFederatedTimelineItemResolverByPostId.getInstance();
-  const existingItemResult = await federatedTimelineItemResolver.resolve({ postId: post.postId });
+  const existingItemResult = await deps.federatedTimelineItemResolverByPostId.resolve({ postId: post.postId });
 
   if (existingItemResult.ok && existingItemResult.val) {
     getLogger().info(`Post already in federated timeline: ${post.postId}`);
@@ -240,7 +230,6 @@ const processRelayAnnounce = async (
   }
 
   // Create federated timeline item
-  const federatedTimelineItemCreatedStore = PgFederatedTimelineItemCreatedStore.getInstance();
   const event = FederatedTimelineItem.createFederatedTimelineItem(
     {
       federatedTimelineItemId: FederatedTimelineItemId.generate(),
@@ -251,6 +240,6 @@ const processRelayAnnounce = async (
     now,
   );
 
-  await federatedTimelineItemCreatedStore.store(event);
+  await deps.federatedTimelineItemCreatedStore.store(event);
   getLogger().info(`Created federated timeline item for relay post: ${post.postId}`);
 };
