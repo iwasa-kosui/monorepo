@@ -6,17 +6,17 @@
 
 2026-09-06 の実行前調査で確認した状態です。再開時は再確認してください。この文書の更新によって設定・配備・移行が実施済みになるわけではありません。
 
-| 対象               | 確認結果                                                                                           | 次の作業                                        |
-| ------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 実装               | [Draft PR #486](https://github.com/iwasa-kosui/monorepo/pull/486)。`e49ab0e` の CI は全4ジョブ成功 | 最新の PR head をレビューし、明示承認後に merge |
-| SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                     | source の詳細診断                               |
-| Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                         | 第4節の確認表を埋める                           |
-| Cloudflare         | Dashboard とローカル Wrangler は未認証                                                             | 第1節のログインと権限設定                       |
-| GitHub Environment | `production` は reviewer・branch 制限なし。`staging` は未作成                                      | 第2節の設定と readback                          |
-| Secrets            | 新 workflow の35参照名のうち31名が不足。既存名の存在は値・権限の適合を保証しない                   | 第3節の入力を Environment ごとに準備            |
-| 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                     | staging の完了後に production を開始            |
+| 対象               | 確認結果                                                                                                       | 次の作業                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 実装               | [Draft PR #486](https://github.com/iwasa-kosui/monorepo/pull/486)。`e49ab0e` の CI は全4ジョブ成功             | 最新の PR head をレビューし、明示承認後に merge |
+| SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                                 | source の詳細診断                               |
+| Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                                     | 第4節の確認表を埋める                           |
+| Cloudflare         | Dashboard とローカル Wrangler は未認証                                                                         | 第1節のログインと権限設定                       |
+| GitHub Environment | `staging` は保護ブランチ方式で reviewer なし。`production` は reviewer 1件、branch 制限なし。`main` は保護済み | 第2節の不足設定と readback                      |
+| Secrets            | 新 workflow の35参照名のうち31名が不足。既存名の存在は値・権限の適合を保証しない                               | 第3節の入力を Environment ごとに準備            |
+| 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                                 | staging の完了後に production を開始            |
 
-事前調査で拒否された操作は、GitHub 保護設定変更（具体的な設定への明示承認不足）、source 診断スクリプトのローカル作成（実行フックの「低レベル操作」判定）、直接 HTTP 取得です。いずれも実行済みとは扱いません。拒否された操作は、具体的な承認または実行環境の許可が得られるまで別ツールで迂回しません。source の診断は作業者が許可された端末で実施することもできます。
+事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の状態は、この選択後の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など未実行の操作は、許可された端末で実施し、拒否された操作を別ツールで迂回しません。
 
 記録には日付、担当者、段階、pass/fail、件数、次の作業を残します。実際の account/resource ID、hostname、secret、DB/画像、state、HTTP body、raw log は非公開領域に保存します。公開 PR や Actions artifact に貼り付けません。
 
@@ -49,29 +49,31 @@ pnpm --silent --filter iori exec wrangler whoami >"$iori_ops_dir/whoami.log" 2>&
 
 ## 2. GitHub Environment の保護
 
-`production` と `staging` の両方に、次の具体的な設定を適用します。この設定案への承認と、後続 job の実行承認を記録してください。
+`production` と `staging` の両方で、ユーザーが選択した `protected_branches` 方式を使います。required reviewer の設定と、後続 job の実行承認も記録してください。
 
-| 設定                         | 今回の設定案                       |
-| ---------------------------- | ---------------------------------- |
-| Required reviewers           | `iwasa-kosui`                      |
-| Wait timer                   | 0分                                |
-| Prevent self-review          | 無効。起動者本人による承認を許可   |
-| Deployment branches and tags | Selected branches and tags         |
-| 許可する規則                 | 種別 Branch、名前 `main` の1件のみ |
+| 設定                         | 今回の設定案                                                |
+| ---------------------------- | ----------------------------------------------------------- |
+| Required reviewers           | `iwasa-kosui`                                               |
+| Wait timer                   | 0分                                                         |
+| Prevent self-review          | 無効。起動者本人による承認を許可                            |
+| Deployment branches and tags | Protected branches only                                     |
+| API の branch policy         | `protected_branches: true`, `custom_branch_policies: false` |
+| Repository の前提            | `main` に branch protection を設定                          |
 
 GitHub repository の **Settings → Environments** で設定します。既に別の保護規則が追加されている場合は、この表で上書きせず差分を確認します。本人による承認を禁止する方針なら、別の承認者を決めてから設定案を変更します。
 
-設定後、各 Environment の読み戻しを行います。最初は `staging`、次に変数を `production` に変更して同じ2コマンドを実行します。
+設定後、各 Environment の読み戻しを行います。最初は `staging`、次に変数を `production` に変更して Environment の確認を繰り返します。`main` の保護状態も確認します。
 
 ```bash
 iori_environment=staging
 gh api "repos/$iori_repo/environments/$iori_environment" \
   --jq '{rules: [.protection_rules[] | {type, wait_timer, prevent_self_review, reviewers: [.reviewers[]? | .reviewer.login]}], policy: .deployment_branch_policy}'
-gh api --paginate "repos/$iori_repo/environments/$iori_environment/deployment-branch-policies?per_page=100" \
-  --jq '.branch_policies[] | {name, type}'
+gh api "repos/$iori_repo/branches/main" --jq '{name, protected}'
 ```
 
-**完了条件:** required reviewer が存在し、custom branch policy が有効で、許可規則が `main` branch の1件だけ。Environment 名の存在だけでは完了しない。[Environment API](https://docs.github.com/en/rest/deployments/environments#create-or-update-an-environment) と [branch policy API](https://docs.github.com/en/rest/deployments/branch-policies)は別の設定です。
+**完了条件:** 両 Environment に required reviewer が存在し、`protected_branches=true`、`custom_branch_policies=false`。`main` は branch protection が有効で、API の `protected` が `true`。個別の deployment branch policy は作成しません。
+
+Environment は保護されたブランチを許可し、`main` だけに限定するものではありません。対象を `main` に固定するのは、source/Worker workflow の `GITHUB_REF=refs/heads/main` と最新 main SHA の一致検査です。この2つの制御を維持します。repository に branch protection rule が1件もない場合、Protected branches only でも全ブランチが許可されるため、Environment の設定だけで完了としません。[GitHub の deployment branch 制限](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
 
 source deploy は対象 path の `main` push でも起動します。**source credential の供給と merge より前に、この保護を完了してください。** Ready 化・merge は明示承認後に行い、merge により起動した source job は第4節の前提が揃うまで承認しません。
 

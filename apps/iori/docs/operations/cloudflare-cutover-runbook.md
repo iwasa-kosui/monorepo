@@ -10,7 +10,7 @@
 
 ## 1. Cutover 前の preflight
 
-1. 対象 commit が reviewed され、保護された `production` Environment から実行されることを確認します。required reviewer と main branch 制限を設定し、手動実行の event SHA、checkout、指定 SHA、最新 main が一致することを検査します。2026-09-06 の metadata 読み取りでは production の保護規則が未設定であり、この変更で設定済みとは扱いません。
+1. 対象 commit が reviewed され、保護された `production` Environment から実行されることを確認します。Environment は required reviewer と `protected_branches=true`、`custom_branch_policies=false` を使い、repository の `main` を保護します。workflow の `main` 固定チェックを維持し、手動実行の event SHA、checkout、指定 SHA、最新 main が一致することを検査します。2026-09-06 の最新 readback では production の reviewer は存在しますが、branch 制限は未設定です。現在地と確認コマンドは[実行手順](./cloudflare-execution-guide.md#2-github-environment-の保護)に従います。
 2. `cloudflare:public-artifacts:check`、Worker typecheck、Worker bundle graph check、Terraform fmt/validate、保存済み plan の validator を通す。D1/R2 replacement または delete を含む plan は適用しない。
 3. 新しい environment/generation の D1、アプリ画像用 R2、KV、Queue、DLQ、移行データ用 R2、Worker を準備します。名前と Terraform backend key も generation で分け、以前のリソースと state を保持します。Queue は配送停止かつ consumer 未接続で作成し、最初の Worker version を `sealed` にしてから停止した consumer を接続します。Worker version、deployment、binding、secret は Terraform state に入れません。
 4. route が absent であり、`enable_production_worker_route=false` と `enable_staging_worker_route=false` の通常 plan では route が作られないことを確認します。切替では対象 environment に対応する一方の flag だけを有効にし、指定した hostname・zone・Worker を照合します。
@@ -31,7 +31,7 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 旧 deploy と移行 workflow は同じ source concurrency を共有し、setup 後にも marker を再検査します。これは管理対象の workflow の競合を防ぐための制御です。operator が同時に別経路から freeze/deploy を実行する場合の原子的な lock ではないため、手動操作を競合させない運用を守ります。
 
-source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer と `main` 制限を設定します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
+source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護を設定します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
 
 ## 2. Staging rehearsal
 

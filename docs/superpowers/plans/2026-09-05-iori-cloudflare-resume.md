@@ -6,7 +6,7 @@
 
 リポジトリを public のまま維持し、移行と再検証にも GitHub-hosted runner の `ubuntu-latest` を使います。self-hosted runner の登録やリポジトリの private 化は移行の必須条件にしません。GitHub-hosted runner は public repository で利用できます。[GitHub の runner 仕様](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
-各 job の作業領域は `$RUNNER_TEMP` 配下に作り、job をまたぐ移行データと証跡は専用の非公開 R2 bucket に保存します。後続 job は同じデータを新しい作業領域へ復元します。Cloudflare への移行操作は、承認者と `main` 制限を設定した `production` Environment から、レビュー済み SHA を指定して手動実行します。
+各 job の作業領域は `$RUNNER_TEMP` 配下に作り、job をまたぐ移行データと証跡は専用の非公開 R2 bucket に保存します。後続 job は同じデータを新しい作業領域へ復元します。Cloudflare への移行操作は、承認者と保護ブランチ制限を設定した `production` Environment から、レビュー済み SHA を指定して手動実行します。`main` を保護し、workflow の `main` 固定検査を維持します。
 
 CI の出力ガード、相対パスを使う v3 証跡、非公開 R2 への分割転送・復元、D1/R2 の実データ検証、移行元の永続的な凍結・drain・一貫 snapshot、新しい移行先の受付制御、実 import と executor を実装しました。hosted workflow も固定 CLI に接続し、操作別の権限、一時入力、非公開ログ、期限と cleanup を組み込みました。D1 の多数 actor 選択と閲覧者の like/repost 状態の回帰も修正し、各実装と全体の接続について独立レビューを完了しています。本番設定と実リソースは変更していません。
 
@@ -49,7 +49,7 @@ flowchart TD
 - 当時の `migrate-data` は既存の署名付き証跡と移行結果の検証だけを行い、書き込み停止、Queue drain、export/import、署名付き証跡の生成を実行する入口が未接続でした。今回の実装で固定 executor に接続しました。
 - manifest の形式、Queue drain の順序、smoke 対象の指定に実装間の不整合がありました。この再開作業で回帰テストと修正を追加しました。
 
-2026-09-06 に保護設定の metadata を再確認しました。`production` は引き続き `protection_rules=[]`、`deployment_branch_policy=null` です。秘密情報の値は取得していません。承認者と `main` 制限の設定は本番実行前の残条件です。
+2026-09-06 の初回再確認では `production` は `protection_rules=[]`、`deployment_branch_policy=null` でした。その後、ユーザーが `protected_branches` 方式を選択しました。選択後の API readback では `staging` は `protected_branches=true`、`custom_branch_policies=false` で reviewer がなく、`production` は required reviewer 1件と `deployment_branch_policy=null`、`main` は `protected=true` です。残る保護設定は staging の reviewer と production の保護ブランチ制限です。秘密情報の値は取得していません。
 
 旧 source deploy は対象 path の `main` push と手動実行を保持するため、merge で job が起動し得ます。source credential を供給して merge する前に、上記の保護設定を完了します。Environment 名の指定だけでは承認待ちになりません。
 
@@ -101,7 +101,7 @@ Worker bundle の dry-run には CI と同じ fixture の bindings を渡しま�
 
 **事前条件:** 運用担当者、レビュー済み SHA、staging の匿名データを用意します。PR の検証には fixture だけを使い、本番 credential、state、データを渡しません。
 
-**作業:** [Environment の設定手順](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)に従い、`production` に承認者と `main` の deployment branch 制限を設定します。公開 repository のまま、次の条件を確認します。
+**作業:** [Environment の設定手順](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)に従い、`production` と `staging` に承認者と Protected branches only（`protected_branches=true`、`custom_branch_policies=false`）を設定します。repository の `main` を保護し、workflow の `main` 固定検査を維持します。公開 repository のまま、次の条件を確認します。
 
 1. `migrate-data` と `verify-import` に採用する `ubuntu-latest` 上で、Node.js、pnpm、Terraform、Wrangler と移行ツールの準備手順を確定します。workflow の変更は手順 3 で行い、本番 job の同時実行防止とレビュー済み SHA・`main` の一致検査を維持します。
 2. 既存の `.github/workflows/deploy-iori.yml` が使う hosted runner から Lightsail への SSH 経路を前提に、停止・drain・export に必要な接続を事前検証します。接続先と信頼する SSH host key、用途を限定した credential は Environment から供給します。PostgreSQL を一般公開せず、SSH 経由の export を使います。hosted runner の送信元 IP は固定と仮定しません。
@@ -116,6 +116,7 @@ Worker bundle の dry-run には CI と同じ fixture の bindings を渡しま�
 ```bash
 gh api repos/iwasa-kosui/monorepo/environments/production \
   --jq '{protection_rules: [.protection_rules[] | {type}], deployment_branch_policy}'
+gh api repos/iwasa-kosui/monorepo/branches/main --jq '{name, protected}'
 df -Pk "$RUNNER_TEMP"
 ```
 

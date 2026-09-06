@@ -148,7 +148,7 @@ Worker の状態は `sealed`、`smoke`、`active` とし、identity が未設定
 
 CI、Terraform、Worker deploy、データ移行と再検証は GitHub-hosted runner の `ubuntu-latest` を使います。self-hosted runner の登録や repository の private 化を前提にしません。`migrate-data` と `verify-import` は、それぞれ新しい非公開作業領域で固定 CLI を実行し、専用 R2 を介して同じ署名済みデータを受け渡します。[GitHub-hosted runner の仕様](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
-Cloudflare の本番操作は承認者と `main` の deployment branch 制限を設定した `production` Environment から手動で実行します。Environment 名だけでは保護が成立しないため、設定と実際の拒否動作を確認します。本番 job は対象 SHA と同時実行を制限します。ローカルの `terraform apply`、remote D1 migration、production Worker deploy は通常手順に含めません。[Environment の保護設定](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+Cloudflare の本番操作は承認者と Protected branches only（`protected_branches=true`、`custom_branch_policies=false`）を設定した `production` Environment から手動で実行します。repository の `main` を保護し、workflow で `refs/heads/main` と最新 main SHA の一致を検査します。Environment は保護ブランチを許可し、`main` だけへの限定は workflow が担います。Environment 名だけでは保護が成立しないため、設定と実際の拒否動作を確認します。本番 job は対象 SHA と同時実行を制限します。ローカルの `terraform apply`、remote D1 migration、production Worker deploy は通常手順に含めません。[Environment の保護設定](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 
 source deploy は既存の対象 path に対する `main` push と手動実行を保持し、同じ `production` Environment と固定 concurrency group を使います。source credential を供給して merge する前に保護設定を完了し、merge による job 起動と実行承認を区別します。凍結 marker があれば checkout、配布、再起動を拒否します。
 
