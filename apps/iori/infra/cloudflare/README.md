@@ -4,6 +4,8 @@ Terraform owns D1, the application and private transfer R2 buckets, Fedify KV, Q
 
 Use the protected hosted workflow described in the [cutover runbook](../../docs/operations/cloudflare-cutover-runbook.md). Creating a Draft PR does not provision resources or authorize a production cutover.
 
+Start with the [operator execution guide](../../docs/operations/cloudflare-execution-guide.md) for the observed readiness state, authentication, Environment protection, credential setup, source diagnostics, initial rehearsal prerequisites, and one-operation-at-a-time workflow commands.
+
 ## Fresh generation and backend
 
 Each migration uses a new `environment` (`staging` or `production`) and `generation` (8–20 lowercase alphanumeric characters, starting with a letter). Resource and Worker names derive from `iori-<environment>-<generation>`. The state key is:

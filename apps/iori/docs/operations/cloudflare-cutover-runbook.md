@@ -2,6 +2,8 @@
 
 この runbook は `iori` を Lightsail/PostgreSQL から Cloudflare Workers、D1、R2、KV、Queues へ計画停止で切り替えるための手順です。レビュー済みの commit を、保護された `production` Environment から実行します。
 
+作業を再開する場合は、[Cloudflare 移行の実行手順](./cloudflare-execution-guide.md)から始めてください。実施済みの確認、認証と Environment の設定、secret の準備元、source の診断、初回リハーサルで手動準備が必要な範囲、workflow dispatch と中断時の対応をまとめています。
+
 2026-09-06 時点では本番実行の準備が未完了です。public repository と GitHub-hosted runner の `ubuntu-latest` を使い、self-hosted runner の登録は必須条件にしません。移行 executor、非公開 R2 からの復元と hosted workflow の接続を実装し、独立レビューを完了しました。ローカル検証の結果と実行前の残条件は[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)に記録します。保護設定、接続・容量・実行時間の確認、匿名化 staging rehearsal を完了してから以下を実施します。
 
 公開リポジトリ、workflow summary、Issue、PR、terminal log に残す証跡は、論理リソース名、件数、timestamp、pass/fail、および Terraform action summary に限定します。account ID、database ID、namespace ID、Workers URL、secret、Terraform state、rendered Wrangler config、export/SQL/manifest の内容、HTTP response body は公開しません。
