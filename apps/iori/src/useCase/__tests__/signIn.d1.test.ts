@@ -12,6 +12,7 @@ import {
 } from './helper/mockAdaptors.ts';
 
 describe('createSignInUseCase', () => {
+  // Real Argon2 hashing and verification can exceed Vitest's default timeout on hosted runners.
   it('runs with injected auth ports', async () => {
     const username = Username.orThrow('kosui');
     const password = Password.orThrow('securepassword1234');
@@ -35,5 +36,5 @@ describe('createSignInUseCase', () => {
 
     expect(result.ok).toBe(true);
     expect(sessionStartedStore.items).toHaveLength(1);
-  });
+  }, 30_000);
 });

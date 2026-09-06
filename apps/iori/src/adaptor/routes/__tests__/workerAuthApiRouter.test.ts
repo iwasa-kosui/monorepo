@@ -13,6 +13,7 @@ import { createSignInUseCase } from '../../../useCase/signIn.ts';
 import { createWorkerAuthApiRouter } from '../workerAuthApiRouter.ts';
 
 describe('createWorkerAuthApiRouter', () => {
+  // Real Argon2 hashing and verification can exceed Vitest's default timeout on hosted runners.
   it('runs sign-in and sets a session cookie for the Worker API path', async () => {
     const username = Username.orThrow('kosui');
     const password = Password.orThrow('securepassword1234');
@@ -41,5 +42,5 @@ describe('createWorkerAuthApiRouter', () => {
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(response.headers.get('set-cookie')).toContain('sessionId=');
     expect(sessionStartedStore.items).toHaveLength(1);
-  });
+  }, 30_000);
 });
