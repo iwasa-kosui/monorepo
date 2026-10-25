@@ -156,7 +156,7 @@ ssh -T -a -o BatchMode=yes -o StrictHostKeyChecking=yes \
 | Private control | `.iori-migration` の mode、owner、`control.sock`、control CLI | 同じ service user、所定の private 配置。初回未配備ならその事実を記録             |
 | 容量            | source export 先と runner の空き容量、実データ量              | [容量・時間の条件](./cloudflare-data-migration.md)を満たす                       |
 
-本番 source の事前配備は、環境保護・固定 runtime・既存 DB/TLS 設定の保持・最新 main のレビューと明示承認が揃ってから `deploy-iori.yml` で行います。merge で同じ SHA の source job が起動済みなら、それを確認し、重複 dispatch しません。DB schema の push はこの事前配備に含みません。
+本番 source の事前配備は、環境保護・固定 runtime・既存 DB/TLS 設定の保持・最新 main のレビューと明示承認が揃ってから `deploy-iori.yml` で行います。配備は env.conf の `UPLOAD_DIR` が dist の外にある既存のディレクトリを指していることを確認し、満たさなければ止まります。merge で同じ SHA の source job が起動済みなら、それを確認し、重複 dispatch しません。DB schema の push はこの事前配備に含みません。
 
 ```bash
 gh workflow run deploy-iori.yml --repo "$iori_repo" --ref main

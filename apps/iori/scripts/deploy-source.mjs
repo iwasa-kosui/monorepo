@@ -100,6 +100,7 @@ export const deploySource = async (options, {
     '--archive',
     '--compress',
     '--delete',
+    '--exclude=/uploads',
     '--rsh',
     ['ssh', ...ssh].join(' '),
     `${dist.root}/`,

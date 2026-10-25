@@ -1,6 +1,6 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { runMigrationCommand } from './migration-command.mjs';
 import {
@@ -24,6 +24,33 @@ export const inspectSourcePnpm = async (path, uid) => {
     !stat.isFile() || stat.uid !== uid || !(stat.mode & 0o100) || (stat.mode & 0o022)
     || await realpath(path) !== path
   ) throw new Error('Invalid source pnpm executable.');
+};
+const sourceEnvironmentFile = '/etc/systemd/system/microblog.service.d/env.conf';
+const insideDirectory = (directory, path) => {
+  const difference = relative(directory, path);
+  return difference === '' || (!difference.startsWith('..') && !isAbsolute(difference));
+};
+const inspectUploadDirectory = async (exec, dist) => {
+  const { stdout } = await exec('sudo', [
+    '-n',
+    'sed',
+    '-n',
+    '-e',
+    '/^[[:space:]]*\\(Environment=\\)\\{0,1\\}"\\{0,1\\}UPLOAD_DIR=/{p;q}',
+    sourceEnvironmentFile,
+  ]);
+  const value = /^\s*(?:Environment=)?"?UPLOAD_DIR=([^"\n]*)"?\s*$/.exec(stdout.split('\n')[0])?.[1];
+  if (!value) throw new Error('Source UPLOAD_DIR is not set.');
+  if (!isAbsolute(value)) throw new Error(`Source UPLOAD_DIR must be an absolute path: ${value}`);
+  if (insideDirectory(dist, resolve(value))) throw new Error(`Source UPLOAD_DIR must be outside dist: ${value}`);
+  let directory;
+  try {
+    directory = await stat(value);
+  } catch {
+    throw new Error(`Source UPLOAD_DIR must be an existing directory: ${value}`);
+  }
+  if (!directory.isDirectory()) throw new Error(`Source UPLOAD_DIR must be an existing directory: ${value}`);
+  if (insideDirectory(dist, await realpath(value))) throw new Error(`Source UPLOAD_DIR must be outside dist: ${value}`);
 };
 // Only the fixed SSH bootstrap enables this transport. Its stderr is captured privately by the runner.
 export const captureSourceCommandOutput = async ({ stdout, stderr }) => {
@@ -108,12 +135,13 @@ export const runSourceDeployStep = async (
       await check();
       const dist = join(checkout, 'apps/iori/dist');
       await inspectSourceDistDirectory(dist, uid, phase === 'dist-check');
+      if (phase === 'dist-check') await inspectUploadDirectory(exec, dist);
       if (phase !== 'dist-check') await verifySourceBuildManifest(dist, manifest, sha, { uid, signal });
       await check();
       if (phase === 'dist-check' || phase === 'verify-dist') return;
       if (phase === 'install') {
-        // Preserve the source-local systemd environment and TLS configuration; never read its bytes.
-        const existing = await lstat('/etc/systemd/system/microblog.service.d/env.conf');
+        // Only the UPLOAD_DIR line is read during dist-check; the rest may hold secrets.
+        const existing = await lstat(sourceEnvironmentFile);
         if (!existing.isFile() || existing.uid !== 0 || (existing.mode & 0o022)) {
           throw new Error('Source configuration unavailable.');
         }

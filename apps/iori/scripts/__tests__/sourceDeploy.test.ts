@@ -80,6 +80,7 @@ it('uses the fixed Node bootstrap before exact checkout, dependency delay, dist 
   expect(calls[0].args.slice(-3)).toEqual(['"$HOME/.nvm/versions/node/v24.12.0/bin/node"', '--input-type=module', '-']);
   expect(calls[rsync].args.at(-1)).toBe('source.invalid:monorepo/apps/iori/dist/');
   expect(calls[rsync].args).toContain('--delete');
+  expect(calls[rsync].args).toContain('--exclude=/uploads');
   expect(calls[rsync].args.join(' ')).toContain('StrictHostKeyChecking=yes');
   expect(calls.at(-1)?.input).toContain('"restart"');
   expect(calls[0].input).toContain('captureOutput: captureSourceCommandOutput');

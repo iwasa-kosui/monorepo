@@ -51,6 +51,10 @@ export const createSourceBuildManifest = async (root, sha, { uid = process.getui
       ) throw invalid();
       const path = join(root, name);
       const before = await lstat(path);
+      if (!relative && name === 'uploads') {
+        if (!before.isDirectory()) throw invalid();
+        continue;
+      }
       if (before.uid !== uid || (before.mode & 0o022) || before.isSymbolicLink()) throw invalid();
       if (before.isDirectory()) {
         await visit(name);

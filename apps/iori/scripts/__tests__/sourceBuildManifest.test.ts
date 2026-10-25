@@ -1,6 +1,6 @@
 import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createSourceBuildManifest,
@@ -76,4 +76,70 @@ it('requires owned real executable pnpm with exact version before install', asyn
   })).rejects.toThrow('Unsupported source pnpm');
   expect(calls.some(args => args.includes('install'))).toBe(false);
   await expect(inspectSourceDistDirectory(executable, process.getuid!())).rejects.toThrow();
+});
+it('ignores a top-level uploads directory in the closure and rejects any other uploads entry', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'index.js'), 'reviewed');
+  const manifest = await createSourceBuildManifest(root, sha);
+  await mkdir(join(root, 'uploads/nested'), { recursive: true });
+  await writeFile(join(root, 'uploads/nested/image with space.png'), 'upload');
+  await expect(createSourceBuildManifest(root, sha)).resolves.toEqual(manifest);
+  await verifySourceBuildManifest(root, manifest, sha);
+  await mkdir(join(root, 'sub/uploads'), { recursive: true });
+  await writeFile(join(root, 'sub/uploads/image.png'), 'upload');
+  await expect(verifySourceBuildManifest(root, manifest, sha)).rejects.toThrow();
+  await rm(join(root, 'sub'), { recursive: true });
+  await rm(join(root, 'uploads'), { recursive: true });
+  await writeFile(join(root, 'uploads'), 'file');
+  await expect(createSourceBuildManifest(root, sha)).rejects.toThrow();
+});
+describe('UPLOAD_DIR inspection before the dist transfer', () => {
+  const run = async (home: string, stdout: string) => {
+    const calls: { program: string; args: string[] }[] = [];
+    const result = runSourceDeployStep({
+      phase: 'dist-check',
+      sha,
+      manifest: { sha, files: [{ path: 'index.js', bytes: 0, sha256: sha.padEnd(64, 'a') }] },
+    }, {
+      home,
+      guard: async () => {},
+      inspectCheckout: async () => {},
+      runCommand: async (program, args) => {
+        calls.push({ program, args });
+        return { stdout: program === 'sudo' ? stdout : args.includes('rev-parse') ? sha : '', stderr: '' };
+      },
+    });
+    return { calls, result };
+  };
+  const prepare = async () => {
+    const home = await fixture();
+    await mkdir(join(home, 'monorepo/apps/iori'), { recursive: true });
+    return home;
+  };
+  it.each(
+    [
+      ['unset', '', 'not set'],
+      ['relative', 'Environment="UPLOAD_DIR=uploads"\n', 'absolute path'],
+      [
+        'inside dist',
+        (home: string) => `Environment="UPLOAD_DIR=${home}/monorepo/apps/iori/dist/uploads"\n`,
+        'outside dist',
+      ],
+      ['missing', (home: string) => `Environment="UPLOAD_DIR=${home}/missing"\n`, 'existing directory'],
+    ] as const,
+  )('stops when UPLOAD_DIR is %s', async (_name, line, message) => {
+    const home = await prepare();
+    const { result } = await run(home, typeof line === 'function' ? line(home) : line);
+    await expect(result).rejects.toThrow(message);
+  });
+  it('accepts an existing UPLOAD_DIR outside dist and reads only the UPLOAD_DIR line', async () => {
+    const home = await prepare();
+    await mkdir(join(home, 'uploads'));
+    const { calls, result } = await run(home, `Environment="UPLOAD_DIR=${home}/uploads"\n`);
+    await expect(result).resolves.toBeUndefined();
+    const sudo = calls.filter(call => call.program === 'sudo');
+    expect(sudo).toHaveLength(1);
+    expect(sudo[0].args.slice(0, 3)).toEqual(['-n', 'sed', '-n']);
+    expect(sudo[0].args.at(-1)).toBe('/etc/systemd/system/microblog.service.d/env.conf');
+  });
 });
