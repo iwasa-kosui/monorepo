@@ -35,7 +35,7 @@ export WRANGLER_LOG_PATH="$iori_ops_dir/wrangler.log"
 ## 1. Cloudflare の認証
 
 1. 作業者が [Cloudflare Dashboard](https://dash.cloudflare.com/login) に既存アカウントでログインします。パスワードや token をチャットへ送る必要はありません。
-2. 対象 account・zone、R2 の利用可否、担当者の作成権限を Dashboard で確認します。新しい課金契約が必要なら、その契約を承認してから進めます。
+2. 対象 account・zone、R2 の利用可否、担当者の作成権限を Dashboard で確認します。新しい課金契約が必要なら、その契約を承認してから進めます。この移行は Cloudflare Workers の有料プラン Workers Paid を前提とします。サインインで使う argon2 のハッシュ計算は、workerd 上のテスト `apps/iori/workerd-tests/worker.test.ts` で 1 回あたり約 2.1 秒の CPU 時間がかかりました。無料プランは 1 リクエストあたりの CPU 時間の上限が 10ms なので、サインインが失敗します。有料プランの既定の上限は 30 秒です。切替の前に、対象 account が Workers Paid であることを確認します。
 3. ローカル CLI を使う場合は、repository の固定 Wrangler で OAuth 認証を行います。ブラウザーのログインと CLI の認証は別々に確認します。
 
 ```bash
@@ -240,6 +240,8 @@ gh run view "$iori_actions_run_id" --repo "$iori_repo" \
 HTTP body や raw log を取得・公開せず、各 job の sanitized status を確認します。dispatch が成功しただけでは移行成功ではありません。失敗・timeout・結果不明なら、新しい操作や再実行を始める前に第7節へ進みます。
 
 staging が完了したら、production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
+
+**既知の制限:** Worker の記事公開処理は OGP 画像を生成しません。移行時に存在する記事の OGP 画像は、データ移行の backfill が R2 に保存します。切替後に公開した記事の `/og/...` は 404 を返します。この手順はこの制限を既知の制限として残し、別の変更で対応します。
 
 ## 7. 中断と引き継ぎ
 
