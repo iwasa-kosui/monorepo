@@ -64,8 +64,16 @@ export const createCloudflareFederation = (
 const createWorkersKvStore = (kv: KVNamespace): KvStore =>
   new (WorkersKvStore as unknown as WorkersKvStoreConstructor)(kv);
 
-const createWorkersMessageQueue = (env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>): MessageQueue =>
-  new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
+const createWorkersMessageQueue = (env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>): MessageQueue => {
+  const queue = new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
+  return {
+    nativeRetrial: queue.nativeRetrial,
+    enqueue: (message, options) => queue.enqueue(message, options),
+    enqueueMany: (messages, options) =>
+      messages.length === 0 ? Promise.resolve() : queue.enqueueMany!(messages, options),
+    listen: (handler, options) => queue.listen(handler, options),
+  };
+};
 
 export const createCloudflareFederationRuntime = async (
   env: IoriWorkerEnv,

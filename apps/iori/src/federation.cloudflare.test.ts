@@ -103,6 +103,22 @@ describe('createCloudflareFederationRuntime', () => {
   });
 });
 
+describe('Cloudflare Fedify message queue', () => {
+  it('does not call sendBatch for an empty enqueueMany and forwards non-empty batches', async () => {
+    const sendBatch = vi.fn(async () => undefined);
+    const { queue } = await createCloudflareFederationRuntime({
+      ...workerEnv,
+      FEDIFY_QUEUE: { sendBatch } as never,
+    });
+
+    await queue.enqueueMany?.([]);
+    expect(sendBatch).not.toHaveBeenCalled();
+
+    await queue.enqueueMany?.([{ type: 'outbox' }]);
+    expect(sendBatch).toHaveBeenCalledOnce();
+  });
+});
+
 describe('processCloudflareFedifyMessages', () => {
   it('acks successful messages and retries failures', async () => {
     const ack = vi.fn();
