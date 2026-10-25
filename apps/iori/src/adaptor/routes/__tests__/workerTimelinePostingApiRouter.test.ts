@@ -95,4 +95,41 @@ describe('createWorkerTimelinePostingApiRouter', () => {
     });
     await expect(created.json()).resolves.toEqual({ success: true });
   });
+
+  it('renders sanitized Markdown preview without a session', async () => {
+    const app = createIoriApp({
+      federationMiddleware: undefined,
+      registerRoutes: (router) => {
+        router.route(
+          '/api',
+          createWorkerTimelinePostingApiRouter({
+            getTimelineUseCase: { run: async () => RA.ok({} as never) },
+            createPostUseCase: { run: async () => RA.ok({} as never) },
+            createContext: () => createMockRequestContext(),
+          }),
+        );
+      },
+      serveAsset: async () => undefined,
+      servePage: async () => undefined,
+      serveUpload: async () => undefined,
+      serveOgImage: async () => new Response('not implemented', { status: 501 }),
+    });
+
+    const preview = await app.request('https://worker.test/api/v1/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: '**bold**<script>alert(1)</script>' }),
+    });
+    const invalid = await app.request('https://worker.test/api/v1/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(preview.status).toBe(200);
+    const body = await preview.json() as { html: string };
+    expect(body.html).toContain('<strong>bold</strong>');
+    expect(body.html).not.toContain('<script>');
+    expect(invalid.status).toBe(400);
+  });
 });

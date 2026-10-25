@@ -14,6 +14,7 @@ import {
   createWorkerPageActionsRouter,
   createWorkerRemoteFollowRedirectRouter,
 } from './adaptor/routes/workerPageActionsRouter.ts';
+import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
 import { createWorkerSocialActionsApiRouter } from './adaptor/routes/workerSocialActionsApiRouter.ts';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
 import { createWorkerUsersRouter } from './adaptor/routes/workerUsersRouter.ts';
@@ -162,6 +163,13 @@ export default {
             followRemoteActor: runtime.core.followRemoteActor,
             unfollowRemoteActor: runtime.core.unfollowRemoteActor,
             createContext: (actionRequest) => runtime.federation.createContext(actionRequest, undefined),
+          }),
+        );
+        app.route(
+          '/posts',
+          createWorkerPostsRouter({
+            createPostUseCase: runtime.posting.createPostUseCase,
+            createContext: (postRequest) => runtime.federation.createContext(postRequest, undefined),
           }),
         );
         app.route(

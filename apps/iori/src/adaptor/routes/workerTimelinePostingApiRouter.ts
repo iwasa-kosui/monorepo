@@ -101,4 +101,18 @@ export const createWorkerTimelinePostingApiRouter = ({
           }),
         );
       },
+    )
+    .post(
+      '/v1/preview',
+      sValidator(
+        'json',
+        z.object({
+          markdown: z.string(),
+        }),
+      ),
+      async (c) => {
+        const { markdown } = c.req.valid('json');
+        const html = await PostContent.fromMarkdown(markdown);
+        return c.json({ html: sanitize(html) });
+      },
     );
