@@ -3,10 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
-import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
-import type { PostResolverByUri } from '../adaptor/pg/post/postResolverByUri.ts';
-import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
-import type { RemotePost } from '../domain/post/post.ts';
+import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
 
 const MAX_DEPTH = 10;
 

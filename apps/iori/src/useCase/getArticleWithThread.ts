@@ -1,10 +1,9 @@
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
-import type { ThreadResolver } from '../adaptor/pg/post/threadResolver.ts';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
-import type { PostWithAuthor } from '../domain/post/post.ts';
+import type { PostWithAuthor, ThreadResolver } from '../domain/post/post.ts';
 import { Schema } from '../helper/schema.ts';
 import type { UseCase } from './useCase.ts';
 

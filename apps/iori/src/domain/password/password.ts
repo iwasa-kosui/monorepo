@@ -1,4 +1,4 @@
-import { argon2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { argon2id } from '@noble/hashes/argon2.js';
 import { z } from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -20,6 +20,8 @@ const hashedPasswordZodType = z.object({
 export type HashedPassword = z.infer<typeof hashedPasswordZodType>;
 export const HashedPassword = Schema.create<HashedPassword, unknown>(hashedPasswordZodType);
 
+type Argon2Config = Omit<HashedPassword, 'nonceHex' | 'tagHex'>;
+
 const CONFIG = {
   parallelism: 4,
   tagLength: 64,
@@ -28,42 +30,68 @@ const CONFIG = {
   algorithm: 'argon2id',
 } as const;
 
+const toHex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+const fromHex = (hex: string): Uint8Array => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+};
+
+const deriveHash = (password: Password, nonce: Uint8Array, config: Argon2Config) => {
+  switch (config.algorithm) {
+    case 'argon2id':
+      return argon2id(password, nonce, {
+        p: config.parallelism,
+        dkLen: config.tagLength,
+        m: config.memory,
+        t: config.passes,
+      });
+    default: {
+      const unsupported: never = config.algorithm;
+      throw new Error(`Unsupported password algorithm: ${String(unsupported)}`);
+    }
+  }
+};
+
+const equalBytes = (left: Uint8Array, right: Uint8Array): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left[index] ^ right[index];
+  }
+  return difference === 0;
+};
+
 const hashPassword = (password: Password) => {
-  const nonce = randomBytes(16);
-  const tag = argon2Sync(
-    CONFIG.algorithm,
-    {
-      message: password,
-      nonce,
-      parallelism: CONFIG.parallelism,
-      tagLength: CONFIG.tagLength,
-      memory: CONFIG.memory,
-      passes: CONFIG.passes,
-    },
-  );
+  const nonce = crypto.getRandomValues(new Uint8Array(16));
+  const tag = deriveHash(password, nonce, CONFIG);
   return {
     algorithm: CONFIG.algorithm,
     parallelism: CONFIG.parallelism,
     tagLength: CONFIG.tagLength,
     memory: CONFIG.memory,
     passes: CONFIG.passes,
-    nonceHex: nonce.toString('hex'),
-    tagHex: tag.toString('hex'),
+    nonceHex: toHex(nonce),
+    tagHex: toHex(tag),
   };
 };
 
 const verifyPassword = (stored: HashedPassword, password: Password) => {
-  const nonce = Buffer.from(stored.nonceHex, 'hex');
-  const expected = Buffer.from(stored.tagHex, 'hex');
-  const actual = argon2Sync(stored.algorithm, {
-    message: password,
-    nonce,
+  const nonce = fromHex(stored.nonceHex);
+  const expected = fromHex(stored.tagHex);
+  const actual = deriveHash(password, nonce, {
+    algorithm: stored.algorithm,
     parallelism: stored.parallelism,
     tagLength: stored.tagLength,
     memory: stored.memory,
     passes: stored.passes,
   });
-  return timingSafeEqual(expected, actual);
+  return equalBytes(expected, actual);
 };
 
 export const Password = {

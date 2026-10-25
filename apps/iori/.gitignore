@@ -1,2 +1,7 @@
 env.conf
 iori.cjs
+workers/iori/.generated/
+infra/cloudflare/config.s3.tfbackend
+infra/cloudflare/.terraform/
+infra/cloudflare/*.tfstate*
+migration-artifacts/

@@ -5,6 +5,12 @@ import { getLogger } from '@logtape/logtape';
 import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 
+export {
+  createFollowersCounter,
+  createFollowersDispatcher,
+  type FollowersDispatcherDeps,
+} from './followersDispatcherFactory.ts';
+
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();
 

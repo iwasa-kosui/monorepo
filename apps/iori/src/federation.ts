@@ -11,7 +11,7 @@ import {
   Note,
   Undo,
 } from '@fedify/fedify';
-import { PostgresKvStore, PostgresMessageQueue } from '@fedify/postgres';
+import { PostgresKvStore } from '@fedify/postgres';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import postgres from 'postgres';
@@ -23,6 +23,8 @@ import { KeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcher.ts';
 import { ObjectDispatcher } from './adaptor/fedify/objectDispatcher.ts';
 import { OutboxDispatcher } from './adaptor/fedify/outboxDispatcher.ts';
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
+import { ControlledQueue } from './adaptor/node/source/controlledQueue.ts';
+import { postgresQueueStorage } from './adaptor/node/source/postgresQueueStorage.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
 import { Username } from './domain/user/username.ts';
 import { Env } from './env.ts';
@@ -30,13 +32,20 @@ import { createContextLoaderFactory } from './federationContext.ts';
 import { singleton } from './helper/singleton.ts';
 import { GetUserProfileUseCase } from './useCase/getUserProfile.ts';
 
+const getQueue = singleton(() => {
+  const env = Env.getInstance();
+  return new ControlledQueue(postgresQueueStorage(
+    postgres(env.DATABASE_URL, PgConfig.getInstance()),
+    postgres(env.DATABASE_URL, { ...PgConfig.getInstance(), max: 1 }),
+  ));
+});
+
 const create = () => {
   const env = Env.getInstance();
   const federation = createFederation({
     kv: new PostgresKvStore(postgres(env.DATABASE_URL, PgConfig.getInstance())),
-    queue: new PostgresMessageQueue(
-      postgres(env.DATABASE_URL, PgConfig.getInstance()),
-    ),
+    queue: getQueue(),
+    manuallyStartQueue: true,
     origin: env.ORIGIN,
     contextLoaderFactory: createContextLoaderFactory(),
   });
@@ -114,4 +123,5 @@ const getInstance = singleton(create);
 
 export const Federation = {
   getInstance,
+  getQueue,
 } as const;

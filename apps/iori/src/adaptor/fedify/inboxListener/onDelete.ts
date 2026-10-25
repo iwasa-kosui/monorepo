@@ -1,29 +1,67 @@
 import type { Delete, InboxContext } from '@fedify/fedify';
 import { getLogger } from '@logtape/logtape';
-import { eq } from 'drizzle-orm';
 
+import {
+  EmojiReact,
+  type EmojiReactDeletedStore,
+  type EmojiReactsResolverByPostId,
+} from '../../../domain/emojiReact/emojiReact.ts';
+import {
+  FederatedTimelineItem,
+  type FederatedTimelineItemDeletedStore,
+  type FederatedTimelineItemsResolverByPostId,
+} from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import {
+  Like,
+  type LikesResolverByPostId,
+  type LocalLikeDeletedStore,
+  type RemoteLikeDeletedStore,
+} from '../../../domain/like/like.ts';
+import type {
+  EmojiReactNotificationDeletedStore,
+  EmojiReactNotificationsResolverByPostId,
+  LikeNotificationDeletedStore,
+  LikeNotificationsResolverByPostId,
+  ReplyNotificationDeletedStore,
+  ReplyNotificationsResolverByOriginalPostId,
+  ReplyNotificationsResolverByReplyPostId,
+} from '../../../domain/notification/notification.ts';
 import { Notification } from '../../../domain/notification/notification.ts';
-import { Post } from '../../../domain/post/post.ts';
-import { PostId } from '../../../domain/post/postId.ts';
-import { Repost } from '../../../domain/repost/repost.ts';
-import { TimelineItem } from '../../../domain/timeline/timelineItem.ts';
-import { DB } from '../../pg/db.ts';
-import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
-import { PgEmojiReactNotificationsResolverByPostId } from '../../pg/notification/emojiReactNotificationsResolverByPostId.ts';
-import { PgLikeNotificationDeletedStore } from '../../pg/notification/likeNotificationDeletedStore.ts';
-import { PgLikeNotificationsResolverByPostId } from '../../pg/notification/likeNotificationsResolverByPostId.ts';
-import { PgReplyNotificationDeletedStore } from '../../pg/notification/replyNotificationDeletedStore.ts';
-import { PgReplyNotificationsResolverByOriginalPostId } from '../../pg/notification/replyNotificationsResolverByOriginalPostId.ts';
-import { PgReplyNotificationsResolverByReplyPostId } from '../../pg/notification/replyNotificationsResolverByReplyPostId.ts';
-import { PgPostDeletedStore } from '../../pg/post/postDeletedStore.ts';
-import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
-import { PgRepostsResolverByPostId } from '../../pg/repost/repostsResolverByPostId.ts';
-import { remotePostsTable } from '../../pg/schema.ts';
-import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDeletedStore.ts';
-import { PgTimelineItemsResolverByPostId } from '../../pg/timeline/timelineItemsResolverByPostId.ts';
+import { Post, type PostDeletedStore, type PostResolverByUri } from '../../../domain/post/post.ts';
+import { Repost, type RepostDeletedStore, type RepostsResolverByPostId } from '../../../domain/repost/repost.ts';
+import {
+  TimelineItem,
+  type TimelineItemDeletedStore,
+  type TimelineItemsResolverByPostId,
+} from '../../../domain/timeline/timelineItem.ts';
+import { settleAll } from '../../../helper/settleAll.ts';
 
-export const onDelete = async (
+export type OnDeleteDeps = Readonly<{
+  remotePostResolverByUri: PostResolverByUri;
+  timelineItemsResolverByPostId: TimelineItemsResolverByPostId;
+  likeNotificationsResolverByPostId: LikeNotificationsResolverByPostId;
+  emojiReactNotificationsResolverByPostId: EmojiReactNotificationsResolverByPostId;
+  replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
+  replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
+  repostsResolverByPostId: RepostsResolverByPostId;
+  likesResolverByPostId: LikesResolverByPostId;
+  emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
+  federatedTimelineItemsResolverByPostId: FederatedTimelineItemsResolverByPostId;
+  timelineItemDeletedStore: TimelineItemDeletedStore;
+  likeNotificationDeletedStore: LikeNotificationDeletedStore;
+  emojiReactNotificationDeletedStore: EmojiReactNotificationDeletedStore;
+  replyNotificationDeletedStore: ReplyNotificationDeletedStore;
+  repostDeletedStore: RepostDeletedStore;
+  localLikeDeletedStore: LocalLikeDeletedStore;
+  remoteLikeDeletedStore: RemoteLikeDeletedStore;
+  emojiReactDeletedStore: EmojiReactDeletedStore;
+  federatedTimelineItemDeletedStore: FederatedTimelineItemDeletedStore;
+  postDeletedStore: PostDeletedStore;
+}>;
+
+export const createOnDelete = (deps: OnDeleteDeps) =>
+async (
   ctx: InboxContext<unknown>,
   del: Delete,
 ): Promise<void> => {
@@ -39,19 +77,15 @@ export const onDelete = async (
   logger.info(`Received Delete activity for: ${objectUri}`);
 
   // Find the remote post
-  const db = DB.getInstance();
-  const [remotePost] = await db
-    .select({ postId: remotePostsTable.postId })
-    .from(remotePostsTable)
-    .where(eq(remotePostsTable.uri, objectUri))
-    .limit(1);
+  const remotePostResult = await deps.remotePostResolverByUri.resolve({ uri: objectUri });
+  const remotePost = remotePostResult.ok ? remotePostResult.val : undefined;
 
   if (!remotePost) {
     logger.info(`No remote post found for URI: ${objectUri}`);
     return;
   }
 
-  const postId = PostId.parseOrThrow(remotePost.postId);
+  const postId = remotePost.postId;
   const now = Instant.now();
 
   // Resolve all related entities in parallel
@@ -62,13 +96,19 @@ export const onDelete = async (
     replyNotificationsByReplyPostResult,
     replyNotificationsByOriginalPostResult,
     repostsResult,
+    likesResult,
+    emojiReactsResult,
+    federatedTimelineItemsResult,
   ] = await Promise.all([
-    PgTimelineItemsResolverByPostId.getInstance().resolve({ postId }),
-    PgLikeNotificationsResolverByPostId.getInstance().resolve({ postId }),
-    PgEmojiReactNotificationsResolverByPostId.getInstance().resolve({ postId }),
-    PgReplyNotificationsResolverByReplyPostId.getInstance().resolve({ replyPostId: postId }),
-    PgReplyNotificationsResolverByOriginalPostId.getInstance().resolve({ originalPostId: postId }),
-    PgRepostsResolverByPostId.getInstance().resolve({ postId }),
+    deps.timelineItemsResolverByPostId.resolve({ postId }),
+    deps.likeNotificationsResolverByPostId.resolve({ postId }),
+    deps.emojiReactNotificationsResolverByPostId.resolve({ postId }),
+    deps.replyNotificationsResolverByReplyPostId.resolve({ replyPostId: postId }),
+    deps.replyNotificationsResolverByOriginalPostId.resolve({ originalPostId: postId }),
+    deps.repostsResolverByPostId.resolve({ postId }),
+    deps.likesResolverByPostId.resolve({ postId }),
+    deps.emojiReactsResolverByPostId.resolve({ postId }),
+    deps.federatedTimelineItemsResolverByPostId.resolve({ postId }),
   ]);
 
   // Generate all delete events
@@ -97,18 +137,37 @@ export const onDelete = async (
     ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
     : [];
 
+  const localLikeEvents = likesResult.ok
+    ? likesResult.val.filter((like) => like.type === 'local').map((like) => Like.deleteLocalLike(like, now))
+    : [];
+  const remoteLikeEvents = likesResult.ok
+    ? likesResult.val.filter((like) => like.type === 'remote').map((like) => Like.deleteRemoteLike(like, now))
+    : [];
+  const emojiReactEvents = emojiReactsResult.ok
+    ? emojiReactsResult.val.map((reaction) => EmojiReact.deleteEmojiReact(reaction, now))
+    : [];
+  const federatedTimelineItemEvents = federatedTimelineItemsResult.ok
+    ? federatedTimelineItemsResult.val.map((item) =>
+      FederatedTimelineItem.deleteFederatedTimelineItem(item.federatedTimelineItemId, now)
+    )
+    : [];
+
   // Store all events in batch (each store handles its own transaction)
-  await Promise.all([
-    PgTimelineItemDeletedStore.getInstance().store(...timelineItemEvents),
-    PgLikeNotificationDeletedStore.getInstance().store(...likeNotificationEvents),
-    PgEmojiReactNotificationDeletedStore.getInstance().store(...emojiReactNotificationEvents),
-    PgReplyNotificationDeletedStore.getInstance().store(...replyNotificationEvents),
-    PgRepostDeletedStore.getInstance().store(...repostEvents),
+  await settleAll([
+    deps.timelineItemDeletedStore.store(...timelineItemEvents),
+    deps.likeNotificationDeletedStore.store(...likeNotificationEvents),
+    deps.emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
+    deps.replyNotificationDeletedStore.store(...replyNotificationEvents),
+    deps.repostDeletedStore.store(...repostEvents),
+    deps.localLikeDeletedStore.store(...localLikeEvents),
+    deps.remoteLikeDeletedStore.store(...remoteLikeEvents),
+    deps.emojiReactDeletedStore.store(...emojiReactEvents),
+    deps.federatedTimelineItemDeletedStore.store(...federatedTimelineItemEvents),
   ]);
 
   // Delete the post via event store
   const deleteEvent = Post.deletePost(now)(postId);
-  await PgPostDeletedStore.getInstance().store(deleteEvent);
+  await deps.postDeletedStore.store(deleteEvent);
 
   logger.info(`Deleted remote post: ${remotePost.postId}`);
 };

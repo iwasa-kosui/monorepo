@@ -1,9 +1,8 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { LikedPostsResolverByActorId } from '../adaptor/pg/like/likedPostsResolverByActorId.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../domain/post/post.ts';
+import type { LikedPostsResolverByActorId, PostWithAuthor } from '../domain/post/post.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';

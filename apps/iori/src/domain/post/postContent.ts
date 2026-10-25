@@ -1,27 +1,33 @@
 import { Marked, Renderer } from 'marked';
-import type { Highlighter } from 'shiki';
+import type { HighlighterCore } from 'shiki/core';
 
-let highlighterPromise: Promise<Highlighter> | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
-const getHighlighter = async (): Promise<Highlighter> => {
+const getHighlighter = async (): Promise<HighlighterCore> => {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then(({ createHighlighter }) =>
-      createHighlighter({
-        themes: ['rose-pine-dawn', 'rose-pine'],
-        langs: [
-          'javascript',
-          'typescript',
-          'json',
-          'bash',
-          'plaintext',
+    highlighterPromise = Promise.all([
+      import('shiki/core'),
+      import('shiki/engine/javascript'),
+    ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
+      createHighlighterCore({
+        themes: [
+          import('shiki/themes/rose-pine-dawn.mjs'),
+          import('shiki/themes/rose-pine.mjs'),
         ],
+        langs: [
+          import('shiki/langs/javascript.mjs'),
+          import('shiki/langs/typescript.mjs'),
+          import('shiki/langs/json.mjs'),
+          import('shiki/langs/shellscript.mjs'),
+        ],
+        engine: createJavaScriptRegexEngine(),
       })
     );
   }
   return highlighterPromise;
 };
 
-const createRenderer = (highlighter: Highlighter): Renderer => {
+const createRenderer = (highlighter: HighlighterCore): Renderer => {
   const renderer = new Renderer();
 
   renderer.code = ({ text, lang }) => {

@@ -41,6 +41,7 @@ describe('AddRemotePostUseCase', () => {
     const linkPreviewCreatedStore = createMockLinkPreviewCreatedStore();
     const ogpFetcher = createMockOgpFetcher();
     return {
+      origin: 'https://blog.kosui.me',
       postCreatedStore,
       postImageCreatedStore,
       remoteActorCreatedStore,

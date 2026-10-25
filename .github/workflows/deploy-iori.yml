@@ -1,108 +1,61 @@
 name: Deploy iori
-
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "apps/iori/**"
-      - "packages/**"
-      - ".github/workflows/deploy-iori.yml"
+    branches: [main]
+    paths: ["apps/iori/**", "packages/**", ".github/workflows/deploy-iori.yml"]
   workflow_dispatch:
-
+concurrency:
+  group: deploy-iori-worker-production
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  MAIN_SHA: ${{ github.sha }}
+  IORI_OPERATION: source
+  WRANGLER_SEND_METRICS: "false"
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 360
+    environment: production
     steps:
-      - name: Checkout repository
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          [[ "$GITHUB_EVENT_NAME" = push || "$GITHUB_EVENT_NAME" = workflow_dispatch ]]
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
         uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build iori
-        run: |
-          pnpm --filter @iwasa-kosui/result run build
-          pnpm --filter iori run build
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.MICROBLOG_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.MICROBLOG_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Create env.conf
-        working-directory: apps/iori
-        run: |
-          cat > env.conf <<'EOF'
-          [Service]
-          Environment="DATABASE_URL=postgresql://microblog:${{ secrets.MICROBLOG_DB_PASSWORD }}@${{ secrets.MICROBLOG_DB_HOST }}/microblog"
-          Environment="ORIGIN=https://blog.kosui.me"
-          Environment="APP_ENV=production"
-          Environment="DATABASE_CERT=/home/ec2-user/ap-northeast-1-bundle.pem"
-          Environment="VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}"
-          Environment="VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}"
-          Environment="VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}"
-          Environment="UPLOAD_DIR=/home/ec2-user/uploads"
-          EOF
-          sed -i 's/^          //' env.conf
-
-      - name: Deploy config files
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Deploy guarded exact source revision
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
         env:
-          HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
-        working-directory: apps/iori
-        run: |
-          ssh $HOST "sudo mkdir -p /etc/systemd/system/microblog.service.d"
-          rsync -av --rsync-path="sudo rsync" microblog.service $HOST:/etc/systemd/system/microblog.service
-          rsync -av --rsync-path="sudo rsync" microblog.sh $HOST:/usr/local/bin/microblog
-          rsync -av --rsync-path="sudo rsync" nginx.conf $HOST:/etc/nginx/nginx.conf
-          rsync -av --rsync-path="sudo rsync" env.conf $HOST:/etc/systemd/system/microblog.service.d/env.conf
-
-      - name: Deploy dist
-        env:
-          HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
-        run: |
-          ssh $HOST "mkdir -p ~/monorepo/apps/iori/dist"
-          rsync -avz --delete apps/iori/dist/ $HOST:~/monorepo/apps/iori/dist/
-
-      - name: Install dependencies and run migration on server
-        env:
-          HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
-        run: |
-          ssh $HOST "
-            cd ~/monorepo
-            git fetch --all
-            git reset --hard origin/main
-            git clean -fd
-            export PATH=\$HOME/.local/share/pnpm:\$PATH
-            pnpm install --frozen-lockfile
-            cd apps/iori
-            pnpm run drizzle:push
-          "
-
-      - name: Restart services
-        env:
-          HOST: ${{ secrets.MICROBLOG_USER }}@${{ secrets.MICROBLOG_HOST }}
-        run: |
-          ssh $HOST "
-            sudo chmod +x /usr/local/bin/microblog
-            sudo systemctl daemon-reload
-            sudo systemctl enable microblog
-            sudo systemctl restart microblog
-            sudo systemctl restart nginx
-          "
-
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/id_ed25519
+          IORI_SOURCE_SSH_HOST: ${{ secrets.IORI_SOURCE_SSH_HOST }}
+          IORI_SOURCE_SSH_USER: ${{ secrets.IORI_SOURCE_SSH_USER }}
+          IORI_SOURCE_SSH_PRIVATE_KEY: ${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}
+          IORI_SOURCE_SSH_KNOWN_HOSTS: ${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs

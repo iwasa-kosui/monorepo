@@ -2,23 +2,9 @@ import { Create, Document, type DocumentLoader, Image, type InboxContext, Note }
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
-import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
-import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
-import { PgLinkPreviewCreatedStore } from '../../pg/linkPreview/linkPreviewCreatedStore.ts';
-import { PgReplyNotificationCreatedStore } from '../../pg/notification/replyNotificationCreatedStore.ts';
-import { PgLocalPostResolverByUri } from '../../pg/post/localPostResolverByUri.ts';
-import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
-import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
-import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
-import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
+import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
 
 type Attachment = Readonly<{
   url: string;
@@ -44,8 +30,14 @@ const extractAttachments = async (
   return attachments;
 };
 
-export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+export type OnCreateDeps = Readonly<{
+  inboxActorResolver: InboxActorResolver;
+  addRemotePostUseCase: AddRemotePostUseCase;
+  fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase;
+}>;
+
+export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<unknown>, activity: Create) => {
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
@@ -66,26 +58,11 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
   }
   const objectUri = object.id.href;
 
-  const useCase = AddRemotePostUseCase.create({
-    postCreatedStore: PgPostCreatedStore.getInstance(),
-    postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
-    localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
-    replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
-    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-    webPushSender: WebPushSender.getInstance(),
-    linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
-    ogpFetcher: createOgpFetcher(),
-  });
-
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
 
   return RA.flow(
-    useCase.run({
+    deps.addRemotePostUseCase.run({
       content: String(object.content),
       uri: objectUri,
       actorIdentity,
@@ -93,30 +70,22 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
       inReplyToUri,
     }),
     RA.match({
-      ok: ({ actor: createdActor }) => {
+      ok: async ({ actor: createdActor }) => {
         getLogger().info(
           `Processed Create activity: ${objectUri} by ${createdActor.uri}`,
         );
 
-        // Fetch reply notes recursively in the background
         if (inReplyToUri) {
-          const fetchReplyNotesUseCase = FetchReplyNotesRecursiveUseCase.create({
-            postResolverByUri: PgPostResolverByUri.getInstance(),
-            localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
-            remotePostUpserter: PgRemotePostUpserter.getInstance(),
-          });
-
-          void fetchReplyNotesUseCase.run({
+          const result = await deps.fetchReplyNotesRecursiveUseCase.run({
             inReplyToUri,
             documentLoader,
             lookupObject: (uri, options) => ctx.lookupObject(uri, options),
-          }).then((result) => {
-            if (result.ok && result.val.fetchedPosts.length > 0) {
-              getLogger().info(
-                `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
-              );
-            }
           });
+          if (result.ok && result.val.fetchedPosts.length > 0) {
+            getLogger().info(
+              `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
+            );
+          }
         }
       },
       err: (err) => {

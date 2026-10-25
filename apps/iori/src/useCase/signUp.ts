@@ -33,7 +33,7 @@ type SignUpUseCase = UseCase<
   UsernameAlreadyTakenError | UnacceptableUsernameError
 >;
 
-type Deps = Readonly<{
+export type SignUpDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   userCreatedStore: UserCreatedStore;
   localActorCreatedStore: LocalActorCreatedStore;
@@ -45,7 +45,7 @@ const create = ({
   userCreatedStore,
   localActorCreatedStore,
   userPasswordSetStore,
-}: Deps): SignUpUseCase => {
+}: SignUpDeps): SignUpUseCase => {
   const errIfUsernameTaken = (
     existingUser: User | undefined,
   ): RA<void, UsernameAlreadyTakenError> => {
@@ -80,6 +80,8 @@ const create = ({
 
   return { run };
 };
+
+export const createSignUpUseCase = (deps: SignUpDeps): SignUpUseCase => create(deps);
 
 export const SignUpUseCase = {
   create,

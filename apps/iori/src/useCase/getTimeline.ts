@@ -81,6 +81,8 @@ const create = ({
   return { run };
 };
 
+export const createGetTimelineUseCase = (deps: Deps): GetTimelineUseCase => create(deps);
+
 export const GetTimelineUseCase = {
   create,
 } as const;

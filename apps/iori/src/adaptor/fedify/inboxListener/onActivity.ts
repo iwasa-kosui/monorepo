@@ -3,17 +3,13 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
-import { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgEmojiReactCreatedStore } from '../../pg/emojiReact/emojiReactCreatedStore.ts';
-import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
-import { PgEmojiReactNotificationCreatedStore } from '../../pg/notification/emojiReactNotificationCreatedStore.ts';
-import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
+
+export type OnActivityDeps = Readonly<{
+  inboxActorResolver: InboxActorResolver;
+  addReceivedEmojiReactUseCase: AddReceivedEmojiReactUseCase;
+}>;
 
 type EmojiTag = Readonly<{
   type: string;
@@ -76,8 +72,13 @@ const extractEmojiImageUrl = (tags: unknown, emojiName: string): string | null =
   return null;
 };
 
-const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, json: JsonLdEmojiReact) => {
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+const handleEmojiReact = async (
+  deps: OnActivityDeps,
+  ctx: InboxContext<unknown>,
+  activity: Activity,
+  json: JsonLdEmojiReact,
+) => {
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor for EmojiReact: ${actorResult.err.message}`);
     return;
@@ -127,20 +128,8 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
   }
   const reactedPostId = postIdResult.val;
 
-  const useCase = AddReceivedEmojiReactUseCase.create({
-    emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
-    emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
-    emojiReactNotificationCreatedStore: PgEmojiReactNotificationCreatedStore.getInstance(),
-    postResolver: PgPostResolver.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-    webPushSender: WebPushSender.getInstance(),
-  });
-
   return RA.flow(
-    useCase.run({
+    deps.addReceivedEmojiReactUseCase.run({
       emojiReactActivityUri,
       reactedPostId,
       reactorIdentity,
@@ -162,12 +151,12 @@ const handleEmojiReact = async (ctx: InboxContext<unknown>, activity: Activity, 
   );
 };
 
-export const onActivity = async (ctx: InboxContext<unknown>, activity: Activity) => {
+export const createOnActivity = (deps: OnActivityDeps) => async (ctx: InboxContext<unknown>, activity: Activity) => {
   const json = await activity.toJsonLd();
 
   // Handle EmojiReact activities
   if (isEmojiReactJsonLd(json)) {
-    return handleEmojiReact(ctx, activity, json);
+    return handleEmojiReact(deps, ctx, activity, json);
   }
 
   // Other activity types are handled by specific handlers

@@ -3,21 +3,9 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { PostId } from '../../../domain/post/postId.ts';
-import { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
-import { AddReceivedLikeUseCase } from '../../../useCase/addReceivedLike.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgEmojiReactCreatedStore } from '../../pg/emojiReact/emojiReactCreatedStore.ts';
-import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
-import { PgRemoteLikeCreatedStore } from '../../pg/like/remoteLikeCreatedStore.ts';
-import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
-import { PgEmojiReactNotificationCreatedStore } from '../../pg/notification/emojiReactNotificationCreatedStore.ts';
-import { PgLikeNotificationCreatedStore } from '../../pg/notification/notificationCreatedStore.ts';
-import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { AddReceivedEmojiReactUseCase } from '../../../useCase/addReceivedEmojiReact.ts';
+import type { AddReceivedLikeUseCase } from '../../../useCase/addReceivedLike.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
 
 type EmojiInfo = Readonly<{
   emoji: string;
@@ -151,8 +139,14 @@ const extractEmojiFromLike = async (activity: Like): Promise<EmojiInfo | null> =
   return { emoji, emojiImageUrl };
 };
 
-export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+export type OnLikeDeps = Readonly<{
+  inboxActorResolver: InboxActorResolver;
+  addReceivedEmojiReactUseCase: AddReceivedEmojiReactUseCase;
+  addReceivedLikeUseCase: AddReceivedLikeUseCase;
+}>;
+
+export const createOnLike = (deps: OnLikeDeps) => async (ctx: InboxContext<unknown>, activity: Like) => {
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
@@ -189,20 +183,8 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   const emojiInfo = await extractEmojiFromLike(activity);
   if (emojiInfo) {
     // Process as EmojiReact
-    const useCase = AddReceivedEmojiReactUseCase.create({
-      emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
-      emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
-      emojiReactNotificationCreatedStore: PgEmojiReactNotificationCreatedStore.getInstance(),
-      postResolver: PgPostResolver.getInstance(),
-      remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-      logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-      actorResolverByUri: PgActorResolverByUri.getInstance(),
-      pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-      webPushSender: WebPushSender.getInstance(),
-    });
-
     return RA.flow(
-      useCase.run({
+      deps.addReceivedEmojiReactUseCase.run({
         emojiReactActivityUri: activityUri,
         reactedPostId: postId,
         reactorIdentity: actorIdentity,
@@ -225,20 +207,8 @@ export const onLike = async (ctx: InboxContext<unknown>, activity: Like) => {
   }
 
   // Process as regular Like
-  const useCase = AddReceivedLikeUseCase.create({
-    remoteLikeCreatedStore: PgRemoteLikeCreatedStore.getInstance(),
-    remoteLikeResolverByActivityUri: PgRemoteLikeResolverByActivityUri.getInstance(),
-    likeNotificationCreatedStore: PgLikeNotificationCreatedStore.getInstance(),
-    postResolver: PgPostResolver.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-    webPushSender: WebPushSender.getInstance(),
-  });
-
   return RA.flow(
-    useCase.run({
+    deps.addReceivedLikeUseCase.run({
       likeActivityUri: activityUri,
       likedPostId: postId,
       likerIdentity: actorIdentity,

@@ -1,0 +1,5 @@
+# Public fixture only. The fixed workflow derives its selected generation key.
+# Preserve old state and resources; never import or reuse them for a fresh generation.
+bucket = "iori-terraform-state-fixture"
+key    = "iori/staging/fixture1/terraform.tfstate"
+region = "auto"

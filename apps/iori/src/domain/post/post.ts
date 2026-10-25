@@ -126,6 +126,25 @@ export const Post = {
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
+export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
+export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
+export type RemotePostIdentity = Readonly<{
+  uri: string;
+  content: string;
+  authorIdentity: Readonly<{
+    uri: string;
+    inboxUrl: string;
+    url?: string;
+    username?: string;
+    logoUri?: string;
+  }>;
+  inReplyToUri?: string | null;
+}>;
+export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
+export type ThreadResolver = Agg.Resolver<
+  { postId: PostId },
+  { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
+>;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<
   { actorIds: ActorId[]; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
@@ -134,6 +153,10 @@ export type PostsResolverByActorIds = Agg.Resolver<
 export type PostsResolverByActorIdWithPagination = Agg.Resolver<
   { actorId: ActorId; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
   (PostWithAuthor)[]
+>;
+export type LikedPostsResolverByActorId = Agg.Resolver<
+  { actorId: ActorId; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
+  PostWithAuthor[]
 >;
 export type PostNotFoundError = Readonly<{
   type: 'PostNotFoundError';

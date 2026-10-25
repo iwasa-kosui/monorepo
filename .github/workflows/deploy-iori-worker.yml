@@ -1,58 +1,422 @@
 name: Deploy iori Worker
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/iori/**"
-      - "packages/result/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/deploy-iori-worker.yml"
   workflow_dispatch:
+    inputs:
+      main_sha:
+        description: Reviewed current main code SHA
+        required: true
+        type: string
+      migration_main_sha:
+        description: Immutable migration SHA (required for later normal updates)
+        required: false
+        type: string
+      operation:
+        description: Protected operation (maintenance choices explicitly stop before privileges)
+        required: true
+        type: choice
+        options:
+          - prepare-target
+          - migrate-data
+          - verify-import
+          - cutover-route
+          - deploy-worker
+          - reconcile-resources
+          - replace-queue-consumer
+      environment:
+        description: Protected isolated destination and source environment
+        required: true
+        type: choice
+        options: [production, staging]
+      generation:
+        description: Reviewed fresh generation (8-20 lowercase alphanumeric characters)
+        required: true
+        type: string
+      migration_run_id:
+        description: Immutable run ID (1-80 ASCII letters, digits, underscore or hyphen)
+        required: true
+        type: string
 
 concurrency:
-  group: deploy-iori-worker
+  group: deploy-iori-worker-production
   cancel-in-progress: false
-
 permissions:
   contents: read
+env:
+  MAIN_SHA: ${{ inputs.main_sha }}
+  IORI_MIGRATION_MAIN_SHA: ${{ inputs.migration_main_sha }}
+  IORI_OPERATION: ${{ inputs.operation }}
+  IORI_ENVIRONMENT: ${{ inputs.environment }}
+  IORI_GENERATION: ${{ inputs.generation }}
+  IORI_MIGRATION_RUN_ID: ${{ inputs.migration_run_id }}
+  WRANGLER_SEND_METRICS: "false"
+  AWS_EC2_METADATA_DISABLED: "true"
 
 jobs:
-  deploy:
-    name: Deploy Worker
+  public-artifact-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-
+    timeout-minutes: 360
     steps:
-      - name: Checkout repository
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
         uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
         uses: actions/setup-node@v4
         with:
           node-version: "24.12.0"
-          cache: "pnpm"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Check public artifact policy with sanitized output
+        run: node apps/iori/scripts/hosted-workflow.mjs public-check
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages/result
-        run: pnpm --filter result run build
-
-      - name: Type check iori
-        run: pnpm --filter iori run typecheck
-
-      - name: Deploy iori Worker
-        run: pnpm --filter iori run deploy:worker
+  prepare-target:
+    if: inputs.operation == 'prepare-target'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          IORI_ADMISSION_MODE: sealed
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ORIGIN: ${{ vars.IORI_ORIGIN }}
-          VAPID_SUBJECT: ${{ vars.IORI_VAPID_SUBJECT }}
-          VAPID_PUBLIC_KEY: ${{ secrets.IORI_VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY: ${{ secrets.IORI_VAPID_PRIVATE_KEY }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_PREPARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_WRITE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_WRITE_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID }}
+          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SMOKE_QUEUE_TOKEN: ${{ secrets.SMOKE_QUEUE_TOKEN }}
+          STAGING_ACCESS_TOKEN: ${{ secrets.STAGING_ACCESS_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  migrate-data:
+    if: inputs.operation == 'migrate-data'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_ADMISSION_MODE: sealed
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_MIGRATE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID }}
+          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY }}
+          IORI_APPLICATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_APPLICATION_R2_WRITE_ACCESS_KEY_ID }}
+          IORI_APPLICATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_APPLICATION_R2_WRITE_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256 }}
+          IORI_MIGRATION_RECEIPT_PRIVATE_KEY: ${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}
+          IORI_MIGRATION_REHEARSAL: ${{ secrets.IORI_MIGRATION_REHEARSAL }}
+          IORI_SOURCE_SSH_HOST: ${{ secrets.IORI_SOURCE_SSH_HOST }}
+          IORI_SOURCE_SSH_USER: ${{ secrets.IORI_SOURCE_SSH_USER }}
+          IORI_SOURCE_SSH_PRIVATE_KEY: ${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}
+          IORI_SOURCE_SSH_KNOWN_HOSTS: ${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  verify-import:
+    if: inputs.operation == 'verify-import' || inputs.operation == 'cutover-route'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_OPERATION: verify-import
+          IORI_ADMISSION_MODE: sealed
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_VERIFY_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
+          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_APPLICATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_APPLICATION_R2_READ_ONLY_ACCESS_KEY_ID }}
+          IORI_APPLICATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_APPLICATION_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256 }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  cutover-route:
+    if: inputs.operation == 'cutover-route'
+    needs: [public-artifact-gate, verify-import]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_ADMISSION_MODE: sealed
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_CUTOVER_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_WRITE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_WRITE_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
+          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_APPLICATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_APPLICATION_R2_READ_ONLY_ACCESS_KEY_ID }}
+          IORI_APPLICATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_APPLICATION_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY }}
+          IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256: ${{ secrets.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256 }}
+          IORI_SOURCE_SSH_HOST: ${{ secrets.IORI_SOURCE_SSH_HOST }}
+          IORI_SOURCE_SSH_USER: ${{ secrets.IORI_SOURCE_SSH_USER }}
+          IORI_SOURCE_SSH_PRIVATE_KEY: ${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}
+          IORI_SOURCE_SSH_KNOWN_HOSTS: ${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}
+          IORI_SMOKE_QUEUE_TOKEN: ${{ secrets.SMOKE_QUEUE_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  deploy-worker:
+    if: inputs.operation == 'deploy-worker'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_ADMISSION_MODE: sealed
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
+          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
+          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs

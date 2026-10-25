@@ -1,11 +1,10 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { type LocalPost, type PostResolver, type RemotePost } from '../domain/post/post.ts';
+import { type LocalPost, type PostResolver, type RemotePost, type RemotePostUpserter } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import {
   AlreadyRepostedError,

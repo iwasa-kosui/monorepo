@@ -19,7 +19,6 @@ import { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
-import { Env } from '../env.ts';
 import { Schema } from '../helper/schema.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -53,6 +52,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  origin: string;
 }>;
 
 const create = ({
@@ -65,6 +65,7 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  origin,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -114,8 +115,7 @@ const create = ({
       }),
       RA.andThrough(async ({ post, content }) => {
         // URLを抽出してOGP情報を取得
-        const env = Env.getInstance();
-        const excludeHost = new URL(env.ORIGIN).host;
+        const excludeHost = new URL(origin).host;
         const urls = extractUrlsFromHtml(content, excludeHost);
 
         if (urls.length === 0) {
@@ -171,7 +171,7 @@ const create = ({
             attachments: images.map(
               (image) =>
                 new Document({
-                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                  url: new URL(`${origin}${image.url}`),
                   mediaType: getMimeTypeFromUrl(image.url),
                 }),
             ),
@@ -204,7 +204,7 @@ const create = ({
           attachments: images.map(
             (image) =>
               new Document({
-                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
+                url: new URL(`${origin}${image.url}`),
                 mediaType: getMimeTypeFromUrl(image.url),
               }),
           ),
@@ -234,6 +234,8 @@ const create = ({
 
   return { run };
 };
+
+export const createCreatePostUseCase = (deps: Deps): CreatePostUseCase => create(deps);
 
 export const CreatePostUseCase = {
   create,
