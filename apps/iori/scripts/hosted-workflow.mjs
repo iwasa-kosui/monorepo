@@ -71,12 +71,17 @@ export const materializeHostedValues = async env => {
     IORI_MIGRATION_ROOT: join(base, 'root'),
     IORI_MIGRATION_EXPECTED_TARGET_PATH: join(base, 'config/expected-target.json'),
   };
-  const put = async (input, output, name) => {
-    mapped[output] = await writePrivateValue(join(base, 'keys'), name, env[input]);
+  const put = async (input, output, name, normalize = value => value) => {
+    mapped[output] = await writePrivateValue(join(base, 'keys'), name, normalize(env[input]));
     delete mapped[input];
   };
   if (['source', 'migrate-data', 'cutover-route'].includes(operation)) {
-    await put('IORI_SOURCE_SSH_PRIVATE_KEY', 'IORI_SOURCE_SSH_IDENTITY_FILE', 'source-key');
+    await put(
+      'IORI_SOURCE_SSH_PRIVATE_KEY',
+      'IORI_SOURCE_SSH_IDENTITY_FILE',
+      'source-key',
+      value => typeof value === 'string' && value && !value.endsWith('\n') ? `${value}\n` : value,
+    );
     await put('IORI_SOURCE_SSH_KNOWN_HOSTS', 'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE', 'source-known-hosts');
   }
   if (['migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {

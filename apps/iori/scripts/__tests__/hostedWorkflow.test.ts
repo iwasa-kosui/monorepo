@@ -47,6 +47,26 @@ it.each(['migrate-data', 'verify-import', 'cutover-route'])(
     }
   },
 );
+it.each([
+  ['without a trailing newline', 'synthetic-source-key'],
+  ['with a trailing newline', 'synthetic-source-key\n'],
+])('writes the source SSH key %s as a single newline-terminated file', async (_label, key) => {
+  const runnerTemp = await createFixtureDirectory('iori-hosted-');
+  try {
+    const paths = await createWorkflowDirectory(runnerTemp);
+    const mapped = await materializeHostedValues({
+      ...baseEnv('source'),
+      RUNNER_TEMP: runnerTemp,
+      IORI_PRIVATE_DIRECTORY: paths.base,
+      IORI_SOURCE_SSH_PRIVATE_KEY: key,
+      IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
+    });
+    expect(await readFile(mapped.IORI_SOURCE_SSH_IDENTITY_FILE!, 'utf8')).toBe('synthetic-source-key\n');
+    expect(await readFile(mapped.IORI_SOURCE_SSH_KNOWN_HOSTS_FILE!, 'utf8')).toBe('synthetic-trusted-host');
+  } finally {
+    await rm(runnerTemp, { recursive: true, force: true });
+  }
+});
 it('rejects a retired operation before even examining any local secret path', async () => {
   await expect(
     materializeHostedValues({ ...baseEnv('replace-queue-consumer'), IORI_PRIVATE_DIRECTORY: '/not-inspected' }),
