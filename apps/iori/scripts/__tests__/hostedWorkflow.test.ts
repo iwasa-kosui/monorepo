@@ -20,7 +20,7 @@ const baseEnv = (operation: string) => ({
   IORI_MIGRATION_RUN_ID: 'run1',
   IORI_OPERATION: operation,
 });
-it.each(['migrate-data', 'verify-import', 'cutover-route'])(
+it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'])(
   'materializes %s into a new private root with only its required file roles',
   async operation => {
     const runnerTemp = await createFixtureDirectory('iori-hosted-');
@@ -45,7 +45,12 @@ it.each(['migrate-data', 'verify-import', 'cutover-route'])(
       expect(mapped.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
       expect(mapped.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
       const files = await readdir(join(paths.base, 'keys'));
-      expect(files.includes('receipt-private.pem')).toBe(operation === 'migrate-data');
+      expect(files.includes('receipt-private.pem')).toBe(
+        operation === 'migrate-data' || operation === 'rehearse-migration',
+      );
+      expect(mapped.IORI_MIGRATION_REHEARSAL).toBeUndefined();
+      expect(mapped.IORI_MIGRATION_REHEARSAL_PATH !== undefined).toBe(operation === 'migrate-data');
+      expect((await readdir(join(paths.base, 'config'))).includes('rehearsal.json')).toBe(operation === 'migrate-data');
       expect(files.includes('source-key')).toBe(operation !== 'verify-import');
     } finally {
       await rm(runnerTemp, { recursive: true, force: true });

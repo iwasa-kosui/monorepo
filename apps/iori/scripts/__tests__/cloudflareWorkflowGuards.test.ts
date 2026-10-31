@@ -34,6 +34,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
   expect(Object.keys(workflow.jobs)).toEqual([
     'public-artifact-gate',
     'prepare-target',
+    'rehearse-migration',
     'migrate-data',
     'verify-import',
     'cutover-route',
@@ -66,6 +67,7 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const prepare = operation(workflow.jobs['prepare-target']).env!;
   const migrate = operation(workflow.jobs['migrate-data']).env!;
+  const rehearse = operation(workflow.jobs['rehearse-migration']).env!;
   const verify = operation(workflow.jobs['verify-import']).env!;
   const cutover = operation(workflow.jobs['cutover-route']).env!;
   const deploy = operation(workflow.jobs['deploy-worker']).env!;
@@ -73,6 +75,22 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   expect(prepare.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
   expect(migrate.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
   expect(migrate.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('WRITE');
+  expect(rehearse.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
+  expect(rehearse.IORI_MIGRATION_REHEARSAL).toBeUndefined();
+  expect(migrate.IORI_MIGRATION_REHEARSAL).toBe('${{ secrets.IORI_MIGRATION_REHEARSAL }}');
+  expect(
+    Object.entries(workflow.jobs).filter(([, job]) =>
+      job.steps.some(step => step.env && 'IORI_MIGRATION_REHEARSAL' in step.env)
+    ).map(([name]) => name),
+  ).toEqual(['migrate-data']);
+  expect(JSON.stringify(workflow.jobs['rehearse-migration'])).not.toContain('IORI_MIGRATION_REHEARSAL');
+  expect({ ...rehearse, IORI_MIGRATION_REHEARSAL: migrate.IORI_MIGRATION_REHEARSAL }).toEqual(migrate);
+  expect({ ...workflow.jobs['rehearse-migration'], if: undefined, steps: undefined }).toEqual({
+    ...workflow.jobs['migrate-data'],
+    if: undefined,
+    steps: undefined,
+  });
+  expect(workflow.jobs['rehearse-migration'].if).toBe('inputs.operation == \'rehearse-migration\'');
   for (const role of [verify, cutover]) {
     expect(role.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
     expect(role.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');

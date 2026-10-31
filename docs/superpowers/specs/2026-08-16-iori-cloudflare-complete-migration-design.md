@@ -176,7 +176,7 @@ Worker secret は新規 generation の準備時に GitHub Actions の protected 
 
 移行は計画停止を伴う一回限りの cutover です。PostgreSQL と D1 の二重書き込みは行いません。
 
-hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止、drain、export を実行します。接続と信頼する host key は停止前に確認し、移行時間中は旧 deploy によるサービス再起動を抑止します。ツール導入後の空き容量、ピーク使用量と全工程の実行時間を測り、転送・変換を分割して hosted runner の容量と job 時間内に収めます。上限内で完了できるリハーサルが終わるまで、本番の停止を始めません。[Actions の制限](https://docs.github.com/en/actions/reference/limits)
+hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止、drain、export を実行します。接続と信頼する host key は停止前に確認し、移行時間中は旧 deploy によるサービス再起動を抑止します。ツール導入後の空き容量、ピーク使用量と全工程の実行時間を測り、転送・変換を分割して hosted runner の容量と job 時間内に収めます。測定のために、`rehearse-migration` が本番 source を短時間凍結します。測定値から見積もった時間が job の期限内に収まると `migrate-data` が判定するまで、本番 cutover のための停止を始めません。[Actions の制限](https://docs.github.com/en/actions/reference/limits)
 
 `execute-protected-migration.mjs` は事前検査と実行予約、source の凍結から実 import、署名生成、bundle 保存までを担当します。`restore-protected-migration.mjs` は別の fresh runner で復元と実データ再検証を行い、既存 `cloudflare:migrate:protected` は完了済み証跡の検証として残します。v3 contract は artifact を相対パスで参照し、各 job の root に解決して署名済み bytes を維持します。絶対パス、`..`、symlink による root 外参照と旧 contract を拒否します。検証用公開鍵と digest は Environment から供給し、provider はレビュー済み SHA の repository 内コードを使います。bundle 内の鍵や module を信頼元にしません。
 
@@ -185,7 +185,7 @@ hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止
 1. `feat/iori-worker-complete-migration` を main へ取り込む前に、D1 adapter、Worker routes、Fedify inbox と outbox、Web Push、R2、OGP の対象を絞った test を実行します。
 2. staging resources に D1 schema migration を適用し、fixture だけで sign-in、timeline、投稿、画像 upload、OGP、ActivityPub、Queue consumer のスモークテストを通します。
 3. production Worker を workers.dev URL に deploy し、custom domain route を有効化する前に `/health`、`/healthz`、`/readyz`、静的アセット、認証エラー、WebFinger、VAPID public key、OGP の境界を検証します。
-4. 本番と同等規模の匿名化データで PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill、bundle 保存と別 job での復元を事前リハーサルします。staging に本番データは投入しません。
+4. 本番の実データを匿名化せずに使い捨て generation の D1 と R2 へ入れて、PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill を事前リハーサルします。bundle 保存と別 job での復元は、リハーサルの対象外です。`rehearse-migration` は署名つき bundle を公開せず、別 job での復元もしないためです。この2つの処理は、本番の `migrate-data` と `verify-import` で初めて実行します。実データは、使い捨て generation の後片付けが終わるまで、その generation に残ります。staging 用の旧環境は作らないと、ユーザーが判断しました。
 5. rehearsal では各 INSERT の 100,000 bytes 上限、最大 32 MiB の SQL 分割、D1 の容量、source/runner の空き容量、各 metadata の 16 MiB 上限と全体時間を確認します。source export の 8 MiB row 上限は D1 へ投入できることを保証しません。全変換と検査を終えてから schema/data を変更します。[D1 の制限](https://developers.cloudflare.com/d1/platform/limits/)
 
 ### 本番 cutover

@@ -15,7 +15,7 @@ import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs'
 import { importMigrationOgp, importMigrationUploads } from './migration-object-import.mjs';
 import { assertExternalMigrationRoot, isMigrationArtifactReference } from './migration-path-safety.mjs';
 import { createMigrationR2Writer } from './migration-r2-writer.mjs';
-import { parseExpectedTarget, targetHash, targetIdentity } from './migration-target-contract.mjs';
+import { parseExpectedTarget, rehearsalTargetKey, targetHash, targetIdentity } from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
 import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
@@ -44,7 +44,7 @@ const freeBytes = async (root) => {
   const stat = await statfs(root, { bigint: true });
   return stat.bavail * stat.bsize;
 };
-const assertSigner = (privateKey, publicKey) => {
+export const assertSigner = (privateKey, publicKey) => {
   if (
     privateKey?.asymmetricKeyType !== 'ed25519' || publicKey?.asymmetricKeyType !== 'ed25519'
     || !createPublicKey(privateKey).export({ type: 'spki', format: 'der' }).equals(
@@ -53,11 +53,8 @@ const assertSigner = (privateKey, publicKey) => {
   ) throw new Error('Migration signing key mismatch.');
 };
 /** Fixed phase engine. Adapter injection is a test seam, never an executable-module environment input. */
-export const executeProtectedMigration = async (options) => {
-  const target = parseExpectedTarget(options.expectedTarget);
-  const { root, source, storage, receiptPrivateKey, receiptPublicKey, bucket, actualProvider } = options;
-  assertSigner(receiptPrivateKey, receiptPublicKey);
-  const rehearsal = parseMigrationRehearsal(options.rehearsal, target.identity.main_sha);
+export const runProtectedPhases = async (options, target, plan) => {
+  const { root, source, storage, receiptPrivateKey, bucket, actualProvider } = options;
   await assertExternalMigrationRoot(root);
   if ((await readdir(root)).length) throw new Error('Migration requires an empty private root.');
   const deadlineMs = options.deadlineMs ?? MIGRATION_DEADLINE_MS;
@@ -68,17 +65,51 @@ export const executeProtectedMigration = async (options) => {
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   const timer = setTimeout(() => controller.abort(new Error('Migration deadline exceeded.')), deadlineMs);
   const started = performance.now();
-  const checkBudget = async () => {
-    signal.throwIfAborted();
-    const { source_revision, ...estimate } = await source.estimate(signal);
+  const checkBudget = async (callSignal = signal) => {
+    callSignal.throwIfAborted();
+    const { source_revision, ...estimate } = await source.estimate(callSignal);
     if (source_revision !== target.identity.main_sha) throw new Error('Source revision mismatch.');
     validateSourceEstimate(estimate);
-    migrationBudget({
+    plan.budget({
       estimate,
-      rehearsal,
       availableBytes: await (options.availableBytes ?? freeBytes)(root),
       remainingMs: deadlineMs - (performance.now() - started),
     });
+    return estimate;
+  };
+  const freezeLimit = new AbortController();
+  let freezeSignal = signal;
+  let freezeExpiry = new Promise(() => {});
+  let freezeTimer;
+  const startFreezeLimit = () => {
+    if (plan.freezeLimitMs === undefined) return;
+    freezeSignal = AbortSignal.any([signal, freezeLimit.signal]);
+    freezeExpiry = new Promise((_, reject) => {
+      freezeLimit.signal.addEventListener('abort', () => reject(freezeLimit.signal.reason), { once: true });
+    });
+    freezeExpiry.catch(() => {});
+    freezeTimer = setTimeout(
+      () => freezeLimit.abort(new Error('Rehearsal freeze limit exceeded.')),
+      plan.freezeLimitMs,
+    );
+  };
+  const stopFreezeLimit = () => {
+    clearTimeout(freezeTimer);
+    freezeSignal = signal;
+    freezeExpiry = new Promise(() => {});
+  };
+  const frozenCall = async (run) => {
+    try {
+      return await Promise.race([run(freezeSignal), freezeExpiry]);
+    } catch (error) {
+      if (freezeLimit.signal.aborted) throw freezeLimit.signal.reason;
+      throw error;
+    }
+  };
+  const elapsed = {};
+  let phaseStart;
+  const beginTiming = () => {
+    phaseStart = performance.now();
   };
   const initialHash = targetHash(`${target.identity.main_sha}:${target.identity.run_id}`);
   const contract = {
@@ -106,6 +137,10 @@ export const executeProtectedMigration = async (options) => {
   const completePhase = async (name, paths) => {
     signal.throwIfAborted();
     if (requiredPhases[contract.phases.length] !== name) throw new Error('Executor phase order mismatch.');
+    if (phaseStart !== undefined) {
+      elapsed[name] = performance.now() - phaseStart;
+      phaseStart = undefined;
+    }
     const artifacts = {};
     for (const [key, path] of Object.entries(paths)) artifacts[key] = await descriptor(path);
     const receipt = {
@@ -163,6 +198,7 @@ export const executeProtectedMigration = async (options) => {
     await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     const fontData = await options.loadFont(signal);
     await checkBudget();
+    await plan.beforeReservation?.();
     const reservation = Buffer.from(
       JSON.stringify({
         schema: 'iori-migration-execution-reservation/v1',
@@ -183,8 +219,10 @@ export const executeProtectedMigration = async (options) => {
         }),
       ),
     });
-    await source.freeze(signal);
-    const drained = validateSourceState(await source.drain(300_000, signal));
+    plan.beforeFreeze?.();
+    startFreezeLimit();
+    await frozenCall(frozenSignal => source.freeze(frozenSignal));
+    const drained = validateSourceState(await frozenCall(frozenSignal => source.drain(300_000, frozenSignal)));
     if (
       !drained.drained || drained.source_revision !== target.identity.main_sha
       || drained.identity?.main_sha !== target.identity.main_sha || drained.identity.run_id !== target.identity.run_id
@@ -205,13 +243,17 @@ export const executeProtectedMigration = async (options) => {
         }),
       ),
     });
-    await checkBudget();
-    const inventory = validateSourceInventory(await source.export(signal));
+    const estimate = await frozenCall(frozenSignal => checkBudget(frozenSignal));
+    beginTiming();
+    const inventory = validateSourceInventory(await frozenCall(frozenSignal => source.export(frozenSignal)));
     if (
       inventory.identity.main_sha !== target.identity.main_sha || inventory.identity.run_id !== target.identity.run_id
     ) throw new Error('Source inventory identity mismatch.');
-    const restored = await source.restore(join(root, 'source'), signal);
+    const restored = await frozenCall(frozenSignal => source.restore(join(root, 'source'), frozenSignal));
+    stopFreezeLimit();
     await completePhase('export-postgres', { postgres_export_manifest: restored.manifestPath });
+    await plan.afterExport?.();
+    beginTiming();
     const sqlRoot = join(root, 'sql');
     await convertD1Import({
       manifestPath: restored.manifestPath,
@@ -224,6 +266,7 @@ export const executeProtectedMigration = async (options) => {
     await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     await options.importD1({ expectedTarget: target, manifestPath: d1ManifestPath, signal });
     await completePhase('convert-and-import-d1', { d1_import_manifest: d1ManifestPath });
+    beginTiming();
     await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     const uploads = await importMigrationUploads({
       sourceDir: restored.uploadDir,
@@ -265,27 +308,45 @@ export const executeProtectedMigration = async (options) => {
         summary('verification_summary', { manifest_digests }),
       ),
     });
-    await writeJson('contract.json', contract);
-    const bundleOptions = {
-      root,
-      contractPath: 'contract.json',
-      environment: target.identity.environment,
-      expectedMainSha: target.identity.main_sha,
-      expectedRunId: target.identity.run_id,
-      expectedTarget: target,
-      receiptPublicKey,
-      storage,
-      signal,
-    };
-    await validateProtectedMigrationEvidence(contract, bundleOptions);
-    await publishMigrationBundle(bundleOptions);
-    return { status: 'published', contractPath: join(root, 'contract.json') };
+    return await plan.finish({ contract, writeJson, signal, estimate, elapsed });
   } finally {
     clearTimeout(timer);
+    clearTimeout(freezeTimer);
   }
 };
+export const executeProtectedMigration = async (options) => {
+  const target = parseExpectedTarget(options.expectedTarget);
+  const { storage, receiptPublicKey } = options;
+  assertSigner(options.receiptPrivateKey, receiptPublicKey);
+  const rehearsal = parseMigrationRehearsal(options.rehearsal, target.identity.main_sha);
+  return runProtectedPhases(options, target, {
+    budget: (input) => migrationBudget({ ...input, rehearsal }),
+    beforeReservation: async () => {
+      if (await storage.getIfExists(rehearsalTargetKey(target), 65536) !== null) {
+        throw new Error('Target generation was used for rehearsal.');
+      }
+    },
+    finish: async ({ contract, writeJson, signal }) => {
+      await writeJson('contract.json', contract);
+      const bundleOptions = {
+        root: options.root,
+        contractPath: 'contract.json',
+        environment: target.identity.environment,
+        expectedMainSha: target.identity.main_sha,
+        expectedRunId: target.identity.run_id,
+        expectedTarget: target,
+        receiptPublicKey,
+        storage,
+        signal,
+      };
+      await validateProtectedMigrationEvidence(contract, bundleOptions);
+      await publishMigrationBundle(bundleOptions);
+      return { status: 'published', contractPath: join(options.root, 'contract.json') };
+    },
+  });
+};
 
-const main = async (cliSignal) => {
+export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
   const deadlineMs = process.env.IORI_JOB_STARTED_AT
     ? workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT)).remainingMs
     : MIGRATION_DEADLINE_MS;
@@ -309,10 +370,12 @@ const main = async (cliSignal) => {
     await readPrivateBounded(required('IORI_MIGRATION_RECEIPT_PRIVATE_KEY_PATH'), 16384),
   );
   assertSigner(receiptPrivateKey, receiptPublicKey);
-  const rehearsal = parseMigrationRehearsal(
-    JSON.parse(await readPrivateBounded(required('IORI_MIGRATION_REHEARSAL_PATH'), 65536)),
-    expectedTarget.identity.main_sha,
-  );
+  const rehearsal = withRehearsal
+    ? parseMigrationRehearsal(
+      JSON.parse(await readPrivateBounded(required('IORI_MIGRATION_REHEARSAL_PATH'), 65536)),
+      expectedTarget.identity.main_sha,
+    )
+    : undefined;
   const apiToken = required('CLOUDFLARE_API_TOKEN');
   const zoneId = required('CLOUDFLARE_ZONE_ID');
   if (!/^[a-f0-9]{32}$/.test(zoneId)) throw new Error('Invalid zone.');
@@ -352,13 +415,13 @@ const main = async (cliSignal) => {
         },
       }),
     );
-    await executeProtectedMigration({
+    await run({
       deadlineMs: deadlineAt - Date.now(),
       expectedTarget,
       root,
       receiptPublicKey,
       receiptPrivateKey,
-      rehearsal,
+      ...(withRehearsal ? { rehearsal } : {}),
       source,
       storage,
       bucket,
@@ -374,7 +437,9 @@ const main = async (cliSignal) => {
   }
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  withCliSignal(main).then(() => console.log('Protected migration bundle published.')).catch(() => {
+  withCliSignal(signal => runExecutorCli(signal, { run: executeProtectedMigration, withRehearsal: true })).then(() =>
+    console.log('Protected migration bundle published.')
+  ).catch(() => {
     console.error(
       'Protected migration failed; retain source freeze, partial evidence and reservations for reviewed recovery.',
     );
