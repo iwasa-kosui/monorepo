@@ -212,3 +212,34 @@ it('validates private inputs before remote work and uses only fixed reviewed SSH
   await expect(createSourceSshAdapter(options, { spawnProcess })).rejects.toThrow('Invalid source inputs.');
   expect(calls).toHaveLength(1);
 });
+const exitingSpawn = (code: number) => () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: () => true,
+  });
+  queueMicrotask(() => {
+    child.stdout.end();
+    child.stderr.end('PRIVATE SHOULD NOT ESCAPE');
+    child.emit('close', code);
+  });
+  return child;
+};
+it.each([
+  [75, 'Source control is not ready.', true],
+  [255, 'Source operation failed.', false],
+  [1, 'Source operation failed.', false],
+])('maps the status exit code %d to "%s"', async (code, message, retryable) => {
+  const { options } = await setup();
+  const adapter = await createSourceSshAdapter(options, { spawnProcess: exitingSpawn(code) });
+  const failure = await adapter.status().catch((error) => error);
+  expect(failure.message).toBe(message);
+  expect(failure.retryable === true).toBe(retryable);
+});
+it('does not mark exit code 75 from another operation as retryable', async () => {
+  const { options } = await setup();
+  const adapter = await createSourceSshAdapter(options, { spawnProcess: exitingSpawn(75) });
+  const failure = await adapter.freeze().catch((error) => error);
+  expect(failure.message).toBe('Source operation failed.');
+  expect(failure.retryable).toBeUndefined();
+});

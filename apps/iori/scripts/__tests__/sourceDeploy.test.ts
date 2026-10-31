@@ -219,6 +219,8 @@ it.each([
   ['Error: Unsupported source pnpm.', 'source-pnpm-version'],
   ['Error: Source UPLOAD_DIR must be outside dist: /secret/path', 'upload-dir-inside-dist'],
   ['Error: Dirty source checkout.', 'source-dirty'],
+  ['Error: Source configuration owner reset failed.', 'config-owner-reset-failed'],
+  ['Error: Source UPLOAD_DIR must be an existing directory: /secret/path', 'upload-dir-missing'],
   ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
   ['Migration command failed; outcome may be uncertain.', 'remote-command-failed'],
   ['something unexpected', 'unclassified'],
@@ -307,4 +309,151 @@ it('names stages outside the child commands', async () => {
     'IORI_DIAG stage=inputs program=none exit=none signal=none reason=source-inputs-invalid\n',
     'IORI_DIAG stage=manifest program=none exit=none signal=none reason=reviewed-main-changed\n',
   ]);
+});
+it('resets the configuration owner immediately before install', async () => {
+  const phases: string[] = [];
+  await deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      phases.push(program === 'rsync' ? 'rsync' : /"?phase"?: "([a-z-]+)"/.exec(options.input ?? '')?.[1] ?? '');
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(phases).toEqual([
+    'check',
+    'checkout',
+    'dependencies',
+    'dist-check',
+    'rsync',
+    'verify-dist',
+    'configuration-owner',
+    'install',
+    'restart',
+  ]);
+});
+const notice = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';
+it('relays only the exact configuration owner notice from a remote stage', async () => {
+  const writes = captureDiagnostics();
+  await deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program === 'ssh' && /"?phase"?: "configuration-owner"/.test(options.input ?? '')) {
+        await options.captureOutput?.({
+          stdout: '',
+          stderr: [
+            notice,
+            `${notice} extra=/home/secret`,
+            ` ${notice}`,
+            `${notice} `,
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=abc previous_gid=1002',
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=-1 previous_gid=1002',
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=12345678901 previous_gid=1',
+            'IORI_NOTICE stage=remote-install previous_uid=1 previous_gid=1',
+            'secret-user@secret-host.invalid: sudo: a password is required',
+          ].join('\n'),
+        });
+      }
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${notice}\n`]);
+  expect(writes.join('')).not.toMatch(/secret|extra|abc/);
+});
+it('does not relay a notice from a failed rsync stage', async () => {
+  const writes = captureDiagnostics();
+  await expect(deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program !== 'rsync') return { stdout: '', stderr: '' };
+      await options.captureOutput?.({ stdout: '', stderr: notice });
+      throw Object.assign(new Error('x'), { exitCode: 23 });
+    },
+  })).rejects.toThrow('x');
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([]);
+});
+const readyState = {
+  source_revision: sha,
+  ingress_frozen: false,
+  consumer_paused: false,
+  queue_failed: false,
+  identity: null,
+  http_inflight: 0,
+  queue_depth: 0,
+  dequeue_work: 0,
+  enqueue_work: 0,
+  drained: false,
+};
+const notReadyError = () => Object.assign(new Error('Source control is not ready.'), { retryable: true });
+const withStatus = (status: () => Promise<typeof readyState>) => ({
+  ...diagnosticDependencies,
+  statusRetryTimeoutMs: 200,
+  statusRetryIntervalMs: 5,
+  sourceFactory: async () => ({ status }),
+  runCommand: async () => ({ stdout: '', stderr: '' }),
+});
+it('retries the status stage while source control is not ready and then succeeds', async () => {
+  let calls = 0;
+  await deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      if (++calls < 3) throw notReadyError();
+      return readyState;
+    }),
+  );
+  expect(calls).toBe(3);
+});
+it('fails with one not-ready diagnostic when source control stays not ready', async () => {
+  const writes = captureDiagnostics();
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      throw notReadyError();
+    }),
+  )).rejects.toThrow('Source control is not ready.');
+  expect(calls).toBeGreaterThan(1);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
+  ]);
+});
+it('does not retry a readiness mismatch', async () => {
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      return { ...readyState, source_revision: 'b'.repeat(40) };
+    }),
+  )).rejects.toThrow('Source prerequisite readiness failed.');
+  expect(calls).toBe(1);
+});
+it('does not retry a status failure that is not marked retryable', async () => {
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      throw new Error('Source operation failed.');
+    }),
+  )).rejects.toThrow('Source operation failed.');
+  expect(calls).toBe(1);
+});
+it('stops waiting between status attempts when the deployment is aborted', async () => {
+  const abort = new AbortController();
+  let calls = 0;
+  const deploying = deploySource(diagnosticOptions, {
+    ...withStatus(async () => {
+      calls++;
+      throw notReadyError();
+    }),
+    statusRetryTimeoutMs: 60_000,
+    statusRetryIntervalMs: 60_000,
+    signal: abort.signal,
+  });
+  const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
+  await vi.waitFor(() => expect(calls).toBe(1));
+  abort.abort();
+  await failed;
+  expect(calls).toBe(1);
 });

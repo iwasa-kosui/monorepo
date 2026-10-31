@@ -17,4 +17,6 @@ export function deploySource(options: SourceSshOptions, dependencies?: {
   checkMain?: (sha: string, options: { signal?: AbortSignal }) => Promise<void>;
   sourceFactory?: (options: SourceSshOptions) => Promise<{ status(signal?: AbortSignal): Promise<SourceState> }>;
   inspectDist?: (sha: string, signal: AbortSignal) => Promise<{ root: string; manifest: SourceBuildManifest }>;
+  statusRetryTimeoutMs?: number;
+  statusRetryIntervalMs?: number;
 }): Promise<void>;

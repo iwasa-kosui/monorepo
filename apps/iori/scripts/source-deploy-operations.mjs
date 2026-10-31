@@ -68,6 +68,7 @@ export const runSourceDeployStep = async (
     guard = assertSourceDeployAllowed,
     inspectCheckout = inspectOwnedCheckout,
     inspectPnpm = inspectSourcePnpm,
+    lstatFile = lstat,
     runCommand = runMigrationCommand,
     signal,
     captureOutput,
@@ -75,11 +76,22 @@ export const runSourceDeployStep = async (
 ) => {
   if (
     !/^[a-f0-9]{40}$/.test(sha ?? '')
-    || !['check', 'checkout', 'dependencies', 'dist-check', 'verify-dist', 'install', 'restart'].includes(phase)
+    || ![
+      'check',
+      'checkout',
+      'dependencies',
+      'dist-check',
+      'verify-dist',
+      'configuration-owner',
+      'install',
+      'restart',
+    ].includes(phase)
   ) {
     throw new Error('Invalid source deployment operation.');
   }
-  if (['dist-check', 'verify-dist', 'install', 'restart'].includes(phase)) validateSourceBuildManifest(manifest, sha);
+  if (['dist-check', 'verify-dist', 'configuration-owner', 'install', 'restart'].includes(phase)) {
+    validateSourceBuildManifest(manifest, sha);
+  }
   const check = async () => {
     signal?.throwIfAborted();
     await guard({ home, uid });
@@ -139,7 +151,30 @@ export const runSourceDeployStep = async (
       if (phase !== 'dist-check') await verifySourceBuildManifest(dist, manifest, sha, { uid, signal });
       await check();
       if (phase === 'dist-check' || phase === 'verify-dist') return;
-      if (phase === 'install') {
+      if (phase === 'configuration-owner') {
+        const inspectConfiguration = async () => {
+          let existing;
+          try {
+            existing = await lstatFile(sourceEnvironmentFile);
+          } catch {
+            throw new Error('Source configuration unavailable.');
+          }
+          if (!existing.isFile() || (existing.mode & 0o022)) throw new Error('Source configuration unavailable.');
+          return existing;
+        };
+        const before = await inspectConfiguration();
+        if (before.uid !== 0) {
+          await check();
+          await exec('sudo', ['-n', 'chown', '-h', '0:0', sourceEnvironmentFile]);
+          const after = await inspectConfiguration();
+          if (after.uid !== 0 || after.dev !== before.dev || after.ino !== before.ino) {
+            throw new Error('Source configuration owner reset failed.');
+          }
+          process.stderr.write(
+            `IORI_NOTICE stage=remote-configuration-owner previous_uid=${before.uid} previous_gid=${before.gid}\n`,
+          );
+        }
+      } else if (phase === 'install') {
         // Only the UPLOAD_DIR line is read during dist-check; the rest may hold secrets.
         const existing = await lstat(sourceEnvironmentFile);
         if (!existing.isFile() || existing.uid !== 0 || (existing.mode & 0o022)) {

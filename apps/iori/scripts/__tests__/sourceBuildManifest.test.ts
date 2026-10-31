@@ -1,6 +1,6 @@
 import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createSourceBuildManifest,
@@ -12,6 +12,7 @@ import { createFixtureDirectory } from './fixtureTemp.js';
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 const fixture = async () => {
@@ -141,5 +142,91 @@ describe('UPLOAD_DIR inspection before the dist transfer', () => {
     expect(sudo).toHaveLength(1);
     expect(sudo[0].args.slice(0, 3)).toEqual(['-n', 'sed', '-n']);
     expect(sudo[0].args.at(-1)).toBe('/etc/systemd/system/microblog.service.d/env.conf');
+  });
+});
+describe('configuration owner reset before install', () => {
+  const environmentFile = '/etc/systemd/system/microblog.service.d/env.conf';
+  type Stat = { isFile: () => boolean; uid: number; gid: number; mode: number; dev: number; ino: number };
+  const regular = (uid: number, mode = 0o100640): Stat => ({
+    isFile: () => true,
+    uid,
+    gid: 1002,
+    mode,
+    dev: 1,
+    ino: 100,
+  });
+  const run = async (stats: Stat[]) => {
+    const home = await fixture();
+    const dist = join(home, 'monorepo/apps/iori/dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(join(dist, 'index.js'), 'reviewed');
+    const manifest = await createSourceBuildManifest(dist, sha);
+    const writes: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation(
+      ((chunk: string | Uint8Array) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write,
+    );
+    const sudo: string[][] = [];
+    const lstatPaths: string[] = [];
+    const result = runSourceDeployStep({ phase: 'configuration-owner', sha, manifest }, {
+      home,
+      guard: async () => {},
+      inspectCheckout: async () => {},
+      lstatFile: async path => {
+        lstatPaths.push(path);
+        const next = stats.shift();
+        if (!next) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+        return next;
+      },
+      runCommand: async (program, args) => {
+        if (program === 'sudo') sudo.push(args);
+        return { stdout: args.includes('rev-parse') ? sha : '', stderr: '' };
+      },
+    });
+    return { result, sudo, writes, lstatPaths };
+  };
+  it('does nothing when root already owns the configuration', async () => {
+    const { result, sudo, writes } = await run([regular(0)]);
+    await expect(result).resolves.toBeUndefined();
+    expect(sudo).toEqual([]);
+    expect(writes.join('')).not.toContain('IORI_NOTICE');
+  });
+  it('runs the fixed chown once and prints only the previous owner ids', async () => {
+    const { result, sudo, writes, lstatPaths } = await run([regular(1001), regular(0)]);
+    await expect(result).resolves.toBeUndefined();
+    expect(sudo).toEqual([['-n', 'chown', '-h', '0:0', environmentFile]]);
+    expect(lstatPaths).toEqual([environmentFile, environmentFile]);
+    expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
+      'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002\n',
+    ]);
+  });
+  it('fails without a notice when the owner is still not root after chown', async () => {
+    const { result, sudo, writes } = await run([regular(1001), regular(1001)]);
+    await expect(result).rejects.toThrow('Source configuration owner reset failed.');
+    expect(sudo).toHaveLength(1);
+    expect(writes.join('')).not.toContain('IORI_NOTICE');
+  });
+  it('fails without a notice when the configuration is replaced during chown', async () => {
+    const { result, sudo, writes } = await run([regular(1001), { ...regular(0), ino: 200 }]);
+    await expect(result).rejects.toThrow('Source configuration owner reset failed.');
+    expect(sudo).toHaveLength(1);
+    expect(writes.join('')).not.toContain('IORI_NOTICE');
+  });
+  it.each([
+    ['a symbolic link', { ...regular(1001), isFile: () => false, mode: 0o120777 }],
+    ['not a regular file', { ...regular(1001), isFile: () => false, mode: 0o040755 }],
+    ['group writable', regular(1001, 0o100660)],
+    ['world writable', regular(0, 0o100602)],
+  ])('refuses without chown when the configuration is %s', async (_name, stat) => {
+    const { result, sudo } = await run([stat]);
+    await expect(result).rejects.toThrow('Source configuration unavailable.');
+    expect(sudo).toEqual([]);
+  });
+  it('refuses without chown when the configuration is missing', async () => {
+    const { result, sudo } = await run([]);
+    await expect(result).rejects.toThrow('Source configuration unavailable.');
+    expect(sudo).toEqual([]);
   });
 });

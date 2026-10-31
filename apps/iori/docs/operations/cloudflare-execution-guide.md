@@ -188,23 +188,47 @@ umask 077
 IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=<名前|none> reason=<分類>
 ```
 
-配備が成功した場合、step は `IORI_DIAG` 行を出しません。
+配備が成功した場合、step は `IORI_DIAG` 行を出しません。ただし、`remote-configuration-owner` 段階が env.conf の所有者を直したときは、成功した配備でも `IORI_NOTICE` 行を Actions ログへ出します。
 
 `stage` の値と意味は次のとおりです。
 
 - `inputs`: 入力の検査
 - `manifest`: runner 側の main と dist の検査
-- `remote-check`、`remote-checkout`、`remote-dependencies`、`remote-dist-check`、`remote-verify-dist`、`remote-install`、`remote-restart`: 旧環境で実行する各段階
+- `remote-check`、`remote-checkout`、`remote-dependencies`、`remote-dist-check`、`remote-verify-dist`、`remote-configuration-owner`、`remote-install`、`remote-restart`: 旧環境で実行する各段階
 - `rsync`: dist の転送
 - `status`: 再起動後の readiness 確認
 - `hosted-invocation`、`hosted-private-directory`、`hosted-materialize`、`hosted-reviewed-main`、`hosted-deploy-source`: runner 側の前処理。まとめて `hosted-*` と呼びます。
+
+旧環境では、`remote-verify-dist` の後、`remote-install` の前に、`remote-configuration-owner` 段階が `/etc/systemd/system/microblog.service.d/env.conf` の所有者を検査します。旧ワークフローは env.conf を `rsync -a` で配置したため、所有者が runner の uid のまま残りました。`remote-install` 段階は root 所有の env.conf だけを受け付けます。この段階は次のように動きます。
+
+- 所有者が root（uid 0）の場合、何もしません。
+- 所有者が root でなく、env.conf が通常ファイルで、group と other に書き込み権限がない場合、`sudo -n chown 0:0` で所有者を root に直します。直したときだけ、Actions ログに次の1行を出します。
+
+  ```text
+  IORI_NOTICE stage=remote-configuration-owner previous_uid=<数値> previous_gid=<数値>
+  ```
+
+- env.conf がシンボリックリンクである、通常ファイルでない、group か other に書き込み権限がある、存在しない、のいずれかの場合、`reason=source-config-unavailable` で失敗します。
+- `chown` の後も所有者が root にならない場合、`reason=config-owner-reset-failed` で失敗します。
+
+所有者を元に戻す場合、作業者は `IORI_NOTICE` 行の数値を使い、旧環境で次のコマンドを実行します。ただし、元の uid は旧環境に存在しないアカウントのものです。
+
+```bash
+sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d/env.conf
+```
 
 作業者は `program`、`exit`、`reason` の組で原因を切り分けます。
 
 - `program` が `ssh` で `exit=255` の場合、または `program` が `rsync` で `exit` が `255` か `12` の場合に、`reason` が `ssh-*` なら、接続か認証が失敗しています。`ssh-*` は `ssh-auth-denied`、`ssh-host-key`、`ssh-key-format`、`ssh-timeout`、`ssh-refused`、`ssh-dns` です。作業者は production environment の `IORI_SOURCE_SSH_*` secret、旧環境の authorized_keys、known_hosts を確認します。
 - `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は `reason` に対応する前提を旧環境で確認します。
+- `reason=source-config-unavailable` の場合、env.conf の種類か mode が不正です。作業者は env.conf が通常ファイルであり、group と other に書き込み権限がないことを旧環境で確認します。
+- `reason=config-owner-reset-failed` の場合、`sudo -n chown 0:0` を実行した後も env.conf の所有者が root になっていません。作業者は旧環境で sudo の権限と env.conf の所有者を確認します。
+- `reason=upload-dir-missing` の場合、env.conf の `UPLOAD_DIR` が指すディレクトリが旧環境に存在しません。
 - `reason=remote-node-missing` の場合、旧環境に nvm の node v24.12.0 がありません。
 - `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
+- `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
+- `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
+- `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
 
 ## 5. 初回 staging rehearsal の準備
