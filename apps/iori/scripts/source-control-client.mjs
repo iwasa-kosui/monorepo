@@ -34,16 +34,26 @@ export const sourceCommandArguments = (args) => {
   return command;
 };
 
+const notReady = () => Object.assign(new Error('Source control is not ready.'), { notReady: true });
+const lstatBeforeListen = async (path) => {
+  try {
+    return await lstat(path);
+  } catch (error) {
+    throw error?.code === 'ENOENT' ? notReady() : error;
+  }
+};
+const NOT_READY_RESPONSE = '{"ok":false,"error":"invalid_command"}\n';
+
 // base/output injection is for fixture callers. The CLI fixes base to service-user home.
 export const requestSourceControl = async ({ args, output, base = join(homedir(), '.iori-migration'), signal }) => {
   const command = sourceCommandArguments(args);
-  const directory = await lstat(base);
+  const directory = await lstatBeforeListen(base);
   if (
     await realpath(base) !== base || !directory.isDirectory() || directory.uid !== process.getuid()
     || (directory.mode & 0o777) !== 0o700
   ) throw new Error('Unsafe source control.');
   const path = join(base, 'control.sock');
-  const stat = await lstat(path);
+  const stat = await lstatBeforeListen(path);
   if (!stat.isSocket() || stat.uid !== process.getuid() || (stat.mode & 0o777) !== 0o600) {
     throw new Error('Unsafe source control.');
   }
@@ -65,7 +75,12 @@ export const requestSourceControl = async ({ args, output, base = join(homedir()
   });
   socket.once('connect', () => socket.write(JSON.stringify(command) + '\n'));
   try {
-    await pipeline(socket, guard, output, { end: false, signal: deadline });
+    try {
+      await pipeline(socket, guard, output, { end: false, signal: deadline });
+    } catch (error) {
+      throw error?.code === 'ECONNREFUSED' ? notReady() : error;
+    }
+    if (bytes === NOT_READY_RESPONSE.length && prefix.toString('utf8') === NOT_READY_RESPONSE) throw notReady();
     if (!prefix.toString('utf8').startsWith('{"ok":true,')) throw new Error('Source control rejected.');
   } finally {
     socket.destroy();

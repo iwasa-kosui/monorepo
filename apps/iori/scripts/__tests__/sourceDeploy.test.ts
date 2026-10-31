@@ -371,3 +371,89 @@ it('does not relay a notice from a failed rsync stage', async () => {
   })).rejects.toThrow('x');
   expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([]);
 });
+const readyState = {
+  source_revision: sha,
+  ingress_frozen: false,
+  consumer_paused: false,
+  queue_failed: false,
+  identity: null,
+  http_inflight: 0,
+  queue_depth: 0,
+  dequeue_work: 0,
+  enqueue_work: 0,
+  drained: false,
+};
+const notReadyError = () => Object.assign(new Error('Source control is not ready.'), { retryable: true });
+const withStatus = (status: () => Promise<typeof readyState>) => ({
+  ...diagnosticDependencies,
+  statusRetryTimeoutMs: 200,
+  statusRetryIntervalMs: 5,
+  sourceFactory: async () => ({ status }),
+  runCommand: async () => ({ stdout: '', stderr: '' }),
+});
+it('retries the status stage while source control is not ready and then succeeds', async () => {
+  let calls = 0;
+  await deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      if (++calls < 3) throw notReadyError();
+      return readyState;
+    }),
+  );
+  expect(calls).toBe(3);
+});
+it('fails with one not-ready diagnostic when source control stays not ready', async () => {
+  const writes = captureDiagnostics();
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      throw notReadyError();
+    }),
+  )).rejects.toThrow('Source control is not ready.');
+  expect(calls).toBeGreaterThan(1);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
+  ]);
+});
+it('does not retry a readiness mismatch', async () => {
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      return { ...readyState, source_revision: 'b'.repeat(40) };
+    }),
+  )).rejects.toThrow('Source prerequisite readiness failed.');
+  expect(calls).toBe(1);
+});
+it('does not retry a status failure that is not marked retryable', async () => {
+  let calls = 0;
+  await expect(deploySource(
+    diagnosticOptions,
+    withStatus(async () => {
+      calls++;
+      throw new Error('Source operation failed.');
+    }),
+  )).rejects.toThrow('Source operation failed.');
+  expect(calls).toBe(1);
+});
+it('stops waiting between status attempts when the deployment is aborted', async () => {
+  const abort = new AbortController();
+  let calls = 0;
+  const deploying = deploySource(diagnosticOptions, {
+    ...withStatus(async () => {
+      calls++;
+      throw notReadyError();
+    }),
+    statusRetryTimeoutMs: 60_000,
+    statusRetryIntervalMs: 60_000,
+    signal: abort.signal,
+  });
+  const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
+  await vi.waitFor(() => expect(calls).toBe(1));
+  abort.abort();
+  await failed;
+  expect(calls).toBe(1);
+});

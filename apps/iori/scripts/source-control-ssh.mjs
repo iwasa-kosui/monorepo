@@ -77,11 +77,11 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
       const exited = new Promise((resolve) => {
         child.once('error', () => {
           closed = true;
-          resolve(false);
+          resolve(undefined);
         });
         child.once('close', (code) => {
           closed = true;
-          resolve(code === 0);
+          resolve(code);
         });
       });
       child.stderr.resume();
@@ -106,11 +106,14 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
       signal?.addEventListener('abort', cancel, { once: true });
       try {
         const result = await consume(child.stdout);
-        if (!await exited) throw new Error();
+        if (await exited !== 0) throw new Error();
         return result;
       } catch {
-        cancel();
-        await exited;
+        if (!child.stdout.readableEnded) cancel();
+        const code = await exited;
+        if (op === 'status' && code === 75) {
+          throw Object.assign(new Error('Source control is not ready.'), { retryable: true });
+        }
         throw new Error('Source operation failed.');
       } finally {
         clearTimeout(timer);

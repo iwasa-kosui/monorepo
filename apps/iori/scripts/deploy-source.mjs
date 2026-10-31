@@ -66,6 +66,7 @@ const fixedReasons = [
   ['Unsafe source control.', 'source-control-unsafe'],
   ['Source output limit.', 'source-output-limit'],
   ['Source control rejected.', 'source-control-rejected'],
+  ['Source control is not ready.', 'source-control-not-ready'],
   ['Source operation failed.', 'source-operation-failed'],
   ['Source prerequisite readiness failed.', 'readiness-failed'],
   ['Migration command aborted.', 'aborted'],
@@ -109,6 +110,22 @@ const writeDiagnostic = (stage, program, error, stderr) => {
     );
   } catch {}
 };
+const waitForRetry = (milliseconds, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error('Migration command aborted.'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error('Migration command aborted.'));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 const checkDist = async (sha, signal) => {
   const root = join(appRoot, 'dist');
   return { root, manifest: await createSourceBuildManifest(root, sha, { signal }) };
@@ -119,6 +136,8 @@ export const deploySource = async (options, {
   sourceFactory = createSourceSshAdapter,
   inspectDist = checkDist,
   signal: suppliedSignal,
+  statusRetryTimeoutMs = 120_000,
+  statusRetryIntervalMs = 3000,
 } = {}) => {
   const { mainSha, host } = options;
   const current = { program: 'none', stderr: '' };
@@ -219,7 +238,16 @@ export const deploySource = async (options, {
   await remote('restart');
   await stage('status', async () => {
     current.program = 'ssh';
-    const state = await source.status(signal);
+    const deadline = Date.now() + statusRetryTimeoutMs;
+    let state;
+    while (state === undefined) {
+      try {
+        state = await source.status(signal);
+      } catch (error) {
+        if (error?.retryable !== true || Date.now() + statusRetryIntervalMs > deadline) throw error;
+        await waitForRetry(statusRetryIntervalMs, signal);
+      }
+    }
     if (
       state.source_revision !== mainSha || state.ingress_frozen || state.consumer_paused
       || state.queue_failed || state.identity !== null
