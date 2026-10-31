@@ -99,40 +99,43 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - bucket 名は `infra/cloudflare/main.tf` の `generation_prefix` から決まります。transfer bucket の名前は `iori-<environment>-<generation>-transfer` で、application bucket の名前は `iori-<environment>-<generation>-uploads` です。
 - run ID は bucket 名にも token の範囲にも入りません。run ID が入るのは transfer bucket の中の key prefix だけです。このため、token の作成は run ID の確定を待ちません。
 - token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。新しい generation の secret を登録した後に、古い generation の子 token を削除します。
+- この小節の Dashboard 操作は、作業者が行います。作業者は Claude in Chrome で Dashboard を操作してもかまいません。
 
-| Secret prefix                   | bucket             | permission group                     | 使う operation                                    | 作る時期              | 期限                         |
-| ------------------------------- | ------------------ | ------------------------------------ | ------------------------------------------------- | --------------------- | ---------------------------- |
-| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`migrate-data`                  | `prepare-target` の前 | `cutover-route` の完了予定後 |
-| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker` | `prepare-target` の後 | なし                         |
-| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `migrate-data`                                    | `prepare-target` の後 | `cutover-route` の完了予定後 |
-| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                  | `prepare-target` の後 | `cutover-route` の完了予定後 |
+| Secret prefix                   | bucket             | permission group                     | 使う operation                                    | 作る時期              | 期限         |
+| ------------------------------- | ------------------ | ------------------------------------ | ------------------------------------------------- | --------------------- | ------------ |
+| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`migrate-data`                  | `prepare-target` の前 | `EXPIRES_ON` |
+| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker` | `prepare-target` の後 | なし         |
+| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `migrate-data`                                    | `prepare-target` の後 | `EXPIRES_ON` |
+| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                  | `prepare-target` の後 | `EXPIRES_ON` |
 
-各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。
+各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。
+
+`EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
 
 未作成の bucket を対象にする token は、`IORI_TRANSFER_R2_WRITE` の 1 つだけです。残りの 3 つは、`prepare-target` が bucket を作った後に作ります。この順序にすると、作成した直後の値で S3 の疎通を確かめられます。GitHub は secret の値を返さないので、登録した後には確かめられません。
 
 **準備**
 
-1. ユーザーが Dashboard で、使い捨ての親 token を作ります。
+1. 作業者が Dashboard で、使い捨ての親 token を作ります。
    - 作成画面は「Manage account > Account API tokens > Create Token」です。
    - 権限には「Account > Account API Tokens > Edit」だけを付けます。API の permission group 名では「Account API Tokens Write」にあたります。
    - 対象 account は移行先の account だけにします。TTL は作業当日の終わりまでにします。
    - 名前は `iori-<environment>-<generation>-r2-issuer` にします。
    - Cloudflare の仕様により、作成者は Super Administrator か API Token Provisioning の権限を持つ必要があります。作成者は、自分が持つ権限の範囲内でしか token に権限を付けられません。
-   - 親 token の値は、画面にも、ログにも、PR にも、メッセージにも書きません。
+   - 作業者は、作成後の画面の Copy ボタンで親 token の値をクリップボードに入れます。作業者は、値を表示した画面のスクリーンショットを撮りません。親 token の値は、ログにも、PR にも、メッセージにも書きません。
    - 段階 A と段階 B を別の日に行う場合は、段階ごとに親 token を作ります。
 2. 作業者が `GET /accounts/<ACCOUNT_ID>/tokens/permission_groups` を呼んで、permission group の名前から ID を引きます。Cloudflare は名前が変わりうると説明しているので、policy には ID を指定します。2026-10-31 時点の ID は次のとおりです。実行前に再確認します。
    - Workers R2 Storage Bucket Item Write: `2efd5506f9c8494dacb1fa10a3e7d5b6`
    - Workers R2 Storage Bucket Item Read: `6a018a9f2fc74eb6b293b0c548f38b39`
-3. 作業者が zsh で次の関数を読み込みます。親 token は `curl --config -` の標準入力で渡すので、コマンドラインの引数には出ません。子 token の値は端末に表示せず、`gh secret set` の標準入力へ渡します。Secret Access Key は、子 token の値の SHA-256 を 16 進の小文字で表した値です。
+3. 作業者が zsh で次の関数を読み込みます。親 token はクリップボードから読み、読んだ直後にクリップボードを空にします。親 token は `curl --config -` の標準入力で渡すので、コマンドラインの引数には出ません。子 token の値は端末に表示せず、`gh secret set` の標準入力へ渡します。Secret Access Key は、子 token の値の SHA-256 を 16 進の小文字で表した値です。
 
    ```zsh
-   set -o pipefail
-   read -rs CF_ISSUER_TOKEN   # 親 token を貼り付けます。画面には表示されません
+   setopt interactive_comments
+   CF_ISSUER_TOKEN=$(pbpaste); pbcopy </dev/null
    ACCOUNT_ID='<ACCOUNT_ID>'
    ENV_NAME='<environment>'
    GENERATION='<generation>'
-   EXPIRES_ON='<cutover-route の完了予定より後の日時（RFC 3339）>'
+   EXPIRES_ON='<cutover-route の完了予定日 + 14 日（RFC 3339）>'
    ITEM_WRITE='<Workers R2 Storage Bucket Item Write の ID>'
    ITEM_READ='<Workers R2 Storage Bucket Item Read の ID>'
    PREFIX="iori-${ENV_NAME}-${GENERATION}"
@@ -148,8 +151,14 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    }
 
    issue_r2() {  # $1=secret prefix $2=bucket 名 $3=permission group ID $4=token 名 $5=期限（空なら期限なし）
-     local body res id
-     if cf_api GET '/tokens?per_page=100' | jq -e --arg n "$4" '.result[] | select(.name == $n)' >/dev/null; then
+     setopt local_options pipe_fail
+     unset LAST_KEY_ID LAST_SECRET
+     local list body res id
+     list=$(cf_api GET '/tokens?per_page=100') || return 1
+     if ! jq -e '.success' >/dev/null <<<"$list"; then
+       jq -c '.errors' <<<"$list"; return 1
+     fi
+     if jq -e --arg n "$4" '.result[] | select(.name == $n)' >/dev/null <<<"$list"; then
        echo "$4 は既にあります。既存の token を確かめるまで作り直しません"; return 1
      fi
      body=$(jq -n --arg n "$4" --arg g "$3" --arg e "$5" \
@@ -162,18 +171,21 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
        jq -c '.errors' <<<"$res"; return 1
      fi
      id=$(jq -r '.result.id' <<<"$res")
-     LAST_KEY_ID=$id
-     LAST_SECRET=$(jq -j '.result.value' <<<"$res" | shasum -a 256 | cut -d' ' -f1)
+     local key_id=$id secret
+     secret=$(jq -j '.result.value' <<<"$res" | shasum -a 256 | cut -d' ' -f1)
      unset res
-     if ! { printf '%s' "$LAST_KEY_ID" | gh secret set "$1_ACCESS_KEY_ID" --env "$ENV_NAME" --repo iwasa-kosui/monorepo &&
-            printf '%s' "$LAST_SECRET" | gh secret set "$1_SECRET_ACCESS_KEY" --env "$ENV_NAME" --repo iwasa-kosui/monorepo; }; then
-       echo "$1 の登録に失敗しました。作った子 token を削除します"
+     if ! { printf '%s' "$key_id" | gh secret set "$1_ACCESS_KEY_ID" --env "$ENV_NAME" --repo iwasa-kosui/monorepo &&
+            printf '%s' "$secret" | gh secret set "$1_SECRET_ACCESS_KEY" --env "$ENV_NAME" --repo iwasa-kosui/monorepo; }; then
+       echo "$1 の登録に失敗しました。作った子 token を削除します。$1 の secret は不整合なので、issue_r2 をやり直すまで次の operation を実行しません"
        cf_api DELETE "/tokens/${id}" | jq -c '{success, errors}'
-       unset LAST_KEY_ID LAST_SECRET; return 1
+       return 1
      fi
+     LAST_KEY_ID=$key_id
+     LAST_SECRET=$secret
    }
 
    s3() {  # $1=method $2=bucket と key（query を含めてよい）。直前に作った credential で呼び、HTTP status だけを表示します
+     [[ -n $LAST_KEY_ID && -n $LAST_SECRET ]] || { echo '直前の issue_r2 が成功していません'; return 1; }
      local -a body
      [[ $1 == PUT ]] && body=(--data-binary ok)
      curl -sS -o /dev/null -w '%{http_code}\n' -X "$1" "${body[@]}" --aws-sigv4 'aws:amz:auto:s3' \
@@ -182,7 +194,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    }
    ```
 
-   `issue_r2` は、失敗したときに `errors` だけを表示します。成功したときは何も表示しません。
+   `issue_r2` は、失敗したときに `errors` だけを表示します。成功したときは何も表示しません。`issue_r2` は、呼ばれるたびに直前の credential を消してから作業します。このため、`issue_r2` が失敗した後の `s3` は、前の token で疎通を確かめずに失敗します。
 
 **段階 A: `prepare-target` の前**
 
@@ -193,42 +205,49 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
    ```
 
-2. ユーザーが Dashboard で親 token を削除し、一覧から消えたことを確認します。
+2. 作業者が Dashboard で親 token を削除し、一覧から消えたことを確認します。
 3. `prepare-target` が準備記録を transfer bucket に書き込んで読み戻すと、`IORI_TRANSFER_R2_WRITE` の疎通が確かめられます。
 
 **段階 B: `prepare-target` の後、`migrate-data` の前**
 
-1. 作業者が新しい親 token で「準備」の手順 3 を読み込み直し、残りの 3 つを作ります。各 token を作った直後に、作った値で S3 の疎通を確かめます。
+1. 作業者が新しい親 token で「準備」の手順 3 を読み込み直し、残りの 3 つを作ります。各 token を作った直後に、作った値で S3 の疎通を確かめます。読み取り専用の token では、書き込みが 403 で拒否されることも確かめます。
 
    ```zsh
-   issue_r2 IORI_TRANSFER_R2_READ_ONLY "$TRANSFER_BUCKET" "$ITEM_READ" "${PREFIX}-transfer-read-only" ''
-   s3 GET "${TRANSFER_BUCKET}/prepared-target/v1/${ENV_NAME}/${GENERATION}/record.json"   # 200
+   issue_r2 IORI_TRANSFER_R2_READ_ONLY "$TRANSFER_BUCKET" "$ITEM_READ" "${PREFIX}-transfer-read-only" '' &&
+     s3 GET "${TRANSFER_BUCKET}/prepared-target/v1/${ENV_NAME}/${GENERATION}/record.json" &&  # 200
+     s3 PUT "${TRANSFER_BUCKET}/connectivity-check/${GENERATION}"                              # 403
 
-   issue_r2 IORI_APPLICATION_R2_WRITE "$UPLOADS_BUCKET" "$ITEM_WRITE" "${PREFIX}-application-write" "$EXPIRES_ON"
-   s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"      # 200
-   s3 DELETE "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"   # 204
+   issue_r2 IORI_APPLICATION_R2_WRITE "$UPLOADS_BUCKET" "$ITEM_WRITE" "${PREFIX}-application-write" "$EXPIRES_ON" &&
+     s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}" &&     # 200
+     s3 DELETE "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"     # 204
 
-   issue_r2 IORI_APPLICATION_R2_READ_ONLY "$UPLOADS_BUCKET" "$ITEM_READ" "${PREFIX}-application-read-only" "$EXPIRES_ON"
-   s3 GET "${UPLOADS_BUCKET}?list-type=2&prefix=og/"   # 200
+   issue_r2 IORI_APPLICATION_R2_READ_ONLY "$UPLOADS_BUCKET" "$ITEM_READ" "${PREFIX}-application-read-only" "$EXPIRES_ON" &&
+     s3 GET "${UPLOADS_BUCKET}?list-type=2&prefix=og/" &&               # 200
+     s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"        # 403
 
    unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
    ```
 
 2. 作業者が `gh api repos/iwasa-kosui/monorepo/environments/<environment>/secrets` で、8 つの secret 名と更新日時を確認します。値は読みません。
-3. ユーザーが Dashboard で親 token を削除し、一覧から消えたことを確認します。
+3. 作業者が Dashboard で親 token を削除し、一覧から消えたことを確認します。
 
-**完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret が登録されていることです。この条件を満たすまで `migrate-data` を実行しません。`connectivity-check/` は `verify-import` が列挙する `post-images/` と `og/` の外にあります。
+**完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret が登録されていることです。この条件を満たすまで `migrate-data` を実行しません。
+
+- 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard ですぐに削除し、レビューに戻します。
+- `connectivity-check/` の DELETE が失敗した場合は、残った object を移行後の後始末で削除します。`verify-import` が列挙するのは `post-images/` と `og/` だけなので、残った object は後続の検査に影響しません。
+- `migrate-data` を始める前に、作業者が Dashboard の Account API tokens の一覧で、期限のある 3 つの子 token の期限を確かめます。期限まで 3 日を切っている場合は、作業者が Dashboard で期限を延ばしてから `migrate-data` を始めます。
 
 **移行後の後始末**
 
-- `cutover-route` の完了を確認した後に、ユーザーが Dashboard で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
+- `cutover-route` の完了を確認した後に、作業者が Dashboard で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
 - `transfer-read-only` の子 token は、その generation が active な間は削除しません。
+- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、この文書ではまだ決めていません。cutover の後始末を決める作業で決めます。
 
 **未確認の点と、止める条件**
 
 - 未作成の bucket 名を resource に指定できるかどうかは、Cloudflare の文書に記載がありません。段階 A の API がエラーを返した場合は、その時点で作業を止めて、レビューに戻します。代わりに bucket を手動で作ってはいけません。
 - account token から S3 credential を導出する方法は、R2 の文書では user token を例に説明されています。`prepare-target` が準備記録の書き込みで認証エラーになった場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。同じ generation で `prepare-target` を再実行しません。
-- `s3` 関数（curl の `--aws-sigv4`）は、この小節を書いた時点では実行していません。段階 B で期待と違う status が返った場合は、その子 token を削除して、レビューに戻します。
+- `s3` 関数（curl の `--aws-sigv4`）は、この小節を書いた時点では実行していません。段階 B で書き込み用の token にも 403 が返った場合は、token の権限ではなく署名の作り方が原因の可能性があります。その場合は、作業者がその子 token を削除して、レビューに戻します。
 
 **根拠**
 
@@ -254,19 +273,24 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 | Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII                        |
 | Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                            |
 
-既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」でユーザーが同じ鍵であることを確認済みです。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
+既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
 
 ### VAPID 値の確認
 
-- 2026-11-01 にユーザーが確認しました。production Environment の旧名 `IORI_VAPID_*` と、repo レベルの `VAPID_*` は同じ鍵です。workflow は repo レベルの `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を受け取ります。
+- 2026-11-01 にユーザーが回答しました。production Environment の旧名 `IORI_VAPID_*` と、repo レベルの `VAPID_*` は同じ鍵です。workflow は repo レベルの `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を受け取ります。
 - Worker の満たすべき条件は、現行の Node 版と同じ鍵を使うことです。Node 版は、source サーバーの `/etc/systemd/system/microblog.service.d/env.conf` から VAPID の値を読みます。
-- `prepare-target` だけが Worker に VAPID の値を設定します。同じ generation では `prepare-target` を再実行できないので、値を確かめる時期は `prepare-target` の前です。切り替え前の Worker は sealed 状態で、すべての要求に 503 を返します。このため、切り替え前の Worker に公開鍵を問い合わせることはできません。
-- `prepare-target` の前に、ユーザーが次の 2 つを比べます。
-  - 保管元にある `VAPID_PUBLIC_KEY` の値
-  - `https://blog.kosui.me/api/v1/push/vapid-public-key` が返す `publicKey`（Node 版が `env.conf` から返す値）
-- 一致しない場合は、`prepare-target` を実行しません。ユーザーが `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。Environment secret は、同じ名前の repo レベル secret より優先されます。
-- `cutover-route` の smoke は、`publicKey` が空でないことだけを確かめます。値の一致は確かめません。route を切り替えた後に、ユーザーが `https://blog.kosui.me/api/v1/push/vapid-public-key` の `publicKey` を、切り替え前の値と比べます。一致しない場合は、cutover runbook に従って切り戻すかどうかを判断します。
-- 旧名の `IORI_VAPID_*` と variable `IORI_VAPID_SUBJECT` は、切り替え後の確認が終わるまで削除しません。
+- `prepare-target` だけが Worker に VAPID の値を設定します。同じ generation では、リソースを作り始めた後の `prepare-target` を再実行できません。
+- このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
+  - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
+  - production だけで、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
+- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。
+- `prepare-target` が失敗した場合は、作業者が Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
+  - どれも存在しない場合は、`prepare-target` がリソースを作る前に止まっています。VAPID の検査で止まった可能性があります。作業者は次の順に対応します。
+    1. 作業者が source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。Environment secret は、同じ名前の repo レベル secret より優先されます。
+    2. 作業者が同じ generation で `prepare-target` をやり直します。
+    3. やり直しても失敗し、リソースも作られていない場合は、GitHub hosted runner から `ORIGIN` に到達できない可能性があります。この場合は作業を止めて、レビューに戻します。
+  - どれか 1 つでも存在する場合は、リソースを作り始めた後に失敗しています。この場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。
+- 旧名の `IORI_VAPID_*` と variable `IORI_VAPID_SUBJECT` は、切り替えが終わるまで削除しません。
 
 CLI で1件ずつ登録する場合は、値を command argument にせず、承認済みの mode `0600` ファイルを標準入力に渡します。これは登録例であり、全値を自動生成するコマンドではありません。
 
@@ -376,12 +400,12 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
   -f migration_run_id="$iori_migration_run_id"
 ```
 
-| 順序 | Operation        | 次へ進む条件                                                                                                                              |
-| ---- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `prepare-target` | Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                |
-| 2    | `migrate-data`   | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                |
-| 3    | `verify-import`  | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
-| 4    | `cutover-route`  | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
+| 順序 | Operation        | 次へ進む条件                                                                                                                                                        |
+| ---- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `prepare-target` | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功 |
+| 2    | `migrate-data`   | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                                          |
+| 3    | `verify-import`  | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                    |
+| 4    | `cutover-route`  | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                           |
 
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 
