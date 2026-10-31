@@ -9,6 +9,7 @@ import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { createTargetPreparation } from './prepare-target.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
+import { originVapidPublicKeyMatches, vapidKeyPairMatches } from './vapid-origin-check.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
 /** Production CLI uses fixed adapters below; injection is only a library testing boundary. */
 export const prepareMigrationTarget = async ({ config, preparation, deploy, storage }) => {
@@ -58,6 +59,19 @@ const main = async (cliSignal) => {
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw new Error('Distinct staging credential is required.');
   }
+  const vapidPairMatches = vapidKeyPairMatches({
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+  });
+  console.log(`VAPID key pair match: ${vapidPairMatches ? 'yes' : 'no'}`);
+  if (!vapidPairMatches) throw new Error('VAPID key pair does not match.');
+  const vapidMatches = await originVapidPublicKeyMatches({
+    origin: config.admissionEnvironment.ORIGIN,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    signal: cliSignal,
+  });
+  console.log(`Origin VAPID public key match: ${vapidMatches ? 'yes' : 'no'}`);
+  if (!vapidMatches) throw new Error('Origin VAPID public key does not match.');
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(30 * 60_000)]);
   const storage = transferStorageFromEnvironment(process.env, config.identity, false, signal);
   const privateDirectory = await mkdtemp(join(tmpdir(), 'iori-target-prepare-'));
