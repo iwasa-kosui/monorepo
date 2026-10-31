@@ -258,6 +258,22 @@ it('fails before reservation and freeze when the generation already carries a re
     f.close();
   }
 });
+it('fails without writing the rehearsal mark when the generation already has an execution reservation', async () => {
+  const f = await fixture();
+  try {
+    const key = executionReservationKey(f.options.expectedTarget);
+    f.remote.set(key, Buffer.from('{}'));
+    await expect(rehearseProtectedMigration(rehearsalOptions(f))).rejects.toThrow(
+      'Target generation already has an execution reservation.',
+    );
+    expect(f.remote.has(rehearsalTargetKey(f.options.expectedTarget))).toBe(false);
+    expect(f.calls).not.toContain('rehearsal-mark');
+    expect(f.source.freeze).not.toHaveBeenCalled();
+    expect(f.remote.get(key)!.toString()).toBe('{}');
+  } finally {
+    f.close();
+  }
+});
 it('applies the fixed D1 capacity to the capacity check only', async () => {
   const f = await fixture();
   try {

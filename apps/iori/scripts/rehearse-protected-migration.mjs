@@ -3,7 +3,12 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withCliSignal } from './cli-lifetime.mjs';
-import { assertSigner, runExecutorCli, runProtectedPhases } from './execute-protected-migration.mjs';
+import {
+  assertSigner,
+  executionReservationKey,
+  runExecutorCli,
+  runProtectedPhases,
+} from './execute-protected-migration.mjs';
 import {
   hasRehearsalSample,
   migrationBudget,
@@ -55,6 +60,9 @@ export const rehearseProtectedMigration = async (options) => {
         migrationBudget({ estimate, d1CapacityBytes: REHEARSAL_D1_CAPACITY_BYTES, availableBytes });
       },
       beforeReservation: async () => {
+        if (await storage.getIfExists(executionReservationKey(target), 65536) !== null) {
+          throw new Error('Target generation already has an execution reservation.');
+        }
         await storage.putNew(
           rehearsalTargetKey(target),
           Buffer.from(

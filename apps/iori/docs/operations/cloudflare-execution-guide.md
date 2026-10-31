@@ -100,7 +100,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - transfer bucket と application bucket は、`prepare-target` が Terraform で作ります。手動で bucket を作ると fresh-generation 検査に失敗するので、手動では作りません。
 - bucket 名は `infra/cloudflare/main.tf` の `generation_prefix` から決まります。transfer bucket の名前は `iori-<environment>-<generation>-transfer` で、application bucket の名前は `iori-<environment>-<generation>-uploads` です。
 - run ID は bucket 名にも token の範囲にも入りません。run ID が入るのは transfer bucket の中の key prefix だけです。このため、token の作成は run ID の確定を待ちません。
-- token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。Environment secret の名前は generation で区別されないので、新しい generation の secret は古い generation の secret を上書きします。新しい generation の secret を登録した後に、古い generation の子 token を削除します。ただし、計測用の generation の子 token は、計測3 が終わった後に削除します（「計測用の generation での扱い」を参照）。
+- token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。Environment secret の名前は generation で区別されないので、新しい generation の secret は古い generation の secret を上書きします。新しい generation の secret を登録した後に、古い generation の子 token を削除します。ただし、計測用の generation の子 token は、`purge-rehearsal-target` が成功した後に削除します（「計測用の generation での扱い」を参照）。
 
 **ユーザーと作業者の分担**
 
@@ -113,12 +113,12 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - ユーザーは、zsh が親 token を読み込んだ後に、親 token の値が表示されたタブを閉じます。ユーザーは、タブを閉じてから作業者に操作を戻します。作業者は、そのタブを再利用しません。
 - 子 token は Dashboard で作りません。子 token は、ユーザーの端末の zsh が API で作ります。子 token の値は、Dashboard にも作業者の画面にも表示されません。
 
-| Secret prefix                   | bucket             | permission group                     | 使う operation                                         | 作る時期              | 期限         |
-| ------------------------------- | ------------------ | ------------------------------------ | ------------------------------------------------------ | --------------------- | ------------ |
-| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`rehearse-migration`、`migrate-data` | `prepare-target` の前 | `EXPIRES_ON` |
-| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker`      | `prepare-target` の後 | なし         |
-| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`                   | `prepare-target` の後 | `EXPIRES_ON` |
-| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                       | `prepare-target` の後 | `EXPIRES_ON` |
+| Secret prefix                   | bucket             | permission group                     | 使う operation                                                              | 作る時期              | 期限         |
+| ------------------------------- | ------------------ | ------------------------------------ | --------------------------------------------------------------------------- | --------------------- | ------------ |
+| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`rehearse-migration`、`migrate-data`                      | `prepare-target` の前 | `EXPIRES_ON` |
+| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker`、`purge-rehearsal-target` | `prepare-target` の後 | なし         |
+| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`、`purge-rehearsal-target`              | `prepare-target` の後 | `EXPIRES_ON` |
+| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                                            | `prepare-target` の後 | `EXPIRES_ON` |
 
 各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
 
@@ -127,11 +127,11 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 **計測用の generation での扱い**
 
 - 5.x 節の計測（計測1〜計測3）では、本番用とは別の使い捨て generation を使います。作業者は、計測でもその generation の bucket に限定した子 token を作ります。
-- 計測で使う子 token は、`IORI_TRANSFER_R2_WRITE` と `IORI_APPLICATION_R2_WRITE` の 2 つだけです。`rehearse-migration` は READ_ONLY の credential を使いません。計測の run ID では、`verify-import` と `cutover-route` を実行しません。
-- 計測では、段階 A を計測1 の前に行います。段階 B は計測2 の前に行い、`application-write` の作成と疎通確認だけを実行します。計測の完了条件では、登録済みの secret は 4 つです。
-- 計測用の `EXPIRES_ON` は、計測2 の実施予定日に 7 日を足した日時にします。
-- 計測用と本番用の generation は、production Environment の同じ secret 名を使います。本番用の段階 A は、計測用の `IORI_TRANSFER_R2_WRITE` を上書きします。このため、作業者とユーザーは、計測1〜計測3 をすべて終えてから本番用の段階 A を行います。
-- 計測3 が終わった後に、作業者が Dashboard の token 一覧で計測用の子 token を削除します。5.4 節の envelope の取得は wrangler で行うので、計測用の子 token を使いません。計測用 generation のリソースと state は、5.x 節の後片付けに従って扱います。
+- 計測で使う子 token は、`IORI_TRANSFER_R2_WRITE`、`IORI_TRANSFER_R2_READ_ONLY`、`IORI_APPLICATION_R2_WRITE` の 3 つです。`rehearse-migration` は `IORI_TRANSFER_R2_WRITE` と `IORI_APPLICATION_R2_WRITE` を使います。`purge-rehearsal-target` は `IORI_TRANSFER_R2_READ_ONLY` と `IORI_APPLICATION_R2_WRITE` を使います。計測の run ID では、`verify-import` と `cutover-route` を実行しないので、`IORI_APPLICATION_R2_READ_ONLY` は作りません。
+- 計測では、段階 A を計測1 の前に行います。段階 B は計測2 の前に行い、`transfer-read-only` と `application-write` の作成と疎通確認だけを実行します。`transfer-read-only` は、準備記録を読む `purge-rehearsal-target` のために、`prepare-target` の後に作ります。計測の完了条件では、登録済みの secret は 6 つです。
+- 計測用の `EXPIRES_ON` は、計測2 の実施予定日に 7 日を足した日時にします。`transfer-read-only` には期限がないので、削除を忘れると残ります。
+- 計測用と本番用の generation は、production Environment の同じ secret 名を使います。本番用の段階 A は、計測用の `IORI_TRANSFER_R2_WRITE` を上書きします。本番用の段階 B は、計測用の `IORI_TRANSFER_R2_READ_ONLY` と `IORI_APPLICATION_R2_WRITE` を、本番用 generation の bucket に限定した token の値で上書きします。上書きされた値では、計測用 generation の bucket に認証できないので、`purge-rehearsal-target` が失敗します。このため、作業者とユーザーは、計測1〜計測3 と `purge-rehearsal-target` をすべて終えてから本番用の段階 A を行います。
+- `purge-rehearsal-target` が成功した後に、作業者が Dashboard の token 一覧で計測用の子 token を削除します。`purge-rehearsal-target` が失敗した場合は、同じ入力で再実行するので、成功するまで計測用の子 token を削除しません。5.4 節の envelope の取得は wrangler で行うので、計測用の子 token を使いません。計測用 generation のリソースと state は、5.x 節の後片付けに従って扱います。
 
 未作成の bucket を対象にする token は、`IORI_TRANSFER_R2_WRITE` の 1 つだけです。残りの 3 つは、`prepare-target` が bucket を作った後に作ります。この順序にすると、作成した直後の値で S3 の疎通を確かめられます。GitHub は secret の値を返さないので、登録した後には確かめられません。
 
@@ -253,6 +253,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
    issue_r2 IORI_APPLICATION_R2_WRITE "$UPLOADS_BUCKET" "$ITEM_WRITE" "${PREFIX}-application-write" "$EXPIRES_ON" &&
      s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}" &&     # 200
+     s3 GET "${UPLOADS_BUCKET}?list-type=2" &&                          # 200
      s3 DELETE "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"     # 204
 
    issue_r2 IORI_APPLICATION_R2_READ_ONLY "$UPLOADS_BUCKET" "$ITEM_READ" "${PREFIX}-application-read-only" "$EXPIRES_ON" &&
@@ -262,10 +263,12 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
    ```
 
+   `IORI_APPLICATION_R2_WRITE` のブロックにある `s3 GET "${UPLOADS_BUCKET}?list-type=2"` は、ListObjectsV2 の疎通確認です。`purge-rehearsal-target` が使う ListObjectsV2 を、実行前に確かめます。計測では、`UPLOADS_BUCKET` が使い捨て generation の uploads bucket を指します。`s3` 関数は DeleteObjects の本文を送れないので、このブロックは DeleteObjects を確かめません。
+
 2. 作業者が `gh api repos/iwasa-kosui/monorepo/environments/<environment>/secrets` で、8 つの secret 名と更新日時を確認します。値は読みません。
 3. 作業者が Dashboard の token 一覧で親 token を削除し、一覧から消えたことを確認します。
 
-**完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret（計測では 4 つ）が登録されていることです。この条件を満たすまで、`rehearse-migration` と `migrate-data` を実行しません。
+**完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret（計測では 6 つ）が登録されていることです。この条件を満たすまで、`rehearse-migration` と `migrate-data` を実行しません。
 
 - 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard の token 一覧ですぐに削除し、レビューに戻します。
 - `connectivity-check/` の DELETE が失敗した場合は、残った object を移行後の後始末で削除します。`verify-import` が列挙するのは `post-images/` と `og/` だけなので、残った object は後続の検査に影響しません。
@@ -507,13 +510,13 @@ source 側と adapter 側には、次の時間上限があります。
 
 #### estimate-source で事前に確認する
 
-`estimate-source` は、source の estimate だけを GitHub Actions から呼ぶ hosted operation です。source を freeze しません。`production` Environment で実行します。`rehearse-migration` が freeze より前に判定する標本と容量を、凍結なしで先に確かめるために使います。
+`estimate-source` は、source の estimate だけを GitHub Actions から呼ぶ hosted operation です。source を freeze しません。`production` Environment で実行します。workflow とコードは `staging` の指定も受け付けます。`rehearse-migration` が freeze より前に判定する標本と容量を、凍結なしで先に確かめるために使います。
 
 dispatch の入力は次のとおりです。
 
 - `main_sha` に、現在の main の先頭を指定する
 - `operation` に `estimate-source` を指定する
-- `environment` に `production` を指定する
+- `environment` に `production` を指定する。`staging` も受け付けるが、旧環境は production だけにあるため、production で実行する
 - `generation` と `migration_run_id` は空にする。値を与えると workflow が拒否する
 - `migration_main_sha` は指定しない
 
@@ -543,6 +546,10 @@ IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient
 - bytes の値は出しません。容量は `ok` と `insufficient` の判定だけを出します
 
 `sample=ok` と `capacity=ok` の両方が出たことを確認してから、`rehearse-migration` を dispatch します。`insufficient` が出た場合は、`rehearse-migration` を dispatch しません。
+
+source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
+
+`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。source の control socket は、拒否の理由を問わず `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
 
 `main_sha` には、次の2つを同時に満たす値が必要です。
 
@@ -685,12 +692,16 @@ D1 と application R2 の実データは、hosted operation `purge-rehearsal-tar
 
 #### 実行前に確認すること
 
-次の4点は、リポジトリの中からは確かめられません。作業者が dispatch の前に確認します。
+次の2点は、リポジトリの中からは確かめられません。作業者が dispatch の前に確認します。
 
 - `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` が、application R2 bucket の `domains/managed` と `domains/custom` を GET できる
 - `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` が、D1 に対して `DELETE` と `SELECT` を実行できる
-- `IORI_APPLICATION_R2_WRITE` の範囲に、使い捨て generation の uploads bucket が含まれている
-- `IORI_APPLICATION_R2_WRITE` が、`ListObjectsV2` と `DeleteObjects` を許している
+
+次の3点は、第3.1節「未作成の bucket に限定した R2 S3 credential の作成」の段階 B にある `IORI_APPLICATION_R2_WRITE` の疎通確認で、最初の2点を確かめます。3点目は確かめられません。
+
+- `IORI_APPLICATION_R2_WRITE` の範囲に、使い捨て generation の uploads bucket が含まれている。段階 B の `s3 PUT` が 200 を返すことで確かめる
+- `IORI_APPLICATION_R2_WRITE` が、`ListObjectsV2` を許している。段階 B の `s3 GET "${UPLOADS_BUCKET}?list-type=2"` が 200 を返すことで確かめる
+- `IORI_APPLICATION_R2_WRITE` が、`DeleteObjects` を許している。段階 B の `s3` 関数は DeleteObjects の本文を送れないので、段階 B では確かめられない [要確認]
 
 #### dispatch
 
@@ -772,7 +783,7 @@ iori_migration_run_id='<固定した移行runID>'
 
 最初は `prepare-target` を指定します。1回の実行が成功し、次の行の前提も満たしてから `iori_operation` だけを変更して同じコマンドを使います。
 
-表のうち、順序に「計測」を含む行は、`migrate-data` より前に第5節の手順で実施します。`estimate-source` の dispatch では、`generation` と `migration_run_id` を空にします。`purge-rehearsal-target` を含む計測用の dispatch では、`iori_environment` を `production`、`iori_generation` を使い捨て generation の名前（第5節の例は `prdrehearse1`）にします。本番用 generation の `iori_generation` と取り違えないでください。
+表のうち、順序に「計測」を含む行は、`migrate-data` より前に第5節の手順で実施します。`estimate-source` の dispatch では、`generation` と `migration_run_id` を空にします。下のコマンドは `generation` と `migration_run_id` を常に渡すので、`estimate-source` では下のコマンドを使わず、[第5.1節](#estimate-source-で事前に確認する)のコマンドを使います。`purge-rehearsal-target` を含む計測用の dispatch では、`iori_environment` を `production`、`iori_generation` を使い捨て generation の名前（第5節の例は `prdrehearse1`）にします。本番用 generation の `iori_generation` と取り違えないでください。
 
 ```bash
 iori_operation=prepare-target

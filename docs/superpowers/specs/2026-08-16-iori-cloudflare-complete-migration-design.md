@@ -101,11 +101,11 @@ Worker binding が参照する resource ID と名前は Terraform output から�
 
 Worker deploy 用の Wrangler config は template とし、Terraform output を標準出力へ表示せず、runner の一時ディレクトリに生成します。resource ID を含む Terraform output は `sensitive = true` にします。`wrangler.jsonc`、Terraform source、ドキュメントには production resource ID を書きません。ローカル開発は `wrangler dev --local` を使い、production resource を参照しません。
 
-Terraform plan と plan JSON は runner の一時ディレクトリだけに置き、action 種別を検査した後に削除します。plan と output を workflow artifact に upload せず、log には resource ID を含まない検査結果だけを出します。data export script は export directory が repository root またはその配下にある場合に失敗します。各 job は `$RUNNER_TEMP` 配下に mode `0700` の作業領域を作り、ファイルを `0600` で生成して終了時に削除します。`.gitignore` は Terraform state、backend config、一時 Wrangler config、export directory を明示的に無視します。
+Terraform plan と plan JSON は runner の一時ディレクトリだけに置き、action 種別を検査した後に削除します。plan と output を workflow artifact に upload せず、log には resource ID を含まない検査結果だけを出します。ただし `estimate-source` は、件数の `rows`、`upload_count`、`article_count` を公開ログに出します。bytes は出さず、容量は `ok` か `insufficient` の判定だけを出します。件数を公開してよいことは、管理担当が判断しました。data export script は export directory が repository root またはその配下にある場合に失敗します。各 job は `$RUNNER_TEMP` 配下に mode `0700` の作業領域を作り、ファイルを `0600` で生成して終了時に削除します。`.gitignore` は Terraform state、backend config、一時 Wrangler config、export directory を明示的に無視します。
 
 job 間の受け渡しには、state・アプリ画像用とは別の非公開 R2 bucket を使います。`r2.dev`、custom domain とアプリからの配信を有効にしません。全 application table の NDJSON、各 manifest、署名付き証跡と参照される全 artifact を environment・main SHA・migration run ID ごとに保存し、全転送と照合後に完了 marker を保存します。完了済み bundle を上書きせず、後続 job は同じ bundle を新しい作業領域へ復元します。credential、署名用秘密鍵、Terraform state・plan、生成 config は含めません。GitHub artifact と cache に本番データを保存しません。bundle は cutover 完了から少なくとも 14 日間保持し、照合と削除承認後に cleanup します。[R2 の公開設定](https://developers.cloudflare.com/r2/buckets/public-buckets/)
 
-pull request と production workflow は、Git tracked file と公開する workflow log に secret と production resource ID が含まれないことを検査します。検査に失敗した commit は Cloudflare API を呼ぶ前に停止します。
+pull request と production workflow は、Git tracked file と公開する workflow log に secret と production resource ID が含まれないことを検査します。検査に失敗した commit は Cloudflare API を呼ぶ前に停止します。`estimate-source` が公開ログに出す件数と容量の判定は、この検査と別に、上の段落のとおり許可した出力です。
 
 ## Terraform 構成
 
@@ -160,13 +160,14 @@ pull request では次を実行します。
 
 本番の手動実行は、protected `main` の指定 commit SHA に対して次の順に実行します。
 
-1. 新しい generation の remote backend と実リソース名を確認し、以前の state とリソースから分離します。
-2. 保存済み Terraform plan を作成し、許可された resource 以外の差分、D1 と R2 の置換、Worker version resource の混入を検査します。
-3. 検査済みの同じ plan を apply します。
-4. Terraform output から一時 Wrangler config を生成し、新しい generation の binding と一致することを検査します。
-5. 新しい Worker identity の最初の version を受付拒否状態で Wrangler から deploy し、停止したままの Queue consumer を Terraform で接続します。
-6. 準備完了を非公開 R2 に記録します。別の移行操作で実行 ID を予約してから移行元を凍結し、export、D1 schema と全 SQL の投入、R2/OGP の投入と照合を実行します。
-7. 別 job に続き切替 job 内でも bundle と実データを再検証し、その process で認証された読み取り専用の workers.dev smoke を実行します。`smoke` のまま route を準備して canonical hostname の全 smoke を通し、対象 identity と移行元の停止を再確認して本番 HTTP を有効化します。Queue を最後に再開し、canonical hostname の smoke を再実行します。
+1. `estimate-source` で、移行元を凍結せずに estimate を取ります。公開ログには、件数と、標本と容量の判定だけが出ます。`generation` と `migration_run_id` は空にします。
+2. 新しい generation の remote backend と実リソース名を確認し、以前の state とリソースから分離します。
+3. 保存済み Terraform plan を作成し、許可された resource 以外の差分、D1 と R2 の置換、Worker version resource の混入を検査します。
+4. 検査済みの同じ plan を apply します。
+5. Terraform output から一時 Wrangler config を生成し、新しい generation の binding と一致することを検査します。
+6. 新しい Worker identity の最初の version を受付拒否状態で Wrangler から deploy し、停止したままの Queue consumer を Terraform で接続します。
+7. 準備完了を非公開 R2 に記録します。別の移行操作で実行 ID を予約してから移行元を凍結し、export、D1 schema と全 SQL の投入、R2/OGP の投入と照合を実行します。
+8. 別 job に続き切替 job 内でも bundle と実データを再検証し、その process で認証された読み取り専用の workers.dev smoke を実行します。`smoke` のまま route を準備して canonical hostname の全 smoke を通し、対象 identity と移行元の停止を再確認して本番 HTTP を有効化します。Queue を最後に再開し、canonical hostname の smoke を再実行します。
 
 Queue consumer の保守は移行の有効化手順から分離します。新規 generation では準備時に配送停止の consumer を接続し、cutover では最後に配送を再開します。失敗後の cleanup で producer binding や Worker version を自動復元しません。保守操作を残す場合も、現在の受付状態と consumer を実 API・Terraform state で照合し、移行の署名・smoke・identity 検査を迂回できないことを受入条件にします。
 
@@ -176,7 +177,7 @@ Worker secret は新規 generation の準備時に GitHub Actions の protected 
 
 移行は計画停止を伴う一回限りの cutover です。PostgreSQL と D1 の二重書き込みは行いません。
 
-hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止、drain、export を実行します。接続と信頼する host key は停止前に確認し、移行時間中は旧 deploy によるサービス再起動を抑止します。ツール導入後の空き容量、ピーク使用量と全工程の実行時間を測り、転送・変換を分割して hosted runner の容量と job 時間内に収めます。測定のために、`rehearse-migration` が本番 source を短時間凍結します。測定値から見積もった時間が job の期限内に収まると `migrate-data` が判定するまで、本番 cutover のための停止を始めません。[Actions の制限](https://docs.github.com/en/actions/reference/limits)
+hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止、drain、export を実行します。接続と信頼する host key は停止前に確認し、移行時間中は旧 deploy によるサービス再起動を抑止します。ツール導入後の空き容量、ピーク使用量と全工程の実行時間を測り、転送・変換を分割して hosted runner の容量と job 時間内に収めます。測定のために、`rehearse-migration` が本番 source を短時間凍結します。`rehearse-migration` の前に、`estimate-source` が source を凍結せずに estimate を取り、標本と容量の判定を確かめます。測定値から見積もった時間が job の期限内に収まると `migrate-data` が判定するまで、本番 cutover のための停止を始めません。[Actions の制限](https://docs.github.com/en/actions/reference/limits)
 
 `execute-protected-migration.mjs` は事前検査と実行予約、source の凍結から実 import、署名生成、bundle 保存までを担当します。`restore-protected-migration.mjs` は別の fresh runner で復元と実データ再検証を行い、既存 `cloudflare:migrate:protected` は完了済み証跡の検証として残します。v3 contract は artifact を相対パスで参照し、各 job の root に解決して署名済み bytes を維持します。絶対パス、`..`、symlink による root 外参照と旧 contract を拒否します。検証用公開鍵と digest は Environment から供給し、provider はレビュー済み SHA の repository 内コードを使います。bundle 内の鍵や module を信頼元にしません。
 
@@ -185,7 +186,11 @@ hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止
 1. `feat/iori-worker-complete-migration` を main へ取り込む前に、D1 adapter、Worker routes、Fedify inbox と outbox、Web Push、R2、OGP の対象を絞った test を実行します。
 2. staging resources に D1 schema migration を適用し、fixture だけで sign-in、timeline、投稿、画像 upload、OGP、ActivityPub、Queue consumer のスモークテストを通します。
 3. production Worker を workers.dev URL に deploy し、custom domain route を有効化する前に `/health`、`/healthz`、`/readyz`、静的アセット、認証エラー、WebFinger、VAPID public key、OGP の境界を検証します。
-4. 本番の実データを匿名化せずに使い捨て generation の D1 と R2 へ入れて、PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill を事前リハーサルします。bundle 保存と別 job での復元は、リハーサルの対象外です。`rehearse-migration` は署名つき bundle を公開せず、別 job での復元もしないためです。この2つの処理は、本番の `migrate-data` と `verify-import` で初めて実行します。実データは、使い捨て generation の後片付けが終わるまで、その generation に残ります。staging 用の旧環境は作らないと、ユーザーが判断しました。
+4. 本番の実データを匿名化せずに使い捨て generation の D1 と R2 へ入れて、PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill を事前リハーサルします。bundle 保存と別 job での復元は、リハーサルの対象外です。`rehearse-migration` は署名つき bundle を公開せず、別 job での復元もしないためです。この2つの処理は、本番の `migrate-data` と `verify-import` で初めて実行します。実データは、`rehearse-migration` の import から `purge-rehearsal-target` の成功まで、その generation に残ります。後片付けは、次の2つに分けます。
+   - データの purge: hosted operation `purge-rehearsal-target` が、D1 の全 application table と application R2 の uploads bucket の全 object を削除します。計測の直後に実行します。
+   - リソースの削除: 手作業で行います。D1 database、R2 bucket、KV、Queue、Worker は `purge-rehearsal-target` の対象外です。手順は [#500](https://github.com/iwasa-kosui/monorepo/issues/500) で整えます。
+
+   staging 用の旧環境は作らないと、ユーザーが判断しました。
 5. rehearsal では各 INSERT の 100,000 bytes 上限、最大 32 MiB の SQL 分割、D1 の容量、source/runner の空き容量、各 metadata の 16 MiB 上限と全体時間を確認します。source export の 8 MiB row 上限は D1 へ投入できることを保証しません。全変換と検査を終えてから schema/data を変更します。[D1 の制限](https://developers.cloudflare.com/d1/platform/limits/)
 
 ### 本番 cutover

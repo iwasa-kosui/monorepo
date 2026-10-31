@@ -13,3 +13,8 @@ export type PurgeOptions = {
   createClient?: (config: S3ClientConfig) => { send(command: unknown, options?: unknown): Promise<unknown> };
 };
 export function purgeRehearsalTarget(options: PurgeOptions): Promise<void>;
+export function purgeFromEnvironment(
+  env: Record<string, string | undefined>,
+  signal?: AbortSignal,
+  deps?: { purge?: (options: PurgeOptions) => Promise<void> },
+): Promise<void>;

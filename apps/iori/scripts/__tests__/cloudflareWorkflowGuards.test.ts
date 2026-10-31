@@ -134,12 +134,14 @@ it('gives purge-rehearsal-target target read credentials and application R2 writ
   const job = workflow.jobs['purge-rehearsal-target'];
   const purge = operation(job).env!;
   expect(job.if).toBe('inputs.operation == \'purge-rehearsal-target\'');
-  expect(purge.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.IORI_CLOUDFLARE_MIGRATE_API_TOKEN }}');
-  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('WRITE');
-  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toContain('WRITE');
-  expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
-  expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toContain('READ_ONLY');
-  expect(purge.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(purge.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_MIGRATE_API_TOKEN'));
+  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_APPLICATION_R2_WRITE_ACCESS_KEY_ID'));
+  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_APPLICATION_R2_WRITE_SECRET_ACCESS_KEY'));
+  expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID'));
+  expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY'));
+  expect(purge.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID'));
+  expect(purge.AWS_SECRET_ACCESS_KEY).toBe(secret('IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY'));
   expect(purge.IORI_ADMISSION_MODE).toBe('sealed');
   expect(Object.keys(purge).filter(key => /SSH|RECEIPT|REHEARSAL|SMOKE|VAPID_(?:PUBLIC|PRIVATE)/.test(key))).toEqual(
     [],

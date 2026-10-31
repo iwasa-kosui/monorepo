@@ -1,7 +1,9 @@
+import { chmod, rm } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
 
-import { estimateSource } from '../estimate-source.mjs';
+import { estimateFromEnvironment, estimateSource } from '../estimate-source.mjs';
 import { SOURCE_LIMITS } from '../source-transfer-protocol.mjs';
+import { createFixtureDirectory } from './fixtureTemp.js';
 
 const estimate = {
   source_revision: 'a'.repeat(40),
@@ -87,4 +89,80 @@ it('propagates a source failure without printing a line', async () => {
     },
   };
   await expect(estimateSource({ source, availableBytes: AVAILABLE })).rejects.toThrow('Source operation failed.');
+});
+
+const cliEnvironment = (root: string, overrides: Record<string, string | undefined> = {}) => ({
+  IORI_MIGRATION_ROOT: root,
+  IORI_SOURCE_SSH_HOST: 'source.example.test',
+  IORI_SOURCE_SSH_USER: 'deploy',
+  IORI_SOURCE_SSH_IDENTITY_FILE: '/keys/id',
+  IORI_SOURCE_SSH_KNOWN_HOSTS_FILE: '/keys/known_hosts',
+  MAIN_SHA: 'a'.repeat(40),
+  GITHUB_RUN_ID: '12345',
+  ...overrides,
+});
+const withRoot = async (run: (root: string) => Promise<void>) => {
+  const root = await createFixtureDirectory('iori-estimate-cli-');
+  try {
+    await chmod(root, 0o700);
+    await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+};
+it('builds the source adapter from the environment with an estimate_ run ID and reports the line', async () => {
+  await withRoot(async root => {
+    const { source } = sourceWith();
+    const createSource = vi.fn(async (_options: unknown) => source);
+    const availableBytes = vi.fn(async (_root: string) => AVAILABLE);
+    const line = await estimateFromEnvironment(cliEnvironment(root), undefined, {
+      createSource: createSource as never,
+      availableBytes,
+    });
+    expect(createSource).toHaveBeenCalledWith({
+      host: 'source.example.test',
+      user: 'deploy',
+      identityFile: '/keys/id',
+      knownHostsFile: '/keys/known_hosts',
+      mainSha: 'a'.repeat(40),
+      runId: 'estimate_12345',
+    });
+    expect(availableBytes).toHaveBeenCalledWith(root);
+    expect(line).toBe('IORI_ESTIMATE rows=5 upload_count=3 article_count=2 sample=ok capacity=ok');
+  });
+});
+it.each([
+  'IORI_MIGRATION_ROOT',
+  'IORI_SOURCE_SSH_HOST',
+  'IORI_SOURCE_SSH_USER',
+  'IORI_SOURCE_SSH_IDENTITY_FILE',
+  'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE',
+  'MAIN_SHA',
+  'GITHUB_RUN_ID',
+])('refuses to estimate when %s is missing or empty', async key => {
+  await withRoot(async root => {
+    for (const value of [undefined, '']) {
+      const createSource = vi.fn(async (_options: unknown) => sourceWith().source);
+      await expect(
+        estimateFromEnvironment(cliEnvironment(root, { [key]: value }), undefined, {
+          createSource: createSource as never,
+        }),
+      ).rejects.toThrow('Estimate configuration is required.');
+      expect(createSource).not.toHaveBeenCalled();
+    }
+  });
+});
+it('refuses a migration root that is not private or not absolute before creating the source', async () => {
+  await withRoot(async root => {
+    await chmod(root, 0o755);
+    const createSource = vi.fn(async (_options: unknown) => sourceWith().source);
+    const deps = { createSource: createSource as never };
+    await expect(estimateFromEnvironment(cliEnvironment(root), undefined, deps)).rejects.toThrow(
+      'Invalid migration root.',
+    );
+    await expect(estimateFromEnvironment(cliEnvironment('relative/root'), undefined, deps)).rejects.toThrow(
+      'Invalid migration root.',
+    );
+    expect(createSource).not.toHaveBeenCalled();
+  });
 });

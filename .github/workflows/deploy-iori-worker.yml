@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       migration_main_sha:
-        description: Immutable migration SHA (required for later normal updates and purge-rehearsal-target)
+        description: Immutable migration SHA (defaults to main_sha when empty; for purge-rehearsal-target, the SHA used when rehearse-migration ran)
         required: false
         type: string
       operation:

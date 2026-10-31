@@ -42,7 +42,7 @@ The transfer bucket has no managed public domain, custom domain or application b
 
 Configure the separately protected `production` and `staging` Environments before dispatch. The current workflow reads these common secret references: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `IORI_ADMISSION_IDENTITY`, `ORIGIN`, and `VAPID_SUBJECT`. These are reference names, not a claim that values or protection rules have been configured.
 
-Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `migration_run_id`. For a later normal Worker update, `migration_main_sha` supplies the original admission SHA while `main_sha` selects current reviewed code. Preserve the original admission JSON, generation and run identity. A new migration generation requires matching newly selected identity inputs.
+Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `migration_run_id`. For `estimate-source`, leave `generation` and `migration_run_id` empty; the workflow rejects any value. For `purge-rehearsal-target`, `migration_main_sha` is the `main_sha` used when `rehearse-migration` ran, and `main_sha` selects the current reviewed code. For a later normal Worker update, `migration_main_sha` supplies the original admission SHA while `main_sha` selects current reviewed code. Preserve the original admission JSON, generation and run identity. A new migration generation requires matching newly selected identity inputs.
 
 Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KEY` pair. The workflow maps the state pair to `AWS_*`, transfer pair to `IORI_MIGRATION_R2_*`, application pair to `IORI_APPLICATION_R2_*`, and the role API token to `CLOUDFLARE_API_TOKEN` only in the operation step.
 
@@ -61,7 +61,7 @@ Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KE
 
 Preparation additionally uses `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `SMOKE_QUEUE_TOKEN`, and the distinct staging-only `STAGING_ACCESS_TOKEN`. Cutover maps the same `SMOKE_QUEUE_TOKEN` to `IORI_SMOKE_QUEUE_TOKEN` for every smoke request.
 
-Migrate, verify and cutover receive `IORI_MIGRATION_RECEIPT_PUBLIC_KEY` and `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`. Only migrate and `rehearse-migration` receive `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`; `rehearse-migration` uses it to sign the profile envelope. Only migrate receives the measured JSON profile `IORI_MIGRATION_REHEARSAL`. Key/profile values become exclusive mode `0600` job-local files; Environment values are not persistent filesystem paths.
+Migrate, `rehearse-migration`, verify and cutover receive `IORI_MIGRATION_RECEIPT_PUBLIC_KEY` and `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`. Only migrate and `rehearse-migration` receive `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`; `rehearse-migration` uses it to sign the profile envelope. Only migrate receives the measured JSON profile `IORI_MIGRATION_REHEARSAL`. Key/profile values become exclusive mode `0600` job-local files; Environment values are not persistent filesystem paths.
 
 `estimate-source`, `rehearse-migration`, migrate, cutover and source prerequisite deployment use `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, and `IORI_SOURCE_SSH_KNOWN_HOSTS`. The key and pinned known-hosts values become private files. Do not bootstrap trust with `ssh-keyscan`, supply source database credentials to the runner, or recreate source `env.conf` during this deployment.
 

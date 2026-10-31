@@ -1,11 +1,14 @@
-import { readFile } from 'node:fs/promises';
+import { chmod, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER } from '../export-postgres-lib.mjs';
+import { migrationBundleReservationKey } from '../migration-bundle.mjs';
 import { reviewedD1Schema } from '../migration-d1-import.mjs';
 import { preparationRecordKey, rehearsalTargetKey, serializePreparationRecord } from '../migration-target-contract.mjs';
-import { purgeRehearsalTarget } from '../purge-rehearsal-target.mjs';
+import { purgeFromEnvironment, purgeRehearsalTarget } from '../purge-rehearsal-target.mjs';
+import { createFixtureDirectory } from './fixtureTemp.js';
 import { expectedTargetFixture, preparationFixture } from './migrationTargetFixture.js';
 
 afterEach(() => {
@@ -83,13 +86,21 @@ const build = async (
   const objects = new Set(
     Array.from({ length: objectCount }, (_, index) => `og/${String(index).padStart(6, '0')}.png`),
   );
-  const s3 = { lists: 0, batches: [] as number[], failWith: undefined as unknown, configs: [] as unknown[] };
+  const s3 = {
+    lists: 0,
+    batches: [] as number[],
+    failWith: undefined as unknown,
+    failBatch: undefined as { number: number; mode: 'errors' | 'reject' } | undefined,
+    listResponse: undefined as unknown,
+    configs: [] as unknown[],
+  };
   const createClient = (config: unknown) => {
     s3.configs.push(config);
     return {
       send: async (command: { constructor: { name: string }; input: any }) => {
         if (command.constructor.name === 'ListObjectsV2Command') {
           s3.lists++;
+          if (s3.listResponse !== undefined) return s3.listResponse;
           const keys = [...objects].sort();
           const start = command.input.ContinuationToken ? Number(command.input.ContinuationToken) : 0;
           const page = keys.slice(start, start + command.input.MaxKeys);
@@ -105,6 +116,12 @@ const build = async (
           const batch = command.input.Delete.Objects as { Key: string }[];
           s3.batches.push(batch.length);
           if (s3.failWith) return s3.failWith;
+          if (s3.failBatch?.number === s3.batches.length) {
+            const { mode } = s3.failBatch;
+            s3.failBatch = undefined;
+            if (mode === 'reject') throw new Error('network');
+            return { Errors: [{ Key: batch[0]!.Key, Code: 'InternalError', Message: 'retry' }] };
+          }
           for (const { Key } of batch) objects.delete(Key);
           return {};
         }
@@ -375,4 +392,189 @@ it('prints nothing', async () => {
   } finally {
     f.db.close();
   }
+});
+it('fails without deleting anything when the generation has a published migration bundle', async () => {
+  const f = await build();
+  try {
+    const key = migrationBundleReservationKey(target);
+    expect(key).toBe(`iori-migration/v1/production/${'a'.repeat(40)}/production-run-001/reservation`);
+    f.remote.set(key, Buffer.from('{}'));
+    await expect(purgeRehearsalTarget(f.options)).rejects.toThrow(
+      'Target generation has a published migration bundle.',
+    );
+    expect(f.urls).toEqual([]);
+    expect(f.statements).toEqual([]);
+    expect(f.s3.lists).toBe(0);
+    expect(f.s3.batches).toEqual([]);
+    expect(f.objects.size).toBe(3);
+    expect(applicationRows(f)).toBeGreaterThan(0);
+  } finally {
+    f.db.close();
+  }
+});
+it('checks the bundle only after the rehearsal mark', async () => {
+  const f = await build({ markBody: null });
+  try {
+    f.remote.set(migrationBundleReservationKey(target), Buffer.from('{}'));
+    await expect(purgeRehearsalTarget(f.options)).rejects.toThrow('Target generation was not used for rehearsal.');
+  } finally {
+    f.db.close();
+  }
+});
+it.each(['errors', 'reject'] as const)(
+  'fails when the second DeleteObjects batch ends with %s and a rerun with the same input completes the purge',
+  async mode => {
+    const f = await build({ objectCount: 2500 });
+    try {
+      f.s3.failBatch = { number: 2, mode };
+      await expect(purgeRehearsalTarget(f.options)).rejects.toThrow('Application R2 purge failed.');
+      expect(f.s3.batches).toEqual([1000, 1000]);
+      expect(f.objects.size).toBe(1500);
+      await purgeRehearsalTarget(f.options);
+      expect(f.s3.batches).toEqual([1000, 1000, 1000, 500]);
+      expect(f.objects.size).toBe(0);
+      expect(applicationRows(f)).toBe(0);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+it.each([
+  ['a truncated page without a continuation token', { Contents: [{ Key: 'og/a.png' }], IsTruncated: true }],
+  ['an empty key', { Contents: [{ Key: '' }], IsTruncated: false }],
+  ['a missing key', { Contents: [{}], IsTruncated: false }],
+  ['non-array contents', { Contents: 'og/a.png', IsTruncated: false }],
+  ['a missing IsTruncated flag', { Contents: [{ Key: 'og/a.png' }] }],
+])('fails without deleting objects when ListObjectsV2 returns %s', async (_label, response) => {
+  const f = await build();
+  try {
+    f.s3.listResponse = response;
+    await expect(purgeRehearsalTarget(f.options)).rejects.toThrow('Application R2 purge failed.');
+    expect(f.s3.batches).toEqual([]);
+    expect(f.objects.size).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+it('does not touch R2 when a D1 DELETE fails on a middle table', async () => {
+  const f = await build();
+  try {
+    const tables = [...APPLICATION_TABLE_ORDER].reverse();
+    const failing = tables[Math.floor(tables.length / 2)]!;
+    const issued: string[] = [];
+    const queryD1 = async (sql: string) => {
+      issued.push(sql);
+      if (sql === `DELETE FROM "${failing}"`) throw new Error('D1 query failed.');
+      return [];
+    };
+    await expect(purgeRehearsalTarget({ ...f.options, queryD1 })).rejects.toThrow('D1 query failed.');
+    expect(issued.at(-1)).toBe(`DELETE FROM "${failing}"`);
+    expect(issued.length).toBe(tables.indexOf(failing) + 1);
+    expect(issued.length).toBeLessThan(tables.length);
+    expect(f.s3.lists).toBe(0);
+    expect(f.s3.configs).toEqual([]);
+    expect(f.s3.batches).toEqual([]);
+    expect(f.objects.size).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+it.each([
+  ['several rows', [{ count: 0 }, { count: 0 }]],
+  ['no rows', []],
+  ['a string count', [{ count: '0' }]],
+  ['a missing count', [{}]],
+  ['a null count', [{ count: null }]],
+])('fails without touching R2 when the COUNT response has %s', async (_label, rows) => {
+  const f = await build();
+  try {
+    const queryD1 = async (sql: string) => sql.startsWith('SELECT') ? rows : [];
+    await expect(purgeRehearsalTarget({ ...f.options, queryD1 })).rejects.toThrow(
+      'D1 application tables are not empty.',
+    );
+    expect(f.s3.lists).toBe(0);
+    expect(f.s3.batches).toEqual([]);
+    expect(f.objects.size).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+
+const writeTarget = async (directory: string) => {
+  const path = join(directory, 'target.json');
+  await writeFile(path, JSON.stringify(target), { mode: 0o600 });
+  await chmod(path, 0o600);
+  return path;
+};
+const cliEnvironment = (path: string, overrides: Record<string, string | undefined> = {}) => ({
+  IORI_MIGRATION_EXPECTED_TARGET_PATH: path,
+  MAIN_SHA: target.identity.main_sha,
+  IORI_MIGRATION_RUN_ID: target.identity.run_id,
+  IORI_MIGRATION_R2_ACCESS_KEY_ID: 'transfer-key',
+  IORI_MIGRATION_R2_SECRET_ACCESS_KEY: 'transfer-secret',
+  CLOUDFLARE_API_TOKEN: 'cli-token',
+  IORI_APPLICATION_R2_ACCESS_KEY_ID: 'application-key',
+  IORI_APPLICATION_R2_SECRET_ACCESS_KEY: 'application-secret',
+  ...overrides,
+});
+const withTarget = async (run: (path: string) => Promise<void>) => {
+  const directory = await createFixtureDirectory('iori-purge-cli-');
+  try {
+    await run(await writeTarget(directory));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+it('passes the target and credentials from the environment to the purge', async () => {
+  await withTarget(async path => {
+    const purge = vi.fn(async () => {});
+    const signal = new AbortController().signal;
+    await purgeFromEnvironment(cliEnvironment(path), signal, { purge });
+    expect(purge).toHaveBeenCalledTimes(1);
+    expect(purge).toHaveBeenCalledWith(expect.objectContaining({
+      expectedTarget: target,
+      apiToken: 'cli-token',
+      accessKeyId: 'application-key',
+      secretAccessKey: 'application-secret',
+      signal,
+    }));
+  });
+});
+it.each([
+  'MAIN_SHA',
+  'IORI_MIGRATION_RUN_ID',
+  'IORI_MIGRATION_R2_ACCESS_KEY_ID',
+  'IORI_MIGRATION_R2_SECRET_ACCESS_KEY',
+  'CLOUDFLARE_API_TOKEN',
+  'IORI_APPLICATION_R2_ACCESS_KEY_ID',
+  'IORI_APPLICATION_R2_SECRET_ACCESS_KEY',
+])('refuses to purge when %s is missing or empty', async key => {
+  await withTarget(async path => {
+    for (const value of [undefined, '']) {
+      const purge = vi.fn(async () => {});
+      await expect(purgeFromEnvironment(cliEnvironment(path, { [key]: value }), undefined, { purge })).rejects.toThrow(
+        'Purge configuration is required.',
+      );
+      expect(purge).not.toHaveBeenCalled();
+    }
+  });
+});
+it.each([
+  ['MAIN_SHA', 'b'.repeat(40)],
+  ['IORI_MIGRATION_RUN_ID', 'another-run'],
+])('refuses to purge when %s differs from the expected target', async (key, value) => {
+  await withTarget(async path => {
+    const purge = vi.fn(async () => {});
+    await expect(purgeFromEnvironment(cliEnvironment(path, { [key]: value }), undefined, { purge })).rejects.toThrow(
+      'Invocation mismatch.',
+    );
+    expect(purge).not.toHaveBeenCalled();
+  });
+});
+it('refuses to purge without an expected target path', async () => {
+  const purge = vi.fn(async () => {});
+  await expect(purgeFromEnvironment(cliEnvironment(''), undefined, { purge })).rejects.toThrow(
+    'Independent expected target is required.',
+  );
+  expect(purge).not.toHaveBeenCalled();
 });

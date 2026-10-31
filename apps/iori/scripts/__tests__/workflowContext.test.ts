@@ -102,6 +102,25 @@ it.each([undefined, ''])('accepts the estimate operation only without generation
   expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
   expect(() => parseWorkflowInvocation({ ...estimate, GITHUB_REF: 'refs/heads/feature' })).toThrow();
 });
+it.each([
+  'prepare-target',
+  'rehearse-migration',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'deploy-worker',
+  'purge-rehearsal-target',
+])('rejects an empty or missing generation and run ID for %s', operation => {
+  const invocation = { ...env, IORI_OPERATION: operation };
+  expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+  for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
+    for (const empty of ['', undefined]) {
+      expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
+        'Protected workflow invocation is invalid.',
+      );
+    }
+  }
+});
 it('reserves activation and cleanup within the whole hosted job deadline', () => {
   expect(workflowTimeBudget(1_000, 61_000)).toMatchObject({ remainingMs: 344 * 60_000, verificationMs: 329 * 60_000 });
   expect(() => workflowTimeBudget(1_000, 331 * 60_000 + 1_000)).toThrow();

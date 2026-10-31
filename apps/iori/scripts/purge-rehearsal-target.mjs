@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { withCliSignal } from './cli-lifetime.mjs';
 import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
+import { migrationBundleReservationKey } from './migration-bundle.mjs';
 import { queryMigrationD1, reviewedD1Schema } from './migration-d1-import.mjs';
 import { assertMigrationBucketPrivate } from './migration-r2-storage.mjs';
 import { parseExpectedTarget, rehearsalTargetKey, targetIdentity } from './migration-target-contract.mjs';
@@ -39,6 +40,11 @@ const assertRehearsalMark = async (storage, target) => {
   }
   if (mark.main_sha !== target.identity.main_sha || mark.run_id !== target.identity.run_id) {
     throw new Error('Rehearsal target mark does not match the invocation.');
+  }
+};
+const assertNoPublishedBundle = async (storage, target) => {
+  if (await storage.getIfExists(migrationBundleReservationKey(target), 65536) !== null) {
+    throw new Error('Target generation has a published migration bundle.');
   }
 };
 const purgeD1 = async (tables, query) => {
@@ -89,6 +95,7 @@ export const purgeRehearsalTarget = async (options) => {
   if (!accessKeyId || !secretAccessKey) throw new Error('Application R2 credentials are required.');
   await readPreparationRecord({ storage, expectedTarget: target });
   await assertRehearsalMark(storage, target);
+  await assertNoPublishedBundle(storage, target);
   const bucket = target.resources.uploads.name;
   await assertMigrationBucketPrivate({ accountId: target.identity.account_id, bucket, apiToken, fetchImpl, signal });
   const tables = await reviewedTables();
@@ -110,28 +117,32 @@ export const purgeRehearsalTarget = async (options) => {
   });
 };
 
+export const purgeFromEnvironment = async (env, signal, { purge = purgeRehearsalTarget } = {}) => {
+  const expectedTarget = await loadExpectedTarget(env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
+  const required = (key) => {
+    if (!env[key]) throw new Error('Purge configuration is required.');
+    return env[key];
+  };
+  if (
+    required('MAIN_SHA') !== expectedTarget.identity.main_sha
+    || required('IORI_MIGRATION_RUN_ID') !== expectedTarget.identity.run_id
+  ) throw new Error('Invocation mismatch.');
+  required('IORI_MIGRATION_R2_ACCESS_KEY_ID');
+  required('IORI_MIGRATION_R2_SECRET_ACCESS_KEY');
+  await purge({
+    expectedTarget,
+    storage: transferStorageFromEnvironment(env, targetIdentity(expectedTarget), true, signal),
+    apiToken: required('CLOUDFLARE_API_TOKEN'),
+    accessKeyId: required('IORI_APPLICATION_R2_ACCESS_KEY_ID'),
+    secretAccessKey: required('IORI_APPLICATION_R2_SECRET_ACCESS_KEY'),
+    signal,
+  });
+};
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  withCliSignal(async (signal) => {
-    const expectedTarget = await loadExpectedTarget(process.env.IORI_MIGRATION_EXPECTED_TARGET_PATH);
-    const required = (key) => {
-      if (!process.env[key]) throw new Error('Purge configuration is required.');
-      return process.env[key];
-    };
-    if (
-      required('MAIN_SHA') !== expectedTarget.identity.main_sha
-      || required('IORI_MIGRATION_RUN_ID') !== expectedTarget.identity.run_id
-    ) throw new Error('Invocation mismatch.');
-    required('IORI_MIGRATION_R2_ACCESS_KEY_ID');
-    required('IORI_MIGRATION_R2_SECRET_ACCESS_KEY');
-    await purgeRehearsalTarget({
-      expectedTarget,
-      storage: transferStorageFromEnvironment(process.env, targetIdentity(expectedTarget), true, signal),
-      apiToken: required('CLOUDFLARE_API_TOKEN'),
-      accessKeyId: required('IORI_APPLICATION_R2_ACCESS_KEY_ID'),
-      secretAccessKey: required('IORI_APPLICATION_R2_SECRET_ACCESS_KEY'),
-      signal,
-    });
-  }).then(() => console.log('Rehearsal target purged.')).catch(() => {
+  withCliSignal((signal) => purgeFromEnvironment(process.env, signal)).then(() =>
+    console.log('Rehearsal target purged.')
+  ).catch(() => {
     console.error('Rehearsal target purge failed; retain the generation for review.');
     process.exitCode = 1;
   });
