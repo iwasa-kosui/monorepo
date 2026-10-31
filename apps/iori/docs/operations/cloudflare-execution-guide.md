@@ -277,6 +277,13 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 | 3    | `verify-import`  | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
 | 4    | `cutover-route`  | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
 
+上の4つの operation に加えて、旧環境（source）に書き込む operation が2つあります。
+
+- `resume-source`: 凍結が残った source の凍結を解きます。
+- `release-pending-freeze`: 凍結の前段階で残った `freeze.pending` を退避します。
+
+この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。
+
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 
 `cutover-route` の dispatch は、別 job の `verify-import` も先行実行します。その後、切替 job 自身がさらに fresh restore と再検証を行います。前の standalone `verify-import` の成功は、この2つの検証の代わりにはなりません。
@@ -324,3 +331,54 @@ staging が完了したら、production に異なる generation・リソース�
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 
 完了後も14日間の監視・保持を続け、AWS retirement は保持証跡と destroy plan のレビュー・明示承認後の別作業とします。実行者は「最後に成功した段階」「確認済みの現在状態」「次の操作」「必要な承認」を残し、次の担当者が同じ run の続行と新規移行を取り違えないようにします。
+
+### 7.1 凍結が残った場合の復旧
+
+凍結が残る状態は2つあります。
+
+- `~/.iori-migration/freeze.json` が残り、source が凍結したままの状態です。
+- `freeze.pending` が残り、source が status と resume を `invalid_freeze_state` で拒否する状態です。
+
+`freeze.pending` は rename の前の状態です。このため、凍結はまだ成立しておらず、export も始まっていません。
+
+旧環境への操作は、`resume-source` と `release-pending-freeze` の2つの operation からだけ行います。作業者は旧環境に直接入って `freeze.json` や `freeze.pending` を消しません。
+
+#### `freeze.json` が残った場合
+
+作業者は `resume-source` を dispatch します。input は次の4つです。
+
+- `main_sha`: 現在の main の SHA
+- `migration_main_sha`: 凍結した run の `main_sha`
+- `migration_run_id`: 凍結した run の `run_id`
+- `recovery`: 移行先の書き込み状況
+
+`recovery` に既定値はありません。作業者は次のとおりに値を選びます。自動処理は `recovery` の値を推測しません。
+
+- 移行先に通常の書き込みを有効にしていないと確認できたときだけ、`destination_writes_not_enabled` を入力します。
+- HTTP を有効にした後に D1 / R2 へ書き込みがあった場合、作業者は照合と反映が済むまで resume しません。済んだら `destination_writes_reconciled` を入力します。
+
+`resume-source` は次の順に動きます。
+
+1. resume を送る前に、status で source が凍結していること、source が idle であること、凍結の identity が input と一致することを確かめます。
+2. 条件を満たさない場合は、resume を送らずに失敗します。
+3. 条件を満たした場合は、resume を送ります。
+4. resume の後に、status で凍結が解けたことを確かめます。
+
+idle でない状態とは、HTTP の処理中、queue の作業中、queue の失敗のどれかに当たる状態です。source が idle でない場合、`resume-source` は resume を送らずに `reason=source-not-idle` で失敗します。`resume-source` は idle になるまで待つ処理を持ちません。
+
+rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。作業者は時間を置いてから `resume-source` を再実行します。
+
+#### `freeze.pending` が残った場合
+
+作業者は `release-pending-freeze` を dispatch します。input は `main_sha`、`migration_main_sha`、`migration_run_id` です。`recovery` は空にします。
+
+`release-pending-freeze` は次の順に動きます。
+
+1. microblog を停止し、停止したことを確かめます。
+2. `freeze.json` が無いことを確かめます。
+3. `freeze.pending` が通常ファイルで、同じ uid の所有であることを確かめます。
+4. `freeze.pending` の中身の `main_sha` と `run_id` が、input の `migration_main_sha` と `migration_run_id` に一致することを確かめます。
+5. 2〜4 の条件を満たした場合だけ、`freeze.pending` を `freeze.pending.rejected-<migration_run_id>` へ rename で退避します。削除はしません。
+6. microblog を起動し、status で凍結していないことを確かめます。
+
+条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。このとき microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。

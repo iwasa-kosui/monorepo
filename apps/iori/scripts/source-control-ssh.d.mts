@@ -48,6 +48,7 @@ export function createSourceSshAdapter(options: SourceSshOptions, testOptions?: 
   freeze(signal?: AbortSignal): Promise<SourceState>;
   status(signal?: AbortSignal): Promise<SourceState>;
   drain(timeoutMs?: number, signal?: AbortSignal): Promise<SourceState>;
+  resume(recovery: string, signal?: AbortSignal): Promise<SourceState>;
   export(signal?: AbortSignal): Promise<SourceInventory>;
   restore(
     outputDir: string,

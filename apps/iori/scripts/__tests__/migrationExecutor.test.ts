@@ -117,6 +117,7 @@ const fixture = async () => {
       return state;
     }),
     status: async () => state,
+    resume: async () => state,
     drain: async () => {
       calls.push('drain');
       return state;

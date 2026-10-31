@@ -52,6 +52,44 @@ it.each(['migrate-data', 'verify-import', 'cutover-route'])(
     }
   },
 );
+it.each(['resume-source', 'release-pending-freeze'])(
+  'materializes only the source SSH files for %s',
+  async operation => {
+    const runnerTemp = await createFixtureDirectory('iori-hosted-');
+    try {
+      const paths = await createWorkflowDirectory(runnerTemp);
+      const mapped = await materializeHostedValues({
+        ...baseEnv(operation),
+        IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
+        IORI_RECOVERY: operation === 'resume-source' ? 'destination_writes_reconciled' : '',
+        RUNNER_TEMP: runnerTemp,
+        IORI_PRIVATE_DIRECTORY: paths.base,
+        IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
+        IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
+        IORI_MIGRATION_RECEIPT_PUBLIC_KEY: 'synthetic-public-key',
+      });
+      expect((await readdir(join(paths.base, 'keys'))).sort()).toEqual(['source-key', 'source-known-hosts']);
+      expect(await readFile(mapped.IORI_SOURCE_SSH_IDENTITY_FILE!, 'utf8')).toBe('synthetic-source-key\n');
+      expect(mapped.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
+      expect(mapped.IORI_SOURCE_SSH_KNOWN_HOSTS).toBeUndefined();
+      expect(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY).toBeUndefined();
+    } finally {
+      await rm(runnerTemp, { recursive: true, force: true });
+    }
+  },
+);
+it('maps the recovery operations to their fixed scripts', async () => {
+  const text = await readFile(new URL('../hosted-workflow.mjs', import.meta.url), 'utf8');
+  for (
+    const [name, script] of [['resume-source', 'resume-source.mjs'], [
+      'release-pending-freeze',
+      'release-pending-freeze.mjs',
+    ]]
+  ) {
+    expect(text).toContain(`'${name}': '${script}',`);
+    expect((await lstat(new URL(`../${script}`, import.meta.url))).isFile()).toBe(true);
+  }
+});
 it.each([
   ['without a trailing newline', 'synthetic-source-key'],
   ['with a trailing newline', 'synthetic-source-key\n'],
@@ -118,6 +156,32 @@ it('relays only the exact configuration owner notice to the public log', async (
     'IORI_NOTICE stage=remote-install previous_uid=1 previous_gid=1',
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
+});
+it('relays only the exact release-pending-freeze notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=release-pending-freeze renamed=1';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    `${accepted} `,
+    'IORI_NOTICE stage=release-pending-freeze renamed=2',
+    'IORI_NOTICE stage=release-pending-freeze renamed=1 path=/home/secret/freeze.pending.rejected-run1',
+    'IORI_NOTICE stage=release-pending-freeze',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
+it('relays the recovery diagnostics reasons within the public vocabulary', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-frozen',
+    'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-operation-failed',
+    'IORI_DIAG stage=resume-verify program=ssh exit=none signal=none reason=resume-not-confirmed',
+    'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
+    'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',
+  ];
+  await publishChildDiagnostics(lines.join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
 it('prints a hosted diagnostic before the failure for an invalid source invocation', async () => {
   const writes = captureStderr();

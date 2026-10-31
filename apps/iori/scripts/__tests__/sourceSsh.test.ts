@@ -212,6 +212,44 @@ it('validates private inputs before remote work and uses only fixed reviewed SSH
   await expect(createSourceSshAdapter(options, { spawnProcess })).rejects.toThrow('Invalid source inputs.');
   expect(calls).toHaveLength(1);
 });
+it.each(['destination_writes_not_enabled', 'destination_writes_reconciled'])(
+  'sends resume with the fixed recovery value %s and the frozen identity only',
+  async (recovery) => {
+    const { options } = await setup();
+    const calls: { program: string; args: string[] }[] = [];
+    const spawnProcess = (program: string, args: string[]) => {
+      calls.push({ program, args });
+      const child = Object.assign(new EventEmitter(), {
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        kill: () => true,
+      });
+      queueMicrotask(() => {
+        child.stdout.end(
+          JSON.stringify({
+            ok: true,
+            state: { ...state, identity: null, ingress_frozen: false, consumer_paused: false, drained: false },
+          })
+            + '\n',
+        );
+        child.emit('close', 0);
+      });
+      return child;
+    };
+    const adapter = await createSourceSshAdapter(options, { spawnProcess });
+    expect(await adapter.resume(recovery)).toMatchObject({ ingress_frozen: false, identity: null });
+    expect(calls[0].args.slice(-6)).toEqual([
+      '"$HOME/.nvm/versions/node/v24.12.0/bin/node"',
+      '"$HOME/monorepo/apps/iori/scripts/source-control.mjs"',
+      'resume',
+      options.mainSha,
+      '123',
+      recovery,
+    ]);
+    await expect(adapter.resume('anything_else')).rejects.toThrow('Invalid source command.');
+    expect(calls).toHaveLength(1);
+  },
+);
 const exitingSpawn = (code: number) => () => {
   const child = Object.assign(new EventEmitter(), {
     stdout: new PassThrough(),

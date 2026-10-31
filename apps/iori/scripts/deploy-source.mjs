@@ -69,6 +69,20 @@ const fixedReasons = [
   ['Source control is not ready.', 'source-control-not-ready'],
   ['Source operation failed.', 'source-operation-failed'],
   ['Source prerequisite readiness failed.', 'readiness-failed'],
+  ['Source is not frozen.', 'source-not-frozen'],
+  ['Source identity mismatch.', 'source-identity-mismatch'],
+  ['Source is not idle.', 'source-not-idle'],
+  ['Source resume was not confirmed.', 'resume-not-confirmed'],
+  ['Invalid source release operation.', 'invalid-release-operation'],
+  ['Source service stop failed.', 'service-stop-failed'],
+  ['Source service is not stopped.', 'service-not-stopped'],
+  ['Source service start failed.', 'service-start-failed'],
+  ['Source freeze is already committed.', 'freeze-committed'],
+  ['Source pending freeze is invalid.', 'pending-freeze-invalid'],
+  ['Source pending freeze identity mismatch.', 'pending-identity-mismatch'],
+  ['Source release destination exists.', 'release-target-exists'],
+  ['Source release rename verification failed.', 'release-rename-failed'],
+  ['Source release was not confirmed.', 'release-not-confirmed'],
   ['Migration command aborted.', 'aborted'],
   ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
 ];
@@ -97,7 +111,7 @@ const classifyFailure = (program, error, stderr) => {
   if (typeof error?.signal === 'string') return 'command-signaled';
   return 'unclassified';
 };
-const writeDiagnostic = (stage, program, error, stderr) => {
+export const writeDiagnostic = (stage, program, error, stderr) => {
   try {
     const exit = Number.isInteger(error?.exitCode) && error.exitCode >= 0 && error.exitCode <= 255
       ? String(error.exitCode)
@@ -110,7 +124,7 @@ const writeDiagnostic = (stage, program, error, stderr) => {
     );
   } catch {}
 };
-const waitForRetry = (milliseconds, signal) =>
+export const waitForRetry = (milliseconds, signal) =>
   new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new Error('Migration command aborted.'));

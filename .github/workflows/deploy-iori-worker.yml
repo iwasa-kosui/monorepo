@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       migration_main_sha:
-        description: Immutable migration SHA (required for later normal updates)
+        description: Immutable migration SHA (required for later normal updates, resume-source and release-pending-freeze)
         required: false
         type: string
       operation:
@@ -21,6 +21,8 @@ on:
           - verify-import
           - cutover-route
           - deploy-worker
+          - resume-source
+          - release-pending-freeze
           - reconcile-resources
           - replace-queue-consumer
       environment:
@@ -36,6 +38,10 @@ on:
         description: Immutable run ID (1-80 ASCII letters, digits, underscore or hyphen)
         required: true
         type: string
+      recovery:
+        description: Required for resume-source only (destination_writes_not_enabled or destination_writes_reconciled); leave empty otherwise
+        required: false
+        type: string
 
 concurrency:
   group: deploy-iori-worker-production
@@ -49,6 +55,7 @@ env:
   IORI_ENVIRONMENT: ${{ inputs.environment }}
   IORI_GENERATION: ${{ inputs.generation }}
   IORI_MIGRATION_RUN_ID: ${{ inputs.migration_run_id }}
+  IORI_RECOVERY: ${{ inputs.recovery }}
   WRANGLER_SEND_METRICS: "false"
   AWS_EC2_METADATA_DISABLED: "true"
 
@@ -417,6 +424,54 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
           IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
           IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  recover-source:
+    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_SOURCE_SSH_HOST: ${{ secrets.IORI_SOURCE_SSH_HOST }}
+          IORI_SOURCE_SSH_USER: ${{ secrets.IORI_SOURCE_SSH_USER }}
+          IORI_SOURCE_SSH_PRIVATE_KEY: ${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}
+          IORI_SOURCE_SSH_KNOWN_HOSTS: ${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}
       - name: Remove this job's private directory
         if: always() && env.IORI_PRIVATE_DIRECTORY != ''
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
