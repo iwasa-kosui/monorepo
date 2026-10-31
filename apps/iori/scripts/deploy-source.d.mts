@@ -3,6 +3,13 @@ import type { SourceSshOptions, SourceState } from './source-control-ssh.mjs';
 export function sourceDeploymentSshArguments(
   options: Pick<SourceSshOptions, 'user' | 'identityFile' | 'knownHostsFile'>,
 ): string[];
+export function writeDiagnostic(
+  stage: string,
+  program: string,
+  error: { message?: string; exitCode?: number | null; signal?: string | null; spawnFailed?: boolean } | undefined,
+  stderr: string,
+): void;
+export function waitForRetry(milliseconds: number, signal: AbortSignal): Promise<void>;
 export function deploySource(options: SourceSshOptions, dependencies?: {
   signal?: AbortSignal;
   runCommand?: (
