@@ -10,3 +10,12 @@ export function importMigrationD1(
     runCommand?: (program: string, args: string[], options: object) => Promise<{ stdout: string; stderr: string }>;
   },
 ): Promise<{ fileCount: number }>;
+export function queryMigrationD1(
+  input: {
+    expectedTarget: ExpectedTarget;
+    apiToken: string;
+    sql: string;
+    signal?: AbortSignal;
+    fetchRequest?: typeof fetch;
+  },
+): Promise<unknown[]>;

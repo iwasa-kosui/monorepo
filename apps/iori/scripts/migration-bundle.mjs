@@ -18,6 +18,11 @@ const digest = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(val
 const fail = () => {
   throw new Error('Migration bundle is invalid or incomplete.');
 };
+const bundlePrefix = (environment, mainSha, runId) => `iori-migration/v1/${environment}/${mainSha}/${runId}`;
+export const migrationBundleReservationKey = (input) => {
+  const { identity: i } = parseExpectedTarget(input);
+  return `${bundlePrefix(i.environment, i.main_sha, i.run_id)}/reservation`;
+};
 const context = ({ environment, expectedMainSha, expectedRunId, contractPath, chunkSize = CHUNK, expectedTarget }) => {
   const target = parseExpectedTarget(expectedTarget);
   if (
@@ -31,7 +36,7 @@ const context = ({ environment, expectedMainSha, expectedRunId, contractPath, ch
     || !isMigrationArtifactReference(contractPath) || !Number.isSafeInteger(chunkSize) || chunkSize < 1
     || chunkSize > CHUNK
   ) fail();
-  return { prefix: `iori-migration/v1/${environment}/${expectedMainSha}/${expectedRunId}`, chunkSize };
+  return { prefix: bundlePrefix(environment, expectedMainSha, expectedRunId), chunkSize };
 };
 const json = async (root, path) => {
   const resolved = await resolveMigrationArtifactPath(root, path);
@@ -129,7 +134,7 @@ export const publishMigrationBundle = async (options) => {
     const { storage, environment, expectedMainSha, expectedRunId, contractPath, root } = options;
     await storage.assertPrivate();
     await storage.putNew(
-      `${prefix}/reservation`,
+      migrationBundleReservationKey(options.expectedTarget),
       serialize({ environment, mainSha: expectedMainSha, runId: expectedRunId }),
     );
     const index = {

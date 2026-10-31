@@ -46,6 +46,81 @@ it('accepts the rehearsal operation under the same invocation binding as data mi
     })
   ).toThrow();
 });
+it('accepts the purge operation and lets its migration SHA differ from the code SHA like deploy-worker', () => {
+  expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'purge-rehearsal-target' })).toMatchObject({
+    operation: 'purge-rehearsal-target',
+    codeSha: env.MAIN_SHA,
+    migrationSha: env.MAIN_SHA,
+    generation: env.IORI_GENERATION,
+    runId: env.IORI_MIGRATION_RUN_ID,
+  });
+  const purge = { ...env, IORI_OPERATION: 'purge-rehearsal-target' };
+  expect(parseWorkflowInvocation({ ...purge, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toMatchObject({
+    operation: 'purge-rehearsal-target',
+    codeSha: env.MAIN_SHA,
+    migrationSha: 'b'.repeat(40),
+  });
+  expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_MAIN_SHA: 'not-a-sha' })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...purge, GITHUB_SHA: 'b'.repeat(40) })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: '' })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_RUN_ID: '' })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: 'Upper_Case' })).toThrow();
+});
+it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'estimate-source'])(
+  'still requires the code SHA and migration SHA to match for %s',
+  operation => {
+    const given = operation === 'estimate-source'
+      ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
+      : {};
+    const invocation = { ...env, ...given, IORI_OPERATION: operation };
+    expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+    expect(() => parseWorkflowInvocation({ ...invocation, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  },
+);
+it.each([undefined, ''])('accepts the estimate operation only without generation and run ID (%s)', empty => {
+  const estimate = { ...env, IORI_OPERATION: 'estimate-source', IORI_GENERATION: empty, IORI_MIGRATION_RUN_ID: empty };
+  expect(parseWorkflowInvocation(estimate)).toMatchObject({
+    operation: 'estimate-source',
+    codeSha: env.MAIN_SHA,
+    migrationSha: env.MAIN_SHA,
+  });
+  expect(() => parseWorkflowInvocation({ ...estimate, IORI_GENERATION: env.IORI_GENERATION })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+  expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+  expect(() =>
+    parseWorkflowInvocation({
+      ...estimate,
+      IORI_GENERATION: env.IORI_GENERATION,
+      IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID,
+    })
+  ).toThrow('Protected workflow invocation is invalid.');
+  expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...estimate, GITHUB_REF: 'refs/heads/feature' })).toThrow();
+});
+it.each([
+  'prepare-target',
+  'rehearse-migration',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'deploy-worker',
+  'purge-rehearsal-target',
+])('rejects an empty or missing generation and run ID for %s', operation => {
+  const invocation = { ...env, IORI_OPERATION: operation };
+  expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+  for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
+    for (const empty of ['', undefined]) {
+      expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
+        'Protected workflow invocation is invalid.',
+      );
+    }
+  }
+});
 it('reserves activation and cleanup within the whole hosted job deadline', () => {
   expect(workflowTimeBudget(1_000, 61_000)).toMatchObject({ remainingMs: 344 * 60_000, verificationMs: 329 * 60_000 });
   expect(() => workflowTimeBudget(1_000, 331 * 60_000 + 1_000)).toThrow();

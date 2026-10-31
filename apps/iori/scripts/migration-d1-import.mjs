@@ -142,3 +142,38 @@ export const importMigrationD1 = async (
   for (const file of files) await run(file);
   return { fileCount: files.length };
 };
+
+export const queryMigrationD1 = async ({ expectedTarget, apiToken, sql, signal, fetchRequest = fetch }) => {
+  const target = parseExpectedTarget(expectedTarget);
+  if (!apiToken) throw new Error('D1 credential is required.');
+  const response = await fetchRequest(
+    `https://api.cloudflare.com/client/v4/accounts/${target.identity.account_id}/d1/database/${target.resources.d1.id}/query`,
+    {
+      method: 'POST',
+      redirect: 'error',
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
+      headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql, params: [] }),
+    },
+  );
+  if (!response.ok || !response.body) throw new Error('D1 query failed.');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      bytes += part.value.length;
+      if (bytes > 65536) throw new Error('D1 read exceeds bound.');
+      chunks.push(part.value);
+    }
+  } finally {
+    await reader.cancel();
+  }
+  const value = JSON.parse(Buffer.concat(chunks).toString());
+  if (value.success !== true || value.result?.length !== 1 || value.result[0].success !== true) {
+    throw new Error('D1 query failed.');
+  }
+  return value.result[0].results ?? [];
+};
