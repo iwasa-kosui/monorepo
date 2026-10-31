@@ -68,6 +68,7 @@ const fixedReasons = [
   ['Source operation failed.', 'source-operation-failed'],
   ['Source prerequisite readiness failed.', 'readiness-failed'],
   ['Migration command aborted.', 'aborted'],
+  ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
 ];
 const sshReasons = [
   [['Permission denied'], 'ssh-auth-denied'],
@@ -82,7 +83,9 @@ const classifyFailure = (program, error, stderr) => {
   const fixed = fixedReasons.find(([needle]) => text.includes(needle));
   if (fixed) return fixed[1];
   if (error?.spawnFailed === true) return 'spawn-failed';
-  const ssh = sshReasons.find(([needles]) => needles.some(needle => text.includes(needle)));
+  const sshExit = (program === 'ssh' && error?.exitCode === 255)
+    || (program === 'rsync' && (error?.exitCode === 255 || error?.exitCode === 12));
+  const ssh = sshExit ? sshReasons.find(([needles]) => needles.some(needle => text.includes(needle))) : undefined;
   if (ssh) return ssh[1];
   if (program === 'ssh' && error?.exitCode === 127 && text.includes('No such file or directory')) {
     return 'remote-node-missing';

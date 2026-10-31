@@ -1,8 +1,13 @@
-import { lstat, readdir, readFile, rm } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { materializeHostedValues, publishChildDiagnostics, runHostedWorkflow } from '../hosted-workflow.mjs';
+import {
+  executeHostedOperation,
+  materializeHostedValues,
+  publishChildDiagnostics,
+  runHostedWorkflow,
+} from '../hosted-workflow.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 const baseEnv = (operation: string) => ({
@@ -113,4 +118,37 @@ it('prints a hosted diagnostic before the failure for an invalid source invocati
   expect(writes).toEqual([
     'IORI_DIAG stage=hosted-invocation program=none exit=none signal=none reason=invalid-source-invocation\n',
   ]);
+});
+it('relays a failed child diagnostic and its hosted diagnostic without raw child output', async () => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const script = join(directory, 'child.mjs');
+    await writeFile(
+      script,
+      [
+        'console.error(\'-----BEGIN OPENSSH PRIVATE KEY-----\');',
+        'console.error(\'IORI_DIAG stage=remote-check program=ssh exit=255 signal=none reason=ssh-auth-denied\');',
+        'process.exit(1);',
+      ].join('\n'),
+    );
+    await expect(
+      executeHostedOperation(
+        'deploy-source',
+        script,
+        { IORI_PRIVATE_LOG_DIRECTORY: logs },
+        new AbortController().signal,
+        60_000,
+      ),
+    ).rejects.toThrow('Migration command failed');
+    expect(writes).toEqual([
+      'IORI_DIAG stage=remote-check program=ssh exit=255 signal=none reason=ssh-auth-denied\n',
+      'IORI_DIAG stage=hosted-deploy-source program=node exit=1 signal=none reason=command-failed\n',
+    ]);
+    expect(writes.join('')).not.toContain('PRIVATE KEY');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

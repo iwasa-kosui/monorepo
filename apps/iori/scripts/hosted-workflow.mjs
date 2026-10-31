@@ -173,14 +173,19 @@ const execute = async (program, args, env, signal, timeout) => {
       maxBuffer: 8_000_000,
       killGraceMs: 15000,
       captureOutput: async result => {
-        await log.capture(result);
-        await publishChildDiagnostics(result.stderr);
+        try {
+          await log.capture(result);
+        } finally {
+          await publishChildDiagnostics(result.stderr);
+        }
       },
     });
   } finally {
     await log.close();
   }
 };
+export const executeHostedOperation = (name, scriptPath, env, signal, timeout) =>
+  hostedStage(name, () => execute(process.execPath, [scriptPath], env, signal, timeout), 'node');
 export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const stage = (name, operation, program) => phase === 'operate' ? hostedStage(name, operation, program) : operation();
   let selected;
@@ -229,17 +234,12 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     runtime.IORI_REQUIRE_TERRAFORM_BINDINGS = 'true';
     await assertReviewedMain(selected.codeSha, { signal });
   }
-  await stage(
+  await executeHostedOperation(
     selected.operation === 'source' ? 'deploy-source' : 'operation',
-    () =>
-      execute(
-        process.execPath,
-        [`apps/iori/scripts/${operations[selected.operation]}`],
-        runtime,
-        signal,
-        remainingMs,
-      ),
-    'node',
+    `apps/iori/scripts/${operations[selected.operation]}`,
+    runtime,
+    signal,
+    remainingMs,
   );
 };
 const emitStatus = async success => {

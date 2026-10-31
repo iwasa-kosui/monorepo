@@ -219,19 +219,48 @@ it.each([
   ['Error: Unsupported source pnpm.', 'source-pnpm-version'],
   ['Error: Source UPLOAD_DIR must be outside dist: /secret/path', 'upload-dir-inside-dist'],
   ['Error: Dirty source checkout.', 'source-dirty'],
+  ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
   ['Migration command failed; outcome may be uncertain.', 'remote-command-failed'],
   ['something unexpected', 'unclassified'],
 ])('classifies remote stderr %s as %s', async (stderr, reason) => {
+  const exitCode = reason.startsWith('ssh-') ? 255 : 1;
   const writes = captureDiagnostics();
   await expect(deploySource(diagnosticOptions, {
     ...diagnosticDependencies,
     runCommand: async (_program, _args, options) => {
       await options.captureOutput?.({ stdout: '', stderr });
-      throw Object.assign(new Error('x'), { exitCode: 1 });
+      throw Object.assign(new Error('x'), { exitCode });
     },
   })).rejects.toThrow('x');
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    `IORI_DIAG stage=remote-check program=ssh exit=1 signal=none reason=${reason}\n`,
+    `IORI_DIAG stage=remote-check program=ssh exit=${exitCode} signal=none reason=${reason}\n`,
+  ]);
+});
+it('does not read a remote command Permission denied as an SSH authentication failure', async () => {
+  const writes = captureDiagnostics();
+  await expect(deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (_program, _args, options) => {
+      await options.captureOutput?.({ stdout: '', stderr: 'bash: /x/node: Permission denied' });
+      throw Object.assign(new Error('x'), { exitCode: 126 });
+    },
+  })).rejects.toThrow('x');
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=remote-check program=ssh exit=126 signal=none reason=unclassified\n',
+  ]);
+});
+it('does not read an rsync local write Permission denied as an SSH authentication failure', async () => {
+  const writes = captureDiagnostics();
+  await expect(deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program !== 'rsync') return { stdout: '', stderr: '' };
+      await options.captureOutput?.({ stdout: '', stderr: 'rsync: mkstemp "x" failed: Permission denied (13)' });
+      throw Object.assign(new Error('x'), { exitCode: 23 });
+    },
+  })).rejects.toThrow('x');
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=rsync program=rsync exit=23 signal=none reason=unclassified\n',
   ]);
 });
 it('classifies a missing remote Node only for ssh exit 127', async () => {
