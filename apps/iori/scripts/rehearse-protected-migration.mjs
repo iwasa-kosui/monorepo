@@ -10,6 +10,8 @@ import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
 const REHEARSAL_D1_CAPACITY_BYTES = 10_000_000_000;
 const RESUME_TIMEOUT_MS = 120_000;
+// Longest write pause we accept on the personal blog during a rehearsal.
+export const REHEARSAL_FREEZE_LIMIT_MS = 30 * 60 * 1000;
 const seconds = (ms) => Math.max(ms, 1) / 1000;
 const measureProfile = ({ mainSha, estimate, elapsed }) => {
   const { raw, sqlBytes, fileCount } = migrationWorkload(estimate);
@@ -60,6 +62,7 @@ export const rehearseProtectedMigration = async (options) => {
       beforeFreeze: () => {
         frozen = true;
       },
+      freezeLimitMs: options.freezeLimitMs ?? REHEARSAL_FREEZE_LIMIT_MS,
       afterExport: resume,
       finish: async ({ estimate, elapsed }) => {
         const profile = JSON.stringify(measureProfile({ mainSha, estimate, elapsed }));

@@ -185,7 +185,7 @@ hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止
 1. `feat/iori-worker-complete-migration` を main へ取り込む前に、D1 adapter、Worker routes、Fedify inbox と outbox、Web Push、R2、OGP の対象を絞った test を実行します。
 2. staging resources に D1 schema migration を適用し、fixture だけで sign-in、timeline、投稿、画像 upload、OGP、ActivityPub、Queue consumer のスモークテストを通します。
 3. production Worker を workers.dev URL に deploy し、custom domain route を有効化する前に `/health`、`/healthz`、`/readyz`、静的アセット、認証エラー、WebFinger、VAPID public key、OGP の境界を検証します。
-4. 本番の実データを匿名化せずに使い捨て generation の D1 と R2 へ入れて、PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill、bundle 保存と別 job での復元を事前リハーサルします。実データは、使い捨て generation の後片付けが終わるまで、その generation に残ります。staging 用の旧環境は作らないと、ユーザーが判断しました。
+4. 本番の実データを匿名化せずに使い捨て generation の D1 と R2 へ入れて、PostgreSQL export と upload export、D1 import、R2 import、件数照合、OGP backfill を事前リハーサルします。bundle 保存と別 job での復元は、リハーサルの対象外です。`rehearse-migration` は署名つき bundle を公開せず、別 job での復元もしないためです。この2つの処理は、本番の `migrate-data` と `verify-import` で初めて実行します。実データは、使い捨て generation の後片付けが終わるまで、その generation に残ります。staging 用の旧環境は作らないと、ユーザーが判断しました。
 5. rehearsal では各 INSERT の 100,000 bytes 上限、最大 32 MiB の SQL 分割、D1 の容量、source/runner の空き容量、各 metadata の 16 MiB 上限と全体時間を確認します。source export の 8 MiB row 上限は D1 へ投入できることを保証しません。全変換と検査を終えてから schema/data を変更します。[D1 の制限](https://developers.cloudflare.com/d1/platform/limits/)
 
 ### 本番 cutover

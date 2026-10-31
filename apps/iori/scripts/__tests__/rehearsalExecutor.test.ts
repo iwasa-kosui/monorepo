@@ -150,6 +150,54 @@ it.each(['export', 'drain'] as const)('resumes the frozen source once when %s fa
     f.close();
   }
 });
+it('aborts the frozen section at the freeze limit, resumes once with a fresh signal and skips D1 import', async () => {
+  const f = await fixture();
+  try {
+    let exportSignal: AbortSignal | undefined;
+    let resumeSignal: AbortSignal | undefined;
+    f.source.resume.mockImplementation(
+      (async (_reason: string, signal: AbortSignal) => {
+        resumeSignal = signal;
+      }) as never,
+    );
+    f.source.export = (async (signal: AbortSignal) => {
+      exportSignal = signal;
+      return new Promise(() => {});
+    }) as typeof f.source.export;
+    await expect(rehearseProtectedMigration({ ...rehearsalOptions(f), freezeLimitMs: 50 })).rejects.toThrow(
+      'Rehearsal freeze limit exceeded.',
+    );
+    expect(exportSignal?.aborted).toBe(true);
+    expect(f.source.resume).toHaveBeenCalledTimes(1);
+    expect(resumeSignal?.aborted).toBe(false);
+    expect(f.calls).not.toContain('d1');
+  } finally {
+    f.close();
+  }
+});
+it('clears the freeze limit timer once restore completes, before the later phases run', async () => {
+  const f = await fixture();
+  try {
+    const limitMs = 123_457;
+    const setTimer = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    const limitTimer = () => setTimer.mock.calls.findIndex(call => call[1] === limitMs);
+    const importD1 = f.options.importD1;
+    let clearedBeforeD1 = false;
+    f.options.importD1 = async input => {
+      const index = limitTimer();
+      clearedBeforeD1 = index >= 0
+        && clearTimer.mock.calls.some(call => call[0] === setTimer.mock.results[index]?.value);
+      return importD1(input);
+    };
+    const result = await rehearseProtectedMigration({ ...rehearsalOptions(f), freezeLimitMs: limitMs });
+    expect(result.status).toBe('measured');
+    expect(clearedBeforeD1).toBe(true);
+    expect(f.source.resume).toHaveBeenCalledTimes(1);
+  } finally {
+    f.close();
+  }
+}, 30000);
 it('resumes once on abort and does not hide the original failure when resume also fails', async () => {
   const f = await fixture();
   try {

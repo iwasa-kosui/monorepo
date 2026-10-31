@@ -65,9 +65,9 @@ export const runProtectedPhases = async (options, target, plan) => {
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   const timer = setTimeout(() => controller.abort(new Error('Migration deadline exceeded.')), deadlineMs);
   const started = performance.now();
-  const checkBudget = async () => {
-    signal.throwIfAborted();
-    const { source_revision, ...estimate } = await source.estimate(signal);
+  const checkBudget = async (callSignal = signal) => {
+    callSignal.throwIfAborted();
+    const { source_revision, ...estimate } = await source.estimate(callSignal);
     if (source_revision !== target.identity.main_sha) throw new Error('Source revision mismatch.');
     validateSourceEstimate(estimate);
     plan.budget({
@@ -76,6 +76,35 @@ export const runProtectedPhases = async (options, target, plan) => {
       remainingMs: deadlineMs - (performance.now() - started),
     });
     return estimate;
+  };
+  const freezeLimit = new AbortController();
+  let freezeSignal = signal;
+  let freezeExpiry = new Promise(() => {});
+  let freezeTimer;
+  const startFreezeLimit = () => {
+    if (plan.freezeLimitMs === undefined) return;
+    freezeSignal = AbortSignal.any([signal, freezeLimit.signal]);
+    freezeExpiry = new Promise((_, reject) => {
+      freezeLimit.signal.addEventListener('abort', () => reject(freezeLimit.signal.reason), { once: true });
+    });
+    freezeExpiry.catch(() => {});
+    freezeTimer = setTimeout(
+      () => freezeLimit.abort(new Error('Rehearsal freeze limit exceeded.')),
+      plan.freezeLimitMs,
+    );
+  };
+  const stopFreezeLimit = () => {
+    clearTimeout(freezeTimer);
+    freezeSignal = signal;
+    freezeExpiry = new Promise(() => {});
+  };
+  const frozenCall = async (run) => {
+    try {
+      return await Promise.race([run(freezeSignal), freezeExpiry]);
+    } catch (error) {
+      if (freezeLimit.signal.aborted) throw freezeLimit.signal.reason;
+      throw error;
+    }
   };
   const elapsed = {};
   let phaseStart;
@@ -191,8 +220,9 @@ export const runProtectedPhases = async (options, target, plan) => {
       ),
     });
     plan.beforeFreeze?.();
-    await source.freeze(signal);
-    const drained = validateSourceState(await source.drain(300_000, signal));
+    startFreezeLimit();
+    await frozenCall(frozenSignal => source.freeze(frozenSignal));
+    const drained = validateSourceState(await frozenCall(frozenSignal => source.drain(300_000, frozenSignal)));
     if (
       !drained.drained || drained.source_revision !== target.identity.main_sha
       || drained.identity?.main_sha !== target.identity.main_sha || drained.identity.run_id !== target.identity.run_id
@@ -213,13 +243,14 @@ export const runProtectedPhases = async (options, target, plan) => {
         }),
       ),
     });
-    const estimate = await checkBudget();
+    const estimate = await frozenCall(frozenSignal => checkBudget(frozenSignal));
     beginTiming();
-    const inventory = validateSourceInventory(await source.export(signal));
+    const inventory = validateSourceInventory(await frozenCall(frozenSignal => source.export(frozenSignal)));
     if (
       inventory.identity.main_sha !== target.identity.main_sha || inventory.identity.run_id !== target.identity.run_id
     ) throw new Error('Source inventory identity mismatch.');
-    const restored = await source.restore(join(root, 'source'), signal);
+    const restored = await frozenCall(frozenSignal => source.restore(join(root, 'source'), frozenSignal));
+    stopFreezeLimit();
     await completePhase('export-postgres', { postgres_export_manifest: restored.manifestPath });
     await plan.afterExport?.();
     beginTiming();
@@ -280,6 +311,7 @@ export const runProtectedPhases = async (options, target, plan) => {
     return await plan.finish({ contract, writeJson, signal, estimate, elapsed });
   } finally {
     clearTimeout(timer);
+    clearTimeout(freezeTimer);
   }
 };
 export const executeProtectedMigration = async (options) => {

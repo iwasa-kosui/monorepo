@@ -219,12 +219,17 @@ CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証
 - 使い捨て generation で `prepare-target` が完了している
 - 登録済みの Secret が `migrate-data` と同じである。ただし `IORI_MIGRATION_REHEARSAL` は不要
 
-dispatch の承認前に、担当者が 5.2 の凍結時間を許容できるか確認します。`rehearse-migration` は時間を判定しません。`apps/iori/scripts/rehearse-protected-migration.mjs` の `budget` は、標本不足と容量だけを検査します。担当者は、次の材料から凍結時間を見積もります。
+`rehearse-migration` は、source を凍結している区間に、全体で 30 分の上限を持ちます。定数 `REHEARSAL_FREEZE_LIMIT_MS` が、この 30 分を表します。この定数は `apps/iori/scripts/rehearse-protected-migration.mjs` にあります。30 分は、個人ブログで許容できる書き込み停止の長さとして、ユーザーが決めた値です。
+
+dispatch の承認前に、担当者が 30 分の書き込み停止を許容できるか確認します。`rehearse-migration` は、凍結する前に時間を判定しません。`apps/iori/scripts/rehearse-protected-migration.mjs` の `budget` は、標本不足と容量だけを検査します。
 
 凍結が続く範囲は次のとおりです。
 
 - 範囲は、freeze の開始から、export と restore が終わった直後の resume の完了までです。D1 import 以降は、凍結を解除した後に実行します。
-- 最悪の場合、凍結は job の deadline まで続きます。deadline は、`timeout-minutes: 360` から 15 分を引いた 345 分です。`apps/iori/scripts/execute-protected-migration.mjs` の `MIGRATION_DEADLINE_MS` が、この 345 分を表します。345 分は、job の最初の step が記録した開始時刻から数えます。
+- 30 分の上限は、freeze の呼び出しから restore の完了までの区間に、全体で1つだけ適用します。上限を超えると、`rehearse-migration` は自分で処理を中断し、resume を1回呼んで `Rehearsal freeze limit exceeded.` で失敗します。`rehearse-migration` は job の cancel に頼りません。
+- 凍結は、最長で 30 分と、その後の resume の時間で終わります。SSH adapter は、resume を 70 秒で打ち切ります。
+
+30 分を超える見込みの場合、計測は失敗し、generation の印 `rehearsal.json` だけが残ります。`rehearse-migration` は、印を freeze より前に書きます。そのため、その generation は再利用できません。
 
 source 側と adapter 側には、次の時間上限があります。
 
@@ -235,15 +240,7 @@ source 側と adapter 側には、次の時間上限があります。
 - restore は、最初に inventory を 70 秒以内に取得します。その後、ファイルを1つずつ転送します。1ファイルの上限は、source 側も SSH adapter 側も 5 分 (`SOURCE_LIMITS.transferMs`) です。転送するファイルは、31 table、export manifest 1つ、upload 1つにつき1ファイルで、合計 `upload_count + 32` 個です。restore 全体の時間上限はありません。
 - resume は、5.2 に書きます。
 
-これらの上限だけを使った凍結時間の上限は、次の式です。単位は秒です。
-
-```text
-70 (freeze) + 310 (drain) + 70 (estimate) + 1860 (export) + 70 (inventory)
-  + 300 × (upload_count + 32) (restore の転送) + 70 (resume)
-= 2450 + 300 × (upload_count + 32)
-```
-
-`upload_count` が 29 以上の場合、この式の値は deadline の 20700 秒 (345 分) を超えます。この場合、凍結時間の実質の上限は deadline です。deadline は job の開始から数えるため、凍結の開始までに使った時間だけ、実際の余裕は小さくなります。
+各上限をすべて使い切った場合の凍結時間は、`upload_count` が 0 でも 12050 秒 (約 201 分) です。計算は 2450 + 300 × 32 です。2450 秒は、freeze、drain、estimate、export、inventory、resume の上限の合計です。300 × 32 秒は、restore の転送の上限です。この値は 30 分 (1800 秒) を大きく超えます。そのため、上限の合計は、30 分を超えるかどうかの事前見積もりに使えません。
 
 `upload_count`、`table_bytes`、`upload_bytes` は、source の estimate が返す値です。estimate は、table の行を JSON にした大きさに、行ごとに改行1バイトを加えて合計した値を `table_bytes` として返します。dispatch の前にこの値を取る手順は、既存の文書にありません [要確認]。
 
@@ -253,7 +250,7 @@ source 側と adapter 側には、次の時間上限があります。
 - upload ファイルは、1つが 32 MiB (`SOURCE_LIMITS.uploadBytes`) 以下です。転送速度が 32 MiB ÷ 300 秒以上であれば、どの upload ファイルも 5 分以内に転送できます。
 - 5 分を超えたファイルが1つでもあれば、restore は失敗します。この場合は、失敗した時点で resume を呼びます。
 
-実際の転送速度は、コードにも既存の文書にもありません。式の値は、各上限まで時間がかかった場合の値であり、実際の凍結時間の予測ではありません。
+実際の転送速度は、コードにも既存の文書にもありません。そのため、30 分を超えるかどうかを、dispatch の前に確定する方法はありません。
 
 ### 5.2 rehearse-migration の処理
 
@@ -273,7 +270,7 @@ source 側と adapter 側には、次の時間上限があります。
 
 次の場合は、凍結が残る可能性があります。
 
-- job をキャンセルした場合に、SIGKILL までの猶予内に SSH の resume が終わらないとき。hosted workflow の親プロセスは、中断を受けると `rehearse-migration` のプロセスへ SIGTERM を送り、15 秒後に SIGKILL を送ります。
+- job をキャンセルした場合に、SIGKILL までの猶予内に SSH の resume が終わらないとき。hosted workflow の親プロセスは、中断を受けると `rehearse-migration` のプロセスへ SIGTERM を送り、15 秒後に SIGKILL を送ります。凍結の区間では job をキャンセルせず、止めたい場合は、30 分の上限で `rehearse-migration` が中断するのを待ちます。
 - runner が失われた場合。プロセスが消えるため、resume を呼べません。
 - `timeout-minutes: 360` で job が強制終了された場合。executor の deadline は 345 分なので、通常は deadline の中断で resume を呼びます。強制終了までに resume が終わらなかった場合に、凍結が残ります。
 - resume 自体が失敗した場合。たとえば、source が `source_not_frozen` や `source_not_idle` を返したとき、SSH が失敗したとき、待ち時間を超えたときです。
@@ -285,7 +282,7 @@ source 側と adapter 側には、次の時間上限があります。
 3. 復旧を明示的に承認した後、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) の手順で復旧します。失敗した `rehearse-migration` と同じ SHA と run ID の source control に、`resume` と `destination_writes_not_enabled` を指定します。
 4. resume の後に、`freeze.json` と `freeze.pending` が無いことを、手順 1 と同じ方法でもう一度確認します。
 
-`freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合の手順は、既存の文書にありません [要確認]。
+`freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合の復旧手段は、作業セッション B1 が次の PR で整備します。この PR では扱いません。
 
 rate は、`migrationBudget` の式の各項と同じ作業量を、その作業を含むフェーズの経過時間で割って求めます。フェーズは重複して数えるため、見積もりは保守的になります。計測値はそのまま profile に使います。`migrate-data` の `migrationBudget` が時間を2倍にし、固定の overhead も足すため、計測側では安全係数を掛けません。
 

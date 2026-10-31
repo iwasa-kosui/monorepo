@@ -38,6 +38,7 @@ export type ExecutorPlan<TResult> = {
   budget(input: { estimate: MigrationEstimate; availableBytes: number | bigint; remainingMs: number }): void;
   beforeReservation?(): Promise<void>;
   beforeFreeze?(): void;
+  freezeLimitMs?: number;
   afterExport?(): Promise<unknown> | undefined;
   finish(
     context: {
