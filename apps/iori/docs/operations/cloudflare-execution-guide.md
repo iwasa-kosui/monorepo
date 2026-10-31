@@ -130,7 +130,7 @@ gh secret list --repo "$iori_repo" --env "$iori_environment"
 | `workerHostname`                                            | 新 generation の確認済み workers.dev hostname                                 |
 | `smoke.username`, `smoke.uploadFilename`, `smoke.articleId` | 移行対象に存在し、完全な smoke checklist を実行できるユーザー・画像・公開記事 |
 
-smoke は、`smoke.articleId` の記事の OGP PNG が R2 に backfill 済みであることを前提とします。smoke は Worker の OGP 生成の経路を検証しません。作業者は、その経路を第6.2節の「ステージング適用後の OGP 確認」で確かめます。
+smoke は、`smoke.articleId` の記事の OGP PNG が R2 に backfill 済みであることを前提とします。smoke は Worker の OGP 生成の経路を検証しません。作業者は、その経路を第6.2節の「production 切替後の OGP 確認」で確かめます。
 
 fixture のゼロ UUID や仮の hostname を本番へ登録しません。初回準備後は identity を同じ migration の途中で差し替えません。詳細な独立 target と prepared record の照合は [infra README](../../infra/cloudflare/README.md)に従います。
 
@@ -279,10 +279,10 @@ staging が完了したら、production に異なる generation・リソース�
 - 生成時に、Worker は Google Fonts の `fonts.googleapis.com` と `fonts.gstatic.com` から、タイトルの描画に必要な文字だけのフォントを取得します。Worker の外向きの通信先が増えます。
 - 生成は Worker の CPU 時間を使います。`workers/iori/wrangler.template.jsonc` に `limits.cpu_ms` は無く、Worker は Workers Paid の既定値 30 秒の範囲で動く想定です。Workers Free の CPU 時間 10 ms には収まらない想定です。第1節のとおり、この移行は Workers Paid を前提とします。
 
-**ステージング適用後の OGP 確認:** 第6.2節の `cutover-route` が staging で成功した後に、次を確認します。
+**production 切替後の OGP 確認:** 第6.2節の `cutover-route` を production で実行して成功した後に、次を確認します。
 
 1. R2 に `og/<article-id>.png` が無い公開済みの記事を1件選びます。
-2. その記事について `/api/og/articles/<article-id>` を1回要求します。
+2. その記事について `/api/og/articles/<article-id>` を1回要求します。ブラウザでこの URL を開き、PNG が表示されることも確かめます。
 3. 応答が 200 で、`Content-Type` が `image/png` であることを確認します。
 4. R2 に `og/<article-id>.png` が保存されたことを確認します。
 
