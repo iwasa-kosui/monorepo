@@ -100,7 +100,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - transfer bucket と application bucket は、`prepare-target` が Terraform で作ります。手動で bucket を作ると fresh-generation 検査に失敗するので、手動では作りません。
 - bucket 名は `infra/cloudflare/main.tf` の `generation_prefix` から決まります。transfer bucket の名前は `iori-<environment>-<generation>-transfer` で、application bucket の名前は `iori-<environment>-<generation>-uploads` です。
 - run ID は bucket 名にも token の範囲にも入りません。run ID が入るのは transfer bucket の中の key prefix だけです。このため、token の作成は run ID の確定を待ちません。
-- token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。Environment secret の名前は generation で区別されないので、新しい generation の secret は古い generation の secret を上書きします。新しい generation の secret を登録した後に、古い generation の子 token を削除します。
+- token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。Environment secret の名前は generation で区別されないので、新しい generation の secret は古い generation の secret を上書きします。新しい generation の secret を登録した後に、古い generation の子 token を削除します。ただし、計測用の generation の子 token は、計測3 が終わった後に削除します（「計測用の generation での扱い」を参照）。
 
 **ユーザーと作業者の分担**
 
@@ -120,7 +120,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 | `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`                   | `prepare-target` の後 | `EXPIRES_ON` |
 | `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                       | `prepare-target` の後 | `EXPIRES_ON` |
 
-各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、バックログ B11 で決めます。
+各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
 
 `EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
 
@@ -158,7 +158,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    ACCOUNT_ID='<ACCOUNT_ID>'
    ENV_NAME='<environment>'
    GENERATION='<generation>'
-   EXPIRES_ON='<cutover-route の完了予定日 + 14 日（RFC 3339）>'
+   EXPIRES_ON='<本番用は cutover-route の完了予定日 + 14 日、計測用は計測2 の予定日 + 7 日（RFC 3339）>'
    ITEM_WRITE='2efd5506f9c8494dacb1fa10a3e7d5b6'
    ITEM_READ='6a018a9f2fc74eb6b293b0c548f38b39'
    PREFIX="iori-${ENV_NAME}-${GENERATION}"
@@ -269,14 +269,14 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 - 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard の token 一覧ですぐに削除し、レビューに戻します。
 - `connectivity-check/` の DELETE が失敗した場合は、残った object を移行後の後始末で削除します。`verify-import` が列挙するのは `post-images/` と `og/` だけなので、残った object は後続の検査に影響しません。
-- `migrate-data` を始める前に、作業者が Dashboard の token 一覧で、期限のある 3 つの子 token の期限を確かめます。期限まで 3 日を切っている子 token がある場合は、Dashboard で期限を延ばしません。延ばした後に token の値が変わらないことを確かめていないからです。代わりに、作業者が Dashboard でその子 token を削除し、ユーザーが新しい親 token で `issue_r2` を実行して作り直します。作り直した後は、段階 B と同じ `s3` で疎通を確かめます。`transfer-write` を作り直した場合は、`s3 GET` で準備記録を読めることを確かめます。
+- `migrate-data` を始める前に、作業者が Dashboard の token 一覧で、期限のある子 token（本番用では 3 つ、計測用では 2 つ）の期限を確かめます。期限まで 3 日を切っている子 token がある場合は、Dashboard で期限を延ばしません。延ばした後に token の値が変わらないことを確かめていないからです。代わりに、作業者が Dashboard でその子 token を削除し、ユーザーが新しい親 token で `issue_r2` を実行して作り直します。作り直した後は、段階 B と同じ `s3` で疎通を確かめます。`transfer-write` を作り直した場合は、`s3 GET` で準備記録を読めることを確かめます。
 
 **移行後の後始末**
 
 - 本番用 generation の `cutover-route` の完了を確認した後に、作業者が Dashboard の token 一覧で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
 - `transfer-read-only` の子 token は、その generation が active な間は削除しません。
 - 作業者が Dashboard の R2 の object 一覧で、application bucket と transfer bucket の `connectivity-check/` に object が残っていないかを確かめます。object が残っていれば、作業者が Dashboard で削除します。読み取り専用の token への PUT が 403 にならなかった場合に書き込まれた object も、同じ prefix にあります。作業者は、その object も同じ方法で削除します。
-- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、バックログ B11 で決めます。
+- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
 
 **未確認の点と、止める条件**
 
@@ -318,7 +318,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
   - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
   - production だけで、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
-- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。公開ログで失敗の種類を見分けられるようにする対応は、バックログ B12 で行います。
+- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。公開ログで失敗の種類を見分けられるようにする対応は、[#499](https://github.com/iwasa-kosui/monorepo/issues/499) で行います。
 - `prepare-target` が失敗した場合は、作業者が Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
   - どれも存在しない場合は、`prepare-target` がリソースを作る前に止まっています。VAPID の検査で止まった可能性があります。作業者は次の順に対応します。
     1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
@@ -606,7 +606,7 @@ rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
 
 後片付けの前に、5.4 の envelope の取得と登録を済ませます。envelope は使い捨て generation の transfer bucket にあるため、bucket を削除すると取り出せなくなります。
 
-`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。削除手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。
+`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。削除手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。削除手順は [#500](https://github.com/iwasa-kosui/monorepo/issues/500) で整えます。
 
 使い捨て generation には、本番の実データが匿名化されずに残ります。実データは個人データを含みます。残る場所は次のとおりです。
 
