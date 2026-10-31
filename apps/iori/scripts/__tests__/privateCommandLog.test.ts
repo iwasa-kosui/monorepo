@@ -64,3 +64,29 @@ it.each([0, 1])('retains remote source child diagnostics privately with exit %s 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+const failureOf = async (program: string, args: string[]) => {
+  try {
+    await runMigrationCommand(program, args, {
+      cwd: process.cwd(),
+      env: process.env,
+      timeout: 10_000,
+      maxBuffer: 100_000,
+      captureOutput: async () => {},
+    });
+  } catch (error) {
+    return error as Error & { exitCode?: number | null; signal?: string | null; spawnFailed?: boolean };
+  }
+  throw new Error('expected the command to fail');
+};
+it('attaches the exit code to the failure without changing its message', async () => {
+  const failure = await failureOf(process.execPath, ['-e', 'process.exitCode=3']);
+  expect(failure.message).toBe('Migration command failed; outcome may be uncertain.');
+  expect(failure.exitCode).toBe(3);
+  expect(failure.signal).toBeNull();
+});
+it('marks a command that could not be spawned', async () => {
+  const failure = await failureOf('iori-command-that-does-not-exist', []);
+  expect(failure.message).toBe('Migration command failed; outcome may be uncertain.');
+  expect(failure.spawnFailed).toBe(true);
+});

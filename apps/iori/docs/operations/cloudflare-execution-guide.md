@@ -178,6 +178,33 @@ umask 077
 
 **完了条件:** 必要な runtime・source control が配備され、build SHA と配布物が一致し、意図しない凍結や dirty checkout がない。ローカル SSH の成功とは別に、hosted runner からの接続も確認する。
 
+### 4.1 source 配備 step の失敗診断
+
+`deploy-iori.yml` の step「Deploy guarded exact source revision」が失敗すると、step は固定の失敗文言 `Protected workflow step failed; retain remote state for reviewed recovery.` を出します。step はこの文言の直前に、次の形式の診断行を Actions ログへ出します。診断行に秘密値とホスト名は含まれません。
+
+```text
+IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=<名前|none> reason=<分類>
+```
+
+配備が成功した場合、step は `IORI_DIAG` 行を出しません。
+
+`stage` の値と意味は次のとおりです。
+
+- `inputs`: 入力の検査
+- `manifest`: runner 側の main と dist の検査
+- `remote-check`、`remote-checkout`、`remote-dependencies`、`remote-dist-check`、`remote-verify-dist`、`remote-install`、`remote-restart`: 旧環境で実行する各段階
+- `rsync`: dist の転送
+- `status`: 再起動後の readiness 確認
+- `hosted-invocation`、`hosted-private-directory`、`hosted-materialize`、`hosted-reviewed-main`、`hosted-deploy-source`: runner 側の前処理。まとめて `hosted-*` と呼びます。
+
+作業者は `program`、`exit`、`reason` の組で原因を切り分けます。
+
+- `program` が `ssh` で `exit=255` の場合、または `program` が `rsync` で `exit` が `255` か `12` の場合に、`reason` が `ssh-*` なら、接続か認証が失敗しています。`ssh-*` は `ssh-auth-denied`、`ssh-host-key`、`ssh-key-format`、`ssh-timeout`、`ssh-refused`、`ssh-dns` です。作業者は production environment の `IORI_SOURCE_SSH_*` secret、旧環境の authorized_keys、known_hosts を確認します。
+- `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は `reason` に対応する前提を旧環境で確認します。
+- `reason=remote-node-missing` の場合、旧環境に nvm の node v24.12.0 がありません。
+- `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
+- `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
+
 ## 5. 初回 staging rehearsal の準備
 
 初回の実測 profile を作る専用 hosted operation は現行 workflow にありません。`migrate-data` は開始前にその profile を要求するため、初回計測目的で dispatch しても先へ進めません。CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証であり、実移行の容量・所要時間の証拠にはしません。
