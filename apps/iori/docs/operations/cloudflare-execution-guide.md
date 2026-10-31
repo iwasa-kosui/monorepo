@@ -130,6 +130,8 @@ gh secret list --repo "$iori_repo" --env "$iori_environment"
 | `workerHostname`                                            | 新 generation の確認済み workers.dev hostname                                 |
 | `smoke.username`, `smoke.uploadFilename`, `smoke.articleId` | 移行対象に存在し、完全な smoke checklist を実行できるユーザー・画像・公開記事 |
 
+smoke は、`smoke.articleId` の記事の OGP PNG が R2 に backfill 済みであることを前提とします。smoke は Worker の OGP 生成の経路を検証しません。作業者は、その経路を第6.2節の「production 切替後の OGP 確認」で確かめます。
+
 fixture のゼロ UUID や仮の hostname を本番へ登録しません。初回準備後は identity を同じ migration の途中で差し替えません。詳細な独立 target と prepared record の照合は [infra README](../../infra/cloudflare/README.md)に従います。
 
 **完了条件:** 参照名、対象、権限、鍵の対応、実測 profile、identity が揃う。各 role の実接続が検証できるまで credential 名だけで pass にしない。
@@ -268,7 +270,23 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 
 staging が完了したら、production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
 
-**既知の制限:** Worker の記事公開処理は OGP 画像を生成しません。移行時に存在する記事の OGP 画像は、データ移行の backfill が R2 に保存します。切替後に公開した記事の `/og/...` は 404 を返します。この手順はこの制限を既知の制限として残し、別の変更で対応します。
+**OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への要求で生成します。Worker はこの要求で R2 の `og/<article-id>.png` を探し、あれば返します。無ければ、公開済みの記事に限り Worker が PNG を生成し、R2 の `og/<article-id>.png` に保存して返します。記事の公開時には生成しません。次の点に注意してください。
+
+- 最初の要求では、Worker が生成を終えるまで応答が遅くなります。2 回目以降は、Worker が R2 の PNG をそのまま返します。
+- 記事が無い場合と記事が未公開の場合、Worker は生成せず 404 を返します。
+- R2 の読み取り、D1 の記事参照、フォント取得、描画のいずれかに失敗すると、Worker は 503 を返し、`Retry-After: 60` と `Cache-Control: public, max-age=60` を付けます。Worker は R2 に保存せず、失敗を Worker のログに記録します。
+- Worker は、失敗した記事への要求に対して、失敗から 60 秒間は生成を試みず 503 を返します。この記録は Worker の isolate ごとのメモリにあり、isolate が変わると消えます。60 秒を過ぎた要求で、Worker が再び生成を試みます。
+- 生成時に、Worker は Google Fonts の `fonts.googleapis.com` と `fonts.gstatic.com` から、タイトルの描画に必要な文字だけのフォントを取得します。Worker の外向きの通信先が増えます。
+- 生成は Worker の CPU 時間を使います。`workers/iori/wrangler.template.jsonc` に `limits.cpu_ms` は無く、Worker は Workers Paid の既定値 30 秒の範囲で動く想定です。Workers Free の CPU 時間 10 ms には収まらない想定です。第1節のとおり、この移行は Workers Paid を前提とします。
+
+**production 切替後の OGP 確認:** 第6.2節の `cutover-route` を production で実行して成功した後に、次を確認します。
+
+1. R2 に `og/<article-id>.png` が無い公開済みの記事を1件選びます。
+2. その記事について `/api/og/articles/<article-id>` を1回要求します。ブラウザでこの URL を開き、PNG が表示されることも確かめます。
+3. 応答が 200 で、`Content-Type` が `image/png` であることを確認します。
+4. R2 に `og/<article-id>.png` が保存されたことを確認します。
+
+記録には pass/fail だけを残します。
 
 ## 7. 中断と引き継ぎ
 

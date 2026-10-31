@@ -5,6 +5,8 @@
     "node": "24.12.0"
   },
   "dependencies": {
+    "@cf-wasm/resvg": "0.4.0",
+    "@cf-wasm/satori": "0.4.2",
     "@dotenvx/dotenvx": "1.51.4",
     "@fedify/fedify": "1.10.0",
     "@fedify/hono": "1.10.0",

@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 const origin = 'http://localhost:8787';
@@ -64,6 +64,42 @@ describe('iori Worker on workerd', () => {
     expect(body.timelineItems.map((item: { post: { content: string } }) => item.post.content).join('\n')).toContain(
       'hello from workerd',
     );
+  });
+
+  it('generates the OGP image with the wasm renderer on an R2 miss and stores it', async () => {
+    const articleId = '3f1d6a52-8c1e-4b6a-9d0e-5a7c2b9e1f40';
+    const row = await env.DB.prepare(
+      'SELECT l.actorId AS actorId, l.userId AS userId, p.postId AS postId FROM local_actors l JOIN posts p ON p.actorId = l.actorId LIMIT 1',
+    ).first<{ actorId: string; userId: string; postId: string }>();
+    expect(row).not.toBeNull();
+    await env.DB.prepare(
+      'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt, publishedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(articleId, row!.actorId, row!.userId, row!.postId, 'workerd で OGP 画像を生成する', 'published', 1, 1).run();
+
+    const fontBytes = Uint8Array.from(atob(env.TEST_OG_FONT_BASE64), (char) => char.charCodeAt(0));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (request.redirect !== 'manual') throw new Error(`Unexpected redirect mode: ${request.redirect}`);
+      const url = new URL(request.url);
+      if (url.hostname === 'fonts.googleapis.com') {
+        return new Response('src: url(https://fonts.gstatic.com/s/notosansjp/font.ttf) format("truetype");');
+      }
+      if (url.hostname === 'fonts.gstatic.com') return new Response(fontBytes);
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const response = await SELF.fetch(`${origin}/api/og/articles/${articleId}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('image/png');
+      expect([...new Uint8Array(await response.arrayBuffer()).slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(await env.UPLOADS.head(`og/${articleId}.png`)).not.toBeNull();
+    const cached = await SELF.fetch(`${origin}/api/og/articles/${articleId}`);
+    expect(cached.status).toBe(200);
   });
 
   it('serves the ActivityPub actor with a generated key pair', async () => {
