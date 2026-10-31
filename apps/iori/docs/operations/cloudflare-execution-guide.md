@@ -706,6 +706,8 @@ dispatch の入力は次のとおりです。
 
 `IORI_ADMISSION_IDENTITY` には、次の前提があります。`purge-rehearsal-target` の job は、子プロセスに渡す `MAIN_SHA` を `migration_main_sha` に差し替えます。`read-migration-target` は、`IORI_ADMISSION_IDENTITY` の `mainSha` が、この `MAIN_SHA` と一致することを要求します。同じ検査は `environment`、`generation`、`runId` にもあります。そのため、`purge-rehearsal-target` の時点の `IORI_ADMISSION_IDENTITY` は、`rehearse-migration` を実行したときの SHA、generation、run ID で作った値である必要があります。この前提は `deploy-worker` と同じです。
 
+作業者は、`purge-rehearsal-target` を `rehearse-migration` の直後に実行します。作業者は、`IORI_ADMISSION_IDENTITY` を本番用 generation（または次の計測）の値に切り替える前に、`purge-rehearsal-target` を実行します。切り替えた後に実行すると、`read-migration-target` が `purge-rehearsal-target` を拒否します。
+
 ```bash
 iori_main_sha="$(gh api "repos/$iori_repo/commits/main" --jq .sha)"
 iori_migration_main_sha='<rehearse-migration を実行した main_sha>'
