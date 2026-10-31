@@ -165,8 +165,11 @@ export const runSourceDeployStep = async (
         const before = await inspectConfiguration();
         if (before.uid !== 0) {
           await check();
-          await exec('sudo', ['-n', 'chown', '0:0', sourceEnvironmentFile]);
-          if ((await inspectConfiguration()).uid !== 0) throw new Error('Source configuration owner reset failed.');
+          await exec('sudo', ['-n', 'chown', '-h', '0:0', sourceEnvironmentFile]);
+          const after = await inspectConfiguration();
+          if (after.uid !== 0 || after.dev !== before.dev || after.ino !== before.ino) {
+            throw new Error('Source configuration owner reset failed.');
+          }
           process.stderr.write(
             `IORI_NOTICE stage=remote-configuration-owner previous_uid=${before.uid} previous_gid=${before.gid}\n`,
           );

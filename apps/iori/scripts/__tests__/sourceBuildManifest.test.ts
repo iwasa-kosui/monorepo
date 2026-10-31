@@ -146,8 +146,15 @@ describe('UPLOAD_DIR inspection before the dist transfer', () => {
 });
 describe('configuration owner reset before install', () => {
   const environmentFile = '/etc/systemd/system/microblog.service.d/env.conf';
-  type Stat = { isFile: () => boolean; uid: number; gid: number; mode: number };
-  const regular = (uid: number, mode = 0o100640): Stat => ({ isFile: () => true, uid, gid: 1002, mode });
+  type Stat = { isFile: () => boolean; uid: number; gid: number; mode: number; dev: number; ino: number };
+  const regular = (uid: number, mode = 0o100640): Stat => ({
+    isFile: () => true,
+    uid,
+    gid: 1002,
+    mode,
+    dev: 1,
+    ino: 100,
+  });
   const run = async (stats: Stat[]) => {
     const home = await fixture();
     const dist = join(home, 'monorepo/apps/iori/dist');
@@ -189,7 +196,7 @@ describe('configuration owner reset before install', () => {
   it('runs the fixed chown once and prints only the previous owner ids', async () => {
     const { result, sudo, writes, lstatPaths } = await run([regular(1001), regular(0)]);
     await expect(result).resolves.toBeUndefined();
-    expect(sudo).toEqual([['-n', 'chown', '0:0', environmentFile]]);
+    expect(sudo).toEqual([['-n', 'chown', '-h', '0:0', environmentFile]]);
     expect(lstatPaths).toEqual([environmentFile, environmentFile]);
     expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
       'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002\n',
@@ -197,6 +204,12 @@ describe('configuration owner reset before install', () => {
   });
   it('fails without a notice when the owner is still not root after chown', async () => {
     const { result, sudo, writes } = await run([regular(1001), regular(1001)]);
+    await expect(result).rejects.toThrow('Source configuration owner reset failed.');
+    expect(sudo).toHaveLength(1);
+    expect(writes.join('')).not.toContain('IORI_NOTICE');
+  });
+  it('fails without a notice when the configuration is replaced during chown', async () => {
+    const { result, sudo, writes } = await run([regular(1001), { ...regular(0), ino: 200 }]);
     await expect(result).rejects.toThrow('Source configuration owner reset failed.');
     expect(sudo).toHaveLength(1);
     expect(writes.join('')).not.toContain('IORI_NOTICE');
