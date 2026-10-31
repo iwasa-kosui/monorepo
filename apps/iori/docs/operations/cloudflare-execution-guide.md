@@ -99,7 +99,16 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - bucket 名は `infra/cloudflare/main.tf` の `generation_prefix` から決まります。transfer bucket の名前は `iori-<environment>-<generation>-transfer` で、application bucket の名前は `iori-<environment>-<generation>-uploads` です。
 - run ID は bucket 名にも token の範囲にも入りません。run ID が入るのは transfer bucket の中の key prefix だけです。このため、token の作成は run ID の確定を待ちません。
 - token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。新しい generation の secret を登録した後に、古い generation の子 token を削除します。
-- この小節の Dashboard 操作は、作業者が行います。作業者は Claude in Chrome で Dashboard を操作してもかまいません。
+
+**ユーザーと作業者の分担**
+
+- 親 token の値は、作成ボタンを押した後の Dashboard の画面に表示されます。親 token は Account API Tokens Edit を持つので、ほかの token を発行できます。
+- ユーザーが、次の 2 つを行います。
+  - 親 token の作成ボタンを押した後の画面で、Copy ボタンを押すこと
+  - 自分の端末で、親 token を読み込む zsh（「準備」の手順 2 と、段階 A と段階 B の zsh）を実行すること
+- 作業者は、それ以外の Dashboard の画面を操作します。対象は、親 token の権限の選択、token の一覧、期限の確認、token の削除です。作業者は Claude in Chrome で操作してもかまいません。
+- 作業者は、token の値が表示される画面に遷移しません。作業者は、その画面のスクリーンショットを撮りません。
+- 子 token は Dashboard で作りません。子 token は、ユーザーの端末の zsh が API で作ります。子 token の値は、Dashboard にも作業者の画面にも表示されません。
 
 | Secret prefix                   | bucket             | permission group                     | 使う operation                                    | 作る時期              | 期限         |
 | ------------------------------- | ------------------ | ------------------------------------ | ------------------------------------------------- | --------------------- | ------------ |
@@ -108,7 +117,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 | `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `migrate-data`                                    | `prepare-target` の後 | `EXPIRES_ON` |
 | `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                  | `prepare-target` の後 | `EXPIRES_ON` |
 
-各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。
+各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、バックログ B11 で決めます。
 
 `EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
 
@@ -116,18 +125,20 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 **準備**
 
-1. 作業者が Dashboard で、使い捨ての親 token を作ります。
-   - 作成画面は「Manage account > Account API tokens > Create Token」です。
-   - 権限には「Account > Account API Tokens > Edit」だけを付けます。API の permission group 名では「Account API Tokens Write」にあたります。
-   - 対象 account は移行先の account だけにします。TTL は作業当日の終わりまでにします。
-   - 名前は `iori-<environment>-<generation>-r2-issuer` にします。
+1. 作業者とユーザーが Dashboard で、使い捨ての親 token を作ります。
+   - 作業者が「Manage account > Account API tokens > Create Token」を開きます。
+   - 作業者が、権限に「Account > Account API Tokens > Edit」だけを付けます。API の permission group 名では「Account API Tokens Write」にあたります。
+   - 作業者が、対象 account を移行先の account だけにし、TTL を作業当日の終わりまでにします。名前は `iori-<environment>-<generation>-r2-issuer` にします。
    - Cloudflare の仕様により、作成者は Super Administrator か API Token Provisioning の権限を持つ必要があります。作成者は、自分が持つ権限の範囲内でしか token に権限を付けられません。
-   - 作業者は、作成後の画面の Copy ボタンで親 token の値をクリップボードに入れます。作業者は、値を表示した画面のスクリーンショットを撮りません。親 token の値は、ログにも、PR にも、メッセージにも書きません。
+   - ユーザーが作成ボタンを押し、表示された画面の Copy ボタンで親 token の値をクリップボードに入れます。親 token の値は、ログにも、PR にも、メッセージにも書きません。
    - 段階 A と段階 B を別の日に行う場合は、段階ごとに親 token を作ります。
-2. 作業者が `GET /accounts/<ACCOUNT_ID>/tokens/permission_groups` を呼んで、permission group の名前から ID を引きます。Cloudflare は名前が変わりうると説明しているので、policy には ID を指定します。2026-10-31 時点の ID は次のとおりです。実行前に再確認します。
-   - Workers R2 Storage Bucket Item Write: `2efd5506f9c8494dacb1fa10a3e7d5b6`
-   - Workers R2 Storage Bucket Item Read: `6a018a9f2fc74eb6b293b0c548f38b39`
-3. 作業者が zsh で次の関数を読み込みます。親 token はクリップボードから読み、読んだ直後にクリップボードを空にします。親 token は `curl --config -` の標準入力で渡すので、コマンドラインの引数には出ません。子 token の値は端末に表示せず、`gh secret set` の標準入力へ渡します。Secret Access Key は、子 token の値の SHA-256 を 16 進の小文字で表した値です。
+2. ユーザーが自分の端末の zsh で、次の内容を実行します。作業者は、`<...>` を埋めたこの内容を、ファイルとして用意してもかまいません。
+   - zsh は、親 token をクリップボードから読み、読んだ直後にクリップボードを空にします。
+   - zsh は、親 token が有効かを `GET /accounts/<ACCOUNT_ID>/tokens/verify` で確かめます。Copy に失敗していると、クリップボードには古い内容が残っています。このため、zsh は有効でない場合に止まります。
+   - zsh は、`GET /accounts/<ACCOUNT_ID>/tokens/permission_groups` で、`ITEM_WRITE` と `ITEM_READ` の ID が正しい名前に対応しているかを確かめます。Cloudflare は名前が変わりうると説明しているので、policy には ID を指定します。2026-10-31 時点の ID は次のとおりです。
+     - Workers R2 Storage Bucket Item Write: `2efd5506f9c8494dacb1fa10a3e7d5b6`
+     - Workers R2 Storage Bucket Item Read: `6a018a9f2fc74eb6b293b0c548f38b39`
+   - 親 token は `curl --config -` の標準入力で渡すので、コマンドラインの引数には出ません。子 token の値は端末に表示せず、`gh secret set` の標準入力へ渡します。Secret Access Key は、子 token の値の SHA-256 を 16 進の小文字で表した値です。
 
    ```zsh
    setopt interactive_comments
@@ -136,8 +147,8 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    ENV_NAME='<environment>'
    GENERATION='<generation>'
    EXPIRES_ON='<cutover-route の完了予定日 + 14 日（RFC 3339）>'
-   ITEM_WRITE='<Workers R2 Storage Bucket Item Write の ID>'
-   ITEM_READ='<Workers R2 Storage Bucket Item Read の ID>'
+   ITEM_WRITE='2efd5506f9c8494dacb1fa10a3e7d5b6'
+   ITEM_READ='6a018a9f2fc74eb6b293b0c548f38b39'
    PREFIX="iori-${ENV_NAME}-${GENERATION}"
    TRANSFER_BUCKET="${PREFIX}-transfer"
    UPLOADS_BUCKET="${PREFIX}-uploads"
@@ -150,9 +161,18 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
        --config - <<<"header = \"Authorization: Bearer ${CF_ISSUER_TOKEN}\""
    }
 
+   if ! cf_api GET /tokens/verify | jq -e '.success and .result.status == "active"' >/dev/null; then
+     echo '親 token が有効ではありません。Copy からやり直します'; unset CF_ISSUER_TOKEN
+   elif ! cf_api GET /tokens/permission_groups | jq -e --arg w "$ITEM_WRITE" --arg r "$ITEM_READ" '
+       ([.result[] | select(.id == $w) | .name] == ["Workers R2 Storage Bucket Item Write"])
+       and ([.result[] | select(.id == $r) | .name] == ["Workers R2 Storage Bucket Item Read"])' >/dev/null; then
+     echo 'permission group の ID と名前が対応していません。レビューに戻します'; unset CF_ISSUER_TOKEN
+   fi
+
    issue_r2() {  # $1=secret prefix $2=bucket 名 $3=permission group ID $4=token 名 $5=期限（空なら期限なし）
      setopt local_options pipe_fail
      unset LAST_KEY_ID LAST_SECRET
+     [[ -n $CF_ISSUER_TOKEN ]] || { echo '親 token がありません'; return 1; }
      local list body res id
      list=$(cf_api GET '/tokens?per_page=100') || return 1
      if ! jq -e '.success' >/dev/null <<<"$list"; then
@@ -198,19 +218,19 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 **段階 A: `prepare-target` の前**
 
-1. 作業者が `IORI_TRANSFER_R2_WRITE` を作ります。
+1. ユーザーが、手順 2 の zsh を読み込んだ端末で `IORI_TRANSFER_R2_WRITE` を作ります。
 
    ```zsh
    issue_r2 IORI_TRANSFER_R2_WRITE "$TRANSFER_BUCKET" "$ITEM_WRITE" "${PREFIX}-transfer-write" "$EXPIRES_ON"
    unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
    ```
 
-2. 作業者が Dashboard で親 token を削除し、一覧から消えたことを確認します。
+2. 作業者が Dashboard の token 一覧で親 token を削除し、一覧から消えたことを確認します。
 3. `prepare-target` が準備記録を transfer bucket に書き込んで読み戻すと、`IORI_TRANSFER_R2_WRITE` の疎通が確かめられます。
 
 **段階 B: `prepare-target` の後、`migrate-data` の前**
 
-1. 作業者が新しい親 token で「準備」の手順 3 を読み込み直し、残りの 3 つを作ります。各 token を作った直後に、作った値で S3 の疎通を確かめます。読み取り専用の token では、書き込みが 403 で拒否されることも確かめます。
+1. 作業者とユーザーが「準備」の手順 1 で新しい親 token を作ります。ユーザーが手順 2 の zsh を読み込み直し、残りの 3 つを作ります。各 token を作った直後に、作った値で S3 の疎通を確かめます。読み取り専用の token では、書き込みが 403 で拒否されることも確かめます。
 
    ```zsh
    issue_r2 IORI_TRANSFER_R2_READ_ONLY "$TRANSFER_BUCKET" "$ITEM_READ" "${PREFIX}-transfer-read-only" '' &&
@@ -229,19 +249,20 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
    ```
 
 2. 作業者が `gh api repos/iwasa-kosui/monorepo/environments/<environment>/secrets` で、8 つの secret 名と更新日時を確認します。値は読みません。
-3. 作業者が Dashboard で親 token を削除し、一覧から消えたことを確認します。
+3. 作業者が Dashboard の token 一覧で親 token を削除し、一覧から消えたことを確認します。
 
 **完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret が登録されていることです。この条件を満たすまで `migrate-data` を実行しません。
 
-- 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard ですぐに削除し、レビューに戻します。
+- 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard の token 一覧ですぐに削除し、レビューに戻します。
 - `connectivity-check/` の DELETE が失敗した場合は、残った object を移行後の後始末で削除します。`verify-import` が列挙するのは `post-images/` と `og/` だけなので、残った object は後続の検査に影響しません。
-- `migrate-data` を始める前に、作業者が Dashboard の Account API tokens の一覧で、期限のある 3 つの子 token の期限を確かめます。期限まで 3 日を切っている場合は、作業者が Dashboard で期限を延ばしてから `migrate-data` を始めます。
+- `migrate-data` を始める前に、作業者が Dashboard の token 一覧で、期限のある 3 つの子 token の期限を確かめます。期限まで 3 日を切っている子 token がある場合は、Dashboard で期限を延ばしません。延ばした後に token の値が変わらないことを確かめていないからです。代わりに、作業者が Dashboard でその子 token を削除し、ユーザーが新しい親 token で `issue_r2` を実行して作り直します。作り直した後は、段階 B と同じ `s3` で疎通を確かめます。`transfer-write` を作り直した場合は、`s3 GET` で準備記録を読めることを確かめます。
 
 **移行後の後始末**
 
-- `cutover-route` の完了を確認した後に、作業者が Dashboard で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
+- `cutover-route` の完了を確認した後に、作業者が Dashboard の token 一覧で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
 - `transfer-read-only` の子 token は、その generation が active な間は削除しません。
-- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、この文書ではまだ決めていません。cutover の後始末を決める作業で決めます。
+- 作業者が Dashboard の R2 の object 一覧で、application bucket と transfer bucket の `connectivity-check/` に object が残っていないかを確かめます。object が残っていれば、作業者が Dashboard で削除します。読み取り専用の token への PUT が 403 にならなかった場合に書き込まれた object も、同じ prefix にあります。作業者は、その object も同じ方法で削除します。
+- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、バックログ B11 で決めます。
 
 **未確認の点と、止める条件**
 
@@ -283,10 +304,10 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
   - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
   - production だけで、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
-- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。
+- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。公開ログで失敗の種類を見分けられるようにする対応は、バックログ B12 で行います。
 - `prepare-target` が失敗した場合は、作業者が Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
   - どれも存在しない場合は、`prepare-target` がリソースを作る前に止まっています。VAPID の検査で止まった可能性があります。作業者は次の順に対応します。
-    1. 作業者が source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。Environment secret は、同じ名前の repo レベル secret より優先されます。
+    1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
     2. 作業者が同じ generation で `prepare-target` をやり直します。
     3. やり直しても失敗し、リソースも作られていない場合は、GitHub hosted runner から `ORIGIN` に到達できない可能性があります。この場合は作業を止めて、レビューに戻します。
   - どれか 1 つでも存在する場合は、リソースを作り始めた後に失敗しています。この場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。
@@ -428,12 +449,12 @@ staging が完了したら、production に異なる generation・リソース�
 
 ## 7. 中断と引き継ぎ
 
-| 中断地点                      | 維持する状態                            | 次の対応                                                             |
-| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                       |
-| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない    |
-| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施 |
-| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない     |
+| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                 |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                           |
+| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない（generation のリソースが1つも無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
+| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                     |
+| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                         |
 
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 
