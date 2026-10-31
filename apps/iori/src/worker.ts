@@ -3,7 +3,11 @@ import { federation } from '@fedify/hono';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
+import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1SessionResolver } from './adaptor/d1/session/sessionResolver.ts';
+import { generateOgImageOnDemand } from './adaptor/ogImage/generateOgImageOnDemand.ts';
+import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
+import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
@@ -257,10 +261,17 @@ export default {
           return new Response('Not Found', { status: 404 });
         }
 
-        const store = createR2OgImageStore(env.UPLOADS);
-        const stored = await store.get(articleId.val);
-        if (stored !== undefined) return stored;
-        return new Response('Not Found', { status: 404 });
+        const articleResolver = createD1ArticleResolver(runtime.db);
+        const generated = await generateOgImageOnDemand({
+          store: createR2OgImageStore(env.UPLOADS),
+          resolvePublishedTitle: async (id) => {
+            const article = await articleResolver.resolve(id);
+            return article.ok && article.val?.status === 'published' ? article.val.title : undefined;
+          },
+          loadFont: (text) => fetchOgFont({ text }),
+          render: renderWorkerOgImage,
+        })(articleId.val);
+        return generated ?? new Response('Not Found', { status: 404 });
       },
     }).fetch(request as unknown as Request, env, executionCtx);
   },

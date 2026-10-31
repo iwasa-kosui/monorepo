@@ -4,7 +4,7 @@ import type { OgImageStore } from '../../ports/ogImageStore.ts';
 
 export type OgImageR2Bucket = Pick<R2Bucket, 'get' | 'put'>;
 
-const cacheControl = 'public, max-age=31536000, immutable';
+export const ogImageCacheControl = 'public, max-age=31536000, immutable';
 
 export const createR2OgImageStore = (bucket: OgImageR2Bucket): OgImageStore => ({
   get: async (key) => {
@@ -16,13 +16,13 @@ export const createR2OgImageStore = (bucket: OgImageR2Bucket): OgImageStore => (
     return new Response(object.body as BodyInit, {
       headers: {
         'Content-Type': object.httpMetadata?.contentType ?? 'image/png',
-        'Cache-Control': object.httpMetadata?.cacheControl ?? cacheControl,
+        'Cache-Control': object.httpMetadata?.cacheControl ?? ogImageCacheControl,
       },
     });
   },
   put: async ({ key, body, contentType }) => {
     await bucket.put(`og/${key}.png`, body, {
-      httpMetadata: { contentType, cacheControl },
+      httpMetadata: { contentType, cacheControl: ogImageCacheControl },
     });
   },
 });

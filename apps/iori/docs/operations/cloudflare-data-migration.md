@@ -43,7 +43,7 @@ executor はさらに renderer・転送 buffer 用の 256 MiB と、記事があ
 
 executor は検証済みの `post_images` NDJSON を順に読み、`/uploads/<uuid>.<gif|jpeg|jpg|png|webp>` に対応する原画像だけを import します。source file の不在や UUID の不一致は失敗です。公式 S3 SDK の `PutObjectCommand` で content type、cache-control、SHA-256 の custom metadata を object 本体へ設定し、`post-images/<image-id>/original` に格納します。metadata sidecar は生成しません。`post_images.url` は既存の値を維持し、Worker が安定 URL と R2 key を対応させます。旧 `cloudflare:import:uploads` CLI は protected executor の利用を要求して停止します。
 
-公開済み article の OGP は、既存の 1,200 × 630 のデザインを使う純粋な Node renderer で生成します。200 文字以下の title から PNG を作り、signature と 32 MiB 上限を検査して `og/<article-id>.png` へ 1 件ずつ upload します。公開記事が 0 件でも空の有効な manifest を生成します。Worker に `sharp` を追加せず、R2 の PNG を読み取ります。
+公開済み article の OGP は、既存の 1,200 × 630 のデザインを使う純粋な Node renderer で生成します。200 文字以下の title から PNG を作り、signature と 32 MiB 上限を検査して `og/<article-id>.png` へ 1 件ずつ upload します。公開記事が 0 件でも空の有効な manifest を生成します。Worker に `sharp` を追加しません。Worker は、R2 に PNG があればそれを返します。PNG が無い公開済みの記事は、Worker が `@cf-wasm/satori` と `@cf-wasm/resvg` で生成して R2 に保存します。
 
 font は凍結前に固定の Google Fonts CSS と許可された `fonts.gstatic.com` から取得します。CSS は 64 KiB / 15 秒、font は 16 MiB / 30 秒に制限し、redirect は拒否します。記事の title はネットワークの URL へ渡しません。upload/OGP manifest は private file へ逐次出力し、各 16 MiB の上限を再確認します。
 

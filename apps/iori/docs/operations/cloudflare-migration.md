@@ -18,13 +18,13 @@
 | -------------------------------- | ---------------------------------------- |
 | HTTP、ActivityPub、Web Push      | Hono/Fedify を実行する Cloudflare Worker |
 | アプリケーションデータ           | D1 と SQLite/Drizzle schema              |
-| 投稿画像と事前生成した OGP PNG   | R2                                       |
+| 投稿画像と OGP PNG               | R2                                       |
 | クライアント静的ファイル         | Workers Assets                           |
 | Fedify の再構築できる一時状態    | Workers KV                               |
 | 非同期配送と失敗配送             | Queues と dead-letter queue              |
 | job 間の移行データと署名済み証跡 | state・アプリ画像用から分離した非公開 R2 |
 
-Terraform は D1、R2、KV、Queue、DLQ、consumer、route を所有します。Wrangler は Worker version、binding、Assets、secret と D1 migration を所有します。Worker graph に Node server、PostgreSQL client、filesystem、`sharp` を含めません。Node は移行元とローカル開発、および runner での OGP 生成に使います。Durable Objects は初回移行には導入しません。
+Terraform は D1、R2、KV、Queue、DLQ、consumer、route を所有します。Wrangler は Worker version、binding、Assets、secret と D1 migration を所有します。Worker graph に Node server、PostgreSQL client、filesystem、`sharp` を含めません。Node は移行元とローカル開発、および runner での OGP 生成に使います。Worker は R2 に OGP PNG が無い公開済みの記事に限り、`@cf-wasm/satori` と `@cf-wasm/resvg` で PNG を生成して R2 に保存します。Durable Objects は初回移行には導入しません。
 
 ## 実行上の条件
 

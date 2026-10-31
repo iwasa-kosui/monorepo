@@ -241,7 +241,11 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 
 staging が完了したら、production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
 
-**既知の制限:** Worker の記事公開処理は OGP 画像を生成しません。移行時に存在する記事の OGP 画像は、データ移行の backfill が R2 に保存します。切替後に公開した記事の `/og/...` は 404 を返します。この手順はこの制限を既知の制限として残し、別の変更で対応します。
+**OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への最初の要求で生成し、R2 の `og/<article-id>.png` に保存します。記事の公開時には生成しません。次の点に注意してください。
+
+- 最初の要求では、Worker が生成を終えるまで応答が遅くなります。2 回目以降は、Worker が R2 の PNG をそのまま返します。
+- 生成に失敗すると、Worker は 404 を返し、R2 には保存しません。次の要求で、Worker が再び生成を試みます。
+- 生成は Worker の CPU 時間を使います。
 
 ## 7. 中断と引き継ぎ
 
