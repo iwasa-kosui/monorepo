@@ -107,6 +107,61 @@ export const materializeHostedValues = async env => {
   ) delete mapped[key];
   return mapped;
 };
+// Only fixed-vocabulary diagnostics may reach the public Actions log.
+const diagnosticLine =
+  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
+const hostedReasons = [
+  ['Invalid source invocation.', 'invalid-source-invocation'],
+  ['Protected workflow invocation is invalid.', 'invalid-invocation'],
+  ['Maintenance operation requires a separate review.', 'maintenance-review-required'],
+  ['Hosted job budget is exhausted.', 'job-budget-exhausted'],
+  ['Invalid hosted private root.', 'private-root-invalid'],
+  ['Invalid runner temporary directory.', 'runner-temp-invalid'],
+  ['Invalid private workflow value.', 'private-value-invalid'],
+  ['Invalid private workflow directory.', 'private-directory-invalid'],
+  ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
+  ['Reviewed main is required.', 'reviewed-main-required'],
+  ['Reviewed checkout mismatch.', 'reviewed-checkout-mismatch'],
+  ['Tracked checkout is dirty.', 'reviewed-checkout-dirty'],
+  ['Reviewed main changed.', 'reviewed-main-changed'],
+  ['Migration command failed; outcome may be uncertain.', 'command-failed'],
+  ['Migration command aborted.', 'aborted'],
+];
+const hostedCodeReasons = {
+  ENOENT: 'fs-enoent',
+  EACCES: 'fs-eacces',
+  EEXIST: 'fs-eexist',
+  ERR_INVALID_ARG_TYPE: 'invalid-argument',
+};
+const writeDiagnosticLine = async line => {
+  try {
+    if (!diagnosticLine.test(line)) return;
+    const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
+    if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
+  } catch {}
+};
+export const publishChildDiagnostics = async stderr => {
+  for (const line of String(stderr).split('\n')) await writeDiagnosticLine(line);
+};
+const hostedStage = async (name, operation, program = 'none') => {
+  try {
+    return await operation();
+  } catch (error) {
+    const exit = program === 'node' && Number.isInteger(error?.exitCode) && error.exitCode >= 0 && error.exitCode <= 255
+      ? String(error.exitCode)
+      : 'none';
+    const exitSignal = program === 'node' && typeof error?.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(error.signal)
+      ? error.signal
+      : 'none';
+    const reason = hostedReasons.find(([message]) => error?.message === message)?.[1]
+      ?? (error?.spawnFailed === true ? 'spawn-failed' : undefined)
+      ?? hostedCodeReasons[error?.code] ?? 'unclassified';
+    await writeDiagnosticLine(
+      `IORI_DIAG stage=hosted-${name} program=${program} exit=${exit} signal=${exitSignal} reason=${reason}`,
+    );
+    throw error;
+  }
+};
 const execute = async (program, args, env, signal, timeout) => {
   const log = await createPrivateCommandLog(env.IORI_PRIVATE_LOG_DIRECTORY);
   try {
@@ -117,17 +172,25 @@ const execute = async (program, args, env, signal, timeout) => {
       timeout,
       maxBuffer: 8_000_000,
       killGraceMs: 15000,
-      captureOutput: log.capture,
+      captureOutput: async result => {
+        await log.capture(result);
+        await publishChildDiagnostics(result.stderr);
+      },
     });
   } finally {
     await log.close();
   }
 };
 export const runHostedWorkflow = async (phase, env, parentSignal) => {
-  const selected = invocation(env);
-  const { remainingMs } = workflowTimeBudget(Number(env.IORI_JOB_STARTED_AT));
+  const stage = (name, operation, program) => phase === 'operate' ? hostedStage(name, operation, program) : operation();
+  let selected;
+  let remainingMs;
+  await stage('invocation', () => {
+    selected = invocation(env);
+    ({ remainingMs } = workflowTimeBudget(Number(env.IORI_JOB_STARTED_AT)));
+  });
   const signal = AbortSignal.any([parentSignal, AbortSignal.timeout(remainingMs)]);
-  await privateBase(env);
+  await stage('private-directory', () => privateBase(env));
   if (phase === 'setup') {
     await execute('pnpm', ['install', '--frozen-lockfile'], env, signal, remainingMs);
     await execute('pnpm', ['--filter', 'result', 'run', 'build'], env, signal, remainingMs);
@@ -145,9 +208,9 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     return;
   }
   if (phase !== 'operate') throw new Error('Invalid hosted phase.');
-  const runtime = await materializeHostedValues(env);
+  const runtime = await stage('materialize', () => materializeHostedValues(env));
   const { assertReviewedMain } = await import('./reviewed-main.mjs');
-  await assertReviewedMain(selected.codeSha, { signal });
+  await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
   if (['migrate-data', 'verify-import', 'cutover-route'].includes(selected.operation)) {
     await execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs);
     // The fixed target-reader output is private and is also the deployment binding authority.
@@ -166,12 +229,17 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     runtime.IORI_REQUIRE_TERRAFORM_BINDINGS = 'true';
     await assertReviewedMain(selected.codeSha, { signal });
   }
-  await execute(
-    process.execPath,
-    [`apps/iori/scripts/${operations[selected.operation]}`],
-    runtime,
-    signal,
-    remainingMs,
+  await stage(
+    selected.operation === 'source' ? 'deploy-source' : 'operation',
+    () =>
+      execute(
+        process.execPath,
+        [`apps/iori/scripts/${operations[selected.operation]}`],
+        runtime,
+        signal,
+        remainingMs,
+      ),
+    'node',
   );
 };
 const emitStatus = async success => {
