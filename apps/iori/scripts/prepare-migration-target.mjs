@@ -9,7 +9,9 @@ import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { createTargetPreparation } from './prepare-target.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
+import { assertVapidBeforePreparation } from './vapid-origin-check.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
+let resourcePreparationStarted = false;
 /** Production CLI uses fixed adapters below; injection is only a library testing boundary. */
 export const prepareMigrationTarget = async ({ config, preparation, deploy, storage }) => {
   const initial = await preparation.prepareResources();
@@ -58,6 +60,13 @@ const main = async (cliSignal) => {
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw new Error('Distinct staging credential is required.');
   }
+  await assertVapidBeforePreparation({
+    environment: config.identity.environment,
+    origin: config.admissionEnvironment.ORIGIN,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    signal: cliSignal,
+  });
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(30 * 60_000)]);
   const storage = transferStorageFromEnvironment(process.env, config.identity, false, signal);
   const privateDirectory = await mkdtemp(join(tmpdir(), 'iori-target-prepare-'));
@@ -89,11 +98,16 @@ const main = async (cliSignal) => {
     if (result.status !== 0) throw new Error('Sealed deployment failed.');
     return JSON.parse(await readFile(resultPath, 'utf8'));
   };
+  resourcePreparationStarted = true;
   await prepareMigrationTarget({ config, preparation, deploy, storage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch(() => {
-    console.error('Target preparation failed; retain generation and any record for reviewed recovery.');
+    console.error(
+      resourcePreparationStarted
+        ? 'Target preparation failed; retain generation and any record for reviewed recovery.'
+        : 'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.',
+    );
     process.exitCode = 1;
   });
 }

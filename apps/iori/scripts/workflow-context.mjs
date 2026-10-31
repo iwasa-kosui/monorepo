@@ -17,6 +17,7 @@ export const parseWorkflowInvocation = (env) => {
     || !/^[a-f0-9]{40}$/.test(migrationSha ?? '')
     || ![
       'prepare-target',
+      'rehearse-migration',
       'migrate-data',
       'verify-import',
       'cutover-route',

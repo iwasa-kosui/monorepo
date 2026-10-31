@@ -105,6 +105,14 @@ export const preparationRecordKey = (target) => {
   const { identity: i } = parseExpectedTarget(target);
   return `prepared-target/v1/${i.environment}/${i.generation}/record.json`;
 };
+export const rehearsalTargetKey = (target) => {
+  const { identity: i } = parseExpectedTarget(target);
+  return `prepared-target/v1/${i.environment}/${i.generation}/rehearsal.json`;
+};
+export const rehearsalProfileKey = (target) => {
+  const { identity: i } = parseExpectedTarget(target);
+  return `iori-migration/v1/${i.environment}/${i.main_sha}/${i.run_id}/rehearsal-profile`;
+};
 export const serializePreparationRecord = (input) => {
   const record = recordSchema.parse(input);
   parseExpectedTarget({

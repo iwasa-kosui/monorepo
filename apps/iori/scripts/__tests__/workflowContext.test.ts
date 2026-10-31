@@ -93,6 +93,20 @@ it('keeps requiring equal code and migration SHAs for the other non-deploy opera
       .toThrow();
   }
 });
+it('accepts the rehearsal operation under the same invocation binding as data migration', () => {
+  expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'rehearse-migration' })).toMatchObject({
+    operation: 'rehearse-migration',
+    codeSha: env.MAIN_SHA,
+    migrationSha: env.MAIN_SHA,
+  });
+  expect(() =>
+    parseWorkflowInvocation({
+      ...env,
+      IORI_OPERATION: 'rehearse-migration',
+      IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
+    })
+  ).toThrow();
+});
 it('reserves activation and cleanup within the whole hosted job deadline', () => {
   expect(workflowTimeBudget(1_000, 61_000)).toMatchObject({ remainingMs: 344 * 60_000, verificationMs: 329 * 60_000 });
   expect(() => workflowTimeBudget(1_000, 331 * 60_000 + 1_000)).toThrow();

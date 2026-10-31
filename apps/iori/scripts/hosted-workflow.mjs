@@ -16,6 +16,7 @@ import {
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = Object.freeze({
   'prepare-target': 'prepare-migration-target.mjs',
+  'rehearse-migration': 'rehearse-protected-migration.mjs',
   'migrate-data': 'execute-protected-migration.mjs',
   'verify-import': 'restore-protected-migration.mjs',
   'cutover-route': 'cutover-migration.mjs',
@@ -77,7 +78,10 @@ export const materializeHostedValues = async env => {
     mapped[output] = await writePrivateValue(join(base, 'keys'), name, normalize(env[input]));
     delete mapped[input];
   };
-  if (['source', 'migrate-data', 'cutover-route', 'resume-source', 'release-pending-freeze'].includes(operation)) {
+  if (
+    ['source', 'rehearse-migration', 'migrate-data', 'cutover-route', 'resume-source', 'release-pending-freeze']
+      .includes(operation)
+  ) {
     await put(
       'IORI_SOURCE_SSH_PRIVATE_KEY',
       'IORI_SOURCE_SSH_IDENTITY_FILE',
@@ -86,11 +90,13 @@ export const materializeHostedValues = async env => {
     );
     await put('IORI_SOURCE_SSH_KNOWN_HOSTS', 'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE', 'source-known-hosts');
   }
-  if (['migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {
+  if (['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {
     await put('IORI_MIGRATION_RECEIPT_PUBLIC_KEY', 'IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH', 'receipt-public.pem');
   }
-  if (operation === 'migrate-data') {
+  if (['rehearse-migration', 'migrate-data'].includes(operation)) {
     await put('IORI_MIGRATION_RECEIPT_PRIVATE_KEY', 'IORI_MIGRATION_RECEIPT_PRIVATE_KEY_PATH', 'receipt-private.pem');
+  }
+  if (operation === 'migrate-data') {
     mapped.IORI_MIGRATION_REHEARSAL_PATH = await writePrivateValue(
       join(base, 'config'),
       'rehearsal.json',
@@ -220,7 +226,7 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const runtime = await stage('materialize', () => materializeHostedValues(env));
   const { assertReviewedMain } = await import('./reviewed-main.mjs');
   await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
-  if (['migrate-data', 'verify-import', 'cutover-route'].includes(selected.operation)) {
+  if (['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'].includes(selected.operation)) {
     await execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs);
     // The fixed target-reader output is private and is also the deployment binding authority.
     const { loadExpectedTarget } = await import('./migration-target-input.mjs');

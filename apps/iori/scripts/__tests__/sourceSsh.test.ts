@@ -212,7 +212,7 @@ it('validates private inputs before remote work and uses only fixed reviewed SSH
   await expect(createSourceSshAdapter(options, { spawnProcess })).rejects.toThrow('Invalid source inputs.');
   expect(calls).toHaveLength(1);
 });
-it.each(['destination_writes_not_enabled', 'destination_writes_reconciled'])(
+it.each(['destination_writes_not_enabled', 'destination_writes_reconciled'] as const)(
   'sends resume with the fixed recovery value %s and the frozen identity only',
   async (recovery) => {
     const { options } = await setup();
@@ -246,7 +246,7 @@ it.each(['destination_writes_not_enabled', 'destination_writes_reconciled'])(
       '123',
       recovery,
     ]);
-    await expect(adapter.resume('anything_else')).rejects.toThrow('Invalid source command.');
+    await expect(adapter.resume('anything_else' as never)).rejects.toThrow('Invalid source command.');
     expect(calls).toHaveLength(1);
   },
 );
