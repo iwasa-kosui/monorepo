@@ -7,3 +7,11 @@ export function runHostedWorkflow(
   env: Record<string, string | undefined>,
   signal: AbortSignal,
 ): Promise<void>;
+export function publishChildDiagnostics(stderr: string): Promise<void>;
+export function executeHostedOperation(
+  name: string,
+  scriptPath: string,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal,
+  timeout: number,
+): Promise<unknown>;

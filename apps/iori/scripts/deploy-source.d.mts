@@ -8,7 +8,11 @@ export function deploySource(options: SourceSshOptions, dependencies?: {
   runCommand?: (
     program: string,
     args: string[],
-    options: { input?: string; signal?: AbortSignal },
+    options: {
+      input?: string;
+      signal?: AbortSignal;
+      captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void>;
+    },
   ) => Promise<{ stdout: string; stderr: string }>;
   checkMain?: (sha: string, options: { signal?: AbortSignal }) => Promise<void>;
   sourceFactory?: (options: SourceSshOptions) => Promise<{ status(signal?: AbortSignal): Promise<SourceState> }>;
