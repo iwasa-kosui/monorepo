@@ -567,11 +567,10 @@ rehearse-migration は、30 分の上限で中断した直後に resume を1回�
 
 `release-pending-freeze` は次の順に動きます。
 
-1. microblog を停止し、停止したことを確かめます。
-2. `freeze.json` が無いことを確かめます。
-3. `freeze.pending` が通常ファイルで、同じ uid の所有であることを確かめます。
-4. `freeze.pending` の中身の `main_sha` と `run_id` が、input の `migration_main_sha` と `migration_run_id` に一致することを確かめます。
-5. 2〜4 の条件を満たした場合だけ、`freeze.pending` を `freeze.pending.rejected-<migration_run_id>` へ rename で退避します。削除はしません。
-6. microblog を起動し、status で凍結していないことを確かめます。
+1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。
+2. microblog を停止し、停止したことを確かめます。
+3. 停止したあとに、手順 1 と同じ条件をもう一度確かめます。あわせて、`freeze.pending` が手順 1 で確かめたファイルと同じファイルであることを確かめます。停止の間にファイルが変わっていた場合は、失敗します。
+4. 手順 3 の条件を満たした場合だけ、`freeze.pending` を `freeze.pending.rejected-<migration_run_id>` へ rename で退避します。削除はしません。
+5. microblog を起動し、status で凍結していないことを確かめます。
 
-条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。このとき microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。
+条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。手順 1 で失敗した場合、`release-pending-freeze` は microblog を停止していません。手順 2 の停止のあとに、手順 3 の再検査、手順 4 の rename、手順 5 の起動のどこかで失敗した場合は、microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。

@@ -55,6 +55,36 @@ export const runPendingFreezeRelease = async (
       throw new Error(message);
     }
   };
+  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
+  const inspect = async () => {
+    if (!await absent(join(base, 'freeze.json'))) throw new Error('Source freeze is already committed.');
+    let before;
+    let identity;
+    try {
+      before = await lstat(pendingPath);
+      if (!before.isFile() || before.uid !== uid || before.size > pendingLimitBytes) throw new Error();
+      const file = await open(pendingPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const opened = await file.stat();
+        if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) throw new Error();
+        const buffer = Buffer.alloc(pendingLimitBytes + 1);
+        const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+        if (bytesRead > pendingLimitBytes) throw new Error();
+        identity = sourceIdentitySchema.parse(JSON.parse(buffer.toString('utf8', 0, bytesRead)));
+      } finally {
+        await file.close();
+      }
+    } catch {
+      throw new Error('Source pending freeze is invalid.');
+    }
+    if (identity.main_sha !== sha || identity.run_id !== runId) {
+      throw new Error('Source pending freeze identity mismatch.');
+    }
+    if (!await absent(rejectedPath)) throw new Error('Source release destination exists.');
+    return before;
+  };
+  await check();
+  const planned = await inspect();
   await service('stop', 'Source service stop failed.');
   let state = '';
   await exec('systemctl', ['is-active', 'microblog'], async (result) => {
@@ -64,31 +94,8 @@ export const runPendingFreezeRelease = async (
   signal?.throwIfAborted();
   if (!['inactive', 'failed'].includes(state)) throw new Error('Source service is not stopped.');
   await check();
-  if (!await absent(join(base, 'freeze.json'))) throw new Error('Source freeze is already committed.');
-  let before;
-  let identity;
-  try {
-    before = await lstat(pendingPath);
-    if (!before.isFile() || before.uid !== uid || before.size > pendingLimitBytes) throw new Error();
-    const file = await open(pendingPath, constants.O_RDONLY | constants.O_NOFOLLOW);
-    try {
-      const opened = await file.stat();
-      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) throw new Error();
-      const buffer = Buffer.alloc(pendingLimitBytes + 1);
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-      if (bytesRead > pendingLimitBytes) throw new Error();
-      identity = sourceIdentitySchema.parse(JSON.parse(buffer.toString('utf8', 0, bytesRead)));
-    } finally {
-      await file.close();
-    }
-  } catch {
-    throw new Error('Source pending freeze is invalid.');
-  }
-  if (identity.main_sha !== sha || identity.run_id !== runId) {
-    throw new Error('Source pending freeze identity mismatch.');
-  }
-  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
-  if (!await absent(rejectedPath)) throw new Error('Source release destination exists.');
+  const before = await inspect();
+  if (before.dev !== planned.dev || before.ino !== planned.ino) throw new Error('Source pending freeze is invalid.');
   await check();
   try {
     await rename(pendingPath, rejectedPath);
