@@ -34,7 +34,9 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
   expect(Object.keys(workflow.jobs)).toEqual([
     'public-artifact-gate',
     'prepare-target',
+    'estimate-source',
     'rehearse-migration',
+    'purge-rehearsal-target',
     'migrate-data',
     'verify-import',
     'cutover-route',
@@ -110,6 +112,48 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   );
   expect(Object.values(workflow.jobs).flatMap(job => job.steps).filter(step => step.uses?.includes('cache')))
     .toHaveLength(0);
+});
+it('gives estimate-source only the four SSH secrets and nothing that signs, writes or reaches Cloudflare', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['estimate-source'];
+  expect(job.if).toBe('inputs.operation == \'estimate-source\'');
+  expect(Object.keys(operation(job).env!)).toEqual([
+    'IORI_SOURCE_SSH_HOST',
+    'IORI_SOURCE_SSH_USER',
+    'IORI_SOURCE_SSH_PRIVATE_KEY',
+    'IORI_SOURCE_SSH_KNOWN_HOSTS',
+  ]);
+  for (const [key, value] of Object.entries(operation(job).env!)) expect(value).toBe(`\${{ secrets.${key} }}`);
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(
+    /CLOUDFLARE|R2|RECEIPT|IORI_MIGRATION_REHEARSAL|TERRAFORM|ADMISSION|VAPID|read-migration-target/,
+  );
+});
+it('gives purge-rehearsal-target target read credentials and application R2 write, without SSH, signing or the rehearsal profile', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['purge-rehearsal-target'];
+  const purge = operation(job).env!;
+  expect(job.if).toBe('inputs.operation == \'purge-rehearsal-target\'');
+  expect(purge.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.IORI_CLOUDFLARE_MIGRATE_API_TOKEN }}');
+  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('WRITE');
+  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toContain('WRITE');
+  expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
+  expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toContain('READ_ONLY');
+  expect(purge.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
+  expect(purge.IORI_ADMISSION_MODE).toBe('sealed');
+  expect(Object.keys(purge).filter(key => /SSH|RECEIPT|REHEARSAL|SMOKE|VAPID_(?:PUBLIC|PRIVATE)/.test(key))).toEqual(
+    [],
+  );
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|IORI_MIGRATION_REHEARSAL/);
+});
+it('lets estimate-source start without generation or run ID while keeping them selectable for the other operations', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { required: boolean; options?: string[] }> } })
+      .workflow_dispatch.inputs;
+  expect(inputs.operation.options).toEqual(expect.arrayContaining(['estimate-source', 'purge-rehearsal-target']));
+  expect(inputs.generation.required).toBe(false);
+  expect(inputs.migration_run_id.required).toBe(false);
 });
 it('shares exact production source serialization and delegates to early guarded fixed source deployment', async () => {
   const [worker, source] = await Promise.all([readWorkflow('deploy-iori-worker.yml'), readWorkflow('deploy-iori.yml')]);

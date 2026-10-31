@@ -46,19 +46,24 @@ Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `mig
 
 Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KEY` pair. The workflow maps the state pair to `AWS_*`, transfer pair to `IORI_MIGRATION_R2_*`, application pair to `IORI_APPLICATION_R2_*`, and the role API token to `CLOUDFLARE_API_TOKEN` only in the operation step.
 
-| Operation        | Cloudflare API token reference      | State prefix               | Transfer prefix              | Application prefix              |
-| ---------------- | ----------------------------------- | -------------------------- | ---------------------------- | ------------------------------- |
-| `prepare-target` | `IORI_CLOUDFLARE_PREPARE_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | `IORI_TRANSFER_R2_WRITE`     | —                               |
-| `migrate-data`   | `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_WRITE`     | `IORI_APPLICATION_R2_WRITE`     |
-| `verify-import`  | `IORI_CLOUDFLARE_VERIFY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
-| `cutover-route`  | `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
-| `deploy-worker`  | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | —                               |
+| Operation                | Cloudflare API token reference      | State prefix               | Transfer prefix              | Application prefix              |
+| ------------------------ | ----------------------------------- | -------------------------- | ---------------------------- | ------------------------------- |
+| `prepare-target`         | `IORI_CLOUDFLARE_PREPARE_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | `IORI_TRANSFER_R2_WRITE`     | —                               |
+| `migrate-data`           | `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_WRITE`     | `IORI_APPLICATION_R2_WRITE`     |
+| `estimate-source`        | —                                   | —                          | —                            | —                               |
+| `rehearse-migration`     | `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_WRITE`     | `IORI_APPLICATION_R2_WRITE`     |
+| `purge-rehearsal-target` | `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_WRITE`     |
+| `verify-import`          | `IORI_CLOUDFLARE_VERIFY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
+| `cutover-route`          | `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
+| `deploy-worker`          | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | —                               |
+
+`estimate-source` receives only the four source SSH references listed below and no Cloudflare, state, transfer or application credential. `purge-rehearsal-target` reads the transfer bucket with read-only credentials, writes only to the application bucket, and receives no SSH, receipt key or rehearsal profile.
 
 Preparation additionally uses `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `SMOKE_QUEUE_TOKEN`, and the distinct staging-only `STAGING_ACCESS_TOKEN`. Cutover maps the same `SMOKE_QUEUE_TOKEN` to `IORI_SMOKE_QUEUE_TOKEN` for every smoke request.
 
 Migrate, verify and cutover receive `IORI_MIGRATION_RECEIPT_PUBLIC_KEY` and `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`. Only migrate and `rehearse-migration` receive `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`; `rehearse-migration` uses it to sign the profile envelope. Only migrate receives the measured JSON profile `IORI_MIGRATION_REHEARSAL`. Key/profile values become exclusive mode `0600` job-local files; Environment values are not persistent filesystem paths.
 
-Migrate, cutover and source prerequisite deployment use `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, and `IORI_SOURCE_SSH_KNOWN_HOSTS`. The key and pinned known-hosts values become private files. Do not bootstrap trust with `ssh-keyscan`, supply source database credentials to the runner, or recreate source `env.conf` during this deployment.
+`estimate-source`, `rehearse-migration`, migrate, cutover and source prerequisite deployment use `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, and `IORI_SOURCE_SSH_KNOWN_HOSTS`. The key and pinned known-hosts values become private files. Do not bootstrap trust with `ssh-keyscan`, supply source database credentials to the runner, or recreate source `env.conf` during this deployment.
 
 The source deployment workflow retains its matching-path `main` push trigger as well as manual dispatch. Before supplying source credentials and merging, configure required reviewers, select Protected branches only (`protected_branches=true`, `custom_branch_policies=false`), and protect the repository's `main` branch. This Environment policy permits protected branches; the workflows separately enforce `refs/heads/main` and the latest reviewed main SHA. Do not create custom deployment branch policies. The Environment name alone does not enforce approval, and a merge can start this protected job. Worker migration operations remain manual dispatches.
 

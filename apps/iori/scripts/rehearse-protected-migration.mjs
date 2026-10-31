@@ -4,11 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 import { withCliSignal } from './cli-lifetime.mjs';
 import { assertSigner, runExecutorCli, runProtectedPhases } from './execute-protected-migration.mjs';
-import { migrationBudget, migrationWorkload, parseMigrationRehearsal } from './migration-budget.mjs';
+import {
+  hasRehearsalSample,
+  migrationBudget,
+  migrationWorkload,
+  parseMigrationRehearsal,
+  REHEARSAL_D1_CAPACITY_BYTES,
+} from './migration-budget.mjs';
 import { parseExpectedTarget, rehearsalProfileKey, rehearsalTargetKey } from './migration-target-contract.mjs';
 import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
-const REHEARSAL_D1_CAPACITY_BYTES = 10_000_000_000;
 const RESUME_TIMEOUT_MS = 120_000;
 // Longest write pause we accept on the personal blog during a rehearsal.
 export const REHEARSAL_FREEZE_LIMIT_MS = 30 * 60 * 1000;
@@ -46,9 +51,7 @@ export const rehearseProtectedMigration = async (options) => {
   try {
     result = await runProtectedPhases(options, target, {
       budget: ({ estimate, availableBytes }) => {
-        if (!estimate.rows || !estimate.upload_count || !estimate.article_count) {
-          throw new Error('Rehearsal sample is insufficient.');
-        }
+        if (!hasRehearsalSample(estimate)) throw new Error('Rehearsal sample is insufficient.');
         migrationBudget({ estimate, d1CapacityBytes: REHEARSAL_D1_CAPACITY_BYTES, availableBytes });
       },
       beforeReservation: async () => {

@@ -12,12 +12,22 @@ export const parseWorkflowInvocation = (env) => {
     env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main'
     || env.GITHUB_SHA !== codeSha || !/^[a-f0-9]{40}$/.test(codeSha ?? '')
     || !/^[a-f0-9]{40}$/.test(migrationSha ?? '')
-    || !['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker']
-      .includes(operation)
+    || ![
+      'prepare-target',
+      'rehearse-migration',
+      'migrate-data',
+      'verify-import',
+      'cutover-route',
+      'deploy-worker',
+      'estimate-source',
+      'purge-rehearsal-target',
+    ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
-    || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? '')
-    || (operation !== 'deploy-worker' && codeSha !== migrationSha)
+    || (operation === 'estimate-source'
+      ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
+      : !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
+        || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? ''))
+    || (!['deploy-worker', 'purge-rehearsal-target'].includes(operation) && codeSha !== migrationSha)
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({
     operation,

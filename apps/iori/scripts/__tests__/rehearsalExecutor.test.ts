@@ -280,6 +280,52 @@ it('refuses data migration on a generation that was used for rehearsal, before r
     f.close();
   }
 });
+it.each(['rehearse-migration', 'migrate-data'] as const)(
+  'fails %s before the source estimate, mark, reservation and freeze when the uploads bucket is public',
+  async operation => {
+    const f = await fixture();
+    try {
+      f.uploadsBucket.public = true;
+      const run = operation === 'migrate-data'
+        ? executeProtectedMigration(f.options)
+        : rehearseProtectedMigration(rehearsalOptions(f));
+      await expect(run).rejects.toThrow('Migration bucket privacy preflight failed.');
+      expect(f.uploadsBucket.urls).toEqual([
+        `https://api.cloudflare.com/client/v4/accounts/${
+          'a'.repeat(32)
+        }/r2/buckets/${f.options.expectedTarget.resources.uploads.name}/domains/managed`,
+        `https://api.cloudflare.com/client/v4/accounts/${
+          'a'.repeat(32)
+        }/r2/buckets/${f.options.expectedTarget.resources.uploads.name}/domains/custom`,
+      ]);
+      expect(f.source.estimate).not.toHaveBeenCalled();
+      expect(f.source.freeze).not.toHaveBeenCalled();
+      expect(f.source.resume).not.toHaveBeenCalled();
+      expect(f.calls).toEqual([]);
+      expect([...f.remote.keys()]).toEqual([preparationRecordKey(f.options.expectedTarget)]);
+    } finally {
+      f.close();
+    }
+  },
+);
+it.each(['rehearse-migration', 'migrate-data'] as const)(
+  'proceeds to freeze in %s after one privacy check of the private uploads bucket',
+  async operation => {
+    const f = await fixture();
+    try {
+      f.source.freeze.mockRejectedValueOnce(new Error('stop at freeze'));
+      const run = operation === 'migrate-data'
+        ? executeProtectedMigration(f.options)
+        : rehearseProtectedMigration(rehearsalOptions(f));
+      await expect(run).rejects.toThrow('stop at freeze');
+      expect(f.uploadsBucket.urls).toHaveLength(2);
+      expect(f.uploadsBucket.urls[0]).toContain(`/r2/buckets/${f.options.expectedTarget.resources.uploads.name}/`);
+      expect(f.source.freeze).toHaveBeenCalledTimes(1);
+    } finally {
+      f.close();
+    }
+  },
+);
 const absenceCheckedBy = (f: Fixture, error: Error) => {
   const probe = createMigrationR2Storage({
     accountId: 'a'.repeat(32),
