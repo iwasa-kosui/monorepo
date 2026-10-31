@@ -5,7 +5,7 @@ import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverB
 import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1SessionResolver } from './adaptor/d1/session/sessionResolver.ts';
-import { generateOgImageOnDemand } from './adaptor/ogImage/generateOgImageOnDemand.ts';
+import { generateOgImageOnDemand, type OgImageFailureLog } from './adaptor/ogImage/generateOgImageOnDemand.ts';
 import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
 import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
@@ -74,6 +74,8 @@ const fetchAsset = async (
     headers,
   });
 };
+
+const ogImageFailures: OgImageFailureLog = new Map();
 
 type IoriWorkerHandler = Readonly<{
   fetch: (
@@ -266,12 +268,22 @@ export default {
           store: createR2OgImageStore(env.UPLOADS),
           resolvePublishedTitle: async (id) => {
             const article = await articleResolver.resolve(id);
-            return article.ok && article.val?.status === 'published' ? article.val.title : undefined;
+            if (!article.ok) return { status: 'failed', error: article.err };
+            return article.val?.status === 'published'
+              ? { status: 'published', title: article.val.title }
+              : { status: 'notFound' };
           },
           loadFont: (text) => fetchOgFont({ text }),
           render: renderWorkerOgImage,
+          now: Date.now,
+          failures: ogImageFailures,
         })(articleId.val);
-        return generated ?? new Response('Not Found', { status: 404 });
+        if (generated.status === 'found') return generated.response;
+        if (generated.status === 'notFound') return new Response('Not Found', { status: 404 });
+        return new Response('Service Unavailable', {
+          status: 503,
+          headers: { 'Retry-After': '60', 'Cache-Control': 'public, max-age=60' },
+        });
       },
     }).fetch(request as unknown as Request, env, executionCtx);
   },

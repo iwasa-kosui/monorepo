@@ -1,4 +1,7 @@
 const readFontResponse = async (response: Response, limit: number): Promise<ArrayBuffer> => {
+  if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+    throw new Error('Font download was redirected.');
+  }
   if (!response.ok || !response.body) throw new Error('Font download failed.');
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -35,7 +38,7 @@ export const fetchOgFont = async (
     await readFontResponse(
       await fetchRequest(cssUrl, {
         headers: { 'User-Agent': 'Safari/534.30' },
-        redirect: 'error',
+        redirect: 'manual',
         signal: deadline(15_000),
       }),
       64 * 1024,
@@ -49,5 +52,5 @@ export const fetchOgFont = async (
     url.protocol !== 'https:' || url.hostname !== 'fonts.gstatic.com' || url.port || url.username || url.password
     || url.hash
   ) throw new Error('Invalid font URL.');
-  return readFontResponse(await fetchRequest(url, { redirect: 'error', signal: deadline(30_000) }), 16 * 1024 * 1024);
+  return readFontResponse(await fetchRequest(url, { redirect: 'manual', signal: deadline(30_000) }), 16 * 1024 * 1024);
 };

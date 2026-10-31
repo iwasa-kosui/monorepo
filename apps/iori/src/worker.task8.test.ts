@@ -170,4 +170,51 @@ describe('Task 8 Worker OGP route', () => {
     expect(ogImage.render).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
   });
+
+  it('returns 503 with retry headers when generation fails, then skips generation within the window', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failingId = 'a1b2c3d4-0e4b-453c-bb9f-5dbd15a319a7';
+    const get = vi.fn(async () => null);
+    const put = vi.fn();
+    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '公開記事', status: 'published' } });
+    ogImage.fetchFont.mockRejectedValue(new Error('font failed'));
+    const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
+    const request = () => new Request(`https://worker.test/api/og/articles/${failingId}`);
+
+    const response = await worker.fetch(request(), env, {} as ExecutionContext);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('60');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(put).not.toHaveBeenCalled();
+
+    const second = await worker.fetch(request(), env, {} as ExecutionContext);
+
+    expect(second.status).toBe(503);
+    expect(second.headers.get('Retry-After')).toBe('60');
+    expect(ogImage.fetchFont).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns 503 when the article resolver reports a failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const resolverFailureId = 'b2c3d4e5-0e4b-453c-bb9f-5dbd15a319a7';
+    const get = vi.fn(async () => null);
+    const put = vi.fn();
+    ogImage.resolveArticle.mockResolvedValue({ ok: false, err: new Error('db down') });
+    const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
+
+    const response = await worker.fetch(
+      new Request(`https://worker.test/api/og/articles/${resolverFailureId}`),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('60');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(ogImage.render).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
+  });
 });

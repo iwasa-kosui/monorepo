@@ -1,5 +1,6 @@
 export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
+export const OG_IMAGE_FOOTER_TEXT = 'blog.kosui.me';
 
 export const buildOgImageElement = (title: string) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +94,7 @@ export const buildOgImageElement = (title: string) => {
           type: 'div',
           props: {
             style: { position: 'absolute', bottom: 50, fontSize: 24, color: '#7A746E' },
-            children: 'blog.kosui.me',
+            children: OG_IMAGE_FOOTER_TEXT,
           },
         },
       ],

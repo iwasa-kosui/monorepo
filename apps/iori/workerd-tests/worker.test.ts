@@ -79,7 +79,9 @@ describe('iori Worker on workerd', () => {
     const fontBytes = Uint8Array.from(atob(env.TEST_OG_FONT_BASE64), (char) => char.charCodeAt(0));
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
+      const request = new Request(input, init);
+      if (request.redirect !== 'manual') throw new Error(`Unexpected redirect mode: ${request.redirect}`);
+      const url = new URL(request.url);
       if (url.hostname === 'fonts.googleapis.com') {
         return new Response('src: url(https://fonts.gstatic.com/s/notosansjp/font.ttf) format("truetype");');
       }
@@ -87,9 +89,7 @@ describe('iori Worker on workerd', () => {
       return originalFetch(input, init);
     }) as typeof fetch;
     try {
-      const startedAt = performance.now();
       const response = await SELF.fetch(`${origin}/api/og/articles/${articleId}`);
-      console.log(`OGP generation took ${(performance.now() - startedAt).toFixed(0)} ms`);
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toBe('image/png');
       expect([...new Uint8Array(await response.arrayBuffer()).slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
