@@ -59,6 +59,7 @@ const fixedReasons = [
   ['Source main changed.', 'source-main-changed'],
   ['Unsupported source pnpm.', 'source-pnpm-version'],
   ['Source configuration unavailable.', 'source-config-unavailable'],
+  ['Source configuration owner reset failed.', 'config-owner-reset-failed'],
   ['Source deployment is blocked.', 'source-deploy-blocked'],
   ['Invalid source build closure.', 'source-build-closure-invalid'],
   ['Invalid source command.', 'source-command-invalid'],
@@ -78,6 +79,7 @@ const sshReasons = [
   [['Connection refused'], 'ssh-refused'],
   [['Could not resolve hostname'], 'ssh-dns'],
 ];
+const ownerNotice = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
 const classifyFailure = (program, error, stderr) => {
   const text = `${error?.message ?? ''}\n${stderr}`;
   const fixed = fixedReasons.find(([needle]) => text.includes(needle));
@@ -151,6 +153,9 @@ export const deploySource = async (options, {
         input,
         captureOutput: async (result) => {
           current.stderr = result.stderr;
+          if (program === 'ssh') {
+            for (const line of result.stderr.split('\n')) if (ownerNotice.test(line)) process.stderr.write(`${line}\n`);
+          }
           await log?.capture(result);
         },
       });
@@ -209,6 +214,7 @@ export const deploySource = async (options, {
       `${host}:monorepo/apps/iori/dist/`,
     ]));
   await remote('verify-dist');
+  await remote('configuration-owner');
   await remote('install');
   await remote('restart');
   await stage('status', async () => {

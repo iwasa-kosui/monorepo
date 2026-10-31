@@ -8,6 +8,7 @@ export function runSourceDeployStep(input: { phase: string; sha: string; manifes
   captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void>;
   guard?: (input: { home: string; uid: number }) => Promise<void>;
   inspectPnpm?: (path: string, uid: number) => Promise<void>;
+  lstatFile?: (path: string) => Promise<{ isFile(): boolean; uid: number; gid: number; mode: number }>;
   inspectCheckout?: (home: string, uid: number) => Promise<void>;
   runCommand?: (program: string, args: string[], options: object) => Promise<{ stdout: string; stderr: string }>;
 }): Promise<void>;

@@ -219,6 +219,8 @@ it.each([
   ['Error: Unsupported source pnpm.', 'source-pnpm-version'],
   ['Error: Source UPLOAD_DIR must be outside dist: /secret/path', 'upload-dir-inside-dist'],
   ['Error: Dirty source checkout.', 'source-dirty'],
+  ['Error: Source configuration owner reset failed.', 'config-owner-reset-failed'],
+  ['Error: Source UPLOAD_DIR must be an existing directory: /secret/path', 'upload-dir-missing'],
   ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
   ['Migration command failed; outcome may be uncertain.', 'remote-command-failed'],
   ['something unexpected', 'unclassified'],
@@ -307,4 +309,65 @@ it('names stages outside the child commands', async () => {
     'IORI_DIAG stage=inputs program=none exit=none signal=none reason=source-inputs-invalid\n',
     'IORI_DIAG stage=manifest program=none exit=none signal=none reason=reviewed-main-changed\n',
   ]);
+});
+it('resets the configuration owner immediately before install', async () => {
+  const phases: string[] = [];
+  await deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      phases.push(program === 'rsync' ? 'rsync' : /"?phase"?: "([a-z-]+)"/.exec(options.input ?? '')?.[1] ?? '');
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(phases).toEqual([
+    'check',
+    'checkout',
+    'dependencies',
+    'dist-check',
+    'rsync',
+    'verify-dist',
+    'configuration-owner',
+    'install',
+    'restart',
+  ]);
+});
+const notice = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';
+it('relays only the exact configuration owner notice from a remote stage', async () => {
+  const writes = captureDiagnostics();
+  await deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program === 'ssh' && /"?phase"?: "configuration-owner"/.test(options.input ?? '')) {
+        await options.captureOutput?.({
+          stdout: '',
+          stderr: [
+            notice,
+            `${notice} extra=/home/secret`,
+            ` ${notice}`,
+            `${notice} `,
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=abc previous_gid=1002',
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=-1 previous_gid=1002',
+            'IORI_NOTICE stage=remote-configuration-owner previous_uid=12345678901 previous_gid=1',
+            'IORI_NOTICE stage=remote-install previous_uid=1 previous_gid=1',
+            'secret-user@secret-host.invalid: sudo: a password is required',
+          ].join('\n'),
+        });
+      }
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${notice}\n`]);
+  expect(writes.join('')).not.toMatch(/secret|extra|abc/);
+});
+it('does not relay a notice from a failed rsync stage', async () => {
+  const writes = captureDiagnostics();
+  await expect(deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program !== 'rsync') return { stdout: '', stderr: '' };
+      await options.captureOutput?.({ stdout: '', stderr: notice });
+      throw Object.assign(new Error('x'), { exitCode: 23 });
+    },
+  })).rejects.toThrow('x');
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([]);
 });

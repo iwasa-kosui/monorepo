@@ -106,6 +106,19 @@ it('relays only exact fixed-vocabulary diagnostic lines to the public log', asyn
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact configuration owner notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    'IORI_NOTICE stage=remote-configuration-owner previous_uid=abc previous_gid=1002',
+    'IORI_NOTICE stage=remote-configuration-owner previous_uid=1 previous_gid=12345678901',
+    'IORI_NOTICE stage=remote-install previous_uid=1 previous_gid=1',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('prints a hosted diagnostic before the failure for an invalid source invocation', async () => {
   const writes = captureStderr();
   await expect(
