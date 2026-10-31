@@ -4,19 +4,19 @@
 
 作業を再開する場合は、[Cloudflare 移行の実行手順](./cloudflare-execution-guide.md)から始めてください。実施済みの確認、認証と Environment の設定、secret の準備元、source の診断、初回リハーサルで手動準備が必要な範囲、workflow dispatch と中断時の対応をまとめています。
 
-2026-09-06 時点では本番実行の準備が未完了です。public repository と GitHub-hosted runner の `ubuntu-latest` を使い、self-hosted runner の登録は必須条件にしません。移行 executor、非公開 R2 からの復元と hosted workflow の接続を実装し、独立レビューを完了しました。ローカル検証の結果と実行前の残条件は[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)に記録します。保護設定、接続・容量・実行時間の確認、匿名化 staging rehearsal を完了してから以下を実施します。
+2026-09-06 時点では本番実行の準備が未完了です。public repository と GitHub-hosted runner の `ubuntu-latest` を使い、self-hosted runner の登録は必須条件にしません。移行 executor、非公開 R2 からの復元と hosted workflow の接続を実装し、独立レビューを完了しました。ローカル検証の結果と実行前の残条件は[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)に記録します。保護設定、接続・容量・実行時間の確認、`rehearse-migration` による実測 profile の登録を完了してから以下を実施します。
 
 公開リポジトリ、workflow summary、Issue、PR、terminal log に残す証跡は、論理リソース名、件数、timestamp、pass/fail、および Terraform action summary に限定します。account ID、database ID、namespace ID、Workers URL、secret、Terraform state、rendered Wrangler config、export/SQL/manifest の内容、HTTP response body は公開しません。
 
 ## 1. Cutover 前の preflight
 
-1. 対象 commit が reviewed され、保護された `production` Environment から実行されることを確認します。Environment は required reviewer と `protected_branches=true`、`custom_branch_policies=false` を使い、repository の `main` を保護します。workflow の `main` 固定チェックを維持し、手動実行の event SHA、checkout、指定 SHA、最新 main が一致することを検査します。2026-09-06 の最新 readback では production の reviewer は存在しますが、branch 制限は未設定です。現在地と確認コマンドは[実行手順](./cloudflare-execution-guide.md#2-github-environment-の保護)に従います。
+1. 対象 commit が reviewed され、保護された `production` Environment から実行されることを確認します。Environment は required reviewer と `protected_branches=true`、`custom_branch_policies=false` を使い、repository の `main` を保護します。workflow の `main` 固定チェックを維持し、手動実行の event SHA、checkout、指定 SHA、最新 main が一致することを検査します。2026-10-31 の readback では、production に required reviewer が User 1件あり、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` でした。現在地と確認コマンドは[実行手順](./cloudflare-execution-guide.md#2-github-environment-の保護)に従います。
 2. `cloudflare:public-artifacts:check`、Worker typecheck、Worker bundle graph check、Terraform fmt/validate、保存済み plan の validator を通す。D1/R2 replacement または delete を含む plan は適用しない。
 3. 新しい environment/generation の D1、アプリ画像用 R2、KV、Queue、DLQ、移行データ用 R2、Worker を準備します。名前と Terraform backend key も generation で分け、以前のリソースと state を保持します。Queue は配送停止かつ consumer 未接続で作成し、最初の Worker version を `sealed` にしてから停止した consumer を接続します。Worker version、deployment、binding、secret は Terraform state に入れません。
 4. route が absent であり、`enable_production_worker_route=false` と `enable_staging_worker_route=false` の通常 plan では route が作られないことを確認します。切替では対象 environment に対応する一方の flag だけを有効にし、指定した hostname・zone・Worker を照合します。
 5. `$RUNNER_TEMP` 配下の export/import ディレクトリが repository 外で mode `0700`、各ファイルが mode `0600` であることを確認します。生成 config と一時入力を含め、失敗時も job 終了時に削除します。
 6. hosted runner からの Lightsail SSH、Cloudflare API、state・移行用 R2 への接続を検査します。信頼する SSH host key と credential は Environment から渡します。移行用 bucket は `r2.dev`、custom domain、アプリからの配信を無効にします。
-7. ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。同じ adapter の代表サンプルから throughput profile を作り、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
+7. ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。`rehearse-migration` が作る throughput profile を[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)の手順で登録し、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
 8. メンテナンス中は旧 SSH deploy による再起動を抑止し、停止から切替または承認された復旧まで書き込み停止を維持します。旧 workflow の削除は AWS retirement の承認後に行います。
 
 移行元は Node process を起動したまま、新規 HTTP の受付を止めます。受付済み HTTP の本文送信・キャンセル処理、enqueue、dequeue、handler transaction の完了と、遅延行を含む Queue の深さ `0` を確認して consumer を一時停止します。`systemd` の停止を drain の証拠にしません。レビュー済み build の SHA と指定 SHA が一致する private source control を使い、export は同じ排他制御の下で既存の DB/TLS 設定を利用します。
@@ -31,9 +31,11 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 旧 deploy と移行 workflow は同じ source concurrency を共有し、setup 後にも marker を再検査します。これは管理対象の workflow の競合を防ぐための制御です。operator が同時に別経路から freeze/deploy を実行する場合の原子的な lock ではないため、手動操作を競合させない運用を守ります。
 
-source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護を設定します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
+source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
 
 ## 2. Staging rehearsal
+
+throughput profile の計測は、この節の staging rehearsal では行いません。`production` Environment の `rehearse-migration` が行います。手順は[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)に従います。
 
 staging は production と異なる D1、R2、KV、Queue、DLQ、Worker name と backend key を使い、匿名化済みのデータだけを投入します。Worker の `SMOKE_QUEUE_TOKEN` と smoke runner の `IORI_SMOKE_QUEUE_TOKEN` は同じ値を使います。token は Queue enqueue を含む全 smoke request に必要で、command argument、output、summary、repository に表示・保存しません。
 

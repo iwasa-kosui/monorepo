@@ -12,7 +12,8 @@ export const parseWorkflowInvocation = (env) => {
     env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main'
     || env.GITHUB_SHA !== codeSha || !/^[a-f0-9]{40}$/.test(codeSha ?? '')
     || !/^[a-f0-9]{40}$/.test(migrationSha ?? '')
-    || !['prepare-target', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker'].includes(operation)
+    || !['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker']
+      .includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
     || !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
     || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? '')

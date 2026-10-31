@@ -56,7 +56,7 @@ Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KE
 
 Preparation additionally uses `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `SMOKE_QUEUE_TOKEN`, and the distinct staging-only `STAGING_ACCESS_TOKEN`. Cutover maps the same `SMOKE_QUEUE_TOKEN` to `IORI_SMOKE_QUEUE_TOKEN` for every smoke request.
 
-Migrate, verify and cutover receive `IORI_MIGRATION_RECEIPT_PUBLIC_KEY` and `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`. Only migrate receives `IORI_MIGRATION_RECEIPT_PRIVATE_KEY` and the measured JSON profile `IORI_MIGRATION_REHEARSAL`. Key/profile values become exclusive mode `0600` job-local files; Environment values are not persistent filesystem paths.
+Migrate, verify and cutover receive `IORI_MIGRATION_RECEIPT_PUBLIC_KEY` and `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`. Only migrate and `rehearse-migration` receive `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`; `rehearse-migration` uses it to sign the profile envelope. Only migrate receives the measured JSON profile `IORI_MIGRATION_REHEARSAL`. Key/profile values become exclusive mode `0600` job-local files; Environment values are not persistent filesystem paths.
 
 Migrate, cutover and source prerequisite deployment use `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, and `IORI_SOURCE_SSH_KNOWN_HOSTS`. The key and pinned known-hosts values become private files. Do not bootstrap trust with `ssh-keyscan`, supply source database credentials to the runner, or recreate source `env.conf` during this deployment.
 

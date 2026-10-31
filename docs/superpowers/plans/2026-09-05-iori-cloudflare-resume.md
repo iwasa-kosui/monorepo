@@ -51,7 +51,9 @@ flowchart TD
 
 2026-09-06 の初回再確認では `production` は `protection_rules=[]`、`deployment_branch_policy=null` でした。その後、ユーザーが `protected_branches` 方式を選択しました。選択後の API readback では `staging` は `protected_branches=true`、`custom_branch_policies=false` で reviewer がなく、`production` は required reviewer 1件と `deployment_branch_policy=null`、`main` は `protected=true` です。残る保護設定は staging の reviewer と production の保護ブランチ制限です。秘密情報の値は取得していません。
 
-旧 source deploy は対象 path の `main` push と手動実行を保持するため、merge で job が起動し得ます。source credential を供給して merge する前に、上記の保護設定を完了します。Environment 名の指定だけでは承認待ちになりません。
+2026-10-31 の API readback（`gh api`）では、`production` と `staging` の両方で required reviewer が User 1件、`prevent_self_review=false`、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` です。前段落で残っていた staging の reviewer と production の保護ブランチ制限は、この時点で設定済みです。
+
+旧 source deploy は対象 path の `main` push と手動実行を保持するため、merge で job が起動し得ます。source credential を供給して merge する前に、上記の保護設定を完了します。2026-10-31 の readback で、この保護設定は両 Environment とも有効になっています。Environment 名の指定だけでは承認待ちになりません。
 
 2026-09-06 の実装統合後のローカル検証結果は次のとおりです。各実装と全体の接続、D1 の回帰修正を独立レビューし、全件テストで見つかった旧 health fixture も受付制御を維持して修正しました。
 

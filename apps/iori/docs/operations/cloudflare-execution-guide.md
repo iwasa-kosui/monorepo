@@ -12,11 +12,11 @@
 | SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                                 | source の詳細診断                               |
 | Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                                     | 第4節の確認表を埋める                           |
 | Cloudflare         | Dashboard とローカル Wrangler は未認証                                                                         | 第1節のログインと権限設定                       |
-| GitHub Environment | `staging` は保護ブランチ方式で reviewer なし。`production` は reviewer 1件、branch 制限なし。`main` は保護済み | 第2節の不足設定と readback                      |
+| GitHub Environment | 2026-10-31 の readback で `staging` と `production` はともに reviewer 1件、保護ブランチ方式。`main` は保護済み | 第2節の readback で再確認                       |
 | Secrets            | 新 workflow の35参照名のうち31名が不足。既存名の存在は値・権限の適合を保証しない                               | 第3節の入力を Environment ごとに準備            |
 | 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                                 | staging の完了後に production を開始            |
 
-事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の状態は、この選択後の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など未実行の操作は、許可された端末で実施し、拒否された操作を別ツールで迂回しません。
+事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の行は、2026-10-31 の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など未実行の操作は、許可された端末で実施し、拒否された操作を別ツールで迂回しません。
 
 記録には日付、担当者、段階、pass/fail、件数、次の作業を残します。実際の account/resource ID、hostname、secret、DB/画像、state、HTTP body、raw log は非公開領域に保存します。公開 PR や Actions artifact に貼り付けません。
 
@@ -49,20 +49,20 @@ pnpm --silent --filter iori exec wrangler whoami >"$iori_ops_dir/whoami.log" 2>&
 
 ## 2. GitHub Environment の保護
 
-`production` と `staging` の両方で、ユーザーが選択した `protected_branches` 方式を使います。required reviewer の設定と、後続 job の実行承認も記録してください。
+`production` と `staging` の両方で、ユーザーが選択した `protected_branches` 方式を使います。2026-10-31 の API 読み戻しでは、両 Environment が下表の Required reviewers、Prevent self-review、Deployment branches and tags、API の branch policy と一致しました。再開時は、この節のコマンドで同じ項目を再確認します。required reviewer の設定と、後続 job の実行承認も記録してください。
 
 | 設定                         | 今回の設定案                                                |
 | ---------------------------- | ----------------------------------------------------------- |
-| Required reviewers           | `iwasa-kosui`                                               |
+| Required reviewers           | User 1件                                                    |
 | Wait timer                   | 0分                                                         |
 | Prevent self-review          | 無効。起動者本人による承認を許可                            |
 | Deployment branches and tags | Protected branches only                                     |
 | API の branch policy         | `protected_branches: true`, `custom_branch_policies: false` |
 | Repository の前提            | `main` に branch protection を設定                          |
 
-GitHub repository の **Settings → Environments** で設定します。既に別の保護規則が追加されている場合は、この表で上書きせず差分を確認します。本人による承認を禁止する方針なら、別の承認者を決めてから設定案を変更します。
+設定を変更する場合は、GitHub repository の **Settings → Environments** で操作します。既に別の保護規則が追加されている場合は、この表で上書きせず差分を確認します。本人による承認を禁止する方針なら、別の承認者を決めてから設定案を変更します。
 
-設定後、各 Environment の読み戻しを行います。最初は `staging`、次に変数を `production` に変更して Environment の確認を繰り返します。`main` の保護状態も確認します。
+設定を変更した後と再開時に、各 Environment の読み戻しを行います。最初は `staging`、次に変数を `production` に変更して Environment の確認を繰り返します。`main` の保護状態も確認します。
 
 ```bash
 iori_environment=staging
@@ -73,9 +73,11 @@ gh api "repos/$iori_repo/branches/main" --jq '{name, protected}'
 
 **完了条件:** 両 Environment に required reviewer が存在し、`protected_branches=true`、`custom_branch_policies=false`。`main` は branch protection が有効で、API の `protected` が `true`。個別の deployment branch policy は作成しません。
 
+**2026-10-31 の結果:** `gh api` の読み戻しで、`production` と `staging` はともに required reviewer が User 1件、`prevent_self_review=false`、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` でした。
+
 Environment は保護されたブランチを許可し、`main` だけに限定するものではありません。対象を `main` に固定するのは、source/Worker workflow の `GITHUB_REF=refs/heads/main` と最新 main SHA の一致検査です。この2つの制御を維持します。repository に branch protection rule が1件もない場合、Protected branches only でも全ブランチが許可されるため、Environment の設定だけで完了としません。[GitHub の deployment branch 制限](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
 
-source deploy は対象 path の `main` push でも起動します。**source credential の供給と merge より前に、この保護を完了してください。** Ready 化・merge は明示承認後に行い、merge により起動した source job は第4節の前提が揃うまで承認しません。
+source deploy は対象 path の `main` push でも起動します。この保護は 2026-10-31 の読み戻しで有効を確認しました。**source credential の供給と merge より前に、この保護が維持されていることを再確認してください。** Ready 化・merge は明示承認後に行い、merge により起動した source job は第4節の前提が揃うまで承認しません。
 
 ## 3. 移行先と Environment inputs の準備
 
@@ -93,19 +95,19 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 値は GitHub の **Settings → Environments → 対象 Environment → Environment secrets** へ登録します。下表の prefix はそれぞれ `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` の2件です。全35名を網羅しています。
 
-| 用途            | Secret 名または prefix                                                                                                                                                                | 値の準備元                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 移行先          | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `ORIGIN`                                                                                              | 確認済み account・zone・独立 backend・canonical origin           |
-| 実行 identity   | `IORI_ADMISSION_IDENTITY`                                                                                                                                                             | 次項の同じ environment/generation/SHA/run と smoke 対象          |
-| API role        | `IORI_CLOUDFLARE_PREPARE_API_TOKEN`, `IORI_CLOUDFLARE_MIGRATE_API_TOKEN`, `IORI_CLOUDFLARE_VERIFY_API_TOKEN`, `IORI_CLOUDFLARE_CUTOVER_API_TOKEN`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` | 第3.1節の用途別 token                                            |
-| State S3        | `IORI_TERRAFORM_WRITE`, `IORI_TERRAFORM_READ_ONLY`                                                                                                                                    | Backend bucket に限定した2組                                     |
-| Transfer S3     | `IORI_TRANSFER_R2_WRITE`, `IORI_TRANSFER_R2_READ_ONLY`                                                                                                                                | 非公開 bundle bucket に限定した2組                               |
-| Application S3  | `IORI_APPLICATION_R2_WRITE`, `IORI_APPLICATION_R2_READ_ONLY`                                                                                                                          | 対象 generation の画像 bucket に限定した2組                      |
-| Source SSH      | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS`                                                                          | 許可された source と信頼済み host key                            |
-| 署名            | `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`                                                                 | Ed25519 秘密鍵、対応する公開鍵 PEM、公開鍵ファイルの SHA-256 pin |
-| 実測            | `IORI_MIGRATION_REHEARSAL`                                                                                                                                                            | 第5節の JSON。ファイル path ではなく内容                         |
-| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII                        |
-| Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                            |
+| 用途            | Secret 名または prefix                                                                                                                                                                | 値の準備元                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 移行先          | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `ORIGIN`                                                                                              | 確認済み account・zone・独立 backend・canonical origin                                                                             |
+| 実行 identity   | `IORI_ADMISSION_IDENTITY`                                                                                                                                                             | 次項の同じ environment/generation/SHA/run と smoke 対象                                                                            |
+| API role        | `IORI_CLOUDFLARE_PREPARE_API_TOKEN`, `IORI_CLOUDFLARE_MIGRATE_API_TOKEN`, `IORI_CLOUDFLARE_VERIFY_API_TOKEN`, `IORI_CLOUDFLARE_CUTOVER_API_TOKEN`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` | 第3.1節の用途別 token                                                                                                              |
+| State S3        | `IORI_TERRAFORM_WRITE`, `IORI_TERRAFORM_READ_ONLY`                                                                                                                                    | Backend bucket に限定した2組                                                                                                       |
+| Transfer S3     | `IORI_TRANSFER_R2_WRITE`, `IORI_TRANSFER_R2_READ_ONLY`                                                                                                                                | 非公開 bundle bucket に限定した2組                                                                                                 |
+| Application S3  | `IORI_APPLICATION_R2_WRITE`, `IORI_APPLICATION_R2_READ_ONLY`                                                                                                                          | 対象 generation の画像 bucket に限定した2組                                                                                        |
+| Source SSH      | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS`                                                                          | 許可された source と信頼済み host key                                                                                              |
+| 署名            | `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`                                                                 | Ed25519 秘密鍵、対応する公開鍵 PEM、公開鍵ファイルの SHA-256 pin                                                                   |
+| 実測            | `IORI_MIGRATION_REHEARSAL`                                                                                                                                                            | 第5.4節で登録する、`rehearse-migration` が作った profile JSON。ファイル path ではなく内容。`rehearse-migration` の実行には要らない |
+| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII                                                                                          |
+| Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                                                                                              |
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
 
@@ -132,7 +134,7 @@ gh secret list --repo "$iori_repo" --env "$iori_environment"
 
 fixture のゼロ UUID や仮の hostname を本番へ登録しません。初回準備後は identity を同じ migration の途中で差し替えません。詳細な独立 target と prepared record の照合は [infra README](../../infra/cloudflare/README.md)に従います。
 
-**完了条件:** 参照名、対象、権限、鍵の対応、実測 profile、identity が揃う。各 role の実接続が検証できるまで credential 名だけで pass にしない。
+**完了条件:** 参照名、対象、権限、鍵の対応、identity が揃う。実測 profile は第5節で `rehearse-migration` を実行した後に登録する。各 role の実接続が検証できるまで credential 名だけで pass にしない。
 
 ## 4. Source の診断と事前配備
 
@@ -178,15 +180,89 @@ umask 077
 
 **完了条件:** 必要な runtime・source control が配備され、build SHA と配布物が一致し、意図しない凍結や dirty checkout がない。ローカル SSH の成功とは別に、hosted runner からの接続も確認する。
 
-## 5. 初回 staging rehearsal の準備
+## 5. 実測 profile の作成と登録
 
-初回の実測 profile を作る専用 hosted operation は現行 workflow にありません。`migrate-data` は開始前にその profile を要求するため、初回計測目的で dispatch しても先へ進めません。CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証であり、実移行の容量・所要時間の証拠にはしません。
+staging 用の旧環境はありません。この移行では新しく作りません。実測 profile は、hosted operation `rehearse-migration` が作ります。`rehearse-migration` は `production` Environment で実行し、本番の source を実際に freeze して処理量を計測します。移行先には、本番の切替に使う generation とは別の、使い捨ての generation を使います。この節では、使い捨ての generation の名前に `prdrehearse1` を使います。
 
-作業者は、隔離した匿名化 PostgreSQL/upload source、そこで動く同じ SHA の source control、専用 staging の SSH 接続、実在する smoke 対象を準備します。代表サンプルを同じ adapter と GitHub-hosted runner で処理する計測手順を別途レビューし、実行したコマンド・サンプル件数・bytes・経過時間・ピーク容量を非公開に記録してください。未整備なら、この計測手順の整備が次の作業です。
+CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証です。実移行の容量・所要時間の証拠にはしません。
 
-計測結果は [データ移行手順の profile 形式](./cloudflare-data-migration.md)に従い、`iori-migration-rehearsal/v1` の JSON にします。レビュー済み `main_sha`、`measured_at`、正の有限値の `bytes_per_second`・`rows_per_second`・`files_per_second`・`ogp_per_second`、適用する `d1_capacity_bytes` を含めます。実測値に基づく保守的な throughput を採用します。
+### 5.1 事前条件
 
-**完了条件:** 同じ SHA の実測 profile を登録し、source/runner/D1/metadata/time の条件を満たす。staging の全工程、別 runner の復元と再検証、認証・投稿・配送などの手動確認が成功するまで、本番を凍結しない。
+- `main_sha` が、source にデプロイ済みの revision と一致する。一致しない場合、source は `revision_mismatch` で拒否する
+- 使い捨て generation で `prepare-target` が完了している
+- 登録済みの Secret が `migrate-data` と同じである。ただし `IORI_MIGRATION_REHEARSAL` は不要
+
+dispatch の承認前に、担当者が 5.2 の凍結時間を許容できるか確認します。
+
+### 5.2 rehearse-migration の処理
+
+1. `rehearse-migration` は、最初に `prepared-target/v1/<environment>/<generation>/rehearsal.json` を書きます。
+2. 件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。
+3. 容量の判定は `migrate-data` と同じです。時間の判定はしません。`d1_capacity_bytes` は Workers Paid の D1 上限である `10000000000` に固定します。
+4. `rehearse-migration` は本番の source を freeze し、drain、export、restore を行います。restore が終わった直後に resume します。
+5. 凍結を解除した後に、D1 import、R2/OGP import、検証を行います。
+6. 失敗した場合も中断した場合も、`rehearse-migration` は resume を必ず呼びます。
+
+凍結の時間は、freeze から restore 完了までです。本番への書き込みは、この間止まります。
+
+rate は、`migrationBudget` の式の各項と同じ作業量を、その作業を含むフェーズの経過時間で割って求めます。フェーズは重複して数えるため、見積もりは保守的になります。計測値はそのまま profile に使います。`migrate-data` の `migrationBudget` が時間を2倍にし、固定の overhead も足すため、計測側では安全係数を掛けません。
+
+### 5.3 生成物と誤用の防止
+
+`rehearse-migration` は、使い捨て generation の transfer R2 bucket に、次の key で envelope を置きます。
+
+```text
+iori-migration/v1/<environment>/<main_sha>/<run_id>/rehearsal-profile
+```
+
+envelope は JSON です。schema は `iori-migration-rehearsal-envelope/v1` で、profile 文字列、`profile_sha256`、Ed25519 署名を含みます。署名には migration receipt の秘密鍵を使います。job ログに profile は出ません。
+
+誤用は次の仕組みで防ぎます。
+
+- `rehearse-migration` が最初に書く `rehearsal.json` は印です。`migrate-data` は、この印がある generation を拒否します。
+- 同じ generation で `rehearse-migration` を2回実行することもできません。印は最初に書かれるため、失敗した場合も同じ generation では再実行できません。
+- `rehearse-migration` は署名つき bundle を公開しません。そのため、この `run_id` では `verify-import` と `cutover-route` が進みません。
+
+### 5.4 profile の登録
+
+作業者はローカルで次の順に実行します。`iori_ops_dir` は第0節で作った一時作業領域です。公開鍵 PEM は第3.2節で登録した公開鍵と同じファイルを使います。
+
+```bash
+umask 077
+iori_rehearsal_bucket='<使い捨てgenerationのtransfer bucket名>'
+iori_rehearsal_envelope="$iori_ops_dir/rehearsal-envelope.json"
+iori_receipt_public_key_sha256='<公開鍵ファイルのSHA-256>'
+
+pnpm --silent --filter iori exec wrangler r2 object get \
+  "$iori_rehearsal_bucket/iori-migration/v1/production/$iori_main_sha/$iori_migration_run_id/rehearsal-profile" \
+  --file "$iori_rehearsal_envelope" --remote
+```
+
+次に、署名と形式を検証します。`verify-rehearsal-profile.mjs` は、検証した profile JSON だけを標準出力に出します。このスクリプトは、検証に失敗すると exit 1 で終わり、固定の文言だけを標準エラー出力に出します。
+
+パイプでつなぐと、スクリプトが失敗しても `gh secret set` が実行され、空の値を登録するおそれがあります。そのため、出力を一時ファイルに書き、スクリプトが成功した場合だけ `&&` で `gh secret set` を実行します。一時ファイルは、envelope と同じ `$iori_ops_dir` に置きます。第5.4節の最初のブロックで実行した `umask 077` が、同じシェルで有効なままです。最後の `rm -f` は `&&` でつながず別の行に書くため、成功した場合と失敗した場合の両方で envelope と profile の一時ファイルを削除します。
+
+```bash
+iori_rehearsal_profile="$iori_ops_dir/rehearsal-profile.json"
+
+node apps/iori/scripts/verify-rehearsal-profile.mjs \
+  "$iori_rehearsal_envelope" "$iori_ops_dir/receipt-public.pem" \
+  "$iori_receipt_public_key_sha256" "$iori_main_sha" \
+  > "$iori_rehearsal_profile" \
+  && gh secret set IORI_MIGRATION_REHEARSAL --repo "$iori_repo" --env production \
+    < "$iori_rehearsal_profile"
+rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
+```
+
+登録する profile の `main_sha` は、本番の `migrate-data` を実行する `main_sha` と一致する必要があります。`main_sha` が変わった場合は、計測をやり直します。同じ generation では `rehearse-migration` を再実行できないため、新しい使い捨て generation を選び、`prepare-target` からやり直します。
+
+### 5.5 使い捨て generation の後片付け
+
+後片付けの前に、5.4 の envelope の取得と登録を済ませます。envelope は使い捨て generation の transfer bucket にあるため、bucket を削除すると取り出せなくなります。
+
+`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。
+
+**完了条件:** 本番の `migrate-data` を実行する `main_sha` と同じ `main_sha` の profile が、`production` Environment の `IORI_MIGRATION_REHEARSAL` に登録されている。ローカルの envelope の一時ファイルを削除している。source の `freeze.json` と `freeze.pending` が残っておらず、書き込みが再開している。`rehearse-migration` は署名つき bundle を公開しないため、bundle の復元と再検証は計測の対象外である。
 
 ## 6. Hosted workflow の実行
 
@@ -207,6 +283,8 @@ iori_migration_run_id='<固定した移行runID>'
 
 最初は `prepare-target` を指定します。1回の実行が成功し、次の行の前提も満たしてから `iori_operation` だけを変更して同じコマンドを使います。
 
+表の「計測」行は、`migrate-data` より前に第5節の手順で実施します。計測用の dispatch では、`iori_environment` を `production`、`iori_generation` を使い捨て generation の名前（第5節の例は `prdrehearse1`）にします。本番用 generation の `iori_generation` と取り違えないでください。
+
 ```bash
 iori_operation=prepare-target
 gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
@@ -217,12 +295,15 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
   -f migration_run_id="$iori_migration_run_id"
 ```
 
-| 順序 | Operation        | 次へ進む条件                                                                                                                              |
-| ---- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `prepare-target` | Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                |
-| 2    | `migrate-data`   | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                |
-| 3    | `verify-import`  | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
-| 4    | `cutover-route`  | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
+| 順序  | Operation                                       | 次へ進む条件                                                                                                                              |
+| ----- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 計測1 | `prepare-target`（使い捨て generation）         | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                         |
+| 計測2 | `rehearse-migration`（使い捨て generation）     | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない     |
+| 計測3 | profile 登録（ローカル操作。dispatch はしない） | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                             |
+| 1     | `prepare-target`（本番用 generation）           | Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                |
+| 2     | `migrate-data`                                  | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                |
+| 3     | `verify-import`                                 | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
+| 4     | `cutover-route`                                 | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
 
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 

@@ -150,6 +150,7 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
       freeze: (signal) => metadata('freeze', undefined, signal),
       status: (signal) => metadata('status', undefined, signal),
       drain: (timeoutMs = 300_000, signal) => metadata('drain', timeoutMs, signal),
+      resume: (recovery, signal) => metadata('resume', recovery, signal),
       export: async (signal) => {
         try {
           const state = await metadata('export', undefined, signal);
