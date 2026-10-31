@@ -192,16 +192,11 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
 
-### VAPID 値の照合（ユーザー作業）
+### VAPID 値の確認
 
-- 2026-10-31 の時点で、production Environment に `VAPID_*` は登録されていません。workflow は repo レベルの secret `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を受け取ります。production Environment には、どの workflow も参照していない旧名 `IORI_VAPID_PUBLIC_KEY`、`IORI_VAPID_PRIVATE_KEY` と variable `IORI_VAPID_SUBJECT` があります。
-- 現行本番の Node 版は、VAPID 値を source サーバーの `/etc/systemd/system/microblog.service.d/env.conf` から読みます。repo の secret は、Node 版へ VAPID 値を渡していません。既存の購読は、`env.conf` の鍵に対応しています。
-- GitHub は secret の値を返しません。このため、エージェントは照合できません。ユーザーが次の手順で照合します。
-  1. ユーザーは、安全な保管元から repo レベルの `VAPID_*` に登録した値を取り出します。ユーザーは、source サーバーの `env.conf` に書かれた値と、取り出した値を比べます。値は画面に出さずに、`shasum -a 256` の結果だけを比べます。比べる値は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` の 3 つです。
-  2. 公開鍵は、`GET https://blog.kosui.me/api/v1/push/vapid-public-key` が返す `publicKey` とも比べます。2026-10-31 の時点で、このエンドポイントは未ログインで 200 を返しました。
-  3. 1 つでも一致しない場合、または repo レベルの値の出どころを確かめられない場合は、`env.conf` の値を使います。ユーザーは、`env.conf` の値を対象 Environment の `VAPID_*` として標準入力で登録します。Environment secret は、同じ名前の repo レベル secret より優先されます。
-  4. Worker に切り替えた後に、ユーザーは Worker の hostname で同じエンドポイントを呼びます。返ってきた `publicKey` が、現行本番の値と一致することを確認します。
-- 旧名の `IORI_VAPID_*` と `IORI_VAPID_SUBJECT` は、照合が終わるまで削除しません。
+- 2026-11-01 にユーザーが確認しました。production Environment の旧名 `IORI_VAPID_*` と repo レベルの `VAPID_*` は、同じ鍵です。workflow は repo レベルの `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を受け取ります。このため、Environment に `VAPID_*` を追加で登録する必要はありません。
+- Worker に切り替えた後に、ユーザーは Worker の hostname で `GET /api/v1/push/vapid-public-key` を呼びます。ユーザーは、返ってきた `publicKey` が切り替え前の `https://blog.kosui.me/api/v1/push/vapid-public-key` の値と一致することを確認します。
+- 旧名の `IORI_VAPID_*` と variable `IORI_VAPID_SUBJECT` は、切り替え後の確認が終わるまで削除しません。
 
 CLI で1件ずつ登録する場合は、値を command argument にせず、承認済みの mode `0600` ファイルを標準入力に渡します。これは登録例であり、全値を自動生成するコマンドではありません。
 
