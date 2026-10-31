@@ -51,7 +51,9 @@ flowchart TD
 
 2026-09-06 の初回再確認では `production` は `protection_rules=[]`、`deployment_branch_policy=null` でした。その後、ユーザーが `protected_branches` 方式を選択しました。選択後の API readback では `staging` は `protected_branches=true`、`custom_branch_policies=false` で reviewer がなく、`production` は required reviewer 1件と `deployment_branch_policy=null`、`main` は `protected=true` です。残る保護設定は staging の reviewer と production の保護ブランチ制限です。秘密情報の値は取得していません。
 
-旧 source deploy は対象 path の `main` push と手動実行を保持するため、merge で job が起動し得ます。source credential を供給して merge する前に、上記の保護設定を完了します。Environment 名の指定だけでは承認待ちになりません。
+2026-10-31 の API readback（`gh api`）では、`production` と `staging` の両方で required reviewer が User 1件、`prevent_self_review=false`、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` です。前段落で残っていた staging の reviewer と production の保護ブランチ制限は、この時点で設定済みです。
+
+旧 source deploy は対象 path の `main` push と手動実行を保持するため、merge で job が起動し得ます。source credential を供給して merge する前に、上記の保護設定を完了します。2026-10-31 の readback で、この保護設定は両 Environment とも有効になっています。Environment 名の指定だけでは承認待ちになりません。
 
 2026-09-06 の実装統合後のローカル検証結果は次のとおりです。各実装と全体の接続、D1 の回帰修正を独立レビューし、全件テストで見つかった旧 health fixture も受付制御を維持して修正しました。
 
@@ -175,6 +177,16 @@ executor は source の停止や application data の変更前に、準備済み
 **コマンドと順序:** [cutover runbook](../../../apps/iori/docs/operations/cloudflare-cutover-runbook.md)に従い、staging smoke、移行リハーサル、本番の停止移行、workers.dev smoke、route 切替、本番 smoke を順に実施します。workflow の dispatch は手順 2・3 の不足を解消しません。
 
 **事後条件:** HTTP、ActivityPub、Web Push、Queue retry/DLQ、D1/R2 の照合を確認します。cutover から 14 日間は Lightsail、PostgreSQL、uploads の backup、AWS state を保持します。14 日分の確認結果と destroy plan への明示承認後に、旧環境の撤去を別の変更として進めます。
+
+## 5. 使い捨て generation の削除手順を整備する
+
+**状態:** 未着手です。`rehearse-migration` は、本番の実データを使い捨て generation の D1 と application R2 に入れます。この generation を削除する手順は、リポジトリにありません。
+
+**事前条件:** 手順 4 のリハーサルで使い捨て generation を作り、`IORI_MIGRATION_REHEARSAL` への profile の登録を済ませています。
+
+**作業:** 使い捨て generation の D1、application R2、transfer R2、KV、Queue、Worker と Terraform state を削除する手順を書き、レビューを受けます。`prevent_destroy = true` を設定したリソースの扱いと、削除前の承認者を決めます。[cutover runbook](../../../apps/iori/docs/operations/cloudflare-cutover-runbook.md)が旧リソースの destroy を hosted workflow の経路に含めないと定めているため、この手順の位置づけも決めます。
+
+**事後条件:** 削除手順がレビュー済みで、明示承認を受けています。承認後に使い捨て generation の実データを削除し、削除の結果を記録します。
 
 ## 完了の判定
 

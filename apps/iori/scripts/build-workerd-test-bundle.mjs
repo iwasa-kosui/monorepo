@@ -19,5 +19,6 @@ await build({
     js:
       'import { createRequire as __createRequire } from \'node:module\';const require = __createRequire(\'file:///worker.js\');',
   },
+  loader: { '.wasm': 'copy' },
   logLevel: 'warning',
 });

@@ -14,6 +14,10 @@ const migrations = await Promise.all(
   })),
 );
 
+const ogFontBase64 = (
+  await readFile(fileURLToPath(new URL('../nen-diagnosis/scripts/fonts/NotoSansJP-Bold.ttf', import.meta.url)))
+).toString('base64');
+
 export default defineWorkersConfig({
   test: {
     include: ['workerd-tests/**/*.test.ts'],
@@ -26,7 +30,7 @@ export default defineWorkersConfig({
         main: './.wrangler/workerd-bundle/worker.js',
         wrangler: { configPath: './workers/iori/wrangler.local.jsonc' },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations },
+          bindings: { TEST_MIGRATIONS: migrations, TEST_OG_FONT_BASE64: ogFontBase64 },
         },
       },
     },

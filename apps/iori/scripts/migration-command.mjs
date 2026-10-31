@@ -30,6 +30,7 @@ const runOwnedCommand = (program, args, options) =>
     const output = { stdout: [], stderr: [] };
     let bytes = 0;
     let failed = false;
+    let spawnFailed = false;
     let settled = false;
     let force;
     const terminateGroup = (signal) => {
@@ -65,8 +66,9 @@ const runOwnedCommand = (program, args, options) =>
     }
     child.once('error', () => {
       failed = true;
+      if (!Number.isSafeInteger(child.pid)) spawnFailed = true;
     });
-    child.once('close', async code => {
+    child.once('close', async (code, closeSignal) => {
       settled = true;
       clearTimeout(timer);
       clearTimeout(force);
@@ -81,7 +83,11 @@ const runOwnedCommand = (program, args, options) =>
         failed = true;
       }
       if (failed || code !== 0 || options.signal?.aborted) {
-        reject(new Error('Migration command failed; outcome may be uncertain.'));
+        reject(Object.assign(new Error('Migration command failed; outcome may be uncertain.'), {
+          exitCode: code,
+          signal: closeSignal,
+          ...(spawnFailed ? { spawnFailed: true } : {}),
+        }));
       } else resolve(result);
     });
   });

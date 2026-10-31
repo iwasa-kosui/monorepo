@@ -10,6 +10,12 @@ importers:
 
   apps/iori:
     dependencies:
+      '@cf-wasm/resvg':
+        specifier: 0.4.0
+        version: 0.4.0
+      '@cf-wasm/satori':
+        specifier: 0.4.2
+        version: 0.4.2
       '@dotenvx/dotenvx':
         specifier: 1.51.4
         version: 1.51.4
@@ -995,6 +1001,12 @@ packages:
   '@capsizecss/unpack@4.0.0':
     resolution: {integrity: sha512-VERIM64vtTP1C4mxQ5thVT9fK0apjPFobqybMtA1UdUujWka24ERHbRHFGmpbbhp73MhV+KSsHQH9C6uOTdEQA==}
     engines: {node: '>=18'}
+
+  '@cf-wasm/resvg@0.4.0':
+    resolution: {integrity: sha512-p45IjI5EDYPTsJzhoqJ48f/TcNhR3/F9l2CCFomEHBJ0jbedQQMFB9CQfRaqcqdhDTNy4fSjN8hvOeKDMnz3zA==}
+
+  '@cf-wasm/satori@0.4.2':
+    resolution: {integrity: sha512-bcX/1Li5TG2ejhevEDSu/AZyhaCGOEFsj69UI8c2cwyg5X36fcc9PLW3WZqzQYbHllOUzaBWdSIcTjb30hzI0w==}
 
   '@cfworker/json-schema@4.1.1':
     resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
@@ -3384,6 +3396,14 @@ packages:
 
   '@resvg/resvg-js@2.6.2':
     resolution: {integrity: sha512-xBaJish5OeGmniDj9cW5PRa/PtmuVU3ziqrbr5xJj901ZDN4TosrVaNZpEiLZAxdfnhAe7uQ7QFWfjPe9d9K2Q==}
+    engines: {node: '>= 10'}
+
+  '@resvg/resvg-wasm@2.4.1':
+    resolution: {integrity: sha512-yi6R0HyHtsoWTRA06Col4WoDs7SvlXU3DLMNP2bdAgs7HK18dTEVl1weXgxRzi8gwLteGUbIg29zulxIB3GSdg==}
+    engines: {node: '>= 10'}
+
+  '@resvg/resvg-wasm@2.6.2':
+    resolution: {integrity: sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw==}
     engines: {node: '>= 10'}
 
   '@rolldown/pluginutils@1.0.0-beta.11':
@@ -8435,6 +8455,10 @@ packages:
     resolution: {integrity: sha512-/XaT/JiWLfNlgjlQdde4wXB1/6F+FEze9c3OW2QIH0ywsfOrY57YOetgESWyOFHW3JfEQ6dJAo2U9Xwb7+DDAw==}
     engines: {node: '>=16'}
 
+  satori@0.32.0:
+    resolution: {integrity: sha512-WwYeCWKjxfXvk7SsLSLTJhcPOrB2HCxbptqGIiYor0yqaPu3xA5uMTQ/4Dan5mxClhhk2Wn9ZE1pLGIlGdUxFQ==}
+    engines: {node: '>=16'}
+
   sax@1.4.4:
     resolution: {integrity: sha512-1n3r/tGXO6b6VXMdFT54SHzT9ytu9yr7TaELowdYpMqY/Ao7EnlQGmAQ1+RatX7Tkkdm6hONI2owqNx2aZj5Sw==}
     engines: {node: '>=11.0.0'}
@@ -10542,6 +10566,15 @@ snapshots:
   '@capsizecss/unpack@4.0.0':
     dependencies:
       fontkitten: 1.0.2
+
+  '@cf-wasm/resvg@0.4.0':
+    dependencies:
+      '@resvg/resvg-wasm': 2.6.2
+      '@resvg/resvg-wasm-legacy': '@resvg/resvg-wasm@2.4.1'
+
+  '@cf-wasm/satori@0.4.2':
+    dependencies:
+      satori: 0.32.0
 
   '@cfworker/json-schema@4.1.1': {}
 
@@ -13097,6 +13130,10 @@ snapshots:
       '@resvg/resvg-js-win32-arm64-msvc': 2.6.2
       '@resvg/resvg-js-win32-ia32-msvc': 2.6.2
       '@resvg/resvg-js-win32-x64-msvc': 2.6.2
+
+  '@resvg/resvg-wasm@2.4.1': {}
+
+  '@resvg/resvg-wasm@2.6.2': {}
 
   '@rolldown/pluginutils@1.0.0-beta.11': {}
 
@@ -19609,6 +19646,20 @@ snapshots:
       postcss: 8.5.6
 
   satori@0.19.1:
+    dependencies:
+      '@shuding/opentype.js': 1.4.0-beta.0
+      css-background-parser: 0.1.0
+      css-box-shadow: 1.0.0-3
+      css-gradient-parser: 0.0.17
+      css-to-react-native: 3.2.0
+      emoji-regex-xs: 2.0.1
+      escape-html: 1.0.3
+      linebreak: 1.1.0
+      parse-css-color: 0.2.1
+      postcss-value-parser: 4.2.0
+      yoga-layout: 3.2.1
+
+  satori@0.32.0:
     dependencies:
       '@shuding/opentype.js': 1.4.0-beta.0
       css-background-parser: 0.1.0
