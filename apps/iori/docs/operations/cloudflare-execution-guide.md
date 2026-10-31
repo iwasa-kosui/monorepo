@@ -219,7 +219,7 @@ CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証
 - 使い捨て generation で `prepare-target` が完了している
 - 登録済みの Secret が `migrate-data` と同じである。ただし `IORI_MIGRATION_REHEARSAL` は不要
 
-`rehearse-migration` は、source を凍結している区間に、全体で 30 分の上限を持ちます。定数 `REHEARSAL_FREEZE_LIMIT_MS` が、この 30 分を表します。この定数は `apps/iori/scripts/rehearse-protected-migration.mjs` にあります。30 分は、個人ブログで許容できる書き込み停止の長さとして、ユーザーが決めた値です。
+`rehearse-migration` は、source を凍結している区間に、全体で 30 分の上限を持ちます。定数 `REHEARSAL_FREEZE_LIMIT_MS` が、この 30 分を表します。この定数は `apps/iori/scripts/rehearse-protected-migration.mjs` にあります。30 分は、個人ブログで許容できる書き込み停止の長さです。
 
 dispatch の承認前に、担当者が 30 分の書き込み停止を許容できるか確認します。`rehearse-migration` は、凍結する前に時間を判定しません。`apps/iori/scripts/rehearse-protected-migration.mjs` の `budget` は、標本不足と容量だけを検査します。
 
@@ -227,7 +227,7 @@ dispatch の承認前に、担当者が 30 分の書き込み停止を許容で�
 
 - 範囲は、freeze の開始から、export と restore が終わった直後の resume の完了までです。D1 import 以降は、凍結を解除した後に実行します。
 - 30 分の上限は、freeze の呼び出しから restore の完了までの区間に、全体で1つだけ適用します。上限を超えると、`rehearse-migration` は自分で処理を中断し、resume を1回呼んで `Rehearsal freeze limit exceeded.` で失敗します。`rehearse-migration` は job の cancel に頼りません。
-- 凍結は、最長で 30 分と、その後の resume の時間で終わります。SSH adapter は、resume を 70 秒で打ち切ります。
+- 30 分の上限に当たると、`rehearse-migration` は resume を1回試みます。source 側で export などの処理がまだ動いている場合、source は resume を `source_not_idle` で拒否し、凍結が残ることがあります。上限に当たる原因は export か restore が遅いことが多いため、上限に当たった場合こそ凍結が残りやすくなります。SSH adapter は、resume を 70 秒で打ち切ります。
 
 30 分を超える見込みの場合、計測は失敗し、generation の印 `rehearsal.json` だけが残ります。`rehearse-migration` は、印を freeze より前に書きます。そのため、その generation は再利用できません。
 
@@ -274,15 +274,17 @@ source 側と adapter 側には、次の時間上限があります。
 - runner が失われた場合。プロセスが消えるため、resume を呼べません。
 - `timeout-minutes: 360` で job が強制終了された場合。executor の deadline は 345 分なので、通常は deadline の中断で resume を呼びます。強制終了までに resume が終わらなかった場合に、凍結が残ります。
 - resume 自体が失敗した場合。たとえば、source が `source_not_frozen` や `source_not_idle` を返したとき、SSH が失敗したとき、待ち時間を超えたときです。
+- 30 分の上限で中断した後、source が resume を `source_not_idle` で拒否した場合。
 
 凍結が残った場合、書き込みは自動では再開しません。担当者が次の順に作業します。
 
 1. service user で、`$HOME/.iori-migration/freeze.json` と `freeze.pending` の有無を確認します。確認の方法は、第4節の「凍結」の行と同じです。どちらかがあれば、再配備も再起動もしません。再起動では凍結が解除されないためです。
 2. 使い捨て generation で通常の書き込みを有効にしていないことを確認します。`rehearse-migration` は署名つき bundle を公開しないため、5.3 のとおり `cutover-route` は進みません。
-3. 復旧を明示的に承認した後、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) の手順で復旧します。失敗した `rehearse-migration` と同じ SHA と run ID の source control に、`resume` と `destination_writes_not_enabled` を指定します。
-4. resume の後に、`freeze.json` と `freeze.pending` が無いことを、手順 1 と同じ方法でもう一度確認します。
+3. source control の status で、export などの source 側の処理が終わったことを確かめてから resume します。status の実行方法は、第4節の配備後の status と同じです。失敗した `rehearse-migration` と同じ SHA と run ID を指定します。source 側の処理が動いている間は、source が resume を `source_not_idle` で拒否します。status の出力のどの項目が処理の終了を示すかは、既存の文書にありません [要確認]。
+4. 復旧を明示的に承認した後、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) の手順で復旧します。失敗した `rehearse-migration` と同じ SHA と run ID の source control に、`resume` と `destination_writes_not_enabled` を指定します。
+5. resume の後に、`freeze.json` と `freeze.pending` が無いことを、手順 1 と同じ方法でもう一度確認します。
 
-`freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合の復旧手段は、作業セッション B1 が次の PR で整備します。この PR では扱いません。
+`freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合の復旧手段は未整備です。この PR では扱いません。
 
 rate は、`migrationBudget` の式の各項と同じ作業量を、その作業を含むフェーズの経過時間で割って求めます。フェーズは重複して数えるため、見積もりは保守的になります。計測値はそのまま profile に使います。`migrate-data` の `migrationBudget` が時間を2倍にし、固定の overhead も足すため、計測側では安全係数を掛けません。
 
