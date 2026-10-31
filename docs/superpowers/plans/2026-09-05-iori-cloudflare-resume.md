@@ -178,6 +178,16 @@ executor は source の停止や application data の変更前に、準備済み
 
 **事後条件:** HTTP、ActivityPub、Web Push、Queue retry/DLQ、D1/R2 の照合を確認します。cutover から 14 日間は Lightsail、PostgreSQL、uploads の backup、AWS state を保持します。14 日分の確認結果と destroy plan への明示承認後に、旧環境の撤去を別の変更として進めます。
 
+## 5. 使い捨て generation の削除手順を整備する
+
+**状態:** 未着手です。`rehearse-migration` は、本番の実データを使い捨て generation の D1 と application R2 に入れます。この generation を削除する手順は、リポジトリにありません。
+
+**事前条件:** 手順 4 のリハーサルで使い捨て generation を作り、`IORI_MIGRATION_REHEARSAL` への profile の登録を済ませています。
+
+**作業:** 使い捨て generation の D1、application R2、transfer R2、KV、Queue、Worker と Terraform state を削除する手順を書き、レビューを受けます。`prevent_destroy = true` を設定したリソースの扱いと、削除前の承認者を決めます。[cutover runbook](../../../apps/iori/docs/operations/cloudflare-cutover-runbook.md)が旧リソースの destroy を hosted workflow の経路に含めないと定めているため、この手順の位置づけも決めます。
+
+**事後条件:** 削除手順がレビュー済みで、明示承認を受けています。承認後に使い捨て generation の実データを削除し、削除の結果を記録します。
+
 ## 完了の判定
 
 - Draft PR とローカル検証: 実装候補のレビュー準備

@@ -219,20 +219,98 @@ CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証
 - 使い捨て generation で `prepare-target` が完了している
 - 登録済みの Secret が `migrate-data` と同じである。ただし `IORI_MIGRATION_REHEARSAL` は不要
 
-dispatch の承認前に、担当者が 5.2 の凍結時間を許容できるか確認します。
+dispatch の承認前に、担当者が 5.2 の凍結時間を許容できるか確認します。`rehearse-migration` は時間を判定しません。`apps/iori/scripts/rehearse-protected-migration.mjs` の `budget` は、標本不足と容量だけを検査します。担当者は、次の材料から凍結時間を見積もります。
+
+凍結が続く範囲は次のとおりです。
+
+- 範囲は、freeze の開始から、export と restore が終わった直後の resume の完了までです。D1 import 以降は、凍結を解除した後に実行します。
+- 最悪の場合、凍結は job の deadline まで続きます。deadline は、`timeout-minutes: 360` から 15 分を引いた 345 分です。`apps/iori/scripts/execute-protected-migration.mjs` の `MIGRATION_DEADLINE_MS` が、この 345 分を表します。345 分は、job の最初の step が記録した開始時刻から数えます。
+
+source 側と adapter 側には、次の時間上限があります。
+
+- freeze は 70 秒です。SSH adapter が、`SOURCE_LIMITS.estimateMs` の 60 秒に 10 秒を足した時間で打ち切ります。
+- drain は 300 秒です。executor が `source.drain(300_000)` を呼び、source がこの時間まで待ちます。SSH adapter は 310 秒で打ち切ります。
+- drain の後の estimate は 70 秒です。executor が、freeze の後に容量と標本の判定をもう一度実行します。
+- export は、source 側が 30 分 (`SOURCE_LIMITS.exportMs`)、SSH adapter 側が 31 分 (`SOURCE_LIMITS.socketMs`) です。
+- restore は、最初に inventory を 70 秒以内に取得します。その後、ファイルを1つずつ転送します。1ファイルの上限は、source 側も SSH adapter 側も 5 分 (`SOURCE_LIMITS.transferMs`) です。転送するファイルは、31 table、export manifest 1つ、upload 1つにつき1ファイルで、合計 `upload_count + 32` 個です。restore 全体の時間上限はありません。
+- resume は、5.2 に書きます。
+
+これらの上限だけを使った凍結時間の上限は、次の式です。単位は秒です。
+
+```text
+70 (freeze) + 310 (drain) + 70 (estimate) + 1860 (export) + 70 (inventory)
+  + 300 × (upload_count + 32) (restore の転送) + 70 (resume)
+= 2450 + 300 × (upload_count + 32)
+```
+
+`upload_count` が 29 以上の場合、この式の値は deadline の 20700 秒 (345 分) を超えます。この場合、凍結時間の実質の上限は deadline です。deadline は job の開始から数えるため、凍結の開始までに使った時間だけ、実際の余裕は小さくなります。
+
+`upload_count`、`table_bytes`、`upload_bytes` は、source の estimate が返す値です。estimate は、table の行を JSON にした大きさに、行ごとに改行1バイトを加えて合計した値を `table_bytes` として返します。dispatch の前にこの値を取る手順は、既存の文書にありません [要確認]。
+
+転送速度の条件は次のとおりです。
+
+- 転送速度が `table_bytes` ÷ 300 秒以上であれば、どの table ファイルも 5 分以内に転送できる見込みです。1つの table ファイルは、全 table の合計である `table_bytes` を超えない見込みだからです。
+- upload ファイルは、1つが 32 MiB (`SOURCE_LIMITS.uploadBytes`) 以下です。転送速度が 32 MiB ÷ 300 秒以上であれば、どの upload ファイルも 5 分以内に転送できます。
+- 5 分を超えたファイルが1つでもあれば、restore は失敗します。この場合は、失敗した時点で resume を呼びます。
+
+実際の転送速度は、コードにも既存の文書にもありません。式の値は、各上限まで時間がかかった場合の値であり、実際の凍結時間の予測ではありません。
 
 ### 5.2 rehearse-migration の処理
 
-1. `rehearse-migration` は、最初に `prepared-target/v1/<environment>/<generation>/rehearsal.json` を書きます。
-2. 件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。
-3. 容量の判定は `migrate-data` と同じです。時間の判定はしません。`d1_capacity_bytes` は Workers Paid の D1 上限である `10000000000` に固定します。
-4. `rehearse-migration` は本番の source を freeze し、drain、export、restore を行います。restore が終わった直後に resume します。
-5. 凍結を解除した後に、D1 import、R2/OGP import、検証を行います。
-6. 失敗した場合も中断した場合も、`rehearse-migration` は resume を必ず呼びます。
+1. `rehearse-migration` は、transfer R2 bucket が非公開であることを検査してから、準備記録を読み取ります。続けて、移行先の状態を読み取り、フォントを読み込みます。
+2. source の estimate を取得します。件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。
+3. 容量を判定します。判定は `migrate-data` と同じです。時間の判定はしません。`d1_capacity_bytes` は Workers Paid の D1 上限である `10000000000` に固定します。
+4. 手順 1〜3 を通った後で、`prepared-target/v1/<environment>/<generation>/rehearsal.json` を書きます。
+5. `migrate-data` と同じ実行予約を書き、読み戻して確認します。
+6. `rehearse-migration` は本番の source を freeze し、drain を行います。drain の後に、手順 2 と 3 の判定をもう一度実行します。その後に export と restore を行い、restore が終わった直後に resume します。
+7. 凍結を解除した後に、D1 import、R2/OGP import、検証を行います。
+
+手順 1〜3 で失敗した場合、`rehearse-migration` は `rehearsal.json` を書いていません。この場合は、同じ generation で `rehearse-migration` を再実行できます。手順 4 以降で失敗した場合は、同じ generation では再実行できません。
 
 凍結の時間は、freeze から restore 完了までです。本番への書き込みは、この間止まります。
 
+`rehearse-migration` は、凍結を始めた後、プロセスが動いている限り、resume を1回呼びます。restore の直後に resume が成功した場合は、終了時に resume を呼びません。失敗した場合も中断した場合も、プロセスは終了する前に resume を呼びます。resume は再試行しません。resume の待ち時間は 120 秒です。ただし、SSH adapter は resume を 70 秒で打ち切ります。
+
+次の場合は、凍結が残る可能性があります。
+
+- job をキャンセルした場合に、SIGKILL までの猶予内に SSH の resume が終わらないとき。hosted workflow の親プロセスは、中断を受けると `rehearse-migration` のプロセスへ SIGTERM を送り、15 秒後に SIGKILL を送ります。
+- runner が失われた場合。プロセスが消えるため、resume を呼べません。
+- `timeout-minutes: 360` で job が強制終了された場合。executor の deadline は 345 分なので、通常は deadline の中断で resume を呼びます。強制終了までに resume が終わらなかった場合に、凍結が残ります。
+- resume 自体が失敗した場合。たとえば、source が `source_not_frozen` や `source_not_idle` を返したとき、SSH が失敗したとき、待ち時間を超えたときです。
+
+凍結が残った場合、書き込みは自動では再開しません。担当者が次の順に作業します。
+
+1. service user で、`$HOME/.iori-migration/freeze.json` と `freeze.pending` の有無を確認します。確認の方法は、第4節の「凍結」の行と同じです。どちらかがあれば、再配備も再起動もしません。再起動では凍結が解除されないためです。
+2. 使い捨て generation で通常の書き込みを有効にしていないことを確認します。`rehearse-migration` は署名つき bundle を公開しないため、5.3 のとおり `cutover-route` は進みません。
+3. 復旧を明示的に承認した後、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) の手順で復旧します。失敗した `rehearse-migration` と同じ SHA と run ID の source control に、`resume` と `destination_writes_not_enabled` を指定します。
+4. resume の後に、`freeze.json` と `freeze.pending` が無いことを、手順 1 と同じ方法でもう一度確認します。
+
+`freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合の手順は、既存の文書にありません [要確認]。
+
 rate は、`migrationBudget` の式の各項と同じ作業量を、その作業を含むフェーズの経過時間で割って求めます。フェーズは重複して数えるため、見積もりは保守的になります。計測値はそのまま profile に使います。`migrate-data` の `migrationBudget` が時間を2倍にし、固定の overhead も足すため、計測側では安全係数を掛けません。
+
+rate の数え方により、`migrate-data` の見積もりは実際の所要時間より大きくなります。フェーズの時間を次のように置きます。
+
+- `t_export`: `export-postgres` フェーズの時間。export と restore を含みます。
+- `t_d1`: `convert-and-import-d1` フェーズの時間。
+- `t_obj`: `import-r2-and-ogp` フェーズの時間。
+
+`rehearse-protected-migration.mjs` は、次の4つの rate を求めます。
+
+- `bytes_per_second` は、(`raw` × 3 + `sqlBytes`) ÷ (`t_export` + `t_d1`) です。
+- `rows_per_second` は、`rows` × 3 ÷ `t_d1` です。
+- `files_per_second` は、(`upload_count` × 3 + `fileCount` × 2) ÷ (`t_d1` + `t_obj`) です。
+- `ogp_per_second` は、`article_count` ÷ `t_obj` です。
+
+`migrate-data` の作業量が計測時と同じ場合、`migration-budget.mjs` の `estimatedMs` は、各項の作業量をこの rate で割ります。各項は `t_export + t_d1`、`t_d1`、`t_d1 + t_obj`、`t_obj` に戻ります。合計すると、見積もりは次の式になります。単位は秒です。
+
+```text
+2 × (600 + t_export + 3 × t_d1 + 2 × t_obj)
+```
+
+実際の所要時間は `t_export + t_d1 + t_obj` です。見積もりは、D1 フェーズの時間を3倍、オブジェクト import の時間を2倍に数えます。D1 import が長い場合は、期限内に終わる移行でも、`migrate-data` が見積もりの超過で拒否することがあります。
+
+`migrate-data` は、`estimatedMs` に 15 分の cleanup 余裕 (`CLEANUP_MARGIN_MS`) を足した値が残り時間を超えると拒否します。残り時間の最大値は 345 分、つまり 20700 秒です。最大値の場合、拒否されない条件は `t_export + 3 × t_d1 + 2 × t_obj` が 9300 秒以下であることです。
 
 ### 5.3 生成物と誤用の防止
 
@@ -246,8 +324,8 @@ envelope は JSON です。schema は `iori-migration-rehearsal-envelope/v1` で
 
 誤用は次の仕組みで防ぎます。
 
-- `rehearse-migration` が最初に書く `rehearsal.json` は印です。`migrate-data` は、この印がある generation を拒否します。
-- 同じ generation で `rehearse-migration` を2回実行することもできません。印は最初に書かれるため、失敗した場合も同じ generation では再実行できません。
+- `rehearse-migration` が書く `rehearsal.json` は印です。`migrate-data` は、この印がある generation を拒否します。
+- 印を書いた後は、同じ generation で `rehearse-migration` を2回実行できません。`rehearse-migration` は、準備記録の読み取り、標本不足の判定、容量の判定を終えた後で印を書きます。印を書いた後に失敗した場合は、同じ generation では再実行できません。印を書く前に失敗した場合は、同じ generation で再実行できます。
 - `rehearse-migration` は署名つき bundle を公開しません。そのため、この `run_id` では `verify-import` と `cutover-route` が進みません。
 
 ### 5.4 profile の登録
@@ -287,7 +365,21 @@ rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
 
 後片付けの前に、5.4 の envelope の取得と登録を済ませます。envelope は使い捨て generation の transfer bucket にあるため、bucket を削除すると取り出せなくなります。
 
-`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。
+`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。削除手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。
+
+使い捨て generation には、本番の実データが匿名化されずに残ります。実データは個人データを含みます。残る場所は次のとおりです。
+
+- D1 には、`rehearse-migration` が import した全 31 table の行が残ります。
+- application R2 の uploads bucket には、`post-images/<id>/original` の元画像と、`og/<id>.png` の OGP 画像が残ります。
+- transfer R2 bucket には、`rehearse-migration` が本番の実データを書きません。bucket にあるのは、準備記録、`rehearsal.json`、実行予約、`rehearsal-profile` の envelope です。envelope の profile は処理速度の数値だけです。
+
+使い捨て generation の実データに到達できる経路は、コードと既存の文書で確かめられた範囲で次のとおりです。
+
+- Worker は `sealed` の状態です。`sealed` の Worker は、すべての HTTP リクエストを 503 で拒否します。`workers.dev` の subdomain は有効ですが、同じ拒否が適用されます。
+- `rehearse-migration` は route を作りません。`cutover-route` も進まないため、本番の hostname から使い捨て generation には到達しません。
+- transfer R2 bucket は非公開です。`prepare-target` と `rehearse-migration` は、bucket の managed domain と custom domain が無効であることを Cloudflare API で確認します。
+- application R2 の uploads bucket に、公開 domain を作る Terraform resource はありません。ただし、公開設定が無効であることを実 API で検査するコードは、transfer R2 bucket にしかありません。
+- 残る経路は、`production` Environment に登録した Cloudflare API token と R2 の credential を使う操作です。
 
 **完了条件:** 本番の `migrate-data` を実行する `main_sha` と同じ `main_sha` の profile が、`production` Environment の `IORI_MIGRATION_REHEARSAL` に登録されている。ローカルの envelope の一時ファイルを削除している。source の `freeze.json` と `freeze.pending` が残っておらず、書き込みが再開している。`rehearse-migration` は署名つき bundle を公開しないため、bundle の復元と再検証は計測の対象外である。
 

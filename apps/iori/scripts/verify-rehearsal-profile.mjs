@@ -8,6 +8,7 @@ import { parseMigrationRehearsal } from './migration-budget.mjs';
 import { loadReceiptPublicKey } from './run-protected-migration.mjs';
 
 const ENVELOPE_BYTES = 65536;
+export const REHEARSAL_SIGNING_PREFIX = 'iori-migration-rehearsal-envelope/v1\n';
 const envelopeSchema = z.object({
   schema: z.literal('iori-migration-rehearsal-envelope/v1'),
   profile: z.string().min(1).max(ENVELOPE_BYTES),
@@ -21,7 +22,7 @@ export const verifyRehearsalEnvelope = (envelopeText, publicKey, mainSha) => {
     if (
       publicKey?.asymmetricKeyType !== 'ed25519'
       || createHash('sha256').update(envelope.profile).digest('hex') !== envelope.profile_sha256
-      || !verify(null, Buffer.from(envelope.profile, 'utf8'), publicKey, signature)
+      || !verify(null, Buffer.from(`${REHEARSAL_SIGNING_PREFIX}${envelope.profile}`), publicKey, signature)
     ) throw new Error('invalid');
     parseMigrationRehearsal(JSON.parse(envelope.profile), mainSha);
     return envelope.profile;

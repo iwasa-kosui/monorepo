@@ -6,6 +6,7 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { assertSigner, runExecutorCli, runProtectedPhases } from './execute-protected-migration.mjs';
 import { migrationBudget, migrationWorkload, parseMigrationRehearsal } from './migration-budget.mjs';
 import { parseExpectedTarget, rehearsalProfileKey, rehearsalTargetKey } from './migration-target-contract.mjs';
+import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
 const REHEARSAL_D1_CAPACITY_BYTES = 10_000_000_000;
 const RESUME_TIMEOUT_MS = 120_000;
@@ -67,7 +68,9 @@ export const rehearseProtectedMigration = async (options) => {
             schema: 'iori-migration-rehearsal-envelope/v1',
             profile,
             profile_sha256: createHash('sha256').update(profile).digest('hex'),
-            signature: sign(null, Buffer.from(profile, 'utf8'), receiptPrivateKey).toString('base64'),
+            signature: sign(null, Buffer.from(`${REHEARSAL_SIGNING_PREFIX}${profile}`), receiptPrivateKey).toString(
+              'base64',
+            ),
           }) + '\n',
         );
         const key = rehearsalProfileKey(target);

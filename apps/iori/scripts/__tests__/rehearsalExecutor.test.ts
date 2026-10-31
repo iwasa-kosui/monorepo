@@ -81,7 +81,7 @@ it(
       expect(
         verify(
           null,
-          Buffer.from(envelope.profile, 'utf8'),
+          Buffer.from(`iori-migration-rehearsal-envelope/v1\n${envelope.profile}`),
           f.options.receiptPublicKey,
           Buffer.from(envelope.signature, 'base64'),
         ),
@@ -289,13 +289,23 @@ const envelopeFixture = () => {
     schema: 'iori-migration-rehearsal-envelope/v1',
     profile: value,
     profile_sha256: createHash('sha256').update(value).digest('hex'),
-    signature: sign(null, Buffer.from(value, 'utf8'), privateKey).toString('base64'),
+    signature: sign(null, Buffer.from(`iori-migration-rehearsal-envelope/v1\n${value}`), privateKey).toString('base64'),
   });
   return { keys, profile, envelope };
 };
 it('verifies an untouched rehearsal envelope and prints only the profile text', () => {
   const { keys, profile, envelope } = envelopeFixture();
   expect(verifyRehearsalEnvelope(JSON.stringify(envelope(profile)), keys.publicKey, 'a'.repeat(40))).toBe(profile);
+});
+it('rejects an envelope whose profile was signed directly without the prefix', () => {
+  const { keys, profile, envelope } = envelopeFixture();
+  const unprefixed = {
+    ...envelope(profile),
+    signature: sign(null, Buffer.from(profile, 'utf8'), keys.privateKey).toString('base64'),
+  };
+  expect(() => verifyRehearsalEnvelope(JSON.stringify(unprefixed), keys.publicKey, 'a'.repeat(40))).toThrow(
+    'Rehearsal profile verification failed.',
+  );
 });
 it('rejects tampered profiles, other keys, hash mismatches and a different main SHA with one fixed message', () => {
   const { keys, profile, envelope } = envelopeFixture();
