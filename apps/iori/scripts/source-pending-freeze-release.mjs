@@ -55,6 +55,21 @@ export const runPendingFreezeRelease = async (
       throw new Error(message);
     }
   };
+  const assertServiceControl = async () => {
+    let systemctl = '';
+    try {
+      await exec('/bin/sh', ['-c', 'command -v systemctl'], async (result) => {
+        systemctl = result.stdout.trim();
+        await captureOutput?.(result);
+      });
+      if (!/^\/[A-Za-z0-9/_.-]+$/.test(systemctl)) throw new Error();
+      await exec('sudo', ['-n', '-l', systemctl, 'stop', 'microblog']);
+      await exec('sudo', ['-n', '-l', systemctl, 'start', 'microblog']);
+    } catch {
+      signal?.throwIfAborted();
+      throw new Error('Source service control is not permitted.');
+    }
+  };
   const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
   const readMarker = async (path) => {
     try {
@@ -98,6 +113,7 @@ export const runPendingFreezeRelease = async (
   };
   await check();
   const planned = await inspect();
+  await assertServiceControl();
   if (planned.kind === 'renamed') {
     process.stderr.write('IORI_NOTICE stage=release-pending-freeze already_renamed=1\n');
     await service('start', 'Source service start failed.');

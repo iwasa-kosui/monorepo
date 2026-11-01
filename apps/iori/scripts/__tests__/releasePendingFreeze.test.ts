@@ -32,7 +32,8 @@ const setup = async (pending: string | null = JSON.stringify({ main_sha: sha, ru
   if (pending !== null) await writeFile(join(base, 'freeze.pending'), pending, { mode: 0o600 });
   return { home, base };
 };
-const commands = (active: string, calls: string[] = []) => ({
+const systemctlPath = '/usr/bin/systemctl';
+const commands = (active: string, calls: string[] = [], located = systemctlPath) => ({
   calls,
   runCommand: async (
     program: string,
@@ -40,6 +41,7 @@ const commands = (active: string, calls: string[] = []) => ({
     options: { captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void> },
   ) => {
     calls.push([program, ...args].join(' '));
+    if (program === '/bin/sh') await options.captureOutput?.({ stdout: `${located}\n`, stderr: '' });
     if (program === 'systemctl') {
       await options.captureOutput?.({ stdout: `${active}\n`, stderr: '' });
       if (active !== 'active') throw Object.assign(new Error('Migration command failed.'), { exitCode: 3 });
@@ -50,6 +52,11 @@ const commands = (active: string, calls: string[] = []) => ({
 const stop = 'sudo -n systemctl stop microblog';
 const isActive = 'systemctl is-active microblog';
 const start = 'sudo -n systemctl start microblog';
+const locate = '/bin/sh -c command -v systemctl';
+const permitStop = `sudo -n -l ${systemctlPath} stop microblog`;
+const permitStart = `sudo -n -l ${systemctlPath} start microblog`;
+const preflight = [locate, permitStop, permitStart];
+const isService = (args: string[], action: string) => args[1] === 'systemctl' && args[2] === action;
 const exists = async (path: string) => lstat(path).then(() => true, () => false);
 
 it.each(['inactive', 'failed'])(
@@ -60,7 +67,7 @@ it.each(['inactive', 'failed'])(
     const before = await lstat(join(base, 'freeze.pending'));
     const { calls, runCommand } = commands(state);
     await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
-    expect(calls).toEqual([stop, isActive, start]);
+    expect(calls).toEqual([...preflight, stop, isActive, start]);
     expect(await exists(join(base, 'freeze.pending'))).toBe(false);
     const moved = await lstat(join(base, `freeze.pending.rejected-${runId}`));
     expect([moved.dev, moved.ino]).toEqual([before.dev, before.ino]);
@@ -79,7 +86,7 @@ it.each(['active', 'activating', 'deactivating', ''])(
     await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
       'Source service is not stopped.',
     );
-    expect(calls).toEqual([stop, isActive]);
+    expect(calls).toEqual([...preflight, stop, isActive]);
     expect(await exists(join(base, 'freeze.pending'))).toBe(true);
     expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
     expect(writes).toEqual([]);
@@ -88,14 +95,18 @@ it.each(['active', 'activating', 'deactivating', ''])(
 it('does not continue or start when the stop command fails', async () => {
   const { home, base } = await setup();
   const calls: string[] = [];
-  const runCommand = async (program: string, args: string[]) => {
-    calls.push([program, ...args].join(' '));
-    throw new Error('Migration command failed; outcome may be uncertain.');
+  const { runCommand: inner } = commands('inactive', calls);
+  const runCommand = async (program: string, args: string[], options: object) => {
+    if (isService(args, 'stop')) {
+      calls.push([program, ...args].join(' '));
+      throw new Error('Migration command failed; outcome may be uncertain.');
+    }
+    return inner(program, args, options as never);
   };
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source service stop failed.',
   );
-  expect(calls).toEqual([stop]);
+  expect(calls).toEqual([...preflight, stop]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(true);
 });
 it('fails without stopping when a committed freeze marker exists', async () => {
@@ -203,7 +214,7 @@ it('does not start the service when the control directory becomes unsafe before 
       if (++checks === 5) throw new Error('Source deployment is blocked.');
     },
   })).rejects.toThrow('Source deployment is blocked.');
-  expect(calls).toEqual([stop, isActive]);
+  expect(calls).toEqual([...preflight, stop, isActive]);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
 });
 it('fails without renaming or starting when the pending marker is replaced during the stop', async () => {
@@ -213,7 +224,7 @@ it('fails without renaming or starting when the pending marker is replaced durin
   const calls: string[] = [];
   const { runCommand: inner } = commands('inactive', calls);
   const runCommand = async (program: string, args: string[], options: object) => {
-    if (args.includes('stop')) {
+    if (isService(args, 'stop')) {
       await writeFile(join(base, 'replacement'), JSON.stringify({ main_sha: sha, run_id: runId }), { mode: 0o600 });
       await rename(join(base, 'replacement'), join(base, 'freeze.pending'));
     }
@@ -222,7 +233,7 @@ it('fails without renaming or starting when the pending marker is replaced durin
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source pending freeze is invalid.',
   );
-  expect(calls).toEqual([stop, isActive]);
+  expect(calls).toEqual([...preflight, stop, isActive]);
   expect((await lstat(join(base, 'freeze.pending'))).ino).not.toBe(before.ino);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
   expect(writes).toEqual([]);
@@ -233,7 +244,7 @@ it('reports a failed start without retrying and keeps the renamed marker', async
   const calls: string[] = [];
   const { runCommand: inner } = commands('inactive', calls);
   const runCommand = async (program: string, args: string[], options: object) => {
-    if (args.includes('start')) {
+    if (isService(args, 'start')) {
       calls.push([program, ...args].join(' '));
       throw new Error('Migration command failed; outcome may be uncertain.');
     }
@@ -242,7 +253,7 @@ it('reports a failed start without retrying and keeps the renamed marker', async
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source service start failed.',
   );
-  expect(calls).toEqual([stop, isActive, start]);
+  expect(calls).toEqual([...preflight, stop, isActive, start]);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
 });
 it('fails on the second inspection without renaming or starting when a committed freeze appears during the stop', async () => {
@@ -251,7 +262,7 @@ it('fails on the second inspection without renaming or starting when a committed
   const calls: string[] = [];
   const { runCommand: inner } = commands('inactive', calls);
   const runCommand = async (program: string, args: string[], options: object) => {
-    if (args.includes('stop')) {
+    if (isService(args, 'stop')) {
       await writeFile(join(base, 'freeze.json'), JSON.stringify({ main_sha: sha, run_id: runId }), { mode: 0o600 });
     }
     return inner(program, args, options as never);
@@ -259,7 +270,7 @@ it('fails on the second inspection without renaming or starting when a committed
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source freeze is already committed.',
   );
-  expect(calls).toEqual([stop, isActive]);
+  expect(calls).toEqual([...preflight, stop, isActive]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(true);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
   expect(writes).toEqual([]);
@@ -290,7 +301,7 @@ it('fails at link without removing the pending marker when a dangling symlink ap
     'Source release destination exists.',
   );
   expect(checks).toBe(4);
-  expect(calls).toEqual([stop, isActive]);
+  expect(calls).toEqual([...preflight, stop, isActive]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(true);
   expect((await lstat(join(base, `freeze.pending.rejected-${runId}`))).isSymbolicLink()).toBe(true);
   expect(writes).toEqual([]);
@@ -301,13 +312,62 @@ const setupRenamed = async (content: string | null = JSON.stringify({ main_sha: 
   if (content !== null) await writeFile(join(base, `freeze.pending.rejected-${runId}`), content, { mode: 0o600 });
   return { home, base };
 };
+const denyOnly = (denied: string, calls: string[], located = systemctlPath) => {
+  const { runCommand: inner } = commands('inactive', calls, located);
+  return async (program: string, args: string[], options: object) => {
+    if ([program, ...args].join(' ') === denied) {
+      calls.push(denied);
+      throw Object.assign(new Error('Migration command failed.'), { exitCode: 1 });
+    }
+    return inner(program, args, options as never);
+  };
+};
+const notPermitted = 'Source service control is not permitted.';
+it.each([
+  ['the stop permission check exits non-zero', permitStop, systemctlPath, [locate, permitStop]],
+  ['the start permission check exits non-zero', permitStart, systemctlPath, preflight],
+])('fails without stopping or starting when %s', async (_label, denied, located, expected) => {
+  const { home, base } = await setup();
+  const calls: string[] = [];
+  const runCommand = denyOnly(denied, calls, located);
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(notPermitted);
+  expect(calls).toEqual(expected);
+  expect(calls).not.toContain(stop);
+  expect(calls).not.toContain(start);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(true);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
+});
+it.each([
+  ['is empty', ''],
+  ['is a relative path', 'systemctl'],
+  ['contains an unsafe character', '/usr/bin/system ctl;reboot'],
+])('fails without stopping or starting when command -v systemctl %s', async (_label, located) => {
+  const { home, base } = await setup();
+  const { calls, runCommand } = commands('inactive', [], located);
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(notPermitted);
+  expect(calls).toEqual([locate]);
+  expect(calls).not.toContain(stop);
+  expect(calls).not.toContain(start);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(true);
+});
+it('fails without starting when the start permission is missing for an already renamed marker', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed();
+  const calls: string[] = [];
+  const runCommand = denyOnly(permitStart, calls);
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(notPermitted);
+  expect(calls).toEqual(preflight);
+  expect(calls).not.toContain(start);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
+  expect(writes).toEqual([]);
+});
 it('only starts and does not stop or link when the marker was already renamed', async () => {
   const writes = captureStderr();
   const { home, base } = await setupRenamed();
   const before = await lstat(join(base, `freeze.pending.rejected-${runId}`));
   const { calls, runCommand } = commands('inactive');
   await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
-  expect(calls).toEqual([start]);
+  expect(calls).toEqual([...preflight, start]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(false);
   const after = await lstat(join(base, `freeze.pending.rejected-${runId}`));
   expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
@@ -317,14 +377,18 @@ it('reports a failed start for an already renamed marker without retrying', asyn
   captureStderr();
   const { home, base } = await setupRenamed();
   const calls: string[] = [];
-  const runCommand = async (program: string, args: string[]) => {
-    calls.push([program, ...args].join(' '));
-    throw new Error('Migration command failed; outcome may be uncertain.');
+  const { runCommand: inner } = commands('inactive', calls);
+  const runCommand = async (program: string, args: string[], options: object) => {
+    if (isService(args, 'start')) {
+      calls.push([program, ...args].join(' '));
+      throw new Error('Migration command failed; outcome may be uncertain.');
+    }
+    return inner(program, args, options as never);
   };
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source service start failed.',
   );
-  expect(calls).toEqual([start]);
+  expect(calls).toEqual([...preflight, start]);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
 });
 it.each([
@@ -396,9 +460,16 @@ it('stops, then only unlinks the pending marker and starts when a hard link was 
     return inner(program, args, options as never);
   };
   await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
-  expect(calls).toEqual([stop, isActive, start]);
+  expect(calls).toEqual([...preflight, stop, isActive, start]);
   // The marker is still present while stopping and is gone by the time the service starts.
-  expect(pendingAtCall).toEqual({ [stop]: true, [isActive]: true, [start]: false });
+  expect(pendingAtCall).toEqual({
+    [locate]: true,
+    [permitStop]: true,
+    [permitStart]: true,
+    [stop]: true,
+    [isActive]: true,
+    [start]: false,
+  });
   const after = await lstat(rejectedPath);
   expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
   expect(after.nlink).toBe(1);
@@ -415,7 +486,7 @@ it('does not unlink or start when the service is not stopped and a hard link was
   await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
     'Source service is not stopped.',
   );
-  expect(calls).toEqual([stop, isActive]);
+  expect(calls).toEqual([...preflight, stop, isActive]);
   const [pending, rejected] = [await lstat(pendingPath), await lstat(rejectedPath)];
   expect([pending.dev, pending.ino]).toEqual([rejected.dev, rejected.ino]);
   expect(writes).toEqual([]);
@@ -542,6 +613,7 @@ it.each([
   ['Error: Source service is not stopped.', 'service-not-stopped'],
   ['Error: Source service stop failed.', 'service-stop-failed'],
   ['Error: Source service start failed.', 'service-start-failed'],
+  ['Error: Source service control is not permitted.', 'service-control-not-permitted'],
   ['Error: Source freeze is already committed.', 'freeze-committed'],
   ['Error: Source pending freeze is invalid.', 'pending-freeze-invalid'],
   ['Error: Source pending freeze identity mismatch.', 'pending-identity-mismatch'],

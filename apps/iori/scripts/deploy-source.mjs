@@ -78,6 +78,7 @@ const fixedReasons = [
   ['Source service stop failed.', 'service-stop-failed'],
   ['Source service is not stopped.', 'service-not-stopped'],
   ['Source service start failed.', 'service-start-failed'],
+  ['Source service control is not permitted.', 'service-control-not-permitted'],
   ['Source freeze is already committed.', 'freeze-committed'],
   ['Source pending freeze is invalid.', 'pending-freeze-invalid'],
   ['Source pending freeze identity mismatch.', 'pending-identity-mismatch'],

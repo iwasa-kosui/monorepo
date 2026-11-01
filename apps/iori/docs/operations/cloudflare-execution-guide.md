@@ -598,7 +598,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 `release-pending-freeze` は次の順に動きます。
 
-1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。
+1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。`sudo -n -l` で、microblog の stop と start が許可されていることを確かめます。許可されていない場合は `reason=service-control-not-permitted` で、microblog を停止せずに失敗します。
 2. microblog を停止し、停止したことを確かめます。
 3. 停止したあとに、手順 1 と同じ条件をもう一度確かめます。あわせて、`freeze.pending` が手順 1 で確かめたファイルと同じファイルであることを確かめます。停止の間にファイルが変わっていた場合は、失敗します。
 4. 手順 3 の条件を満たした場合だけ、`freeze.pending.rejected-<migration_run_id>` を新しく作る形で、`freeze.pending` を退避します。退避先がすでにある場合は、上書きせずに失敗します。`freeze.pending` の削除はしません。
