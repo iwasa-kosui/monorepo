@@ -34,10 +34,14 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
   expect(Object.keys(workflow.jobs)).toEqual([
     'public-artifact-gate',
     'prepare-target',
+    'estimate-source',
+    'rehearse-migration',
+    'purge-rehearsal-target',
     'migrate-data',
     'verify-import',
     'cutover-route',
     'deploy-worker',
+    'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
     expect(job['runs-on']).toBe('ubuntu-latest');
@@ -53,9 +57,12 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     if (name !== 'public-artifact-gate') {
       expect([job.needs].flat()).toContain('public-artifact-gate');
       expect(job.environment).toBe('${{ inputs.environment }}');
-      expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(
-        false,
-      );
+      if (name === 'recover-source') {
+        expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
+      } else {
+        expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper)
+          .toBe(false);
+      }
     }
   }
   expect(workflow.jobs['cutover-route'].needs).toEqual(['public-artifact-gate', 'verify-import']);
@@ -66,6 +73,7 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const prepare = operation(workflow.jobs['prepare-target']).env!;
   const migrate = operation(workflow.jobs['migrate-data']).env!;
+  const rehearse = operation(workflow.jobs['rehearse-migration']).env!;
   const verify = operation(workflow.jobs['verify-import']).env!;
   const cutover = operation(workflow.jobs['cutover-route']).env!;
   const deploy = operation(workflow.jobs['deploy-worker']).env!;
@@ -73,6 +81,22 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   expect(prepare.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
   expect(migrate.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
   expect(migrate.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('WRITE');
+  expect(rehearse.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
+  expect(rehearse.IORI_MIGRATION_REHEARSAL).toBeUndefined();
+  expect(migrate.IORI_MIGRATION_REHEARSAL).toBe('${{ secrets.IORI_MIGRATION_REHEARSAL }}');
+  expect(
+    Object.entries(workflow.jobs).filter(([, job]) =>
+      job.steps.some(step => step.env && 'IORI_MIGRATION_REHEARSAL' in step.env)
+    ).map(([name]) => name),
+  ).toEqual(['migrate-data']);
+  expect(JSON.stringify(workflow.jobs['rehearse-migration'])).not.toContain('IORI_MIGRATION_REHEARSAL');
+  expect({ ...rehearse, IORI_MIGRATION_REHEARSAL: migrate.IORI_MIGRATION_REHEARSAL }).toEqual(migrate);
+  expect({ ...workflow.jobs['rehearse-migration'], if: undefined, steps: undefined }).toEqual({
+    ...workflow.jobs['migrate-data'],
+    if: undefined,
+    steps: undefined,
+  });
+  expect(workflow.jobs['rehearse-migration'].if).toBe('inputs.operation == \'rehearse-migration\'');
   for (const role of [verify, cutover]) {
     expect(role.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
     expect(role.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
@@ -92,6 +116,84 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   );
   expect(Object.values(workflow.jobs).flatMap(job => job.steps).filter(step => step.uses?.includes('cache')))
     .toHaveLength(0);
+});
+it('runs the source recovery operations in one approved job holding only the source SSH secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['recover-source'];
+  expect(job.if).toBe('inputs.operation == \'resume-source\' || inputs.operation == \'release-pending-freeze\'');
+  expect([job.needs].flat()).toEqual(['public-artifact-gate']);
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    IORI_SOURCE_SSH_HOST: '${{ secrets.IORI_SOURCE_SSH_HOST }}',
+    IORI_SOURCE_SSH_USER: '${{ secrets.IORI_SOURCE_SSH_USER }}',
+    IORI_SOURCE_SSH_PRIVATE_KEY: '${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}',
+    IORI_SOURCE_SSH_KNOWN_HOSTS: '${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}',
+  });
+  expect(workflow.concurrency.group).toBe('deploy-iori-worker-production');
+});
+it('exposes the recovery operations and inputs without a default recovery value', async () => {
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const workflow = parse(text) as {
+    on: {
+      workflow_dispatch: {
+        inputs: Record<string, { required?: boolean; type?: string; default?: unknown; options?: string[] }>;
+      };
+    };
+    env: Record<string, string>;
+  };
+  const inputs = workflow.on.workflow_dispatch.inputs;
+  expect(inputs.operation.options).toEqual(expect.arrayContaining(['resume-source', 'release-pending-freeze']));
+  expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
+  expect(inputs.recovery.default).toBeUndefined();
+  expect(inputs.migration_main_sha.required).toBe(false);
+  expect(inputs.migration_run_id.required).toBe(false);
+  expect(workflow.env.IORI_RECOVERY).toBe('${{ inputs.recovery }}');
+  expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
+  expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
+});
+it('gives estimate-source only the four SSH secrets and nothing that signs, writes or reaches Cloudflare', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['estimate-source'];
+  expect(job.if).toBe('inputs.operation == \'estimate-source\'');
+  expect(Object.keys(operation(job).env!)).toEqual([
+    'IORI_SOURCE_SSH_HOST',
+    'IORI_SOURCE_SSH_USER',
+    'IORI_SOURCE_SSH_PRIVATE_KEY',
+    'IORI_SOURCE_SSH_KNOWN_HOSTS',
+  ]);
+  for (const [key, value] of Object.entries(operation(job).env!)) expect(value).toBe(`\${{ secrets.${key} }}`);
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(
+    /CLOUDFLARE|R2|RECEIPT|IORI_MIGRATION_REHEARSAL|TERRAFORM|ADMISSION|VAPID|read-migration-target/,
+  );
+});
+it('gives purge-rehearsal-target target read credentials and application R2 write, without SSH, signing or the rehearsal profile', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['purge-rehearsal-target'];
+  const purge = operation(job).env!;
+  expect(job.if).toBe('inputs.operation == \'purge-rehearsal-target\'');
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(purge.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_MIGRATE_API_TOKEN'));
+  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_APPLICATION_R2_WRITE_ACCESS_KEY_ID'));
+  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_APPLICATION_R2_WRITE_SECRET_ACCESS_KEY'));
+  expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID'));
+  expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY'));
+  expect(purge.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID'));
+  expect(purge.AWS_SECRET_ACCESS_KEY).toBe(secret('IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY'));
+  expect(purge.IORI_ADMISSION_MODE).toBe('sealed');
+  expect(Object.keys(purge).filter(key => /SSH|RECEIPT|REHEARSAL|SMOKE|VAPID_(?:PUBLIC|PRIVATE)/.test(key))).toEqual(
+    [],
+  );
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|IORI_MIGRATION_REHEARSAL/);
+});
+it('lets estimate-source start without generation or run ID while keeping them selectable for the other operations', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { required: boolean; options?: string[] }> } })
+      .workflow_dispatch.inputs;
+  expect(inputs.operation.options).toEqual(expect.arrayContaining(['estimate-source', 'purge-rehearsal-target']));
+  expect(inputs.generation.required).toBe(false);
+  expect(inputs.migration_run_id.required).toBe(false);
 });
 it('shares exact production source serialization and delegates to early guarded fixed source deployment', async () => {
   const [worker, source] = await Promise.all([readWorkflow('deploy-iori-worker.yml'), readWorkflow('deploy-iori.yml')]);

@@ -26,4 +26,4 @@ export function createMigrationR2Storage(options: {
     ): Promise<{ Body?: AsyncIterable<Uint8Array> | Buffer }>;
   };
   fetchImpl?: typeof fetch;
-}): MigrationStorage;
+}): MigrationStorage & { getIfExists(key: string, limit: number): Promise<Buffer | null> };

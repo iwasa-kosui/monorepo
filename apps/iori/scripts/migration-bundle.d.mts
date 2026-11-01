@@ -25,3 +25,4 @@ export function publishMigrationBundle(
 export function restoreMigrationBundle(
   options: MigrationBundleOptions,
 ): Promise<{ status: 'restored'; fileCount: number }>;
+export function migrationBundleReservationKey(input: ExpectedTarget): string;

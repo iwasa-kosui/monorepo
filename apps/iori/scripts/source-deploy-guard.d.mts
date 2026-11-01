@@ -6,7 +6,13 @@ type DirectoryStat = {
   dev: number;
   ino: number;
 };
-export function assertSourceDeployAllowed(input: { home: string; uid: number }, fs?: {
+type GuardFileSystem = {
   lstat(path: string): Promise<DirectoryStat>;
   realpath(path: string): Promise<string>;
-}): Promise<void>;
+};
+export function assertSourceControlDirectory(
+  input: { home: string; uid: number },
+  fs?: GuardFileSystem,
+  between?: (base: string) => Promise<void>,
+): Promise<void>;
+export function assertSourceDeployAllowed(input: { home: string; uid: number }, fs?: GuardFileSystem): Promise<void>;

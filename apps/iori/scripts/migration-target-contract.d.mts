@@ -57,6 +57,8 @@ export function admissionEnvironment(
 ): { IORI_ADMISSION_MODE: string; IORI_ADMISSION_IDENTITY: string; ORIGIN: string };
 export function parseExpectedTarget(input: unknown): ExpectedTarget;
 export function preparationRecordKey(target: ExpectedTarget): string;
+export function rehearsalTargetKey(target: ExpectedTarget): string;
+export function rehearsalProfileKey(target: ExpectedTarget): string;
 export function serializePreparationRecord(input: unknown): Buffer;
 export function parsePreparationRecord(
   body: Buffer,

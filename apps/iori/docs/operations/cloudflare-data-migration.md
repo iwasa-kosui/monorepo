@@ -21,7 +21,7 @@ source snapshot の上限は row ごとに 8 MiB、画像ごとに 32 MiB、合�
 
 executor はさらに renderer・転送 buffer 用の 256 MiB と、記事がある場合は同時に扱う OGP 1 件分の 32 MiB を加算します。OGP を全件ディスクに保持する見積もりにはしません。D1 の容量計画は free の 500,000,000 bytes または paid の 10,000,000,000 bytes を指定し、`table_bytes × 4` が収まることを事前検査します。SQLite/index の実際の増加量は staging で確認します。
 
-`IORI_MIGRATION_REHEARSAL_PATH` の private JSON は `iori-migration-rehearsal/v1` です。レビュー済み `main_sha`、ISO timestamp の `measured_at`、正の有限値である `bytes_per_second`、`rows_per_second`、`files_per_second`、`ogp_per_second` と、上記の `d1_capacity_bytes` を記録します。最初は同じ adapter と runner を使って代表的な匿名化サンプルを測定し、その保守的な値で全体リハーサルを実行します。実測値の代わりに pass flag や timeout の上書きを渡せません。
+`IORI_MIGRATION_REHEARSAL_PATH` の private JSON は `iori-migration-rehearsal/v1` です。レビュー済み `main_sha`、ISO timestamp の `measured_at`、正の有限値である `bytes_per_second`、`rows_per_second`、`files_per_second`、`ogp_per_second` と、上記の `d1_capacity_bytes` を記録します。この profile は、hosted operation `rehearse-migration` が本番 source の実測から作ります。手順は[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)にあります。実測値の代わりに pass flag や timeout の上書きを渡せません。
 
 処理量と実測 rate から計算した時間を 2 倍し、固定 overhead と cleanup の余裕を含めて検査します。executor の期限は 5 時間 45 分で、6 時間の job 上限に cleanup の余裕を残します。各処理の timeout 上限をファイル数倍して通常の所要時間とは扱いません。技術上限内の全データがこの時間内に完了する保証ではなく、時間・空き容量・metadata のいずれかが不足すれば凍結前に失敗します。
 

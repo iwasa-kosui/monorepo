@@ -89,6 +89,17 @@ export const createMigrationR2Storage = (
         throw new Error('Migration storage read failed.');
       }
     },
+    async getIfExists(key, limit) {
+      let result;
+      try {
+        signal?.throwIfAborted();
+        result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: deadline() });
+      } catch (error) {
+        if (error?.name === 'NoSuchKey' || error?.$metadata?.httpStatusCode === 404) return null;
+        throw new Error('Migration storage read failed.');
+      }
+      return readBoundedObject(result.Body, limit);
+    },
     async putNew(key, body) {
       try {
         signal?.throwIfAborted();

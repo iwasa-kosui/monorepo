@@ -16,11 +16,16 @@ import {
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = Object.freeze({
   'prepare-target': 'prepare-migration-target.mjs',
+  'rehearse-migration': 'rehearse-protected-migration.mjs',
   'migrate-data': 'execute-protected-migration.mjs',
   'verify-import': 'restore-protected-migration.mjs',
   'cutover-route': 'cutover-migration.mjs',
   'deploy-worker': 'deploy-active-worker.mjs',
+  'estimate-source': 'estimate-source.mjs',
+  'purge-rehearsal-target': 'purge-rehearsal-target.mjs',
   source: 'deploy-source.mjs',
+  'resume-source': 'resume-source.mjs',
+  'release-pending-freeze': 'release-pending-freeze.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -64,18 +69,29 @@ export const initializeHostedWorkflow = async env => {
   }
 };
 export const materializeHostedValues = async env => {
-  const { operation } = invocation(env);
+  const { operation, migrationSha } = invocation(env);
   const base = await privateBase(env);
   const mapped = {
     ...env,
     IORI_MIGRATION_ROOT: join(base, 'root'),
     IORI_MIGRATION_EXPECTED_TARGET_PATH: join(base, 'config/expected-target.json'),
+    ...(operation === 'purge-rehearsal-target' ? { MAIN_SHA: migrationSha } : {}),
   };
   const put = async (input, output, name, normalize = value => value) => {
     mapped[output] = await writePrivateValue(join(base, 'keys'), name, normalize(env[input]));
     delete mapped[input];
   };
-  if (['source', 'migrate-data', 'cutover-route'].includes(operation)) {
+  if (
+    [
+      'source',
+      'rehearse-migration',
+      'migrate-data',
+      'cutover-route',
+      'estimate-source',
+      'resume-source',
+      'release-pending-freeze',
+    ].includes(operation)
+  ) {
     await put(
       'IORI_SOURCE_SSH_PRIVATE_KEY',
       'IORI_SOURCE_SSH_IDENTITY_FILE',
@@ -84,11 +100,13 @@ export const materializeHostedValues = async env => {
     );
     await put('IORI_SOURCE_SSH_KNOWN_HOSTS', 'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE', 'source-known-hosts');
   }
-  if (['migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {
+  if (['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {
     await put('IORI_MIGRATION_RECEIPT_PUBLIC_KEY', 'IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH', 'receipt-public.pem');
   }
-  if (operation === 'migrate-data') {
+  if (['rehearse-migration', 'migrate-data'].includes(operation)) {
     await put('IORI_MIGRATION_RECEIPT_PRIVATE_KEY', 'IORI_MIGRATION_RECEIPT_PRIVATE_KEY_PATH', 'receipt-private.pem');
+  }
+  if (operation === 'migrate-data') {
     mapped.IORI_MIGRATION_REHEARSAL_PATH = await writePrivateValue(
       join(base, 'config'),
       'rehearsal.json',
@@ -112,6 +130,11 @@ const diagnosticLine =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
 const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
+const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
+const alreadyRenamedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
+const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
+const estimateLine =
+  /^IORI_ESTIMATE rows=(?:0|[1-9]\d{0,15}) upload_count=(?:0|[1-9]\d{0,15}) article_count=(?:0|[1-9]\d{0,15}) sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -137,7 +160,11 @@ const hostedCodeReasons = {
 };
 const writeDiagnosticLine = async line => {
   try {
-    if (!diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)) return;
+    if (
+      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
+      && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
+      && !estimateLine.test(line)
+    ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
   } catch {}
@@ -218,7 +245,11 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const runtime = await stage('materialize', () => materializeHostedValues(env));
   const { assertReviewedMain } = await import('./reviewed-main.mjs');
   await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
-  if (['migrate-data', 'verify-import', 'cutover-route'].includes(selected.operation)) {
+  if (
+    ['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'purge-rehearsal-target'].includes(
+      selected.operation,
+    )
+  ) {
     await execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs);
     // The fixed target-reader output is private and is also the deployment binding authority.
     const { loadExpectedTarget } = await import('./migration-target-input.mjs');
