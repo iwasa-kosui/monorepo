@@ -270,6 +270,28 @@ it('runs readonly Terraform init and validate in CI and fails when the tracked l
     'run_guarded git diff --exit-code -- apps/iori/infra/cloudflare/.terraform.lock.hcl',
   );
 });
+it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const ci = await readWorkflow('ci.yml');
+  const script = ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
+  const lines = script.split('\n');
+  const start = lines.findIndex(line => line.trim() === 'run_guarded() {');
+  const end = lines.findIndex((line, index) => index > start && line.trim() === '}');
+  const definition = lines.slice(start, end + 1).join('\n');
+  const run = (command: string) =>
+    spawnSync('bash', ['-c', `set -euo pipefail\n${definition}\n${command}`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    });
+  const failed = run(`run_guarded bash -c 'echo $((40+2)); exit 3'`);
+  expect(failed.status).toBe(3);
+  expect(failed.stderr).toContain('Guarded command failed: exit=3 guard=0 command=bash -c echo $((40+2)); exit 3\n');
+  expect(failed.stderr).not.toContain('42');
+  expect(failed.stdout).not.toContain('42');
+  const passed = run('run_guarded true');
+  expect(passed.status).toBe(0);
+  expect(passed.stderr).not.toContain('Guarded command failed');
+});
 it('constructs the CI admission as a validated synthetic sealed identity', async () => {
   const { execFileSync } = await import('node:child_process');
   const { parseAdmission } = await import('../../src/workerAdmission.ts');

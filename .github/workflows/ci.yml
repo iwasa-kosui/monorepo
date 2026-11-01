@@ -91,6 +91,9 @@ jobs:
             "$@" >"$output" 2>&1 || status=$?
             node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
             rm -f "$output"
+            if [ "$status" -ne 0 ] || [ "$guard_status" -ne 0 ]; then
+              printf 'Guarded command failed: exit=%s guard=%s command=%s\n' "$status" "$guard_status" "$*" >&2
+            fi
             if [ "$guard_status" -ne 0 ]; then return "$guard_status"; fi
             return "$status"
           }
