@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import { behindProxy } from 'x-forwarded-fetch';
 
 import { listenControlSocket } from './adaptor/node/source/controlSocket.ts';
+import { createShutdown } from './adaptor/node/source/shutdown.ts';
 import { defaultControlBase, SourceControl } from './adaptor/node/source/sourceControl.ts';
 import { SourceSnapshot } from './adaptor/node/source/sourceSnapshot.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
@@ -42,22 +43,22 @@ const server = serve(
   (info) => console.log('Server started at http://' + info.address + ':' + info.port),
 );
 
-let shuttingDown = false;
-const shutdown = async () => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  Federation.getQueue().pause();
-  queueAbort.abort();
-  // Close ingress and await accepted HTTP and the queue transaction before exiting.
-  const results = await Promise.allSettled([
-    source.stop(),
-    new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
-    controlSocket.close(),
-    queueRunning,
-  ]);
-  process.exit(results.some((result) => result.status === 'rejected') ? 1 : 0);
-};
-process.once('SIGTERM', shutdown);
-process.once('SIGINT', shutdown);
+const shutdown = createShutdown({
+  run: () => {
+    Federation.getQueue().pause();
+    queueAbort.abort();
+    // Close ingress and await accepted HTTP and the queue transaction before exiting.
+    return Promise.allSettled([
+      source.stop(),
+      new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+      controlSocket.close(),
+      queueRunning,
+    ]);
+  },
+  forceClose: () => controlSocket.forceClose(),
+  exit: (code) => process.exit(code),
+});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 export default app;

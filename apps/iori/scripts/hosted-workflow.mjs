@@ -132,6 +132,7 @@ export const materializeHostedValues = async env => {
 const diagnosticLine =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
+const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
 const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
 const alreadyRenamedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
 const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
@@ -163,9 +164,9 @@ const hostedCodeReasons = {
 const writeDiagnosticLine = async line => {
   try {
     if (
-      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !releaseNoticeLine.test(line)
-      && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line) && !estimateLine.test(line)
-      && !sourceDiagnoseNoticeLine.test(line)
+      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
+      && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
+      && !estimateLine.test(line) && !sourceDiagnoseNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

@@ -147,7 +147,7 @@ describe('UPLOAD_DIR inspection before the dist transfer', () => {
 describe('configuration owner reset before install', () => {
   const environmentFile = '/etc/systemd/system/microblog.service.d/env.conf';
   type Stat = { isFile: () => boolean; uid: number; gid: number; mode: number; dev: number; ino: number };
-  const regular = (uid: number, mode = 0o100640): Stat => ({
+  const regular = (uid: number, mode = 0o100600): Stat => ({
     isFile: () => true,
     uid,
     gid: 1002,
@@ -213,6 +213,45 @@ describe('configuration owner reset before install', () => {
     await expect(result).rejects.toThrow('Source configuration owner reset failed.');
     expect(sudo).toHaveLength(1);
     expect(writes.join('')).not.toContain('IORI_NOTICE');
+  });
+  it('resets a 0644 configuration with one fixed chmod and prints the previous mode', async () => {
+    const { result, sudo, writes, lstatPaths } = await run([regular(0, 0o100644), regular(0, 0o100600)]);
+    await expect(result).resolves.toBeUndefined();
+    expect(sudo).toEqual([['-n', 'chmod', '600', environmentFile]]);
+    expect(lstatPaths).toEqual([environmentFile, environmentFile]);
+    expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
+      'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644\n',
+    ]);
+  });
+  it('does not chmod or print a mode notice when the mode is already 0600', async () => {
+    const { result, sudo, writes } = await run([regular(0, 0o100600)]);
+    await expect(result).resolves.toBeUndefined();
+    expect(sudo).toEqual([]);
+    expect(writes.join('')).not.toContain('remote-configuration-mode');
+  });
+  it('runs chown and chmod and prints both notices for a non-root 0644 configuration', async () => {
+    const { result, sudo, writes } = await run([regular(1001, 0o100644), regular(0, 0o100644), regular(0, 0o100600)]);
+    await expect(result).resolves.toBeUndefined();
+    expect(sudo).toEqual([
+      ['-n', 'chown', '-h', '0:0', environmentFile],
+      ['-n', 'chmod', '600', environmentFile],
+    ]);
+    expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
+      'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002\n',
+      'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644\n',
+    ]);
+  });
+  it('fails without a mode notice when the mode is not 0600 after chmod', async () => {
+    const { result, sudo, writes } = await run([regular(0, 0o100644), regular(0, 0o100644)]);
+    await expect(result).rejects.toThrow('Source configuration mode reset failed.');
+    expect(sudo).toHaveLength(1);
+    expect(writes.join('')).not.toContain('remote-configuration-mode');
+  });
+  it('fails without a mode notice when the configuration is replaced during chmod', async () => {
+    const { result, sudo, writes } = await run([regular(0, 0o100644), { ...regular(0, 0o100600), ino: 200 }]);
+    await expect(result).rejects.toThrow('Source configuration mode reset failed.');
+    expect(sudo).toHaveLength(1);
+    expect(writes.join('')).not.toContain('remote-configuration-mode');
   });
   it.each([
     ['a symbolic link', { ...regular(1001), isFile: () => false, mode: 0o120777 }],

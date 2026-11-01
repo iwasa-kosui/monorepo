@@ -114,6 +114,7 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
         if (op === 'status' && code === 75) {
           throw Object.assign(new Error('Source control is not ready.'), { retryable: true });
         }
+        if (code === 76) throw new Error('Source is not idle.');
         throw new Error('Source operation failed.');
       } finally {
         clearTimeout(timer);

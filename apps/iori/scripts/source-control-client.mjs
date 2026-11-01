@@ -43,6 +43,7 @@ const lstatBeforeListen = async (path) => {
   }
 };
 const NOT_READY_RESPONSE = '{"ok":false,"error":"invalid_command"}\n';
+const BUSY_RESPONSE = '{"ok":false,"error":"control_busy"}\n';
 
 // base/output injection is for fixture callers. The CLI fixes base to service-user home.
 export const requestSourceControl = async ({ args, output, base = join(homedir(), '.iori-migration'), signal }) => {
@@ -81,6 +82,9 @@ export const requestSourceControl = async ({ args, output, base = join(homedir()
       throw error?.code === 'ECONNREFUSED' ? notReady() : error;
     }
     if (bytes === NOT_READY_RESPONSE.length && prefix.toString('utf8') === NOT_READY_RESPONSE) throw notReady();
+    if (bytes === BUSY_RESPONSE.length && prefix.toString('utf8') === BUSY_RESPONSE) {
+      throw Object.assign(new Error('Source control is busy.'), { busy: true });
+    }
     if (!prefix.toString('utf8').startsWith('{"ok":true,')) throw new Error('Source control rejected.');
   } finally {
     socket.destroy();

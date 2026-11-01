@@ -266,6 +266,20 @@ it('relays only the exact configuration owner notice to the public log', async (
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact configuration mode notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=644',
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=0888',
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=01644',
+    'IORI_NOTICE stage=remote-install previous_mode=0644',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('relays only the exact release-pending-freeze notice to the public log', async () => {
   const writes = captureStderr();
   const accepted = 'IORI_NOTICE stage=release-pending-freeze renamed=1';
@@ -341,6 +355,7 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-frozen',
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-operation-failed',
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed',
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-idle',
     'IORI_DIAG stage=resume-verify program=ssh exit=none signal=none reason=resume-not-confirmed',
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',

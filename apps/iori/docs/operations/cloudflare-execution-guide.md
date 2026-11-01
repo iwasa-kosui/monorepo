@@ -427,7 +427,7 @@ umask 077
 IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=<名前|none> reason=<分類>
 ```
 
-配備が成功した場合、step は `IORI_DIAG` 行を出しません。ただし、`remote-configuration-owner` 段階が env.conf の所有者を直したときは、成功した配備でも `IORI_NOTICE` 行を Actions ログへ出します。
+配備が成功した場合、step は `IORI_DIAG` 行を出しません。ただし、`remote-configuration-owner` 段階が env.conf の所有者か mode を直したときは、成功した配備でも `IORI_NOTICE` 行を Actions ログへ出します。
 
 `stage` の値と意味は次のとおりです。
 
@@ -440,7 +440,7 @@ IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=
 
 旧環境では、`remote-verify-dist` の後、`remote-install` の前に、`remote-configuration-owner` 段階が `/etc/systemd/system/microblog.service.d/env.conf` の所有者を検査します。旧ワークフローは env.conf を `rsync -a` で配置したため、所有者が runner の uid のまま残りました。`remote-install` 段階は root 所有の env.conf だけを受け付けます。この段階は次のように動きます。
 
-- 所有者が root（uid 0）の場合、何もしません。
+- 所有者が root（uid 0）の場合、所有者を変えません。
 - 所有者が root でなく、env.conf が通常ファイルで、group と other に書き込み権限がない場合、`sudo -n chown 0:0` で所有者を root に直します。直したときだけ、Actions ログに次の1行を出します。
 
   ```text
@@ -449,6 +449,13 @@ IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=
 
 - env.conf がシンボリックリンクである、通常ファイルでない、group か other に書き込み権限がある、存在しない、のいずれかの場合、`reason=source-config-unavailable` で失敗します。
 - `chown` の後も所有者が root にならない場合、`reason=config-owner-reset-failed` で失敗します。
+- 所有者の確認が済んだ後、env.conf の mode が 0600 でない場合、`sudo -n chmod 600` で mode を 0600 に直します。所有者がもともと root の場合も、この確認を行います。直したときだけ、Actions ログに次の1行を出します。`previous_mode` は、直す前の mode です。
+
+  ```text
+  IORI_NOTICE stage=remote-configuration-mode previous_mode=<4桁の8進数>
+  ```
+
+- `chmod` の後に mode が 0600 になっていない場合、または env.conf が `chmod` の前と別のファイルになっている場合、`reason=config-mode-reset-failed` で失敗します。
 
 所有者を元に戻す場合、作業者は `IORI_NOTICE` 行の数値を使い、旧環境で次のコマンドを実行します。ただし、元の uid は旧環境に存在しないアカウントのものです。
 
@@ -456,20 +463,53 @@ IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=
 sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d/env.conf
 ```
 
+mode を元に戻す必要があるかどうかは、管理役が判断します。作業者は `previous_mode` を管理役に伝え、旧環境で mode を手作業で戻しません。
+
 作業者は `program`、`exit`、`reason` の組で原因を切り分けます。
 
 - `program` が `ssh` で `exit=255` の場合、または `program` が `rsync` で `exit` が `255` か `12` の場合に、`reason` が `ssh-*` なら、接続か認証が失敗しています。`ssh-*` は `ssh-auth-denied`、`ssh-host-key`、`ssh-key-format`、`ssh-timeout`、`ssh-refused`、`ssh-dns` です。作業者は production environment の `IORI_SOURCE_SSH_*` secret、旧環境の authorized_keys、known_hosts を確認します。
 - `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は `reason` に対応する前提を旧環境で確認します。
-- `reason=source-config-unavailable` の場合、env.conf の種類か mode が不正です。作業者は env.conf が通常ファイルであり、group と other に書き込み権限がないことを旧環境で確認します。
-- `reason=config-owner-reset-failed` の場合、`sudo -n chown 0:0` を実行した後も env.conf の所有者が root になっていません。作業者は旧環境で sudo の権限と env.conf の所有者を確認します。
+- `reason=source-config-unavailable` の場合、env.conf の種類か mode が不正です。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
+- `reason=config-owner-reset-failed` の場合、`sudo -n chown 0:0` を実行した後も env.conf の所有者が root になっていません。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
+- `reason=config-mode-reset-failed` の場合、`sudo -n chmod 600` を実行した後も env.conf の mode が 0600 になっていないか、env.conf が別のファイルに入れ替わっています。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
 - `reason=upload-dir-missing` の場合、env.conf の `UPLOAD_DIR` が指すディレクトリが旧環境に存在しません。
 - `reason=remote-node-missing` の場合、旧環境に nvm の node v24.12.0 がありません。
 - `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
 - `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
 - `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
 - `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
+- `reason=source-not-idle`（`stage=status`）の場合、アプリが control コマンドの実行中のために status を拒否しました。作業者は、実行中の operation（export など）が終わるのを待ってから再実行します。
 - `prepare-target` の分類として、`reason=stopped-before-resources`（`stage=hosted-operation`、`exit=78`）の場合、`prepare-target` がリソースを作る前に止まっています。作業者は、[VAPID 値の確認](#vapid-値の確認)の `reason=stopped-before-resources` の項目に従って原因を確かめ、同じ generation で再実行します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
+
+### 4.2 旧版へ戻す
+
+Deploy iori（`deploy-iori.yml`）は、配備する SHA が最新の main であることを要求します。作業者は旧版へ戻すとき、旧環境に直接入って操作しません。手順は次のとおりです。
+
+1. 作業者は、戻したい変更を main で revert する PR を作り、レビューを経て merge します。
+2. main への push で Deploy iori が走ります。production environment の承認者が実行を承認します。
+3. 作業者は、step「Deploy guarded exact source revision」が成功したことと、`IORI_DIAG` 行が出ていないことを確認します。
+4. 作業者は、本番の応答を確認します。
+
+配備が `status` 段階より前で失敗した場合、旧環境の dist、unit、nginx.conf は途中まで更新されている可能性があります。配備は退避を作りません。作業者は、revert した main で Deploy iori をもう一度実行し、旧版の内容で上書きします。
+
+凍結（`~/.iori-migration/freeze.json` または `freeze.pending`）が残っている場合、配備はすべての段階で `reason=source-deploy-blocked` で止まります。作業者は、凍結の復旧を先に行います。`freeze.json` が残っている場合、作業者は `resume-source` を使います。手順は [7.1 節の `freeze.json` が残った場合](#freezejson-が残った場合)に書いてあります。`freeze.pending` が残っている場合、作業者は `release-pending-freeze` を使います。手順は [7.1 節の `freeze.pending` が残った場合](#freezepending-が残った場合)に書いてあります。
+
+### 4.3 control socket が残った場合
+
+アプリは起動時に `~/.iori-migration/control.sock` が残っていると、その socket に応答するプロセスがいないことを確かめてから削除します。確かめる条件は次の3つです。
+
+- socket であること
+- アプリと同じ uid の所有で、mode が 0600 であること
+- 接続が拒否されること
+
+条件を1つでも満たさない場合、アプリは `control_socket_exists` で起動に失敗します。
+
+アプリは停止時に 60 秒の期限を持ちます。期限を過ぎると、アプリは自分が作った socket だけを削除して終了します。
+
+アプリは起動のたびに、上の3つの条件を満たす残った socket を自動で削除します。microblog の unit は `Restart=always` を設定しているので、systemd が再起動するたびに、アプリはこの削除を行います。
+
+それでも `control_socket_exists` で起動できない状態が続く場合、作業者は socket を手で削除しません。作業者は旧環境に直接入らず、管理役に判断を仰ぎます。
 
 ## 5. 実測 profile の作成と登録
 
@@ -558,7 +598,7 @@ IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient
 
 source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
 
-`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。source の control socket は、拒否の理由を問わず `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
+`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。`IORI_DIAG` 行は出しません。source の control socket は、control コマンドの実行中に拒否したときだけ `control_busy` を返します。CI のクライアントは `control_busy` を終了コード 76 にし、ssh アダプタは終了コード 76 を `Source is not idle.` に対応づけます。`IORI_DIAG` を出す operation では、この場合の reason が `source-not-idle` になります。`estimate-source` は `IORI_DIAG` を出さないので、`control_busy` の場合も表示は `Source estimate failed.` のままです。source の control socket は、control コマンドの実行中以外の拒否では、理由を問わず従来どおり `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
 
 `main_sha` には、次の2つを同時に満たす値が必要です。
 
@@ -934,18 +974,18 @@ export、inventory、transfer などの control コマンドが実行中の間�
 
 `resume-source` は、次の3つの場合に resume を送らずに失敗します。
 
-- export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は `stage=resume-precheck` で `reason=source-operation-failed` として失敗します。
+- export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は、status が拒否されると `stage=resume-precheck` で失敗します。拒否の理由が control コマンドの実行中であれば `reason=source-not-idle` になります。それ以外の理由で拒否された場合は `reason=source-operation-failed` になります。
 - status が値を返し、`queue_failed` が true の場合、`resume-source` は `stage=resume-precheck` で `reason=source-queue-failed` として失敗します。
 - status が値を返し、`queue_failed` が false で、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でない場合、`resume-source` は `stage=resume-precheck` で `reason=source-not-idle` として失敗します。
 
 `resume-source` は idle になるまで待つ処理を持ちません。失敗した場合、作業者は次のとおり対応します。
 
 - `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。この失敗は、この PR の operation の範囲外です。復旧の経路はまだ決まっていません。作業者は旧環境に直接入らず、管理役に判断を仰ぎます。
-- `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。control コマンドの実行中（`control_busy`）だけでなく、revision の不一致、identity の不一致、ssh の失敗でも、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
-- `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。作業者は時間を置いて再実行します。
+- `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。revision の不一致、identity の不一致、ssh の失敗が、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
+- `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。export などの control コマンドが実行中で、source が status か resume を拒否した場合も、この reason になります。作業者は時間を置いて再実行します。
 - resume が source 側で成功したのに応答が届かなかった場合、`resume-source` は失敗として報告します。再実行すると `reason=source-not-frozen` で失敗します。`source-not-frozen` は、凍結がすでに解除済みである可能性を示します。作業者は status か本番の応答で、凍結が解けていることを確かめます。
 
-rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-operation-failed` と `reason=source-not-idle` のどちらにもなりえます。export などの control コマンドが実行中であれば `reason=source-operation-failed` で、control コマンドは終わっていて HTTP や queue の処理が残っていれば `reason=source-not-idle` で失敗します。どちらの場合も、作業者は上の対応に従います。
+rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-not-idle` で失敗します。export などの control コマンドが実行中の場合も、control コマンドは終わっていて HTTP や queue の処理が残っている場合も、reason は同じです。どちらの場合も、作業者は上の対応に従います。
 
 #### `freeze.pending` が残った場合
 

@@ -100,6 +100,15 @@ it('does not send resume when the precheck status itself fails', async () => {
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-operation-failed\n',
   ]);
 });
+it('reports source-not-idle and does not send resume when the precheck status finds the source busy', async () => {
+  const writes = captureDiagnostics();
+  const { calls, sourceFactory } = fixture([new Error('Source is not idle.')]);
+  await expect(resumeSource(options, { sourceFactory })).rejects.toThrow('Source is not idle.');
+  expect(calls).toEqual(['status']);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-idle\n',
+  ]);
+});
 it('reports source-not-idle without a retry when the source rejects resume while busy', async () => {
   const writes = captureDiagnostics();
   const { calls, sourceFactory } = fixture([frozenState, { ...frozenState, http_inflight: 1 }], async () => {
