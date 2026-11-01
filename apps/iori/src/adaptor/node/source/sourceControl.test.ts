@@ -240,14 +240,20 @@ describe('source control', () => {
   it('malformed persisted state fails closed', async () => {
     const { base, queue } = await setup();
     await writeFile(join(base, 'freeze.json'), '{}', { mode: 0o600 });
+    queue.resume();
+    expect(queue.snapshot().paused).toBe(false);
     const control = await SourceControl.open({ base, queue, revision: identity.main_sha });
+    expect(queue.snapshot().paused).toBe(true);
     expect((await control.fetch(async () => new Response(null))).status).toBe(503);
     await expect(control.command(command('resume', { recovery: 'destination_writes_not_enabled' }))).rejects.toThrow();
   });
   it('pending freeze persistence fails closed after restart', async () => {
     const { base, queue } = await setup();
     await writeFile(join(base, 'freeze.pending'), JSON.stringify(identity), { mode: 0o600 });
+    queue.resume();
+    expect(queue.snapshot().paused).toBe(false);
     const control = await SourceControl.open({ base, queue, revision: identity.main_sha });
+    expect(queue.snapshot().paused).toBe(true);
     expect((await control.fetch(async () => new Response(null))).status).toBe(503);
     await expect(control.command(command('freeze'))).rejects.toThrow('invalid_freeze_state');
   });

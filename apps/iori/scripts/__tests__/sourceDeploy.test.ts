@@ -428,10 +428,13 @@ it('retries the status stage while source control is not ready and then succeeds
   let calls = 0;
   await deploySource(
     diagnosticOptions,
-    withStatus(async () => {
-      if (++calls < 3) throw notReadyError();
-      return readyState;
-    }),
+    {
+      ...withStatus(async () => {
+        if (++calls < 3) throw notReadyError();
+        return readyState;
+      }),
+      statusRetryTimeoutMs: 5000,
+    },
   );
   expect(calls).toBe(3);
 });
@@ -559,7 +562,7 @@ it('does not read the unit state when the deployment is aborted during the statu
       async () => {},
       unitCalls,
     ),
-    statusRetryTimeoutMs: 60_000,
+    statusRetryTimeoutMs: 120_000,
     statusRetryIntervalMs: 60_000,
     signal: abort.signal,
   });

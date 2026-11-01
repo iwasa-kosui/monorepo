@@ -139,17 +139,23 @@ class FixtureD1 {
   }
 }
 
-const makeSeed = async () => {
+const generateKeyMaterial = async () => {
   const [rsa, ed25519] = await Promise.all([
     generateCryptoKeyPair('RSASSA-PKCS1-v1_5'),
     generateCryptoKeyPair('Ed25519'),
   ]);
-  const [rsaPrivate, rsaPublic, ed25519Private, ed25519Public] = await Promise.all([
+  return Promise.all([
     exportJwk(rsa.privateKey),
     exportJwk(rsa.publicKey),
     exportJwk(ed25519.privateKey),
     exportJwk(ed25519.publicKey),
   ]);
+};
+let keyMaterial: ReturnType<typeof generateKeyMaterial> | undefined;
+
+const makeSeed = async () => {
+  keyMaterial ??= generateKeyMaterial();
+  const [rsaPrivate, rsaPublic, ed25519Private, ed25519Public] = await keyMaterial;
   return {
     actor: {
       actorId,

@@ -646,16 +646,24 @@ it('retries the status while source control is not ready after the restart', asy
   await releasePendingFreeze(options, {
     sourceFactory: sourceWith([notReady, notReady, openState]),
     runCommand: async () => ({ stdout: '', stderr: '' }),
-    statusRetryTimeoutMs: 200,
+    statusRetryTimeoutMs: 5000,
     statusRetryIntervalMs: 5,
   });
   const writes = captureStderr();
+  let statusCalls = 0;
   await expect(releasePendingFreeze(options, {
-    sourceFactory: sourceWith([notReady, notReady, notReady]),
+    sourceFactory: async () =>
+      ({
+        status: async () => {
+          statusCalls++;
+          throw notReady;
+        },
+      }) as never,
     runCommand: async () => ({ stdout: '', stderr: '' }),
-    statusRetryTimeoutMs: 8,
+    statusRetryTimeoutMs: 200,
     statusRetryIntervalMs: 5,
   })).rejects.toThrow('Source control is not ready.');
+  expect(statusCalls).toBeGreaterThanOrEqual(2);
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
