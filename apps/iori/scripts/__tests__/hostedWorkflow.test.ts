@@ -1,5 +1,6 @@
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import {
@@ -485,4 +486,27 @@ it('selects the stopped message only for the marked error and accepts both messa
   expect(assertWorkflowOutput(stoppedMessage)).toEqual([]);
   expect(assertWorkflowOutput(failedMessage)).toEqual([]);
   expect(preparationFailureReport(false).message).toBe(stoppedMessage);
+});
+it('reports the real prepare-migration-target CLI that stops before resources as stopped', async () => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const error = await executeHostedOperation(
+      'operation',
+      fileURLToPath(new URL('../prepare-migration-target.mjs', import.meta.url)),
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      'prepare-target',
+    ).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(stoppedMessage);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

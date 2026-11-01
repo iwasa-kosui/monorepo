@@ -333,14 +333,19 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
   - staging 以外の environment で、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
 - 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、`IORI_DIAG` 行の `reason` と固定の文言で、失敗の種類が出ます。
   - `prepare-target` がリソースを作る前に止まった場合、子プロセスは終了コード 78 で終わります。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources` と、「Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.」が出ます。後者は private ログにある子プロセスの文言と同じです。
-  - `prepare-target` がリソースを作った後に失敗した場合、子プロセスは終了コード 1 で終わります。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed` と、「Protected workflow step failed; retain remote state for reviewed recovery.」が出ます。
-- 公開ログに `reason=stopped-before-resources` が出ている場合、`prepare-target` はリソースを作る前に止まっています。リソースは作られていないので、作業者は Dashboard を確かめずに、同じ generation で再実行してよいです。VAPID の検査で止まった可能性があります。作業者は、下の「どれも存在しない場合」と同じ手順 1 から 3 に従います。
-- 公開ログに `reason=command-failed` が出ている場合、`prepare-target` はリソースを作った後に失敗しています。作業者は Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
-  - どれも存在しない場合は、`prepare-target` がリソースを作る前に止まっています。VAPID の検査で止まった可能性があります。作業者は次の順に対応します。
-    1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
-    2. 作業者が同じ generation で `prepare-target` をやり直します。
-    3. やり直しても失敗し、リソースも作られていない場合は、GitHub hosted runner から `ORIGIN` に到達できない可能性があります。この場合は作業を止めて、レビューに戻します。
-  - どれか 1 つでも存在する場合は、リソースを作り始めた後に失敗しています。この場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。
+  - `prepare-target` がリソースを作り始める段階に入った後に失敗した場合、子プロセスは終了コード 1 で終わります。この段階に入っても、リソースが作られたとは限りません。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed` と、「Protected workflow step failed; retain remote state for reviewed recovery.」が出ます。
+- 公開ログに `reason=stopped-before-resources` が出ている場合、`prepare-target` はリソースを作る前に止まっています。リソースは作られていないので、作業者は Dashboard を確かめずに、同じ generation で再実行してよいです。原因は private ログにしか残らないため、作業者は次の順に確かめます。
+  1. `IORI_ENVIRONMENT` などの入力が正しいか確かめます。
+  2. 必須の secret が揃っているか確かめます。必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`SMOKE_QUEUE_TOKEN` です。staging では `STAGING_ACCESS_TOKEN` も必須です。staging では、`STAGING_ACCESS_TOKEN` と `SMOKE_QUEUE_TOKEN` が別の値であることも確かめます。
+  3. VAPID の値を確かめます。VAPID の検査で止まった可能性があるので、作業者は次の順に対応します。
+     1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
+     2. 作業者が同じ generation で `prepare-target` をやり直します。
+     3. やり直しても失敗し、リソースも作られていない場合は、GitHub hosted runner から `ORIGIN` に到達できない可能性があります。この場合は作業を止めて、レビューに戻します。
+- 公開ログに `reason=command-failed` が出ている場合、`prepare-target` はリソースを作り始める段階に入った後に失敗しています。この段階に入っても、リソースが作られたとは限りません。`prepare-target` は、最初の処理として、この generation の名前のリソースが無いことを読み取りだけで確かめます（`assertFresh`）。この読み取りの失敗でも、終了コード 1 で終わります。作業者は Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
+  - どれも存在しない場合は、リソースが作られる前に失敗しています。`assertFresh` の読み取りが失敗した可能性があります。`assertFresh` は、Cloudflare API の応答が失敗した場合、応答の形式が想定と違う場合、一覧が 100 件以上ある場合に失敗します。リソースが無くても、apply の段階で state が書かれた可能性があります。作業者は、Dashboard の R2 で backend bucket（`IORI_TERRAFORM_BACKEND_BUCKET`）を開き、`iori/<environment>/<generation>/` の下に object（`terraform.tfstate` とロック用の `terraform.tfstate.tflock`）が無いかを確かめます。
+    - object が1つも無い場合、作業者は同じ generation で再実行してよいです。
+    - object が1つでもある場合、作業者は同じ generation で再実行せず、作業を止めて、Dashboard の確認結果を添えてレビューに戻します。
+  - どれか 1 つでも存在する場合は、リソースを作り始めた後に失敗しているか、その generation がすでに使われています。`assertFresh` は、同じ名前のリソースを 1 つでも見つけると失敗するためです。この場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。
 - 旧名の `IORI_VAPID_*` と variable `IORI_VAPID_SUBJECT` は、切り替えが終わるまで削除しません。
 
 CLI で1件ずつ登録する場合は、値を command argument にせず、承認済みの mode `0600` ファイルを標準入力に渡します。これは登録例であり、全値を自動生成するコマンドではありません。
@@ -463,7 +468,7 @@ sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d
 - `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
 - `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
 - `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
-- `reason=stopped-before-resources`（`stage=hosted-operation`、`exit=78`）の場合、`prepare-target` がリソースを作る前に止まっています。作業者は入力を直して、同じ generation で再実行します。
+- `prepare-target` の分類として、`reason=stopped-before-resources`（`stage=hosted-operation`、`exit=78`）の場合、`prepare-target` がリソースを作る前に止まっています。作業者は、[VAPID 値の確認](#vapid-値の確認)の `reason=stopped-before-resources` の項目に従って原因を確かめ、同じ generation で再実行します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
 
 ## 5. 実測 profile の作成と登録
@@ -855,12 +860,12 @@ staging が完了したら、production に異なる generation・リソース�
 
 ## 7. 中断と引き継ぎ
 
-| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                 |
-| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                           |
-| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない（generation のリソースが1つも無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
-| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                     |
-| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                         |
+| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                 |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                                                                           |
+| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
+| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                     |
+| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                         |
 
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 
