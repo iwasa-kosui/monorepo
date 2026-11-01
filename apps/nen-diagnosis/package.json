@@ -37,7 +37,7 @@
   "scripts": {
     "dev": "vite",
     "generate:og": "npx tsx scripts/generate-og-images.ts",
-    "prebuild": "pnpm --filter result run build && pnpm generate:og",
+    "prebuild": "pnpm generate:og",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
