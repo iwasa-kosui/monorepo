@@ -17,6 +17,7 @@ import {
   REHEARSAL_D1_CAPACITY_BYTES,
 } from './migration-budget.mjs';
 import { parseExpectedTarget, rehearsalProfileKey, rehearsalTargetKey } from './migration-target-contract.mjs';
+import { estimateUploadFailureReason } from './source-transfer-protocol.mjs';
 import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
 const RESUME_TIMEOUT_MS = 120_000;
@@ -56,6 +57,7 @@ export const rehearseProtectedMigration = async (options) => {
   try {
     result = await runProtectedPhases(options, target, {
       budget: ({ estimate, availableBytes }) => {
+        if (estimateUploadFailureReason(estimate)) throw new Error('Source upload files could not be opened.');
         if (!hasRehearsalSample(estimate)) throw new Error('Rehearsal sample is insufficient.');
         migrationBudget({ estimate, d1CapacityBytes: REHEARSAL_D1_CAPACITY_BYTES, availableBytes });
       },

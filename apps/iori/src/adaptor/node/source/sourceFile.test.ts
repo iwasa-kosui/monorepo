@@ -49,3 +49,60 @@ it.each(['type', 'inode', 'device', 'owner', 'size'] as const)(
     expect(close).toHaveBeenCalledOnce();
   },
 );
+const failure = async (privateFile = true) =>
+  openSourceFile('/private/root/file', 100, privateFile).catch((error) => error);
+const errno = (code: string) => Object.assign(new Error(code), { code });
+const lstatAs = (override: object) =>
+  vi.mocked(lstat).mockResolvedValue({ ...regular(), ...override } as Awaited<ReturnType<typeof lstat>>);
+it.each(['ENOENT', 'ENOTDIR'])('gives a lstat failure with %s the reason missing', async (code) => {
+  vi.mocked(lstat).mockRejectedValue(errno(code));
+  expect(await failure()).toMatchObject({ message: code, reason: 'missing' });
+  expect(open).not.toHaveBeenCalled();
+});
+it.each(['EACCES', 'EPERM'])('gives a lstat or open failure with %s the reason access', async (code) => {
+  vi.mocked(lstat).mockRejectedValueOnce(errno(code));
+  expect(await failure()).toMatchObject({ message: code, reason: 'access' });
+  vi.mocked(open).mockRejectedValueOnce(errno(code));
+  expect(await failure()).toMatchObject({ message: code, reason: 'access' });
+});
+it('gives a file owned by another user the reason owner, before and after opening', async () => {
+  lstatAs({ uid: (process.getuid?.() ?? 0) + 1 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'owner' });
+  expect(open).not.toHaveBeenCalled();
+  lstatAs({});
+  stat.mockResolvedValue({ ...regular(), uid: (process.getuid?.() ?? 0) + 1 });
+  expect(await failure(false)).toMatchObject({ message: 'unsafe_file', reason: 'owner' });
+  expect(close).toHaveBeenCalledOnce();
+});
+it('gives a path that is not a regular file the reason not-regular, before and after opening', async () => {
+  lstatAs({ isFile: () => false });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'not-regular' });
+  lstatAs({});
+  stat.mockResolvedValue({ ...regular(), isFile: () => false });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'not-regular' });
+});
+it('gives a file above the size limit the reason too-large, before and after opening', async () => {
+  lstatAs({ size: 101 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'too-large' });
+  expect(open).not.toHaveBeenCalled();
+  lstatAs({});
+  stat.mockResolvedValue({ ...regular(), size: 101 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'too-large' });
+});
+it('gives every other failure the reason other', async () => {
+  vi.mocked(realpath).mockResolvedValue('/elsewhere');
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'other' });
+  vi.mocked(realpath).mockResolvedValue('/private/root');
+  lstatAs({ mode: 0o100644 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'other' });
+  expect(await failure(false)).not.toBeInstanceOf(Error);
+  lstatAs({});
+  vi.mocked(open).mockRejectedValueOnce(errno('ELOOP'));
+  expect(await failure()).toMatchObject({ message: 'ELOOP', reason: 'other' });
+  vi.mocked(lstat).mockRejectedValueOnce(errno('EIO'));
+  expect(await failure()).toMatchObject({ message: 'EIO', reason: 'other' });
+  stat.mockResolvedValue({ ...regular(), ino: 3 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'other' });
+  stat.mockResolvedValue({ ...regular(), size: 11 });
+  expect(await failure()).toMatchObject({ message: 'unsafe_file', reason: 'other' });
+});

@@ -250,6 +250,30 @@ it.each(['rows', 'upload_count', 'article_count'] as const)(
     }
   },
 );
+it.each(
+  [
+    'upload_missing_count',
+    'upload_owner_count',
+    'upload_not_regular_count',
+    'upload_too_large_count',
+    'upload_access_count',
+    'upload_other_count',
+  ] as const,
+)('fails before marking, reserving or freezing when %s is not zero', async field => {
+  const f = await fixture();
+  try {
+    f.source.estimate.mockResolvedValue({ ...await f.source.estimate(), [field]: 1 });
+    await expect(rehearseProtectedMigration(rehearsalOptions(f))).rejects.toThrow(
+      'Source upload files could not be opened.',
+    );
+    expect(f.source.freeze).not.toHaveBeenCalled();
+    expect(f.source.resume).not.toHaveBeenCalled();
+    expect(f.remote.has(rehearsalTargetKey(f.options.expectedTarget))).toBe(false);
+    expect(f.remote.has(executionReservationKey(f.options.expectedTarget))).toBe(false);
+  } finally {
+    f.close();
+  }
+});
 it('fails before reservation and freeze when the generation already carries a rehearsal mark', async () => {
   const f = await fixture();
   try {

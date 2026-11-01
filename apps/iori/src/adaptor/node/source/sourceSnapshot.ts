@@ -30,10 +30,28 @@ import {
   validateSourceInventory,
 } from '../../../../scripts/source-transfer-protocol.mjs';
 import { validatePrivateDirectory } from './sourceControl.ts';
-import { openSourceFile } from './sourceFile.ts';
+import { openSourceFile, type SourceFileFailure } from './sourceFile.ts';
 
 export type FileTransfer = (metadata: SourceFile, stream: Readable) => Promise<void>;
 const number = z.coerce.number().int().nonnegative().safe();
+const failureReasons: readonly SourceFileFailure[] = [
+  'missing',
+  'owner',
+  'not-regular',
+  'too-large',
+  'access',
+  'other',
+];
+const uploadExtensions = ['webp', 'png', 'jpeg', 'gif'] as const;
+type UploadExtension = (typeof uploadExtensions)[number];
+const extensionOf = (filename: string) => {
+  const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+  return (extension === 'jpg' ? 'jpeg' : extension) as UploadExtension;
+};
+const failureOf = (error: unknown) => {
+  const reason = (error as { reason?: unknown } | null | undefined)?.reason;
+  return failureReasons.find((known) => known === reason) ?? 'other';
+};
 async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, destination?: string) {
   const { file, stat } = await openSourceFile(path, maxBytes, destination === undefined);
   let output: Awaited<ReturnType<typeof open>> | undefined;
@@ -95,6 +113,15 @@ export class SourceSnapshot {
     let rows = 0;
     const uploads = createUploadTracker();
     let articles = 0;
+    const failures = Object.fromEntries(failureReasons.map((reason) => [reason, 0])) as Record<
+      SourceFileFailure,
+      number
+    >;
+    const extensions = Object.fromEntries(uploadExtensions.map((extension) => [extension, 0])) as Record<
+      UploadExtension,
+      number
+    >;
+    const failedExtensions = { ...extensions };
     const limit = signal;
     const lifetime = guardPostgresClient(client, signal);
     signal = lifetime.signal;
@@ -141,9 +168,16 @@ export class SourceSnapshot {
           stage = 'estimate-upload-root';
           const path = join(await this.uploadRoot(), upload.filename);
           stage = 'estimate-upload-open';
-          const { file, stat } = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false);
-          await file.close();
-          uploadBytes += stat.size;
+          const extension = extensionOf(upload.filename);
+          extensions[extension] += 1;
+          const opened = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false).catch((error: unknown) => {
+            failures[failureOf(error)] += 1;
+            failedExtensions[extension] += 1;
+          });
+          if (opened) {
+            await opened.file.close();
+            uploadBytes += opened.stat.size;
+          }
           if (
             uploads.uniqueCount > SOURCE_LIMITS.inventoryFiles - 32
             || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes
@@ -168,6 +202,20 @@ export class SourceSnapshot {
         rows,
         upload_count: uploads.uniqueCount,
         upload_duplicate_count: uploads.duplicateCount,
+        upload_missing_count: failures.missing,
+        upload_owner_count: failures.owner,
+        upload_not_regular_count: failures['not-regular'],
+        upload_too_large_count: failures['too-large'],
+        upload_access_count: failures.access,
+        upload_other_count: failures.other,
+        upload_ext_webp_count: extensions.webp,
+        upload_ext_png_count: extensions.png,
+        upload_ext_jpeg_count: extensions.jpeg,
+        upload_ext_gif_count: extensions.gif,
+        upload_failed_ext_webp_count: failedExtensions.webp,
+        upload_failed_ext_png_count: failedExtensions.png,
+        upload_failed_ext_jpeg_count: failedExtensions.jpeg,
+        upload_failed_ext_gif_count: failedExtensions.gif,
         article_count: articles,
         source_free_bytes,
         source_required_bytes,

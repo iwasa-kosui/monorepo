@@ -6,8 +6,33 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { hasRehearsalSample, migrationBudget, REHEARSAL_D1_CAPACITY_BYTES } from './migration-budget.mjs';
 import { assertExternalMigrationRoot } from './migration-path-safety.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
-import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS, validateSourceEstimate } from './source-transfer-protocol.mjs';
+import {
+  estimateUploadFailureReason,
+  SOURCE_REJECTION_DETAILS,
+  SOURCE_SSH_REASONS,
+  validateSourceEstimate,
+} from './source-transfer-protocol.mjs';
 
+const ESTIMATE_LINE_COUNTS = Object.freeze([
+  'rows',
+  'upload_count',
+  'upload_duplicate_count',
+  'upload_missing_count',
+  'upload_owner_count',
+  'upload_not_regular_count',
+  'upload_too_large_count',
+  'upload_access_count',
+  'upload_other_count',
+  'upload_ext_webp_count',
+  'upload_ext_png_count',
+  'upload_ext_jpeg_count',
+  'upload_ext_gif_count',
+  'upload_failed_ext_webp_count',
+  'upload_failed_ext_png_count',
+  'upload_failed_ext_jpeg_count',
+  'upload_failed_ext_gif_count',
+  'article_count',
+]);
 const freeBytes = async (root) => {
   const stat = await statfs(root, { bigint: true });
   return stat.bavail * stat.bsize;
@@ -26,7 +51,16 @@ export const estimateSource = async ({ source, availableBytes, signal }) => {
   const estimate = validateSourceEstimate(rest);
   const sample = hasRehearsalSample(estimate) ? 'ok' : 'insufficient';
   const capacity = capacityIsSufficient(estimate, availableBytes) ? 'ok' : 'insufficient';
-  return `IORI_ESTIMATE rows=${estimate.rows} upload_count=${estimate.upload_count} upload_duplicate_count=${estimate.upload_duplicate_count} article_count=${estimate.article_count} sample=${sample} capacity=${capacity}`;
+  const counts = ESTIMATE_LINE_COUNTS.map((field) => `${field}=${estimate[field]}`).join(' ');
+  const line = `IORI_ESTIMATE ${counts} sample=${sample} capacity=${capacity}`;
+  const reason = estimateUploadFailureReason(estimate);
+  if (reason) {
+    throw Object.assign(new Error('Source upload files could not be opened.'), {
+      diagnostic: { reason },
+      estimateLine: line,
+    });
+  }
+  return line;
 };
 
 export const estimateFromEnvironment = async (
@@ -71,6 +105,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.stderr.write(`${line}\n`);
   }).catch((error) => {
     let line = 'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified';
+    try {
+      if (typeof error?.estimateLine === 'string') process.stderr.write(`${error.estimateLine}\n`);
+    } catch {}
     try {
       line = estimateFailureLine(error);
     } catch {}

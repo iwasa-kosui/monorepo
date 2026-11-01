@@ -34,7 +34,12 @@ import {
   validateProtectedMigrationEvidence,
 } from './run-protected-migration.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
-import { validateSourceEstimate, validateSourceInventory, validateSourceState } from './source-transfer-protocol.mjs';
+import {
+  estimateUploadFailureReason,
+  validateSourceEstimate,
+  validateSourceInventory,
+  validateSourceState,
+} from './source-transfer-protocol.mjs';
 import { readPreparationRecord } from './target-preparation-record.mjs';
 import {
   createCloudflareImportProvider,
@@ -77,6 +82,7 @@ export const runProtectedPhases = async (options, target, plan) => {
     const { source_revision, ...estimate } = await source.estimate(callSignal);
     if (source_revision !== target.identity.main_sha) throw new Error('Source revision mismatch.');
     validateSourceEstimate(estimate);
+    if (estimateUploadFailureReason(estimate)) throw new Error('Source upload files could not be opened.');
     plan.budget({
       estimate,
       availableBytes: await (options.availableBytes ?? freeBytes)(root),

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -77,6 +77,9 @@ it('estimates bounded read-only source and runner capacity with upload/article c
     rows: 31,
     upload_count: 2,
     upload_duplicate_count: 1,
+    upload_missing_count: 0,
+    upload_ext_png_count: 2,
+    upload_failed_ext_png_count: 0,
     article_count: 1,
     source_required_bytes: 3100 * 24 + 34 + 64 * 1024 ** 2,
     runner_required_bytes: 3100 * 24 + 51 + 128 * 1024 ** 2,
@@ -91,13 +94,11 @@ type Failure = {
   abort?: boolean;
   drop?: boolean;
   missingBase?: boolean;
-  bigUpload?: boolean;
   rows?: number;
   rowList?: ImageRow[];
 };
 const estimateWith = async (failure: Failure, uploadDir?: (base: string) => string, createFails = false) => {
   const { base } = await setup();
-  if (failure.bigUpload) await truncate(join(base, 'originals', `${imageId}.png`), SOURCE_LIMITS.uploadBytes + 1);
   const controller = new AbortController();
   let onError: ((error: Error) => void) | undefined;
   const failing = new SourceSnapshot({
@@ -170,19 +171,84 @@ it.each<[string, Failure, string, ((base: string) => string)?, boolean?]>([
     rowList: [{ imageId, url: `/uploads/${imageId}.png` }, { imageId, url: `/uploads/${imageId}.jpg` }],
   }, 'estimate-upload-row'],
   ['missing upload root', {}, 'estimate-upload-root', (base) => join(base, 'missing')],
-  ['missing upload file', {
-    row: { imageId: imageId.replace('3', '4'), url: `/uploads/${imageId.replace('3', '4')}.png` },
-  }, 'estimate-upload-open'],
   ['oversized tables', { bytes: String(SOURCE_LIMITS.totalBytes + 1) }, 'estimate-too-large'],
   ['deadline', { abort: true }, 'estimate-limit'],
   ['connection lost while reading the next page', { drop: true }, 'estimate-query'],
   ['free space', { missingBase: true }, 'estimate-other'],
-  ['oversized upload file', { bigUpload: true }, 'estimate-upload-open'],
   ['too many upload files', {
     rowList: [imageId, urlImageId, ...spareImageIds].map((id) => ({ imageId: id, url: `/uploads/${id}.png` })),
   }, 'estimate-too-large'],
 ])('names the %s stage of a failed estimate with a fixed message', async (_name, failure, stage, uploadDir, create) => {
   expect(await estimateWith(failure, uploadDir, create)).toBe(`source_estimate_failed:${stage}`);
+});
+const countsOf = (estimate: Awaited<ReturnType<SourceSnapshot['estimate']>>) =>
+  Object.fromEntries(Object.entries(estimate).filter(([key, value]) => key.startsWith('upload_') && value !== 0));
+const spareId = (letter: string) =>
+  `${letter.repeat(8)}-${letter.repeat(4)}-4${letter.repeat(3)}-8${letter.repeat(3)}-${letter.repeat(12)}`;
+const rowFor = (id: string, extension: string) => ({ imageId: id, url: `/uploads/${id}.${extension}` });
+it('counts every unopened upload by cause and extension, and adds only opened files to upload_bytes', async () => {
+  const [webp, jpg] = [spareId('e'), spareId('f')];
+  const { snapshot, uploadDir } = await setup([
+    rowFor(imageId, 'png'),
+    rowFor(webp, 'webp'),
+    rowFor(jpg, 'jpg'),
+    rowFor(webp, 'webp'),
+  ]);
+  await symlink(join(uploadDir, 'unreferenced.txt'), join(uploadDir, `${jpg}.jpg`));
+  expect(countsOf(await snapshot.estimate(new AbortController().signal))).toEqual({
+    upload_count: 3,
+    upload_duplicate_count: 1,
+    upload_bytes: 5,
+    upload_missing_count: 1,
+    upload_not_regular_count: 1,
+    upload_ext_webp_count: 1,
+    upload_ext_png_count: 1,
+    upload_ext_jpeg_count: 1,
+    upload_failed_ext_webp_count: 1,
+    upload_failed_ext_jpeg_count: 1,
+  });
+});
+it('counts oversized and absent uploads without stopping at the first failure', async () => {
+  const [gif, jpeg] = [spareId('a'), spareId('b')];
+  const { snapshot, uploadDir } = await setup([
+    rowFor(gif, 'gif'),
+    rowFor(jpeg, 'jpeg'),
+    rowFor(urlImageId, 'png'),
+  ]);
+  await writeFile(join(uploadDir, `${gif}.gif`), '');
+  await truncate(join(uploadDir, `${gif}.gif`), SOURCE_LIMITS.uploadBytes + 1);
+  expect(countsOf(await snapshot.estimate(new AbortController().signal))).toEqual({
+    upload_count: 3,
+    upload_bytes: 12,
+    upload_missing_count: 1,
+    upload_too_large_count: 1,
+    upload_ext_png_count: 1,
+    upload_ext_jpeg_count: 1,
+    upload_ext_gif_count: 1,
+    upload_failed_ext_jpeg_count: 1,
+    upload_failed_ext_gif_count: 1,
+  });
+});
+it.skipIf(process.getuid?.() === 0)('counts an upload the process cannot open as access', async () => {
+  const { snapshot, uploadDir } = await setup([rowFor(imageId, 'png'), rowFor(urlImageId, 'png')]);
+  await chmod(join(uploadDir, `${imageId}.png`), 0o000);
+  expect(countsOf(await snapshot.estimate(new AbortController().signal))).toEqual({
+    upload_count: 2,
+    upload_bytes: 12,
+    upload_access_count: 1,
+    upload_ext_png_count: 2,
+    upload_failed_ext_png_count: 1,
+  });
+});
+it('counts an uppercase extension under its lowercase name', async () => {
+  const upper = spareId('c');
+  const { snapshot, uploadDir } = await setup([rowFor(upper, 'WEBP')]);
+  await writeFile(join(uploadDir, `${upper}.WEBP`), 'x');
+  expect(countsOf(await snapshot.estimate(new AbortController().signal))).toEqual({
+    upload_count: 1,
+    upload_bytes: 1,
+    upload_ext_webp_count: 1,
+  });
 });
 it('estimates with the same fake client when nothing fails', async () => {
   expect(await estimateWith({})).toBe('estimated');

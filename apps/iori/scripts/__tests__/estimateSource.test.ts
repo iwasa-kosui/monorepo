@@ -15,6 +15,20 @@ const estimate = {
   rows: 5,
   upload_count: 3,
   upload_duplicate_count: 1,
+  upload_missing_count: 0,
+  upload_owner_count: 0,
+  upload_not_regular_count: 0,
+  upload_too_large_count: 0,
+  upload_access_count: 0,
+  upload_other_count: 0,
+  upload_ext_webp_count: 1,
+  upload_ext_png_count: 1,
+  upload_ext_jpeg_count: 1,
+  upload_ext_gif_count: 0,
+  upload_failed_ext_webp_count: 0,
+  upload_failed_ext_png_count: 0,
+  upload_failed_ext_jpeg_count: 0,
+  upload_failed_ext_gif_count: 0,
   article_count: 2,
   source_free_bytes: 10_000_000_000,
   source_required_bytes: 64_000_000,
@@ -34,12 +48,14 @@ const sourceWith = (override: Partial<typeof estimate> = {}) => {
   return { source: { estimate: vi.fn(async () => ({ ...estimate, ...override })), ...others }, others };
 };
 const AVAILABLE = 10_000_000_000;
+const upload_counts =
+  'upload_missing_count=0 upload_owner_count=0 upload_not_regular_count=0 upload_too_large_count=0 upload_access_count=0 upload_other_count=0 upload_ext_webp_count=1 upload_ext_png_count=1 upload_ext_jpeg_count=1 upload_ext_gif_count=0 upload_failed_ext_webp_count=0 upload_failed_ext_png_count=0 upload_failed_ext_jpeg_count=0 upload_failed_ext_gif_count=0';
 
 it('reports a sufficient sample and capacity in one fixed line without any byte counts', async () => {
   const { source } = sourceWith();
   const line = await estimateSource({ source, availableBytes: AVAILABLE });
   expect(line).toBe(
-    'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=ok',
+    `IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 ${upload_counts} article_count=2 sample=ok capacity=ok`,
   );
   expect(line).not.toContain('\n');
   expect(line).not.toMatch(/bytes|10000|64000000|128000000/);
@@ -75,7 +91,7 @@ it('marks capacity insufficient when the runner has too little free space, for n
 it('judges both fields independently', async () => {
   const { source } = sourceWith({ rows: 0, table_bytes: 3_000_000_000 });
   expect(await estimateSource({ source, availableBytes: 100_000_000_000 })).toBe(
-    'IORI_ESTIMATE rows=0 upload_count=3 upload_duplicate_count=1 article_count=2 sample=insufficient capacity=insufficient',
+    `IORI_ESTIMATE rows=0 upload_count=3 upload_duplicate_count=1 ${upload_counts} article_count=2 sample=insufficient capacity=insufficient`,
   );
 });
 it('calls only the read-only estimate operation, once', async () => {
@@ -87,6 +103,33 @@ it('calls only the read-only estimate operation, once', async () => {
 it('rejects a malformed estimate instead of printing a line', async () => {
   const { source } = sourceWith({ source_sufficient: false });
   await expect(estimateSource({ source, availableBytes: AVAILABLE })).rejects.toThrow();
+});
+it.each(
+  [
+    ['upload_missing_count', 'estimate-upload-missing'],
+    ['upload_owner_count', 'estimate-upload-owner'],
+    ['upload_not_regular_count', 'estimate-upload-not-regular'],
+    ['upload_too_large_count', 'estimate-upload-too-large'],
+    ['upload_access_count', 'estimate-upload-access'],
+    ['upload_other_count', 'estimate-upload-other'],
+  ] as const,
+)('fails with the reason of %s after building the estimate line', async (field, reason) => {
+  const { source } = sourceWith({ [field]: 2, upload_failed_ext_png_count: 2 });
+  const failure = await estimateSource({ source, availableBytes: AVAILABLE }).catch(error => error);
+  expect(failure.diagnostic).toEqual({ reason });
+  expect(failure.estimateLine).toContain(`${field}=2 `);
+  expect(failure.estimateLine).toMatch(/^IORI_ESTIMATE .* sample=ok capacity=ok$/);
+  expect(estimateFailureLine(failure)).toBe(
+    `IORI_DIAG stage=estimate-source program=ssh exit=none signal=none reason=${reason}`,
+  );
+});
+it('picks the first reason in the fixed order when several causes are counted', async () => {
+  const { source } = sourceWith({ upload_other_count: 1, upload_access_count: 1, upload_too_large_count: 1 });
+  const failure = await estimateSource({ source, availableBytes: AVAILABLE }).catch(error => error);
+  expect(failure.diagnostic).toEqual({ reason: 'estimate-upload-too-large' });
+  const both = sourceWith({ upload_owner_count: 3, upload_missing_count: 1, upload_not_regular_count: 1 });
+  const first = await estimateSource({ source: both.source, availableBytes: AVAILABLE }).catch(error => error);
+  expect(first.diagnostic).toEqual({ reason: 'estimate-upload-missing' });
 });
 it('propagates a source failure without printing a line', async () => {
   const source = {
@@ -135,7 +178,7 @@ it('builds the source adapter from the environment with an estimate_ run ID and 
     });
     expect(availableBytes).toHaveBeenCalledWith(root);
     expect(line).toBe(
-      'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=ok',
+      `IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 ${upload_counts} article_count=2 sample=ok capacity=ok`,
     );
   });
 });
@@ -228,6 +271,55 @@ it('prints exactly one diagnostic line and then fails when the source rejects th
     expect(result.stderr).toBe(
       'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=estimate-query\nSource estimate failed.\n',
     );
+  });
+});
+it('prints the estimate line before the diagnostic line and fails when uploads could not be opened', async () => {
+  await withRoot(async root => {
+    const bin = join(root, 'bin');
+    await mkdir(bin);
+    const { source_revision, ...fields } = estimate;
+    const response = {
+      ok: true,
+      state: {
+        source_revision,
+        identity: null,
+        ingress_frozen: false,
+        http_inflight: 0,
+        queue_depth: 0,
+        dequeue_work: 0,
+        enqueue_work: 0,
+        consumer_paused: false,
+        queue_failed: false,
+        drained: false,
+        estimate: {
+          ...fields,
+          upload_owner_count: 2,
+          upload_access_count: 1,
+          upload_failed_ext_png_count: 3,
+        },
+      },
+    };
+    await writeFile(join(root, 'response.json'), `${JSON.stringify(response)}\n`);
+    await writeFile(join(bin, 'ssh'), `#!/bin/sh\ncat '${join(root, 'response.json')}'\n`, { mode: 0o755 });
+    await writeFile(join(root, 'id'), 'synthetic', { mode: 0o600 });
+    await writeFile(join(root, 'known_hosts'), 'synthetic', { mode: 0o600 });
+    const result = await runCli({
+      PATH: `${bin}:/usr/bin:/bin`,
+      ...cliEnvironment(root, {
+        IORI_SOURCE_SSH_IDENTITY_FILE: join(root, 'id'),
+        IORI_SOURCE_SSH_KNOWN_HOSTS_FILE: join(root, 'known_hosts'),
+      }) as Record<string, string>,
+    });
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe('');
+    const lines = result.stderr.split('\n');
+    expect(lines[0]).toMatch(/^IORI_ESTIMATE rows=5 upload_count=3 .* upload_owner_count=2 .* upload_access_count=1 /);
+    expect(lines[0]).toContain('upload_failed_ext_png_count=3');
+    expect(lines.slice(1)).toEqual([
+      'IORI_DIAG stage=estimate-source program=ssh exit=none signal=none reason=estimate-upload-owner',
+      'Source estimate failed.',
+      '',
+    ]);
   });
 });
 it('prints one unclassified diagnostic line when the configuration is missing', async () => {
