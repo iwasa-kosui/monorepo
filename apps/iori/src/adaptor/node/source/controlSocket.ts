@@ -4,10 +4,16 @@ import { connect, createServer } from 'node:net';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { SOURCE_LIMITS } from '../../../../scripts/source-transfer-protocol.mjs';
+import { SOURCE_LIMITS, SOURCE_REJECTION_DETAILS } from '../../../../scripts/source-transfer-protocol.mjs';
 import { type SourceControl, validatePrivateDirectory } from './sourceControl.ts';
 
 const isMissing = (error: unknown) => error instanceof Error && 'code' in error && error.code === 'ENOENT';
+const ESTIMATE_FAILURE_PREFIX = 'source_estimate_failed:';
+const rejectionDetail = (error: unknown) => {
+  if (!(error instanceof Error) || !error.message.startsWith(ESTIMATE_FAILURE_PREFIX)) return undefined;
+  const detail = error.message.slice(ESTIMATE_FAILURE_PREFIX.length);
+  return SOURCE_REJECTION_DETAILS.includes(detail) ? detail : undefined;
+};
 const PROBE_TIMEOUT_MS = 1000;
 const probeSocket = (path: string) =>
   new Promise<'refused' | 'missing' | 'other'>((resolve) => {
@@ -109,7 +115,14 @@ export async function listenControlSocket(control: SourceControl) {
           if (streaming) socket.destroy();
           else if (error instanceof Error && error.message === 'control_busy') {
             socket.end('{"ok":false,"error":"control_busy"}\n');
-          } else socket.end('{"ok":false,"error":"control_rejected"}\n');
+          } else {
+            const detail = rejectionDetail(error);
+            socket.end(
+              detail === undefined
+                ? '{"ok":false,"error":"control_rejected"}\n'
+                : JSON.stringify({ ok: false, error: 'control_rejected', detail }) + '\n',
+            );
+          }
         },
       );
     });

@@ -6,6 +6,7 @@ export function estimateSource(
     signal?: AbortSignal;
   },
 ): Promise<string>;
+export function estimateFailureLine(error: unknown): string;
 export function estimateFromEnvironment(
   env: Record<string, string | undefined>,
   signal?: AbortSignal,

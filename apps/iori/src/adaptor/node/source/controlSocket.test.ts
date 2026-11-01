@@ -98,6 +98,30 @@ describe('private socket', () => {
       await server.close();
     }
   });
+  it.each([
+    ['source_estimate_failed:estimate-query', { ok: false, error: 'control_rejected', detail: 'estimate-query' }],
+    ['source_estimate_failed:estimate-limit', { ok: false, error: 'control_rejected', detail: 'estimate-limit' }],
+    ['source_estimate_failed:estimate-secret', { ok: false, error: 'control_rejected' }],
+    ['source_estimate_failed:', { ok: false, error: 'control_rejected' }],
+    ['source_estimate_failed', { ok: false, error: 'control_rejected' }],
+    ['relation "articles" does not exist', { ok: false, error: 'control_rejected' }],
+    ['identity_mismatch:estimate-query', { ok: false, error: 'control_rejected' }],
+  ])('answers a command rejected with %j as %j', async (message, expected) => {
+    const { base, control } = await setup();
+    vi.spyOn(control, 'command').mockRejectedValue(new Error(message));
+    const server = await listenControlSocket(control);
+    try {
+      const response = JSON.parse(
+        await request(
+          join(base, 'control.sock'),
+          JSON.stringify({ op: 'estimate', main_sha: 'a'.repeat(40), run_id: '123' }) + '\n',
+        ),
+      );
+      expect(response).toEqual(expected);
+    } finally {
+      await server.close();
+    }
+  });
   it('never removes an unrelated file and rejects public directories and symlinks', async () => {
     const { base, control, queue } = await setup();
     const path = join(base, 'control.sock');

@@ -6,7 +6,7 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { hasRehearsalSample, migrationBudget, REHEARSAL_D1_CAPACITY_BYTES } from './migration-budget.mjs';
 import { assertExternalMigrationRoot } from './migration-path-safety.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
-import { validateSourceEstimate } from './source-transfer-protocol.mjs';
+import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS, validateSourceEstimate } from './source-transfer-protocol.mjs';
 
 const freeBytes = async (root) => {
   const stat = await statfs(root, { bigint: true });
@@ -51,10 +51,26 @@ export const estimateFromEnvironment = async (
   return estimateSource({ source, availableBytes: await availableBytes(root), signal });
 };
 
+const failureReasons = new Set([...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS]);
+export const estimateFailureLine = (error) => {
+  const diagnostic = error?.diagnostic;
+  if (!failureReasons.has(diagnostic?.reason)) {
+    return 'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified';
+  }
+  const exit = Number.isInteger(diagnostic.exit) && diagnostic.exit >= 0 && diagnostic.exit <= 255
+    ? String(diagnostic.exit)
+    : 'none';
+  const exitSignal = typeof diagnostic.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(diagnostic.signal)
+    ? diagnostic.signal
+    : 'none';
+  return `IORI_DIAG stage=estimate-source program=ssh exit=${exit} signal=${exitSignal} reason=${diagnostic.reason}`;
+};
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   withCliSignal((signal) => estimateFromEnvironment(process.env, signal)).then((line) => {
     process.stderr.write(`${line}\n`);
-  }).catch(() => {
+  }).catch((error) => {
+    process.stderr.write(`${estimateFailureLine(error)}\n`);
     console.error('Source estimate failed.');
     process.exitCode = 1;
   });

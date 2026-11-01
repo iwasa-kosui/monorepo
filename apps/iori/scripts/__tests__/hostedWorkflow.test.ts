@@ -12,6 +12,7 @@ import {
 } from '../hosted-workflow.mjs';
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { preparationFailureReport } from '../prepare-migration-target.mjs';
+import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 const baseEnv = (operation: string) => ({
@@ -428,6 +429,26 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
     'IORI_DIAG stage=restart-verify program=ssh exit=none signal=none reason=restart-not-confirmed',
   ];
   await publishChildDiagnostics(lines.join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
+it('relays the estimate-source failure diagnostics and refuses lines with raw text', async () => {
+  const writes = captureStderr();
+  const lines = [
+    ...[...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS].map(reason =>
+      `IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=${reason}`
+    ),
+    'IORI_DIAG stage=estimate-source program=ssh exit=none signal=SIGTERM reason=aborted',
+    'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=relation "articles" does not exist',
+    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=estimate-query detail=password',
+    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=source.example.test',
+    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=/home/ec2-user/uploads',
+    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=Estimate_Query',
+    'Source estimate failed.',
+  ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
 const estimateLine = 'IORI_ESTIMATE rows=5 upload_count=3 article_count=2 sample=ok capacity=insufficient';
