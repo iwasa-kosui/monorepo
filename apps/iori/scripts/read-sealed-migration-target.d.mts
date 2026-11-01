@@ -1,11 +1,12 @@
+import type { ExpectedTarget } from './migration-target-contract.mjs';
 export function readSealedMigrationTarget(
   input: {
-    expectedTarget: any;
-    record: any;
-    token: string | undefined;
-    zoneId: string | undefined;
-    fetchRequest?: (...args: any[]) => any;
+    expectedTarget: ExpectedTarget;
+    record: unknown;
+    token: string;
+    zoneId: string;
+    fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
     signal?: AbortSignal;
     expectedVersionId?: string;
   },
-): Promise<{ resources: any; worker: any }>;
+): Promise<{ resources: unknown; worker: unknown }>;

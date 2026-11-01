@@ -17,6 +17,7 @@ import {
   REHEARSAL_D1_CAPACITY_BYTES,
 } from './migration-budget.mjs';
 import { parseExpectedTarget, rehearsalProfileKey, rehearsalTargetKey } from './migration-target-contract.mjs';
+import { operationFailureLines } from './operation-diagnostics.mjs';
 import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
 const RESUME_TIMEOUT_MS = 120_000;
@@ -112,7 +113,10 @@ export const rehearseProtectedMigration = async (options) => {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   withCliSignal(signal => runExecutorCli(signal, { run: rehearseProtectedMigration, withRehearsal: false })).then(() =>
     console.log('Migration rehearsal profile recorded.')
-  ).catch(() => {
+  ).catch((error) => {
+    try {
+      process.stderr.write(`${operationFailureLines('rehearse-migration', error).join('\n')}\n`);
+    } catch {}
     console.error(
       'Migration rehearsal failed; confirm the source is unfrozen and retain the generation, reservations and partial evidence for review.',
     );

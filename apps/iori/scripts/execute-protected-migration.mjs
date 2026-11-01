@@ -40,6 +40,7 @@ import {
   validateSourceInventory,
   validateSourceState,
 } from './source-transfer-protocol.mjs';
+import { operationFailureLines } from './operation-diagnostics.mjs';
 import { readPreparationRecord } from './target-preparation-record.mjs';
 import {
   createCloudflareImportProvider,
@@ -482,7 +483,10 @@ export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   withCliSignal(signal => runExecutorCli(signal, { run: executeProtectedMigration, withRehearsal: true })).then(() =>
     console.log('Protected migration bundle published.')
-  ).catch(() => {
+  ).catch((error) => {
+    try {
+      process.stderr.write(`${operationFailureLines('migrate-data', error).join('\n')}\n`);
+    } catch {}
     console.error(
       'Protected migration failed; retain source freeze, partial evidence and reservations for reviewed recovery.',
     );

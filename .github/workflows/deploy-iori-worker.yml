@@ -150,6 +150,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -214,6 +215,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -266,6 +268,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -336,6 +339,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -399,6 +403,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -470,6 +475,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -535,6 +541,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -604,6 +611,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -665,6 +673,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation

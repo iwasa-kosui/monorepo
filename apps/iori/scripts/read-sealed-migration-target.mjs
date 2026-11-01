@@ -27,7 +27,11 @@ export const readSealedMigrationTarget = async ({
     dlqId: r.dlq.id,
     consumerAttached: true,
   });
-  if (resources.consumerId !== r.consumer.id) throw new Error('Prepared consumer mismatch.');
+  if (resources.consumerId !== r.consumer.id) {
+    throw Object.assign(new Error('Prepared consumer mismatch.'), {
+      diagnostic: { reason: 'state-mismatch', details: ['resource-consumer-id'] },
+    });
+  }
   const worker = await control.readSealedWorker({
     resources,
     admissionEnvironment: admissionEnvironment(target),
