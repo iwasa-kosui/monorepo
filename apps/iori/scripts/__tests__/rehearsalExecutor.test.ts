@@ -176,7 +176,6 @@ it('aborts the frozen section at the freeze limit, resumes once with a fresh sig
     expect(resumeSignal?.aborted).toBe(false);
     expect(f.calls).not.toContain('d1');
   } finally {
-    clearTimeout(setTimer.mock.results[limitTimer()]?.value);
     f.close();
   }
 });

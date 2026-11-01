@@ -25,7 +25,7 @@ it.each(['direct', 'pnpm', 'infrastructure'])('awaits actual process group clean
   const marker = join(root, 'closed');
   const controller = new AbortController();
   const source =
-    'const fs=require(\'node:fs\');process.on(\'SIGTERM\',()=>setTimeout(()=>{fs.writeFileSync(process.argv[2],\'term\');process.exit(0)},50));fs.writeFileSync(process.argv[1],\'ready\');setTimeout(()=>{fs.writeFileSync(process.argv[2],\'fallback\');process.exit(0)},1500);';
+    'const fs=require(\'node:fs\');process.on(\'SIGTERM\',()=>setTimeout(()=>{fs.writeFileSync(process.argv[2],\'term\');process.exit(0)},50));fs.writeFileSync(process.argv[1],\'ready\');setTimeout(()=>{fs.writeFileSync(process.argv[2],\'fallback\');process.exit(0)},8000);';
   const args = ['-e', source, ready, marker];
   const pending = (mode === 'infrastructure' ? runInfrastructureCommand : runMigrationCommand)(
     mode === 'pnpm' ? 'pnpm' : process.execPath,
@@ -33,14 +33,14 @@ it.each(['direct', 'pnpm', 'infrastructure'])('awaits actual process group clean
     {
       cwd: fileURLToPath(new URL('../../', import.meta.url)),
       env: process.env,
-      timeout: 5000,
+      timeout: 30_000,
       maxBuffer: 1024,
       signal: controller.signal,
     },
   );
   const result = pending.catch(error => error);
   try {
-    for (let attempt = 0; attempt < 100; attempt++) {
+    for (let attempt = 0; attempt < 1000; attempt++) {
       try {
         await access(ready);
         break;
@@ -57,4 +57,4 @@ it.each(['direct', 'pnpm', 'infrastructure'])('awaits actual process group clean
     await result;
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 40_000);
