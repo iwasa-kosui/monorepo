@@ -70,7 +70,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   withCliSignal((signal) => estimateFromEnvironment(process.env, signal)).then((line) => {
     process.stderr.write(`${line}\n`);
   }).catch((error) => {
-    process.stderr.write(`${estimateFailureLine(error)}\n`);
+    let line = 'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified';
+    try {
+      line = estimateFailureLine(error);
+    } catch {}
+    try {
+      process.stderr.write(`${line}\n`);
+    } catch {}
     console.error('Source estimate failed.');
     process.exitCode = 1;
   });

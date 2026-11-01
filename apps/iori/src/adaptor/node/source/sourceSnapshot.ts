@@ -106,8 +106,8 @@ export class SourceSnapshot {
         'DECLARE iori_images NO SCROLL CURSOR FOR SELECT CASE WHEN octet_length(url) <= 128 THEN jsonb_build_object(\'imageId\', "imageId", \'url\', url) ELSE NULL END AS row FROM post_images',
       );
       while (true) {
-        signal.throwIfAborted();
         stage = 'estimate-query';
+        signal.throwIfAborted();
         const page = await client.query('FETCH FORWARD 100 FROM iori_images');
         if (page.rows.length > 100) throw new Error('invalid_page');
         if (!page.rows.length) break;

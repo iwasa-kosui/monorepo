@@ -620,18 +620,20 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 
 旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
 
-| `reason`               | 失敗した段                                                   |
-| ---------------------- | ------------------------------------------------------------ |
-| `estimate-connect`     | DB への接続と transaction の開始                             |
-| `estimate-query`       | table ごとの SELECT、`post_images` の cursor、COMMIT         |
-| `estimate-upload-row`  | `post_images` の行の形と、url の形                           |
-| `estimate-upload-root` | `UPLOAD_DIR` の realpath の確認                              |
-| `estimate-upload-open` | upload ファイルを開く処理、stat、1 ファイルのサイズの確認    |
-| `estimate-too-large`   | 全体のサイズか、ファイル数の上限の超過                       |
-| `estimate-limit`       | estimate 全体の時間の上限 (60 秒) への到達、または接続の切断 |
-| `estimate-other`       | 上のどの段にも当たらない失敗。空き容量の取得を含みます       |
+| `reason`               | 失敗した段                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `estimate-connect`     | DB への接続と transaction の開始                                               |
+| `estimate-query`       | table ごとの SELECT、`post_images` の cursor、COMMIT                           |
+| `estimate-upload-row`  | `post_images` の行の形と、url の形                                             |
+| `estimate-upload-root` | `UPLOAD_DIR` の realpath の確認                                                |
+| `estimate-upload-open` | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                      |
+| `estimate-too-large`   | 全体のサイズか、ファイル数の上限の超過                                         |
+| `estimate-limit`       | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断 |
+| `estimate-other`       | 上のどの段にも当たらない失敗。空き容量の取得を含みます                         |
 
 `estimate-` で始まる語彙は、旧環境への配備 (`deploy-iori.yml`) の後に効きます。配備の前の旧環境は `detail` を返さないので、サービス側の失敗は `reason=rejected` になります。
+
+PostgreSQL の接続の切断は、`estimate-connect` か `estimate-query` になります。
 
 `reason` が `busy` になるのは、source の control socket が、control コマンドの実行中に拒否したときだけです。この場合、source は `control_busy` を返し、CI のクライアントは `control_busy` を終了コード 76 にします。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
 

@@ -1,10 +1,15 @@
-import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { SOURCE_LIMITS } from '../../../../scripts/source-transfer-protocol.mjs';
 import { SourceSnapshot } from './sourceSnapshot.ts';
+
+vi.mock('../../../../scripts/source-transfer-protocol.mjs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../scripts/source-transfer-protocol.mjs')>();
+  return { ...actual, SOURCE_LIMITS: Object.freeze({ ...actual.SOURCE_LIMITS, inventoryFiles: 35 }) };
+});
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -60,17 +65,32 @@ it('estimates bounded read-only source and runner capacity with upload/article c
   });
   expect(estimate.source_sufficient).toBe(estimate.source_free_bytes >= estimate.source_required_bytes);
 });
-type Failure = { at?: (sql: string) => boolean; connect?: boolean; bytes?: string; row?: unknown; abort?: boolean };
+type Failure = {
+  at?: (sql: string) => boolean;
+  connect?: boolean;
+  bytes?: string;
+  row?: unknown;
+  abort?: boolean;
+  drop?: boolean;
+  missingBase?: boolean;
+  bigUpload?: boolean;
+  rows?: number;
+};
 const estimateWith = async (failure: Failure, uploadDir?: (base: string) => string, createFails = false) => {
   const { base } = await setup();
+  if (failure.bigUpload) await truncate(join(base, 'originals', `${imageId}.png`), SOURCE_LIMITS.uploadBytes + 1);
   const controller = new AbortController();
+  let onError: ((error: Error) => void) | undefined;
   const failing = new SourceSnapshot({
-    base,
+    base: failure.missingBase ? join(base, 'missing') : base,
     uploadDir: uploadDir?.(base) ?? join(base, 'originals'),
     createClient: async () => {
       if (createFails) throw new Error('password=hunter2');
       let sent = false;
       return {
+        on: (_event: 'error', listener: (error: Error) => void) => {
+          onError = listener;
+        },
         connect: async () => {
           if (failure.connect) throw new Error('password=hunter2');
           if (failure.abort) controller.abort();
@@ -81,7 +101,9 @@ const estimateWith = async (failure: Failure, uploadDir?: (base: string) => stri
           if (sql.startsWith('SELECT COALESCE')) return { rows: [{ bytes: failure.bytes ?? '100', count: '1' }] };
           if (sql.startsWith('FETCH') && !sent) {
             sent = true;
-            return { rows: [{ row: failure.row ?? { imageId, url: `/uploads/${imageId}.png` } }] };
+            if (failure.drop) onError?.(new Error('password=hunter2'));
+            const row = failure.row ?? { imageId, url: `/uploads/${imageId}.png` };
+            return { rows: Array.from({ length: failure.rows ?? 1 }, () => ({ row })) };
           }
           return { rows: [] };
         },
@@ -108,6 +130,10 @@ it.each<[string, Failure, string, ((base: string) => string)?, boolean?]>([
   }, 'estimate-upload-open'],
   ['oversized tables', { bytes: String(SOURCE_LIMITS.totalBytes + 1) }, 'estimate-too-large'],
   ['deadline', { abort: true }, 'estimate-limit'],
+  ['connection lost while reading the next page', { drop: true }, 'estimate-query'],
+  ['free space', { missingBase: true }, 'estimate-other'],
+  ['oversized upload file', { bigUpload: true }, 'estimate-upload-open'],
+  ['too many upload files', { rows: 4 }, 'estimate-too-large'],
 ])('names the %s stage of a failed estimate with a fixed message', async (_name, failure, stage, uploadDir, create) => {
   expect(await estimateWith(failure, uploadDir, create)).toBe(`source_estimate_failed:${stage}`);
 });
