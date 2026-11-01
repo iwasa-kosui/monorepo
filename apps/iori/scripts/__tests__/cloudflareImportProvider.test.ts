@@ -215,14 +215,18 @@ describe('live Cloudflare import provider', () => {
     await expect(new Response(result!.body).text()).rejects.toThrow('Cloudflare import read failed.');
   });
   it('cleans external spool files after a source error during multi-run sorting', async () => {
-    const before = (await readdir(tmpdir())).filter(name => name.startsWith('iori-canonical-')).sort();
-    const rows = async function*() {
-      yield 'z';
-      yield 'a';
-      yield 'b';
-      throw new Error('source failed');
-    };
-    await expect(canonicalRowSummary(rows(), { chunkBytes: 1 })).rejects.toThrow('source failed');
-    expect((await readdir(tmpdir())).filter(name => name.startsWith('iori-canonical-')).sort()).toEqual(before);
+    const spoolParent = await mkdtemp(join(tmpdir(), 'iori-spool-parent-'));
+    try {
+      const rows = async function*() {
+        yield 'z';
+        yield 'a';
+        yield 'b';
+        throw new Error('source failed');
+      };
+      await expect(canonicalRowSummary(rows(), { chunkBytes: 1, spoolParent })).rejects.toThrow('source failed');
+      expect(await readdir(spoolParent)).toEqual([]);
+    } finally {
+      await rm(spoolParent, { recursive: true, force: true });
+    }
   });
 });

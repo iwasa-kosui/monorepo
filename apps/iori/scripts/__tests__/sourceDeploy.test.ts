@@ -442,17 +442,22 @@ it('does not retry a status failure that is not marked retryable', async () => {
 it('stops waiting between status attempts when the deployment is aborted', async () => {
   const abort = new AbortController();
   let calls = 0;
+  let markFirstCall: () => void = () => {};
+  const firstCall = new Promise<void>(resolve => {
+    markFirstCall = resolve;
+  });
   const deploying = deploySource(diagnosticOptions, {
     ...withStatus(async () => {
       calls++;
+      markFirstCall();
       throw notReadyError();
     }),
-    statusRetryTimeoutMs: 60_000,
+    statusRetryTimeoutMs: 120_000,
     statusRetryIntervalMs: 60_000,
     signal: abort.signal,
   });
   const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
-  await vi.waitFor(() => expect(calls).toBe(1));
+  await firstCall;
   abort.abort();
   await failed;
   expect(calls).toBe(1);
