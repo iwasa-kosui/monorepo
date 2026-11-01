@@ -446,6 +446,7 @@ it.each([
   ['the queue is still failed', { ...restartedState, queue_failed: true }],
   ['ingress is not frozen', { ...restartedState, ingress_frozen: false }],
   ['the consumer is not paused', { ...restartedState, consumer_paused: false }],
+  ['no identity is held', { ...restartedState, identity: null }],
 ])('fails verification when %s after the restart', async (_label, after) => {
   const writes = captureStderr();
   const { factory } = sourceWith([failedState, after]);

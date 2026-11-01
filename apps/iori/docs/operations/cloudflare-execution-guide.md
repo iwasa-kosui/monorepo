@@ -950,6 +950,8 @@ rehearse-migration は、30 分の上限で中断した直後に resume を1回�
 - `freeze.pending` がありません。
 - status の `queue_failed` が true です。
 
+`queue_failed` は microblog を再起動するまで true のまま残ります。このため、`restart-failed-source` は旧環境側で `queue_failed` を確かめ直しません。
+
 input は `main_sha`、`migration_main_sha`、`migration_run_id` です。`environment` と `generation` には、凍結した run と同じ値を入れます。`recovery` は渡しません。渡すとエラーになります。
 
 ```bash
@@ -970,7 +972,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 3. 再起動の記録を `~/.iori-migration/queue-failed-restart.json` に書きます。書き終えると `IORI_NOTICE stage=restart-failed-source recorded=1` を出します。
 4. microblog を停止します。停止を確かめると `IORI_NOTICE stage=restart-failed-source stopped=1` を出します。
 5. microblog を起動します。起動すると `IORI_NOTICE stage=restart-failed-source started=1` を出します。
-6. status が次の4つの条件をすべて満たすまで待ちます。待つ時間には上限があり、約2分です。
+6. status が応答するまで、約2分を上限に待ちます。応答した status が次の4つの条件をすべて満たすかを確かめます。
    - `ingress_frozen` が true です。
    - `consumer_paused` が true です。
    - `queue_failed` が false です。
@@ -988,8 +990,11 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 - `invalid-restart-operation` の場合、作業者は dispatch の input を見直してから再実行します。
 - `restart-record-invalid` と `restart-record-failed` の場合、作業者は旧環境に入らず、管理役に判断を戻します。前回の実行で記録の書き込みが途中で失敗した場合も、`restart-record-invalid` になります。
 - `service-control-not-permitted` の場合、記録を書く前に失敗しています。microblog は止まっておらず、記録も残っていません。作業者は旧環境に入らず、管理役に判断を戻します。管理役が許可を直した後は、再実行できます。
-- `service-stop-failed`、`service-not-stopped`、`service-start-failed` の場合、記録を書いた後に失敗しています。microblog が停止したまま残る場合があります。再実行は `restart-already-attempted` で拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
-- `restart-not-confirmed` の場合（`stage=restart-verify`）、起動した後の約2分の間に、status が手順 6 の条件を満たしませんでした。記録が残っているので、再実行は拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `service-stop-failed` と `service-not-stopped` の場合、記録を書いた後に失敗しています。microblog が停止したまま残る場合があります。再実行は `restart-already-attempted` で拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `service-start-failed` の場合、記録を書いた後に失敗しています。再実行は `restart-already-attempted` で拒否されます。microblog が停止したまま残ると、本番の配信が止まります。CI から start だけを行う operation はありません。作業者は旧環境に入らず、すぐに管理役に連絡します。
+- `restart-not-confirmed` の場合（`stage=restart-verify`）、応答した status が手順 6 の条件を満たしませんでした。記録が残っているので、再実行は拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `stage=restart-precheck` で `source-operation-failed` か `source-control-not-ready` になった場合、status を読めずに、旧環境を変える前に失敗しています。記録も残っていません。作業者は Actions ログで原因を確かめてから、再実行できます。原因には、control コマンドの実行中、ssh の失敗、identity の不一致などがあります。
+- `stage=restart-verify` で `source-control-not-ready` か `source-operation-failed` になった場合、microblog を起動した後に失敗しています。`source-control-not-ready` は、約2分以内に status が応答しなかったことを示します。記録が残っているので、再実行は拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
 - `restart-already-attempted` の場合、同じ凍結の記録がすでにあります。作業者は旧環境に入らず、管理役に判断を戻します。
 
 再起動の記録は、`~/.iori-migration/queue-failed-restart.json` に1つだけ置きます。`restart-failed-source` は、記録を次の2つの場合に分けて扱います。

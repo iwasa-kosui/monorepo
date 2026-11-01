@@ -94,7 +94,7 @@ export const restartFailedSource = async (options, {
   });
   await stage('restart-verify', async () => {
     const state = await status();
-    if (!state.ingress_frozen || !state.consumer_paused || state.queue_failed) {
+    if (!state.ingress_frozen || !state.consumer_paused || state.queue_failed || !state.identity) {
       throw new Error('Source restart was not confirmed.');
     }
   });
