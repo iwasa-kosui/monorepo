@@ -178,8 +178,8 @@ it('gives purge-rehearsal-target target read credentials and application R2 writ
   expect(job.if).toBe('inputs.operation == \'purge-rehearsal-target\'');
   const secret = (name: string) => `\${{ secrets.${name} }}`;
   expect(purge.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_MIGRATE_API_TOKEN'));
-  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_APPLICATION_R2_WRITE_ACCESS_KEY_ID'));
-  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_APPLICATION_R2_WRITE_SECRET_ACCESS_KEY'));
+  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID'));
+  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY'));
   expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID'));
   expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY'));
   expect(purge.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID'));
