@@ -584,3 +584,14 @@ it('classifies an invalid remote diagnostic without relaying remote text', async
     'IORI_DIAG stage=diagnose-remote program=ssh exit=1 signal=none reason=diagnostic-invalid\n',
   ]);
 });
+it.each([
+  ['host', { host: '-oProxyCommand=x' }],
+  ['user', { user: 'Ec2-User' }],
+])('rejects an invalid %s before running ssh', async (_label, override) => {
+  captureStderr();
+  const runCommand = vi.fn();
+  await expect(diagnoseSource({ ...sshOptions, ...override }, { runCommand })).rejects.toThrow(
+    'Invalid source inputs.',
+  );
+  expect(runCommand).not.toHaveBeenCalled();
+});

@@ -312,9 +312,6 @@ importers:
 
   apps/nen-diagnosis:
     dependencies:
-      '@iwasa-kosui/result':
-        specifier: workspace:*
-        version: link:../../packages/result
       react:
         specifier: 19.1.0
         version: 19.1.0

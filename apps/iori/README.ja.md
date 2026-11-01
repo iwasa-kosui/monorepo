@@ -65,13 +65,19 @@ ioriは、日々の思考を記録・整理するだけでなく、Fediverseを�
 
 ### インストール
 
-1. データベースを起動
+1. ワークスペースパッケージ `result` をビルド
+
+```bash
+pnpm --filter result run build
+```
+
+2. データベースを起動
 
 ```bash
 pnpm compose:up
 ```
 
-2. 環境変数を設定
+3. 環境変数を設定
 
 ```bash
 cp .env.example .env
@@ -85,13 +91,13 @@ cp .env.example .env
 | `DATABASE_URL` | PostgreSQL接続文字列                               |
 | `ORIGIN`       | サーバーのオリジンURL（例: `https://example.com`） |
 
-3. データベースマイグレーション
+4. データベースマイグレーション
 
 ```bash
 pnpm drizzle:push
 ```
 
-4. 開発サーバー起動
+5. 開発サーバー起動
 
 ```bash
 pnpm dev

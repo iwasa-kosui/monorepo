@@ -12,11 +12,11 @@
 | SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                                                                                                                                                                                                                                                                                                                                                                                                   | source の詳細診断                                                       |
 | Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                                                                                                                                                                                                                                                                                                                                                                                                       | 第4節の確認表を埋める                                                   |
 | Cloudflare         | Dashboard とローカル Wrangler は未認証                                                                                                                                                                                                                                                                                                                                                                                                                                           | 第1節のログインと権限設定                                               |
-| GitHub Environment | 2026-10-31 の readback で `staging` と `production` はともに reviewer 1件、保護ブランチ方式。`main` は保護済み                                                                                                                                                                                                                                                                                                                                                                   | 第2節の readback で再確認                                               |
+| GitHub Environment | 2026-10-31 の readback で `production` と `staging` はともに reviewer 1件、保護ブランチ方式。`staging` の設定が要るのは staging を使う場合だけ。`main` は保護済み                                                                                                                                                                                                                                                                                                                | 第2節の readback で再確認                                               |
 | Secrets            | 2026-11-01 の readback で、production では新 workflow の35参照名のうち10名が未登録です。未登録の名前は、`IORI_ADMISSION_IDENTITY`、`IORI_MIGRATION_REHEARSAL`、`IORI_TRANSFER_R2_*` の4名、`IORI_APPLICATION_R2_*` の4名です。workflow は `VAPID_*` の3名を repo レベルの secret から読みます。今回の移行では staging を使いません。staging の Environment には `CLOUDFLARE_ACCOUNT_ID` だけが登録されています。登録済みの名前があっても、値と権限が適合しているとは限りません。 | R2 は第3.1節の手順、identity は第3.3節、rehearsal profile は第5節で準備 |
 | 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                                                                                                                                                                                                                                                                                                                                                                                                   | staging を使う場合だけ、staging の完了後に production を開始            |
 
-事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の行は、2026-10-31 の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など未実行の操作は、許可された端末で実施し、拒否された操作を別ツールで迂回しません。
+事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の行は、2026-10-31 の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など旧環境に対する未実行の操作は、作業者が旧環境に直接入らず、管理役に伝えたうえで `diagnose-source` などの CI の operation で実施します。拒否された操作を別ツールで迂回しません。
 
 記録には日付、担当者、段階、pass/fail、件数、次の作業を残します。実際の account/resource ID、hostname、secret、DB/画像、state、HTTP body、raw log は非公開領域に保存します。公開 PR や Actions artifact に貼り付けません。
 
@@ -49,7 +49,7 @@ pnpm --silent --filter iori exec wrangler whoami >"$iori_ops_dir/whoami.log" 2>&
 
 ## 2. GitHub Environment の保護
 
-`production` と `staging` の両方で、ユーザーが選択した `protected_branches` 方式を使います。2026-10-31 の API 読み戻しでは、両 Environment が下表の Required reviewers、Prevent self-review、Deployment branches and tags、API の branch policy と一致しました。再開時は、この節のコマンドで同じ項目を再確認します。required reviewer の設定と、後続 job の実行承認も記録してください。
+`production` で、ユーザーが選択した `protected_branches` 方式を使います。staging を使う場合は、`staging` でも同じ方式を使います。2026-10-31 の API 読み戻しでは、両 Environment が下表の Required reviewers、Prevent self-review、Deployment branches and tags、API の branch policy と一致しました。再開時は、この節のコマンドで同じ項目を再確認します。required reviewer の設定と、後続 job の実行承認も記録してください。
 
 | 設定                         | 今回の設定案                                                |
 | ---------------------------- | ----------------------------------------------------------- |
@@ -62,18 +62,18 @@ pnpm --silent --filter iori exec wrangler whoami >"$iori_ops_dir/whoami.log" 2>&
 
 設定を変更する場合は、GitHub repository の **Settings → Environments** で操作します。既に別の保護規則が追加されている場合は、この表で上書きせず差分を確認します。本人による承認を禁止する方針なら、別の承認者を決めてから設定案を変更します。
 
-設定を変更した後と再開時に、各 Environment の読み戻しを行います。最初は `staging`、次に変数を `production` に変更して Environment の確認を繰り返します。`main` の保護状態も確認します。
+設定を変更した後と再開時に、`production` Environment の読み戻しを行います。staging を使う場合だけ、変数を `staging` に変更して Environment の確認を繰り返します。`main` の保護状態も確認します。
 
 ```bash
-iori_environment=staging
+iori_environment=production
 gh api "repos/$iori_repo/environments/$iori_environment" \
   --jq '{rules: [.protection_rules[] | {type, wait_timer, prevent_self_review, reviewers: [.reviewers[]? | .reviewer.login]}], policy: .deployment_branch_policy}'
 gh api "repos/$iori_repo/branches/main" --jq '{name, protected}'
 ```
 
-**完了条件:** 両 Environment に required reviewer が存在し、`protected_branches=true`、`custom_branch_policies=false`。`main` は branch protection が有効で、API の `protected` が `true`。個別の deployment branch policy は作成しません。
+**完了条件:** `production` に required reviewer が存在し（staging を使う場合は `staging` にも存在し）、`protected_branches=true`、`custom_branch_policies=false`。`main` は branch protection が有効で、API の `protected` が `true`。個別の deployment branch policy は作成しません。
 
-**2026-10-31 の結果:** `gh api` の読み戻しで、`production` と `staging` はともに required reviewer が User 1件、`prevent_self_review=false`、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` でした。
+**2026-10-31 の結果:** `gh api` の読み戻しで、`production` と、staging を使う場合に必要な `staging` は、ともに required reviewer が User 1件、`prevent_self_review=false`、`protected_branches=true`、`custom_branch_policies=false` でした。`main` は `protected=true` でした。
 
 Environment は保護されたブランチを許可し、`main` だけに限定するものではありません。対象を `main` に固定するのは、source/Worker workflow の `GITHUB_REF=refs/heads/main` と最新 main SHA の一致検査です。この2つの制御を維持します。repository に branch protection rule が1件もない場合、Protected branches only でも全ブランチが許可されるため、Environment の設定だけで完了としません。[GitHub の deployment branch 制限](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
 
@@ -87,7 +87,7 @@ source deploy は対象 path の `main` push でも起動します。この保�
 2. 新しい generation と run ID を選び、非公開の作業記録に固定します。generation は先頭が小文字英字の8〜20文字の小文字英数字、run ID は英数字・`_`・`-` の1〜80文字です。
 3. [infra の操作別権限表](../../infra/cloudflare/README.md#environment-references)に従い、5用途の Cloudflare API token と、state・transfer・application 各用途の読み書き用／読み取り専用 S3 credential を分けます。
 4. S3 credential は対象 bucket に限定します。新規 bucket は `prepare-target` が作るため、transfer の書き込み権限は未作成の予定名へ事前に限定する必要があります。Dashboard では既存の bucket しか選べないので、transfer の書き込み token は「[未作成の bucket に限定した R2 S3 credential の作成](#未作成の-bucket-に限定した-r2-s3-credential-の作成)」の手順で作ります。手動で target bucket を先に作ると fresh-generation 検査に失敗します。
-5. Account の `workers.dev` subdomain を Dashboard で確認し、未登録なら `prepare-target` より前に登録します。staging の Worker hostname は `iori-staging-<generation>.<登録済みsubdomain>.workers.dev`、production は同じ形で environment 部分を `production` にします。固定 Wrangler の非対話 deploy に初回登録を任せると、リソース作成後に失敗して部分 generation が残るため、hosted job では登録しません。[workers.dev の設定](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)を参照してください。
+5. Account の `workers.dev` subdomain を Dashboard で確認し、未登録なら `prepare-target` より前に登録します。production の Worker hostname は `iori-production-<generation>.<登録済みsubdomain>.workers.dev` です。staging を使う場合の Worker hostname は、同じ形で environment 部分を `staging` にします。固定 Wrangler の非対話 deploy に初回登録を任せると、リソース作成後に失敗して部分 generation が残るため、hosted job では登録しません。[workers.dev の設定](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)を参照してください。
 
 R2 の S3 credential と Cloudflare REST API token は別に扱います。作成方法・bucket scope は [R2 認証手順](https://developers.cloudflare.com/r2/api/tokens/)を参照してください。API token の実際の permission と readback API の適合も確認します。通常の広い token を全 role に流用して完了扱いにしません。
 
@@ -308,7 +308,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 | Source SSH      | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS`                                                                          | 許可された source と信頼済み host key                                                                                              |
 | 署名            | `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`                                                                 | Ed25519 秘密鍵、対応する公開鍵 PEM、公開鍵ファイルの SHA-256 pin                                                                   |
 | 実測            | `IORI_MIGRATION_REHEARSAL`                                                                                                                                                            | 第5.4節で登録する、`rehearse-migration` が作った profile JSON。ファイル path ではなく内容。`rehearse-migration` の実行には要らない |
-| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII                                                                                          |
+| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII。`STAGING_ACCESS_TOKEN` が要るのは staging を使う場合だけ                                |
 | Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                                                                                              |
 
 `estimate-source` が使う参照名は、Source SSH の4件だけです。`purge-rehearsal-target` が使う参照名は、次のとおりです。Source SSH、署名、実測の参照名は使いません。
@@ -321,7 +321,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - Transfer S3: `IORI_TRANSFER_R2_READ_ONLY`
 - Application S3: `IORI_APPLICATION_R2_WRITE`
 
-既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
+既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、特に staging の source SSH を本番へ向けないでください。
 
 ### VAPID 値の確認
 
@@ -330,13 +330,13 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - `prepare-target` だけが Worker に VAPID の値を設定します。同じ generation では、リソースを作り始めた後の `prepare-target` を再実行できません。
 - このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
   - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
-  - staging 以外の environment で、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
+  - staging 以外の environment（今回の移行では production）で、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging を使う場合、staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
 - 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、`IORI_DIAG` 行の `reason` と固定の文言で、失敗の種類が出ます。
   - `prepare-target` がリソースを作る前に止まった場合、子プロセスは終了コード 78 で終わります。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources` と、「Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.」が出ます。後者は private ログにある子プロセスの文言と同じです。
   - `prepare-target` がリソースを作り始める段階に入った後に失敗した場合、子プロセスは終了コード 1 で終わります。この段階に入っても、リソースが作られたとは限りません。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed` と、「Protected workflow step failed; retain remote state for reviewed recovery.」が出ます。
 - 公開ログに `reason=stopped-before-resources` が出ている場合、`prepare-target` はリソースを作る前に止まっています。リソースは作られていないので、作業者は Dashboard を確かめずに、同じ generation で再実行してよいです。原因は private ログにしか残らないため、作業者は次の順に確かめます。
   1. `IORI_ENVIRONMENT` などの入力が正しいか確かめます。
-  2. 必須の secret が揃っているか確かめます。必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`SMOKE_QUEUE_TOKEN` です。staging では `STAGING_ACCESS_TOKEN` も必須です。staging では、`STAGING_ACCESS_TOKEN` と `SMOKE_QUEUE_TOKEN` が別の値であることも確かめます。
+  2. 必須の secret が揃っているか確かめます。必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`SMOKE_QUEUE_TOKEN` です。staging を使う場合は、`STAGING_ACCESS_TOKEN` も必須です。staging を使う場合は、`STAGING_ACCESS_TOKEN` と `SMOKE_QUEUE_TOKEN` が別の値であることも確かめます。
   3. VAPID の値を確かめます。VAPID の検査で止まった可能性があるので、作業者は次の順に対応します。
      1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
      2. 作業者が同じ generation で `prepare-target` をやり直します。
@@ -377,25 +377,19 @@ fixture のゼロ UUID や仮の hostname を本番へ登録しません。初�
 
 ## 4. Source の診断と事前配備
 
-最初の接続だけなら、既存の SSH 設定を使って次を実行します。これは source が移行可能であることを証明する検査ではありません。
+作業者は旧環境に直接入りません。作業者は、確認したい項目を管理役に伝えます。作業者と管理役は、`diagnose-source` などの CI（GitHub Actions）の operation で旧環境の状態を読みます。`diagnose-source` の手順と出力項目は[第7.2節](#72-旧環境の状態を読み取る)に書いてあります。`diagnose-source` が成功すれば、hosted runner から旧環境へ SSH で接続できたことも分かります。ただし、この成功は source が移行可能であることを証明しません。
 
-```bash
-ssh -T -a -o BatchMode=yes -o StrictHostKeyChecking=yes \
-  -o ForwardAgent=no -o ConnectTimeout=15 microblog true \
-  >"$iori_ops_dir/source-connect.log" 2>&1
-```
+作業者は、読み取った値を非公開で記録します。未確認・不一致を見つけたら、修正内容を具体化して事前配備より前に解消します。下表の「操作・対象」列に `diagnose-source` の項目名を書いた行は、その項目で確認します。項目名のない行は、`diagnose-source` の出力に対応する値がありません。作業者は、項目名のない行の確認を管理役に伝えます。
 
-詳細診断は許可済みの端末から service user として行い、値を非公開で記録します。未確認・不一致を見つけたら、修正内容を具体化して事前配備より前に解消します。
-
-| 確認            | 操作・対象                                                    | 完了条件                                                                         |
-| --------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 稼働状態        | `systemctl is-active microblog`                               | `active`。停止を drain の証拠にしない                                            |
-| Checkout        | `$HOME/monorepo` の revision と tracked 変更                  | 配備前の revision を記録。変更があれば保持方針を決める                           |
-| Runtime         | `$HOME/.nvm/versions/node/v24.12.0/bin/node`                  | 実体・所有者・実行権限・安全な mode を確認し、version が `v24.12.0`              |
-| Package manager | `$HOME/.local/share/pnpm/pnpm`                                | 同じ metadata 検査を行い、version が `10.12.4`。symlink を別実体へ自動追従しない |
-| 凍結            | `$HOME/.iori-migration/freeze.json` と `freeze.pending`       | 両方の有無を確認。存在したら再配備・再起動せず、その run の復旧判断へ進む        |
-| Private control | `.iori-migration` の mode、owner、`control.sock`、control CLI | 同じ service user、所定の private 配置。初回未配備ならその事実を記録             |
-| 容量            | source export 先と runner の空き容量、実データ量              | [容量・時間の条件](./cloudflare-data-migration.md)を満たす                       |
+| 確認            | 操作・対象                                                                                                  | 完了条件                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 稼働状態        | `diagnose-source` の `active` と `sub`（`systemctl show microblog` の `ActiveState` と `SubState`）         | `active`。停止を drain の証拠にしない                                            |
+| Checkout        | `$HOME/monorepo` の revision と tracked 変更                                                                | 配備前の revision を記録。変更があれば保持方針を決める                           |
+| Runtime         | `$HOME/.nvm/versions/node/v24.12.0/bin/node`                                                                | 実体・所有者・実行権限・安全な mode を確認し、version が `v24.12.0`              |
+| Package manager | `$HOME/.local/share/pnpm/pnpm`                                                                              | 同じ metadata 検査を行い、version が `10.12.4`。symlink を別実体へ自動追従しない |
+| 凍結            | `diagnose-source` の `freeze`（`$HOME/.iori-migration/freeze.json`）と `freeze_pending`（`freeze.pending`） | 両方の有無を確認。存在したら再配備・再起動せず、その run の復旧判断へ進む        |
+| Private control | `.iori-migration` の mode、owner、`control.sock`、control CLI                                               | 同じ service user、所定の private 配置。初回未配備ならその事実を記録             |
+| 容量            | source export 先と runner の空き容量、実データ量                                                            | [容量・時間の条件](./cloudflare-data-migration.md)を満たす                       |
 
 本番 source の事前配備は、環境保護・固定 runtime・既存 DB/TLS 設定の保持・最新 main のレビューと明示承認が揃ってから `deploy-iori.yml` で行います。配備は env.conf の `UPLOAD_DIR` が dist の外にある既存のディレクトリを指していることを確認し、満たさなければ止まります。merge で同じ SHA の source job が起動済みなら、それを確認し、重複 dispatch しません。DB schema の push はこの事前配備に含みません。
 
@@ -405,19 +399,11 @@ gh workflow run deploy-iori.yml --repo "$iori_repo" --ref main
 
 この workflow は入力なしで **production 固定の配備** を行います。診断コマンドでも、staging source の構築入口でもありません。別途準備する匿名化 source にこの workflow を流用しません。
 
-配備後の status は、source 上の service user のシェルで以下を実行します。事前に配備記録の SHA と run ID を `iori_source_main_sha`・`iori_source_run_id` に設定し、mode `0700` の非公開領域を `iori_source_ops_dir` に指定します。raw response を公開しません。
-
-```bash
-umask 077
-"$HOME/.nvm/versions/node/v24.12.0/bin/node" \
-  "$HOME/monorepo/apps/iori/scripts/source-control.mjs" \
-  status "$iori_source_main_sha" "$iori_source_run_id" \
-  >"$iori_source_ops_dir/source-status.json" 2>"$iori_source_ops_dir/source-status.log"
-```
+`deploy-iori.yml` の step「Deploy guarded exact source revision」は、旧環境の再起動の後に `status` 段階を実行します。作業者は旧環境に直接入らないので、旧環境で `source-control.mjs` を実行しません。作業者は、この step が成功したことを確認します。step が失敗した場合、作業者は[第4.1節](#41-source-配備-step-の失敗診断)の `reason` に従います。
 
 `source-control-client.mjs` は library であり、直接の CLI 入口ではありません。status は既知の SHA/run を渡して照合する操作で、未知の build SHA や既存 freeze の run を探す操作ではありません。既存 marker/socket を作り直して成功させず、status が返す起動中 build SHA と配布 manifest の検証まで確認します。
 
-**完了条件:** 必要な runtime・source control が配備され、build SHA と配布物が一致し、意図しない凍結や dirty checkout がない。ローカル SSH の成功とは別に、hosted runner からの接続も確認する。
+**完了条件:** 必要な runtime・source control が配備され、build SHA と配布物が一致し、意図しない凍結や dirty checkout がない。hosted runner からの接続も確認する。
 
 ### 4.1 source 配備 step の失敗診断
 
@@ -457,18 +443,14 @@ IORI_DIAG stage=<段階> program=<ssh|rsync|node|none> exit=<0-255|none> signal=
 
 - `chmod` の後に mode が 0600 になっていない場合、または env.conf が `chmod` の前と別のファイルになっている場合、`reason=config-mode-reset-failed` で失敗します。
 
-所有者を元に戻す場合、作業者は `IORI_NOTICE` 行の数値を使い、旧環境で次のコマンドを実行します。ただし、元の uid は旧環境に存在しないアカウントのものです。
-
-```bash
-sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d/env.conf
-```
+所有者を元に戻す必要があるかどうかは、管理役が判断します。元の uid は旧環境に存在しないアカウントのものです。作業者は `IORI_NOTICE` 行の `previous_uid` と `previous_gid` を管理役に伝え、旧環境で所有者を手作業で戻しません。
 
 mode を元に戻す必要があるかどうかは、管理役が判断します。作業者は `previous_mode` を管理役に伝え、旧環境で mode を手作業で戻しません。
 
 作業者は `program`、`exit`、`reason` の組で原因を切り分けます。
 
-- `program` が `ssh` で `exit=255` の場合、または `program` が `rsync` で `exit` が `255` か `12` の場合に、`reason` が `ssh-*` なら、接続か認証が失敗しています。`ssh-*` は `ssh-auth-denied`、`ssh-host-key`、`ssh-key-format`、`ssh-timeout`、`ssh-refused`、`ssh-dns` です。作業者は production environment の `IORI_SOURCE_SSH_*` secret、旧環境の authorized_keys、known_hosts を確認します。
-- `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は `reason` に対応する前提を旧環境で確認します。
+- `program` が `ssh` で `exit=255` の場合、または `program` が `rsync` で `exit` が `255` か `12` の場合に、`reason` が `ssh-*` なら、接続か認証が失敗しています。`ssh-*` は `ssh-auth-denied`、`ssh-host-key`、`ssh-key-format`、`ssh-timeout`、`ssh-refused`、`ssh-dns` です。作業者は production environment の `IORI_SOURCE_SSH_*` secret を確認します。作業者は旧環境に直接入りません。作業者は、旧環境の authorized_keys と known_hosts の確認を、この `reason` を添えて管理役に伝えます。
+- `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は旧環境に直接入りません。作業者は、この `reason` を管理役に伝えて、対応する前提の確認を依頼します。
 - `reason=source-config-unavailable` の場合、env.conf の種類か mode が不正です。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
 - `reason=config-owner-reset-failed` の場合、`sudo -n chown 0:0` を実行した後も env.conf の所有者が root になっていません。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
 - `reason=config-mode-reset-failed` の場合、`sudo -n chmod 600` を実行した後も env.conf の mode が 0600 になっていないか、env.conf が別のファイルに入れ替わっています。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
@@ -476,8 +458,8 @@ mode を元に戻す必要があるかどうかは、管理役が判断します
 - `reason=remote-node-missing` の場合、旧環境に nvm の node v24.12.0 がありません。
 - `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
 - `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
-- `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
-- `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
+- `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境に直接入りません。作業者は、この `reason` を管理役に伝えます。microblog サービスが起動しているかどうかと、起動に失敗していないかは、`diagnose-source` の `active`、`sub`、`journal` で読みます（[第7.2節](#72-旧環境の状態を読み取る)）。
+- `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認する必要があります。作業者は旧環境に直接入りません。作業者は、この `reason` を管理役に伝えます。`freeze` と `freeze_pending` の有無は、`diagnose-source` で読みます。`~/.iori-migration` の mode、所有者と control socket の状態は `diagnose-source` の出力に対応する値がないので、管理役に確認を依頼します。
 - `reason=source-not-idle`（`stage=status`）の場合、アプリが control コマンドの実行中のために status を拒否しました。作業者は、実行中の operation（export など）が終わるのを待ってから再実行します。
 - `prepare-target` の分類として、`reason=stopped-before-resources`（`stage=hosted-operation`、`exit=78`）の場合、`prepare-target` がリソースを作る前に止まっています。作業者は、[VAPID 値の確認](#vapid-値の確認)の `reason=stopped-before-resources` の項目に従って原因を確かめ、同じ generation で再実行します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
@@ -821,12 +803,12 @@ SSH の secret、receipt の鍵、`IORI_MIGRATION_REHEARSAL` は渡しません�
 
 ```bash
 iori_main_sha="$(gh api "repos/$iori_repo/commits/main" --jq .sha)"
-iori_environment=staging
+iori_environment=production
 iori_generation='<承認済みの新しいgeneration>'
 iori_migration_run_id='<固定した移行runID>'
 ```
 
-`iori_main_sha` をレビュー対象および Environment の identity/profile と照合します。main が進んだら実行を止めて再レビューし、古い identity を黙って書き換えません。PR head をそのまま main SHA として使いません。
+この例は `production` で実行します。staging を使う場合だけ、`iori_environment` を `staging` に変更します。`iori_main_sha` をレビュー対象および Environment の identity/profile と照合します。main が進んだら実行を止めて再レビューし、古い identity を黙って書き換えません。PR head をそのまま main SHA として使いません。
 
 ### 6.2 一段階ずつ dispatch する
 
@@ -1156,5 +1138,7 @@ journal の読み取りは、次の順に試します。`diagnose-source` は、
 3. どちらも読めない場合、または journalctl が権限不足を報告した場合は、`journal=unavailable` を出します。この場合も、operation は成功します。
 
 `diagnose-source` の成功の条件は、値を集めて1行を出せたことです。microblog が `failed` でも、operation は成功します。旧環境へ接続できない場合や、`systemctl show` を読めない場合は失敗し、`IORI_DIAG` の行に `stage` と `reason` が出ます。`reason=diagnostic-invalid` は、旧環境で読んだ値が想定の形ではなかったことを示します。
+
+Actions ログに `IORI_NOTICE` の行が出ていれば、job が失敗していても、作業者はその行の値を読めます。
 
 `source_revision` は、dist の中の40桁の16進の文字列が1つだけのときに限って値になります。この読み方は、dist を最後にビルドしたときの revision を示します。実行中のプロセスが返す `source_revision` とは別の経路です。
