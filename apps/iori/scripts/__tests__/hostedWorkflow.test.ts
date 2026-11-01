@@ -369,6 +369,26 @@ it('relays only the exact restart-precheck notice to the public log', async () =
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact status-unit notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=status-unit active=failed sub=failed result=start-limit-hit restarts=5';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    `${accepted} `,
+    `${accepted}\r`,
+    accepted.replace('result=start-limit-hit', 'result=/home/ec2-user/monorepo'),
+    accepted.replace('result=start-limit-hit', 'result=banana'),
+    accepted.replace('active=failed', 'active=secret-host'),
+    accepted.replace('sub=failed', 'sub=Error: Cannot find module'),
+    accepted.replace('restarts=5', 'restarts=1234567'),
+    accepted.replace('restarts=5', 'restarts=x'),
+    accepted.replace('stage=status-unit', 'stage=other'),
+    accepted.replace(' restarts=5', ''),
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('relays only the exact source-diagnose notice to the public log', async () => {
   const writes = captureStderr();
   const accepted =

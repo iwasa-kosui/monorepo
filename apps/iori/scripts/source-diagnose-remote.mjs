@@ -103,6 +103,45 @@ export const parseSystemctlShow = (text) => {
     exitStatus: boundedInteger(properties.get('ExecMainStatus'), exitStatusLimit),
   };
 };
+export const unitResults = [
+  'success',
+  'exit-code',
+  'signal',
+  'core-dump',
+  'watchdog',
+  'start-limit-hit',
+  'timeout',
+  'resources',
+  'protocol',
+  'oom-kill',
+  'exec-condition',
+  'oneshot-not-reloadable',
+  'other',
+];
+export const sourceUnitStatusNoticeLine = new RegExp(
+  `^IORI_NOTICE stage=status-unit active=(?:${activeStates.join('|')}) sub=(?:${subStates.join('|')})`
+    + ` result=(?:${unitResults.join('|')}) restarts=\\d{1,6}$`,
+);
+export const parseUnitStatus = (text) => {
+  const properties = new Map();
+  for (const line of String(text).split('\n')) {
+    const separator = line.indexOf('=');
+    if (separator > 0) properties.set(line.slice(0, separator), line.slice(separator + 1).trim());
+  }
+  if (!properties.has('ActiveState') || !properties.has('SubState')) throw invalid();
+  return {
+    active: vocabulary(properties.get('ActiveState'), activeStates),
+    sub: vocabulary(properties.get('SubState'), subStates),
+    result: vocabulary(properties.get('Result'), unitResults),
+    restarts: boundedInteger(properties.get('NRestarts'), restartsLimit),
+  };
+};
+export const formatUnitStatusNotice = (values) => {
+  const line = `IORI_NOTICE stage=status-unit active=${values.active} sub=${values.sub} result=${values.result}`
+    + ` restarts=${values.restarts}`;
+  if (!sourceUnitStatusNoticeLine.test(line)) throw invalid();
+  return line;
+};
 const journalRules = [
   ['module-not-found', /ERR_MODULE_NOT_FOUND|Cannot find (?:module|package)/],
   ['syntax-error', /SyntaxError/],
