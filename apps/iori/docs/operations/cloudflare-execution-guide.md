@@ -231,6 +231,38 @@ sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d
 - `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
 
+### 4.2 旧版へ戻す
+
+Deploy iori（`deploy-iori.yml`）は、配備する SHA が最新の main であることを要求します。作業者は旧版へ戻すとき、旧環境に直接入って操作しません。手順は次のとおりです。
+
+1. 作業者は、戻したい変更を main で revert する PR を作り、レビューを経て merge します。
+2. main への push で Deploy iori が走ります。production environment の承認者が実行を承認します。
+3. 作業者は、step「Deploy guarded exact source revision」が成功したことと、`IORI_DIAG` 行が出ていないことを確認します。
+4. 作業者は、本番の応答を確認します。
+
+配備が `status` 段階より前で失敗した場合、旧環境の dist、unit、nginx.conf は途中まで更新されている可能性があります。配備は退避を作りません。作業者は、revert した main で Deploy iori をもう一度実行し、旧版の内容で上書きします。
+
+凍結（`~/.iori-migration/freeze.json` または `freeze.pending`）が残っている場合、配備はすべての段階で `reason=source-deploy-blocked` で止まります。作業者は、凍結の復旧を先に行います。
+
+### 4.3 control socket が残った場合
+
+アプリは起動時に `~/.iori-migration/control.sock` が残っていると、その socket に応答するプロセスがいないことを確かめてから削除します。確かめる条件は次の3つです。
+
+- socket であること
+- アプリと同じ uid の所有で、mode が 0600 であること
+- 接続が拒否されること
+
+条件を1つでも満たさない場合、アプリは `control_socket_exists` で起動に失敗します。
+
+アプリは停止時に 60 秒の期限を持ちます。期限を過ぎると、アプリは自分が作った socket だけを削除して終了します。
+
+それでも `control_socket_exists` で起動できない場合、作業者は socket を手で削除する前に、次の2点を確認します。
+
+1. `systemctl status microblog` で、microblog が停止していること。
+2. socket に接続できないこと。
+
+作業者は、2点を確認できない場合、socket を削除しません。
+
 ## 5. 初回 staging rehearsal の準備
 
 初回の実測 profile を作る専用 hosted operation は現行 workflow にありません。`migrate-data` は開始前にその profile を要求するため、初回計測目的で dispatch しても先へ進めません。CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証であり、実移行の容量・所要時間の証拠にはしません。
