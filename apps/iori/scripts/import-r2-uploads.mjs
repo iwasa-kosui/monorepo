@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { assertExternalMigrationPath, prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
-import { classifyUploadUrl, createUploadTracker } from './migration-upload-rows.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from './migration-upload-rows.mjs';
 
 const execFileAsync = promisify(execFile);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -85,11 +85,12 @@ const writePrivateManifest = async ({ outputDir, filename, manifest }) => {
 export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputDir, sourceOrigin }) => {
   await Promise.all([assertExternalMigrationPath(sourceDir), assertExternalMigrationPath(manifestPath)]);
   if (outputDir === undefined) throw new Error('An external R2 manifest directory is required.');
+  const sourceHostname = sourceOrigin === undefined ? undefined : requireSourceHostname(sourceOrigin);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const objects = [];
   const seen = createUploadTracker();
   for await (const row of uploadsFromManifest(manifest, manifestPath)) {
-    const upload = classifyUploadUrl(row?.url, sourceOrigin);
+    const upload = classifyUploadUrl(row?.url, sourceHostname);
     if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
     if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
     if (upload.kind === 'invalid') throw new Error('Upload manifest contains an invalid legacy upload.');

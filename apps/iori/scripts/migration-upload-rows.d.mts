@@ -12,9 +12,9 @@ export type UploadClassification =
   | { kind: 'legacy' }
   | { kind: 'invalid' };
 
-export function requireSourceOrigin(sourceOrigin: unknown): string;
+export function requireSourceHostname(sourceOrigin: unknown): string;
 
-export function classifyUploadUrl(url: unknown, sourceOrigin?: string): UploadClassification;
+export function classifyUploadUrl(url: unknown, sourceHostname?: string): UploadClassification;
 
 export function createUploadTracker(): {
   add(upload: LocalUpload): 'new' | 'duplicate' | 'conflict';

@@ -157,6 +157,11 @@ it.each<[string, Failure, string, ((base: string) => string)?, boolean?]>([
     'estimate-upload-same-origin',
   ],
   [
+    'same-origin upload url over http',
+    { row: { imageId, url: `http://blog.test/uploads/${imageId}.png` } },
+    'estimate-upload-same-origin',
+  ],
+  [
     'same-origin upload url cut at 128 characters',
     { row: { imageId, url: `${origin}/static/uploads/${'x'.repeat(200)}.png`.slice(0, 128) } },
     'estimate-upload-same-origin',
@@ -231,6 +236,7 @@ it('fails on referenced upload symlinks or traversal without publishing inventor
 it.each<[string, ImageRow[], string]>([
   ['a legacy url', [{ imageId, url: `/static/uploads/${imageId}.png` }], 'upload-legacy-path'],
   ['a same-origin url', [{ imageId, url: `${origin}/uploads/${imageId}.png` }], 'upload-same-origin'],
+  ['a same-host url over http', [{ imageId, url: `http://blog.test/uploads/${imageId}.png` }], 'upload-same-origin'],
   ['an invalid url', [{ imageId, url: 'data:image/png;base64,AAAA' }], 'invalid_upload'],
   [
     'the same key with another extension',
@@ -243,14 +249,16 @@ it.each<[string, ImageRow[], string]>([
   await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow(message);
   await expect(snapshot.inventory(identity)).rejects.toThrow();
 });
-it('requires the source origin', () => {
+it('constructs without a source origin but fails to estimate and export', async () => {
   const createClient = async () => {
     throw new Error('unused');
   };
   const options = { base: '/unused', uploadDir: '/unused', createClient };
-  expect(() => new SourceSnapshot(options as unknown as ConstructorParameters<typeof SourceSnapshot>[0])).toThrow(
-    'source-origin-required',
+  const snapshot = new SourceSnapshot(options as unknown as ConstructorParameters<typeof SourceSnapshot>[0]);
+  await expect(snapshot.estimate(new AbortController().signal)).rejects.toThrow(
+    'source_estimate_failed:estimate-other',
   );
+  await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow('source-origin-required');
 });
 it('exports remote rows without copying anything for them', async () => {
   const { snapshot } = await setup([{ imageId, url: 'https://remote.test/media/a.png' }]);

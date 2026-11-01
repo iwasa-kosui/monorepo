@@ -5,16 +5,16 @@ const contentTypes = { gif: 'image/gif', jpeg: 'image/jpeg', jpg: 'image/jpeg', 
 const absoluteUrl = /^https?:\/\//i;
 const sameOriginPrefixes = ['/uploads/', '/static/uploads/'];
 
-export const requireSourceOrigin = (sourceOrigin) => {
+export const requireSourceHostname = (sourceOrigin) => {
   if (typeof sourceOrigin !== 'string' || !absoluteUrl.test(sourceOrigin)) throw new Error('source-origin-required');
   try {
-    return new URL(sourceOrigin).origin;
+    return new URL(sourceOrigin).hostname;
   } catch {
     throw new Error('source-origin-required');
   }
 };
 
-export const classifyUploadUrl = (url, sourceOrigin) => {
+export const classifyUploadUrl = (url, sourceHostname) => {
   if (typeof url !== 'string') return { kind: 'invalid' };
   const match = localUpload.exec(url);
   if (match !== null) {
@@ -34,8 +34,8 @@ export const classifyUploadUrl = (url, sourceOrigin) => {
       return { kind: 'invalid' };
     }
     if (
-      sourceOrigin !== undefined
-      && parsed.origin === requireSourceOrigin(sourceOrigin)
+      sourceHostname !== undefined
+      && parsed.hostname === sourceHostname
       && sameOriginPrefixes.some((prefix) => parsed.pathname.startsWith(prefix))
     ) return { kind: 'same-origin' };
     return { kind: 'remote' };

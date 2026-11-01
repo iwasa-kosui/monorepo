@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 
 import { parseUploadFilenameImageId, postImageObjectKey } from '../../src/adaptor/r2/postImageObjectStore.ts';
-import { classifyUploadUrl, createUploadTracker, requireSourceOrigin } from '../migration-upload-rows.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from '../migration-upload-rows.mjs';
 
 const uuid = '55555555-5555-4555-8555-555555555555';
 
@@ -52,47 +52,65 @@ it('classifies absolute http and https URLs as remote, including URLs longer tha
   expect(classifyUploadUrl(`https://remote.test/${'x'.repeat(100)}`.slice(0, 128))).toEqual({ kind: 'remote' });
 });
 
-const origin = 'https://example.com/';
+const hostname = requireSourceHostname('https://example.com/');
 
-it('classifies absolute URLs under /uploads/ of the source origin as same-origin', () => {
-  expect(classifyUploadUrl(`https://example.com/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'same-origin' });
-  expect(classifyUploadUrl(`https://Example.com:443/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'same-origin' });
-  expect(classifyUploadUrl(`HTTPS://EXAMPLE.com/uploads/${uuid}.webp`, 'https://example.com:443')).toEqual({
-    kind: 'same-origin',
-  });
-  expect(classifyUploadUrl(`https://example.com/static/uploads/${uuid}.webp`, origin)).toEqual({
+it('classifies absolute URLs under /uploads/ of the source host as same-origin', () => {
+  expect(classifyUploadUrl(`https://example.com/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`https://Example.com:443/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`HTTPS://EXAMPLE.com/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`https://example.com/static/uploads/${uuid}.webp`, hostname)).toEqual({
     kind: 'same-origin',
   });
 });
 
-it('keeps absolute URLs outside /uploads/ or on another origin remote', () => {
-  expect(classifyUploadUrl(`https://other.example/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
-  expect(classifyUploadUrl(`http://example.com/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
-  expect(classifyUploadUrl(`https://example.com:8443/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
-  expect(classifyUploadUrl('https://example.com/other/a.png', origin)).toEqual({ kind: 'remote' });
-  expect(classifyUploadUrl('https://example.com/uploads/../other/a.png', origin)).toEqual({ kind: 'remote' });
-  expect(classifyUploadUrl('HTTPS://other.example/x.png', origin)).toEqual({ kind: 'remote' });
+it('treats another scheme or port of the source host as same-origin', () => {
+  expect(classifyUploadUrl(`http://example.com/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`https://example.com:8443/uploads/${uuid}.webp`, hostname)).toEqual({
+    kind: 'same-origin',
+  });
+});
+
+it('keeps absolute URLs outside /uploads/ or on another host remote', () => {
+  expect(classifyUploadUrl(`https://other.example/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl(`http://other.example:8443/uploads/${uuid}.webp`, hostname)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('https://example.com/other/a.png', hostname)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('https://example.com/uploads/../other/a.png', hostname)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('HTTPS://other.example/x.png', hostname)).toEqual({ kind: 'remote' });
   expect(classifyUploadUrl(`https://example.com/uploads/${uuid}.webp`)).toEqual({ kind: 'remote' });
 });
 
 it('classifies absolute URLs that cannot be parsed as invalid', () => {
-  expect(classifyUploadUrl('https://', origin)).toEqual({ kind: 'invalid' });
-  expect(classifyUploadUrl('http://exa mple.com/uploads/a.png', origin)).toEqual({ kind: 'invalid' });
+  expect(classifyUploadUrl('https://', hostname)).toEqual({ kind: 'invalid' });
+  expect(classifyUploadUrl('http://exa mple.com/uploads/a.png', hostname)).toEqual({ kind: 'invalid' });
 });
 
 it('classifies a same-origin URL cut at 128 characters the same way as the full URL', () => {
   const full = `https://example.com/uploads/${'x'.repeat(200)}.png`;
-  expect(classifyUploadUrl(full, origin)).toEqual({ kind: 'same-origin' });
-  expect(classifyUploadUrl(full.slice(0, 128), origin)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(full, hostname)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(full.slice(0, 128), hostname)).toEqual({ kind: 'same-origin' });
 });
 
-it('requires the source origin to be an absolute http or https URL', () => {
-  expect(requireSourceOrigin('https://Example.com:443/')).toBe('https://example.com');
-  expect(() => requireSourceOrigin(undefined)).toThrow('source-origin-required');
-  expect(() => requireSourceOrigin('')).toThrow('source-origin-required');
-  expect(() => requireSourceOrigin('example.com')).toThrow('source-origin-required');
-  expect(() => classifyUploadUrl('https://remote.test/a.png', 'example.com')).toThrow('source-origin-required');
+it('normalizes the source origin to a lower case host name', () => {
+  expect(requireSourceHostname('https://Example.com:443/')).toBe('example.com');
+  expect(requireSourceHostname('http://EXAMPLE.com:8080/blog')).toBe('example.com');
 });
+
+it.each([
+  undefined,
+  null,
+  42,
+  '',
+  'example.com',
+  '//example.com',
+  'ftp://example.com',
+  'https://',
+  'http://exa mple.com',
+])(
+  'rejects %j as a source origin',
+  (value) => {
+    expect(() => requireSourceHostname(value)).toThrow('source-origin-required');
+  },
+);
 
 it('classifies URLs under /static/uploads/ as legacy', () => {
   expect(classifyUploadUrl(`/static/uploads/${uuid}.png`)).toEqual({ kind: 'legacy' });

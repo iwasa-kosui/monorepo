@@ -240,6 +240,11 @@ it.each([
     [imageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.jpg`)],
     'upload-same-origin',
   ],
+  [
+    'an http URL under /uploads/ of the source host',
+    [imageRow(urlImageId, `http://blog.test/uploads/${urlImageId}.jpg`)],
+    'upload-same-origin',
+  ],
   ['an invalid path', [imageRow(urlImageId, `/uploads/../${urlImageId}.jpg`)], 'Invalid legacy upload.'],
   [
     'the same key with another extension',

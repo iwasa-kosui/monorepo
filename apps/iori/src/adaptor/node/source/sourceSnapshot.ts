@@ -17,7 +17,7 @@ import {
 import {
   classifyUploadUrl,
   createUploadTracker,
-  requireSourceOrigin,
+  requireSourceHostname,
 } from '../../../../scripts/migration-upload-rows.mjs';
 import { guardPostgresClient } from '../../../../scripts/postgres-client-lifetime.mjs';
 import {
@@ -68,9 +68,7 @@ export class SourceSnapshot {
       origin: string;
       createClient: () => Promise<PostgresExportClient>;
     },
-  ) {
-    requireSourceOrigin(options.origin);
-  }
+  ) {}
   private key(identity: SourceIdentity) {
     const checked = sourceIdentitySchema.parse(identity);
     return `${checked.main_sha}-${checked.run_id}`;
@@ -80,6 +78,12 @@ export class SourceSnapshot {
   }
   async estimate(signal: AbortSignal) {
     let stage = 'estimate-connect';
+    let sourceHostname: string;
+    try {
+      sourceHostname = requireSourceHostname(this.options.origin);
+    } catch {
+      throw new Error('source_estimate_failed:estimate-other');
+    }
     let client: PostgresExportClient;
     try {
       client = await this.options.createClient();
@@ -124,7 +128,7 @@ export class SourceSnapshot {
         if (!page.rows.length) break;
         for (const { row } of page.rows) {
           stage = 'estimate-upload-row';
-          const upload = this.uploadOf(row);
+          const upload = this.uploadOf(row, sourceHostname);
           if (upload.kind === 'legacy') stage = 'estimate-upload-legacy-path';
           if (upload.kind === 'same-origin') stage = 'estimate-upload-same-origin';
           if (upload.kind === 'legacy' || upload.kind === 'same-origin' || upload.kind === 'invalid') {
@@ -180,8 +184,8 @@ export class SourceSnapshot {
       await lifetime.cleanup();
     }
   }
-  private uploadOf(row: unknown) {
-    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url, this.options.origin);
+  private uploadOf(row: unknown, sourceHostname: string) {
+    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url, sourceHostname);
   }
   private async uploadRoot() {
     const root = resolve(this.options.uploadDir);
@@ -189,6 +193,7 @@ export class SourceSnapshot {
     return root;
   }
   async export(identity: SourceIdentity, signal: AbortSignal): Promise<SourceInventory> {
+    const sourceHostname = requireSourceHostname(this.options.origin);
     const parent = join(this.options.base, 'exports');
     await assertExternalMigrationPath(parent);
     await validatePrivateDirectory(parent);
@@ -223,7 +228,7 @@ export class SourceSnapshot {
       try {
         for await (const line of lines) {
           signal.throwIfAborted();
-          const upload = this.uploadOf(JSON.parse(line));
+          const upload = this.uploadOf(JSON.parse(line), sourceHostname);
           if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
           if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
           if (upload.kind === 'invalid') throw new Error('invalid_upload');

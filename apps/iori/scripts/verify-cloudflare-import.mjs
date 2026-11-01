@@ -11,7 +11,7 @@ import { canonicalD1RowString } from './data-migration-mapping.mjs';
 import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
 import { assertExternalMigrationPath } from './migration-path-safety.mjs';
 import { admissionEnvironment } from './migration-target-contract.mjs';
-import { classifyUploadUrl, createUploadTracker, requireSourceOrigin } from './migration-upload-rows.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from './migration-upload-rows.mjs';
 
 const objectMap = (objects, keys) =>
   new Map((objects ?? keys?.map((key) => ({ key })) ?? []).map((object) => [object.key, object]));
@@ -143,7 +143,7 @@ export const createManifestExpectedProvider = ({
   signal,
 }) => ({
   loadExpected: async () => {
-    requireSourceOrigin(sourceOrigin);
+    const sourceHostname = requireSourceHostname(sourceOrigin);
     if (d1ImportManifestPath === undefined) throw new Error('D1 import manifest is required.');
     await assertExternalMigrationPath(exportManifestPath);
     await Promise.all(
@@ -167,7 +167,7 @@ export const createManifestExpectedProvider = ({
         signal,
         onRow: table === 'post_images'
           ? (row) => {
-            const upload = classifyUploadUrl(row.url, sourceOrigin);
+            const upload = classifyUploadUrl(row.url, sourceHostname);
             if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
             if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
             if (upload.kind === 'invalid') throw new Error('Post image export row has an invalid upload URL.');
