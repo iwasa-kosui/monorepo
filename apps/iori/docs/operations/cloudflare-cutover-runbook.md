@@ -84,6 +84,26 @@ staging rehearsal の実施有無にかかわらず、この節の手順を実�
 
 実行中の workflow summary には各 step の pass/fail、timestamp、aggregate count だけを記録する。DB row、R2 key、checksum 値、response body、URL、ID、secret を記録しない。
 
+### 連合の外部確認
+
+第3節の手順 12（Queue を再開した後の smoke）の後に、外部の Fediverse サーバーから見て連合が動くことを確かめます。この節は、手順 13 の手動確認のうち、外部のアカウントから行う follow の確認の手順を具体的に書いたものです。smoke の検査は blog.kosui.me 宛ての決まった GET だけです。このため、フォローの受理と Accept の送信は、外から確かめていません。Accept の送信には、Queue の配送と HTTP Signature が関わります。
+
+使うアカウントは、operator が持つ外部の Fediverse アカウントです。インスタンスは問いません。
+
+1. 外部のアカウントから `@kosui@blog.kosui.me` を検索し、プロフィールが表示されることを確かめます。
+2. 外部のアカウントから `@kosui@blog.kosui.me` をフォローし、フォローが承認済みになることを確かめます。承認済みとは、外部のサーバーが Accept を受け取った状態です。この確認で、Queue の配送の再開、署名、keyId `https://blog.kosui.me/users/kosui#main-key` の解決が動くことを確かめられます。
+3. 外部のアカウントから、プロフィールの投稿一覧である outbox が表示されることを確かめます。
+4. 確かめ終えたら、外部のアカウントからフォローを解除します。
+
+この節の確認のために、試験用の投稿はしません。投稿は本番の followers 全員に配送されるためです。手順 13 の post と repost は、operator が本番で普段どおり使う操作として確かめるもので、この節の確認とは目的が違います。
+
+切り替え前に workers.dev の Worker で試しません。actor の id と inbox は ORIGIN である blog.kosui.me に固定されていて、外部サーバーからのフォローは route を切り替えるまで旧環境に届きます。また、Worker は workers.dev 宛てには smoke token 付きの決まった GET しか受け付けず、inbox への POST が通りません。
+
+activitypub.academy は、24 時間で消える一時的なアカウントで外部サーバーとのやり取りを試せる、ActivityPub の学習用の Mastodon サーバーです。2026-11-01 に確認した時点では停止していました。再開していれば、上の外部のアカウントの代わりに使えます。
+
+- https://activitypub.academy/
+- https://seb.jambor.dev/posts/activitypub-academy/
+
 ## 4. Rollback
 
 移行に失敗しても Lightsail の書き込みを自動再開しません。route 作成前であっても、失敗した実行 ID、部分的な import、移行先の受付状態を確認します。再起動だけでは永続的な凍結は解除されません。移行先への通常書き込みを有効にしていないと確認し、復旧を明示的に承認した場合だけ、同じ SHA と run ID の source control に `resume` と `destination_writes_not_enabled` を指定します。
