@@ -451,14 +451,21 @@ it('relays the estimate-source failure diagnostics and refuses lines with raw te
   ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
+const uploadCounts =
+  'upload_missing_count=2 upload_owner_count=0 upload_not_regular_count=1 upload_too_large_count=0 upload_access_count=0 upload_other_count=0 upload_ext_webp_count=1 upload_ext_png_count=2 upload_ext_jpeg_count=3 upload_ext_gif_count=0 upload_failed_ext_webp_count=0 upload_failed_ext_png_count=1 upload_failed_ext_jpeg_count=2 upload_failed_ext_gif_count=0';
+const zeroUploadCounts = uploadCounts.replace(/=\d+/g, '=0');
 const estimateLine =
-  'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=insufficient';
+  `IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 ${uploadCounts} article_count=2 sample=ok capacity=insufficient`;
+const minimalEstimateLine =
+  `IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 ${zeroUploadCounts} article_count=0 sample=insufficient capacity=ok`;
+const largestEstimateLine =
+  `IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 ${zeroUploadCounts} article_count=1 sample=ok capacity=ok`;
 it('relays only the exact estimate line to the public log', async () => {
   const writes = captureStderr();
   await publishChildDiagnostics([
     estimateLine,
-    'IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 article_count=0 sample=insufficient capacity=ok',
-    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 article_count=1 sample=ok capacity=ok',
+    minimalEstimateLine,
+    largestEstimateLine,
     `${estimateLine} table_bytes=10000`,
     `${estimateLine} extra=/home/secret`,
     ` ${estimateLine}`,
@@ -479,12 +486,16 @@ it('relays only the exact estimate line to the public log', async () => {
     estimateLine.replace('rows=5 upload_count=3', 'upload_count=3 rows=5'),
     estimateLine.replace(' upload_duplicate_count=1', ''),
     estimateLine.replace('upload_duplicate_count=1', 'upload_duplicate_count=-1'),
+    estimateLine.replace(' upload_missing_count=2', ''),
+    estimateLine.replace('upload_missing_count=2', 'upload_missing_count=-1'),
+    estimateLine.replace('upload_failed_ext_gif_count=0', 'upload_failed_ext_gif_count=/home/secret'),
+    estimateLine.replace(
+      'upload_ext_png_count=2 upload_ext_jpeg_count=3',
+      'upload_ext_jpeg_count=3 upload_ext_png_count=2',
+    ),
+    estimateLine.replace(' upload_ext_webp_count=1', ' upload_ext_bmp_count=1'),
   ].join('\n'));
-  expect(writes).toEqual([
-    `${estimateLine}\n`,
-    'IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 article_count=0 sample=insufficient capacity=ok\n',
-    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 article_count=1 sample=ok capacity=ok\n',
-  ]);
+  expect(writes).toEqual([`${estimateLine}\n`, `${minimalEstimateLine}\n`, `${largestEstimateLine}\n`]);
 });
 it('relays the estimate line from a child process and keeps byte counts out of the public log', async () => {
   const writes = captureStderr();

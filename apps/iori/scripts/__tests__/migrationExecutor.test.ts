@@ -94,6 +94,26 @@ it('rejects metadata preflight before reservation/freeze and post-drain growth b
     g.close();
   }
 });
+it.each(
+  [
+    'upload_missing_count',
+    'upload_owner_count',
+    'upload_not_regular_count',
+    'upload_too_large_count',
+    'upload_access_count',
+    'upload_other_count',
+  ] as const,
+)('rejects unopened uploads counted in %s before reservation and freeze', async field => {
+  const f = await fixture();
+  try {
+    f.source.estimate.mockResolvedValue({ ...await f.source.estimate(), [field]: 1 });
+    await expect(executeProtectedMigration(f.options)).rejects.toThrow('Source upload files could not be opened.');
+    expect(f.source.freeze).not.toHaveBeenCalled();
+    expect(f.remote.has(executionReservationKey(f.options.expectedTarget))).toBe(false);
+  } finally {
+    f.close();
+  }
+});
 it('rejects a consumed execution ID and missing expected target without source mutation', async () => {
   const f = await fixture();
   try {

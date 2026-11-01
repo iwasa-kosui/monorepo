@@ -141,8 +141,31 @@ const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/
 const restartPrecheckNoticeLine =
   /^IORI_NOTICE stage=restart-precheck ingress_frozen=[01] consumer_paused=[01] queue_failed=[01] drained=[01]$/;
 const restartNoticeLine = /^IORI_NOTICE stage=restart-failed-source (?:recorded|stopped|started)=1$/;
-const estimateLine =
-  /^IORI_ESTIMATE rows=(?:0|[1-9]\d{0,15}) upload_count=(?:0|[1-9]\d{0,15}) upload_duplicate_count=(?:0|[1-9]\d{0,15}) article_count=(?:0|[1-9]\d{0,15}) sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$/;
+const estimateCount = '(?:0|[1-9]\\d{0,15})';
+const estimateLine = new RegExp(
+  `^IORI_ESTIMATE ${
+    [
+      'rows',
+      'upload_count',
+      'upload_duplicate_count',
+      'upload_missing_count',
+      'upload_owner_count',
+      'upload_not_regular_count',
+      'upload_too_large_count',
+      'upload_access_count',
+      'upload_other_count',
+      'upload_ext_webp_count',
+      'upload_ext_png_count',
+      'upload_ext_jpeg_count',
+      'upload_ext_gif_count',
+      'upload_failed_ext_webp_count',
+      'upload_failed_ext_png_count',
+      'upload_failed_ext_jpeg_count',
+      'upload_failed_ext_gif_count',
+      'article_count',
+    ].map((field) => `${field}=${estimateCount}`).join(' ')
+  } sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$`,
+);
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],

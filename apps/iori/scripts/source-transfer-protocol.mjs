@@ -21,6 +21,12 @@ export const SOURCE_REJECTION_DETAILS = Object.freeze([
   'estimate-upload-same-origin',
   'estimate-upload-root',
   'estimate-upload-open',
+  'estimate-upload-missing',
+  'estimate-upload-owner',
+  'estimate-upload-not-regular',
+  'estimate-upload-too-large',
+  'estimate-upload-access',
+  'estimate-upload-other',
   'estimate-too-large',
   'estimate-limit',
   'estimate-other',
@@ -69,6 +75,20 @@ export const validateSourceEstimate = (value) => {
     rows: count,
     upload_count: count,
     upload_duplicate_count: count,
+    upload_missing_count: count,
+    upload_owner_count: count,
+    upload_not_regular_count: count,
+    upload_too_large_count: count,
+    upload_access_count: count,
+    upload_other_count: count,
+    upload_ext_webp_count: count,
+    upload_ext_png_count: count,
+    upload_ext_jpeg_count: count,
+    upload_ext_gif_count: count,
+    upload_failed_ext_webp_count: count,
+    upload_failed_ext_png_count: count,
+    upload_failed_ext_jpeg_count: count,
+    upload_failed_ext_gif_count: count,
     article_count: count,
     source_free_bytes: count,
     source_required_bytes: count,
@@ -83,6 +103,17 @@ export const validateSourceEstimate = (value) => {
   ) throw new Error('Invalid source estimate.');
   return estimate;
 };
+const UPLOAD_FAILURE_COUNTS = Object.freeze([
+  ['estimate-upload-missing', 'upload_missing_count'],
+  ['estimate-upload-owner', 'upload_owner_count'],
+  ['estimate-upload-not-regular', 'upload_not_regular_count'],
+  ['estimate-upload-too-large', 'upload_too_large_count'],
+  ['estimate-upload-access', 'upload_access_count'],
+  ['estimate-upload-other', 'upload_other_count'],
+]);
+export const ESTIMATE_UPLOAD_FAILURE_REASONS = Object.freeze(UPLOAD_FAILURE_COUNTS.map(([reason]) => reason));
+export const estimateUploadFailureReason = (estimate) =>
+  UPLOAD_FAILURE_COUNTS.find(([, field]) => estimate[field] > 0)?.[0] ?? null;
 const fileSchema = z.object({
   id: z.string().max(100),
   path: z.string().max(120),
