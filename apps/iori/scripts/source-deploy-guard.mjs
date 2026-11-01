@@ -4,8 +4,11 @@ import { join, resolve } from 'node:path';
 const fail = () => {
   throw new Error('Source deployment is blocked.');
 };
-// Read-only bootstrap check: never depend on the currently deployed client or parse marker contents.
-export const assertSourceDeployAllowed = async ({ home, uid }, fs = { lstat, realpath }) => {
+export const assertSourceControlDirectory = async (
+  { home, uid },
+  fs = { lstat, realpath },
+  between = async () => {},
+) => {
   if (!Number.isSafeInteger(uid) || uid < 0 || typeof home !== 'string' || resolve(home) !== home) fail();
   const base = join(home, '.iori-migration');
   const directory = async (path, privateMode) => {
@@ -24,14 +27,7 @@ export const assertSourceDeployAllowed = async ({ home, uid }, fs = { lstat, rea
   };
   const beforeHome = await directory(home, false);
   const before = await directory(base, true);
-  for (const name of ['freeze.json', 'freeze.pending']) {
-    try {
-      await fs.lstat(join(base, name));
-      fail();
-    } catch (error) {
-      if (error.code !== 'ENOENT') fail();
-    }
-  }
+  await between(base);
   const after = await directory(base, true);
   const afterHome = await directory(home, false);
   if (
@@ -39,3 +35,15 @@ export const assertSourceDeployAllowed = async ({ home, uid }, fs = { lstat, rea
     || beforeHome.dev !== afterHome.dev || beforeHome.ino !== afterHome.ino
   ) fail();
 };
+// Read-only bootstrap check: never depend on the currently deployed client or parse marker contents.
+export const assertSourceDeployAllowed = (input, fs = { lstat, realpath }) =>
+  assertSourceControlDirectory(input, fs, async (base) => {
+    for (const name of ['freeze.json', 'freeze.pending']) {
+      try {
+        await fs.lstat(join(base, name));
+        fail();
+      } catch (error) {
+        if (error.code !== 'ENOENT') fail();
+      }
+    }
+  });

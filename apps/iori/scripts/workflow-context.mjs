@@ -1,13 +1,16 @@
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+const recoveryOperations = ['resume-source', 'release-pending-freeze'];
+const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
 export const parseWorkflowInvocation = (env) => {
   const operation = env.IORI_OPERATION;
   if (['reconcile-resources', 'replace-queue-consumer'].includes(operation)) {
     throw new Error('Maintenance operation requires a separate review.');
   }
   const codeSha = env.MAIN_SHA;
-  const migrationSha = env.IORI_MIGRATION_MAIN_SHA || codeSha;
+  const recoveryOperation = recoveryOperations.includes(operation);
+  const migrationSha = recoveryOperation ? env.IORI_MIGRATION_MAIN_SHA : env.IORI_MIGRATION_MAIN_SHA || codeSha;
   if (
     env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main'
     || env.GITHUB_SHA !== codeSha || !/^[a-f0-9]{40}$/.test(codeSha ?? '')
@@ -21,13 +24,18 @@ export const parseWorkflowInvocation = (env) => {
       'deploy-worker',
       'estimate-source',
       'purge-rehearsal-target',
+      ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
     || (operation === 'estimate-source'
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
         || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? ''))
-    || (!['deploy-worker', 'purge-rehearsal-target'].includes(operation) && codeSha !== migrationSha)
+    || (!['deploy-worker', 'purge-rehearsal-target'].includes(operation) && !recoveryOperation
+      && codeSha !== migrationSha)
+    || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
+    || (!recoveryOperation && env.IORI_RECOVERY)
+    || (operation === 'release-pending-freeze' && env.IORI_RECOVERY)
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({
     operation,

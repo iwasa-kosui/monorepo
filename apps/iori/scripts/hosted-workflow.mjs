@@ -24,6 +24,8 @@ const operations = Object.freeze({
   'estimate-source': 'estimate-source.mjs',
   'purge-rehearsal-target': 'purge-rehearsal-target.mjs',
   source: 'deploy-source.mjs',
+  'resume-source': 'resume-source.mjs',
+  'release-pending-freeze': 'release-pending-freeze.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -79,7 +81,17 @@ export const materializeHostedValues = async env => {
     mapped[output] = await writePrivateValue(join(base, 'keys'), name, normalize(env[input]));
     delete mapped[input];
   };
-  if (['source', 'rehearse-migration', 'migrate-data', 'cutover-route', 'estimate-source'].includes(operation)) {
+  if (
+    [
+      'source',
+      'rehearse-migration',
+      'migrate-data',
+      'cutover-route',
+      'estimate-source',
+      'resume-source',
+      'release-pending-freeze',
+    ].includes(operation)
+  ) {
     await put(
       'IORI_SOURCE_SSH_PRIVATE_KEY',
       'IORI_SOURCE_SSH_IDENTITY_FILE',
@@ -117,6 +129,9 @@ export const materializeHostedValues = async env => {
 const diagnosticLine =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
+const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
+const alreadyRenamedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
+const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
 const estimateLine =
   /^IORI_ESTIMATE rows=(?:0|[1-9]\d{0,15}) upload_count=(?:0|[1-9]\d{0,15}) article_count=(?:0|[1-9]\d{0,15}) sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$/;
 const hostedReasons = [
@@ -144,7 +159,10 @@ const hostedCodeReasons = {
 };
 const writeDiagnosticLine = async line => {
   try {
-    if (!diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !estimateLine.test(line)) return;
+    if (
+      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !releaseNoticeLine.test(line)
+      && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line) && !estimateLine.test(line)
+    ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
   } catch {}

@@ -210,6 +210,8 @@ hosted runner から既存の Lightsail SSH 経路を使い、書き込み停止
 
 移行先で書き込みを有効にしていないことを確認できる場合は、同じ migration identity を指定した明示的な復旧操作で移行元の停止を解除できます。失敗時の自動解除や service restart による解除は行いません。Cloudflare 側で書き込みが始まると、D1 と R2 の新規データを PostgreSQL とローカルディスクへ自動同期できません。その時点からは、Worker を maintenance mode にして原因を修正する前方復旧を原則とします。
 
+凍結が残った場合、作業者は hosted operation で復旧します。`freeze.json` が残った場合は `resume-source`、`freeze.pending` が残った場合は `release-pending-freeze` を使います。`release-pending-freeze` は、`freeze.pending` の中身は消さず、`freeze.pending.rejected-<migration_run_id>` という hard link を作ってから、`freeze.pending` の名前を外します。詳しい手順は、実行手順書の 7.1 節にあります。
+
 route を Lightsail に戻す必要がある場合は、D1 と R2 に発生した書き込みを一覧化し、PostgreSQL と upload directory に手動反映してから Lightsail を再開します。整合性を確認できない状態で Lightsail を write mode に戻しません。
 
 cutover 完了時刻から 14 日間は Lightsail、PostgreSQL、upload backup、AWS Terraform state を保持します。この期間に daily smoke test、現在の D1/R2 件数と取得結果、Fediverse の送受信、Queue の dead-letter queue を監視します。正常な投稿・削除で live data は変わるため、移行時の manifest との件数・checksum の完全一致を日次条件にはしません。保存した bundle の完全性と保持状態は別に確認します。14 日間の記録に未解決の障害がなく、復元テストを終えた後に既存 AWS Terraform の保存済み destroy plan をレビューし、明示承認後に Lightsail instance、database、static IP、AWS 側の deploy 経路を撤去します。

@@ -41,6 +41,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     'verify-import',
     'cutover-route',
     'deploy-worker',
+    'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
     expect(job['runs-on']).toBe('ubuntu-latest');
@@ -56,9 +57,12 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     if (name !== 'public-artifact-gate') {
       expect([job.needs].flat()).toContain('public-artifact-gate');
       expect(job.environment).toBe('${{ inputs.environment }}');
-      expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(
-        false,
-      );
+      if (name === 'recover-source') {
+        expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
+      } else {
+        expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper)
+          .toBe(false);
+      }
     }
   }
   expect(workflow.jobs['cutover-route'].needs).toEqual(['public-artifact-gate', 'verify-import']);
@@ -112,6 +116,40 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   );
   expect(Object.values(workflow.jobs).flatMap(job => job.steps).filter(step => step.uses?.includes('cache')))
     .toHaveLength(0);
+});
+it('runs the source recovery operations in one approved job holding only the source SSH secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['recover-source'];
+  expect(job.if).toBe('inputs.operation == \'resume-source\' || inputs.operation == \'release-pending-freeze\'');
+  expect([job.needs].flat()).toEqual(['public-artifact-gate']);
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    IORI_SOURCE_SSH_HOST: '${{ secrets.IORI_SOURCE_SSH_HOST }}',
+    IORI_SOURCE_SSH_USER: '${{ secrets.IORI_SOURCE_SSH_USER }}',
+    IORI_SOURCE_SSH_PRIVATE_KEY: '${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}',
+    IORI_SOURCE_SSH_KNOWN_HOSTS: '${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}',
+  });
+  expect(workflow.concurrency.group).toBe('deploy-iori-worker-production');
+});
+it('exposes the recovery operations and inputs without a default recovery value', async () => {
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const workflow = parse(text) as {
+    on: {
+      workflow_dispatch: {
+        inputs: Record<string, { required?: boolean; type?: string; default?: unknown; options?: string[] }>;
+      };
+    };
+    env: Record<string, string>;
+  };
+  const inputs = workflow.on.workflow_dispatch.inputs;
+  expect(inputs.operation.options).toEqual(expect.arrayContaining(['resume-source', 'release-pending-freeze']));
+  expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
+  expect(inputs.recovery.default).toBeUndefined();
+  expect(inputs.migration_main_sha.required).toBe(false);
+  expect(inputs.migration_run_id.required).toBe(false);
+  expect(workflow.env.IORI_RECOVERY).toBe('${{ inputs.recovery }}');
+  expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
+  expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
 });
 it('gives estimate-source only the four SSH secrets and nothing that signs, writes or reaches Cloudflare', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
