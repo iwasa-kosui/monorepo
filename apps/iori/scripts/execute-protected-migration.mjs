@@ -40,7 +40,7 @@ import {
   validateSourceInventory,
   validateSourceState,
 } from './source-transfer-protocol.mjs';
-import { operationFailureLines } from './target-preparation-diagnostics.mjs';
+import { operationFailureLines } from './operation-diagnostics.mjs';
 import { readPreparationRecord } from './target-preparation-record.mjs';
 import {
   createCloudflareImportProvider,

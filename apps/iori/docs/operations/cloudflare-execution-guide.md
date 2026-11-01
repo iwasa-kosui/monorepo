@@ -1167,16 +1167,17 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
 
-| `stage`                | operation と時点                                                    |
-| ---------------------- | ------------------------------------------------------------------- |
-| `verify-import`        | verify-import                                                       |
-| `rehearse-migration`   | rehearse-migration                                                  |
-| `migrate-data`         | migrate-data                                                        |
-| `deploy-worker-before` | deploy-worker で、レビュー済みの Worker の version を deploy する前 |
-| `deploy-worker-after`  | deploy-worker で、レビュー済みの Worker の version を deploy した後 |
-| `unclassified`         | 上のどれにも当たらない段                                            |
+| `stage`                | operation と時点                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `verify-import`        | verify-import                                                                                                             |
+| `rehearse-migration`   | rehearse-migration                                                                                                        |
+| `migrate-data`         | migrate-data                                                                                                              |
+| `deploy-worker-before` | deploy-worker で、レビュー済みの Worker の version の deploy を始める前                                                   |
+| `deploy-worker-deploy` | deploy-worker で、レビュー済みの Worker の version を deploy している途中                                                 |
+| `deploy-worker-after`  | deploy-worker で、レビュー済みの Worker の version を deploy した後。deploy の後の Worker と backend の読み直しを含みます |
+| `unclassified`         | 上のどれにも当たらない段                                                                                                  |
 
-分類の行の `reason` には、prepare-target の節と同じ語が出ます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。
+分類の行の `reason` には、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の節と同じ語が出ます。この語には、prepare-target の節の語と、source の接続の失敗を表す語が含まれます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
 
 ## 7. 中断と引き継ぎ
 

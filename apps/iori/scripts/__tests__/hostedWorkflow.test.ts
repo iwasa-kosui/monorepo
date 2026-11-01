@@ -764,6 +764,7 @@ it('relays the fixed-vocabulary operation detail and stage lines to the public l
     'IORI_DIAG stage=rehearse-migration program=none exit=none signal=none reason=aborted',
     'IORI_DIAG stage=migrate-data program=none exit=none signal=none reason=resource-queue-paused',
     'IORI_DIAG stage=deploy-worker-before program=none exit=none signal=none reason=worker-route',
+    'IORI_DIAG stage=deploy-worker-deploy program=none exit=none signal=none reason=deploy-failed',
     'IORI_DIAG stage=deploy-worker-after program=none exit=none signal=none reason=mismatch',
     'IORI_DIAG stage=unclassified program=none exit=none signal=none reason=unclassified',
   ];
@@ -795,7 +796,7 @@ it.each([
     ).then(() => undefined, (reason: unknown) => reason);
     expect(error).toBeInstanceOf(Error);
     expect(writes).toEqual([
-      `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=unclassified\n`,
+      `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=config-invalid\n`,
       'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
     ]);
     expect(hostedFailureMessage(error)).toBe(failedMessage);

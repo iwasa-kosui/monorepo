@@ -43,6 +43,7 @@ export const updateActiveWorker = async (
     routePresent: true,
   });
   await checkMain(currentCodeSha, { signal });
+  onStage('deploy-worker-deploy');
   const versionId = await deployReviewedWorkerVersion({
     identity,
     resources: before,

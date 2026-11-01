@@ -17,7 +17,7 @@ import {
   REHEARSAL_D1_CAPACITY_BYTES,
 } from './migration-budget.mjs';
 import { parseExpectedTarget, rehearsalProfileKey, rehearsalTargetKey } from './migration-target-contract.mjs';
-import { operationFailureLines } from './target-preparation-diagnostics.mjs';
+import { operationFailureLines } from './operation-diagnostics.mjs';
 import { REHEARSAL_SIGNING_PREFIX } from './verify-rehearsal-profile.mjs';
 
 const RESUME_TIMEOUT_MS = 120_000;

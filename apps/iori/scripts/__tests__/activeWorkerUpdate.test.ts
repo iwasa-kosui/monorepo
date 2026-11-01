@@ -91,7 +91,7 @@ it.each(['consumer', 'Queue', 'route', 'deploy'])(
 it.each([
   ['the Queue read before deploy', 'deploy-worker-before'],
   ['the Queue read after deploy', 'deploy-worker-after'],
-  ['the deploy itself', 'deploy-worker-before'],
+  ['the deploy itself', 'deploy-worker-deploy'],
 ])('reports the stage for a failure in %s', async (failure, expected) => {
   if (failure === 'the Queue read before deploy') mocks.read.mockRejectedValueOnce(new Error('read'));
   if (failure === 'the Queue read after deploy') {

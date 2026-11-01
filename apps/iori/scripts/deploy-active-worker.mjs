@@ -7,7 +7,7 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { activeTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { assertReviewedMain } from './reviewed-main.mjs';
-import { operationFailureLines } from './target-preparation-diagnostics.mjs';
+import { operationFailureLines } from './operation-diagnostics.mjs';
 import { createTargetTerraform } from './target-terraform.mjs';
 import { updateActiveWorker } from './update-active-worker.mjs';
 import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.mjs';
