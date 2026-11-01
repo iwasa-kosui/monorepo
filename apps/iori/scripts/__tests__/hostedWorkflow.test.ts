@@ -4,10 +4,13 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import {
   executeHostedOperation,
+  hostedFailureMessage,
   materializeHostedValues,
   publishChildDiagnostics,
   runHostedWorkflow,
 } from '../hosted-workflow.mjs';
+import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
+import { preparationFailureReport } from '../prepare-migration-target.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 const baseEnv = (operation: string) => ({
@@ -427,4 +430,59 @@ it('relays a failed child diagnostic and its hosted diagnostic without raw child
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+const runExitingChild = async (operation: string, exitCode: number) => {
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const script = join(directory, 'child.mjs');
+    await writeFile(script, `process.exit(${exitCode});\n`);
+    const result = await executeHostedOperation(
+      'operation',
+      script,
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      operation,
+    ).then(() => undefined, (error: unknown) => error);
+    return result;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+const stoppedMessage =
+  'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.';
+const failedMessage = 'Protected workflow step failed; retain remote state for reviewed recovery.';
+it('classifies a prepare-target child that exits with 78 as stopped before resources', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('prepare-target', 78);
+  expect(error).toBeInstanceOf(Error);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(stoppedMessage);
+});
+it('keeps command-failed for a prepare-target child that exits with 1', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('prepare-target', 1);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(failedMessage);
+});
+it('keeps command-failed for another operation that exits with 78', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('migrate-data', 78);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=command-failed\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(failedMessage);
+});
+it('selects the stopped message only for the marked error and accepts both messages as workflow output', () => {
+  expect(hostedFailureMessage(new Error('x'))).toBe(failedMessage);
+  expect(hostedFailureMessage(undefined)).toBe(failedMessage);
+  expect(assertWorkflowOutput(stoppedMessage)).toEqual([]);
+  expect(assertWorkflowOutput(failedMessage)).toEqual([]);
+  expect(preparationFailureReport(false).message).toBe(stoppedMessage);
 });
