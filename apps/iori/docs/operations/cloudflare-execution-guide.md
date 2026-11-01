@@ -413,6 +413,22 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 
 `prepare-fresh-check` 以外の段で Cloudflare の読み取りが期待と違ったときは `state-mismatch` が、Worker が sealed でないときは `not-sealed` が `reason` に出ます。
 
+準備で配備した Worker の状態の読み取り（`prepare-attach` など）が期待と違ったときは、`state-mismatch` の代わりに次の `reason` が出ます。
+
+| `reason`                  | 意味                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `worker-input`            | Worker の読み取りに渡した入力（admission の値、zone、version）が正しくありません                                       |
+| `worker-resources`        | 読み取ったリソースの状態が、Queue の一時停止を含めて期待と違います                                                     |
+| `worker-deployment`       | 最新の deployment が、配備した version を 100% で1つだけ持っていません                                                 |
+| `worker-version`          | 読み取った version が、配備した version と違います                                                                     |
+| `worker-subdomain`        | workers.dev が無効か、preview が有効です                                                                               |
+| `worker-route`            | この Worker の route の数か pattern が期待と違います                                                                   |
+| `worker-bindings-shape`   | binding の一覧が無いか、名前が重複しています                                                                           |
+| `worker-binding-missing`  | 期待する binding（D1、R2、KV、Queue、assets、admission の値、ORIGIN）がありません                                      |
+| `worker-binding-mismatch` | 期待する名前の binding の種類か値が違います                                                                            |
+| `worker-binding-extra`    | 期待しない binding があります。production の Worker に `STAGING_ACCESS_TOKEN` があると、この `reason` になります       |
+| `worker-secret-missing`   | 必須の secret（VAPID の鍵と smoke の token。staging では `STAGING_ACCESS_TOKEN` も）が secret として登録されていません |
+
 `reason` のその他の語彙は、次のとおりです。
 
 | `reason`                  | 意味                                                                                      |

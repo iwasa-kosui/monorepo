@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createTargetIdentity } from '../fresh-target.mjs';
 import { createTargetControlPlane } from '../target-control-plane.mjs';
@@ -431,12 +431,360 @@ it('verifies deployed version, bindings, preview and route state without exposin
   expect(JSON.stringify(result)).not.toContain('secret-must-not-leak');
   responses[`${root}/subdomain`] = { enabled: true, previews_enabled: true };
   await expect(api.readSealedWorker(input)).rejects.toThrow();
-  await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('state-mismatch'));
+  await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('worker-subdomain'));
   responses[`${root}/subdomain`] = { enabled: true, previews_enabled: false };
   bindings[0] = { name: 'DB', type: 'd1', id: 'old-db' };
   await expect(api.readSealedWorker(input)).rejects.toThrow();
   delete responses['/client/v4/zones/zone1/workers/routes'];
   await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('zones-shape'));
+});
+
+const routesPath = '/client/v4/zones/zone1/workers/routes';
+const workerFixture = async () => {
+  const admissionEnvironment = {
+    ORIGIN: 'https://staging.test',
+    IORI_ADMISSION_MODE: 'sealed',
+    IORI_ADMISSION_IDENTITY: JSON.stringify({
+      environment: 'staging',
+      generation: 'fixture1',
+      mainSha: 'a'.repeat(40),
+      runId: 'run1',
+      hostname: 'staging.test',
+      workerHostname: `${identity.workerName}.fixture.workers.dev`,
+      smoke: {
+        username: 'iori-smoke',
+        uploadFilename: '00000000-0000-4000-8000-000000000000.png',
+        articleId: '00000000-0000-4000-8000-000000000000',
+      },
+    }),
+  };
+  const bindings: Record<string, unknown>[] = [
+    { name: 'DB', type: 'd1', id: ids.d1Id },
+    { name: 'UPLOADS', type: 'r2_bucket', bucket_name: identity.names.uploads },
+    { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: ids.kvId },
+    { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: identity.names.queue },
+    { name: 'ASSETS', type: 'assets' },
+    ...Object.entries(admissionEnvironment).map(([name, text]) => ({ name, type: 'plain_text', text })),
+    ...['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN', 'STAGING_ACCESS_TOKEN'].map((name) => ({
+      name,
+      type: 'secret_text',
+      text: 'secret-value',
+    })),
+  ];
+  const root = `/workers/scripts/${identity.workerName}`;
+  const responses: Record<string, unknown> = {
+    ...resourceResponses(),
+    [`${root}/deployments`]: { deployments: [{ versions: [{ percentage: 100, version_id: 'version1' }] }] },
+    [`${root}/versions/version1`]: { id: 'version1', resources: { bindings } },
+    [`${root}/subdomain`]: { enabled: true, previews_enabled: false },
+    [routesPath]: [],
+  };
+  const api = fixtureApi(responses);
+  const resources = await api.readResources(ids);
+  const input = { resources, admissionEnvironment, zoneId: 'zone1', expectedVersionId: 'version1' };
+  return { api, input, responses, bindings, root };
+};
+type WorkerFixture = Awaited<ReturnType<typeof workerFixture>>;
+const withoutBinding = (name: string) => ({ bindings }: WorkerFixture) => {
+  bindings.splice(bindings.findIndex((binding) => binding.name === name), 1);
+};
+const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<WorkerFixture['input']> | void][] = [
+  ['worker-input', 'a routePresent that is not a boolean', () => ({ routePresent: 'yes' as never })],
+  [
+    'worker-input',
+    'an admission identity that does not parse',
+    ({ input }) => ({ admissionEnvironment: { ...input.admissionEnvironment, IORI_ADMISSION_IDENTITY: 'not json' } }),
+  ],
+  [
+    'worker-input',
+    'an admission generation that differs from the identity',
+    ({ input }) => ({
+      admissionEnvironment: {
+        ...input.admissionEnvironment,
+        IORI_ADMISSION_IDENTITY: JSON.stringify({
+          ...JSON.parse(input.admissionEnvironment.IORI_ADMISSION_IDENTITY),
+          generation: 'fixture2',
+          workerHostname: `iori-staging-fixture2.fixture.workers.dev`,
+        }),
+      },
+    }),
+  ],
+  ['worker-input', 'a zone id that is not a safe id', () => ({ zoneId: 'zone 1' })],
+  ['worker-input', 'a version id that is not a safe id', () => ({ expectedVersionId: 'version 1' })],
+  [
+    'worker-resources',
+    'resources of another identity',
+    ({ input }) => ({ resources: { ...input.resources, identity: { ...identity, generation: 'other' } } }),
+  ],
+  [
+    'worker-resources',
+    'resources whose queue is not paused',
+    ({ input }) => ({ resources: { ...input.resources, queuePaused: false } }),
+  ],
+  [
+    'worker-deployment',
+    'deployments that are not an array',
+    ({ responses, root }) => {
+      responses[`${root}/deployments`] = { deployments: {} };
+    },
+  ],
+  [
+    'worker-deployment',
+    'two versions in the latest deployment',
+    ({ responses, root }) => {
+      responses[`${root}/deployments`] = {
+        deployments: [{
+          versions: [{ percentage: 50, version_id: 'version1' }, { percentage: 50, version_id: 'version0' }],
+        }],
+      };
+    },
+  ],
+  [
+    'worker-deployment',
+    'a deployment below 100 percent',
+    ({ responses, root }) => {
+      responses[`${root}/deployments`] = { deployments: [{ versions: [{ percentage: 50, version_id: 'version1' }] }] };
+    },
+  ],
+  [
+    'worker-deployment',
+    'a deployment of another version',
+    ({ responses, root }) => {
+      responses[`${root}/deployments`] = { deployments: [{ versions: [{ percentage: 100, version_id: 'version0' }] }] };
+    },
+  ],
+  [
+    'worker-version',
+    'a version with another id',
+    ({ responses, bindings, root }) => {
+      responses[`${root}/versions/version1`] = { id: 'version0', resources: { bindings } };
+    },
+  ],
+  [
+    'worker-subdomain',
+    'a disabled workers.dev subdomain',
+    ({ responses, root }) => {
+      responses[`${root}/subdomain`] = { enabled: false, previews_enabled: false };
+    },
+  ],
+  [
+    'worker-subdomain',
+    'enabled previews',
+    ({ responses, root }) => {
+      responses[`${root}/subdomain`] = { enabled: true, previews_enabled: true };
+    },
+  ],
+  [
+    'worker-route',
+    'routes that are not an array',
+    ({ responses }) => {
+      responses[routesPath] = {};
+    },
+  ],
+  [
+    'worker-route',
+    'a route of this Worker that is not expected',
+    ({ responses }) => {
+      responses[routesPath] = [{ script: identity.workerName, pattern: 'staging.test/*' }];
+    },
+  ],
+  [
+    'worker-route',
+    'a route pattern of another hostname',
+    ({ responses }) => {
+      responses[routesPath] = [{ script: identity.workerName, pattern: 'other.test/*' }];
+      return { routePresent: true };
+    },
+  ],
+  [
+    'worker-bindings-shape',
+    'bindings that are not an array',
+    ({ responses, root }) => {
+      responses[`${root}/versions/version1`] = { id: 'version1', resources: { bindings: {} } };
+    },
+  ],
+  [
+    'worker-bindings-shape',
+    'a duplicated binding name',
+    ({ bindings }) => {
+      bindings.push({ name: 'ASSETS', type: 'assets' });
+    },
+  ],
+  ['worker-binding-missing', 'a missing DB binding', withoutBinding('DB')],
+  ['worker-binding-missing', 'a missing ORIGIN binding', withoutBinding('ORIGIN')],
+  [
+    'worker-binding-mismatch',
+    'a DB binding of another database',
+    ({ bindings }) => {
+      bindings[0] = { name: 'DB', type: 'd1', id: 'old-db' };
+    },
+  ],
+  [
+    'worker-binding-mismatch',
+    'an ASSETS binding of another type',
+    ({ bindings }) => {
+      bindings[4] = { name: 'ASSETS', type: 'plain_text', text: 'assets' };
+    },
+  ],
+  [
+    'worker-binding-extra',
+    'a binding that is not expected',
+    ({ bindings }) => {
+      bindings.push({ name: 'UNEXPECTED', type: 'plain_text', text: 'x' });
+    },
+  ],
+  ['worker-secret-missing', 'a missing SMOKE_QUEUE_TOKEN secret', withoutBinding('SMOKE_QUEUE_TOKEN')],
+  [
+    'worker-secret-missing',
+    'a STAGING_ACCESS_TOKEN that is not a secret_text',
+    ({ bindings }) => {
+      bindings[bindings.findIndex((binding) => binding.name === 'STAGING_ACCESS_TOKEN')] = {
+        name: 'STAGING_ACCESS_TOKEN',
+        type: 'plain_text',
+        text: 'x',
+      };
+    },
+  ],
+];
+it('reads a complete worker fixture before the broken cases', async () => {
+  const { api, input } = await workerFixture();
+  await expect(api.readSealedWorker(input)).resolves.toMatchObject({ mode: 'sealed', bindingCount: 12 });
+});
+it.each(workerReadbackCases)('classifies %s for %s', async (reason, _label, break_) => {
+  const fixture = await workerFixture();
+  const changed = break_(fixture);
+  await expect(fixture.api.readSealedWorker({ ...fixture.input, ...changed })).rejects.toMatchObject(
+    readbackFailure(reason),
+  );
+});
+describe('a state close to a production wrangler deployment', () => {
+  const wranglerFixture = async (
+    environment: 'production' | 'staging',
+    extraBindings: Record<string, unknown>[] = [],
+  ) => {
+    const wranglerIdentity = createTargetIdentity({
+      environment,
+      generation: 'fixture1',
+      accountId: 'a'.repeat(32),
+      backendBucket: 'tf-state',
+    });
+    const terraformIds = {
+      d1Id: '6f1c2a4e-1b7d-4c3a-9e5f-0a1b2c3d4e5f',
+      kvId: '0123456789abcdef0123456789abcdef',
+      queueId: 'f0e1d2c3b4a5968778695a4b3c2d1e0f',
+      dlqId: '1f2e3d4c5b6a79880a9b8c7d6e5f4a3b',
+    };
+    const admissionEnvironment = {
+      ORIGIN: `https://${environment}.test`,
+      IORI_ADMISSION_MODE: 'sealed',
+      IORI_ADMISSION_IDENTITY: JSON.stringify({
+        environment,
+        generation: 'fixture1',
+        mainSha: 'a'.repeat(40),
+        runId: 'run1',
+        hostname: `${environment}.test`,
+        workerHostname: `${wranglerIdentity.workerName}.fixture.workers.dev`,
+        smoke: {
+          username: 'iori-smoke',
+          uploadFilename: '00000000-0000-4000-8000-000000000000.png',
+          articleId: '00000000-0000-4000-8000-000000000000',
+        },
+      }),
+    };
+    const bindings = [
+      { name: 'ASSETS', type: 'assets' },
+      { name: 'DB', type: 'd1', id: terraformIds.d1Id },
+      { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: terraformIds.kvId },
+      { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: wranglerIdentity.names.queue },
+      { name: 'UPLOADS', type: 'r2_bucket', bucket_name: wranglerIdentity.names.uploads },
+      { name: 'IORI_ADMISSION_IDENTITY', type: 'plain_text', text: admissionEnvironment.IORI_ADMISSION_IDENTITY },
+      { name: 'IORI_ADMISSION_MODE', type: 'plain_text', text: admissionEnvironment.IORI_ADMISSION_MODE },
+      { name: 'ORIGIN', type: 'plain_text', text: admissionEnvironment.ORIGIN },
+      { name: 'VAPID_SUBJECT', type: 'plain_text', text: 'mailto:operator@example.test' },
+      { name: 'SMOKE_QUEUE_TOKEN', type: 'secret_text' },
+      { name: 'VAPID_PRIVATE_KEY', type: 'secret_text' },
+      { name: 'VAPID_PUBLIC_KEY', type: 'secret_text' },
+      ...extraBindings,
+    ];
+    const versionIds = Array.from({ length: 6 }, (_, index) => `version-id-${6 - index}`);
+    const deployment = (versionId: string, index: number) => ({
+      id: `deployment-id-${index}`,
+      source: 'wrangler',
+      strategy: 'percentage',
+      created_on: `2026-10-01T00:0${6 - index}:00.000000Z`,
+      author_email: 'operator@example.test',
+      annotations: { 'workers/triggered_by': index === 0 ? 'deployment' : 'secret' },
+      versions: [{ version_id: versionId, percentage: 100 }],
+    });
+    const root = `/workers/scripts/${wranglerIdentity.workerName}`;
+    const responses: Record<string, unknown> = {
+      [`/d1/database/${terraformIds.d1Id}`]: { uuid: terraformIds.d1Id, name: wranglerIdentity.names.d1 },
+      [`/storage/kv/namespaces/${terraformIds.kvId}`]: { id: terraformIds.kvId, title: wranglerIdentity.names.kv },
+      [`/r2/buckets/${wranglerIdentity.names.uploads}`]: { name: wranglerIdentity.names.uploads },
+      [`/r2/buckets/${wranglerIdentity.names.transfer}`]: { name: wranglerIdentity.names.transfer },
+      [`/r2/buckets/${wranglerIdentity.names.transfer}/domains/managed`]: { enabled: false },
+      ...Object.fromEntries(
+        [[terraformIds.queueId, wranglerIdentity.names.queue], [terraformIds.dlqId, wranglerIdentity.names.dlq]].map((
+          [queueId, queueName],
+        ) => [`/queues/${queueId}`, {
+          queue_id: queueId,
+          queue_name: queueName,
+          created_on: '2026-09-05T00:00:00Z',
+          settings: { delivery_paused: true },
+          consumers: [],
+          producers: [],
+          consumers_total_count: 0,
+          producers_total_count: 0,
+        }]),
+      ),
+      [`${root}/deployments`]: { deployments: versionIds.map(deployment) },
+      [`${root}/versions/${versionIds[0]}`]: {
+        id: versionIds[0],
+        number: 6,
+        metadata: {
+          created_on: '2026-10-01T00:06:00.000000Z',
+          modified_on: '2026-10-01T00:06:00.000000Z',
+          source: 'wrangler',
+          author_email: 'operator@example.test',
+        },
+        resources: {
+          bindings,
+          script: { etag: 'e'.repeat(64), handlers: ['fetch', 'queue'] },
+          script_runtime: {
+            compatibility_date: '2026-09-01',
+            compatibility_flags: ['nodejs_compat'],
+            usage_model: 'standard',
+          },
+        },
+      },
+      [`${root}/subdomain`]: { enabled: true, previews_enabled: false },
+      [routesPath]: [],
+    };
+    const api = createTargetControlPlane({
+      identity: wranglerIdentity,
+      token: 'private-token',
+      fetchRequest: async (url: URL) => {
+        const path = url.pathname.replace(`/client/v4/accounts/${wranglerIdentity.accountId}`, '');
+        const result = responses[path];
+        return Response.json(result === undefined ? { success: false } : { success: true, result });
+      },
+    });
+    const resources = await api.readResources(terraformIds);
+    return { api, input: { resources, admissionEnvironment, zoneId: 'zone1', expectedVersionId: versionIds[0]! } };
+  };
+  const stagingAccessToken = { name: 'STAGING_ACCESS_TOKEN', type: 'secret_text' };
+  it('reads twelve bindings of production', async () => {
+    const { api, input } = await wranglerFixture('production');
+    await expect(api.readSealedWorker(input)).resolves.toMatchObject({ mode: 'sealed', bindingCount: 12 });
+  });
+  it('rejects the thirteen bindings of production that include STAGING_ACCESS_TOKEN', async () => {
+    const { api, input } = await wranglerFixture('production', [stagingAccessToken]);
+    await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-extra'));
+  });
+  it('reads the same thirteen bindings of staging', async () => {
+    const { api, input } = await wranglerFixture('staging', [stagingAccessToken]);
+    await expect(api.readSealedWorker(input)).resolves.toMatchObject({ mode: 'sealed', bindingCount: 13 });
+  });
 });
 
 it.each(['/queues/queue-id', '/queues/dlq-id'])(

@@ -169,13 +169,13 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
     paused,
   ) => {
-    if (typeof routePresent !== 'boolean') fail('state-mismatch');
-    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail('state-mismatch');
+    if (typeof routePresent !== 'boolean') fail('worker-input');
+    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail('worker-resources');
     const admission = parseAdmission(admissionEnvironment);
     if (
       !admission || admission.environment !== identity.environment
       || admission.generation !== identity.generation || !safeId(zoneId) || !safeId(expectedVersionId)
-    ) fail('state-mismatch');
+    ) fail('worker-input');
     const script = `${root}/workers/scripts/${identity.workerName}`;
     const [deployments, version, subdomain, routes] = await Promise.all([
       get(`${script}/deployments`),
@@ -188,14 +188,17 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       || (deployments.deployments[0]?.versions?.length !== 1
         || deployments.deployments[0].versions[0].percentage !== 100
         || deployments.deployments[0].versions[0].version_id !== expectedVersionId)
-      || version.id !== expectedVersionId || subdomain.enabled !== true || subdomain.previews_enabled !== false
-      || !Array.isArray(routes)
+    ) fail('worker-deployment');
+    if (version.id !== expectedVersionId) fail('worker-version');
+    if (subdomain.enabled !== true || subdomain.previews_enabled !== false) fail('worker-subdomain');
+    if (
+      !Array.isArray(routes)
       || routes.filter((route) => route.script === identity.workerName).length !== Number(routePresent)
       || routes.some((route) => route.script === identity.workerName && route.pattern !== `${admission.hostname}/*`)
-    ) fail('state-mismatch');
+    ) fail('worker-route');
     const bindings = version.resources?.bindings;
     if (!Array.isArray(bindings) || new Set(bindings.map((b) => b.name)).size !== bindings.length) {
-      fail('state-mismatch');
+      fail('worker-bindings-shape');
     }
     const expected = [
       { name: 'DB', type: 'd1', id: resources.d1Id },
@@ -209,11 +212,12 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         text: admissionEnvironment[name],
       })),
     ];
-    if (
-      expected.some((entry) =>
-        !bindings.some((binding) => Object.entries(entry).every(([key, value]) => binding[key] === value))
-      )
-    ) fail('state-mismatch');
+    for (const entry of expected) {
+      if (!bindings.some((binding) => binding.name === entry.name)) fail('worker-binding-missing');
+      if (!bindings.some((binding) => Object.entries(entry).every(([key, value]) => binding[key] === value))) {
+        fail('worker-binding-mismatch');
+      }
+    }
     const extraNames = new Set([
       'VAPID_SUBJECT',
       'VAPID_PUBLIC_KEY',
@@ -223,7 +227,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ]);
     if (
       bindings.some((binding) => !expected.some((item) => item.name === binding.name) && !extraNames.has(binding.name))
-    ) fail('state-mismatch');
+    ) fail('worker-binding-extra');
     for (
       const name of [
         'VAPID_PUBLIC_KEY',
@@ -232,7 +236,9 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         ...(identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
       ]
     ) {
-      if (!bindings.some((binding) => binding.name === name && binding.type === 'secret_text')) fail('state-mismatch');
+      if (!bindings.some((binding) => binding.name === name && binding.type === 'secret_text')) {
+        fail('worker-secret-missing');
+      }
     }
     // Return only reviewed metadata: never secret values or the raw version bindings.
     return {

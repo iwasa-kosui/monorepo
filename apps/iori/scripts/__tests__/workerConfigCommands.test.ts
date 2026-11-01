@@ -119,6 +119,56 @@ describe('temporary Worker config command paths', () => {
     expect(commands.match(/exec wrangler deploy/g)).toHaveLength(1);
   });
 
+  it('does not install STAGING_ACCESS_TOKEN as a secret in production even when a value is supplied', async () => {
+    const fakePnpmDirectory = await createFakePnpm();
+    const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;
+    await execFileAsync(process.execPath, [script], {
+      cwd: appRoot,
+      env: {
+        ...fixtureEnvironment(fakePnpmDirectory),
+        VAPID_PUBLIC_KEY: 'fixture-public',
+        VAPID_PRIVATE_KEY: 'fixture-private',
+        SMOKE_QUEUE_TOKEN: 'fixture-smoke-token',
+        STAGING_ACCESS_TOKEN: 'fixture-staging-token',
+      },
+    });
+    const commands = await readFile(join(fakePnpmDirectory, 'pnpm-command.log'), 'utf8');
+    const secretPuts = commands.split('\n').filter((line) => line.startsWith('exec wrangler secret put'));
+
+    expect(secretPuts.map((line) => line.split(' ')[4])).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+    ]);
+  });
+
+  it('installs STAGING_ACCESS_TOKEN as the fourth secret in staging when a value is supplied', async () => {
+    const fakePnpmDirectory = await createFakePnpm();
+    const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;
+    await execFileAsync(process.execPath, [script], {
+      cwd: appRoot,
+      env: {
+        ...fixtureEnvironment(fakePnpmDirectory),
+        ...admissionFixture('iori.example.invalid', 'staging'),
+        IORI_ADMISSION_MODE: 'sealed',
+        WORKER_NAME: 'iori-staging-fixture1',
+        VAPID_PUBLIC_KEY: 'fixture-public',
+        VAPID_PRIVATE_KEY: 'fixture-private',
+        SMOKE_QUEUE_TOKEN: 'fixture-smoke-token',
+        STAGING_ACCESS_TOKEN: 'fixture-staging-token',
+      },
+    });
+    const commands = await readFile(join(fakePnpmDirectory, 'pnpm-command.log'), 'utf8');
+    const secretPuts = commands.split('\n').filter((line) => line.startsWith('exec wrangler secret put'));
+
+    expect(secretPuts.map((line) => line.split(' ')[4])).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+      'STAGING_ACCESS_TOKEN',
+    ]);
+  });
+
   it('remote D1 migration renders a private temporary config and cleans it up', async () => {
     const fakePnpmDirectory = await createFakePnpm();
     const script = new URL('../d1-migrate-remote.mjs', import.meta.url).pathname;
