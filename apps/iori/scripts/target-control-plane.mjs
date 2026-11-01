@@ -46,7 +46,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       if (body.success !== true || body.result === undefined) failApi(path, 'shape');
       return body;
     } catch (error) {
-      if (error?.diagnostic) throw error;
+      if (error?.diagnostic || signal?.aborted) throw error;
       failApi(path, 'request');
     }
   };

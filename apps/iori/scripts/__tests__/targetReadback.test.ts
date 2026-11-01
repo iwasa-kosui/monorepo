@@ -188,6 +188,22 @@ it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])(
       .rejects.toMatchObject(readbackFailure(`${api}-request`));
   },
 );
+it('leaves an abort of the outer signal without a diagnostic', async () => {
+  const controller = new AbortController();
+  const control = createTargetControlPlane({
+    identity,
+    token: 'private-token',
+    signal: controller.signal,
+    fetchRequest: (_url: URL, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+        controller.abort();
+      }),
+  });
+  const error = await control.assertFresh().then(() => undefined, (reason: unknown) => reason);
+  expect(error).toBeDefined();
+  expect(error).not.toHaveProperty('diagnostic');
+});
 it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])('classifies broken JSON for %s as shape', async (api) => {
   await expect(failureFor(api, () => new Response('{not json')))
     .rejects.toMatchObject(readbackFailure(`${api}-shape`));
