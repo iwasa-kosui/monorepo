@@ -95,6 +95,62 @@ it('publishes after resources, sealed deployment and paused consumer readback on
   await expect(prepareMigrationTarget({ config, preparation, deploy, storage })).rejects.toThrow();
   expect(calls).toEqual(['resources', 'deploy']);
 });
+const stagedFixture = () => {
+  const { config, outputs } = fixture();
+  const calls: string[] = [];
+  let body: Buffer = Buffer.alloc(0);
+  const preparation = {
+    prepareResources: async () => outputs,
+    attachSealedConsumer: async () => ({
+      ...outputs,
+      resources: { consumerId: 'consumer', queuePaused: true },
+      worker: { versionId: 'version', mode: 'sealed', previewsEnabled: false, routeCount: 0 },
+    }),
+  };
+  const storage = {
+    assertPrivate: async () => {
+      calls.push('privacy');
+    },
+    putNew: async (_key: string, value: Buffer) => {
+      body = value;
+    },
+    get: async () => body,
+  };
+  const onStage = (stage: string) => {
+    calls.push(stage);
+  };
+  return { config, preparation, storage, onStage, calls };
+};
+it('reports the deploy, attach, readback and record stages in order', async () => {
+  const { config, preparation, storage, onStage, calls } = stagedFixture();
+  const deploy = async () => ({ workerName: config.identity.workerName, versionId: 'version' });
+  await prepareMigrationTarget({ config, preparation, deploy, storage, onStage });
+  expect(calls).toEqual(['deploy', 'attach', 'readback', 'record', 'privacy']);
+});
+it('classifies a Worker name mismatch as identity-mismatch before attaching', async () => {
+  const { config, preparation, storage, onStage, calls } = stagedFixture();
+  const deploy = async () => ({ workerName: 'other-worker', versionId: 'version' });
+  await expect(prepareMigrationTarget({ config, preparation, deploy, storage, onStage })).rejects.toMatchObject({
+    message: 'Prepared Worker identity mismatch.',
+    diagnostic: { reason: 'identity-mismatch' },
+  });
+  expect(calls).toEqual(['deploy']);
+});
+it('classifies a readback mismatch as mismatch at the readback stage', async () => {
+  const { config, preparation, storage, onStage, calls } = stagedFixture();
+  const deploy = async () => ({ workerName: config.identity.workerName, versionId: 'other-version' });
+  await expect(prepareMigrationTarget({ config, preparation, deploy, storage, onStage })).rejects.toMatchObject({
+    message: 'Prepared target readback mismatch.',
+    diagnostic: { reason: 'mismatch' },
+  });
+  expect(calls).toEqual(['deploy', 'attach', 'readback']);
+  const broken = { ...preparation, attachSealedConsumer: async () => ({ resources: {}, worker: {} }) } as never;
+  await expect(prepareMigrationTarget({ config, preparation: broken, deploy, storage, onStage })).rejects.toMatchObject(
+    {
+      diagnostic: { reason: 'mismatch' },
+    },
+  );
+});
 it('normalizes pretty/reordered admission once for preparation deployment and later readback', async () => {
   const { targetSetupConfiguration } = await import('../migration-target-setup.mjs');
   const target = expectedTargetFixture();

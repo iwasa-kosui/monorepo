@@ -4,6 +4,7 @@ import { createTargetTerraform } from './target-terraform.mjs';
 
 /** Separate protected target preparation precedes executor reservation. This owns no source export, import, signing, or receipt phases. */
 export const createTargetPreparation = (options) => {
+  const onStage = options.onStage ?? (() => {});
   const identity = createTargetIdentity(options.identity);
   const control = createTargetControlPlane({
     identity,
@@ -11,16 +12,18 @@ export const createTargetPreparation = (options) => {
     fetchRequest: options.fetchRequest,
     signal: options.signal,
   });
-  const terraform = createTargetTerraform({ ...options, identity });
+  const terraform = createTargetTerraform({ ...options, identity, onStage });
   let resources;
   let outputs;
   let started = false;
   const prepareResources = async () => {
     if (started) throw new Error('Target preparation is single-use.');
     started = true;
+    onStage('fresh-check');
     await control.assertFresh();
     await terraform.initializeFresh();
     outputs = await terraform.prepare('resources');
+    onStage('resource-read');
     resources = await control.readResources({
       d1Id: outputs.workerBindings.d1_database_id,
       kvId: outputs.workerBindings.kv_namespace_id,
@@ -34,9 +37,11 @@ export const createTargetPreparation = (options) => {
     };
   };
   const attachSealedConsumer = async ({ admissionEnvironment, zoneId, expectedVersionId }) => {
+    onStage('attach');
     if (!resources || !outputs) throw new Error('Target resources have not been established.');
     const worker = await control.readSealedWorker({ resources, admissionEnvironment, zoneId, expectedVersionId });
     outputs = await terraform.prepare('consumer', { establishedBindings: outputs.workerBindings });
+    onStage('attach-read');
     resources = await control.readResources({ ...resources, consumerAttached: true });
     return { ...outputs, resources, worker, summary: { queuePaused: true, consumerCount: 1, sealedWorker: true } };
   };

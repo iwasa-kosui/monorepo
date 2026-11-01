@@ -112,6 +112,134 @@ it('rejects identity collisions and private API failures without leaking bodies'
   });
   await expect(api.assertFresh()).rejects.toThrow(/^Target readback failed\.$/);
 });
+const apiPaths = {
+  workers: '/workers/scripts',
+  d1: '/d1/database',
+  kv: '/storage/kv/namespaces',
+  queues: '/queues',
+  r2: '/r2/buckets',
+} as const;
+const failureFor = async (api: keyof typeof apiPaths, respond: (url: URL) => Response | Promise<Response>) => {
+  const control = createTargetControlPlane({
+    identity,
+    token: 'private-token',
+    fetchRequest: async (url: URL) =>
+      url.pathname.endsWith(apiPaths[api]) ? respond(url) : Response.json(inventoryResponse(url)),
+  });
+  return control.assertFresh();
+};
+const offsetInfo = (count: number, extra: Record<string, unknown> = {}) => ({
+  count,
+  page: 1,
+  per_page: 100,
+  total_count: count,
+  ...extra,
+});
+const readbackFailure = (reason: string) => ({ message: 'Target readback failed.', diagnostic: { reason } });
+it('classifies a Cloudflare HTTP failure by API and integer status only', async () => {
+  await expect(failureFor('workers', () => Response.json({ success: false, errors: ['secret'] }, { status: 403 })))
+    .rejects.toMatchObject(readbackFailure('workers-http-403'));
+  await expect(failureFor('queues', () => new Response('secret', { status: 503 })))
+    .rejects.toMatchObject(readbackFailure('queues-http-503'));
+});
+it('classifies an existing resource as exists', async () => {
+  await expect(
+    failureFor(
+      'd1',
+      () =>
+        Response.json({ success: true, result: [{ uuid: 'x', name: identity.names.d1 }], result_info: offsetInfo(1) }),
+    ),
+  ).rejects.toMatchObject(readbackFailure('d1-exists'));
+  await expect(failureFor('workers', () => Response.json({ success: true, result: [{ id: identity.workerName }] })))
+    .rejects.toMatchObject(readbackFailure('workers-exists'));
+});
+it('classifies a non-string key as shape', async () => {
+  await expect(failureFor('workers', () => Response.json({ success: true, result: [{ id: 1 }] })))
+    .rejects.toMatchObject(readbackFailure('workers-shape'));
+});
+it('classifies pagination beyond one complete page as limit', async () => {
+  const hundred = Array.from({ length: 100 }, (_, index) => ({ id: `id${index}`, title: `title${index}` }));
+  await expect(
+    failureFor('kv', () => Response.json({ success: true, result: hundred, result_info: offsetInfo(100) })),
+  ).rejects.toMatchObject(readbackFailure('kv-limit'));
+  await expect(
+    failureFor(
+      'r2',
+      () => Response.json({ success: true, result: { buckets: [] }, result_info: { per_page: 100, cursor: 'next' } }),
+    ),
+  ).rejects.toMatchObject(readbackFailure('r2-limit'));
+  await expect(
+    failureFor(
+      'queues',
+      () => Response.json({ success: true, result: [], result_info: offsetInfo(0, { total_pages: 2 }) }),
+    ),
+  ).rejects.toMatchObject(readbackFailure('queues-limit'));
+  await expect(
+    failureFor(
+      'd1',
+      () => Response.json({ success: true, result: [], result_info: offsetInfo(0, { total_count: 3 }) }),
+    ),
+  ).rejects.toMatchObject(readbackFailure('d1-limit'));
+});
+it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])(
+  'classifies a fetch exception for %s as request',
+  async (api) => {
+    await expect(failureFor(api, () => Promise.reject(new Error('https://secret.invalid/path'))))
+      .rejects.toMatchObject(readbackFailure(`${api}-request`));
+  },
+);
+it('leaves an abort of the outer signal without a diagnostic', async () => {
+  const controller = new AbortController();
+  const control = createTargetControlPlane({
+    identity,
+    token: 'private-token',
+    signal: controller.signal,
+    fetchRequest: (_url: URL, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+        controller.abort();
+      }),
+  });
+  const error = await control.assertFresh().then(() => undefined, (reason: unknown) => reason);
+  expect(error).toBeDefined();
+  expect(error).not.toHaveProperty('diagnostic');
+});
+it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])('classifies broken JSON for %s as shape', async (api) => {
+  await expect(failureFor(api, () => new Response('{not json')))
+    .rejects.toMatchObject(readbackFailure(`${api}-shape`));
+  await expect(failureFor(api, () => Response.json({ success: false, result: [] })))
+    .rejects.toMatchObject(readbackFailure(`${api}-shape`));
+});
+it('classifies an oversized body as too-large', async () => {
+  await expect(failureFor('workers', () => new Response('x'.repeat(2_000_001))))
+    .rejects.toMatchObject(readbackFailure('workers-too-large'));
+});
+it('classifies readback mismatches as state-mismatch and a non-sealed admission as not-sealed', async () => {
+  const control = createTargetControlPlane({
+    identity,
+    token: 'private-token',
+    fetchRequest: async () => Response.json({}),
+  });
+  await expect(control.readResources({ d1Id: 'bad id', kvId: 'kv', queueId: 'q', dlqId: 'd' })).rejects.toMatchObject(
+    readbackFailure('state-mismatch'),
+  );
+  await expect(
+    control.readSealedWorker({
+      resources: {} as never,
+      admissionEnvironment: { IORI_ADMISSION_MODE: 'active' },
+      zoneId: 'z',
+      expectedVersionId: 'v',
+    }),
+  ).rejects.toMatchObject(readbackFailure('not-sealed'));
+  const ok = createTargetControlPlane({
+    identity,
+    token: 'private-token',
+    fetchRequest: async () => Response.json({ success: true, result: { id: 'other' } }),
+  });
+  await expect(ok.readQueuePause({ queueId: 'queue-id', paused: true })).rejects.toMatchObject(
+    readbackFailure('state-mismatch'),
+  );
+});
 const ids = { d1Id: 'db-id', kvId: 'kv-id', queueId: 'queue-id', dlqId: 'dlq-id' };
 const resourceResponses = () => ({
   '/d1/database/db-id': { uuid: ids.d1Id, name: identity.names.d1 },
@@ -251,9 +379,12 @@ it('verifies deployed version, bindings, preview and route state without exposin
   expect(JSON.stringify(result)).not.toContain('secret-must-not-leak');
   responses[`${root}/subdomain`] = { enabled: true, previews_enabled: true };
   await expect(api.readSealedWorker(input)).rejects.toThrow();
+  await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('state-mismatch'));
   responses[`${root}/subdomain`] = { enabled: true, previews_enabled: false };
   bindings[0] = { name: 'DB', type: 'd1', id: 'old-db' };
   await expect(api.readSealedWorker(input)).rejects.toThrow();
+  delete responses['/client/v4/zones/zone1/workers/routes'];
+  await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('zones-shape'));
 });
 
 it.each(['/queues/queue-id', '/queues/dlq-id'])(

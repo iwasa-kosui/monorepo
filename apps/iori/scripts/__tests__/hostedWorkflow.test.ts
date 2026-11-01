@@ -259,6 +259,18 @@ it('relays only exact fixed-vocabulary diagnostic lines to the public log', asyn
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays the fixed-vocabulary prepare-target diagnostics to the public log', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=prepare-attach-tf-apply program=none exit=none signal=none reason=queues-http-503',
+    'IORI_DIAG stage=prepare-fresh-check program=none exit=none signal=none reason=workers-exists',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=prepare-fresh-check program=none exit=none signal=none reason=https://secret.invalid',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
 it('relays only the exact configuration owner notice to the public log', async () => {
   const writes = captureStderr();
   const accepted = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';
@@ -668,6 +680,7 @@ it('reports the real prepare-migration-target CLI that stops before resources as
     ).then(() => undefined, (reason: unknown) => reason);
     expect(error).toBeInstanceOf(Error);
     expect(writes).toEqual([
+      'IORI_DIAG stage=prepare-inputs program=none exit=none signal=none reason=config-invalid\n',
       'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
     ]);
     expect(hostedFailureMessage(error)).toBe(stoppedMessage);

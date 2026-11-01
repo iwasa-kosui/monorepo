@@ -12,6 +12,7 @@ export function createTargetPreparation(
     fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
     runCommand?: InfrastructureCommand;
     signal?: AbortSignal;
+    onStage?: (stage: string) => void;
   },
 ): Readonly<{
   prepareResources(): Promise<

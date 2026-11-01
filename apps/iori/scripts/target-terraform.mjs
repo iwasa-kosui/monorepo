@@ -5,17 +5,18 @@ import { fileURLToPath } from 'node:url';
 import { assertFreshTargetState, createTargetIdentity, validateFreshTargetPlan } from './fresh-target.mjs';
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { validateRouteCutoverPlan } from './route-cutover-plan.mjs';
+import { withReason } from './target-preparation-diagnostics.mjs';
 import { validateCloudflarePlan } from './validate-cloudflare-plan.mjs';
 
 const infra = fileURLToPath(new URL('../infra/cloudflare/', import.meta.url));
-const fail = () => {
-  throw new Error('Target Terraform operation failed.');
+const fail = (reason) => {
+  throw Object.assign(new Error('Target Terraform operation failed.'), { diagnostic: { reason } });
 };
 const parsePrivateJson = (source) => {
   try {
     return JSON.parse(source);
   } catch {
-    fail();
+    fail('output-invalid');
   }
 };
 /** Fixed repository Terraform commands; no module/command injection. Protected target preparation precedes executor reservation. */
@@ -28,6 +29,7 @@ export const createTargetTerraform = (
     hostname,
     runCommand = runInfrastructureCommand,
     signal = AbortSignal.timeout(30 * 60_000),
+    onStage = () => {},
   },
 ) => {
   const identity = createTargetIdentity(supplied);
@@ -35,28 +37,34 @@ export const createTargetTerraform = (
     !/^https:\/\/[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(backendEndpoint ?? '')
     || !/^[a-f0-9]{32}$/.test(zoneId ?? '') || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(hostname ?? '')
     || !privateDirectory || resolve(privateDirectory) !== privateDirectory
-  ) fail();
+  ) fail('config-invalid');
   const run = async (args) => {
     signal.throwIfAborted();
     await mkdir(privateDirectory, { recursive: true, mode: 0o700 });
     await chmod(privateDirectory, 0o700);
-    const result = await runCommand('terraform', [`-chdir=${infra}`, ...args], {
-      signal,
-      shell: false,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 8_000_000,
-      env: {
-        ...process.env,
-        TF_DATA_DIR: join(privateDirectory, 'terraform-data'),
-        TF_INPUT: '0',
-        TF_VAR_cloudflare_account_id: identity.accountId,
-        TF_VAR_environment: identity.environment,
-        TF_VAR_generation: identity.generation,
-        TF_VAR_zone_id: zoneId,
-        TF_VAR_public_hostname: hostname,
-      },
-    });
+    let result;
+    try {
+      result = await runCommand('terraform', [`-chdir=${infra}`, ...args], {
+        signal,
+        shell: false,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        maxBuffer: 8_000_000,
+        env: {
+          ...process.env,
+          TF_DATA_DIR: join(privateDirectory, 'terraform-data'),
+          TF_INPUT: '0',
+          TF_VAR_cloudflare_account_id: identity.accountId,
+          TF_VAR_environment: identity.environment,
+          TF_VAR_generation: identity.generation,
+          TF_VAR_zone_id: zoneId,
+          TF_VAR_public_hostname: hostname,
+        },
+      });
+    } catch (error) {
+      signal.throwIfAborted();
+      throw withReason(error, 'command-failed');
+    }
     await writeFile(
       join(privateDirectory, 'terraform-diagnostic.txt'),
       `${result.stdout ?? ''}\n${result.stderr ?? ''}`,
@@ -64,11 +72,12 @@ export const createTargetTerraform = (
     );
     await chmod(join(privateDirectory, 'terraform-diagnostic.txt'), 0o600);
     signal.throwIfAborted();
-    if (result.status !== 0) fail();
+    if (result.status !== 0) fail('command-failed');
     return result.stdout;
   };
   let initialized = false;
   const initializeBackend = async () => {
+    onStage('tf-init');
     await run([
       'init',
       '-input=false',
@@ -81,17 +90,24 @@ export const createTargetTerraform = (
   };
   const initializeFresh = async () => {
     await initializeBackend();
+    onStage('tf-show');
     // show -json returns an empty object for a fresh backend. Nonempty state is never adopted/imported.
     const state = parsePrivateJson(await run(['show', '-json']));
     const resources = state.values?.root_module?.resources ?? [];
-    if (state.values !== undefined) fail();
-    assertFreshTargetState(identity, { backendKey: identity.backendKey, resources });
+    if (state.values !== undefined) fail('state-present');
+    try {
+      assertFreshTargetState(identity, { backendKey: identity.backendKey, resources });
+    } catch (error) {
+      throw withReason(error, 'state-present');
+    }
     initialized = true;
     return { backendKey: identity.backendKey, resourceCount: 0 };
   };
   const prepare = async (stage, { establishedBindings } = {}) => {
-    if (!['resources', 'consumer'].includes(stage) || (stage === 'resources' && !initialized)) fail();
-    if (stage === 'consumer' && !establishedBindings) fail();
+    const stagePrefix = stage === 'consumer' ? 'attach-' : '';
+    onStage(`${stagePrefix}tf-plan`);
+    if (!['resources', 'consumer'].includes(stage) || (stage === 'resources' && !initialized)) fail('plan-rejected');
+    if (stage === 'consumer' && !establishedBindings) fail('plan-rejected');
     const path = join(privateDirectory, 'target.tfplan');
     await run([
       'plan',
@@ -104,13 +120,14 @@ export const createTargetTerraform = (
       '-var=enable_staging_worker_route=false',
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
-    if (validateFreshTargetPlan(plan, identity, stage).length) fail();
+    if (validateFreshTargetPlan(plan, identity, stage).length) fail('plan-rejected');
     if (
       stage === 'consumer'
       && (JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
         || validateCloudflarePlan({ ...plan, operation: 'consumer-replacement', requireWorkerBindingsNoop: true })
           .length)
-    ) fail();
+    ) fail('plan-rejected');
+    onStage(`${stagePrefix}tf-apply`);
     await run(['apply', '-input=false', path]);
     const outputs = parsePrivateJson(await run(['output', '-json']));
     const target = outputs.target_identity?.value;
@@ -124,13 +141,13 @@ export const createTargetTerraform = (
       || !bindings.d1_database_id || !bindings.kv_namespace_id || !target.queue_id || !target.dlq_id
       || target.queue_settings?.delivery_paused !== true
       || storage?.bucket_name !== identity.names.transfer || storage.environment !== identity.environment
-    ) fail();
+    ) fail('output-mismatch');
     return { workerBindings: bindings, targetIdentity: target, migrationStorage: storage };
   };
   const initializeExisting = async (paused) => {
     await initializeBackend();
     const state = parsePrivateJson(await run(['show', '-json']));
-    if (!state.values?.root_module?.resources?.length) fail();
+    if (!state.values?.root_module?.resources?.length) fail('output-mismatch');
     const outputs = parsePrivateJson(await run(['output', '-json']));
     const result = {
       workerBindings: outputs.worker_bindings?.value,
@@ -152,11 +169,11 @@ export const createTargetTerraform = (
       || t.dlq_settings?.delivery_paused !== true || !Array.isArray(t.consumer) || t.consumer.length !== 1
       || !t.consumer[0].consumer_id || t.consumer[0].queue_id !== t.queue_id
       || t.consumer[0].script_name !== identity.workerName || t.consumer[0].dead_letter_queue !== identity.names.dlq
-    ) fail();
+    ) fail('output-mismatch');
     return result;
   };
   const changeQueuePause = async ({ paused, establishedBindings, routeEnabled }) => {
-    if (typeof paused !== 'boolean' || typeof routeEnabled !== 'boolean' || !establishedBindings) fail();
+    if (typeof paused !== 'boolean' || typeof routeEnabled !== 'boolean' || !establishedBindings) fail('plan-rejected');
     const path = join(privateDirectory, 'queue-control.tfplan');
     await run([
       'plan',
@@ -176,14 +193,14 @@ export const createTargetTerraform = (
         operation: paused ? 'queue-pause' : 'queue-resume',
         requireWorkerBindingsNoop: true,
       }).length
-    ) fail();
+    ) fail('plan-rejected');
     await run(['apply', '-input=false', path]);
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
   const initializeEstablished = () => initializeExisting(true);
   const initializeActive = () => initializeExisting(false);
   const changeRoute = async ({ establishedBindings }) => {
-    if (!establishedBindings) fail();
+    if (!establishedBindings) fail('plan-rejected');
     const path = join(privateDirectory, 'route-control.tfplan');
     await run([
       'plan',
@@ -199,7 +216,7 @@ export const createTargetTerraform = (
     if (
       JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
       || validateRouteCutoverPlan(plan, { hostname, workerName: identity.workerName, zoneId }).length
-    ) fail();
+    ) fail('plan-rejected');
     await run(['apply', '-input=false', path]);
     return { applied: true };
   };

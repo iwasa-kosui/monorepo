@@ -8,26 +8,43 @@ import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { createTargetPreparation } from './prepare-target.mjs';
+import { preparationFailureLine, withReason } from './target-preparation-diagnostics.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
 import { assertVapidBeforePreparation } from './vapid-origin-check.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
 let resourcePreparationStarted = false;
+let preparationStage = 'inputs';
+let preparationSignal;
+const onStage = (stage) => {
+  preparationStage = stage;
+};
 /** Production CLI uses fixed adapters below; injection is only a library testing boundary. */
-export const prepareMigrationTarget = async ({ config, preparation, deploy, storage }) => {
+export const prepareMigrationTarget = async ({ config, preparation, deploy, storage, onStage = () => {} }) => {
   const initial = await preparation.prepareResources();
+  onStage('deploy');
   const deployed = await deploy(initial.workerBindings);
-  if (deployed.workerName !== config.identity.workerName) throw new Error('Prepared Worker identity mismatch.');
+  if (deployed.workerName !== config.identity.workerName) {
+    throw withReason(new Error('Prepared Worker identity mismatch.'), 'identity-mismatch');
+  }
+  onStage('attach');
   const final = await preparation.attachSealedConsumer({
     admissionEnvironment: config.admissionEnvironment,
     zoneId: config.zoneId,
     expectedVersionId: deployed.versionId,
   });
-  const expectedTarget = expectedTargetFromOutputs({ ...config, outputs: final });
+  onStage('readback');
+  let expectedTarget;
+  try {
+    expectedTarget = expectedTargetFromOutputs({ ...config, outputs: final });
+  } catch (error) {
+    throw withReason(error, 'mismatch');
+  }
   if (
     final.resources.consumerId !== expectedTarget.resources.consumer.id || final.worker.versionId !== deployed.versionId
     || final.worker.mode !== 'sealed' || final.worker.previewsEnabled !== false || final.worker.routeCount !== 0
     || final.resources.queuePaused !== true
-  ) throw new Error('Prepared target readback mismatch.');
+  ) throw withReason(new Error('Prepared target readback mismatch.'), 'mismatch');
+  onStage('record');
   const { schema: _schema, ...fields } = expectedTarget;
   const record = {
     schema: 'iori-target-preparation/v1',
@@ -53,7 +70,13 @@ export const preparationFailureReport = (resourcePreparationStarted) =>
       exitCode: 78,
     };
 const main = async (cliSignal) => {
-  const config = targetSetupConfiguration(process.env);
+  preparationSignal = cliSignal;
+  let config;
+  try {
+    config = targetSetupConfiguration(process.env);
+  } catch (error) {
+    throw withReason(error, 'config-invalid');
+  }
   for (
     const key of [
       'VAPID_PUBLIC_KEY',
@@ -63,55 +86,75 @@ const main = async (cliSignal) => {
       ...(config.identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
     ]
   ) {
-    if (!process.env[key]) throw new Error('Preparation credentials are required.');
+    if (!process.env[key]) throw withReason(new Error('Preparation credentials are required.'), 'credentials-missing');
   }
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
-    throw new Error('Distinct staging credential is required.');
+    throw withReason(new Error('Distinct staging credential is required.'), 'credential-not-distinct');
   }
-  await assertVapidBeforePreparation({
-    environment: config.identity.environment,
-    origin: config.admissionEnvironment.ORIGIN,
-    privateKey: process.env.VAPID_PRIVATE_KEY,
-    publicKey: process.env.VAPID_PUBLIC_KEY,
-    signal: cliSignal,
-  });
+  onStage('vapid');
+  try {
+    await assertVapidBeforePreparation({
+      environment: config.identity.environment,
+      origin: config.admissionEnvironment.ORIGIN,
+      privateKey: process.env.VAPID_PRIVATE_KEY,
+      publicKey: process.env.VAPID_PUBLIC_KEY,
+      signal: cliSignal,
+    });
+  } catch (error) {
+    throw cliSignal.aborted ? error : withReason(error, 'vapid-rejected');
+  }
+  onStage('setup');
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(30 * 60_000)]);
   const storage = transferStorageFromEnvironment(process.env, config.identity, false, signal);
   const privateDirectory = await mkdtemp(join(tmpdir(), 'iori-target-prepare-'));
-  const preparation = createTargetPreparation({ ...config, privateDirectory, signal });
+  const preparation = createTargetPreparation({ ...config, privateDirectory, signal, onStage });
   const deploy = async (bindings) => {
     const bindingsPath = join(privateDirectory, 'bindings.json');
     const resultPath = join(privateDirectory, 'deployment.json');
     await writeFile(bindingsPath, JSON.stringify(bindings), { flag: 'wx', mode: 0o600 });
-    const result = await runInfrastructureCommand(process.execPath, ['scripts/deploy-worker.mjs'], {
-      signal,
-      cwd: appRoot,
-      shell: false,
-      encoding: 'utf8',
-      maxBuffer: 8_000_000,
-      env: {
-        ...process.env,
-        ...config.admissionEnvironment,
-        IORI_WORKER_BINDINGS_PATH: bindingsPath,
-        IORI_REQUIRE_TERRAFORM_BINDINGS: 'true',
-        IORI_DEPLOYMENT_RESULT_PATH: resultPath,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    let result;
+    try {
+      result = await runInfrastructureCommand(process.execPath, ['scripts/deploy-worker.mjs'], {
+        signal,
+        cwd: appRoot,
+        shell: false,
+        encoding: 'utf8',
+        maxBuffer: 8_000_000,
+        env: {
+          ...process.env,
+          ...config.admissionEnvironment,
+          IORI_WORKER_BINDINGS_PATH: bindingsPath,
+          IORI_REQUIRE_TERRAFORM_BINDINGS: 'true',
+          IORI_DEPLOYMENT_RESULT_PATH: resultPath,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      signal.throwIfAborted();
+      throw withReason(error, 'command-failed');
+    }
     await writeFile(
       join(privateDirectory, 'deployment-diagnostic.txt'),
       `${result.stdout ?? ''}\n${result.stderr ?? ''}`,
       { flag: 'wx', mode: 0o600 },
     );
-    if (result.status !== 0) throw new Error('Sealed deployment failed.');
-    return JSON.parse(await readFile(resultPath, 'utf8'));
+    if (result.status !== 0) throw withReason(new Error('Sealed deployment failed.'), 'command-failed');
+    try {
+      return JSON.parse(await readFile(resultPath, 'utf8'));
+    } catch (error) {
+      throw withReason(error, 'result-invalid');
+    }
   };
   resourcePreparationStarted = true;
-  await prepareMigrationTarget({ config, preparation, deploy, storage });
+  onStage('fresh-check');
+  await prepareMigrationTarget({ config, preparation, deploy, storage, onStage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch(() => {
+  withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch((error) => {
     const { message, exitCode } = preparationFailureReport(resourcePreparationStarted);
+    try {
+      process.stderr.write(`${preparationFailureLine(preparationStage, error, preparationSignal?.aborted === true)}\n`);
+    } catch {}
     console.error(message);
     process.exitCode = exitCode;
   });

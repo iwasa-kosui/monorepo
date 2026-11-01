@@ -25,5 +25,6 @@ export function prepareMigrationTarget(input: {
   };
   deploy(bindings: Record<string, string>): Promise<{ workerName: string; versionId: string }>;
   storage: MigrationStorage;
+  onStage?: (stage: string) => void;
 }): Promise<{ record: PreparationRecord; sha256: string }>;
 export function preparationFailureReport(resourcePreparationStarted: boolean): { message: string; exitCode: number };
