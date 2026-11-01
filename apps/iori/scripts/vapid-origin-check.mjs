@@ -67,7 +67,7 @@ export async function assertVapidBeforePreparation({
   const pairMatches = vapidKeyPairMatches({ privateKey, publicKey });
   log(`VAPID key pair match: ${pairMatches ? 'yes' : 'no'}`);
   if (!pairMatches) throw new Error('VAPID key pair does not match.');
-  if (environment !== 'production') {
+  if (environment === 'staging') {
     log('Origin VAPID public key match: skipped');
     return;
   }
