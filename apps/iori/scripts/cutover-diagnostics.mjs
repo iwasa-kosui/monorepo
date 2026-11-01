@@ -26,6 +26,18 @@ export const CUTOVER_STAGES = Object.freeze([
   'read-resume',
   'smoke-final',
 ]);
+export const PROBE_STAGES = Object.freeze([
+  'inputs',
+  'rehearsal-gate',
+  'tf-init',
+  'read-sealed',
+  'route-plan',
+  'queue-plan',
+  'to-smoke',
+  'smoke-worker',
+  'to-sealed',
+  'read-final',
+]);
 const CUTOVER_REASONS = new Set([
   ...SOURCE_SSH_REASONS,
   ...SOURCE_REJECTION_DETAILS,
@@ -38,6 +50,7 @@ const CUTOVER_REASONS = new Set([
   'verify-failed',
   'deploy-failed',
   'source-not-quiescent',
+  'rehearsal-missing',
 ]);
 const MESSAGE_REASONS = new Map([
   ['Reviewed main is required.', 'reviewed-main-required'],
@@ -62,12 +75,14 @@ const classify = (error, aborted) => {
   const message = typeof error?.message === 'string' ? error.message : undefined;
   return (message !== undefined && MESSAGE_REASONS.get(message)) || 'unclassified';
 };
-export const cutoverFailureLines = (stage, error, aborted) => {
-  const stageWord = CUTOVER_STAGES.includes(stage) ? stage : 'unclassified';
-  const line = (reason) => `IORI_DIAG stage=cutover-${stageWord} program=none exit=none signal=none reason=${reason}`;
+const failureLines = (prefix, stages) => (stage, error, aborted) => {
+  const stageWord = stages.includes(stage) ? stage : 'unclassified';
+  const line = (reason) => `IORI_DIAG stage=${prefix}-${stageWord} program=none exit=none signal=none reason=${reason}`;
   const details = Array.isArray(error?.diagnostic?.details) ? error.diagnostic.details : [];
   return [
     ...[...new Set(details.filter(isPreparationReason))].slice(0, 8).map(line),
     line(classify(error, aborted)),
   ];
 };
+export const cutoverFailureLines = failureLines('cutover', CUTOVER_STAGES);
+export const probeFailureLines = failureLines('probe', PROBE_STAGES);

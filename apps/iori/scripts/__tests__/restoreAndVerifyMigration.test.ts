@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { chmod, cp, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { convertD1Import } from '../convert-d1-import.mjs';
 import { exportPostgres } from '../export-postgres.mjs';
@@ -27,9 +27,8 @@ vi.mock('../cloudflare-import-provider.mjs', async (importOriginal) => ({
         },
     }),
 }));
-vi.mock('../read-sealed-migration-target.mjs', () => ({
-  readSealedMigrationTarget: async () => ({ resources: {}, worker: {} }),
-}));
+const sealedRead = vi.hoisted(() => vi.fn());
+vi.mock('../read-sealed-migration-target.mjs', () => ({ readSealedMigrationTarget: sealedRead }));
 
 const d1Id = '11111111-1111-4111-8111-111111111111';
 const postImageRow = (imageId: string, url: string) => ({
@@ -141,6 +140,18 @@ const setup = async (url: string) => {
 };
 
 describe('restoreAndVerifyMigration', () => {
+  beforeEach(() => {
+    sealedRead.mockReset();
+    sealedRead.mockResolvedValue({ resources: {}, worker: {} });
+  });
+
+  it('checks the sealed target against the record version without an override of the expected version', async () => {
+    const { env } = await setup('https://blog.test/uploads/77777777-7777-4777-8777-777777777777.webp');
+    await expect(restoreAndVerifyMigration({ env, signal: new AbortController().signal })).rejects.toThrow();
+    expect(sealedRead).toHaveBeenCalledTimes(1);
+    expect(sealedRead.mock.calls[0]![0]).not.toHaveProperty('expectedVersionId');
+  }, 30_000);
+
   it('rejects a post image URL that points at the sealed target origin', async () => {
     const { env } = await setup('https://blog.test/uploads/77777777-7777-4777-8777-777777777777.webp');
     await expect(restoreAndVerifyMigration({ env, signal: new AbortController().signal }))

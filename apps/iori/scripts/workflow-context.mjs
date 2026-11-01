@@ -29,6 +29,7 @@ export const parseWorkflowInvocation = (env) => {
       'migrate-data',
       'verify-import',
       'cutover-route',
+      'probe-cutover-route',
       'deploy-worker',
       'estimate-source',
       'diagnose-source',

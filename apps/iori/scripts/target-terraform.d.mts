@@ -13,6 +13,8 @@ export function createTargetTerraform(
   },
 ): Readonly<{
   changeRoute(input: { establishedBindings: Record<string, string> }): Promise<{ applied: true }>;
+  planRoute(input: { establishedBindings: Record<string, string> }): Promise<{ path: string }>;
+  planQueueResume(input: { establishedBindings: Record<string, string> }): Promise<{ path: string }>;
   initializeActive(): Promise<
     {
       workerBindings: Record<string, string>;

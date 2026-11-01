@@ -478,3 +478,113 @@ it('keeps a plan-rejected diagnostic without details for control inputs that pre
   expect(error).toMatchObject({ diagnostic: { reason: 'plan-rejected' } });
   expect((error as { diagnostic: object }).diagnostic).not.toHaveProperty('details');
 });
+const recordedControl = async (plan: unknown) => {
+  const calls: string[][] = [];
+  const { api, stages } = await stagedTerraform((_program, args) => {
+    calls.push(args);
+    return { status: 0, stdout: args.includes('show') ? JSON.stringify(plan) : '', stderr: '' };
+  });
+  return { api, stages, calls };
+};
+const routePlan = {
+  resource_changes: [routeCreate, queue('fedify', true), queue('fedify_dlq', true)],
+  ...bindingsNoop(consumerBindings),
+};
+const resumePlan = {
+  resource_changes: [queue('fedify', true, false), queue('fedify_dlq', true)],
+  ...bindingsNoop(consumerBindings),
+};
+it('plans the route with the cutover variables and never applies', async () => {
+  const { api, stages, calls } = await recordedControl(routePlan);
+  const result = await api.planRoute({ establishedBindings: consumerBindings });
+  expect(result).toEqual({ path: expect.stringMatching(/route-probe\.tfplan$/) });
+  expect(stages).toEqual(['route-plan']);
+  expect(calls.map(args => args[1])).toEqual(['plan', 'show']);
+  expect(calls.some(args => args.includes('apply'))).toBe(false);
+  expect(calls[0]).toEqual(expect.arrayContaining([
+    '-lock=true',
+    '-var=attach_queue_consumer=true',
+    '-var=queue_delivery_paused=true',
+    '-var=enable_production_worker_route=false',
+    '-var=enable_staging_worker_route=true',
+  ]));
+});
+it('plans the Queue resume with the route disabled and delivery unpaused and never applies', async () => {
+  const { api, stages, calls } = await recordedControl(resumePlan);
+  const result = await api.planQueueResume({ establishedBindings: consumerBindings });
+  expect(result).toEqual({ path: expect.stringMatching(/queue-probe\.tfplan$/) });
+  expect(stages).toEqual(['queue-plan']);
+  expect(calls.map(args => args[1])).toEqual(['plan', 'show']);
+  expect(calls.some(args => args.includes('apply'))).toBe(false);
+  expect(calls[0]).toEqual(expect.arrayContaining([
+    '-lock=true',
+    '-var=attach_queue_consumer=true',
+    '-var=queue_delivery_paused=false',
+    '-var=enable_production_worker_route=false',
+    '-var=enable_staging_worker_route=false',
+  ]));
+});
+it('keeps the probe plan files apart from the cutover plan files', async () => {
+  const route = await recordedControl(routePlan);
+  await route.api.planRoute({ establishedBindings: consumerBindings });
+  await route.api.changeRoute({ establishedBindings: consumerBindings });
+  const routePaths = route.calls.filter(args => args[1] === 'plan').map(args => args.find(a => a.startsWith('-out=')));
+  expect(routePaths[0]).toMatch(/route-probe\.tfplan$/);
+  expect(routePaths[1]).toMatch(/route-control\.tfplan$/);
+  expect(route.calls.filter(args => args[1] === 'apply')).toHaveLength(1);
+  const resume = await recordedControl(resumePlan);
+  await resume.api.planQueueResume({ establishedBindings: consumerBindings });
+  await resume.api.changeQueuePause({ paused: false, establishedBindings: consumerBindings, routeEnabled: true });
+  const queuePaths = resume.calls.filter(args => args[1] === 'plan').map(args => args.find(a => a.startsWith('-out=')));
+  expect(queuePaths[0]).toMatch(/queue-probe\.tfplan$/);
+  expect(queuePaths[1]).toMatch(/queue-control\.tfplan$/);
+  expect(resume.calls.filter(args => args[1] === 'apply')).toHaveLength(1);
+});
+it('rejects a route plan that touches the Queue and names the resource without applying', async () => {
+  const { api, stages, calls } = await recordedControl({
+    resource_changes: [routeCreate, queue('fedify', true, false), queue('fedify_dlq', true)],
+    ...bindingsNoop(consumerBindings),
+  });
+  const error = await api.planRoute({ establishedBindings: consumerBindings }).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  );
+  expect(error).toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: expect.arrayContaining(['plan-queue-update']) },
+  });
+  expect(stages).toEqual(['route-plan']);
+  expect(calls.some(args => args.includes('apply'))).toBe(false);
+});
+it('rejects a Queue resume plan that creates the route or changes the bindings without applying', async () => {
+  const withRoute = await recordedControl({
+    resource_changes: [routeCreate, queue('fedify', true, false), queue('fedify_dlq', true)],
+    ...bindingsNoop(consumerBindings),
+  });
+  const routeError = await withRoute.api.planQueueResume({ establishedBindings: consumerBindings }).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  );
+  expect(routeError).toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: expect.arrayContaining(['plan-route-create']) },
+  });
+  expect(withRoute.calls.some(args => args.includes('apply'))).toBe(false);
+  const changed = await recordedControl({
+    ...resumePlan,
+    ...bindingsNoop({ ...consumerBindings, d1_database_id: 'other' }),
+  });
+  await expect(changed.api.planQueueResume({ establishedBindings: consumerBindings })).rejects.toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: ['plan-bindings-changed'] },
+  });
+  expect(changed.calls.some(args => args.includes('apply'))).toBe(false);
+});
+it('rejects the probe plans without established bindings before running any command', async () => {
+  const run = vi.fn();
+  const { api } = await stagedTerraform(run);
+  await expect(api.planRoute({ establishedBindings: undefined as never })).rejects.toMatchObject({
+    diagnostic: { reason: 'plan-rejected' },
+  });
+  await expect(api.planQueueResume({ establishedBindings: undefined as never })).rejects.toMatchObject({
+    diagnostic: { reason: 'plan-rejected' },
+  });
+  expect(run).not.toHaveBeenCalled();
+});

@@ -6,7 +6,15 @@ import {
   targetIdentity,
 } from './migration-target-contract.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
-export const readSealedMigrationTarget = async ({ expectedTarget, record, token, zoneId, fetchRequest, signal }) => {
+export const readSealedMigrationTarget = async ({
+  expectedTarget,
+  record,
+  token,
+  zoneId,
+  fetchRequest,
+  signal,
+  expectedVersionId = record.observed.worker_version_id,
+}) => {
   const target = parseExpectedTarget(expectedTarget);
   parsePreparationRecord(serializePreparationRecord(record), target);
   if (!/^[a-f0-9]{32}$/.test(zoneId ?? '') || !token) throw new Error('Target readback configuration is required.');
@@ -24,7 +32,7 @@ export const readSealedMigrationTarget = async ({ expectedTarget, record, token,
     resources,
     admissionEnvironment: admissionEnvironment(target),
     zoneId,
-    expectedVersionId: record.observed.worker_version_id,
+    expectedVersionId,
   });
   return { resources, worker };
 };

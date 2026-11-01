@@ -162,7 +162,7 @@ it('hands purge-rehearsal-target the migration SHA as MAIN_SHA while the invocat
     await rm(runnerTemp, { recursive: true, force: true });
   }
 });
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'])(
+it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'probe-cutover-route'])(
   'rejects %s when the migration SHA differs from the code SHA',
   async operation => {
     await expect(
@@ -174,6 +174,42 @@ it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route']
     ).rejects.toThrow('Protected workflow invocation is invalid.');
   },
 );
+it('materializes probe-cutover-route without SSH, receipt or rehearsal files', async () => {
+  const runnerTemp = await createFixtureDirectory('iori-hosted-');
+  try {
+    const paths = await createWorkflowDirectory(runnerTemp);
+    const mapped = await materializeHostedValues({
+      ...baseEnv('probe-cutover-route'),
+      RUNNER_TEMP: runnerTemp,
+      IORI_PRIVATE_DIRECTORY: paths.base,
+      IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
+      IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
+      IORI_MIGRATION_RECEIPT_PUBLIC_KEY: 'synthetic-public-key',
+      IORI_MIGRATION_RECEIPT_PRIVATE_KEY: 'synthetic-signing-key',
+      IORI_MIGRATION_REHEARSAL: '{}',
+    });
+    expect(await readdir(join(paths.base, 'keys'))).toEqual([]);
+    expect(await readdir(join(paths.base, 'config'))).toEqual([]);
+    expect(await readdir(mapped.IORI_MIGRATION_ROOT!)).toEqual([]);
+    expect(mapped.IORI_MIGRATION_EXPECTED_TARGET_PATH).toBe(join(paths.base, 'config/expected-target.json'));
+    for (
+      const key of [
+        'IORI_SOURCE_SSH_PRIVATE_KEY',
+        'IORI_SOURCE_SSH_KNOWN_HOSTS',
+        'IORI_SOURCE_SSH_IDENTITY_FILE',
+        'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE',
+        'IORI_MIGRATION_RECEIPT_PUBLIC_KEY',
+        'IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH',
+        'IORI_MIGRATION_RECEIPT_PRIVATE_KEY',
+        'IORI_MIGRATION_RECEIPT_PRIVATE_KEY_PATH',
+        'IORI_MIGRATION_REHEARSAL',
+        'IORI_MIGRATION_REHEARSAL_PATH',
+      ]
+    ) expect(mapped[key]).toBeUndefined();
+  } finally {
+    await rm(runnerTemp, { recursive: true, force: true });
+  }
+});
 it('materializes purge-rehearsal-target without SSH, receipt or rehearsal files', async () => {
   const runnerTemp = await createFixtureDirectory('iori-hosted-');
   try {
@@ -749,6 +785,45 @@ it('publishes the stage and reason of the real cutover-migration CLI that stops 
     expect(error).toBeInstanceOf(Error);
     expect(writes).toEqual([
       'IORI_DIAG stage=cutover-inputs program=none exit=none signal=none reason=config-invalid\n',
+      'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(failedMessage);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+it('relays the fixed-vocabulary probe detail and stage lines to the public log', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=probe-rehearsal-gate program=none exit=none signal=none reason=rehearsal-missing',
+    'IORI_DIAG stage=probe-route-plan program=none exit=none signal=none reason=plan-route-create',
+    'IORI_DIAG stage=probe-queue-plan program=none exit=none signal=none reason=plan-rejected',
+    'IORI_DIAG stage=probe-smoke-worker program=none exit=none signal=none reason=smoke-failed',
+    'IORI_DIAG stage=probe-to-sealed program=none exit=none signal=none reason=deploy-failed',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=probe-Smoke-worker program=none exit=none signal=none reason=smoke-failed',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
+it('publishes the stage and reason of the real probe-cutover-route CLI that stops at its inputs', async () => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const error = await executeHostedOperation(
+      'operation',
+      fileURLToPath(new URL('../probe-cutover-route.mjs', import.meta.url)),
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      'probe-cutover-route',
+    ).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      'IORI_DIAG stage=probe-inputs program=none exit=none signal=none reason=config-invalid\n',
       'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
     ]);
     expect(hostedFailureMessage(error)).toBe(failedMessage);

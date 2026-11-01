@@ -40,6 +40,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     'migrate-data',
     'verify-import',
     'cutover-route',
+    'probe-cutover-route',
     'deploy-worker',
     'recover-source',
   ]);
@@ -68,6 +69,9 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
   expect(workflow.jobs['cutover-route'].needs).toEqual(['public-artifact-gate', 'verify-import']);
   expect(workflow.jobs['verify-import'].if).toContain('inputs.operation == \'cutover-route\'');
   expect(operation(workflow.jobs['verify-import']).env?.IORI_OPERATION).toBe('verify-import');
+  expect(workflow.jobs['probe-cutover-route'].needs).toBe('public-artifact-gate');
+  expect(workflow.jobs['probe-cutover-route'].if).toBe('inputs.operation == \'probe-cutover-route\'');
+  expect(workflow.jobs['verify-import'].if).not.toContain('probe-cutover-route');
 });
 it('scopes signing and write credentials to the exact roles, without mounted secret paths or public caches', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
@@ -108,6 +112,25 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   expect(verify.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
   expect(cutover.CLOUDFLARE_API_TOKEN).toContain('CUTOVER_API_TOKEN');
   expect(cutover.AWS_ACCESS_KEY_ID).toContain('WRITE');
+  const probe = operation(workflow.jobs['probe-cutover-route']).env!;
+  expect(probe.CLOUDFLARE_API_TOKEN).toBe(cutover.CLOUDFLARE_API_TOKEN);
+  expect(probe.AWS_ACCESS_KEY_ID).toBe(cutover.AWS_ACCESS_KEY_ID);
+  expect(probe.AWS_SECRET_ACCESS_KEY).toBe(cutover.AWS_SECRET_ACCESS_KEY);
+  expect(probe.IORI_SMOKE_QUEUE_TOKEN).toBe(cutover.IORI_SMOKE_QUEUE_TOKEN);
+  expect(probe.IORI_MIGRATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
+  expect(Object.keys(probe).filter(key => /SSH|RECEIPT|REHEARSAL|APPLICATION_R2/.test(key))).toEqual([]);
+  expect(
+    Object.keys(cutover).filter(key => !(key in probe)).sort(),
+  ).toEqual([
+    'IORI_APPLICATION_R2_ACCESS_KEY_ID',
+    'IORI_APPLICATION_R2_SECRET_ACCESS_KEY',
+    'IORI_MIGRATION_RECEIPT_PUBLIC_KEY',
+    'IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256',
+    'IORI_SOURCE_SSH_HOST',
+    'IORI_SOURCE_SSH_KNOWN_HOSTS',
+    'IORI_SOURCE_SSH_PRIVATE_KEY',
+    'IORI_SOURCE_SSH_USER',
+  ]);
   expect(deploy.VAPID_PRIVATE_KEY).toBeUndefined();
   expect(deploy.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
   expect(deploy.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');

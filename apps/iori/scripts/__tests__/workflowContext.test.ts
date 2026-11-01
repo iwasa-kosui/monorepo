@@ -107,7 +107,15 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each(['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker'])(
+it.each([
+  'prepare-target',
+  'rehearse-migration',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'probe-cutover-route',
+  'deploy-worker',
+])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
     const valid = { ...env, IORI_OPERATION: operation };
@@ -148,6 +156,7 @@ it.each([
   'prepare-target',
   'verify-import',
   'cutover-route',
+  'probe-cutover-route',
   'deploy-worker',
   'purge-rehearsal-target',
   'diagnose-source',
@@ -172,7 +181,7 @@ it.each([
   }
 });
 it('keeps requiring equal code and migration SHAs for the other non-deploy operations', () => {
-  for (const operation of ['prepare-target', 'migrate-data', 'verify-import', 'cutover-route']) {
+  for (const operation of ['prepare-target', 'migrate-data', 'verify-import', 'cutover-route', 'probe-cutover-route']) {
     expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, IORI_MIGRATION_MAIN_SHA: frozenSha }))
       .toThrow();
   }
@@ -211,7 +220,15 @@ it('accepts the purge operation and lets its migration SHA differ from the code 
   expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_RUN_ID: '' })).toThrow();
   expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: 'Upper_Case' })).toThrow();
 });
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'estimate-source', 'diagnose-source'])(
+it.each([
+  'rehearse-migration',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'probe-cutover-route',
+  'estimate-source',
+  'diagnose-source',
+])(
   'still requires the code SHA and migration SHA to match for %s',
   operation => {
     const given = ['estimate-source', 'diagnose-source'].includes(operation)
@@ -270,6 +287,7 @@ it.each([
   'migrate-data',
   'verify-import',
   'cutover-route',
+  'probe-cutover-route',
   'deploy-worker',
   'purge-rehearsal-target',
 ])('rejects an empty or missing generation and run ID for %s', operation => {

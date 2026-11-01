@@ -184,10 +184,10 @@ export const createTargetTerraform = (
     ) fail('output-mismatch');
     return result;
   };
-  const changeQueuePause = async ({ paused, establishedBindings, routeEnabled }) => {
+  const inspectQueuePlan = async ({ paused, establishedBindings, routeEnabled }, planFile) => {
     onStage('queue-plan');
     if (typeof paused !== 'boolean' || typeof routeEnabled !== 'boolean' || !establishedBindings) fail('plan-rejected');
-    const path = join(privateDirectory, 'queue-control.tfplan');
+    const path = join(privateDirectory, planFile);
     await run([
       'plan',
       '-input=false',
@@ -209,16 +209,22 @@ export const createTargetTerraform = (
     if (bindingsChanged || issues.length) {
       fail('plan-rejected', [...(bindingsChanged ? ['plan-bindings-changed'] : []), ...planRejectionDetails(issues)]);
     }
+    return { path };
+  };
+  const changeQueuePause = async (input) => {
+    const { path } = await inspectQueuePlan(input, 'queue-control.tfplan');
     onStage('queue-apply');
     await run(['apply', '-input=false', path]);
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
+  const planQueueResume = ({ establishedBindings }) =>
+    inspectQueuePlan({ paused: false, establishedBindings, routeEnabled: false }, 'queue-probe.tfplan');
   const initializeEstablished = () => initializeExisting(true);
   const initializeActive = () => initializeExisting(false);
-  const changeRoute = async ({ establishedBindings }) => {
+  const inspectRoutePlan = async ({ establishedBindings }, planFile) => {
     onStage('route-plan');
     if (!establishedBindings) fail('plan-rejected');
-    const path = join(privateDirectory, 'route-control.tfplan');
+    const path = join(privateDirectory, planFile);
     await run([
       'plan',
       '-input=false',
@@ -236,10 +242,15 @@ export const createTargetTerraform = (
     if (bindingsChanged || issues.length) {
       fail('plan-rejected', [...(bindingsChanged ? ['plan-bindings-changed'] : []), ...planRejectionDetails(issues)]);
     }
+    return { path };
+  };
+  const changeRoute = async (input) => {
+    const { path } = await inspectRoutePlan(input, 'route-control.tfplan');
     onStage('route-apply');
     await run(['apply', '-input=false', path]);
     return { applied: true };
   };
+  const planRoute = (input) => inspectRoutePlan(input, 'route-probe.tfplan');
   return Object.freeze({
     initializeFresh,
     initializeEstablished,
@@ -247,5 +258,7 @@ export const createTargetTerraform = (
     prepare,
     changeQueuePause,
     changeRoute,
+    planRoute,
+    planQueueResume,
   });
 };

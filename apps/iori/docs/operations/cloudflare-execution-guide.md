@@ -924,6 +924,61 @@ rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
 
 登録する profile の `main_sha` は、本番の `migrate-data` を実行する `main_sha` と一致する必要があります。`main_sha` が変わった場合は、計測をやり直します。同じ generation では `rehearse-migration` を再実行できないため、新しい使い捨て generation を選び、`prepare-target` からやり直します。
 
+### probe-cutover-route で cutover-route を予行する
+
+#### 目的
+
+`cutover-route` は、本番を止めている間に初めて動きます。`probe-cutover-route` は、本番を止める前に、計測用の generation に対して次の 2 点を確かめます。
+
+- route の plan と Queue の再開の plan を取り、`cutover-route` と同じ検査を通します。`probe-cutover-route` は apply をしません。
+- Worker の admission を sealed から smoke に切り替え、workers.dev の hostname で smoke を通し、sealed に戻します。
+
+#### 前提条件
+
+- 作業者は、計測3 が終わった後に、最後の計測で import した generation に対して `probe-cutover-route` を実行します。
+- 対象は、`rehearse-migration` を実行した generation だけです。transfer bucket に `rehearsal.json` が無い generation では、`probe-cutover-route` は `rehearsal-missing` で止まります。本番の generation には実行できません。
+- 作業者は、dispatch の前に、`IORI_ADMISSION_IDENTITY` をその generation 用に登録し直します。登録し直す値は、`generation`、`mainSha`、`runId`、`workerHostname` です。
+- 作業者は、登録し直す値を `rehearse-migration` を実行したときと同じ値にします。違う値にすると、[第5.5節](#55-使い捨て-generation-の後片付け)の `purge-rehearsal-target` がその generation を拒否します。
+- 作業者は、dispatch の前に、`smoke.username`、`smoke.articleId`、`smoke.uploadFilename` が import 済みのデータにあることを確かめます。OGP の backfill が済んでいることも確かめます。
+- `production` の Environment の承認が要ります。job が使う Cloudflare API token は、`cutover-route` と同じ `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` です。Terraform の state の鍵は、`IORI_TERRAFORM_WRITE` の鍵です。job は SSH の secret を使わず、旧サーバーにも触れません。
+
+#### 段の順序と公開ログ
+
+公開ログには `stage=probe-<段>` の形で出ます。段は次の順です。
+
+```text
+inputs → rehearsal-gate → tf-init → read-sealed → route-plan → queue-plan → to-smoke → smoke-worker → to-sealed → read-final
+```
+
+`smoke-worker` で失敗したときも、`probe-cutover-route` は `to-sealed` で sealed に戻してから、`smoke-worker` の失敗を報告します。`to-sealed` も失敗したときは、`to-sealed` の失敗を報告します。このとき Worker は smoke のまま残っている可能性があります。
+
+#### 実行後に残るもの
+
+- Worker に新しい版が 2 回 deploy されます。最後の版は sealed です。
+- smoke の Queue enqueue の検査が、その generation の Queue に smoke の marker を 1 件積みます。Queue は paused なので、marker は配送されずに残ります。
+- route は作られません。Queue は paused のままです。
+
+#### 本番に影響しない理由
+
+- D1、R2、KV、Queue、Terraform の state は generation ごとに分かれています。`probe-cutover-route` は、その generation のものだけを扱います。
+- route の plan の中身は、本番の hostname を計測用の Worker に向ける route の create です。`probe-cutover-route` は、この plan を apply しません。
+- smoke は `workerHostname` にだけ送ります。canonical の hostname には送りません。route が無い時点で canonical の hostname に送ると、旧サーバーに smoke 用の token が届くからです。
+- smoke のリクエストでは、Queue への送信が拒否されます。Queue も paused です。このため、本番の followers に配送されることはありません。
+- 計測用の generation の D1 には、本番の鍵と followers のコピーがあります。`probe-cutover-route` は、active への切り替えと Queue の再開をしません。作業者は、この generation を active にしたり、Queue を再開したりしてはいけません。
+
+#### 確かめられない点
+
+- `probe-cutover-route` は、Queue の再開の plan を、route を無効にした状態で取ります。route がまだ無い generation で route を有効にすると、plan に route の create が混ざり、Queue の検査がその plan を拒否するからです。このため、`probe-cutover-route` は、本番の `cutover-route` と同じ形の plan を確かめられません。本番の plan は、route を作った後の Queue の再開の plan で、route は no-op になります。
+- `probe-cutover-route` は、署名つき bundle の復元、canonical の hostname への smoke、active への切り替え、route と Queue の apply を確かめられません。
+
+#### 再実行
+
+`probe-cutover-route` は、同じ generation に何度でも実行できます。`read-sealed` 段が、`record.json` の `worker_version_id` の代わりに、いま配信されている Worker の version で照合するからです。この段は、sealed であること、binding、Queue の paused、route が無いことを、record の version を使わずに検査します。
+
+`probe-cutover-route` を実行した後は、Worker の version が `record.json` の値と違う値になります。このため、その generation では `cutover-route`、`migrate-data`、`verify-import` が通りません。
+
+`cutover-route`、`migrate-data`、`verify-import` の `read-sealed` 段は、これまでどおり `record.json` の version と照合します。
+
 ### 5.5 使い捨て generation の後片付け
 
 使い捨て generation には、本番の実データが匿名化されずに残ります。実データは個人データを含みます。残る場所は次のとおりです。
@@ -1055,17 +1110,18 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 `rehearse-migration` と `migrate-data` を dispatch するときは、上のコマンドに `-f allowed_missing_uploads=<n>` を足します。`<n>` には、直前の `estimate-source` の `upload_missing_count` と同じ値を入れます。欠けたファイルが無ければ、足しません。意味と失敗の位置は[欠けたファイルを許容する](#欠けたファイルを許容する)に書きます。`rehearse-migration` と `migrate-data` のどちらも、`allowed_missing_uploads` を同じ入力から受け取ります。
 
-| 順序     | Operation                                                    | 次へ進む条件                                                                                                                                                                                              |
-| -------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 計測の前 | `estimate-source`（`generation` と `migration_run_id` は空） | 出力が `sample=ok` と `capacity=ok`。freeze はしない。欠けたファイルがある場合は `allowed_missing_uploads` に `upload_missing_count` と同じ値を入れる。手順は[第5.1節](#estimate-source-で事前に確認する) |
-| 計測1    | `prepare-target`（使い捨て generation）                      | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                                                                                         |
-| 計測2    | `rehearse-migration`（使い捨て generation）                  | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない。欠けたファイルがある場合は `allowed_missing_uploads` を指定する    |
-| 計測3    | profile 登録（ローカル操作。dispatch はしない）              | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                                                                                             |
-| 計測の後 | `purge-rehearsal-target`（使い捨て generation）              | job が成功し、D1 の全 table と application R2 の uploads bucket が空。リソースは残る。手順は[第5.5節](#55-使い捨て-generation-の後片付け)                                                                 |
-| 1        | `prepare-target`（本番用 generation）                        | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                       |
-| 2        | `migrate-data`                                               | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功。欠けたファイルがある場合は `allowed_missing_uploads` を指定する                               |
-| 3        | `verify-import`                                              | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                                                          |
-| 4        | `cutover-route`                                              | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                                                                 |
+| 順序       | Operation                                                    | 次へ進む条件                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 計測の前   | `estimate-source`（`generation` と `migration_run_id` は空） | 出力が `sample=ok` と `capacity=ok`。freeze はしない。欠けたファイルがある場合は `allowed_missing_uploads` に `upload_missing_count` と同じ値を入れる。手順は[第5.1節](#estimate-source-で事前に確認する) |
+| 計測1      | `prepare-target`（使い捨て generation）                      | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                                                                                         |
+| 計測2      | `rehearse-migration`（使い捨て generation）                  | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない。欠けたファイルがある場合は `allowed_missing_uploads` を指定する    |
+| 計測3      | profile 登録（ローカル操作。dispatch はしない）              | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                                                                                             |
+| 計測3 の後 | `probe-cutover-route`（使い捨て generation）                 | job が成功し、全段が通っている。route は作られない。手順は[probe-cutover-route で cutover-route を予行する](#probe-cutover-route-で-cutover-route-を予行する)                                             |
+| 計測の後   | `purge-rehearsal-target`（使い捨て generation）              | job が成功し、D1 の全 table と application R2 の uploads bucket が空。リソースは残る。手順は[第5.5節](#55-使い捨て-generation-の後片付け)                                                                 |
+| 1          | `prepare-target`（本番用 generation）                        | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                       |
+| 2          | `migrate-data`                                               | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功。欠けたファイルがある場合は `allowed_missing_uploads` を指定する                               |
+| 3          | `verify-import`                                              | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                                                          |
+| 4          | `cutover-route`                                              | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                                                                 |
 
 上の表の operation に加えて、旧環境（source）に書き込む operation が2つあります。
 

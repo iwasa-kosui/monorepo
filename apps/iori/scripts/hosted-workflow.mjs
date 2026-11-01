@@ -21,6 +21,7 @@ const operations = Object.freeze({
   'migrate-data': 'execute-protected-migration.mjs',
   'verify-import': 'restore-protected-migration.mjs',
   'cutover-route': 'cutover-migration.mjs',
+  'probe-cutover-route': 'probe-cutover-route.mjs',
   'deploy-worker': 'deploy-active-worker.mjs',
   'estimate-source': 'estimate-source.mjs',
   'purge-rehearsal-target': 'purge-rehearsal-target.mjs',
@@ -294,9 +295,14 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const { assertReviewedMain } = await import('./reviewed-main.mjs');
   await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
   if (
-    ['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'purge-rehearsal-target'].includes(
-      selected.operation,
-    )
+    [
+      'rehearse-migration',
+      'migrate-data',
+      'verify-import',
+      'cutover-route',
+      'probe-cutover-route',
+      'purge-rehearsal-target',
+    ].includes(selected.operation)
   ) {
     await execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs);
     // The fixed target-reader output is private and is also the deployment binding authority.

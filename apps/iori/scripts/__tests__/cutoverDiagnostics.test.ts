@@ -1,7 +1,13 @@
 import { expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
-import { CUTOVER_STAGES, cutoverFailureLines, isCutoverReason } from '../cutover-diagnostics.mjs';
+import {
+  CUTOVER_STAGES,
+  cutoverFailureLines,
+  isCutoverReason,
+  PROBE_STAGES,
+  probeFailureLines,
+} from '../cutover-diagnostics.mjs';
 import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 
 const publicLine =
@@ -115,6 +121,7 @@ it('accepts the preparation, source and cutover reasons only', () => {
       'verify-failed',
       'deploy-failed',
       'source-not-quiescent',
+      'rehearsal-missing',
     ]
   ) expect(isCutoverReason(reason), reason).toBe(true);
   for (const reason of ['', 'Secret_Value', 'a/b', undefined, 3, 'https://x.invalid']) {
@@ -150,4 +157,38 @@ it.each([
     `IORI_DIAG stage=cutover-main-check program=none exit=none signal=none reason=${reason}`,
   ]);
   expect(cutoverFailureLines('main-check', new Error(`${message} extra`), false)[0]).toContain('reason=unclassified');
+});
+it('pins the probe stage vocabulary', () => {
+  expect(PROBE_STAGES).toEqual([
+    'inputs',
+    'rehearsal-gate',
+    'tf-init',
+    'read-sealed',
+    'route-plan',
+    'queue-plan',
+    'to-smoke',
+    'smoke-worker',
+    'to-sealed',
+    'read-final',
+  ]);
+  expect(Object.isFrozen(PROBE_STAGES)).toBe(true);
+});
+it('keeps every public probe stage word within the hosted workflow pattern', () => {
+  for (const stage of [...PROBE_STAGES, 'unclassified']) {
+    const [line] = probeFailureLines(stage, failure('rehearsal-missing'), false);
+    expect(`probe-${stage}`.length).toBeLessThanOrEqual(24);
+    expect(line).toMatch(publicLine);
+    expect(assertWorkflowOutput(line!)).toEqual([]);
+  }
+});
+it('reports the probe stage with the same detail and reason lines as the cutover', () => {
+  const error = failure('plan-rejected', ['plan-route-create']);
+  expect(probeFailureLines('queue-plan', error, false)).toEqual([
+    'IORI_DIAG stage=probe-queue-plan program=none exit=none signal=none reason=plan-route-create',
+    'IORI_DIAG stage=probe-queue-plan program=none exit=none signal=none reason=plan-rejected',
+  ]);
+  expect(probeFailureLines('route-apply', error, false).at(-1)).toContain('stage=probe-unclassified');
+  expect(probeFailureLines('smoke-worker', new Error('Reviewed smoke failed.'), false)).toEqual([
+    'IORI_DIAG stage=probe-smoke-worker program=none exit=none signal=none reason=smoke-failed',
+  ]);
 });
