@@ -1,10 +1,15 @@
-import { link, lstat, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { releasePendingFreeze } from '../release-pending-freeze.mjs';
 import { runPendingFreezeRelease } from '../source-pending-freeze-release.mjs';
 import { createFixtureDirectory } from './fixtureTemp.ts';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, unlink: vi.fn(actual.unlink) };
+});
 
 const sha = 'a'.repeat(40);
 const runId = 'run_1';
@@ -42,21 +47,22 @@ const commands = (active: string, calls: string[] = [], located = systemctlPath)
   ) => {
     calls.push([program, ...args].join(' '));
     if (program === '/bin/sh') await options.captureOutput?.({ stdout: `${located}\n`, stderr: '' });
-    if (program === 'systemctl') {
+    if (program === located) {
       await options.captureOutput?.({ stdout: `${active}\n`, stderr: '' });
       if (active !== 'active') throw Object.assign(new Error('Migration command failed.'), { exitCode: 3 });
     }
     return { stdout: '', stderr: '' };
   },
 });
-const stop = 'sudo -n systemctl stop microblog';
-const isActive = 'systemctl is-active microblog';
-const start = 'sudo -n systemctl start microblog';
+const stop = `sudo -n ${systemctlPath} stop microblog`;
+const isActive = `${systemctlPath} is-active microblog`;
+const start = `sudo -n ${systemctlPath} start microblog`;
 const locate = '/bin/sh -c command -v systemctl';
 const permitStop = `sudo -n -l ${systemctlPath} stop microblog`;
 const permitStart = `sudo -n -l ${systemctlPath} start microblog`;
 const preflight = [locate, permitStop, permitStart];
-const isService = (args: string[], action: string) => args[1] === 'systemctl' && args[2] === action;
+const isService = (args: string[], action: string) => args[1] === systemctlPath && args[2] === action;
+const stopped = 'IORI_NOTICE stage=release-pending-freeze stopped=1\n';
 const exists = async (path: string) => lstat(path).then(() => true, () => false);
 
 it.each(['inactive', 'failed'])(
@@ -74,7 +80,7 @@ it.each(['inactive', 'failed'])(
     expect(await readFile(join(base, `freeze.pending.rejected-${runId}`), 'utf8')).toBe(
       JSON.stringify({ main_sha: sha, run_id: runId }),
     );
-    expect(writes).toEqual(['IORI_NOTICE stage=release-pending-freeze renamed=1\n']);
+    expect(writes).toEqual([stopped, 'IORI_NOTICE stage=release-pending-freeze renamed=1\n']);
   },
 );
 it.each(['active', 'activating', 'deactivating', ''])(
@@ -236,7 +242,7 @@ it('fails without renaming or starting when the pending marker is replaced durin
   expect(calls).toEqual([...preflight, stop, isActive]);
   expect((await lstat(join(base, 'freeze.pending'))).ino).not.toBe(before.ino);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
-  expect(writes).toEqual([]);
+  expect(writes).toEqual([stopped]);
 });
 it('reports a failed start without retrying and keeps the renamed marker', async () => {
   captureStderr();
@@ -273,7 +279,7 @@ it('fails on the second inspection without renaming or starting when a committed
   expect(calls).toEqual([...preflight, stop, isActive]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(true);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
-  expect(writes).toEqual([]);
+  expect(writes).toEqual([stopped]);
 });
 it('fails without changing anything when the rejected destination is a dangling symlink', async () => {
   const writes = captureStderr();
@@ -304,7 +310,7 @@ it('fails at link without removing the pending marker when a dangling symlink ap
   expect(calls).toEqual([...preflight, stop, isActive]);
   expect(await exists(join(base, 'freeze.pending'))).toBe(true);
   expect((await lstat(join(base, `freeze.pending.rejected-${runId}`))).isSymbolicLink()).toBe(true);
-  expect(writes).toEqual([]);
+  expect(writes).toEqual([stopped]);
 });
 const alreadyRenamed = 'IORI_NOTICE stage=release-pending-freeze already_renamed=1\n';
 const setupRenamed = async (content: string | null = JSON.stringify({ main_sha: sha, run_id: runId })) => {
@@ -461,7 +467,6 @@ it('stops, then only unlinks the pending marker and starts when a hard link was 
   };
   await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
   expect(calls).toEqual([...preflight, stop, isActive, start]);
-  // The marker is still present while stopping and is gone by the time the service starts.
   expect(pendingAtCall).toEqual({
     [locate]: true,
     [permitStop]: true,
@@ -474,7 +479,7 @@ it('stops, then only unlinks the pending marker and starts when a hard link was 
   expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
   expect(after.nlink).toBe(1);
   // A link call would fail with EEXIST on the existing destination, so success also proves it was skipped.
-  expect(writes).toEqual(['IORI_NOTICE stage=release-pending-freeze renamed=1\n']);
+  expect(writes).toEqual([stopped, 'IORI_NOTICE stage=release-pending-freeze renamed=1\n']);
 });
 it('does not unlink or start when the service is not stopped and a hard link was left', async () => {
   const writes = captureStderr();
@@ -504,6 +509,52 @@ it('fails without stopping when both files exist with different inodes', async (
   expect(calls).toEqual([]);
   const [pending, rejected] = [await lstat(pendingPath), await lstat(rejectedPath)];
   expect(pending.ino).not.toBe(rejected.ino);
+  expect(writes).toEqual([]);
+});
+it('does not start when the guard fails right before the start for an already renamed marker', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed();
+  const { calls, runCommand } = commands('inactive');
+  let checks = 0;
+  await expect(runPendingFreezeRelease({ sha, runId }, {
+    home,
+    uid,
+    runCommand,
+    guard: async () => {
+      if (++checks === 2) throw new Error('Source deployment is blocked.');
+    },
+  })).rejects.toThrow('Source deployment is blocked.');
+  expect(checks).toBe(2);
+  expect(calls).toEqual(preflight);
+  expect(calls).not.toContain(start);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
+  expect(writes).toEqual([alreadyRenamed]);
+});
+it('keeps both files and does not start when the unlink fails after the link', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const pendingPath = join(base, 'freeze.pending');
+  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
+  vi.mocked(unlink).mockRejectedValueOnce(Object.assign(new Error('unlink failed'), { code: 'EPERM' }));
+  const { calls, runCommand } = commands('inactive');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source release rename verification failed.',
+  );
+  expect(calls).toEqual([...preflight, stop, isActive]);
+  expect(calls).not.toContain(start);
+  const [pending, rejected] = [await lstat(pendingPath), await lstat(rejectedPath)];
+  expect([pending.dev, pending.ino]).toEqual([rejected.dev, rejected.ino]);
+  expect(writes).toEqual([stopped]);
+});
+it.each([
+  ['the stop permission check is denied', permitStop],
+  ['the start permission check is denied', permitStart],
+  ['the stop command fails', stop],
+])('does not report the stopped notice when %s', async (_label, denied) => {
+  const writes = captureStderr();
+  const { home } = await setup();
+  const runCommand = denyOnly(denied, []);
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow();
   expect(writes).toEqual([]);
 });
 it.each([
@@ -665,6 +716,33 @@ it('relays the already renamed notice exactly and nothing near it', async () => 
           'IORI_NOTICE stage=release-pending-freeze already_renamed=',
           'IORI_NOTICE stage=release-pending-freeze already_renamed',
           'IORI_NOTICE stage=other already_renamed=1',
+          'secret-user@secret-host.invalid: noise',
+        ].join('\n'),
+      });
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(writes).toEqual([`${accepted}\n`]);
+});
+it('relays the stopped notice exactly and nothing near it', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=release-pending-freeze stopped=1';
+  await releasePendingFreeze(options, {
+    sourceFactory: sourceWith([openState]),
+    runCommand: async (_program, _args, commandOptions) => {
+      await commandOptions.captureOutput?.({
+        stdout: '',
+        stderr: [
+          accepted,
+          `${accepted} extra=/home/secret`,
+          ` ${accepted}`,
+          `${accepted} `,
+          `${accepted}\r`,
+          'IORI_NOTICE stage=release-pending-freeze stopped=0',
+          'IORI_NOTICE stage=release-pending-freeze stopped=11',
+          'IORI_NOTICE stage=release-pending-freeze stopped=',
+          'IORI_NOTICE stage=release-pending-freeze stopped',
+          'IORI_NOTICE stage=other stopped=1',
           'secret-user@secret-host.invalid: noise',
         ].join('\n'),
       });

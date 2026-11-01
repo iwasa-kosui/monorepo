@@ -86,10 +86,212 @@ source deploy は対象 path の `main` push でも起動します。この保�
 1. 移行用の Terraform state bucket を別途作成します。アプリ画像用・移行 bundle 用 bucket と共有せず、既存 state を移動しません。
 2. 新しい staging generation と run ID を選び、非公開の作業記録に固定します。generation は先頭が小文字英字の8〜20文字の小文字英数字、run ID は英数字・`_`・`-` の1〜80文字です。
 3. [infra の操作別権限表](../../infra/cloudflare/README.md#environment-references)に従い、5用途の Cloudflare API token と、state・transfer・application 各用途の読み書き用／読み取り専用 S3 credential を分けます。
-4. S3 credential は対象 bucket に限定します。新規 bucket は `prepare-target` が作るため、transfer の書き込み権限は未作成の予定名へ事前に限定する必要があります。この設定可否を確認し、Dashboard で既存 bucket しか選べない場合は、Cloudflare の bucket resource 指定を使う token 作成手順を別途レビューします。手動で target bucket を先に作ると fresh-generation 検査に失敗します。
+4. S3 credential は対象 bucket に限定します。新規 bucket は `prepare-target` が作るため、transfer の書き込み権限は未作成の予定名へ事前に限定する必要があります。Dashboard では既存の bucket しか選べないので、transfer の書き込み token は「[未作成の bucket に限定した R2 S3 credential の作成](#未作成の-bucket-に限定した-r2-s3-credential-の作成)」の手順で作ります。手動で target bucket を先に作ると fresh-generation 検査に失敗します。
 5. Account の `workers.dev` subdomain を Dashboard で確認し、未登録なら `prepare-target` より前に登録します。staging の Worker hostname は `iori-staging-<generation>.<登録済みsubdomain>.workers.dev`、production は同じ形で environment 部分を `production` にします。固定 Wrangler の非対話 deploy に初回登録を任せると、リソース作成後に失敗して部分 generation が残るため、hosted job では登録しません。[workers.dev の設定](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)を参照してください。
 
 R2 の S3 credential と Cloudflare REST API token は別に扱います。作成方法・bucket scope は [R2 認証手順](https://developers.cloudflare.com/r2/api/tokens/)を参照してください。API token の実際の permission と readback API の適合も確認します。通常の広い token を全 role に流用して完了扱いにしません。
+
+### 未作成の bucket に限定した R2 S3 credential の作成
+
+**前提と対象**
+
+- この小節は、transfer bucket と application bucket の S3 credential だけを扱います。state 用の `IORI_TERRAFORM_*` は既存の backend bucket が対象なので、Dashboard の R2 token 作成画面で作れます。
+- Dashboard の R2 token 作成画面では、既存の bucket しか選べません。2026-10-31 に確認しました。未作成の名前を入力すると「No matching buckets」と表示されます。
+- transfer bucket と application bucket は、`prepare-target` が Terraform で作ります。手動で bucket を作ると fresh-generation 検査に失敗するので、手動では作りません。
+- bucket 名は `infra/cloudflare/main.tf` の `generation_prefix` から決まります。transfer bucket の名前は `iori-<environment>-<generation>-transfer` で、application bucket の名前は `iori-<environment>-<generation>-uploads` です。
+- run ID は bucket 名にも token の範囲にも入りません。run ID が入るのは transfer bucket の中の key prefix だけです。このため、token の作成は run ID の確定を待ちません。
+- token の範囲は bucket 名で限定されます。このため、generation ごとに token を作り直します。Environment secret の名前は generation で区別されないので、新しい generation の secret は古い generation の secret を上書きします。新しい generation の secret を登録した後に、古い generation の子 token を削除します。ただし、計測用の generation の子 token は、`purge-rehearsal-target` が成功した後に削除します（「計測用の generation での扱い」を参照）。
+
+**ユーザーと作業者の分担**
+
+- 親 token の値は、作成ボタンを押した後の Dashboard の画面に表示されます。親 token は Account API Tokens Edit を持つので、ほかの token を発行できます。
+- ユーザーが、次の 2 つを行います。
+  - 親 token の作成ボタンを押した後の画面で、Copy ボタンを押すこと
+  - 自分の端末で、親 token を読み込む zsh（「準備」の手順 2 と、段階 A と段階 B の zsh）を実行すること
+- 作業者は、それ以外の Dashboard の画面を操作します。対象は、親 token の権限の選択、token の一覧、期限の確認、token の削除です。作業者は Claude in Chrome で操作してもかまいません。
+- 作業者は、token の値が表示される画面に遷移しません。作業者は、その画面のスクリーンショットを撮りません。
+- ユーザーは、zsh が親 token を読み込んだ後に、親 token の値が表示されたタブを閉じます。ユーザーは、タブを閉じてから作業者に操作を戻します。作業者は、そのタブを再利用しません。
+- 子 token は Dashboard で作りません。子 token は、ユーザーの端末の zsh が API で作ります。子 token の値は、Dashboard にも作業者の画面にも表示されません。
+
+| Secret prefix                   | bucket             | permission group                     | 使う operation                                                              | 作る時期              | 期限         |
+| ------------------------------- | ------------------ | ------------------------------------ | --------------------------------------------------------------------------- | --------------------- | ------------ |
+| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`rehearse-migration`、`migrate-data`                      | `prepare-target` の前 | `EXPIRES_ON` |
+| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker`、`purge-rehearsal-target` | `prepare-target` の後 | なし         |
+| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`、`purge-rehearsal-target`              | `prepare-target` の後 | `EXPIRES_ON` |
+| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                                            | `prepare-target` の後 | `EXPIRES_ON` |
+
+各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
+
+`EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
+
+**計測用の generation での扱い**
+
+- 5.x 節の計測（計測1〜計測3）では、本番用とは別の使い捨て generation を使います。作業者は、計測でもその generation の bucket に限定した子 token を作ります。
+- 計測で使う子 token は、`IORI_TRANSFER_R2_WRITE`、`IORI_TRANSFER_R2_READ_ONLY`、`IORI_APPLICATION_R2_WRITE` の 3 つです。`rehearse-migration` は `IORI_TRANSFER_R2_WRITE` と `IORI_APPLICATION_R2_WRITE` を使います。`purge-rehearsal-target` は `IORI_TRANSFER_R2_READ_ONLY` と `IORI_APPLICATION_R2_WRITE` を使います。計測の run ID では、`verify-import` と `cutover-route` を実行しないので、`IORI_APPLICATION_R2_READ_ONLY` は作りません。
+- 計測では、段階 A を計測1 の前に行います。段階 B は計測2 の前に行い、`transfer-read-only` と `application-write` の作成と疎通確認だけを実行します。`transfer-read-only` は、準備記録を読む `purge-rehearsal-target` のために、`prepare-target` の後に作ります。計測の完了条件では、登録済みの secret は 6 つです。
+- 計測用の `EXPIRES_ON` は、計測2 の実施予定日に 7 日を足した日時にします。`transfer-read-only` には期限がないので、削除を忘れると残ります。
+- 計測用と本番用の generation は、production Environment の同じ secret 名を使います。本番用の段階 A は、計測用の `IORI_TRANSFER_R2_WRITE` を上書きします。本番用の段階 B は、計測用の `IORI_TRANSFER_R2_READ_ONLY` と `IORI_APPLICATION_R2_WRITE` を、本番用 generation の bucket に限定した token の値で上書きします。上書きされた値では、計測用 generation の bucket に認証できないので、`purge-rehearsal-target` が失敗します。このため、作業者とユーザーは、計測1〜計測3 と `purge-rehearsal-target` をすべて終えてから本番用の段階 A を行います。
+- `purge-rehearsal-target` が成功した後に、作業者が Dashboard の token 一覧で計測用の子 token を削除します。`purge-rehearsal-target` が失敗した場合は、同じ入力で再実行するので、成功するまで計測用の子 token を削除しません。5.4 節の envelope の取得は wrangler で行うので、計測用の子 token を使いません。計測用 generation のリソースと state は、5.x 節の後片付けに従って扱います。
+
+未作成の bucket を対象にする token は、`IORI_TRANSFER_R2_WRITE` の 1 つだけです。残りの 3 つは、`prepare-target` が bucket を作った後に作ります。この順序にすると、作成した直後の値で S3 の疎通を確かめられます。GitHub は secret の値を返さないので、登録した後には確かめられません。
+
+**準備**
+
+1. 作業者とユーザーが Dashboard で、使い捨ての親 token を作ります。
+   - 作業者が「Manage account > Account API tokens > Create Token」を開きます。
+   - 作業者が、権限に「Account > Account API Tokens > Edit」だけを付けます。API の permission group 名では「Account API Tokens Write」にあたります。
+   - 作業者が、対象 account を移行先の account だけにし、TTL を作業当日の終わりまでにします。名前は `iori-<environment>-<generation>-r2-issuer` にします。
+   - Cloudflare の仕様により、作成者は Super Administrator か API Token Provisioning の権限を持つ必要があります。作成者は、自分が持つ権限の範囲内でしか token に権限を付けられません。
+   - ユーザーが作成ボタンを押し、表示された画面の Copy ボタンで親 token の値をクリップボードに入れます。親 token の値は、ログにも、PR にも、メッセージにも書きません。
+   - 段階 A と段階 B を別の日に行う場合は、段階ごとに親 token を作ります。
+2. ユーザーが自分の端末の zsh で、次の内容を実行します。作業者は、`<...>` を埋めたこの内容を、ファイルとして用意してもかまいません。
+   - zsh は、親 token をクリップボードから読み、読んだ直後にクリップボードを空にします。
+   - zsh は、親 token が有効かを `GET /accounts/<ACCOUNT_ID>/tokens/verify` で確かめます。Copy に失敗していると、クリップボードには古い内容が残っています。このため、zsh は、まず値が token の形式かを確かめます。形式が合わない場合は、zsh は Cloudflare に値を送らずに止まります。形式が合っても有効でない場合も、zsh は止まります。
+   - zsh は、`GET /accounts/<ACCOUNT_ID>/tokens/permission_groups` で、`ITEM_WRITE` と `ITEM_READ` の ID が正しい名前に対応しているかを確かめます。Cloudflare は名前が変わりうると説明しているので、policy には ID を指定します。2026-10-31 時点の ID は次のとおりです。
+     - Workers R2 Storage Bucket Item Write: `2efd5506f9c8494dacb1fa10a3e7d5b6`
+     - Workers R2 Storage Bucket Item Read: `6a018a9f2fc74eb6b293b0c548f38b39`
+   - 親 token は `curl --config -` の標準入力で渡すので、コマンドラインの引数には出ません。子 token の値は端末に表示せず、`gh secret set` の標準入力へ渡します。Secret Access Key は、子 token の値の SHA-256 を 16 進の小文字で表した値です。
+
+   ```zsh
+   setopt interactive_comments
+   CF_ISSUER_TOKEN=$(pbpaste); pbcopy </dev/null
+   ACCOUNT_ID='<ACCOUNT_ID>'
+   ENV_NAME='<environment>'
+   GENERATION='<generation>'
+   EXPIRES_ON='<本番用は cutover-route の完了予定日 + 14 日、計測用は計測2 の予定日 + 7 日（RFC 3339）>'
+   ITEM_WRITE='2efd5506f9c8494dacb1fa10a3e7d5b6'
+   ITEM_READ='6a018a9f2fc74eb6b293b0c548f38b39'
+   PREFIX="iori-${ENV_NAME}-${GENERATION}"
+   TRANSFER_BUCKET="${PREFIX}-transfer"
+   UPLOADS_BUCKET="${PREFIX}-uploads"
+
+   cf_api() {  # $1=method $2=account 配下の path $3=JSON 本文（省略可）
+     local -a data
+     [[ -n $3 ]] && data=(--data "$3")
+     curl -sS -X "$1" "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}$2" \
+       -H 'Content-Type: application/json' "${data[@]}" \
+       --config - <<<"header = \"Authorization: Bearer ${CF_ISSUER_TOKEN}\""
+   }
+
+   if [[ ! $CF_ISSUER_TOKEN =~ '^[A-Za-z0-9_-]{30,}$' ]]; then
+     echo 'クリップボードの内容が token の形式ではありません。Copy からやり直します'; unset CF_ISSUER_TOKEN
+   elif ! cf_api GET /tokens/verify | jq -e '.success and .result.status == "active"' >/dev/null; then
+     echo '親 token が有効ではありません。Copy からやり直します'; unset CF_ISSUER_TOKEN
+   elif ! cf_api GET /tokens/permission_groups | jq -e --arg w "$ITEM_WRITE" --arg r "$ITEM_READ" '
+       ([.result[] | select(.id == $w) | .name] == ["Workers R2 Storage Bucket Item Write"])
+       and ([.result[] | select(.id == $r) | .name] == ["Workers R2 Storage Bucket Item Read"])' >/dev/null; then
+     echo 'permission group の ID と名前が対応していません。レビューに戻します'; unset CF_ISSUER_TOKEN
+   fi
+
+   issue_r2() {  # $1=secret prefix $2=bucket 名 $3=permission group ID $4=token 名 $5=期限（空なら期限なし）
+     setopt local_options pipe_fail
+     unset LAST_KEY_ID LAST_SECRET
+     [[ -n $CF_ISSUER_TOKEN ]] || { echo '親 token がありません'; return 1; }
+     local list body res id
+     list=$(cf_api GET '/tokens?per_page=100') || return 1
+     if ! jq -e '.success' >/dev/null <<<"$list"; then
+       jq -c '.errors' <<<"$list"; return 1
+     fi
+     if jq -e --arg n "$4" '.result[] | select(.name == $n)' >/dev/null <<<"$list"; then
+       echo "$4 は既にあります。既存の token を確かめるまで作り直しません"; return 1
+     fi
+     body=$(jq -n --arg n "$4" --arg g "$3" --arg e "$5" \
+       --arg r "com.cloudflare.edge.r2.bucket.${ACCOUNT_ID}_default_$2" \
+       '{name:$n,policies:[{effect:"allow",permission_groups:[{id:$g}],resources:{($r):"*"}}]}
+        + (if $e == "" then {} else {expires_on:$e} end)')
+     res=$(cf_api POST /tokens "$body") || return 1
+     if ! jq -e '.success and (.result.id | type == "string")
+                 and (.result.value | type == "string" and length > 0)' >/dev/null <<<"$res"; then
+       jq -c '.errors' <<<"$res"; return 1
+     fi
+     id=$(jq -r '.result.id' <<<"$res")
+     local key_id=$id secret
+     secret=$(jq -j '.result.value' <<<"$res" | shasum -a 256 | cut -d' ' -f1)
+     unset res
+     if ! { printf '%s' "$key_id" | gh secret set "$1_ACCESS_KEY_ID" --env "$ENV_NAME" --repo iwasa-kosui/monorepo &&
+            printf '%s' "$secret" | gh secret set "$1_SECRET_ACCESS_KEY" --env "$ENV_NAME" --repo iwasa-kosui/monorepo; }; then
+       echo "$1 の登録に失敗しました。作った子 token を削除します。$1 の secret は不整合なので、issue_r2 をやり直すまで次の operation を実行しません"
+       cf_api DELETE "/tokens/${id}" | jq -c '{success, errors}'
+       return 1
+     fi
+     LAST_KEY_ID=$key_id
+     LAST_SECRET=$secret
+   }
+
+   s3() {  # $1=method $2=bucket と key（query を含めてよい）。直前に作った credential で呼び、HTTP status だけを表示します
+     [[ -n $LAST_KEY_ID && -n $LAST_SECRET ]] || { echo '直前の issue_r2 が成功していません'; return 1; }
+     local -a body
+     [[ $1 == PUT ]] && body=(--data-binary ok)
+     curl -sS -o /dev/null -w '%{http_code}\n' -X "$1" "${body[@]}" --aws-sigv4 'aws:amz:auto:s3' \
+       "https://${ACCOUNT_ID}.r2.cloudflarestorage.com/$2" \
+       --config - <<<"user = \"${LAST_KEY_ID}:${LAST_SECRET}\""
+   }
+   ```
+
+   `issue_r2` は、失敗したときに `errors` だけを表示します。成功したときは何も表示しません。`issue_r2` は、呼ばれるたびに直前の credential を消してから作業します。このため、`issue_r2` が失敗した後の `s3` は、前の token で疎通を確かめずに失敗します。途中で作業を止めた場合は、ユーザーが `unset CF_ISSUER_TOKEN LAST_KEY_ID LAST_SECRET` を実行するか、シェルを閉じます。
+
+**段階 A: `prepare-target` の前**
+
+1. ユーザーが、手順 2 の zsh を読み込んだ端末で `IORI_TRANSFER_R2_WRITE` を作ります。
+
+   ```zsh
+   issue_r2 IORI_TRANSFER_R2_WRITE "$TRANSFER_BUCKET" "$ITEM_WRITE" "${PREFIX}-transfer-write" "$EXPIRES_ON"
+   unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
+   ```
+
+2. 作業者が Dashboard の token 一覧で親 token を削除し、一覧から消えたことを確認します。
+3. `prepare-target` が準備記録を transfer bucket に書き込んで読み戻すと、`IORI_TRANSFER_R2_WRITE` の疎通が確かめられます。
+
+**段階 B: `prepare-target` の後、`rehearse-migration` と `migrate-data` の前**
+
+1. 作業者とユーザーが「準備」の手順 1 で新しい親 token を作ります。ユーザーが手順 2 の zsh を読み込み直し、残りの 3 つを作ります。各 token を作った直後に、作った値で S3 の疎通を確かめます。読み取り専用の token では、書き込みが 403 で拒否されることも確かめます。
+
+   ```zsh
+   issue_r2 IORI_TRANSFER_R2_READ_ONLY "$TRANSFER_BUCKET" "$ITEM_READ" "${PREFIX}-transfer-read-only" '' &&
+     s3 GET "${TRANSFER_BUCKET}/prepared-target/v1/${ENV_NAME}/${GENERATION}/record.json" &&  # 200
+     s3 PUT "${TRANSFER_BUCKET}/connectivity-check/${GENERATION}"                              # 403
+
+   issue_r2 IORI_APPLICATION_R2_WRITE "$UPLOADS_BUCKET" "$ITEM_WRITE" "${PREFIX}-application-write" "$EXPIRES_ON" &&
+     s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}" &&     # 200
+     s3 GET "${UPLOADS_BUCKET}?list-type=2" &&                          # 200
+     s3 DELETE "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"     # 204
+
+   issue_r2 IORI_APPLICATION_R2_READ_ONLY "$UPLOADS_BUCKET" "$ITEM_READ" "${PREFIX}-application-read-only" "$EXPIRES_ON" &&
+     s3 GET "${UPLOADS_BUCKET}?list-type=2&prefix=og/" &&               # 200
+     s3 PUT "${UPLOADS_BUCKET}/connectivity-check/${GENERATION}"        # 403
+
+   unset LAST_KEY_ID LAST_SECRET CF_ISSUER_TOKEN
+   ```
+
+   `IORI_APPLICATION_R2_WRITE` のブロックにある `s3 GET "${UPLOADS_BUCKET}?list-type=2"` は、ListObjectsV2 の疎通確認です。`purge-rehearsal-target` が使う ListObjectsV2 を、実行前に確かめます。計測では、`UPLOADS_BUCKET` が使い捨て generation の uploads bucket を指します。`s3` 関数は DeleteObjects の本文を送れないので、このブロックは DeleteObjects を確かめません。
+
+2. 作業者が `gh api repos/iwasa-kosui/monorepo/environments/<environment>/secrets` で、8 つの secret 名と更新日時を確認します。値は読みません。
+3. 作業者が Dashboard の token 一覧で親 token を削除し、一覧から消えたことを確認します。
+
+**完了条件:** 段階 B の `s3` がすべて期待した status を返し、8 つの secret（計測では 6 つ）が登録されていることです。この条件を満たすまで、`rehearse-migration` と `migrate-data` を実行しません。
+
+- 読み取り専用の token への PUT が 403 以外を返した場合は、作業者がその子 token を Dashboard の token 一覧ですぐに削除し、レビューに戻します。
+- `connectivity-check/` の DELETE が失敗した場合は、残った object を移行後の後始末で削除します。`verify-import` が列挙するのは `post-images/` と `og/` だけなので、残った object は後続の検査に影響しません。
+- `migrate-data` を始める前に、作業者が Dashboard の token 一覧で、期限のある子 token（本番用では 3 つ、計測用では 2 つ）の期限を確かめます。期限まで 3 日を切っている子 token がある場合は、Dashboard で期限を延ばしません。延ばした後に token の値が変わらないことを確かめていないからです。代わりに、作業者が Dashboard でその子 token を削除し、ユーザーが新しい親 token で `issue_r2` を実行して作り直します。作り直した後は、段階 B と同じ `s3` で疎通を確かめます。`transfer-write` を作り直した場合は、`s3 GET` で準備記録を読めることを確かめます。
+
+**移行後の後始末**
+
+- 本番用 generation の `cutover-route` の完了を確認した後に、作業者が Dashboard の token 一覧で `transfer-write`、`application-write`、`application-read-only` の子 token を削除します。期限は削除を忘れた場合の備えです。
+- `transfer-read-only` の子 token は、その generation が active な間は削除しません。
+- 作業者が Dashboard の R2 の object 一覧で、application bucket と transfer bucket の `connectivity-check/` に object が残っていないかを確かめます。object が残っていれば、作業者が Dashboard で削除します。読み取り専用の token への PUT が 403 にならなかった場合に書き込まれた object も、同じ prefix にあります。作業者は、その object も同じ方法で削除します。
+- 切り替え後に transfer bucket の移行 bundle（準備記録以外）をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
+
+**未確認の点と、止める条件**
+
+- 未作成の bucket 名を resource に指定できるかどうかは、Cloudflare の文書に記載がありません。段階 A の API がエラーを返した場合は、その時点で作業を止めて、レビューに戻します。代わりに bucket を手動で作ってはいけません。
+- account token から S3 credential を導出する方法は、R2 の文書では user token を例に説明されています。`prepare-target` が準備記録の書き込みで認証エラーになった場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。同じ generation で `prepare-target` を再実行しません。
+- `s3` 関数（curl の `--aws-sigv4`）は、この小節を書いた時点では実行していません。段階 B で書き込み用の token にも 403 が返った場合は、token の権限ではなく署名の作り方が原因の可能性があります。その場合は、作業者がその子 token を削除して、レビューに戻します。
+
+**根拠**
+
+- [R2 の API token](https://developers.cloudflare.com/r2/api/tokens/): permission group、resource の書式、S3 credential の導出
+- [API 経由の token 作成](https://developers.cloudflare.com/fundamentals/api/how-to/create-via-api/): account token の作成 API と、親 token に必要な権限
+- [account 所有の token](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/): 作成者に必要な権限
 
 ### 3.2 登録する参照名
 
@@ -109,7 +311,34 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 | Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII                                                                                          |
 | Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                                                                                              |
 
-既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
+`estimate-source` が使う参照名は、Source SSH の4件だけです。`purge-rehearsal-target` が使う参照名は、次のとおりです。Source SSH、署名、実測の参照名は使いません。
+
+- 移行先: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_TERRAFORM_BACKEND_BUCKET`、`ORIGIN`
+- 実行 identity: `IORI_ADMISSION_IDENTITY`
+- Web Push: `VAPID_SUBJECT`
+- API role: `IORI_CLOUDFLARE_MIGRATE_API_TOKEN`
+- State S3: `IORI_TERRAFORM_READ_ONLY`
+- Transfer S3: `IORI_TRANSFER_R2_READ_ONLY`
+- Application S3: `IORI_APPLICATION_R2_WRITE`
+
+既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。特に staging の source SSH を本番へ向けないでください。
+
+### VAPID 値の確認
+
+- 2026-11-01 にユーザーが回答しました。production Environment の旧名 `IORI_VAPID_*` と、repo レベルの `VAPID_*` は同じ鍵です。workflow は repo レベルの `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を受け取ります。
+- Worker の満たすべき条件は、現行の Node 版と同じ鍵を使うことです。Node 版は、source サーバーの `/etc/systemd/system/microblog.service.d/env.conf` から VAPID の値を読みます。
+- `prepare-target` だけが Worker に VAPID の値を設定します。同じ generation では、リソースを作り始めた後の `prepare-target` を再実行できません。
+- このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
+  - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
+  - production だけで、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
+- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、どの失敗でも「Protected workflow step failed; retain remote state for reviewed recovery.」とだけ出ます。公開ログで失敗の種類を見分けられるようにする対応は、[#499](https://github.com/iwasa-kosui/monorepo/issues/499) で行います。
+- `prepare-target` が失敗した場合は、作業者が Dashboard で Worker `iori-<environment>-<generation>` と、その generation の D1、KV、Queue、R2 bucket の有無を確かめます。
+  - どれも存在しない場合は、`prepare-target` がリソースを作る前に止まっています。VAPID の検査で止まった可能性があります。作業者は次の順に対応します。
+    1. ユーザーが source サーバーの `env.conf` の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` を、production Environment の secret として標準入力で登録します。鍵は、末尾の `=` と改行を除いた base64url の値で登録します。パディングや改行が残っていると、同じ検査で再び失敗します。Environment secret は、同じ名前の repo レベル secret より優先されます。
+    2. 作業者が同じ generation で `prepare-target` をやり直します。
+    3. やり直しても失敗し、リソースも作られていない場合は、GitHub hosted runner から `ORIGIN` に到達できない可能性があります。この場合は作業を止めて、レビューに戻します。
+  - どれか 1 つでも存在する場合は、リソースを作り始めた後に失敗しています。この場合は、[中断と引き継ぎ](#7-中断と引き継ぎ)の「準備の結果が不明」の行に従います。
+- 旧名の `IORI_VAPID_*` と variable `IORI_VAPID_SUBJECT` は、切り替えが終わるまで削除しません。
 
 CLI で1件ずつ登録する場合は、値を command argument にせず、承認済みの mode `0600` ファイルを標準入力に渡します。これは登録例であり、全値を自動生成するコマンドではありません。
 
@@ -244,6 +473,7 @@ CI の `run-migration-fixture.mjs` と合成 PostgreSQL テストは機能検証
 - `main_sha` が、source にデプロイ済みの revision と一致する。一致しない場合、source は `revision_mismatch` で拒否する
 - 使い捨て generation で `prepare-target` が完了している
 - 登録済みの Secret が `migrate-data` と同じである。ただし `IORI_MIGRATION_REHEARSAL` は不要
+- `estimate-source` が `sample=ok` と `capacity=ok` を出している。手順はこの節の末尾の[estimate-source で事前に確認する](#estimate-source-で事前に確認する)に書く
 
 `rehearse-migration` は、source を凍結している区間に、全体で 30 分の上限を持ちます。定数 `REHEARSAL_FREEZE_LIMIT_MS` が、この 30 分を表します。この定数は `apps/iori/scripts/rehearse-protected-migration.mjs` にあります。30 分は、個人ブログで許容できる書き込み停止の長さです。
 
@@ -268,7 +498,7 @@ source 側と adapter 側には、次の時間上限があります。
 
 各上限をすべて使い切った場合の凍結時間は、`upload_count` が 0 でも 12050 秒 (約 201 分) です。計算は 2450 + 300 × 32 です。2450 秒は、freeze、drain、estimate、export、inventory、resume の上限の合計です。300 × 32 秒は、restore の転送の上限です。この値は 30 分 (1800 秒) を大きく超えます。そのため、上限の合計は、30 分を超えるかどうかの事前見積もりに使えません。
 
-`upload_count`、`table_bytes`、`upload_bytes` は、source の estimate が返す値です。estimate は、table の行を JSON にした大きさに、行ごとに改行1バイトを加えて合計した値を `table_bytes` として返します。dispatch の前にこの値を取る手順は、既存の文書にありません [要確認]。
+`upload_count`、`table_bytes`、`upload_bytes` は、source の estimate が返す値です。estimate は、table の行を JSON にした大きさに、行ごとに改行1バイトを加えて合計した値を `table_bytes` として返します。dispatch の前にこの値を取るには、hosted operation `estimate-source` を使います。ただし `estimate-source` は `table_bytes` と `upload_bytes` を出さず、件数と判定だけを出します。`upload_count` は `estimate-source` の出力から読めます。`table_bytes` は dispatch の前には取れません。
 
 転送速度の条件は次のとおりです。
 
@@ -278,9 +508,59 @@ source 側と adapter 側には、次の時間上限があります。
 
 実際の転送速度は、コードにも既存の文書にもありません。そのため、30 分を超えるかどうかを、dispatch の前に確定する方法はありません。
 
+#### estimate-source で事前に確認する
+
+`estimate-source` は、source の estimate だけを GitHub Actions から呼ぶ hosted operation です。source を freeze しません。`production` Environment で実行します。workflow とコードは `staging` の指定も受け付けます。`rehearse-migration` が freeze より前に判定する標本と容量を、凍結なしで先に確かめるために使います。
+
+dispatch の入力は次のとおりです。
+
+- `main_sha` に、現在の main の先頭を指定する
+- `operation` に `estimate-source` を指定する
+- `environment` に `production` を指定する。`staging` も受け付けるが、旧環境は production だけにあるため、production で実行する
+- `generation` と `migration_run_id` は空にする。値を与えると workflow が拒否する
+- `migration_main_sha` は指定しない
+
+run ID は、`estimate-source` が `estimate_<GITHUB_RUN_ID>` の形で内部に作ります。
+
+```bash
+iori_main_sha="$(gh api "repos/$iori_repo/commits/main" --jq .sha)"
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha="$iori_main_sha" \
+  -f operation=estimate-source \
+  -f environment=production
+```
+
+job に渡す secret は、`IORI_SOURCE_SSH_HOST`、`IORI_SOURCE_SSH_USER`、`IORI_SOURCE_SSH_PRIVATE_KEY`、`IORI_SOURCE_SSH_KNOWN_HOSTS` の4件だけです。Cloudflare、R2、Terraform、receipt 鍵の secret は渡しません。
+
+`estimate-source` は、本番 PostgreSQL の全 table を読み取り専用 transaction で走査します。SQL 文ごとの `statement_timeout` は 30 秒で、source 側の estimate 全体の上限は 60 秒です。
+
+成功すると、Actions ログに次の1行だけを出します。
+
+```text
+IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient capacity=ok|insufficient
+```
+
+- `rows`、`upload_count`、`article_count` は件数です。件数は公開してよいと管理担当が判断しました
+- `sample` は、3つの件数がすべて 1 以上なら `ok` です。どれかが 0 なら `insufficient` で、`rehearse-migration` は freeze の前に失敗します
+- `capacity` は、source の空き容量、D1 の上限 10 GB (`10000000000` バイト)、runner の空き容量の3つの判定です。すべて足りれば `ok` です
+- bytes の値は出しません。容量は `ok` と `insufficient` の判定だけを出します
+
+`sample=ok` と `capacity=ok` の両方が出たことを確認してから、`rehearse-migration` を dispatch します。`insufficient` が出た場合は、`rehearse-migration` を dispatch しません。
+
+source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
+
+`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。source の control socket は、拒否の理由を問わず `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
+
+`main_sha` には、次の2つを同時に満たす値が必要です。
+
+- source にデプロイ済みの revision と一致する。一致しない場合、source は `revision_mismatch` で拒否する
+- 現在の main の先頭と一致する。一致しない場合、workflow は `assertReviewedMain` で拒否する
+
+source の配備 workflow (`deploy-iori.yml`) は、`apps/iori/**`、`packages/**`、`.github/workflows/deploy-iori.yml` の変更を含む push で起動します。この3つの path の外の変更だけが main に入ると、main の先頭は進み、source は再配備されません。この場合、2つの条件を同時に満たせません。作業者は、先に第4節の `deploy-iori.yml` を手動で dispatch して source を配備し直し、その後に `estimate-source` を実行します。
+
 ### 5.2 rehearse-migration の処理
 
-1. `rehearse-migration` は、transfer R2 bucket が非公開であることを検査してから、準備記録を読み取ります。続けて、移行先の状態を読み取り、フォントを読み込みます。
+1. `rehearse-migration` は、transfer R2 bucket が非公開であることを検査してから、準備記録を読み取ります。続けて、application R2 の uploads bucket が非公開であることを検査します。検査の対象は `domains/managed` と `domains/custom` です。bucket が公開されている場合、`rehearse-migration` は freeze の前に失敗します。その後、移行先の状態を読み取り、フォントを読み込みます。`migrate-data` も同じ順序で同じ検査をします。
 2. source の estimate を取得します。件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。
 3. 容量を判定します。判定は `migrate-data` と同じです。時間の判定はしません。`d1_capacity_bytes` は Workers Paid の D1 上限である `10000000000` に固定します。
 4. 手順 1〜3 を通った後で、`prepared-target/v1/<environment>/<generation>/rehearsal.json` を書きます。
@@ -388,25 +668,101 @@ rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
 
 ### 5.5 使い捨て generation の後片付け
 
-後片付けの前に、5.4 の envelope の取得と登録を済ませます。envelope は使い捨て generation の transfer bucket にあるため、bucket を削除すると取り出せなくなります。
-
-`prepare-target` が作ったリソースを削除する手順は未整備です。`apps/iori/docs/operations/` と `apps/iori/infra/cloudflare/` に、generation や target を破棄する手順はありません。[cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。`apps/iori/infra/cloudflare/main.tf` には `prevent_destroy = true` を設定したリソースもあります。削除手順をレビューして明示承認を得るまで、作業者は使い捨て generation のリソースと state を保持します。削除手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。
-
 使い捨て generation には、本番の実データが匿名化されずに残ります。実データは個人データを含みます。残る場所は次のとおりです。
 
 - D1 には、`rehearse-migration` が import した全 31 table の行が残ります。
 - application R2 の uploads bucket には、`post-images/<id>/original` の元画像と、`og/<id>.png` の OGP 画像が残ります。
 - transfer R2 bucket には、`rehearse-migration` が本番の実データを書きません。bucket にあるのは、準備記録、`rehearsal.json`、実行予約、`rehearsal-profile` の envelope です。envelope の profile は処理速度の数値だけです。
 
-使い捨て generation の実データに到達できる経路は、コードと既存の文書で確かめられた範囲で次のとおりです。
+D1 と application R2 の実データは、hosted operation `purge-rehearsal-target` が削除します。実データが残る期間は、`rehearse-migration` の import から `purge-rehearsal-target` の成功までです。計測の直後に `purge-rehearsal-target` を実行し、`migrate-data` を実行する時期や cutover まで待ちません。
+
+#### purge-rehearsal-target の処理
+
+`purge-rehearsal-target` は、次の順に処理します。
+
+1. 準備記録を読み取ります。このとき transfer R2 bucket が非公開であることも検査します。
+2. transfer R2 に `rehearsal.json` があることを確認します。`rehearsal.json` は `rehearse-migration` が書く印です。印の `main_sha` と `run_id` が dispatch の `migration_main_sha` と `migration_run_id` に一致しない場合、`purge-rehearsal-target` は失敗します。印が無い generation も失敗します。`migrate-data` は印のある generation を拒否するため、本番の切替に使う generation は対象になりません。
+3. application R2 の uploads bucket が非公開であることを検査します。検査の対象は `domains/managed` と `domains/custom` です。公開されている場合、`purge-rehearsal-target` は何も削除せずに失敗します。
+4. D1 の application table に、import 順の逆順で `DELETE` を実行します。その後、全 table の `COUNT` が 0 であることを確かめます。
+5. application R2 の uploads bucket の全 object を列挙し、1000 件ずつ削除します。削除の後に再び列挙し、0 件であることを確かめます。
+
+`purge-rehearsal-target` は、transfer R2 に何も書かず、何も削除しません。transfer R2 の envelope と印は残ります。そのため、`purge-rehearsal-target` の前に envelope を回収する必要はありません。ただし、5.4 の登録は先に済ませておきます。印が残るため、この generation は再利用できません。
+
+`purge-rehearsal-target` は何度実行しても同じ結果になります。Actions に出す文言は固定で、件数や名前は出しません。失敗した場合は、generation を保持したまま原因を確認し、同じ入力で再実行できます。
+
+#### 実行前に確認すること
+
+次の2点は、リポジトリの中からは確かめられません。作業者が dispatch の前に確認します。
+
+- `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` が、application R2 bucket の `domains/managed` と `domains/custom` を GET できる
+- `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` が、D1 に対して `DELETE` と `SELECT` を実行できる
+
+次の3点は、第3.1節「未作成の bucket に限定した R2 S3 credential の作成」の段階 B にある `IORI_APPLICATION_R2_WRITE` の疎通確認で、最初の2点を確かめます。3点目は確かめられません。
+
+- `IORI_APPLICATION_R2_WRITE` の範囲に、使い捨て generation の uploads bucket が含まれている。段階 B の `s3 PUT` が 200 を返すことで確かめる
+- `IORI_APPLICATION_R2_WRITE` が、`ListObjectsV2` を許している。段階 B の `s3 GET "${UPLOADS_BUCKET}?list-type=2"` が 200 を返すことで確かめる
+- `IORI_APPLICATION_R2_WRITE` が、`DeleteObjects` を許している。段階 B の `s3` 関数は DeleteObjects の本文を送れないので、段階 B では確かめられない [要確認]
+
+#### dispatch
+
+dispatch の入力は次のとおりです。
+
+- `main_sha` に、現在の main の先頭を指定する。workflow はこの値で code を checkout し、main の先頭との一致を検査する
+- `migration_main_sha` に、`rehearse-migration` を実行したときの `main_sha` を指定する
+- `migration_run_id` に、`rehearse-migration` を実行したときの値を指定する
+- `generation` に、使い捨て generation を指定する
+- `environment` に `production` を指定する
+
+`main_sha` と `migration_main_sha` は異なってよいので、`rehearse-migration` の後に main が進んでいても `purge-rehearsal-target` を実行できます。準備記録と印の照合には、`migration_main_sha` と `migration_run_id` を使います。
+
+`IORI_ADMISSION_IDENTITY` には、次の前提があります。`purge-rehearsal-target` の job は、子プロセスに渡す `MAIN_SHA` を `migration_main_sha` に差し替えます。`read-migration-target` は、`IORI_ADMISSION_IDENTITY` の `mainSha` が、この `MAIN_SHA` と一致することを要求します。同じ検査は `environment`、`generation`、`runId` にもあります。そのため、`purge-rehearsal-target` の時点の `IORI_ADMISSION_IDENTITY` は、`rehearse-migration` を実行したときの SHA、generation、run ID で作った値である必要があります。この前提は `deploy-worker` と同じです。
+
+作業者は、`purge-rehearsal-target` を `rehearse-migration` の直後に実行します。作業者は、`IORI_ADMISSION_IDENTITY` を本番用 generation（または次の計測）の値に切り替える前に、`purge-rehearsal-target` を実行します。切り替えた後に実行すると、`read-migration-target` が `purge-rehearsal-target` を拒否します。
+
+```bash
+iori_main_sha="$(gh api "repos/$iori_repo/commits/main" --jq .sha)"
+iori_migration_main_sha='<rehearse-migration を実行した main_sha>'
+iori_generation='<使い捨て generation>'
+iori_migration_run_id='<rehearse-migration を実行した run ID>'
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha="$iori_main_sha" \
+  -f migration_main_sha="$iori_migration_main_sha" \
+  -f operation=purge-rehearsal-target \
+  -f environment=production \
+  -f generation="$iori_generation" \
+  -f migration_run_id="$iori_migration_run_id"
+```
+
+job に渡す credential は、`rehearse-migration` と同じものに加えて次のとおりです。ただし、transfer R2 は読み取り専用の credential で読むだけです。
+
+- `CLOUDFLARE_API_TOKEN` に `IORI_CLOUDFLARE_MIGRATE_API_TOKEN` を渡す
+- application R2 に `IORI_APPLICATION_R2_WRITE_*` を渡す
+- Terraform backend の読み取りに `IORI_TERRAFORM_READ_ONLY_*` を渡す
+- transfer R2 の読み取りに `IORI_TRANSFER_R2_READ_ONLY_*` を渡す
+
+SSH の secret、receipt の鍵、`IORI_MIGRATION_REHEARSAL` は渡しません。
+
+#### リソースの削除
+
+`purge-rehearsal-target` は、D1 database、R2 bucket、KV、Queue、Worker などのリソースを削除しません。リソースの削除は、後続の手作業の項目です。手作業にする理由は次のとおりです。
+
+- `apps/iori/infra/cloudflare/main.tf` に、`prevent_destroy = true` を設定したリソースがあります。
+- Worker は Terraform の管理外です。`apps/iori/infra/cloudflare/` に Worker を作る resource はありません。
+- [cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。
+
+リソースの削除手順は、レビューして明示承認を得るまで未整備です。作業者は、承認を得るまで使い捨て generation のリソースと state を保持します。手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。削除手順は [#500](https://github.com/iwasa-kosui/monorepo/issues/500) で整えます。
+
+#### 実データへの到達経路
+
+`purge-rehearsal-target` を実行する前の使い捨て generation の実データに到達できる経路は、コードと既存の文書で確かめられた範囲で次のとおりです。
 
 - Worker は `sealed` の状態です。`sealed` の Worker は、すべての HTTP リクエストを 503 で拒否します。`workers.dev` の subdomain は有効ですが、同じ拒否が適用されます。
 - `rehearse-migration` は route を作りません。`cutover-route` も進まないため、本番の hostname から使い捨て generation には到達しません。
 - transfer R2 bucket は非公開です。`prepare-target` と `rehearse-migration` は、bucket の managed domain と custom domain が無効であることを Cloudflare API で確認します。
-- application R2 の uploads bucket に、公開 domain を作る Terraform resource はありません。ただし、公開設定が無効であることを実 API で検査するコードは、transfer R2 bucket にしかありません。
+- application R2 の uploads bucket に、公開 domain を作る Terraform resource はありません。`rehearse-migration`、`migrate-data`、`purge-rehearsal-target` は、uploads bucket の `domains/managed` と `domains/custom` が無効であることを Cloudflare API で検査し、公開されていれば失敗します。`rehearse-migration` と `migrate-data` は freeze の前に、`purge-rehearsal-target` は削除の前に検査します。
 - 残る経路は、`production` Environment に登録した Cloudflare API token と R2 の credential を使う操作です。
 
-**完了条件:** 本番の `migrate-data` を実行する `main_sha` と同じ `main_sha` の profile が、`production` Environment の `IORI_MIGRATION_REHEARSAL` に登録されている。ローカルの envelope の一時ファイルを削除している。source の `freeze.json` と `freeze.pending` が残っておらず、書き込みが再開している。`rehearse-migration` は署名つき bundle を公開しないため、bundle の復元と再検証は計測の対象外である。
+**完了条件:** 本番の `migrate-data` を実行する `main_sha` と同じ `main_sha` の profile が、`production` Environment の `IORI_MIGRATION_REHEARSAL` に登録されている。ローカルの envelope の一時ファイルを削除している。`purge-rehearsal-target` の job が成功している。source の `freeze.json` と `freeze.pending` が残っておらず、書き込みが再開している。`rehearse-migration` は署名つき bundle を公開しないため、bundle の復元と再検証は計測の対象外である。
 
 ## 6. Hosted workflow の実行
 
@@ -427,7 +783,7 @@ iori_migration_run_id='<固定した移行runID>'
 
 最初は `prepare-target` を指定します。1回の実行が成功し、次の行の前提も満たしてから `iori_operation` だけを変更して同じコマンドを使います。
 
-表の「計測」行は、`migrate-data` より前に第5節の手順で実施します。計測用の dispatch では、`iori_environment` を `production`、`iori_generation` を使い捨て generation の名前（第5節の例は `prdrehearse1`）にします。本番用 generation の `iori_generation` と取り違えないでください。
+表のうち、順序に「計測」を含む行は、`migrate-data` より前に第5節の手順で実施します。`estimate-source` の dispatch では、`generation` と `migration_run_id` を空にします。下のコマンドは `generation` と `migration_run_id` を常に渡すので、`estimate-source` では下のコマンドを使わず、[第5.1節](#estimate-source-で事前に確認する)のコマンドを使います。`purge-rehearsal-target` を含む計測用の dispatch では、`iori_environment` を `production`、`iori_generation` を使い捨て generation の名前（第5節の例は `prdrehearse1`）にします。本番用 generation の `iori_generation` と取り違えないでください。
 
 ```bash
 iori_operation=prepare-target
@@ -439,15 +795,17 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
   -f migration_run_id="$iori_migration_run_id"
 ```
 
-| 順序  | Operation                                       | 次へ進む条件                                                                                                                              |
-| ----- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 計測1 | `prepare-target`（使い捨て generation）         | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                         |
-| 計測2 | `rehearse-migration`（使い捨て generation）     | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない     |
-| 計測3 | profile 登録（ローカル操作。dispatch はしない） | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                             |
-| 1     | `prepare-target`（本番用 generation）           | Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                |
-| 2     | `migrate-data`                                  | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                |
-| 3     | `verify-import`                                 | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
-| 4     | `cutover-route`                                 | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
+| 順序     | Operation                                                    | 次へ進む条件                                                                                                                                                        |
+| -------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 計測の前 | `estimate-source`（`generation` と `migration_run_id` は空） | 出力が `sample=ok` と `capacity=ok`。freeze はしない。手順は[第5.1節](#estimate-source-で事前に確認する)                                                            |
+| 計測1    | `prepare-target`（使い捨て generation）                      | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                                                   |
+| 計測2    | `rehearse-migration`（使い捨て generation）                  | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない                               |
+| 計測3    | profile 登録（ローカル操作。dispatch はしない）              | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                                                       |
+| 計測の後 | `purge-rehearsal-target`（使い捨て generation）              | job が成功し、D1 の全 table と application R2 の uploads bucket が空。リソースは残る。手順は[第5.5節](#55-使い捨て-generation-の後片付け)                           |
+| 1        | `prepare-target`（本番用 generation）                        | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功 |
+| 2        | `migrate-data`                                               | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                                          |
+| 3        | `verify-import`                                              | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                    |
+| 4        | `cutover-route`                                              | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                           |
 
 上の表の operation に加えて、旧環境（source）に書き込む operation が2つあります。
 
@@ -493,12 +851,12 @@ staging が完了したら、production に異なる generation・リソース�
 
 ## 7. 中断と引き継ぎ
 
-| 中断地点                      | 維持する状態                            | 次の対応                                                             |
-| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                       |
-| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない    |
-| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施 |
-| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない     |
+| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                 |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                           |
+| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない（generation のリソースが1つも無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
+| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                     |
+| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                         |
 
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 
@@ -573,7 +931,7 @@ export、inventory、transfer などの control コマンドが実行中の間�
 
 `resume-source` は idle になるまで待つ処理を持ちません。失敗した場合、作業者は次のとおり対応します。
 
-- `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。作業者は承認を得て、手作業で対応します。
+- `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。この失敗は、この PR の operation の範囲外です。復旧の経路はまだ決まっていません。作業者は旧環境に直接入らず、管理役に判断を仰ぎます。
 - `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。control コマンドの実行中（`control_busy`）だけでなく、revision の不一致、identity の不一致、ssh の失敗でも、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
 - `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。作業者は時間を置いて再実行します。
 - resume が source 側で成功したのに応答が届かなかった場合、`resume-source` は失敗として報告します。再実行すると `reason=source-not-frozen` で失敗します。`source-not-frozen` は、凍結がすでに解除済みである可能性を示します。作業者は status か本番の応答で、凍結が解けていることを確かめます。
@@ -598,18 +956,23 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 `release-pending-freeze` は次の順に動きます。
 
-1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。`sudo -n -l` で、microblog の stop と start が許可されていることを確かめます。許可されていない場合は `reason=service-control-not-permitted` で、microblog を停止せずに失敗します。
+1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。`release-pending-freeze` は、旧環境の systemctl の絶対パスを確かめ、そのパスで許可の検査と、stop と start の実行を行います。`sudo -n -l` で、microblog の stop と start が許可されていることを確かめます。許可されていない場合は `reason=service-control-not-permitted` で、microblog を停止せずに失敗します。
 2. microblog を停止し、停止したことを確かめます。
 3. 停止したあとに、手順 1 と同じ条件をもう一度確かめます。あわせて、`freeze.pending` が手順 1 で確かめたファイルと同じファイルであることを確かめます。停止の間にファイルが変わっていた場合は、失敗します。
-4. 手順 3 の条件を満たした場合だけ、`freeze.pending.rejected-<migration_run_id>` を新しく作る形で、`freeze.pending` を退避します。退避先がすでにある場合は、上書きせずに失敗します。`freeze.pending` の削除はしません。
+4. 手順 3 の条件を満たした場合だけ、`freeze.pending` を退避します。`freeze.pending` の中身は消さず、`freeze.pending.rejected-<migration_run_id>` という hard link を作ってから、`freeze.pending` の名前を外します。退避先がすでにある場合は、上書きせずに失敗します。
 5. microblog を起動し、status で凍結していないことを確かめます。
 
-条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。手順 1 で失敗した場合、`release-pending-freeze` は microblog を停止していません。手順 2 の停止のあとに、手順 3 の再検査、手順 4 の rename、手順 5 の起動のどこかで失敗した場合は、microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。
+条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。手順 1 で失敗した場合、`release-pending-freeze` は microblog を停止していません。手順 2 の停止のあとに、手順 3 の再検査、手順 4 の退避、手順 5 の起動のどこかで失敗した場合は、microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。
 
 `reason` ごとに、作業者は次のとおり対応します。
 
 - `service-stop-failed`、`service-not-stopped`、`release-rename-failed` の場合、作業者は原因を確かめてから `release-pending-freeze` を再実行します。microblog が停止したまま残っている場合があります。
-- 停止後の再検査が `freeze-committed`、`pending-freeze-invalid`、`pending-identity-mismatch`、`release-target-exists` のどれかで失敗した場合も、作業者は原因を確かめてから `release-pending-freeze` を再実行します。microblog が停止したまま残っている場合があります。
+- `release-pending-freeze` は、microblog の停止を確かめた直後に、Actions ログへ `IORI_NOTICE stage=release-pending-freeze stopped=1` を出します。失敗した場合、作業者は失敗より前にこの行が出ているかを確かめます。
+  - `reason` が停止前の検査で起きる5つ（`freeze-committed`、`pending-freeze-invalid`、`pending-identity-mismatch`、`release-target-exists`、`service-control-not-permitted`）のどれかで、失敗より前に `stopped=1` の行が出ていない場合は、停止前の検査で失敗しています。旧環境は変わっておらず、microblog も止まっていません。この場合、再実行しても同じ理由で失敗し続けます。作業者は再実行せず、承認を得て `freeze.pending` と退避先の状態を確かめます。
+  - `service-stop-failed` と `service-not-stopped` は、停止を試みたあとの失敗です。この2つの場合、`stopped=1` の行は出ませんが、microblog が止まっている場合があります。作業者は上の項目のとおり、原因を確かめてから再実行します。
+  - 凍結が残っていないのに dispatch した場合も、停止前の検査で `pending-freeze-invalid` として失敗します。
+  - `service-control-not-permitted` は旧環境を変えません。再実行しても直りません。作業者は承認を得て、旧環境の sudoers を確かめます。
+- `stopped=1` の行が出たあとの停止後の再検査が `freeze-committed`、`pending-freeze-invalid`、`pending-identity-mismatch`、`release-target-exists` のどれかで失敗した場合は、作業者は原因を確かめてから `release-pending-freeze` を再実行します。microblog が停止したまま残っている場合があります。
 - `service-start-failed`、`release-not-confirmed` の場合、作業者は `release-pending-freeze` を再実行します。再実行は退避済みとして扱われ、起動と確認だけを行います。
 
 再実行したときの事前検査で、次の3つの条件がそろうことがあります。
@@ -618,7 +981,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 - `freeze.pending.rejected-<migration_run_id>` が通常ファイルで、同じ uid が所有しています。
 - その中身の `main_sha` と `run_id` が input と一致します。
 
-この場合、`release-pending-freeze` は退避済みとして扱います。停止と退避を飛ばし、microblog を起動して、status で凍結していないことを確かめます。Actions ログには `IORI_NOTICE stage=release-pending-freeze already_renamed=1` が出ます。
+この場合、`release-pending-freeze` は退避済みとして扱います。停止と退避を飛ばし、microblog を起動して、status で凍結していないことを確かめます。この経路でも、`release-pending-freeze` は stop と start の両方の許可を確かめます。Actions ログには `IORI_NOTICE stage=release-pending-freeze already_renamed=1` が出ます。
 
 退避の途中で失敗した場合は、`freeze.pending` と退避先の両方が同じファイルとして残ります。再実行すると、`release-pending-freeze` は microblog を停止して確かめ直してから、`freeze.pending` の側だけを取り除き、microblog を起動します。
 

@@ -233,6 +233,16 @@ export const fixture = async () => {
     }),
   });
   const actualProvider = createCloudflareImportProvider(transport);
+  const uploadsBucket = { public: false, urls: [] as string[] };
+  const privacyFetch: typeof fetch = async url => {
+    uploadsBucket.urls.push(String(url));
+    return new Response(
+      JSON.stringify({
+        success: true,
+        result: String(url).endsWith('/managed') ? { enabled: uploadsBucket.public } : { domains: [] },
+      }),
+    );
+  };
   const options: ExecutorOptions = {
     root,
     expectedTarget: target,
@@ -242,6 +252,8 @@ export const fixture = async () => {
     storage,
     bucket,
     actualProvider,
+    apiToken: 'fixture',
+    fetchImpl: privacyFetch,
     maxSqlFileBytes: 1024,
     rehearsal: parseMigrationRehearsal({
       schema: 'iori-migration-rehearsal/v1',
@@ -291,6 +303,7 @@ export const fixture = async () => {
     calls,
     remote,
     actualProvider,
+    uploadsBucket,
     close: () => {
       sourceDb.close();
       actualDb.close();

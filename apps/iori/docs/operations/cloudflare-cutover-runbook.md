@@ -16,7 +16,7 @@
 4. route が absent であり、`enable_production_worker_route=false` と `enable_staging_worker_route=false` の通常 plan では route が作られないことを確認します。切替では対象 environment に対応する一方の flag だけを有効にし、指定した hostname・zone・Worker を照合します。
 5. `$RUNNER_TEMP` 配下の export/import ディレクトリが repository 外で mode `0700`、各ファイルが mode `0600` であることを確認します。生成 config と一時入力を含め、失敗時も job 終了時に削除します。
 6. hosted runner からの Lightsail SSH、Cloudflare API、state・移行用 R2 への接続を検査します。信頼する SSH host key と credential は Environment から渡します。移行用 bucket は `r2.dev`、custom domain、アプリからの配信を無効にします。
-7. ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。`rehearse-migration` が作る throughput profile を[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)の手順で登録し、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
+7. ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。計測の前に `estimate-source` で件数と容量の判定を確認し、計測の後に `purge-rehearsal-target` で使い捨て generation のデータを削除します。`rehearse-migration` が作る throughput profile を[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)の手順で登録し、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
 8. メンテナンス中は旧 SSH deploy による再起動を抑止し、停止から切替または承認された復旧まで書き込み停止を維持します。旧 workflow の削除は AWS retirement の承認後に行います。
 
 移行元は Node process を起動したまま、新規 HTTP の受付を止めます。受付済み HTTP の本文送信・キャンセル処理、enqueue、dequeue、handler transaction の完了と、遅延行を含む Queue の深さ `0` を確認して consumer を一時停止します。`systemd` の停止を drain の証拠にしません。レビュー済み build の SHA と指定 SHA が一致する private source control を使い、export は同じ排他制御の下で既存の DB/TLS 設定を利用します。

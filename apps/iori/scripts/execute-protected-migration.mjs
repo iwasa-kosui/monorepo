@@ -14,6 +14,7 @@ import { importMigrationD1, reviewedD1Schema } from './migration-d1-import.mjs';
 import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
 import { importMigrationOgp, importMigrationUploads } from './migration-object-import.mjs';
 import { assertExternalMigrationRoot, isMigrationArtifactReference } from './migration-path-safety.mjs';
+import { assertMigrationBucketPrivate } from './migration-r2-storage.mjs';
 import { createMigrationR2Writer } from './migration-r2-writer.mjs';
 import { parseExpectedTarget, rehearsalTargetKey, targetHash, targetIdentity } from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
@@ -195,6 +196,13 @@ export const runProtectedPhases = async (options, target, plan) => {
     signal.throwIfAborted();
     await mkdir(join(root, 'evidence'), { mode: 0o700 });
     const prepared = await readPreparationRecord({ storage, expectedTarget: target });
+    await assertMigrationBucketPrivate({
+      accountId: target.identity.account_id,
+      bucket: target.resources.uploads.name,
+      apiToken: options.apiToken,
+      fetchImpl: options.fetchImpl,
+      signal,
+    });
     await options.readTarget({ expectedTarget: target, record: prepared.record, signal });
     const fontData = await options.loadFont(signal);
     await checkBudget();
@@ -426,6 +434,7 @@ export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
       storage,
       bucket,
       actualProvider,
+      apiToken,
       signal,
       readTarget: (input) => readSealedMigrationTarget({ ...input, token: apiToken, zoneId }),
       loadFont: (signal) => loadNodeOgFont({ signal }),

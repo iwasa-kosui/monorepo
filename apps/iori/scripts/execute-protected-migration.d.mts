@@ -16,6 +16,8 @@ export type ExecutorOptions = {
   rehearsal: MigrationRehearsal;
   bucket: MigrationObjectWriter;
   actualProvider: ReturnType<typeof createCloudflareImportProvider>;
+  apiToken: string;
+  fetchImpl?: typeof fetch;
   signal?: AbortSignal;
   deadlineMs?: number;
   maxSqlFileBytes?: number;

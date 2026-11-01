@@ -4,6 +4,9 @@ import { objectManifestEnvelope, serializeObjectEntry } from './migration-object
 import { SOURCE_LIMITS } from './source-transfer-protocol.mjs';
 export const MIGRATION_DEADLINE_MS = 5 * 60 * 60_000 + 45 * 60_000;
 export const CLEANUP_MARGIN_MS = 15 * 60_000;
+export const REHEARSAL_D1_CAPACITY_BYTES = 10_000_000_000;
+export const hasRehearsalSample = (estimate) =>
+  Boolean(estimate.rows && estimate.upload_count && estimate.article_count);
 const positive = z.number().positive().finite();
 /** Protected rehearsal measurements, not operator timeout overrides. Technical caps stay fixed. */
 export const parseMigrationRehearsal = (input, mainSha) => {

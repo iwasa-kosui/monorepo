@@ -19,6 +19,7 @@ afterEach(() => {
 });
 it.each([
   ['resume-source', 'resume-source.mjs', 'destination_writes_reconciled'],
+  ['resume-source', 'resume-source.mjs', 'destination_writes_not_enabled'],
   ['release-pending-freeze', 'release-pending-freeze.mjs', undefined],
 ])(
   'runs %s against the reviewed code SHA and never reads the migration target',

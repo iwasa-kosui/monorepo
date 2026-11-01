@@ -10,6 +10,10 @@ export type MigrationRehearsal = {
   ogp_per_second: number;
   d1_capacity_bytes: 500000000 | 10000000000;
 };
+export const REHEARSAL_D1_CAPACITY_BYTES: number;
+export function hasRehearsalSample(
+  estimate: Pick<MigrationEstimate, 'rows' | 'upload_count' | 'article_count'>,
+): boolean;
 export function parseMigrationRehearsal(input: unknown, mainSha: string): MigrationRehearsal;
 export type MigrationEstimate = {
   table_bytes: number;

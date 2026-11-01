@@ -12,6 +12,7 @@ import { createStageRunner, readSourceStatus } from './source-recovery.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
 const releaseNotice = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
 const alreadyRenamedNotice = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
+const stoppedNotice = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
 export const releasePendingFreeze = async (options, {
   runCommand = runMigrationCommand,
   sourceFactory = createSourceSshAdapter,
@@ -66,7 +67,9 @@ export const releasePendingFreeze = async (options, {
         captureOutput: async (result) => {
           current.stderr = result.stderr;
           for (const line of result.stderr.split('\n')) {
-            if (releaseNotice.test(line) || alreadyRenamedNotice.test(line)) process.stderr.write(`${line}\n`);
+            if (releaseNotice.test(line) || alreadyRenamedNotice.test(line) || stoppedNotice.test(line)) {
+              process.stderr.write(`${line}\n`);
+            }
           }
           await log?.capture(result);
         },

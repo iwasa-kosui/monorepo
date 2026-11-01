@@ -46,17 +46,17 @@ export const runPendingFreezeRelease = async (
       signal,
       captureOutput: capture,
     });
+  let systemctl = '';
   const service = async (action, message) => {
     await check();
     try {
-      await exec('sudo', ['-n', 'systemctl', action, 'microblog']);
+      await exec('sudo', ['-n', systemctl, action, 'microblog']);
     } catch {
       signal?.throwIfAborted();
       throw new Error(message);
     }
   };
   const assertServiceControl = async () => {
-    let systemctl = '';
     try {
       await exec('/bin/sh', ['-c', 'command -v systemctl'], async (result) => {
         systemctl = result.stdout.trim();
@@ -121,12 +121,13 @@ export const runPendingFreezeRelease = async (
   }
   await service('stop', 'Source service stop failed.');
   let state = '';
-  await exec('systemctl', ['is-active', 'microblog'], async (result) => {
+  await exec(systemctl, ['is-active', 'microblog'], async (result) => {
     state = result.stdout.trim();
     await captureOutput?.(result);
   }).catch(() => {});
   signal?.throwIfAborted();
   if (!['inactive', 'failed'].includes(state)) throw new Error('Source service is not stopped.');
+  process.stderr.write('IORI_NOTICE stage=release-pending-freeze stopped=1\n');
   await check();
   const { kind, before } = await inspect();
   if (kind !== planned.kind || before.dev !== planned.before.dev || before.ino !== planned.before.ino) {
