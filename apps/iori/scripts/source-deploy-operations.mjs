@@ -162,16 +162,34 @@ export const runSourceDeployStep = async (
           if (!existing.isFile() || (existing.mode & 0o022)) throw new Error('Source configuration unavailable.');
           return existing;
         };
-        const before = await inspectConfiguration();
-        if (before.uid !== 0) {
+        let current = await inspectConfiguration();
+        if (current.uid !== 0) {
           await check();
           await exec('sudo', ['-n', 'chown', '-h', '0:0', sourceEnvironmentFile]);
           const after = await inspectConfiguration();
-          if (after.uid !== 0 || after.dev !== before.dev || after.ino !== before.ino) {
+          if (after.uid !== 0 || after.dev !== current.dev || after.ino !== current.ino) {
             throw new Error('Source configuration owner reset failed.');
           }
           process.stderr.write(
-            `IORI_NOTICE stage=remote-configuration-owner previous_uid=${before.uid} previous_gid=${before.gid}\n`,
+            `IORI_NOTICE stage=remote-configuration-owner previous_uid=${current.uid} previous_gid=${current.gid}\n`,
+          );
+          current = after;
+        }
+        if ((current.mode & 0o777) !== 0o600) {
+          await check();
+          try {
+            await exec('sudo', ['-n', 'chmod', '600', sourceEnvironmentFile]);
+          } catch {
+            throw new Error('Source configuration mode reset failed.');
+          }
+          const after = await inspectConfiguration();
+          if (after.dev !== current.dev || after.ino !== current.ino || (after.mode & 0o777) !== 0o600) {
+            throw new Error('Source configuration mode reset failed.');
+          }
+          process.stderr.write(
+            `IORI_NOTICE stage=remote-configuration-mode previous_mode=${
+              (current.mode & 0o777).toString(8).padStart(4, '0')
+            }\n`,
           );
         }
       } else if (phase === 'install') {

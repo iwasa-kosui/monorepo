@@ -74,6 +74,13 @@ it('keeps other rejections and unsafe control paths as ordinary failures', async
   expect(unsafe.message).toBe('Unsafe source control.');
   expect(unsafe.notReady).toBeUndefined();
 });
+it('marks the control_busy response as busy', async () => {
+  const base = await setup();
+  await listenWith(base, '{"ok":false,"error":"control_busy"}\n');
+  const busy = await requestSourceControl({ args, output: sink(), base }).catch((error) => error);
+  expect(busy).toMatchObject({ message: 'Source control is busy.', busy: true });
+  expect(busy.notReady).toBeUndefined();
+});
 const runCli = (home: string) =>
   spawnSync(process.execPath, [fileURLToPath(new URL('../source-control.mjs', import.meta.url)), ...args], {
     env: { ...process.env, HOME: home },
@@ -89,4 +96,26 @@ it('exits with 75 and the fixed message only when the control socket is not read
   const unsafe = runCli(home);
   expect(unsafe.status).toBe(1);
   expect(unsafe.stderr).toBe('Source control unavailable or rejected\n');
+});
+const runCliAsync = (home: string) =>
+  new Promise<{ status: number | null; stderr: string }>((resolve) => {
+    const child = spawn(process.execPath, [fileURLToPath(new URL('../source-control.mjs', import.meta.url)), ...args], {
+      env: { ...process.env, HOME: home },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('close', (status) => resolve({ status, stderr }));
+  });
+it('exits with 76 and the fixed message when the control socket is busy', async () => {
+  const home = await setup();
+  const base = join(home, '.iori-migration');
+  await mkdir(base, { mode: 0o700 });
+  await listenWith(base, '{"ok":false,"error":"control_busy"}\n');
+  const busy = await runCliAsync(home);
+  expect(busy.status).toBe(76);
+  expect(busy.stderr).toBe('Source control is busy.\n');
 });

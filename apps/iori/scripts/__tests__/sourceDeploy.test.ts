@@ -1,7 +1,11 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { deploySource } from '../deploy-source.mjs';
+import { createSourceBuildManifest } from '../source-build-manifest.mjs';
 import { runSourceDeployStep } from '../source-deploy-operations.mjs';
+import { createFixtureDirectory } from './fixtureTemp.ts';
 
 it('blocks before any remote mutation and repeats the guard after setup delay', async () => {
   const calls: string[] = [];
@@ -220,6 +224,7 @@ it.each([
   ['Error: Source UPLOAD_DIR must be outside dist: /secret/path', 'upload-dir-inside-dist'],
   ['Error: Dirty source checkout.', 'source-dirty'],
   ['Error: Source configuration owner reset failed.', 'config-owner-reset-failed'],
+  ['Error: Source configuration mode reset failed.', 'config-mode-reset-failed'],
   ['Error: Source UPLOAD_DIR must be an existing directory: /secret/path', 'upload-dir-missing'],
   ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
   ['Migration command failed; outcome may be uncertain.', 'remote-command-failed'],
@@ -359,6 +364,34 @@ it('relays only the exact configuration owner notice from a remote stage', async
   expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${notice}\n`]);
   expect(writes.join('')).not.toMatch(/secret|extra|abc/);
 });
+const modeNotice = 'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644';
+it('relays only the exact configuration mode notice from a remote stage', async () => {
+  const writes = captureDiagnostics();
+  await deploySource(diagnosticOptions, {
+    ...diagnosticDependencies,
+    runCommand: async (program, _args, options) => {
+      if (program === 'ssh' && /"?phase"?: "configuration-owner"/.test(options.input ?? '')) {
+        await options.captureOutput?.({
+          stdout: '',
+          stderr: [
+            modeNotice,
+            `${modeNotice} extra=/home/secret`,
+            ` ${modeNotice}`,
+            `${modeNotice} `,
+            'IORI_NOTICE stage=remote-configuration-mode previous_mode=644',
+            'IORI_NOTICE stage=remote-configuration-mode previous_mode=0888',
+            'IORI_NOTICE stage=remote-configuration-mode previous_mode=01644',
+            'IORI_NOTICE stage=remote-configuration-mode previous_mode=abc',
+            'IORI_NOTICE stage=remote-install previous_mode=0644',
+          ].join('\n'),
+        });
+      }
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${modeNotice}\n`]);
+  expect(writes.join('')).not.toMatch(/secret|extra|abc/);
+});
 it('does not relay a notice from a failed rsync stage', async () => {
   const writes = captureDiagnostics();
   await expect(deploySource(diagnosticOptions, {
@@ -456,4 +489,59 @@ it('stops waiting between status attempts when the deployment is aborted', async
   abort.abort();
   await failed;
   expect(calls).toBe(1);
+});
+it('stops before install and restart when the configuration chmod command fails and prints one diagnostic', async () => {
+  const writes = captureDiagnostics();
+  const home = await createFixtureDirectory('iori-deploy-');
+  try {
+    const dist = join(home, 'monorepo/apps/iori/dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(join(dist, 'index.js'), 'reviewed');
+    const manifest = await createSourceBuildManifest(dist, sha);
+    const phases: string[] = [];
+    await expect(deploySource(diagnosticOptions, {
+      ...diagnosticDependencies,
+      inspectDist: async () => ({ root: '/fixture/dist', manifest }),
+      runCommand: async (program, _args, options) => {
+        const phase = program === 'rsync' ? 'rsync' : /"?phase"?: "([a-z-]+)"/.exec(options.input ?? '')?.[1] ?? '';
+        phases.push(phase);
+        if (phase !== 'configuration-owner') return { stdout: '', stderr: '' };
+        const failure = await runSourceDeployStep({ phase, sha, manifest }, {
+          home,
+          guard: async () => {},
+          inspectCheckout: async () => {},
+          lstatFile: async () => ({ isFile: () => true, uid: 0, gid: 0, mode: 0o100644, dev: 1, ino: 100 }) as never,
+          runCommand: async (remoteProgram, args) => {
+            if (remoteProgram === 'sudo' && args.includes('chmod')) {
+              throw Object.assign(new Error('Migration command failed; outcome may be uncertain.'), { exitCode: 1 });
+            }
+            return { stdout: args.includes('rev-parse') ? sha : '', stderr: '' };
+          },
+        }).then(() => undefined, (error: Error) => error);
+        expect(failure).toBeInstanceOf(Error);
+        await options.captureOutput?.({
+          stdout: '',
+          stderr: `sudo: a password is required\nError: ${failure?.message}`,
+        });
+        throw Object.assign(new Error('x'), { exitCode: 1 });
+      },
+    })).rejects.toThrow('x');
+    expect(phases).toEqual([
+      'check',
+      'checkout',
+      'dependencies',
+      'dist-check',
+      'rsync',
+      'verify-dist',
+      'configuration-owner',
+    ]);
+    const lines = writes.filter(line => line.startsWith('IORI_DIAG'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(
+      /^IORI_DIAG stage=remote-configuration-owner program=ssh exit=1 signal=none reason=config-mode-reset-failed\n$/,
+    );
+    expect(writes.join('')).not.toMatch(/secret|password/);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });
