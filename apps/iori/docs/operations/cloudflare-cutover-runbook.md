@@ -39,6 +39,8 @@ source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push �
 
 `blog.kosui.me` が proxied でない状態で `cutover-route` を実行すると、canonical hostname の smoke（stage 名 `smoke-canonical`）のリクエストは旧環境の nginx に届きます。この場合、`cutover-route` は `smoke-failed` で止まる見込みです。このリクエストの `x-iori-smoke-token` ヘッダーも旧 origin に送られます。このため、`cutover-route` の前に、次の手順で独立して proxied に切り替えます。
 
+2026-11-01 16:07Z に、管理役が `blog.kosui.me` の A レコードを proxied にし、`blog.kosui.me` だけに Full (strict) を適用する Configuration Rule を作成済みです。
+
 旧環境の証明書は `certbot --nginx` で取得したもので、更新は cron の `certbot renew` が行います。設定は `ansible/enable-https.yaml` と `ansible/auto-renewal-cert.yaml` にあります。
 
 0. secret `IORI_SOURCE_SSH_HOST` の値が `blog.kosui.me` でないことを確かめます。`blog.kosui.me` を proxied にすると、旧環境への SSH が Cloudflare に向かいます。その結果、`Deploy iori Worker` workflow の `migrate-data`、`cutover-route` の gate、`resume-source` と、`Deploy iori` workflow が止まります。値が `blog.kosui.me` の場合は、旧環境の IP アドレスに替えます。あわせて `IORI_SOURCE_SSH_KNOWN_HOSTS` も、その IP アドレスの行に替えます。
@@ -52,7 +54,7 @@ source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push �
    - WebFinger と `/users/kosui` が旧アプリから 200 で返る。
    - `/inbox` への POST が 2xx のまま返る。
    - 52x のエラーが出ない。
-   - `estimate-source` が通る。
+   - `estimate-source` が通る。この確認は、proxied にした後に旧環境へ SSH が届くことの確認を兼ねます。手順 7 で実行する `estimate-source` と同じ実行で兼ねてかまいません。
 7. 手順 6 を終えたら、第1節の手順 7 に戻ります。`estimate-source` を含むリハーサルを実施した後に、`prepare-target`、`migrate-data`、`cutover-route` を従来どおり実行します。
 
 ## 2. Staging rehearsal（任意）

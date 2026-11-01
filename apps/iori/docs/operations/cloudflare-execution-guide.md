@@ -678,7 +678,7 @@ dispatch の入力は次のとおりです。
 - `environment` に `production` を指定する。`staging` も受け付けるが、旧環境は production だけにあるため、production で実行する
 - `generation` と `migration_run_id` は空にする。値を与えると workflow が拒否する
 - `migration_main_sha` は指定しない
-- `allowed_missing_uploads` は、欠けたファイルを許容するときだけ指定する。省略すると `0` として扱う。意味は[欠けたファイルを許容する](#欠けたファイルを許容する)に書く
+- `allowed_missing_uploads` は、export の対象に絞った範囲の `post_images` に付く画像のうち、ファイルが欠けている数を許容するときだけ指定する。`estimate-source` と export は、この範囲で欠けを数える。省略すると `0` として扱う。意味は[欠けたファイルを許容する](#欠けたファイルを許容する)に書く
 
 run ID は、`estimate-source` が `estimate_<GITHUB_RUN_ID>` の形で内部に作ります。
 
@@ -720,7 +720,7 @@ IORI_ESTIMATE rows=<n> upload_count=<n> upload_duplicate_count=<n> upload_missin
 
 #### 欠けたファイルを許容する
 
-旧環境の `post_images` に、ファイルが存在しない行が残っている場合があります。作業者は、このファイルを移行から外すために `allowed_missing_uploads` を使います。
+旧環境の `post_images` に、ファイルが存在しない行が残っている場合があります。`allowed_missing_uploads` が対象にするのは、export と同じく絞った範囲の `post_images` に付く画像のうち、欠けているものです。この範囲は、本人の投稿と、本人がいいねまたはリアクションした投稿に付く画像です。範囲外の `post_images` の欠けは、数に入りません。`estimate-source` と export は、同じ範囲で欠けを数えます。作業者は、この欠けたファイルを移行から外すために `allowed_missing_uploads` を使います。
 
 入力の決まりは次のとおりです。
 
@@ -782,24 +782,25 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 
 旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
 
-| `reason`                      | 失敗した段                                                                                                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                                        |
-| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                                                    |
-| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                                                      |
-| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                                           |
-| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す                        |
-| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                                         |
-| `estimate-upload-open`        | estimate が開いたアップロードのファイルを閉じる処理など、原因別の6つの `reason` に当たらない段で失敗した                                                                |
-| `estimate-upload-missing`     | estimate が開けなかったアップロードのファイルのうち、ファイルがないものの件数が `allowed_missing_uploads` と違う。件数は IORI_ESTIMATE の `upload_missing_count` を見る |
-| `estimate-upload-owner`       | estimate が開けなかったアップロードのファイルのうち、所有者が違うものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_owner_count` を見る                           |
-| `estimate-upload-not-regular` | estimate が開けなかったアップロードのファイルのうち、通常のファイルでないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_not_regular_count` を見る             |
-| `estimate-upload-too-large`   | estimate が開けなかったアップロードのファイルのうち、サイズが上限を超えるものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_too_large_count` を見る               |
-| `estimate-upload-access`      | estimate が開けなかったアップロードのファイルのうち、権限がないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_access_count` を見る                            |
-| `estimate-upload-other`       | estimate が開けなかったアップロードのファイルのうち、上のどれにも当たらないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_other_count` を見る                 |
-| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                                                  |
-| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                                          |
-| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                                                  |
+| `reason`                      | 失敗した段                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                                                                 |
+| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                                                                             |
+| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                                                                               |
+| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                                                                    |
+| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す                                                 |
+| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                                                                  |
+| `estimate-upload-open`        | estimate が開いたアップロードのファイルを閉じる処理など、原因別の6つの `reason` に当たらない段で失敗した                                                                                         |
+| `estimate-upload-missing`     | estimate が開けなかったアップロードのファイルのうち、ファイルがないものの件数が `allowed_missing_uploads` と違う。件数は IORI_ESTIMATE の `upload_missing_count` を見る                          |
+| `estimate-upload-owner`       | estimate が開けなかったアップロードのファイルのうち、所有者が違うものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_owner_count` を見る                                                    |
+| `estimate-upload-not-regular` | estimate が開けなかったアップロードのファイルのうち、通常のファイルでないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_not_regular_count` を見る                                      |
+| `estimate-upload-too-large`   | estimate が開けなかったアップロードのファイルのうち、サイズが上限を超えるものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_too_large_count` を見る                                        |
+| `estimate-upload-access`      | estimate が開けなかったアップロードのファイルのうち、権限がないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_access_count` を見る                                                     |
+| `estimate-upload-other`       | estimate が開けなかったアップロードのファイルのうち、上のどれにも当たらないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_other_count` を見る                                          |
+| `estimate-export-owner`       | local_actors と users の結合で求めた本人の actorId が、ちょうど1人ではない。旧環境を凍結する前に止まる。旧 DB の users と local_actors を確かめる。本人が1人でなければ export の範囲が決まらない |
+| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                                                                           |
+| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                                                                   |
+| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                                                                           |
 
 `reason` が `estimate-upload-missing`、`estimate-upload-owner`、`estimate-upload-not-regular`、`estimate-upload-too-large`、`estimate-upload-access`、`estimate-upload-other` のときは、ssh の失敗ではないので、`IORI_DIAG` の行は `program=none exit=none signal=none` で出ます。
 
@@ -1053,7 +1054,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
   -f migration_run_id="$iori_migration_run_id"
 ```
 
-`rehearse-migration` と `migrate-data` を dispatch するときは、上のコマンドに `-f allowed_missing_uploads=<n>` を足します。`<n>` には、直前の `estimate-source` の `upload_missing_count` と同じ値を入れます。欠けたファイルが無ければ、足しません。意味と失敗の位置は[欠けたファイルを許容する](#欠けたファイルを許容する)に書きます。`rehearse-migration` と `migrate-data` のどちらも、`allowed_missing_uploads` を同じ入力から受け取ります。
+`rehearse-migration` と `migrate-data` を dispatch するときは、上のコマンドに `-f allowed_missing_uploads=<n>` を足します。`<n>` には、直前の `estimate-source` の `upload_missing_count` と同じ値を入れます。`upload_missing_count` と export が数える欠けは、どちらも絞った範囲の `post_images` に付く画像だけを対象にします。欠けたファイルが無ければ、足しません。意味と失敗の位置は[欠けたファイルを許容する](#欠けたファイルを許容する)に書きます。`rehearse-migration` と `migrate-data` のどちらも、`allowed_missing_uploads` を同じ入力から受け取ります。
 
 | 順序     | Operation                                                    | 次へ進む条件                                                                                                                                                                                              |
 | -------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1086,7 +1087,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 範囲外のデータは旧 DB に残ります。本人の投稿への他人の返信とリポストも範囲外です。後から追加で移す前提なので、作業者は旧 DB を消しません。
 
-export は、31表すべてのファイルと manifest のキーを、0行の表も含めて残します。`estimate-source` の COUNT は全行を数えるので、export の件数より大きくなります。
+export は、31表すべてのファイルと manifest のキーを、0行の表も含めて残します。`estimate-source` は、表ごとの行数（`rows`、`table_bytes`、`article_count`）を全行で数えます。このため、行数は export の件数より大きくなります。画像の数（`upload_count`、`upload_bytes`、`upload_missing_count`）と URL の検査は、export と同じ範囲で数えます。この範囲は、本人の投稿と、本人がいいねまたはリアクションした投稿に付く `post_images` です。本人（local_actors と users の結合）がちょうど1人でなければ、`estimate-source` は `estimate-export-owner` で失敗します。
 
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 

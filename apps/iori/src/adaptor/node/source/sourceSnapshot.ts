@@ -7,6 +7,8 @@ import { z } from 'zod';
 
 import {
   APPLICATION_TABLE_ORDER,
+  EXPORT_OWNER_ACTOR_IDS,
+  EXPORT_ROW_SCOPE,
   exportPostgres,
   type PostgresExportClient,
 } from '../../../../scripts/export-postgres-lib.mjs';
@@ -132,6 +134,11 @@ export class SourceSnapshot {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       await client.query('SET LOCAL statement_timeout = \'30s\'');
       stage = 'estimate-query';
+      const owners = await client.query(`SELECT count(*)::text AS count FROM (${EXPORT_OWNER_ACTOR_IDS}) AS owner`);
+      if (number.parse(owners.rows[0]?.count) !== 1) {
+        stage = 'estimate-export-owner';
+        throw new Error('export_owner_not_unique');
+      }
       for (const table of APPLICATION_TABLE_ORDER) {
         signal.throwIfAborted();
         const result = await client.query(
@@ -146,7 +153,7 @@ export class SourceSnapshot {
         }
       }
       await client.query(
-        'DECLARE iori_images NO SCROLL CURSOR FOR SELECT jsonb_build_object(\'imageId\', "imageId", \'url\', left(url, 128)) AS row FROM post_images',
+        `DECLARE iori_images NO SCROLL CURSOR FOR SELECT jsonb_build_object('imageId', "imageId", 'url', left(url, 128)) AS row FROM post_images WHERE ${EXPORT_ROW_SCOPE.post_images}`,
       );
       while (true) {
         stage = 'estimate-query';

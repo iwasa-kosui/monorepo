@@ -43,6 +43,7 @@ export const APPLICATION_TABLE_ORDER = [
 
 const ME =
   'SELECT "local_actors"."actorId" FROM "local_actors" INNER JOIN "users" ON "users"."userId" = "local_actors"."userId"';
+export const EXPORT_OWNER_ACTOR_IDS = ME;
 const LIKE_SCOPE = `"actorId" IN (${ME}) OR "postId" IN (SELECT "postId" FROM "posts" WHERE "actorId" IN (${ME}))`;
 const EMOJI_REACT_SCOPE = LIKE_SCOPE;
 const POST_IDS = [
@@ -54,7 +55,6 @@ const POST_IDS = [
 ].join(' UNION ');
 const ACTOR_IDS = [
   ME,
-  'SELECT "actorId" FROM "local_actors"',
   `SELECT "followerId" FROM "follows" WHERE "followingId" IN (${ME})`,
   `SELECT "followingId" FROM "follows" WHERE "followerId" IN (${ME})`,
   `SELECT "actorId" FROM "likes" WHERE (${LIKE_SCOPE})`,

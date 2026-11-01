@@ -1,4 +1,5 @@
 export const APPLICATION_TABLE_ORDER: readonly string[];
+export const EXPORT_OWNER_ACTOR_IDS: string;
 export const EXPORT_ROW_SCOPE: Readonly<Record<string, string | null>>;
 export const EXPORT_LIMITS: Readonly<{ rowBytes: number; pageRows: number; totalBytes: number; deadlineMs: number }>;
 export type PostgresExportClient = {
