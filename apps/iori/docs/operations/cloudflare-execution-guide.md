@@ -298,19 +298,19 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 値は GitHub の **Settings → Environments → 対象 Environment → Environment secrets** へ登録します。下表の prefix はそれぞれ `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` の2件です。全35名を網羅しています。
 
-| 用途            | Secret 名または prefix                                                                                                                                                                | 値の準備元                                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 移行先          | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `ORIGIN`                                                                                              | 確認済み account・zone・独立 backend・canonical origin                                                                             |
-| 実行 identity   | `IORI_ADMISSION_IDENTITY`                                                                                                                                                             | 次項の同じ environment/generation/SHA/run と smoke 対象                                                                            |
-| API role        | `IORI_CLOUDFLARE_PREPARE_API_TOKEN`, `IORI_CLOUDFLARE_MIGRATE_API_TOKEN`, `IORI_CLOUDFLARE_VERIFY_API_TOKEN`, `IORI_CLOUDFLARE_CUTOVER_API_TOKEN`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` | 第3.1節の用途別 token                                                                                                              |
-| State S3        | `IORI_TERRAFORM_WRITE`, `IORI_TERRAFORM_READ_ONLY`                                                                                                                                    | Backend bucket に限定した2組                                                                                                       |
-| Transfer S3     | `IORI_TRANSFER_R2_WRITE`, `IORI_TRANSFER_R2_READ_ONLY`                                                                                                                                | 非公開 bundle bucket に限定した2組                                                                                                 |
-| Application S3  | `IORI_APPLICATION_R2_WRITE`, `IORI_APPLICATION_R2_READ_ONLY`                                                                                                                          | 対象 generation の画像 bucket に限定した2組                                                                                        |
-| Source SSH      | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS`                                                                          | 許可された source と信頼済み host key                                                                                              |
-| 署名            | `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`                                                                 | Ed25519 秘密鍵、対応する公開鍵 PEM、公開鍵ファイルの SHA-256 pin                                                                   |
-| 実測            | `IORI_MIGRATION_REHEARSAL`                                                                                                                                                            | 第5.4節で登録する、`rehearse-migration` が作った profile JSON。ファイル path ではなく内容。`rehearse-migration` の実行には要らない |
-| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII。`STAGING_ACCESS_TOKEN` が要るのは staging を使う場合だけ                                |
-| Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                                                                                              |
+| 用途            | Secret 名または prefix                                                                                                                                                                | 値の準備元                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 移行先          | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `ORIGIN`                                                                                              | 確認済み account・zone・独立 backend・canonical origin                                                                                                                                 |
+| 実行 identity   | `IORI_ADMISSION_IDENTITY`                                                                                                                                                             | 次項の同じ environment/generation/SHA/run と smoke 対象                                                                                                                                |
+| API role        | `IORI_CLOUDFLARE_PREPARE_API_TOKEN`, `IORI_CLOUDFLARE_MIGRATE_API_TOKEN`, `IORI_CLOUDFLARE_VERIFY_API_TOKEN`, `IORI_CLOUDFLARE_CUTOVER_API_TOKEN`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` | 第3.1節の用途別 token                                                                                                                                                                  |
+| State S3        | `IORI_TERRAFORM_WRITE`, `IORI_TERRAFORM_READ_ONLY`                                                                                                                                    | Backend bucket に限定した2組                                                                                                                                                           |
+| Transfer S3     | `IORI_TRANSFER_R2_WRITE`, `IORI_TRANSFER_R2_READ_ONLY`                                                                                                                                | 非公開 bundle bucket に限定した2組                                                                                                                                                     |
+| Application S3  | `IORI_APPLICATION_R2_WRITE`, `IORI_APPLICATION_R2_READ_ONLY`                                                                                                                          | 対象 generation の画像 bucket に限定した2組                                                                                                                                            |
+| Source SSH      | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS`                                                                          | 許可された source と信頼済み host key                                                                                                                                                  |
+| 署名            | `IORI_MIGRATION_RECEIPT_PRIVATE_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY`, `IORI_MIGRATION_RECEIPT_PUBLIC_KEY_SHA256`                                                                 | Ed25519 秘密鍵、対応する公開鍵 PEM、公開鍵ファイルの SHA-256 pin                                                                                                                       |
+| 実測            | `IORI_MIGRATION_REHEARSAL`                                                                                                                                                            | 第5.4節で登録する、`rehearse-migration` が作った profile JSON。ファイル path ではなく内容。`rehearse-migration` の実行には要らない                                                     |
+| Smoke / staging | `SMOKE_QUEUE_TOKEN`, `STAGING_ACCESS_TOKEN`                                                                                                                                           | 互いに異なる16〜1,024文字のランダム ASCII。`STAGING_ACCESS_TOKEN` が要るのは staging を使う場合だけ。`prepare-target` と `cutover-route` が入口で `SMOKE_QUEUE_TOKEN` の形を検査します |
+| Web Push        | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`                                                                                                                              | 既存購読と対応する承認済み VAPID 設定                                                                                                                                                  |
 
 `estimate-source` が使う参照名は、Source SSH の4件だけです。`purge-rehearsal-target` が使う参照名は、次のとおりです。Source SSH、署名、実測の参照名は使いません。
 
@@ -434,26 +434,31 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 
 `reason` のその他の語彙は、次のとおりです。
 
-| `reason`                   | 意味                                                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `config-invalid`           | 設定、token、Terraform の入力が不正です                                                                                              |
-| `credentials-missing`      | 必須の secret がありません                                                                                                           |
-| `credential-not-distinct`  | staging の access token が smoke の token と同じです                                                                                 |
-| `vapid-rejected`           | VAPID 値の検査で失敗しました                                                                                                         |
-| `command-failed`           | terraform または Worker の配備コマンドが失敗しました。出力は private のログにだけ残ります                                            |
-| `state-present`            | Terraform の state が既にあります                                                                                                    |
-| `plan-rejected`            | plan に想定外の変更が含まれています。拒否の詳細は、この行の前に出る `plan-` で始まる行で示します。                                   |
-| `queue-not-paused`         | deploy の後か Worker の切り替えの後に、Queue の配送が一時停止ではありません。                                                        |
-| `plan-<resource>-<action>` | `plan-rejected` の行の前に出る詳細の行です。Terraform の plan が `<resource>` に対して `<action>` を含んでいたために拒否されました。 |
-| `plan-invalid`             | 詳細の行です。plan の形が不正か、特定の resource に結び付かない検査で拒否されました。                                                |
-| `plan-bindings-changed`    | 詳細の行です。plan の前後で Worker の binding の出力が変わるために拒否されました。                                                   |
-| `output-invalid`           | Terraform の出力が読めません                                                                                                         |
-| `output-mismatch`          | Terraform の出力が想定と違います                                                                                                     |
-| `result-invalid`           | Worker の配備結果が読めません                                                                                                        |
-| `identity-mismatch`        | 配備した Worker の名前が想定と違います                                                                                               |
-| `mismatch`                 | 準備後の読み取りと Terraform の出力が合いません                                                                                      |
-| `aborted`                  | 中断または timeout です                                                                                                              |
-| `unclassified`             | 上のどれにも当たりません                                                                                                             |
+| `reason`                   | 意味                                                                                                                                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config-invalid`           | 設定、token、Terraform の入力が不正です                                                                                                                                                                                                                    |
+| `credentials-missing`      | 必須の secret がありません                                                                                                                                                                                                                                 |
+| `smoke-token-empty`        | `stage` が `prepare-inputs` の入口の検査で、smoke token が空です。値が空のときは `credentials-missing` が先に出ます。リソースは作られていません。区分の意味は、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の token の区分の表と同じです。 |
+| `smoke-token-space`        | `stage` が `prepare-inputs` の入口の検査で、smoke token の先頭に空白があるか、値の途中に空白や改行があります。リソースは作られていません。                                                                                                                 |
+| `smoke-token-charset`      | `stage` が `prepare-inputs` の入口の検査で、smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。リソースは作られていません。                                                                                                              |
+| `smoke-token-short`        | `stage` が `prepare-inputs` の入口の検査で、smoke token が16文字未満です。リソースは作られていません。                                                                                                                                                     |
+| `smoke-token-long`         | `stage` が `prepare-inputs` の入口の検査で、smoke token が1024文字を超えます。リソースは作られていません。                                                                                                                                                 |
+| `credential-not-distinct`  | staging の access token が smoke の token と同じです                                                                                                                                                                                                       |
+| `vapid-rejected`           | VAPID 値の検査で失敗しました                                                                                                                                                                                                                               |
+| `command-failed`           | terraform または Worker の配備コマンドが失敗しました。出力は private のログにだけ残ります                                                                                                                                                                  |
+| `state-present`            | Terraform の state が既にあります                                                                                                                                                                                                                          |
+| `plan-rejected`            | plan に想定外の変更が含まれています。拒否の詳細は、この行の前に出る `plan-` で始まる行で示します。                                                                                                                                                         |
+| `queue-not-paused`         | deploy の後か Worker の切り替えの後に、Queue の配送が一時停止ではありません。                                                                                                                                                                              |
+| `plan-<resource>-<action>` | `plan-rejected` の行の前に出る詳細の行です。Terraform の plan が `<resource>` に対して `<action>` を含んでいたために拒否されました。                                                                                                                       |
+| `plan-invalid`             | 詳細の行です。plan の形が不正か、特定の resource に結び付かない検査で拒否されました。                                                                                                                                                                      |
+| `plan-bindings-changed`    | 詳細の行です。plan の前後で Worker の binding の出力が変わるために拒否されました。                                                                                                                                                                         |
+| `output-invalid`           | Terraform の出力が読めません                                                                                                                                                                                                                               |
+| `output-mismatch`          | Terraform の出力が想定と違います                                                                                                                                                                                                                           |
+| `result-invalid`           | Worker の配備結果が読めません                                                                                                                                                                                                                              |
+| `identity-mismatch`        | 配備した Worker の名前が想定と違います                                                                                                                                                                                                                     |
+| `mismatch`                 | 準備後の読み取りと Terraform の出力が合いません                                                                                                                                                                                                            |
+| `aborted`                  | 中断または timeout です                                                                                                                                                                                                                                    |
+| `unclassified`             | 上のどれにも当たりません                                                                                                                                                                                                                                   |
 
 `<resource>` は `d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかです。`<action>` は `create`、`update`、`delete`、`replace`、`no-op`、`other` のどれかです。例として、`plan-queue-update` は fedify の Queue の更新を表します。
 
@@ -1163,20 +1168,97 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 `reason` には、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表と同じ語が出ます。`cutover-route` だけに出る語は、次のとおりです。
 
-| `reason`                     | 意味                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------ |
-| `reviewed-main-required`     | レビュー済みの main が指定されていません。                                     |
-| `reviewed-checkout-mismatch` | checkout がレビュー済みの main と一致しません。                                |
-| `reviewed-checkout-dirty`    | checkout に未 commit の変更があります。                                        |
-| `reviewed-main-changed`      | 実行中に main が変わりました。                                                 |
-| `job-budget-exhausted`       | job の作業時間の上限に達しました。                                             |
-| `smoke-failed`               | smoke の検査が失敗しました。                                                   |
-| `verify-failed`              | 移行データの検証が失敗しました。                                               |
-| `deploy-failed`              | レビュー済みの Worker の version の deploy が失敗しました。                    |
-| `source-not-quiescent`       | source の凍結、drain、identity のどれかを確認できません。                      |
-| `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。 |
+| `reason`                     | 意味                                                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reviewed-main-required`     | レビュー済みの main が指定されていません。                                                                                                                                       |
+| `reviewed-checkout-mismatch` | checkout がレビュー済みの main と一致しません。                                                                                                                                  |
+| `reviewed-checkout-dirty`    | checkout に未 commit の変更があります。                                                                                                                                          |
+| `reviewed-main-changed`      | 実行中に main が変わりました。                                                                                                                                                   |
+| `job-budget-exhausted`       | job の作業時間の上限に達しました。                                                                                                                                               |
+| `smoke-failed`               | smoke の検査が失敗しました。                                                                                                                                                     |
+| `smoke-token-empty`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が空です。restore と Worker の smoke モードへの切り替えの前に止まります。                                                |
+| `smoke-token-space`          | `stage` が `cutover-inputs` の入口の検査で、smoke token の先頭に空白があるか、値の途中に空白や改行があります。restore と Worker の smoke モードへの切り替えの前に止まります。    |
+| `smoke-token-charset`        | `stage` が `cutover-inputs` の入口の検査で、smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。restore と Worker の smoke モードへの切り替えの前に止まります。 |
+| `smoke-token-short`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が16文字未満です。restore と Worker の smoke モードへの切り替えの前に止まります。                                        |
+| `smoke-token-long`           | `stage` が `cutover-inputs` の入口の検査で、smoke token が1024文字を超えます。restore と Worker の smoke モードへの切り替えの前に止まります。                                    |
+| `verify-failed`              | 移行データの検証が失敗しました。                                                                                                                                                 |
+| `deploy-failed`              | レビュー済みの Worker の version の deploy が失敗しました。                                                                                                                      |
+| `source-not-quiescent`       | source の凍結、drain、identity のどれかを確認できません。                                                                                                                        |
+| `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。                                                                                                   |
 
 `cutover-source` と `cutover-gate-*` では、source の接続の失敗として `not-ready`、`busy`、`rejected`、`invalid-response`、`spawn-failed`、`ssh-failed` と、`estimate-` で始まる語が出ます。意味は、[estimate-source で事前に確認する](#estimate-source-で事前に確認する)の `reason` の表に書いています。
+
+`stage` が `cutover-smoke-worker`、`cutover-smoke-canonical`、`cutover-smoke-final` のどれかで smoke が失敗すると、`reason=smoke-failed` の分類の行の前に、`IORI_DIAG` の行が出ます。最初に smoke token の区分の行が1行出て、その後に失敗した項目ごとの行が1行ずつ出ます。項目ごとの行は最大13行で、token の区分の行と合わせて最大14行です。項目ごとの行の `reason` は `smoke-<項目>-<status>-<種別>` の形です。行には、応答の本文、token、ホスト名、URL は入りません。
+
+`<項目>` の語と smoke の項目は、次のように対応します。
+
+| `<項目>`    | smoke の項目                   |
+| ----------- | ------------------------------ |
+| `health`    | health                         |
+| `healthz`   | healthz                        |
+| `readyz`    | readyz                         |
+| `asset`     | static asset（/manifest.json） |
+| `auth`      | auth rejection                 |
+| `webfinger` | WebFinger                      |
+| `actor`     | actor                          |
+| `outbox`    | outbox                         |
+| `inbox`     | inbox                          |
+| `upload`    | upload retrieval               |
+| `ogp`       | OGP PNG                        |
+| `queue`     | Queue enqueue                  |
+| `push`      | Web Push public key            |
+| `other`     | 上の表にない項目               |
+
+`<status>` は HTTP status の3桁の数字です。応答を得られなかったときは `none` が入ります。
+
+`<種別>` の語は、次の失敗を示します。
+
+| `<種別>`           | 意味                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `status-text`      | status が期待と違い、応答の content-type が text/plain です。Worker の admission が拒否した応答（本文 Unavailable）はこの形になります。 |
+| `status-json`      | status が期待と違い、応答の content-type が JSON です。アプリが返した応答です。                                                         |
+| `status-html`      | status が期待と違い、応答の content-type が text/html です。Cloudflare のエラーページが返った可能性があります。                         |
+| `status-none`      | status が期待と違い、応答に content-type がありません。                                                                                 |
+| `status-other`     | status が期待と違い、content-type が上のどれでもありません。                                                                            |
+| `type`             | status は期待どおりで、content-type が期待と違います。                                                                                  |
+| `json`             | JSON の形が期待と違うか、JSON として読めません。                                                                                        |
+| `request-timeout`  | 応答が10秒以内に返りませんでした。                                                                                                      |
+| `request-abort`    | 要求が中断されました。                                                                                                                  |
+| `request-dns`      | ホスト名を解決できませんでした。                                                                                                        |
+| `request-connect`  | 接続を確立できなかったか、接続が切れました。                                                                                            |
+| `request-tls`      | TLS の確立に失敗しました。                                                                                                              |
+| `request-redirect` | 応答が redirect でした。smoke は redirect を失敗として扱います。                                                                        |
+| `request-other`    | 応答を得られず、上のどれにも当たりません。                                                                                              |
+| `token`            | smoke token が空なので、要求を送りませんでした。                                                                                        |
+| `other`            | 上のどれにも当たらない失敗です。                                                                                                        |
+
+token の区分の行の `reason` は `smoke-token-<区分>` の形です。判定は、smoke token の末尾の空白と改行を取り除いた値で行います。Worker に登録するときも末尾の空白は取り除かれるので、末尾に空白や改行があるだけの token は `ok` になります。`<区分>` は、次の表の上から順に判定します。
+
+| `<区分>`  | 意味                                                                         |
+| --------- | ---------------------------------------------------------------------------- |
+| `empty`   | 末尾の空白と改行を取り除くと、smoke token が空です。                         |
+| `space`   | smoke token の先頭に空白があるか、値の途中に空白や改行があります。           |
+| `charset` | smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。        |
+| `short`   | smoke token が16文字未満です。Worker は16文字未満の token を常に拒否します。 |
+| `long`    | smoke token が1024文字を超えます。                                           |
+| `ok`      | 上のどれにも当たりません。                                                   |
+
+この行は、job 側の値の形だけを示します。Worker に登録された値と一致するかは示しません。
+
+`cutover-route` は、入口の `cutover-inputs` の段でも、同じ区分で smoke token の形を検査します。`prepare-target` も、入口の `prepare-inputs` の段で同じ検査をします。形が違うと、`reason=smoke-token-<区分>` で止まります。`cutover-route` は restore と Worker の smoke モードへの切り替えの前に止まり、`prepare-target` は Cloudflare のリソースを作る前に止まります。この検査は値の形だけを見て、Worker に登録した値と一致するかは見ません。
+
+#### smoke-worker の段のやり直し
+
+`cutover-route` は、`cutover-smoke-worker` の段で13項目すべてが 503 の status 不一致になったとき、smoke を最大4回まで試します。
+
+- 失敗した回の後に、10秒、20秒、30秒の順に待ちます。
+- 開始から120秒を超える待機になるときは、やり直さずに止まります。
+- やり直す前に、`reason=smoke-retry-<n>-all-503` の `IORI_DIAG` の行を1行出します。`<n>` は失敗した回の番号で、1〜3です。
+- 最後の回も失敗したら、その回の token の区分の行と項目ごとの行を出し、`reason=smoke-failed` で止まります。
+- 一部の項目だけが失敗したときと、503 以外で失敗したときは、やり直しません。
+- `cutover-smoke-canonical` と `cutover-smoke-final` の段は、やり直しません。
+
+smoke token の値が Worker に登録した値と食い違っている場合も、全項目が 503 になります。この場合は、やり直しても通りません。
 
 ### 6.4 verify-import、rehearse-migration、migrate-data、deploy-worker の失敗の行
 

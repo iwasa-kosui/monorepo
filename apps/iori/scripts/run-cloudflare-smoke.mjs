@@ -1,3 +1,5 @@
+import { smokeRequestCause } from './smoke-diagnostics.mjs';
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 const requiredBindings = {
@@ -280,8 +282,15 @@ export const runCloudflareSmoke = async (
         signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]),
       });
       results.push(await checkResponse(response, check));
-    } catch {
-      results.push({ name: check.name, ok: false, status: null, contentType: null, failure: 'request failed' });
+    } catch (error) {
+      results.push({
+        name: check.name,
+        ok: false,
+        status: null,
+        contentType: null,
+        failure: 'request failed',
+        cause: smokeRequestCause(error),
+      });
     }
   }
 

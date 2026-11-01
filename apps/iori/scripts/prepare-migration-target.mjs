@@ -8,6 +8,7 @@ import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { createTargetPreparation } from './prepare-target.mjs';
+import { assertSmokeQueueToken } from './smoke-diagnostics.mjs';
 import { preparationDetailLines, preparationFailureLine, withReason } from './target-preparation-diagnostics.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
 import { assertVapidBeforePreparation } from './vapid-origin-check.mjs';
@@ -90,6 +91,7 @@ const main = async (cliSignal) => {
   ) {
     if (!process.env[key]) throw withReason(new Error('Preparation credentials are required.'), 'credentials-missing');
   }
+  assertSmokeQueueToken(process.env.SMOKE_QUEUE_TOKEN);
   if (config.identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw withReason(new Error('Distinct staging credential is required.'), 'credential-not-distinct');
   }

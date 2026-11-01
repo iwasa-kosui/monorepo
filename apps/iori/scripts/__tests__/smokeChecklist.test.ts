@@ -202,6 +202,7 @@ describe('runCloudflareSmoke', () => {
       status: null,
       contentType: null,
       failure: 'request failed',
+      cause: 'redirect',
     });
     expect(JSON.stringify(result)).not.toContain(fixtureBody);
     expect(JSON.stringify(result)).not.toContain(redirectedOrigin);

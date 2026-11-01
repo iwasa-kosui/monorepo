@@ -741,6 +741,7 @@ it('relays the fixed-vocabulary cutover detail and stage lines to the public log
     'IORI_DIAG stage=cutover-queue-plan program=none exit=none signal=none reason=plan-rejected',
     'IORI_DIAG stage=cutover-gate-smoke program=none exit=none signal=none reason=source-not-quiescent',
     'IORI_DIAG stage=cutover-smoke-canonical program=none exit=none signal=none reason=smoke-failed',
+    'IORI_DIAG stage=cutover-smoke-worker program=none exit=none signal=none reason=smoke-readyz-503-status',
   ];
   await publishChildDiagnostics([
     ...lines,

@@ -2,6 +2,8 @@ import { expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { CUTOVER_STAGES, cutoverFailureLines, isCutoverReason } from '../cutover-diagnostics.mjs';
+// @ts-expect-error The smoke diagnostics module is executed directly by Node as ESM.
+import { SMOKE_ITEM_WORDS, SMOKE_MAX_DETAIL_LINES, smokeFailureDetails } from '../smoke-diagnostics.mjs';
 import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 
 const publicLine =
@@ -59,7 +61,7 @@ it('uses cutover-unclassified for a stage outside the vocabulary', () => {
     ]);
   }
 });
-it('prints at most eight distinct allowed details and then the classification', () => {
+it('prints at most fourteen distinct allowed details and then the classification', () => {
   const details = [
     'plan-d1-update',
     'plan-d1-update',
@@ -73,6 +75,11 @@ it('prints at most eight distinct allowed details and then the classification', 
     'plan-d1-delete',
     'plan-kv-delete',
     'plan-consumer-delete',
+    'smoke-health-503-status-text',
+    'smoke-healthz-503-status-json',
+    'smoke-readyz-503-status-none',
+    'smoke-asset-none-request-dns',
+    'smoke-inbox-none-request-timeout',
   ];
   const lines = cutoverFailureLines('queue-plan', failure('plan-rejected', details), false);
   expect(lines.map(line => line.split('reason=')[1])).toEqual([
@@ -84,9 +91,81 @@ it('prints at most eight distinct allowed details and then the classification', 
     'plan-consumer-update',
     'plan-route-create',
     'plan-d1-delete',
+    'plan-kv-delete',
+    'plan-consumer-delete',
+    'smoke-health-503-status-text',
+    'smoke-healthz-503-status-json',
+    'smoke-readyz-503-status-none',
+    'smoke-asset-none-request-dns',
     'plan-rejected',
   ]);
   expect(lines.join('\n')).not.toContain('secret');
+});
+it('prints every failed smoke item word and the token class and then the smoke-failed classification', () => {
+  const details = [
+    'smoke-token-ok',
+    ...smokeFailureDetails(
+      Object.keys(SMOKE_ITEM_WORDS).map(name => ({
+        name,
+        ok: false,
+        status: 503,
+        contentType: 'text/plain',
+        failure: 'status mismatch',
+      })),
+    ),
+  ] as string[];
+  expect(SMOKE_MAX_DETAIL_LINES).toBe(Object.keys(SMOKE_ITEM_WORDS).length + 1);
+  expect(details).toHaveLength(SMOKE_MAX_DETAIL_LINES);
+  const lines = cutoverFailureLines('smoke-worker', failure('smoke-failed', details, 'Reviewed smoke failed.'), false);
+  expect(lines).toHaveLength(SMOKE_MAX_DETAIL_LINES + 1);
+  expect(lines.map(line => line.split('reason=')[1])).toEqual([...details, 'smoke-failed']);
+  for (const line of lines) {
+    expect(line).toMatch(publicLine);
+    expect(line.startsWith('IORI_DIAG stage=cutover-smoke-worker ')).toBe(true);
+    expect(assertWorkflowOutput(line)).toEqual([]);
+  }
+});
+it('prints the status content type, request cause and token class words', () => {
+  const details = [
+    'smoke-token-short',
+    'smoke-readyz-503-status-text',
+    'smoke-readyz-503-status-json',
+    'smoke-readyz-503-status-html',
+    'smoke-readyz-503-status-none',
+    'smoke-readyz-503-status-other',
+    'smoke-webfinger-none-request-timeout',
+    'smoke-webfinger-none-request-abort',
+    'smoke-webfinger-none-request-dns',
+    'smoke-webfinger-none-request-connect',
+    'smoke-webfinger-none-request-tls',
+    'smoke-webfinger-none-request-redirect',
+    'smoke-webfinger-none-request-other',
+  ];
+  const lines = cutoverFailureLines('smoke-final', failure('smoke-failed', details), false);
+  expect(lines.map(line => line.split('reason=')[1])).toEqual([...details, 'smoke-failed']);
+  for (const line of lines) expect(line).toMatch(publicLine);
+});
+it('drops smoke details outside the fixed smoke vocabulary', () => {
+  const lines = cutoverFailureLines(
+    'smoke-final',
+    failure('smoke-failed', [
+      'smoke-readyz-503-status-text',
+      'smoke-readyz-99-status-text',
+      'smoke-readyz-600-status-text',
+      'smoke-Readyz-503-status-text',
+      'smoke-secret-503-status-text',
+      'smoke-readyz-503-body',
+      'smoke-readyz-503-status',
+      'smoke-readyz-503-status-xml',
+      'smoke-inbox-none-request',
+      'smoke-inbox-none-request-foo',
+      'smoke-token-bad',
+      'smoke-token-ok-extra',
+      'readyz',
+    ]),
+    false,
+  );
+  expect(lines.map(line => line.split('reason=')[1])).toEqual(['smoke-readyz-503-status-text', 'smoke-failed']);
 });
 it('drops every detail that is not a fixed word', () => {
   const lines = cutoverFailureLines(
@@ -112,6 +191,11 @@ it('accepts the preparation, source and cutover reasons only', () => {
       'reviewed-main-changed',
       'job-budget-exhausted',
       'smoke-failed',
+      'smoke-token-empty',
+      'smoke-token-space',
+      'smoke-token-charset',
+      'smoke-token-short',
+      'smoke-token-long',
       'verify-failed',
       'deploy-failed',
       'source-not-quiescent',
