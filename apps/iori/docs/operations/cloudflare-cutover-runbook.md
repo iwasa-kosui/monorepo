@@ -86,23 +86,22 @@ staging rehearsal の実施有無にかかわらず、この節の手順を実�
 
 ### 連合の外部確認
 
-第3節の手順 12（Queue を再開した後の smoke）の後に、外部の Fediverse サーバーから見て連合が動くことを確かめます。この節は、手順 13 の手動確認のうち、外部のアカウントから行う follow の確認の手順を具体的に書いたものです。smoke の検査は blog.kosui.me 宛ての決まった GET だけです。このため、フォローの受理と Accept の送信は、外から確かめていません。Accept の送信には、Queue の配送と HTTP Signature が関わります。
+第3節の手順 12（Queue を再開した後の smoke）の後に、外部の Fediverse サーバーから見て連合が動くことを確かめます。この節は、手順 13 の手動確認のうち、外部のアカウントから行う follow の確認の手順を具体的に書いたものです。smoke の検査は、決まった GET と smoke 用の Queue への送信だけで、inbox への POST を含みません。このため、フォローの受理と Accept の送信は、外から確かめていません。Accept の送信には、Queue の配送と HTTP Signature が関わります。
 
 使うアカウントは、operator が持つ外部の Fediverse アカウントです。インスタンスは問いません。
 
 1. 外部のアカウントから `@kosui@blog.kosui.me` を検索し、プロフィールが表示されることを確かめます。
-2. 外部のアカウントから `@kosui@blog.kosui.me` をフォローし、フォローが承認済みになることを確かめます。承認済みとは、外部のサーバーが Accept を受け取った状態です。この確認で、Queue の配送の再開、署名、keyId `https://blog.kosui.me/users/kosui#main-key` の解決が動くことを確かめられます。
+2. 外部のアカウントから `@kosui@blog.kosui.me` をフォローし、外部のサーバーでフォローが承認済みになることを確かめます。承認済みとは、外部のサーバーが Accept を受け取った状態です。続けて、iori のフォロワー一覧に外部のアカウントが出ることを確かめます。iori は、フォローの保存に成功したかどうかに関係なく Accept を送ります。このため、承認済みの表示だけでは、フォローが D1 に保存されたことを確かめられません。この確認で、inbox への POST の受付、受け取った Follow の署名の検証、相手の actor の取得、Queue の配送の再開、Accept の署名、keyId `https://blog.kosui.me/users/kosui#main-key` の解決が動くことを確かめられます。承認済みにならないときは、Worker のログで `Failed to resolve actor` と `Failed to process Follow activity` を探し、Queue の DLQ にメッセージが入っていないかを確かめます。
 3. 外部のアカウントから、プロフィールの投稿一覧である outbox が表示されることを確かめます。
-4. 確かめ終えたら、外部のアカウントからフォローを解除します。
+4. 確かめ終えたら、外部のアカウントからフォローを解除し、iori のフォロワー一覧から外部のアカウントが消えたことを確かめます。
+
+この確認は本番に痕跡を残します。フォローすると、operator の端末に Web Push の通知が届きます。フォローを解除しても、D1 のフォロー通知の行と remote actor の行は残ります。外部のアカウントは operator 自身のアカウントなので、operator はこれらの痕跡を許容します。
 
 この節の確認のために、試験用の投稿はしません。投稿は本番の followers 全員に配送されるためです。手順 13 の post と repost は、operator が本番で普段どおり使う操作として確かめるもので、この節の確認とは目的が違います。
 
-切り替え前に workers.dev の Worker で試しません。actor の id と inbox は ORIGIN である blog.kosui.me に固定されていて、外部サーバーからのフォローは route を切り替えるまで旧環境に届きます。また、Worker は workers.dev 宛てには smoke token 付きの決まった GET しか受け付けず、inbox への POST が通りません。
+切り替え前に workers.dev の Worker で試しません。actor の id と inbox は ORIGIN である blog.kosui.me に固定されていて、外部サーバーからのフォローは route を切り替えるまで旧環境に届きます。また、Worker は workers.dev 宛てには smoke token 付きの決まった GET と、smoke 用の Queue への送信しか受け付けず、inbox への POST が通りません。
 
-activitypub.academy は、24 時間で消える一時的なアカウントで外部サーバーとのやり取りを試せる、ActivityPub の学習用の Mastodon サーバーです。2026-11-01 に確認した時点では停止していました。再開していれば、上の外部のアカウントの代わりに使えます。
-
-- https://activitypub.academy/
-- https://seb.jambor.dev/posts/activitypub-academy/
+activitypub.academy はサービスを終了しているため、この確認には使えません（2026-11-01 に operator が確認）。
 
 ## 4. Rollback
 
