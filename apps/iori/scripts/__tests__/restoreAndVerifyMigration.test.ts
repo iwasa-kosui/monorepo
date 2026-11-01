@@ -17,6 +17,16 @@ vi.mock('../migration-r2-storage.mjs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../migration-r2-storage.mjs')>()),
   createMigrationR2Storage: () => held.storage,
 }));
+vi.mock('../cloudflare-import-provider.mjs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../cloudflare-import-provider.mjs')>()),
+  createCloudflareImportTransport: () =>
+    new Proxy({}, {
+      get: (_target, property) =>
+        property === 'then' ? undefined : () => {
+          throw new Error('unexpected Cloudflare access');
+        },
+    }),
+}));
 vi.mock('../read-sealed-migration-target.mjs', () => ({
   readSealedMigrationTarget: async () => ({ resources: {}, worker: {} }),
 }));
@@ -135,5 +145,11 @@ describe('restoreAndVerifyMigration', () => {
     const { env } = await setup('https://blog.test/uploads/77777777-7777-4777-8777-777777777777.webp');
     await expect(restoreAndVerifyMigration({ env, signal: new AbortController().signal }))
       .rejects.toThrow('upload-same-origin');
+  }, 30_000);
+
+  it('rejects a post image URL that uses a legacy upload path', async () => {
+    const { env } = await setup('/static/uploads/77777777-7777-4777-8777-777777777777.webp');
+    await expect(restoreAndVerifyMigration({ env, signal: new AbortController().signal }))
+      .rejects.toThrow('upload-legacy-path');
   }, 30_000);
 });
