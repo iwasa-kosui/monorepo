@@ -2,6 +2,8 @@ import { expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { CUTOVER_STAGES, cutoverFailureLines, isCutoverReason } from '../cutover-diagnostics.mjs';
+// @ts-expect-error The smoke diagnostics module is executed directly by Node as ESM.
+import { SMOKE_ITEM_WORDS, smokeFailureDetails } from '../smoke-diagnostics.mjs';
 import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 
 const publicLine =
@@ -59,7 +61,7 @@ it('uses cutover-unclassified for a stage outside the vocabulary', () => {
     ]);
   }
 });
-it('prints at most eight distinct allowed details and then the classification', () => {
+it('prints at most thirteen distinct allowed details and then the classification', () => {
   const details = [
     'plan-d1-update',
     'plan-d1-update',
@@ -73,6 +75,10 @@ it('prints at most eight distinct allowed details and then the classification', 
     'plan-d1-delete',
     'plan-kv-delete',
     'plan-consumer-delete',
+    'smoke-health-503-status',
+    'smoke-healthz-503-status',
+    'smoke-readyz-503-status',
+    'smoke-asset-none-request',
   ];
   const lines = cutoverFailureLines('queue-plan', failure('plan-rejected', details), false);
   expect(lines.map(line => line.split('reason=')[1])).toEqual([
@@ -84,9 +90,44 @@ it('prints at most eight distinct allowed details and then the classification', 
     'plan-consumer-update',
     'plan-route-create',
     'plan-d1-delete',
+    'plan-kv-delete',
+    'plan-consumer-delete',
+    'smoke-health-503-status',
+    'smoke-healthz-503-status',
+    'smoke-readyz-503-status',
     'plan-rejected',
   ]);
   expect(lines.join('\n')).not.toContain('secret');
+});
+it('prints every failed smoke item word and then the smoke-failed classification', () => {
+  const details = smokeFailureDetails(
+    Object.keys(SMOKE_ITEM_WORDS).map(name => ({ name, ok: false, status: 503, failure: 'status mismatch' })),
+  ) as string[];
+  expect(details).toHaveLength(13);
+  const lines = cutoverFailureLines('smoke-worker', failure('smoke-failed', details, 'Reviewed smoke failed.'), false);
+  expect(lines).toHaveLength(14);
+  expect(lines.map(line => line.split('reason=')[1])).toEqual([...details, 'smoke-failed']);
+  for (const line of lines) {
+    expect(line).toMatch(publicLine);
+    expect(line.startsWith('IORI_DIAG stage=cutover-smoke-worker ')).toBe(true);
+    expect(assertWorkflowOutput(line)).toEqual([]);
+  }
+});
+it('drops smoke details outside the fixed smoke vocabulary', () => {
+  const lines = cutoverFailureLines(
+    'smoke-final',
+    failure('smoke-failed', [
+      'smoke-readyz-503-status',
+      'smoke-readyz-99-status',
+      'smoke-readyz-600-status',
+      'smoke-Readyz-503-status',
+      'smoke-secret-503-status',
+      'smoke-readyz-503-body',
+      'readyz',
+    ]),
+    false,
+  );
+  expect(lines.map(line => line.split('reason=')[1])).toEqual(['smoke-readyz-503-status', 'smoke-failed']);
 });
 it('drops every detail that is not a fixed word', () => {
   const lines = cutoverFailureLines(

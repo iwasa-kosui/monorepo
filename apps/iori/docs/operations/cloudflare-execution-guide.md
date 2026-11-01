@@ -1178,6 +1178,40 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 `cutover-source` と `cutover-gate-*` では、source の接続の失敗として `not-ready`、`busy`、`rejected`、`invalid-response`、`spawn-failed`、`ssh-failed` と、`estimate-` で始まる語が出ます。意味は、[estimate-source で事前に確認する](#estimate-source-で事前に確認する)の `reason` の表に書いています。
 
+`stage` が `cutover-smoke-worker`、`cutover-smoke-canonical`、`cutover-smoke-final` のどれかで smoke が失敗すると、`reason=smoke-failed` の分類の行の前に、失敗した項目ごとに `IORI_DIAG` の行が1行ずつ出ます。この行は最大13行です。`reason` は `smoke-<項目>-<status>-<種別>` の形です。行には、応答の本文、token、ホスト名、URL は入りません。
+
+`<項目>` の語と smoke の項目は、次のように対応します。
+
+| `<項目>`    | smoke の項目                   |
+| ----------- | ------------------------------ |
+| `health`    | health                         |
+| `healthz`   | healthz                        |
+| `readyz`    | readyz                         |
+| `asset`     | static asset（/manifest.json） |
+| `auth`      | auth rejection                 |
+| `webfinger` | WebFinger                      |
+| `actor`     | actor                          |
+| `outbox`    | outbox                         |
+| `inbox`     | inbox                          |
+| `upload`    | upload retrieval               |
+| `ogp`       | OGP PNG                        |
+| `queue`     | Queue enqueue                  |
+| `push`      | Web Push public key            |
+| `other`     | 上の表にない項目               |
+
+`<status>` は HTTP status の3桁の数字です。応答を得られなかったときは `none` が入ります。
+
+`<種別>` の語は、次の失敗を示します。
+
+| `<種別>`  | 意味                                                      |
+| --------- | --------------------------------------------------------- |
+| `status`  | status が期待と違います。                                 |
+| `type`    | content-type が期待と違います。                           |
+| `json`    | JSON の形が期待と違うか、JSON として読めません。          |
+| `request` | 応答を得られませんでした（timeout、接続失敗、redirect）。 |
+| `token`   | smoke token が空です。                                    |
+| `other`   | 上のどれにも当たらない失敗です。                          |
+
 ### 6.4 verify-import、rehearse-migration、migrate-data、deploy-worker の失敗の行
 
 次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
