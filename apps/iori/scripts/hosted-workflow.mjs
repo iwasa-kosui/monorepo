@@ -293,8 +293,10 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   }
   if (phase !== 'operate') throw new Error('Invalid hosted phase.');
   const runtime = await stage('materialize', () => materializeHostedValues(env));
-  const { assertReviewedMain } = await import('./reviewed-main.mjs');
-  await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
+  await stage('reviewed-main', async () => {
+    const { assertReviewedMain } = await import('./reviewed-main.mjs');
+    return assertReviewedMain(selected.codeSha, { signal });
+  });
   if (
     ['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'purge-rehearsal-target'].includes(
       selected.operation,
@@ -306,11 +308,10 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
       'node',
     );
     // The fixed target-reader output is private and is also the deployment binding authority.
-    const { loadExpectedTarget } = await import('./migration-target-input.mjs');
-    const target = await stage(
-      'target-load',
-      () => loadExpectedTarget(runtime.IORI_MIGRATION_EXPECTED_TARGET_PATH),
-    );
+    const target = await stage('target-load', async () => {
+      const { loadExpectedTarget } = await import('./migration-target-input.mjs');
+      return loadExpectedTarget(runtime.IORI_MIGRATION_EXPECTED_TARGET_PATH);
+    });
     const b = {
       d1_database_id: target.resources.d1.id,
       r2_bucket_name: target.resources.uploads.name,
@@ -322,7 +323,10 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     await stage('binding-write', () => writeFile(bindingPath, JSON.stringify(b), { flag: 'wx', mode: 0o600 }));
     runtime.IORI_WORKER_BINDINGS_PATH = bindingPath;
     runtime.IORI_REQUIRE_TERRAFORM_BINDINGS = 'true';
-    await stage('main-recheck', () => assertReviewedMain(selected.codeSha, { signal }));
+    await stage('main-recheck', async () => {
+      const { assertReviewedMain } = await import('./reviewed-main.mjs');
+      return assertReviewedMain(selected.codeSha, { signal });
+    });
   }
   await executeHostedOperation(
     selected.operation === 'source' ? 'deploy-source' : 'operation',

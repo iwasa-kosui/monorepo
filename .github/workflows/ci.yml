@@ -114,7 +114,6 @@ jobs:
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
           run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
-          run_guarded git diff --exit-code -- apps/iori/infra/cloudflare/.terraform.lock.hcl
           run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap scripts/__tests__/validateCloudflarePlan.test.ts
 
       - name: Verify credential-free migration fixture chain
@@ -151,6 +150,7 @@ jobs:
           mkdir -p "$schema_dir"
           cp apps/iori/infra/cloudflare/versions.tf apps/iori/infra/cloudflare/.terraform.lock.hcl "$schema_dir/"
           terraform -chdir="$schema_dir" init -input=false
+          cmp -s apps/iori/infra/cloudflare/.terraform.lock.hcl "$schema_dir/.terraform.lock.hcl" || { echo 'Terraform init changed the lock file on linux_amd64'; exit 1; }
           terraform -chdir="$schema_dir" providers schema -json > "$RUNNER_TEMP/iori-provider-schema.json"
           test -s "$RUNNER_TEMP/iori-provider-schema.json"
 

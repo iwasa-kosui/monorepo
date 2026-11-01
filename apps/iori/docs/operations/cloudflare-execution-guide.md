@@ -1242,7 +1242,7 @@ IORI_DIAG stage=target-read-<処理> program=<terraform|none> exit=<0-255|none> 
 
 複数の文字列が当たる場合、`terraform-lock`、`terraform-auth`、`terraform-unreachable` の順に先に当たった語を出します。Terraform は長い文を折り返し、行頭に罫線の文字を付けるので、照合の前に色の制御文字と罫線を取り除き、空白を1つにまとめます。
 
-`terraform init` は `-lockfile=readonly` 付きで実行するため、lock と導入した provider が合わない場合は、lock を書き換えずに `terraform-lock` で失敗します。`terraform-lock` が出た原因は確定していません。作業者は、`target-read-tf-init` の行と `reason=terraform-lock` を管理役に伝えます。管理役は、同じ commit の CI にある `Run guarded Cloudflare checks` の `terraform init` と `git diff --exit-code` の結果と照らして確かめます。
+`terraform init` は `-lockfile=readonly` 付きで実行します。この指定により、`terraform init` は lock を書き換えません。lock には `linux_amd64` と `darwin_arm64` の h1 を記録しています。provider を更新するときは、`terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` で両方の platform を指定して lock を作り直します。lock が runner の platform に合わないと、`terraform init` の後の `terraform show` や `terraform plan` が `terraform-lock` で止まります。CI の `Generate Cloudflare provider schema` は、linux で lock の更新が要るかを検出します。
 
 `terraform show -json` と `terraform output -json` の出力の検査で失敗した場合、`program=none` で、`reason` は次のどれかです。
 

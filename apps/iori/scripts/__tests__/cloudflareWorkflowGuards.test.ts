@@ -257,17 +257,23 @@ it('wires real credential-free fixture execution, explicit portable PostgreSQL o
   expect(guard).toContain('IORI_ADMISSION_IDENTITY=');
   expect(guard).toContain('assert-workflow-output.mjs');
 });
-it('runs readonly Terraform init and validate in CI and fails when the tracked lock file changes', async () => {
+it('runs readonly Terraform init and validate in CI and fails when init changes the lock file on linux', async () => {
   const ci = await readWorkflow('ci.yml');
-  const lines = ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
+  const steps = ci.jobs.iori.steps;
+  const lines = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
     .split('\n').map(line => line.trim());
   const init = lines.indexOf(
     'run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
   );
   expect(init).toBeGreaterThan(-1);
   expect(lines[init + 1]).toBe('run_guarded terraform -chdir=apps/iori/infra/cloudflare validate');
-  expect(lines[init + 2]).toBe(
-    'run_guarded git diff --exit-code -- apps/iori/infra/cloudflare/.terraform.lock.hcl',
+  expect(lines.some(line => line.includes('git diff --exit-code'))).toBe(false);
+  const schema = steps.find(step => step.name === 'Generate Cloudflare provider schema')!.run!
+    .split('\n').map(line => line.trim());
+  const schemaInit = schema.indexOf('terraform -chdir="$schema_dir" init -input=false');
+  expect(schemaInit).toBeGreaterThan(-1);
+  expect(schema[schemaInit + 1]).toBe(
+    `cmp -s apps/iori/infra/cloudflare/.terraform.lock.hcl "$schema_dir/.terraform.lock.hcl" || { echo 'Terraform init changed the lock file on linux_amd64'; exit 1; }`,
   );
 });
 it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
