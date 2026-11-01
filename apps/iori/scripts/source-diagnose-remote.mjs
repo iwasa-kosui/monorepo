@@ -58,12 +58,30 @@ export const journalClasses = [
   'unavailable',
 ];
 const restartsLimit = 999_999;
+const countLimit = 999_999;
+const journalWindowHours = 6;
+const exitLookbackLines = 30;
+const journalLimitBytes = 8_000_000;
+const truncationMarginBytes = 262_144;
+const countClasses = [
+  'module-not-found',
+  'syntax-error',
+  'env-invalid',
+  'port-in-use',
+  'out-of-memory',
+  'permission-denied',
+  'database-unavailable',
+  'uncaught-exception',
+];
 const exitStatusLimit = 255;
 const megabytesLimit = 999_999_999_999;
 export const sourceDiagnoseNoticeLine = new RegExp(
   `^IORI_NOTICE stage=source-diagnose active=(?:${activeStates.join('|')}) sub=(?:${subStates.join('|')})`
     + ` restarts=\\d{1,6} exit_status=\\d{1,3} journal=(?:${journalClasses.join('|')}) freeze=[01] freeze_pending=[01]`
-    + ' mem_available_mb=\\d{1,12} disk_free_mb=\\d{1,12} source_revision=(?:[a-f0-9]{40}|unknown)$',
+    + ' mem_available_mb=\\d{1,12} disk_free_mb=\\d{1,12} source_revision=(?:[a-f0-9]{40}|unknown)'
+    + ` active_enter=(?:\\d{8}T\\d{4}Z|unknown) journal_window_h=${journalWindowHours} journal_truncated=[01]`
+    + ' exits=\\d{1,6} scheduled_restarts=\\d{1,6}'
+    + `${countClasses.map((name) => ` jc_${name.replaceAll('-', '_')}=\\d{1,6}`).join('')}$`,
 );
 const invalid = () => new Error('Invalid source diagnostic.');
 const boundedInteger = (value, limit) => {
@@ -101,21 +119,56 @@ const journalRules = [
   ],
 ];
 const uncaughtException = /UnhandledPromiseRejection|\bUncaught\b|^\s+at\s+\S/;
-const failureMarker =
-  /Failed with result|Main process exited, code=(?:exited, status=[1-9]|killed|dumped)|start request repeated too quickly|Scheduled restart job/;
-export const classifyJournal = (text) => {
-  const lines = String(text).split('\n');
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const rule = journalRules.find(([, pattern]) => pattern.test(lines[index]));
-    if (rule) return rule[0];
+const failedMainExit = /Main process exited, code=(?:exited, status=[1-9]|killed, status=(?!15\/TERM)|dumped)/;
+const exitLine = new RegExp(`Failed with result|${failedMainExit.source}`);
+const classifyLine = (line) => journalRules.find(([, pattern]) => pattern.test(line))?.[0];
+const classifyRange = (range) => {
+  for (let index = range.length - 1; index >= 0; index -= 1) {
+    const name = classifyLine(range[index]);
+    if (name) return name;
   }
-  if (lines.some((line) => uncaughtException.test(line))) return 'uncaught-exception';
-  return lines.some((line) => failureMarker.test(line)) ? 'other' : 'none';
+  return range.some((line) => uncaughtException.test(line)) ? 'uncaught-exception' : 'other';
+};
+const emptyCounts = () => Object.fromEntries(countClasses.map((name) => [name, 0]));
+export const analyzeJournal = (text) => {
+  const lines = String(text).split('\n');
+  const counts = emptyCounts();
+  let exits = 0;
+  let scheduledRestarts = 0;
+  let previousExit = -1;
+  let sawExit = false;
+  let lastClass;
+  lines.forEach((line, index) => {
+    const name = classifyLine(line);
+    if (name) counts[name] += 1;
+    if (failedMainExit.test(line)) exits += 1;
+    if (/Scheduled restart job/.test(line)) scheduledRestarts += 1;
+    if (!exitLine.test(line)) return;
+    sawExit = true;
+    const range = lines.slice(Math.max(previousExit + 1, index - exitLookbackLines), index);
+    previousExit = index;
+    if (range.length === 0) return;
+    lastClass = classifyRange(range);
+    if (lastClass === 'uncaught-exception') counts[lastClass] += 1;
+  });
+  for (const name of countClasses) counts[name] = Math.min(counts[name], countLimit);
+  return {
+    journal: lastClass ?? (sawExit ? 'other' : 'none'),
+    exits: Math.min(exits, countLimit),
+    scheduledRestarts: Math.min(scheduledRestarts, countLimit),
+    counts,
+  };
 };
 export const parseMemAvailableMegabytes = (text) => {
   const kilobytes = /^MemAvailable:\s+(\d{1,15}) kB$/m.exec(String(text))?.[1];
   if (!kilobytes) throw invalid();
   return Math.min(Math.floor(Number(kilobytes) / 1024), megabytesLimit);
+};
+export const parseActiveEnter = (text) => {
+  const value = /^ActiveEnterTimestamp=(.*)$/m.exec(String(text))?.[1]?.trim();
+  const seconds = /^@(\d{1,12})$/.exec(value ?? '')?.[1];
+  if (!seconds || Number(seconds) === 0) return 'unknown';
+  return `${new Date(Number(seconds) * 1000).toISOString().slice(0, 16).replace(/[-:]/g, '')}Z`;
 };
 export const parseSourceRevision = (text) => {
   const found = new Set([...String(text).matchAll(/["'`]([a-f0-9]{40})["'`]/g)].map((match) => match[1]));
@@ -125,7 +178,11 @@ export const formatSourceDiagnoseNotice = (values) => {
   const line = `IORI_NOTICE stage=source-diagnose active=${values.active} sub=${values.sub} restarts=${values.restarts}`
     + ` exit_status=${values.exitStatus} journal=${values.journal} freeze=${values.freeze}`
     + ` freeze_pending=${values.freezePending} mem_available_mb=${values.memAvailableMegabytes}`
-    + ` disk_free_mb=${values.diskFreeMegabytes} source_revision=${values.sourceRevision}`;
+    + ` disk_free_mb=${values.diskFreeMegabytes} source_revision=${values.sourceRevision}`
+    + ` active_enter=${values.activeEnter} journal_window_h=${journalWindowHours}`
+    + ` journal_truncated=${values.journalTruncated} exits=${values.exits}`
+    + ` scheduled_restarts=${values.scheduledRestarts}`
+    + countClasses.map((name) => ` jc_${name.replaceAll('-', '_')}=${values.counts?.[name]}`).join('');
   if (!sourceDiagnoseNoticeLine.test(line)) throw invalid();
   return line;
 };
@@ -148,7 +205,7 @@ const readSourceRevision = async (path) => {
     return 'unknown';
   }
 };
-const journalArguments = ['-u', 'microblog', '-n', '200', '--no-pager', '-o', 'cat'];
+const journalArguments = ['-u', 'microblog', `--since=-${journalWindowHours}h`, '--no-pager', '-o', 'cat'];
 const unreadableJournal = /insufficient permissions|not seeing messages from other users|No journal files were opened/i;
 export const runSourceDiagnosis = async ({
   home = homedir(),
@@ -157,14 +214,14 @@ export const runSourceDiagnosis = async ({
   signal,
   write = (line) => process.stderr.write(`${line}\n`),
 } = {}) => {
-  const exec = (program, args) =>
+  const exec = (program, args, captureOutput = async () => {}) =>
     runCommand(program, args, {
       cwd: home,
       env: { ...process.env, PATH: '/usr/bin:/bin', LC_ALL: 'C' },
       timeout: 60_000,
-      maxBuffer: 8_000_000,
+      maxBuffer: journalLimitBytes,
       signal,
-      captureOutput: async () => {},
+      captureOutput,
     });
   const locate = async (name) => {
     const { stdout } = await exec('/bin/sh', ['-c', `command -v ${name}`]);
@@ -176,29 +233,61 @@ export const runSourceDiagnosis = async ({
   const state = parseSystemctlShow(
     (await exec(systemctl, ['show', 'microblog', '--property=ActiveState,SubState,NRestarts,ExecMainStatus'])).stdout,
   );
+  const activeEnter = await (async () => {
+    try {
+      return parseActiveEnter(
+        (await exec(systemctl, ['show', 'microblog', '--property=ActiveEnterTimestamp', '--timestamp=unix'])).stdout,
+      );
+    } catch {
+      signal?.throwIfAborted();
+      return 'unknown';
+    }
+  })();
+  const attemptJournal = async (program, args) => {
+    let captured = '';
+    try {
+      return await exec(program, args, async (output) => {
+        captured = output.stdout;
+      });
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (Buffer.byteLength(captured) < journalLimitBytes - truncationMarginBytes) throw error;
+      return {
+        stdout: captured.endsWith('\n') ? captured : captured.slice(0, captured.lastIndexOf('\n') + 1),
+        stderr: '',
+        truncated: 1,
+      };
+    }
+  };
   const readJournal = async () => {
     try {
       const journalctl = await locate('journalctl');
       let result;
       try {
         await exec('sudo', ['-n', '-l', journalctl, ...journalArguments]);
-        result = await exec('sudo', ['-n', journalctl, ...journalArguments]);
+        result = await attemptJournal('sudo', ['-n', journalctl, ...journalArguments]);
       } catch {
         signal?.throwIfAborted();
       }
-      result ??= await exec(journalctl, journalArguments);
-      return unreadableJournal.test(result.stderr) ? 'unavailable' : classifyJournal(result.stdout);
+      result ??= await attemptJournal(journalctl, journalArguments);
+      if (unreadableJournal.test(result.stderr)) return { ...analyzeJournal(''), journal: 'unavailable', truncated: 0 };
+      return { ...analyzeJournal(result.stdout), truncated: result.truncated ?? 0 };
     } catch {
       signal?.throwIfAborted();
-      return 'unavailable';
+      return { ...analyzeJournal(''), journal: 'unavailable', truncated: 0 };
     }
   };
-  const journal = await readJournal();
+  const analysis = await readJournal();
   const base = join(home, '.iori-migration');
   const filesystem = await statfs(home, { bigint: true });
   write(formatSourceDiagnoseNotice({
     ...state,
-    journal,
+    journal: analysis.journal,
+    journalTruncated: analysis.truncated,
+    exits: analysis.exits,
+    scheduledRestarts: analysis.scheduledRestarts,
+    counts: analysis.counts,
+    activeEnter,
     freeze: await present(join(base, 'freeze.json')),
     freezePending: await present(join(base, 'freeze.pending')),
     memAvailableMegabytes: parseMemAvailableMegabytes(await readFile(meminfoPath, 'utf8')),

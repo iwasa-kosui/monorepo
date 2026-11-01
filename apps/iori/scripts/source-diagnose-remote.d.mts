@@ -5,7 +5,10 @@ export const sourceDiagnoseNoticeLine: RegExp;
 export function parseSystemctlShow(
   text: string,
 ): { active: string; sub: string; restarts: number; exitStatus: number };
-export function classifyJournal(text: string): string;
+export function analyzeJournal(
+  text: string,
+): { journal: string; exits: number; scheduledRestarts: number; counts: Record<string, number> };
+export function parseActiveEnter(text: string): string;
 export function parseMemAvailableMegabytes(text: string): number;
 export function parseSourceRevision(text: string): string;
 export function formatSourceDiagnoseNotice(values: {
@@ -19,6 +22,11 @@ export function formatSourceDiagnoseNotice(values: {
   memAvailableMegabytes: number;
   diskFreeMegabytes: number;
   sourceRevision: string;
+  activeEnter: string;
+  journalTruncated: number;
+  exits: number;
+  scheduledRestarts: number;
+  counts: Record<string, number>;
 }): string;
 export function runSourceDiagnosis(options?: {
   home?: string;

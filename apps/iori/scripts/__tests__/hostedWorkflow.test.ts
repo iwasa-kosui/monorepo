@@ -333,7 +333,7 @@ it('relays only the exact source-diagnose notice to the public log', async () =>
   const accepted =
     `IORI_NOTICE stage=source-diagnose active=failed sub=auto-restart restarts=12 exit_status=1 journal=module-not-found freeze=0 freeze_pending=0 mem_available_mb=312 disk_free_mb=5120 source_revision=${
       'a'.repeat(40)
-    }`;
+    } active_enter=20261101T0612Z journal_window_h=6 journal_truncated=0 exits=3 scheduled_restarts=2 jc_module_not_found=4 jc_syntax_error=0 jc_env_invalid=0 jc_port_in_use=1 jc_out_of_memory=0 jc_permission_denied=0 jc_database_unavailable=0 jc_uncaught_exception=7`;
   await publishChildDiagnostics([
     accepted,
     `${accepted} extra=/home/secret`,
@@ -346,6 +346,8 @@ it('relays only the exact source-diagnose notice to the public log', async () =>
     accepted.replace(/source_revision=.*/, `source_revision=${'a'.repeat(39)}`),
     accepted.replace('freeze=0', 'freeze=2'),
     accepted.replace('stage=source-diagnose', 'stage=other'),
+    accepted.replace(/ active_enter=.*/, ''),
+    accepted.replace('jc_uncaught_exception=7', 'jc_uncaught_exception=x'),
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
