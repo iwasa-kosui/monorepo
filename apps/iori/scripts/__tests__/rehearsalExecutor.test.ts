@@ -152,6 +152,9 @@ it.each(['export', 'drain'] as const)('resumes the frozen source once when %s fa
 });
 it('aborts the frozen section at the freeze limit, resumes once with a fresh signal and skips D1 import', async () => {
   const f = await fixture();
+  const limitMs = 123_459;
+  const setTimer = vi.spyOn(globalThis, 'setTimeout');
+  const limitTimer = () => setTimer.mock.calls.findIndex(call => call[1] === limitMs);
   try {
     let exportSignal: AbortSignal | undefined;
     let resumeSignal: AbortSignal | undefined;
@@ -162,9 +165,10 @@ it('aborts the frozen section at the freeze limit, resumes once with a fresh sig
     );
     f.source.export = (async (signal: AbortSignal) => {
       exportSignal = signal;
+      (setTimer.mock.calls[limitTimer()]?.[0] as () => void)();
       return new Promise(() => {});
     }) as typeof f.source.export;
-    await expect(rehearseProtectedMigration({ ...rehearsalOptions(f), freezeLimitMs: 50 })).rejects.toThrow(
+    await expect(rehearseProtectedMigration({ ...rehearsalOptions(f), freezeLimitMs: limitMs })).rejects.toThrow(
       'Rehearsal freeze limit exceeded.',
     );
     expect(exportSignal?.aborted).toBe(true);

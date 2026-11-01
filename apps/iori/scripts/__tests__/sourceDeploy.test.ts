@@ -473,6 +473,19 @@ it('does not retry a status failure that is not marked retryable', async () => {
   expect(calls).toBe(1);
 });
 it('stops waiting between status attempts when the deployment is aborted', async () => {
+  const realSetTimeout = globalThis.setTimeout;
+  let markWaiting: () => void = () => {};
+  const waiting = new Promise<void>(resolve => {
+    markWaiting = resolve;
+  });
+  const setTimer = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+    ((handler: () => void, milliseconds?: number) => {
+      const timer = realSetTimeout(handler, milliseconds);
+      if (milliseconds === 60_000) markWaiting();
+      return timer;
+    }) as unknown as typeof globalThis.setTimeout,
+  );
+  const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
   const abort = new AbortController();
   let calls = 0;
   const deploying = deploySource(diagnosticOptions, {
@@ -480,14 +493,18 @@ it('stops waiting between status attempts when the deployment is aborted', async
       calls++;
       throw notReadyError();
     }),
-    statusRetryTimeoutMs: 60_000,
+    statusRetryTimeoutMs: 120_000,
     statusRetryIntervalMs: 60_000,
     signal: abort.signal,
   });
   const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
-  await vi.waitFor(() => expect(calls).toBe(1));
+  await waiting;
+  const index = setTimer.mock.calls.findIndex(call => call[1] === 60_000);
+  const handle = setTimer.mock.results[index]?.value;
+  expect(clearTimer).not.toHaveBeenCalledWith(handle);
   abort.abort();
   await failed;
+  expect(clearTimer).toHaveBeenCalledWith(handle);
   expect(calls).toBe(1);
 });
 it('stops before install and restart when the configuration chmod command fails and prints one diagnostic', async () => {

@@ -4,8 +4,16 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = () =>
-  execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: scriptDirectory, encoding: 'utf8' }).trim();
+let cachedRepositoryRoot;
+const repositoryRoot = () => {
+  if (cachedRepositoryRoot === undefined) {
+    cachedRepositoryRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: scriptDirectory,
+      encoding: 'utf8',
+    }).trim();
+  }
+  return cachedRepositoryRoot;
+};
 
 const isWithin = (candidate, parent) => {
   const path = relative(parent, candidate);

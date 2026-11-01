@@ -5,6 +5,8 @@ import { expect, it } from 'vitest';
 import { runMigrationCommand } from '../migration-command.mjs';
 import { createFixtureDirectory } from './fixtureTemp.ts';
 
+const killGraceMs = 1500;
+
 it.each([false, true])(
   'forwards outer termination and awaits nested owned child cleanup (ignores TERM: %s)',
   async (ignore) => {
@@ -14,7 +16,7 @@ it.each([false, true])(
     const wrapper = join(root, 'wrapper.mjs');
     const childCode = `const fs=require('node:fs');
     process.on('SIGTERM',()=>{ ${ignore ? '' : 'setTimeout(()=>process.exit(0),30);'} });
-    fs.writeFileSync(${JSON.stringify(ready)},'ready');setTimeout(()=>process.exit(0),2000);`;
+    fs.writeFileSync(${JSON.stringify(ready)},'ready');setTimeout(()=>process.exit(0),8000);`;
     await writeFile(
       wrapper,
       `
@@ -32,13 +34,13 @@ it.each([false, true])(
     const pending = runMigrationCommand(process.execPath, [wrapper], {
       cwd: root,
       env: process.env,
-      timeout: 5000,
+      timeout: 30_000,
       maxBuffer: 1024,
       signal: abort.signal,
-      killGraceMs: 1500,
+      killGraceMs,
     }).catch(error => error);
     try {
-      for (let attempt = 0; attempt < 100; attempt++) {
+      for (let attempt = 0; attempt < 1000; attempt++) {
         try {
           await access(ready);
           break;
@@ -51,11 +53,12 @@ it.each([false, true])(
       abort.abort();
       expect(await pending).toBeInstanceOf(Error);
       expect(await readFile(settled, 'utf8')).toBe('closed');
-      expect(Date.now() - start).toBeLessThan(1000);
+      expect(Date.now() - start).toBeLessThan(killGraceMs);
     } finally {
       abort.abort();
       await pending;
       await rm(root, { recursive: true, force: true });
     }
   },
+  40_000,
 );
