@@ -97,3 +97,33 @@ it('reports prepare-target stopped before resources when the operation command e
     await rm(runnerTemp, { recursive: true, force: true });
   }
 });
+it('runs diagnose-source against the reviewed code SHA without generation, run ID or migration SHA', async () => {
+  const runnerTemp = await createFixtureDirectory('iori-hosted-');
+  try {
+    const paths = await createWorkflowDirectory(runnerTemp);
+    await runHostedWorkflow('operate', {
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_SHA: codeSha,
+      MAIN_SHA: codeSha,
+      IORI_MIGRATION_MAIN_SHA: '',
+      IORI_MIGRATION_RUN_ID: '',
+      IORI_ENVIRONMENT: 'production',
+      IORI_GENERATION: '',
+      IORI_OPERATION: 'diagnose-source',
+      IORI_RECOVERY: '',
+      IORI_JOB_STARTED_AT: String(Date.now() - 60_000),
+      RUNNER_TEMP: runnerTemp,
+      IORI_PRIVATE_DIRECTORY: paths.base,
+      IORI_PRIVATE_LOG_DIRECTORY: paths.logs,
+      IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
+      IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
+    }, new AbortController().signal);
+    expect(vi.mocked(assertReviewedMain).mock.calls.map(call => call[0])).toEqual([codeSha]);
+    const commands = vi.mocked(runMigrationCommand).mock.calls as unknown as [string, string[], { env: object }][];
+    expect(commands.map(([, args]) => args)).toEqual([['apps/iori/scripts/diagnose-source.mjs']]);
+    expect(commands[0][2].env).not.toHaveProperty('IORI_WORKER_BINDINGS_PATH');
+  } finally {
+    await rm(runnerTemp, { recursive: true, force: true });
+  }
+});

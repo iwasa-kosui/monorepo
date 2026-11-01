@@ -68,6 +68,7 @@ const fixedReasons = [
   ['Source control rejected.', 'source-control-rejected'],
   ['Source control is not ready.', 'source-control-not-ready'],
   ['Source operation failed.', 'source-operation-failed'],
+  ['Invalid source diagnostic.', 'diagnostic-invalid'],
   ['Source prerequisite readiness failed.', 'readiness-failed'],
   ['Source is not frozen.', 'source-not-frozen'],
   ['Source identity mismatch.', 'source-identity-mismatch'],
