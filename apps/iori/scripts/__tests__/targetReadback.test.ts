@@ -152,6 +152,10 @@ const offsetInfo = (count: number, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const readbackFailure = (reason: string) => ({ message: 'Target readback failed.', diagnostic: { reason } });
+const resourceFailure = (details: string[]) => ({
+  message: 'Target readback failed.',
+  diagnostic: { reason: 'state-mismatch', details },
+});
 it('classifies a Cloudflare HTTP failure by API and integer status only', async () => {
   await expect(failureFor('workers', () => Response.json({ success: false, errors: ['secret'] }, { status: 403 })))
     .rejects.toMatchObject(readbackFailure('workers-http-403'));
@@ -376,7 +380,7 @@ it('requires the expected paused consumer target and rejects unexpected producer
   const responses = resourceResponses();
   (responses['/queues/queue-id'].consumers as unknown[]).push({
     type: 'worker',
-    script_name: identity.workerName,
+    script: identity.workerName,
     dead_letter_queue: identity.names.dlq,
     consumer_id: 'consumer-id',
     settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
@@ -393,7 +397,7 @@ it('keeps preparation paused while the separate active readback retains complete
   responses['/queues/queue-id'].settings.delivery_paused = false;
   (responses['/queues/queue-id'].consumers as unknown[]).push({
     type: 'worker',
-    script_name: identity.workerName,
+    script: identity.workerName,
     dead_letter_queue: identity.names.dlq,
     consumer_id: 'consumer-id',
     settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
@@ -825,3 +829,223 @@ it.each(['/queues/queue-id', '/queues/dlq-id'])(
     }
   },
 );
+
+describe('the resource readback names the conditions that differ', () => {
+  const attachedConsumer = () => ({
+    type: 'worker',
+    script: identity.workerName,
+    dead_letter_queue: identity.names.dlq,
+    consumer_id: 'consumer-id',
+    settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
+  });
+  const attachedResponses = (change: (consumer: Record<string, unknown>) => void = () => {}) => {
+    const responses = resourceResponses();
+    const consumer: Record<string, unknown> = attachedConsumer();
+    change(consumer);
+    (responses['/queues/queue-id'].consumers as unknown[]).push(consumer);
+    responses['/queues/queue-id'].consumers_total_count = 1;
+    return responses;
+  };
+  const readAttached = (responses: Record<string, unknown>) =>
+    fixtureApi(responses).readResources({ ...ids, consumerAttached: true });
+  it('reads the attached state without a detail', async () => {
+    await expect(readAttached(attachedResponses())).resolves.toMatchObject({ consumerId: 'consumer-id' });
+  });
+  it('reads a consumer that has only script, the key of the actual response', async () => {
+    const responses = attachedResponses((consumer) => {
+      delete consumer.script_name;
+      consumer.script = identity.workerName;
+    });
+    await expect(readAttached(responses)).resolves.toMatchObject({ consumerId: 'consumer-id' });
+  });
+  it('reads a consumer that has only script_name', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script_name = consumer.script;
+      delete consumer.script;
+    });
+    await expect(readAttached(responses)).resolves.toMatchObject({ consumerId: 'consumer-id' });
+  });
+  it('names resource-consumer-script when script is another Worker', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script = 'old-worker';
+    });
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('prefers script over script_name', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script = 'old-worker';
+      consumer.script_name = identity.workerName;
+    });
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('names resource-consumer-script when only script_name is another Worker', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script_name = 'old-worker';
+      delete consumer.script;
+    });
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('names resource-consumer-script when neither script nor script_name is present', async () => {
+    const responses = attachedResponses((consumer) => {
+      delete consumer.script;
+      delete consumer.script_name;
+    });
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('names resource-input for an id of an invalid shape and for equal Queue ids', async () => {
+    const api = fixtureApi(resourceResponses());
+    await expect(api.readResources({ ...ids, d1Id: 'bad id' })).rejects.toMatchObject(
+      resourceFailure(['resource-input']),
+    );
+    await expect(api.readResources({ ...ids, dlqId: ids.queueId })).rejects.toMatchObject(
+      resourceFailure(['resource-input']),
+    );
+  });
+  it.each<[string, string, (responses: ReturnType<typeof resourceResponses>) => void]>([
+    ['resource-d1', 'a D1 name', (r) => {
+      r['/d1/database/db-id'].name = 'old';
+    }],
+    ['resource-d1', 'a D1 uuid', (r) => {
+      r['/d1/database/db-id'].uuid = 'other';
+    }],
+    ['resource-kv', 'a KV title', (r) => {
+      r['/storage/kv/namespaces/kv-id'].title = 'old';
+    }],
+    ['resource-r2', 'an uploads bucket name', (r) => {
+      r[`/r2/buckets/${identity.names.uploads}`].name = 'old';
+    }],
+    ['resource-r2', 'a transfer bucket name', (r) => {
+      r[`/r2/buckets/${identity.names.transfer}`].name = 'old';
+    }],
+    ['resource-queue-identity', 'a Queue id', (r) => {
+      r['/queues/queue-id'].queue_id = 'other';
+    }],
+    ['resource-queue-identity', 'a dead letter Queue name', (r) => {
+      r['/queues/dlq-id'].queue_name = 'other';
+    }],
+    ['resource-queue-paused', 'a Queue that is not paused', (r) => {
+      r['/queues/queue-id'].settings.delivery_paused = false;
+    }],
+    ['resource-queue-paused', 'a dead letter Queue that is not paused', (r) => {
+      r['/queues/dlq-id'].settings.delivery_paused = false;
+    }],
+    ['resource-queue-created', 'a Queue without created_on', (r) => {
+      delete (r['/queues/queue-id'] as Partial<(typeof r)['/queues/queue-id']>).created_on;
+    }],
+    ['resource-queue-created', 'a Queue with a created_on that is not a date', (r) => {
+      r['/queues/dlq-id'].created_on = 'yesterday';
+    }],
+    ['resource-dlq-attached', 'a producer of the dead letter Queue', (r) => {
+      (r['/queues/dlq-id'].producers as unknown[]).push({ type: 'worker', script: identity.workerName });
+      r['/queues/dlq-id'].producers_total_count = 1;
+    }],
+    ['resource-producer', 'a producer of another Worker', (r) => {
+      (r['/queues/queue-id'].producers as unknown[]).push({ type: 'worker', script: 'old-worker' });
+      r['/queues/queue-id'].producers_total_count = 1;
+    }],
+    ['resource-domain-public', 'a public managed domain', (r) => {
+      r[`/r2/buckets/${identity.names.transfer}/domains/managed`].enabled = true;
+    }],
+  ])('names %s for %s', async (word, _label, change) => {
+    const responses = resourceResponses();
+    change(responses);
+    await expect(fixtureApi(responses).readResources(ids)).rejects.toMatchObject(resourceFailure([word]));
+  });
+  it.each(['consumers', 'producers'])('names resource-queue-shape for %s that are not an array', async (field) => {
+    const responses = resourceResponses();
+    (responses['/queues/queue-id'] as Record<string, unknown>)[field] = {};
+    await expect(fixtureApi(responses).readResources(ids)).rejects.toMatchObject(
+      resourceFailure(['resource-queue-shape']),
+    );
+  });
+  it.each([
+    ['consumers_total_count', undefined],
+    ['consumers_total_count', 1],
+    ['producers_total_count', '0'],
+    ['producers_total_count', 1],
+  ])('names resource-queue-shape for a %s of %j', async (field, count) => {
+    const responses = resourceResponses();
+    (responses['/queues/queue-id'] as Record<string, unknown>)[field] = count;
+    await expect(fixtureApi(responses).readResources(ids)).rejects.toMatchObject(
+      resourceFailure(['resource-queue-shape']),
+    );
+  });
+  it('names resource-consumer-count for a consumer that is missing or not expected', async () => {
+    await expect(readAttached(resourceResponses())).rejects.toMatchObject(resourceFailure(['resource-consumer-count']));
+    await expect(fixtureApi(attachedResponses()).readResources(ids)).rejects.toMatchObject(
+      resourceFailure(['resource-consumer-count']),
+    );
+  });
+  it.each<[string, string, (consumer: Record<string, unknown>) => void]>([
+    ['resource-consumer-type', 'a consumer that is not a Worker', (c) => {
+      c.type = 'http_pull';
+    }],
+    ['resource-consumer-script', 'a consumer of another Worker', (c) => {
+      c.script = 'old-worker';
+    }],
+    ['resource-consumer-dlq', 'another dead letter Queue', (c) => {
+      c.dead_letter_queue = 'other';
+    }],
+    ['resource-consumer-id', 'a missing consumer_id', (c) => {
+      delete c.consumer_id;
+    }],
+    ['resource-consumer-id', 'a consumer_id of an invalid shape', (c) => {
+      c.consumer_id = 'bad id';
+    }],
+    ['resource-consumer-settings', 'another batch_size', (c) => {
+      (c.settings as Record<string, unknown>).batch_size = 10;
+    }],
+    ['resource-consumer-settings', 'another max_wait_time_ms', (c) => {
+      (c.settings as Record<string, unknown>).max_wait_time_ms = 500;
+    }],
+    ['resource-consumer-settings', 'another max_retries', (c) => {
+      (c.settings as Record<string, unknown>).max_retries = 5;
+    }],
+    ['resource-consumer-settings', 'another retry_delay', (c) => {
+      (c.settings as Record<string, unknown>).retry_delay = 60;
+    }],
+    ['resource-consumer-settings', 'missing settings', (c) => {
+      delete c.settings;
+    }],
+  ])('names %s for %s', async (word, _label, change) => {
+    await expect(readAttached(attachedResponses(change))).rejects.toMatchObject(resourceFailure([word]));
+  });
+  it('keeps state-mismatch as the reason and lists every condition that differs, once each', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script = 'old-worker';
+      consumer.settings = { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 60 };
+    });
+    responses['/d1/database/db-id'].name = 'old';
+    responses['/queues/queue-id'].settings.delivery_paused = false;
+    responses['/queues/dlq-id'].settings.delivery_paused = false;
+    const error = await readAttached(responses).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toMatchObject({
+      message: 'Target readback failed.',
+      diagnostic: {
+        reason: 'state-mismatch',
+        details: ['resource-d1', 'resource-queue-paused', 'resource-consumer-script', 'resource-consumer-settings'],
+      },
+    });
+  });
+  it('lists the conditions found so far when a later request fails', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script = 'old-worker';
+    });
+    delete (responses as Record<string, unknown>)[`/r2/buckets/${identity.names.transfer}/domains/managed`];
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('keeps the request failure when no condition differs', async () => {
+    const responses = resourceResponses() as Record<string, unknown>;
+    delete responses[`/r2/buckets/${identity.names.transfer}/domains/managed`];
+    await expect(fixtureApi(responses).readResources(ids)).rejects.toMatchObject(readbackFailure('r2-shape'));
+  });
+  it('names the same words in the active readback', async () => {
+    const responses = attachedResponses((consumer) => {
+      consumer.script = 'old-worker';
+    });
+    responses['/queues/queue-id'].settings.delivery_paused = false;
+    await expect(fixtureApi(responses).readActiveResources(ids)).rejects.toMatchObject(
+      resourceFailure(['resource-consumer-script']),
+    );
+  });
+});

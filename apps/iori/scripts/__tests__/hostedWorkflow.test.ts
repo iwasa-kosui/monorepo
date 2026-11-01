@@ -285,6 +285,19 @@ it('relays the plan rejection detail lines before the plan-rejected line of prep
   ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
+it('relays the resource readback detail lines before the state-mismatch line of prepare-target', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource-consumer-script',
+    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource-consumer-settings',
+    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=state-mismatch',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource_consumer_script',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
 it('relays only the exact configuration owner notice to the public log', async () => {
   const writes = captureStderr();
   const accepted = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';

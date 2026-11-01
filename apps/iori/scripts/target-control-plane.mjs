@@ -2,8 +2,10 @@ import { parseAdmission } from '../src/workerAdmission.ts';
 import { createTargetIdentity } from './fresh-target.mjs';
 import { controlPlaneApi } from './target-preparation-diagnostics.mjs';
 
-const fail = (reason) => {
-  throw Object.assign(new Error('Target readback failed.'), { diagnostic: { reason } });
+const fail = (reason, details) => {
+  throw Object.assign(new Error('Target readback failed.'), {
+    diagnostic: { reason, ...(details?.length ? { details } : {}) },
+  });
 };
 const failApi = (path, kind) => fail(`${controlPlaneApi(path)}-${kind}`);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -109,7 +111,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     return { fresh: true, resourceCount: 0 };
   };
   const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }, paused) => {
-    if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail('state-mismatch');
+    if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail('state-mismatch', ['resource-input']);
     const [d1, kv, uploads, transfer, queue, dlq] = await Promise.all([
       get(`${root}/d1/database/${d1Id}`),
       get(`${root}/storage/kv/namespaces/${kvId}`),
@@ -118,36 +120,49 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       get(`${root}/queues/${queueId}`),
       get(`${root}/queues/${dlqId}`),
     ]).then((values) => values.map((value) => value.result));
-    if (
-      d1.uuid !== d1Id || d1.name !== identity.names.d1 || kv.id !== kvId || kv.title !== identity.names.kv
-      || uploads.name !== identity.names.uploads || transfer.name !== identity.names.transfer
-    ) fail('state-mismatch');
+    const details = [];
+    const note = (word) => {
+      if (!details.includes(word)) details.push(word);
+    };
+    if (d1.uuid !== d1Id || d1.name !== identity.names.d1) note('resource-d1');
+    if (kv.id !== kvId || kv.title !== identity.names.kv) note('resource-kv');
+    if (uploads.name !== identity.names.uploads || transfer.name !== identity.names.transfer) note('resource-r2');
     for (const [q, id, name] of [[queue, queueId, identity.names.queue], [dlq, dlqId, identity.names.dlq]]) {
+      if (q.queue_id !== id || q.queue_name !== name) note('resource-queue-identity');
+      if (q.settings?.delivery_paused !== (id === queueId ? paused : true)) note('resource-queue-paused');
       if (
-        q.queue_id !== id || q.queue_name !== name || q.settings?.delivery_paused !== (id === queueId ? paused : true)
-        || !Array.isArray(q.consumers) || !Array.isArray(q.producers)
+        !Array.isArray(q.consumers) || !Array.isArray(q.producers)
         || !Number.isInteger(q.consumers_total_count) || q.consumers_total_count !== q.consumers.length
         || !Number.isInteger(q.producers_total_count) || q.producers_total_count !== q.producers.length
-      ) fail('state-mismatch');
-      if (!q.created_on || !Number.isFinite(Date.parse(q.created_on))) fail('state-mismatch');
+      ) note('resource-queue-shape');
+      if (!q.created_on || !Number.isFinite(Date.parse(q.created_on))) note('resource-queue-created');
     }
-    if (
-      dlq.consumers.length !== 0 || dlq.producers.length !== 0 || queue.consumers.length !== Number(consumerAttached)
-    ) fail('state-mismatch');
+    if (details.includes('resource-queue-shape')) fail('state-mismatch', details);
+    if (dlq.consumers.length !== 0 || dlq.producers.length !== 0) note('resource-dlq-attached');
+    if (queue.consumers.length !== Number(consumerAttached)) note('resource-consumer-count');
     if (queue.producers.some((producer) => producer.type !== 'worker' || producer.script !== identity.workerName)) {
-      fail('state-mismatch');
+      note('resource-producer');
     }
-    if (consumerAttached) {
+    if (consumerAttached && queue.consumers.length === 1) {
       const consumer = queue.consumers[0];
+      if (consumer.type !== 'worker') note('resource-consumer-type');
+      const consumerScript = consumer.script === undefined ? consumer.script_name : consumer.script;
+      if (consumerScript !== identity.workerName) note('resource-consumer-script');
+      if (consumer.dead_letter_queue !== identity.names.dlq) note('resource-consumer-dlq');
+      if (!safeId(consumer.consumer_id)) note('resource-consumer-id');
       if (
-        consumer.type !== 'worker' || consumer.script_name !== identity.workerName
-        || consumer.dead_letter_queue !== identity.names.dlq || !safeId(consumer.consumer_id)
-        || consumer.settings?.batch_size !== 1 || consumer.settings?.max_wait_time_ms !== 1000
+        consumer.settings?.batch_size !== 1 || consumer.settings?.max_wait_time_ms !== 1000
         || consumer.settings?.max_retries !== 3 || consumer.settings?.retry_delay !== 30
-      ) fail('state-mismatch');
+      ) note('resource-consumer-settings');
     }
-    const publicAccess = (await get(`${root}/r2/buckets/${identity.names.transfer}/domains/managed`)).result;
-    if (publicAccess.enabled !== false) fail('state-mismatch');
+    const publicAccess = await get(`${root}/r2/buckets/${identity.names.transfer}/domains/managed`).then(
+      (body) => body.result,
+      (error) => {
+        if (details.length === 0 || signal?.aborted) throw error;
+      },
+    );
+    if (publicAccess !== undefined && publicAccess.enabled !== false) note('resource-domain-public');
+    if (details.length > 0) fail('state-mismatch', details);
     return {
       identity,
       d1Id,

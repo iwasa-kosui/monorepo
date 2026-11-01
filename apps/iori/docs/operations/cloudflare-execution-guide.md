@@ -414,7 +414,7 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 | `limit`         | 一覧が 100 件以上あるか、続きのページがあります。この確認は1ページで全件を見る前提なので、作業者が件数を減らすか確認の方法を見直すまで、同じ generation でも通りません。R2 の bucket の一覧は、応答に 1ページの件数（`per_page`）が無いときは 20 件以上、件数の合計（`total_count`）が返した件数より多いときも `limit` になります |
 | `exists`        | generation の名前のリソースが既にあります。`prepare-fresh-check` だけで出ます                                                                                                                                                                                                                                                     |
 
-`prepare-fresh-check` 以外の段で Cloudflare の読み取りが期待と違ったときは `state-mismatch` が、Worker が sealed でないときは `not-sealed` が `reason` に出ます。
+`prepare-fresh-check` 以外の段で Cloudflare の読み取りが期待と違ったときは `state-mismatch` が、Worker が sealed でないときは `not-sealed` が `reason` に出ます。`reason` が `state-mismatch` のときは、外れた条件を示す `resource-` で始まる行が、`state-mismatch` の行の前に出ます。
 
 準備で配備した Worker の状態の読み取り（`prepare-attach` など）が期待と違ったときは、`state-mismatch` の代わりに次の `reason` が出ます。
 
@@ -456,6 +456,30 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 | `unclassified`             | 上のどれにも当たりません                                                                                                             |
 
 `<resource>` は `d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかです。`<action>` は `create`、`update`、`delete`、`replace`、`no-op`、`other` のどれかです。例として、`plan-queue-update` は fedify の Queue の更新を表します。
+
+リソースの読み取り（`prepare-resource-read`、`prepare-attach-read`、`cutover-gate-smoke`、`cutover-gate-route`、`cutover-gate-active`、`cutover-gate-queue`、`cutover-read-resume`）が `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
+
+| `reason`                     | 意味                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| `resource-input`             | 読み取りに渡したリソースの ID の形が不正か、Queue と DLQ の ID が同じです。            |
+| `resource-d1`                | D1 の uuid か名前が一致しません。                                                      |
+| `resource-kv`                | KV の ID か title が一致しません。                                                     |
+| `resource-r2`                | uploads か transfer の bucket の名前が一致しません。                                   |
+| `resource-queue-identity`    | Queue か DLQ の ID か名前が一致しません。                                              |
+| `resource-queue-paused`      | Queue か DLQ の配送の一時停止の状態が期待と違います。                                  |
+| `resource-queue-shape`       | Queue の応答の consumers、producers、件数の形が不正です。                              |
+| `resource-queue-created`     | Queue の作成日時が無いか、日時の形ではありません。                                     |
+| `resource-dlq-attached`      | DLQ に consumer か producer があります。                                               |
+| `resource-consumer-count`    | Queue の consumer の件数が期待と違います。                                             |
+| `resource-producer`          | Queue に、自分の Worker 以外の producer があります。                                   |
+| `resource-consumer-type`     | consumer の種別が Worker ではありません。                                              |
+| `resource-consumer-script`   | consumer の Worker 名が自分の Worker と一致しません。                                  |
+| `resource-consumer-dlq`      | consumer の DLQ の名前が一致しません。                                                 |
+| `resource-consumer-id`       | consumer の ID が無いか、形が不正です。                                                |
+| `resource-consumer-settings` | consumer の batch size、待ち時間、再試行の回数、再試行の間隔のどれかが期待と違います。 |
+| `resource-domain-public`     | transfer の bucket の r2.dev の公開 URL が無効になっていません。                       |
+
+Cloudflare Queues API は、consumer の Worker 名を `script` で返します。Terraform の provider の定義は `script_name` と書いていますが、2026-11-01 の読み取りでは、`GET /queues/{queue_id}` の応答の consumer に `script_name` はありませんでした。読み取りは `script` を使い、`script` が無いときだけ `script_name` を使います。2026-11-01 の `GET /queues/{queue_id}` の読み取りでは、次のキーを確かめました。`result` は `queue_id`、`queue_name`、`settings`、`created_on`、`modified_on`、`producers_total_count`、`producers`、`consumers_total_count`、`consumers` を持ちます。`result.settings` は `delivery_delay`、`delivery_paused`、`message_retention_period` を持ちます。`result.consumers[]` の要素は `script`、`dead_letter_queue`、`settings`、`consumer_id`、`type` を持ち、`dead_letter_queue` は DLQ の名前です。consumer の `settings` は `batch_size`、`max_retries`、`max_wait_time_ms`、`retry_delay` を持ちます。`result.producers[]` の要素は `script` と `type` を持ちます。Dashboard が表示する HTTP Push の producer は、API の `producers` には入っていません。
 
 ### 3.3 Identity の照合
 
@@ -1087,7 +1111,7 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 ### 6.3 cutover-route の失敗した段
 
-`cutover-route` が失敗すると、公開ログに `IORI_DIAG stage=cutover-<段> program=none exit=none signal=none reason=<分類>` の行が出ます。plan を拒否したときは、この行の前に `plan-` で始まる詳細の行が最大8行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
+`cutover-route` が失敗すると、公開ログに `IORI_DIAG stage=cutover-<段> program=none exit=none signal=none reason=<分類>` の行が出ます。plan を拒否したときは、この行の前に `plan-` で始まる詳細の行が最大8行出ます。`reason` が `state-mismatch` のときは、外れた条件を示す `resource-` で始まる行が最大8行出ます。語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。行には固定の語だけが入り、メッセージの本文や ID は入りません。
 
 どの段で止まった場合も、作業者は source の凍結を解かず、`cutover-route` を自動で再実行しません。作業者は、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従って、記録を残してレビューに戻します。
 

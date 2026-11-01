@@ -83,6 +83,37 @@ it.each(PREPARATION_STAGES)('builds a public line for stage %s with every repres
     expect(line).toMatch(publicLine);
   }
 });
+const resourceReasons = [
+  'resource-input',
+  'resource-d1',
+  'resource-kv',
+  'resource-r2',
+  'resource-queue-identity',
+  'resource-queue-paused',
+  'resource-queue-shape',
+  'resource-queue-created',
+  'resource-dlq-attached',
+  'resource-consumer-count',
+  'resource-producer',
+  'resource-consumer-type',
+  'resource-consumer-script',
+  'resource-consumer-dlq',
+  'resource-consumer-id',
+  'resource-consumer-settings',
+  'resource-domain-public',
+];
+it.each(resourceReasons)('accepts the resource readback reason %s as a public detail line', (reason) => {
+  expect(isPreparationReason(reason)).toBe(true);
+  const lines = preparationDetailLines('attach-read', { diagnostic: { reason: 'state-mismatch', details: [reason] } });
+  expect(lines).toEqual([`IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=${reason}`]);
+  expect(lines[0]).toMatch(publicLine);
+});
+it.each(['resource-', 'resource-secret', 'Resource-d1', 'resource-d1\n', 'resource-d1-extra'])(
+  'rejects the resource-like reason %j',
+  (reason) => {
+    expect(isPreparationReason(reason)).toBe(false);
+  },
+);
 it('accepts every control plane API with every kind', () => {
   for (const api of CONTROL_PLANE_APIS) {
     for (const kind of ['http-401', 'http-503', 'request', 'too-large', 'shape', 'limit', 'exists']) {

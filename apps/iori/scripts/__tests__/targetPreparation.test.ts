@@ -143,7 +143,7 @@ const scenario = async (
         applied === 2
           ? [{
             type: 'worker',
-            script_name: identity.workerName,
+            script: identity.workerName,
             dead_letter_queue: identity.names.dlq,
             consumer_id: 'consumer-id',
             settings: consumerSettings,
