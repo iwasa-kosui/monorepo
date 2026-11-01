@@ -42,7 +42,7 @@ const fixture = async () => {
       end: async () => {},
       query: async (sql: string) => {
         if (sql.startsWith('DECLARE')) {
-          actors = sql.includes('FROM "actors"');
+          actors = /FROM "([a-z_]+)" AS row/.exec(sql)![1] === 'actors';
           sent = false;
         }
         const deliver = sql.startsWith('FETCH') && actors && !sent;

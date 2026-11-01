@@ -33,6 +33,28 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
 
+### blog.kosui.me の DNS を proxied にする
+
+この repo の Terraform は DNS、proxied、SSL/TLS の暗号化モード、Always Use HTTPS を管理しません。`infra/cloudflare/main.tf` が管理するのは D1、R2、KV、Queue、DLQ、Queue consumer、Workers route と移行用 bucket だけです。`cutover-route` も proxied を変更しません。
+
+`blog.kosui.me` が proxied でない状態で `cutover-route` を実行すると、canonical hostname の smoke（stage 名 `smoke-canonical`）のリクエストは旧環境の nginx に届きます。この場合、`cutover-route` は `smoke-failed` で止まる見込みです。このリクエストの `x-iori-smoke-token` ヘッダーも旧 origin に送られます。このため、`cutover-route` の前に、次の手順で独立して proxied に切り替えます。
+
+旧環境の証明書は `certbot --nginx` で取得したもので、更新は cron の `certbot renew` が行います。設定は `ansible/enable-https.yaml` と `ansible/auto-renewal-cert.yaml` にあります。
+
+0. secret `IORI_SOURCE_SSH_HOST` の値が `blog.kosui.me` でないことを確かめます。`blog.kosui.me` を proxied にすると、旧環境への SSH が Cloudflare に向かいます。その結果、`Deploy iori Worker` workflow の `migrate-data`、`cutover-route` の gate、`resume-source` と、`Deploy iori` workflow が止まります。値が `blog.kosui.me` の場合は、旧環境の IP アドレスに替えます。あわせて `IORI_SOURCE_SSH_KNOWN_HOSTS` も、その IP アドレスの行に替えます。
+1. 現在の A レコードの TTL を確かめます。2026-11-02 時点の値は 60 秒です。
+2. Cloudflare の Edge Certificates で、Universal SSL が `blog.kosui.me` を含み、状態が Active であることを確かめます。
+3. SSL/TLS の暗号化モードを Full (strict) にします。Flexible は使いません。
+4. Security の設定が、`/inbox` への POST と `/users/kosui` への GET を challenge にしないことを確かめます。対象は Bot Fight Mode、Security Level、WAF です。Bot Fight Mode は off にします。あわせて、旧 origin の証明書の期限を控えます。
+5. A レコードを proxied にし、Always Use HTTPS を on にします。
+6. 5〜10分後に次を確かめます。問題があれば、A レコードを DNS only に戻します。
+   - 応答ヘッダーに `server: cloudflare` と `cf-ray` が含まれる。
+   - WebFinger と `/users/kosui` が旧アプリから 200 で返る。
+   - `/inbox` への POST が 2xx のまま返る。
+   - 52x のエラーが出ない。
+   - `estimate-source` が通る。
+7. これ以降は、`prepare-target`、`migrate-data`、`cutover-route` を従来どおり実行します。
+
 ## 2. Staging rehearsal（任意）
 
 ユーザーの判断により、今回の移行は staging を使わず production だけで行います。この節は staging を使う場合だけ実施します。staging を使わない場合は、この節を飛ばして第3節へ進みます。第3節の production cutover は、この節の完了を前提条件にしません。
@@ -108,6 +130,22 @@ activitypub.academy はサービスを終了しているため、この確認に
 移行に失敗しても Lightsail の書き込みを自動再開しません。route 作成前であっても、失敗した実行 ID、部分的な import、移行先の受付状態を確認します。再起動だけでは永続的な凍結は解除されません。移行先への通常書き込みを有効にしていないと確認し、復旧を明示的に承認した場合だけ、同じ SHA と run ID の source control に `resume` と `destination_writes_not_enabled` を指定します。
 
 HTTP を有効にした後は移行先の受付と配送を止め、移行先での復旧を優先します。D1/R2 に通常書き込みが発生した場合、その変更を照合・反映し終わるまで Lightsail の書き込みを再開しません。承認された復旧では `resume` に `destination_writes_reconciled` を指定します。これらの指定は operator の復旧判断であり、自動処理が推測して送信してはいけません。公開記録は件数と pass/fail に限定します。
+
+### route を作った後に旧環境へ戻す
+
+`cutover-route` が route を作った後に、公開先を旧環境へ戻す場合は、次の順に実施します。
+
+1. Cloudflare の Workers Routes から `blog.kosui.me/*` の route を削除します。DNS は proxied のままにします。
+2. Worker が `active` に達していた場合は、その generation の配送 Queue の delivery を pause します。
+3. Terraform の state は修正しません。その generation では `terraform apply` を実行しません。`infra/cloudflare/main.tf` の route resource は `prevent_destroy = true` を指定しています。やり直すときは、新しい generation を使います。
+4. `resume-source` で旧環境の凍結を解きます。入力 `recovery` には次の値を指定します。手順は[実行手順の第7.1節](./cloudflare-execution-guide.md#71-凍結が残った場合の復旧)に従います。
+   - Worker が `active` に達する前は、`destination_writes_not_enabled` を指定します。
+   - Worker が `active` に達した後は、移行先の書き込みの扱いを決めてから、`destination_writes_reconciled` を指定します。第4節の冒頭の2段落が、この指定の条件を定めています。
+5. 次を確かめます。
+   - 旧アプリが応答する。
+   - `/users/kosui` の publicKeyPem が切り替え前と同じである。
+   - 外部の Fediverse アカウントから連合が動く。確認の手順は[連合の外部確認](#連合の外部確認)に従います。
+6. route が有効だった間に certbot の更新が失敗していないかを確かめます。
 
 ## 5. 14-day retention と AWS retirement
 

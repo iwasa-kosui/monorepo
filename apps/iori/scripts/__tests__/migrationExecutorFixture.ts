@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import { type ExecutorOptions } from '../execute-protected-migration.mjs';
 import { expectedTargetFixture, preparationFixture } from './migrationTargetFixture.js';
 import { preparationRecordKey, serializePreparationRecord } from '../migration-target-contract.mjs';
-import { APPLICATION_TABLE_ORDER, exportPostgres } from '../export-postgres.mjs';
+import { APPLICATION_TABLE_ORDER, EXPORT_ROW_SCOPE, exportPostgres } from '../export-postgres.mjs';
 import { SOURCE_LIMITS, type SourceInventory } from '../source-transfer-protocol.mjs';
 import { importMigrationD1, reviewedD1Schema } from '../migration-d1-import.mjs';
 import { createCloudflareImportTransport } from '../cloudflare-import-provider.mjs';
@@ -156,12 +156,14 @@ export const fixture = async (config: { extraImageUrl?: string; missingUpload?: 
           end: async () => {},
           query: async (sql: string) => {
             if (sql.startsWith('DECLARE')) {
-              table = /FROM "([a-z_]+)"/.exec(sql)![1]!;
+              table = /FROM "([a-z_]+)" AS row/.exec(sql)![1]!;
               sent = false;
             }
             if (sql.startsWith('FETCH') && !sent) {
               sent = true;
-              return { rows: sourceDb.prepare(`SELECT * FROM "${table}"`).all().map(row => ({ row })) };
+              const scope = EXPORT_ROW_SCOPE[table];
+              const select = `SELECT * FROM "${table}" AS row${scope === null ? '' : ` WHERE ${scope}`}`;
+              return { rows: sourceDb.prepare(select).all().map(row => ({ row })) };
             }
             return { rows: [] };
           },

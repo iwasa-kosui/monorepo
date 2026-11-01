@@ -1074,6 +1074,20 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。この2つの dispatch は `migration_main_sha` を必要とし、`resume-source` は `recovery` も必要とするため、上の例は使わず、第7.1節の例に従います。旧環境の状態を読み取るだけの `diagnose-source` は、旧環境に書き込まないため、この2つには含みません。手順は第7.2節に書きます。
 
+`migrate-data` は、旧 DB の全行を移しません。`scripts/export-postgres-lib.mjs` の `EXPORT_ROW_SCOPE` が、本人の投稿と本人に関わる相手の行だけを export の対象にします。export は、本人を users と local_actors から求めます。
+
+- 全行を移す表は、users、user_passwords、keys、instance_actor_keys、local_actors、local_posts、articles、relays、push_subscriptions、mutes です。keys と instance_actor_keys が無いと、Worker が新しい鍵を作り、連合が壊れます。このため export は、この2表を必ず全行移します。
+- 絞って移す表は、次のとおりです。
+  - posts、remote_posts、post_images、link_previews は、本人の投稿と、本人がいいねまたはリアクションした投稿だけを移します。articles と local_posts が指す投稿も含みます。
+  - follows は、本人がフォローする行と、本人がフォローされる行を移します。
+  - likes と emoji_reacts は、本人が付けたものと、本人の投稿に付いたものを移します。local_likes と remote_likes も同じ範囲です。
+  - actors と remote_actors は、本人と、上の行から参照される相手を移します。ミュートした相手と articles の著者も含みます。
+- 移さない表は、domain_events、notifications とその子の4表、timeline_items、federated_timeline_items、reposts、sessions です。export はこれらの表を0行で出力します。
+
+範囲外のデータは旧 DB に残ります。本人の投稿への他人の返信とリポストも範囲外です。後から追加で移す前提なので、作業者は旧 DB を消しません。
+
+export は、31表すべてのファイルと manifest のキーを、0行の表も含めて残します。`estimate-source` の COUNT は全行を数えるので、export の件数より大きくなります。
+
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 
 `cutover-route` の dispatch は、別 job の `verify-import` も先行実行します。その後、切替 job 自身がさらに fresh restore と再検証を行います。前の standalone `verify-import` の成功は、この2つの検証の代わりにはなりません。

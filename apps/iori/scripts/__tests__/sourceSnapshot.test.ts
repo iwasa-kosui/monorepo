@@ -115,7 +115,7 @@ it('rejects oversized/partial exports and connection-close failure without a com
         },
         query: async (sql) => {
           if (sql.startsWith('DECLARE')) {
-            table = sql.includes('"actors"') ? 'actors' : '';
+            table = /FROM "([a-z_]+)" AS row/.exec(sql)![1] === 'actors' ? 'actors' : '';
             sent = false;
           }
           if (sql.startsWith('FETCH') && table === 'actors' && !sent) {
@@ -160,7 +160,7 @@ it.each([false, true])(
         query: async (sql: string) => {
           sqls.push(sql);
           if (sql.startsWith('DECLARE')) {
-            table = APPLICATION_TABLE_ORDER.find((name) => sql.includes(`"${name}"`))!;
+            table = /FROM "([a-z_]+)" AS row/.exec(sql)![1]!;
             page = 0;
           }
           if (sql.startsWith('FETCH') && table === 'posts' && page++ < 2) {
