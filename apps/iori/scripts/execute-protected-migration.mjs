@@ -469,7 +469,8 @@ export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
       actualProvider,
       apiToken,
       signal,
-      readTarget: (input) => readSealedMigrationTarget({ ...input, token: apiToken, zoneId }),
+      readTarget: ({ expectedTarget, record, signal }) =>
+        readSealedMigrationTarget({ expectedTarget, record, signal, token: apiToken, zoneId }),
       loadFont: (signal) => loadNodeOgFont({ signal }),
       render: renderNodeOgImage,
       importD1: (input) => importMigrationD1({ ...input, apiToken }),

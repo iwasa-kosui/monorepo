@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
-import { probeFailureLines } from '../cutover-diagnostics.mjs';
+import { probeFailureLines, ProbeRestoreFailure } from '../cutover-diagnostics.mjs';
 import { rehearsalTargetKey } from '../migration-target-contract.mjs';
 import { probeCutoverRoute } from '../probe-cutover-route.mjs';
 import { preparationFixture, targetOutputsFixture } from './migrationTargetFixture.js';
@@ -18,27 +18,36 @@ const mocks = {
   planQueueResume: vi.fn(),
   changeRoute: vi.fn(),
   changeQueuePause: vi.fn(),
+  prepare: vi.fn(),
   transition: vi.fn(),
   smoke: vi.fn(),
   terraformArgs: undefined as { onStage: (stage: string) => void } | undefined,
 };
 const calls: string[] = [];
 const stages: string[] = [];
+const readTerraformKeys: string[] = [];
 const terraformFactory = (args: { onStage: (stage: string) => void }) => {
   mocks.terraformArgs = args;
-  return {
+  return new Proxy({
     initializeEstablished: mocks.established,
     planRoute: mocks.planRoute,
     planQueueResume: mocks.planQueueResume,
     changeRoute: mocks.changeRoute,
     changeQueuePause: mocks.changeQueuePause,
-  };
+    prepare: mocks.prepare,
+  }, {
+    get: (fakes, key) => {
+      readTerraformKeys.push(String(key));
+      return Reflect.get(fakes, key);
+    },
+  });
 };
 const resources = { d1Id: 'db', kvId: 'kv', queueId: 'queue', dlqId: 'dlq', consumerId: 'consumer' };
 beforeEach(() => {
   for (const mock of Object.values(mocks)) if (typeof mock === 'function') mock.mockReset();
   calls.length = 0;
   stages.length = 0;
+  readTerraformKeys.length = 0;
   const { config, outputs, target } = targetOutputsFixture();
   mocks.setup.mockReturnValue({ ...config, token: 'cloudflare-token' });
   mocks.loadTarget.mockResolvedValue(target);
@@ -72,7 +81,7 @@ beforeEach(() => {
     calls.push('smoke');
   });
 });
-const invoke = () =>
+const invoke = (signal: AbortSignal = new AbortController().signal) =>
   probeCutoverRoute({
     env: {
       IORI_PRIVATE_DIRECTORY: '/fixture',
@@ -80,7 +89,7 @@ const invoke = () =>
       IORI_MIGRATION_EXPECTED_TARGET_PATH: '/target.json',
     },
     startedAt: Date.now(),
-    signal: new AbortController().signal,
+    signal,
   }, {
     setup: mocks.setup,
     loadTarget: mocks.loadTarget,
@@ -93,10 +102,11 @@ const invoke = () =>
     smoke: mocks.smoke,
     onStage: stage => stages.push(stage),
   });
-const rejection = () => invoke().then(() => undefined, (error: unknown) => error);
+const rejection = (signal?: AbortSignal) => invoke(signal).then(() => undefined, (error: unknown) => error);
 const expectNoCutoverMutation = () => {
   expect(mocks.changeRoute).not.toHaveBeenCalled();
   expect(mocks.changeQueuePause).not.toHaveBeenCalled();
+  expect(mocks.prepare).not.toHaveBeenCalled();
   expect(mocks.transition.mock.calls.map(([input]) => input.mode)).not.toContain('active');
 };
 it('plans the route and the Queue resume, then moves sealed to smoke and back around one smoke', async () => {
@@ -207,12 +217,109 @@ it('returns to sealed after a failed smoke and reports the smoke failure at its 
   ]);
   expectNoCutoverMutation();
 });
-it('reports the return failure at to-sealed when the smoke and the return both fail', async () => {
-  mocks.smoke.mockRejectedValueOnce(new Error('Reviewed smoke failed.'));
+it('reports the smoke failure first and then the return failure when the smoke and the return both fail', async () => {
+  const smokeFailure = new Error('Reviewed smoke failed.');
+  mocks.smoke.mockRejectedValueOnce(smokeFailure);
   const restoreFailure = new Error('Reviewed Worker deployment failed; retain current state.');
   mocks.transition.mockResolvedValueOnce({ versionId: 'smoke-version' }).mockRejectedValueOnce(restoreFailure);
-  expect(await rejection()).toBe(restoreFailure);
+  const error = await rejection();
+  expect(error).toBeInstanceOf(ProbeRestoreFailure);
+  expect(error).toMatchObject({ failure: smokeFailure, failedStage: 'smoke-worker', restoreFailure });
   expect(stages.at(-1)).toBe('to-sealed');
+  expect(probeFailureLines(stages.at(-1), error, false)).toEqual([
+    'IORI_DIAG stage=probe-smoke-worker program=none exit=none signal=none reason=smoke-failed',
+    'IORI_DIAG stage=probe-to-sealed program=none exit=none signal=none reason=deploy-failed',
+  ]);
+});
+it('only reads the planning and initialization methods of the Terraform adapter', async () => {
+  await invoke();
+  expect([...new Set(readTerraformKeys)].sort()).toEqual(['initializeEstablished', 'planQueueResume', 'planRoute']);
+  expectNoCutoverMutation();
+});
+it('returns to sealed from the deployed version when the move to smoke fails after the version changed', async () => {
+  const failure = new Error('fixture');
+  mocks.transition.mockRejectedValueOnce(failure);
+  mocks.readVersion.mockResolvedValueOnce('current-version').mockResolvedValueOnce('changed-version');
+  expect(await rejection()).toBe(failure);
+  expect(mocks.readVersion).toHaveBeenCalledTimes(2);
+  expect(mocks.transition).toHaveBeenCalledTimes(2);
+  expect(mocks.transition.mock.calls[1][0]).toMatchObject({
+    mode: 'sealed',
+    expectedVersionId: 'changed-version',
+    routePresent: false,
+    admissionEnvironment: { IORI_ADMISSION_MODE: 'smoke' },
+  });
+  expect(stages.at(-1)).toBe('to-smoke');
+  expect(stages).toContain('to-sealed');
+  expect(mocks.smoke).not.toHaveBeenCalled();
+  expectNoCutoverMutation();
+});
+it('does not return to sealed when the move to smoke fails and the version did not change', async () => {
+  const failure = new Error('fixture');
+  mocks.transition.mockRejectedValueOnce(failure);
+  expect(await rejection()).toBe(failure);
+  expect(mocks.readVersion).toHaveBeenCalledTimes(2);
+  expect(mocks.transition).toHaveBeenCalledTimes(1);
+  expect(stages).not.toContain('to-sealed');
+  expect(stages.at(-1)).toBe('to-smoke');
+  expect(mocks.smoke).not.toHaveBeenCalled();
+});
+it('does not return to sealed when the move to smoke fails and the version cannot be read', async () => {
+  const failure = new Error('fixture');
+  mocks.transition.mockRejectedValueOnce(failure);
+  mocks.readVersion.mockResolvedValueOnce('current-version').mockRejectedValueOnce(new Error('unreadable'));
+  expect(await rejection()).toBe(failure);
+  expect(mocks.transition).toHaveBeenCalledTimes(1);
+  expect(stages).not.toContain('to-sealed');
+  expect(stages.at(-1)).toBe('to-smoke');
+});
+it('reports the move failure first and then the return failure when the move to smoke and the return both fail', async () => {
+  const failure = new Error('Reviewed Worker deployment failed; retain current state.');
+  const restoreFailure = new Error('Reviewed Worker deployment failed; retain current state.');
+  mocks.transition.mockRejectedValueOnce(failure).mockRejectedValueOnce(restoreFailure);
+  mocks.readVersion.mockResolvedValueOnce('current-version').mockResolvedValueOnce('changed-version');
+  const error = await rejection();
+  expect(error).toMatchObject({ failure, failedStage: 'to-smoke', restoreFailure });
+  expect(probeFailureLines(stages.at(-1), error, false)).toEqual([
+    'IORI_DIAG stage=probe-to-smoke program=none exit=none signal=none reason=deploy-failed',
+    'IORI_DIAG stage=probe-to-sealed program=none exit=none signal=none reason=deploy-failed',
+  ]);
+});
+it('returns to sealed with a signal detached from the probe after the probe signal aborted during the smoke', async () => {
+  const controller = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, 'timeout');
+  mocks.smoke.mockImplementationOnce(async () => {
+    controller.abort();
+    throw new Error('Reviewed smoke failed.');
+  });
+  await rejection(controller.signal);
+  const restoreSignal = mocks.transition.mock.calls[1][0].signal as AbortSignal;
+  expect(mocks.transition.mock.calls[1][0]).toMatchObject({ mode: 'sealed' });
+  expect(mocks.transition.mock.calls[0][0].signal.aborted).toBe(true);
+  expect(restoreSignal.aborted).toBe(false);
+  expect(timeout).toHaveBeenCalledWith(15 * 60_000);
+  timeout.mockRestore();
+});
+it('returns to sealed with a detached signal after the probe signal aborted during a successful smoke', async () => {
+  const controller = new AbortController();
+  mocks.smoke.mockImplementationOnce(async () => {
+    controller.abort();
+  });
+  await expect(invoke(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(mocks.transition.mock.calls[1][0]).toMatchObject({ mode: 'sealed' });
+  expect(mocks.transition.mock.calls[1][0].signal.aborted).toBe(false);
+});
+it('returns to sealed with a detached signal after the probe signal aborted during the move to smoke', async () => {
+  const controller = new AbortController();
+  mocks.transition.mockImplementationOnce(async () => {
+    controller.abort();
+    throw controller.signal.reason;
+  });
+  mocks.readVersion.mockResolvedValueOnce('current-version').mockResolvedValueOnce('changed-version');
+  await rejection(controller.signal);
+  expect(mocks.readVersion.mock.calls[1][0].signal.aborted).toBe(false);
+  expect(mocks.transition.mock.calls[1][0]).toMatchObject({ mode: 'sealed', expectedVersionId: 'changed-version' });
+  expect(mocks.transition.mock.calls[1][0].signal.aborted).toBe(false);
 });
 const failAt = (stage: string, mock: ReturnType<typeof vi.fn>) =>
   mock.mockImplementationOnce(async () => {

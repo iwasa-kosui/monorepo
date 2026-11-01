@@ -75,7 +75,21 @@ const classify = (error, aborted) => {
   const message = typeof error?.message === 'string' ? error.message : undefined;
   return (message !== undefined && MESSAGE_REASONS.get(message)) || 'unclassified';
 };
+export class ProbeRestoreFailure extends Error {
+  constructor(failure, failedStage, restoreFailure) {
+    super('Probe restore failed.');
+    this.failure = failure;
+    this.failedStage = failedStage;
+    this.restoreFailure = restoreFailure;
+  }
+}
 const failureLines = (prefix, stages) => (stage, error, aborted) => {
+  if (prefix === 'probe' && error instanceof ProbeRestoreFailure) {
+    return [
+      ...failureLines(prefix, stages)(error.failedStage, error.failure, aborted),
+      ...failureLines(prefix, stages)('to-sealed', error.restoreFailure, false),
+    ];
+  }
   const stageWord = stages.includes(stage) ? stage : 'unclassified';
   const line = (reason) => `IORI_DIAG stage=${prefix}-${stageWord} program=none exit=none signal=none reason=${reason}`;
   const details = Array.isArray(error?.diagnostic?.details) ? error.diagnostic.details : [];

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
 import { withCliSignal } from './cli-lifetime.mjs';
-import { probeFailureLines } from './cutover-diagnostics.mjs';
+import { probeFailureLines, ProbeRestoreFailure } from './cutover-diagnostics.mjs';
 import {
   admissionEnvironment,
   expectedTargetFromOutputs,
@@ -20,6 +20,8 @@ import { readPreparationRecord } from './target-preparation-record.mjs';
 import { createTargetTerraform } from './target-terraform.mjs';
 import { transitionWorkerAdmission } from './transition-worker-admission.mjs';
 import { workflowTimeBudget } from './workflow-context.mjs';
+
+const RESTORE_TIMEOUT_MS = 15 * 60_000;
 
 export const probeCutoverRoute = async ({ env, startedAt, signal }, {
   setup = targetSetupConfiguration,
@@ -48,13 +50,13 @@ export const probeCutoverRoute = async ({ env, startedAt, signal }, {
     throw withReason(new Error('Target generation was not used for rehearsal.'), 'rehearsal-missing');
   }
   onStage('tf-init');
-  const terraform = terraformFactory({
+  const { initializeEstablished, planRoute, planQueueResume } = terraformFactory({
     ...config,
     privateDirectory: join(env.IORI_PRIVATE_DIRECTORY, 'state'),
     signal,
     onStage,
   });
-  const outputs = await terraform.initializeEstablished();
+  const outputs = await initializeEstablished();
   onStage('read-sealed');
   if (!isDeepStrictEqual(expectedTargetFromOutputs({ ...config, outputs }), target)) {
     throw withReason(new Error('Probe target mismatch.'), 'mismatch');
@@ -69,11 +71,11 @@ export const probeCutoverRoute = async ({ env, startedAt, signal }, {
     zoneId: config.zoneId,
     signal,
   });
-  await terraform.planRoute({ establishedBindings: outputs.workerBindings });
-  await terraform.planQueueResume({ establishedBindings: outputs.workerBindings });
+  await planRoute({ establishedBindings: outputs.workerBindings });
+  await planQueueResume({ establishedBindings: outputs.workerBindings });
   let mode = 'sealed';
   const environment = () => ({ ...admissionEnvironment(target), IORI_ADMISSION_MODE: mode });
-  const move = async (next) => {
+  const move = async (next, moveSignal = signal) => {
     const moved = await transition({
       ...config,
       resources,
@@ -81,24 +83,45 @@ export const probeCutoverRoute = async ({ env, startedAt, signal }, {
       expectedVersionId: versionId,
       mode: next,
       routePresent: false,
-      signal,
+      signal: moveSignal,
     });
     versionId = moved.versionId;
     mode = next;
   };
+  const returnToSealed = async (failure, failedStage, restoreSignal) => {
+    onStage('to-sealed');
+    try {
+      await move('sealed', restoreSignal);
+    } catch (restoreFailure) {
+      throw new ProbeRestoreFailure(failure, failedStage, restoreFailure);
+    }
+    onStage(failedStage);
+    throw failure;
+  };
   onStage('to-smoke');
-  await move('smoke');
+  try {
+    await move('smoke');
+  } catch (toSmokeFailure) {
+    const restoreSignal = AbortSignal.timeout(RESTORE_TIMEOUT_MS);
+    let deployedVersionId;
+    try {
+      deployedVersionId = await readVersion({ target, token: config.token, signal: restoreSignal });
+    } catch {
+      throw toSmokeFailure;
+    }
+    if (deployedVersionId === versionId) throw toSmokeFailure;
+    versionId = deployedVersionId;
+    mode = 'smoke';
+    await returnToSealed(toSmokeFailure, 'to-smoke', restoreSignal);
+  }
   onStage('smoke-worker');
   try {
     await smoke({ target, hostname: target.admission.workerHostname, token: env.IORI_SMOKE_QUEUE_TOKEN, signal });
   } catch (smokeFailure) {
-    onStage('to-sealed');
-    await move('sealed');
-    onStage('smoke-worker');
-    throw smokeFailure;
+    await returnToSealed(smokeFailure, 'smoke-worker', AbortSignal.timeout(RESTORE_TIMEOUT_MS));
   }
   onStage('to-sealed');
-  await move('sealed');
+  await move('sealed', AbortSignal.timeout(RESTORE_TIMEOUT_MS));
   onStage('read-final');
   await readSealed({
     expectedTarget: target,

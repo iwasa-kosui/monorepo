@@ -950,12 +950,33 @@ rm -f "$iori_rehearsal_envelope" "$iori_rehearsal_profile"
 inputs → rehearsal-gate → tf-init → read-sealed → route-plan → queue-plan → to-smoke → smoke-worker → to-sealed → read-final
 ```
 
-`smoke-worker` で失敗したときも、`probe-cutover-route` は `to-sealed` で sealed に戻してから、`smoke-worker` の失敗を報告します。`to-sealed` も失敗したときは、`to-sealed` の失敗を報告します。このとき Worker は smoke のまま残っている可能性があります。
+失敗した段によって、`probe-cutover-route` は次のように動きます。
+
+- `smoke-worker` が失敗したとき: `probe-cutover-route` は `to-sealed` で sealed に戻してから、`smoke-worker` の失敗を報告します。
+- `to-smoke` が失敗したとき: `probe-cutover-route` は、いま配信されている Worker の version を読み直します。version が `to-smoke` の前と違うときだけ、その version から `to-sealed` で sealed に戻します。version が同じときと、version を読めないときは、sealed に戻さずに `to-smoke` の失敗を報告します。
+- `probe-cutover-route` が中断したときとタイムアウトしたとき: `probe-cutover-route` は、自分の signal から切り離した 15 分のタイムアウトで `to-sealed` を実行します。
+
+sealed に戻す処理も失敗したときは、公開ログに元の失敗（`to-smoke` または `smoke-worker`）の行を先に出し、その後に `to-sealed` の失敗の行を出します。
+
+#### Worker が smoke のまま残ったとき
+
+Worker が smoke のまま残る可能性があるのは、次の 2 つの場合です。
+
+- sealed に戻す処理（`to-sealed`）が失敗した場合
+- `to-smoke` が失敗した後に、Worker の version を読めなかった場合
+
+smoke のまま残った Worker は、workers.dev の hostname で、正しい smoke の token を付けたリクエストだけを受け付けます。受け付けるのは、smoke の検査用に決められたパスへの GET と、`/__smoke__/queue-enqueue` への POST だけです。GET は読み取り専用の環境で処理します。token が無いリクエストと、決められたパス以外へのリクエストには 503 を返します。canonical の hostname には route が無いので、canonical の hostname からは Worker に届きません。
+
+対処は次のとおりです。
+
+- 作業者がその generation に `probe-cutover-route` をもう一度実行しても、`read-sealed` 段が `worker-binding-mismatch` で止まります。「再実行」の節の「何度でも実行できます」は、Worker が sealed に戻った generation に限ります。
+- 作業者は、その generation で予行を続けず、[第5.5節](#55-使い捨て-generation-の後片付け)の `purge-rehearsal-target` に進みます。`purge-rehearsal-target` は Worker の mode と version を確かめないので、Worker が smoke のままでも、その generation を削除できます。
+- その generation では、`probe-cutover-route` を実行した後と同じく、Worker の version が `record.json` の値と違うため、`cutover-route`、`migrate-data`、`verify-import` も通りません。
 
 #### 実行後に残るもの
 
 - Worker に新しい版が 2 回 deploy されます。最後の版は sealed です。
-- smoke の Queue enqueue の検査が、その generation の Queue に smoke の marker を 1 件積みます。Queue は paused なので、marker は配送されずに残ります。
+- smoke の Queue enqueue の検査は、専用の POST `/__smoke__/queue-enqueue` を使い、その generation の Queue に smoke の marker を 1 件積みます。marker は連合の activity ではありません。Queue は paused です。consumer は、admission の mode が active でないとき、取り出した message を処理せずに retry に戻します。このため、marker は処理されずに Queue に残ります。
 - route は作られません。Queue は paused のままです。
 
 #### 本番に影響しない理由
@@ -963,7 +984,7 @@ inputs → rehearsal-gate → tf-init → read-sealed → route-plan → queue-p
 - D1、R2、KV、Queue、Terraform の state は generation ごとに分かれています。`probe-cutover-route` は、その generation のものだけを扱います。
 - route の plan の中身は、本番の hostname を計測用の Worker に向ける route の create です。`probe-cutover-route` は、この plan を apply しません。
 - smoke は `workerHostname` にだけ送ります。canonical の hostname には送りません。route が無い時点で canonical の hostname に送ると、旧サーバーに smoke 用の token が届くからです。
-- smoke のリクエストでは、Queue への送信が拒否されます。Queue も paused です。このため、本番の followers に配送されることはありません。
+- smoke のリクエストでは、Worker は読み取り専用の環境に差し替えます。この環境は、D1 では SELECT だけ、R2 と KV では読み取りだけを許し、FEDIFY_QUEUE への送信を拒否します。このため、smoke のリクエストが連合の配送（ActivityPub の activity）を Queue に積むことはありません。Queue に積まれるのは、専用のパスから送る smoke の marker だけです。Queue は paused なので、本番の followers に配送されることもありません。
 - 計測用の generation の D1 には、本番の鍵と followers のコピーがあります。`probe-cutover-route` は、active への切り替えと Queue の再開をしません。作業者は、この generation を active にしたり、Queue を再開したりしてはいけません。
 
 #### 確かめられない点
