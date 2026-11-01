@@ -607,6 +607,12 @@ IORI_ESTIMATE rows=<n> upload_count=<n> upload_duplicate_count=<n> upload_missin
 - 許容できるのは、原因が `missing` のファイルだけです。`owner`、`not-regular`、`too-large`、`access`、`other` の件数が 1 以上のときは、値に関係なく失敗します。
 - 数えた欠けの数が `allowed_missing_uploads` と完全に一致したときだけ、処理が先へ進みます。欠けの数が多くても少なくても失敗します。
 
+配備の順番の注意は次のとおりです。
+
+- 作業者は、source をこの変更を含む main の SHA に配備してから、`rehearse-migration` と `migrate-data` を実行します。
+- source の SHA が migration の main SHA と違うと、freeze の前に `Source revision mismatch` で失敗します。
+- この変更より前のコードで作った bundle には `omittedCount` がありません。この bundle は `verify-import` と `cutover-route` を通りません。この場合、作業者は `migrate-data` からやり直します。
+
 欠けたファイルの扱いは次のとおりです。
 
 - 欠けたファイルは R2 に移りません。D1 の `post_images` の行は、ほかの行と同じようにそのまま移ります。
@@ -629,7 +635,7 @@ IORI_NOTICE stage=export-missing-uploads count=<n>
 
 `migrate-data` は、freeze の後に失敗しても、resume を呼びません。作業者は、凍結と実行予約を残したまま、第7.1節の手順で復旧します。`rehearse-migration` が呼ぶ resume に失敗した場合は、5.2 節の「凍結が残る可能性がある」場合と同じ扱いになります。
 
-freeze の後の失敗の詳しい理由（`Source missing upload count mismatch.` など）は、公開ログに出ません。作業者は、公開ログの `IORI_NOTICE` の `count` と、`allowed_missing_uploads` に入れた値を見比べて、不一致を判断します。
+freeze の後の失敗の詳しい理由（`Source missing upload count mismatch.` など）は、公開ログに出ません。作業者は、公開ログの `IORI_NOTICE` の `count` と、`allowed_missing_uploads` に入れた値を見比べて、不一致を判断します。`IORI_NOTICE stage=export-missing-uploads` の行が公開ログに無いときは、export より前で失敗しています。失敗した段階は、drain の後の estimate か、それより前です。
 
 source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
 
