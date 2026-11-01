@@ -80,7 +80,8 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   expect(prepare.SMOKE_QUEUE_TOKEN).toBe('${{ secrets.SMOKE_QUEUE_TOKEN }}');
   expect(prepare.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
   expect(migrate.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
-  expect(migrate.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('WRITE');
+  expect(migrate.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe('${{ secrets.IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID }}');
+  expect(migrate.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe('${{ secrets.IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY }}');
   expect(rehearse.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
   expect(rehearse.IORI_MIGRATION_REHEARSAL).toBeUndefined();
   expect(migrate.IORI_MIGRATION_REHEARSAL).toBe('${{ secrets.IORI_MIGRATION_REHEARSAL }}');
