@@ -26,6 +26,7 @@ on:
           - deploy-worker
           - resume-source
           - release-pending-freeze
+          - diagnose-source
           - reconcile-resources
           - replace-queue-consumer
       environment:
@@ -34,11 +35,11 @@ on:
         type: choice
         options: [production, staging]
       generation:
-        description: Reviewed fresh generation (8-20 lowercase alphanumeric characters; leave empty for estimate-source)
+        description: Reviewed fresh generation (8-20 lowercase alphanumeric characters; leave empty for estimate-source and diagnose-source)
         required: false
         type: string
       migration_run_id:
-        description: Immutable run ID (1-80 ASCII letters, digits, underscore or hyphen; leave empty for estimate-source)
+        description: Immutable run ID (1-80 ASCII letters, digits, underscore or hyphen; leave empty for estimate-source and diagnose-source)
         required: false
         type: string
       recovery:
@@ -615,7 +616,7 @@ jobs:
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
 
   recover-source:
-    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze'
+    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze' || inputs.operation == 'diagnose-source'
     needs: public-artifact-gate
     runs-on: ubuntu-latest
     timeout-minutes: 360
