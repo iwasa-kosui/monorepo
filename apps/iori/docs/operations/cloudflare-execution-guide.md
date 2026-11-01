@@ -471,7 +471,7 @@ mode を元に戻す必要があるかどうかは、管理役が判断します
 - `stage` が `remote-*` で、`reason` がリポジトリの固定エラー文言に対応する場合、旧環境が配備の前提条件を満たしていません。対応する `reason` は `source-pnpm-version`、`source-pnpm-invalid`、`source-dirty`、`source-repository-unexpected`、`source-checkout-invalid`、`source-deploy-blocked`、`upload-dir-unset` などです。作業者は `reason` に対応する前提を旧環境で確認します。
 - `reason=source-config-unavailable` の場合、env.conf の種類か mode が不正です。作業者は env.conf が通常ファイルであり、group と other に書き込み権限がないことを旧環境で確認します。
 - `reason=config-owner-reset-failed` の場合、`sudo -n chown 0:0` を実行した後も env.conf の所有者が root になっていません。作業者は旧環境で sudo の権限と env.conf の所有者を確認します。
-- `reason=config-mode-reset-failed` の場合、`sudo -n chmod 600` を実行した後も env.conf の mode が 0600 になっていないか、env.conf が別のファイルに入れ替わっています。作業者は旧環境で sudo の権限と env.conf の mode を確認します。
+- `reason=config-mode-reset-failed` の場合、`sudo -n chmod 600` を実行した後も env.conf の mode が 0600 になっていないか、env.conf が別のファイルに入れ替わっています。作業者は旧環境に直接入りません。作業者は、この reason を管理役に伝えて判断を仰ぎます。
 - `reason=upload-dir-missing` の場合、env.conf の `UPLOAD_DIR` が指すディレクトリが旧環境に存在しません。
 - `reason=remote-node-missing` の場合、旧環境に nvm の node v24.12.0 がありません。
 - `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
