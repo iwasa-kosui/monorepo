@@ -378,17 +378,20 @@ IORI_DIAG stage=prepare-<段> program=none exit=none signal=none reason=<分類>
 | `prepare-fresh-check`     | Cloudflare API でリソースが無いことを確かめる読み取り                                        | 終了コードは 1 です。読み取りだけなので、リソースも state も作られていません。`-exists` 以外は、作業者は原因を直して同じ generation でやり直せます。`-exists` は同じ名前のリソースが既にあるので、作業者は同じ generation では進めず、既存のリソースをレビューします |
 | `prepare-tf-init`         | Terraform の backend の初期化                                                                | 終了コードは 1 です。リソースは作られていません。作業者は上で説明した手順で backend bucket の object を確かめ、1つも無ければ同じ generation でやり直せます                                                                                                           |
 | `prepare-tf-show`         | state が空であることの確認                                                                   | `reason` が `state-present` のときは、state が既にあるので、作業者は同じ generation では進めずレビューします。それ以外は、`prepare-tf-init` と同じ判断です                                                                                                           |
-| `prepare-tf-plan`         | リソースの plan と検査                                                                       | リソースは作られていません。作業者は `prepare-tf-init` と同じ判断をします                                                                                                                                                                                            |
+| `prepare-tf-plan`         | リソースの plan と検査。plan を拒否したときは、`reason=plan-rejected` の行の前に、拒否した resource と action を示す行を最大8行出します | リソースは作られていません。作業者は `prepare-tf-init` と同じ判断をします                                                                                                                                                                                            |
 | `prepare-tf-apply`        | リソースの apply と出力の突合                                                                | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-resource-read`   | 作ったリソースの読み取り                                                                     | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-deploy`          | sealed の Worker の配備                                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-deploy-read`     | deploy の後の Queue の一時停止の読み直し                                                     | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-attach`          | Worker が sealed で配備されたことの確認                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
-| `prepare-attach-tf-plan`  | consumer の plan と検査                                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-attach-tf-plan`  | consumer の plan と検査。plan を拒否したときは、`reason=plan-rejected` の行の前に、拒否した resource と action を示す行を最大8行出します | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-attach-tf-apply` | consumer の apply                                                                            | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-attach-read`     | consumer を付けた後の読み取り                                                                | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-readback`        | Terraform の出力と読み取った状態の突合                                                       | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-record`          | 準備の記録の書き込み                                                                         | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
 | `prepare-unclassified`    | 段が分からない                                                                               | 終了コード 1 として扱います。作業者は上で説明した backend bucket の確認手順で判断します                                                                                                                                                                              |
+
+`prepare-deploy-read` は、Worker を deploy した後に Queue の配送が一時停止のままかを Queue API で読み直します。wrangler 4.29.0 より前の版は、queue の producer を持つ Worker を deploy するたびに Queue の設定を置き換え、一時停止を解除していました。apps/iori は 4.72.0 を使います。この段は、同じ解除が再び起きたときに、Terraform の plan より前に止めるために置いています。
 
 Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<種別>` の形です。`<api>` は読み取りの対象を、`<種別>` は失敗の種類を表します。
 
@@ -439,7 +442,11 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 | `vapid-rejected`          | VAPID 値の検査で失敗しました                                                              |
 | `command-failed`          | terraform または Worker の配備コマンドが失敗しました。出力は private のログにだけ残ります |
 | `state-present`           | Terraform の state が既にあります                                                         |
-| `plan-rejected`           | plan に想定外の変更が含まれています                                                       |
+| `plan-rejected`           | plan に想定外の変更が含まれています。拒否の詳細は、この行の前に出る `plan-` で始まる行で示します。 |
+| `queue-not-paused`        | deploy の後か Worker の切り替えの後に、Queue の配送が一時停止ではありません。            |
+| `plan-<resource>-<action>` | `plan-rejected` の行の前に出る詳細の行です。Terraform の plan が、`<resource>` に対して `<action>` を含んでいたために拒否されました。`<resource>` は `d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかです。`<action>` は `create`、`update`、`delete`、`replace`、`no-op`、`other` のどれかです。例として、`plan-queue-update` は fedify の Queue の更新を表します。 |
+| `plan-invalid`            | 詳細の行です。plan の形が不正か、特定の resource に結び付かない検査で拒否されました。     |
+| `plan-bindings-changed`   | 詳細の行です。plan の前後で Worker の binding の出力が変わるために拒否されました。        |
 | `output-invalid`          | Terraform の出力が読めません                                                              |
 | `output-mismatch`         | Terraform の出力が想定と違います                                                          |
 | `result-invalid`          | Worker の配備結果が読めません                                                             |
@@ -1076,6 +1083,58 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 記録には pass/fail だけを残します。
 
+### 6.3 cutover-route の失敗した段
+
+`cutover-route` が失敗すると、公開ログに `IORI_DIAG stage=cutover-<段> program=none exit=none signal=none reason=<分類>` の行が出ます。plan を拒否したときは、この行の前に `plan-` で始まる詳細の行が最大8行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
+
+どの段で止まった場合も、作業者は source の凍結を解かず、`cutover-route` を自動で再実行しません。作業者は、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従って、記録を残してレビューに戻します。
+
+`stage` の語彙と処理は、次のとおりです。
+
+| `stage`                   | 処理                                                                    |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `cutover-inputs`          | 入力と作業時間の上限の確認                                              |
+| `cutover-main-check`      | レビュー済みの main の確認                                              |
+| `cutover-restore`         | 移行データの復元と検証                                                  |
+| `cutover-tf-init`         | Terraform の backend の初期化と既存の state の読み取り                  |
+| `cutover-target-check`    | Terraform の出力と移行先の記録の照合                                    |
+| `cutover-source`          | source の接続の準備                                                     |
+| `cutover-gate-smoke`      | smoke への切り替えの前の確認（main、リソース、consumer、source の凍結） |
+| `cutover-to-smoke`        | Worker を smoke に切り替える                                            |
+| `cutover-smoke-worker`    | workers.dev での smoke                                                  |
+| `cutover-gate-route`      | route の作成の前の確認                                                  |
+| `cutover-read-smoke`      | route の作成の前のリソースの読み取り                                    |
+| `cutover-route-plan`      | route の plan と検査                                                    |
+| `cutover-route-apply`     | route の apply                                                          |
+| `cutover-read-route`      | route の作成の後のリソースの読み取り                                    |
+| `cutover-smoke-canonical` | 公開ホスト名での smoke                                                  |
+| `cutover-gate-active`     | active への切り替えの前の確認                                           |
+| `cutover-to-active`       | Worker を active に切り替える                                           |
+| `cutover-gate-queue`      | Queue の配送の再開の前の確認                                            |
+| `cutover-read-active`     | Queue の配送の再開の前のリソースの読み取り                              |
+| `cutover-queue-plan`      | Queue の配送の再開の plan と検査                                        |
+| `cutover-queue-apply`     | Queue の配送の再開の apply                                              |
+| `cutover-read-resume`     | 配送の再開の後の consumer と Worker の読み取り                          |
+| `cutover-smoke-final`     | 最後の smoke                                                            |
+| `cutover-unclassified`    | 上のどれにも当たらない段                                                |
+
+`reason` には、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表と同じ語が出ます。`cutover-route` だけに出る語は、次のとおりです。
+
+| `reason`                     | 意味                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| `reviewed-main-required`     | レビュー済みの main が指定されていません。                                     |
+| `reviewed-checkout-mismatch` | checkout がレビュー済みの main と一致しません。                                |
+| `reviewed-checkout-dirty`    | checkout に未 commit の変更があります。                                        |
+| `reviewed-main-changed`      | 実行中に main が変わりました。                                                 |
+| `job-budget-exhausted`       | job の作業時間の上限に達しました。                                             |
+| `smoke-failed`               | smoke の検査が失敗しました。                                                   |
+| `verify-failed`              | 移行データの検証が失敗しました。                                               |
+| `deploy-failed`              | レビュー済みの Worker の version の deploy が失敗しました。                    |
+| `source-not-quiescent`       | source の凍結、drain、identity のどれかを確認できません。                      |
+| `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。 |
+
+`cutover-source` と `cutover-gate-*` では、source の接続の失敗として `not-ready`、`busy`、`rejected`、`invalid-response`、`spawn-failed`、`ssh-failed` と、`estimate-` で始まる語が出ます。意味は、[estimate-source で事前に確認する](#estimate-source-で事前に確認する)の `reason` の表に書いています。
+
 ## 7. 中断と引き継ぎ
 
 | 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                                                                                                                             |
@@ -1084,6 +1143,7 @@ staging を使う場合、作業者は staging の完了後に production に異
 | 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。`stage=prepare-<段>` の行を見て、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表で判断する。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
 | 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                                                                                                                                 |
 | HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                                                                                                                                     |
+| cutover-route が止まった      | 旧 source を凍結したまま保持            | source の凍結を保ち、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の `stage` と `reason` を記録して、レビューに戻します。                                                                                                                                                                              |
 
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 

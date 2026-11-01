@@ -82,4 +82,52 @@ it('uses the reviewed deployment command and rechecks the actual emitted version
     }),
   );
   expect(mocks.pause).toHaveBeenCalledWith({ queueId: 'queue', paused: true });
+  expect(mocks.pause).toHaveBeenCalledTimes(2);
+  expect(mocks.pause.mock.invocationCallOrder[1]).toBeGreaterThan(command.mock.invocationCallOrder[0]!);
+  expect(mocks.pause.mock.invocationCallOrder[1]).toBeLessThan(mocks.read.mock.invocationCallOrder[1]!);
+});
+it('does not read the Worker after deployment when the Queue is no longer paused', async () => {
+  const path = join(await mkdtemp(join(tmpdir(), 'admission-test-')), 'wrangler.json');
+  const admissionEnvironment = {
+    IORI_ADMISSION_MODE: 'sealed',
+    IORI_ADMISSION_IDENTITY: 'fixture-identity',
+    ORIGIN: 'https://staging.test',
+  };
+  await writeFile(
+    path,
+    JSON.stringify({
+      name: identity.workerName,
+      vars: { ...admissionEnvironment, IORI_ADMISSION_MODE: 'smoke' },
+      d1_databases: [{ database_id: 'db' }],
+      kv_namespaces: [{ id: 'kv' }],
+      r2_buckets: [{ bucket_name: identity.names.uploads }],
+      queues: { producers: [{ queue: identity.names.queue }] },
+    }),
+  );
+  mocks.config.mockResolvedValue({ path, cleanup: vi.fn() });
+  mocks.read.mockResolvedValue({ mode: 'smoke' });
+  mocks.pause.mockResolvedValueOnce({ queueId: 'queue', paused: true });
+  mocks.pause.mockRejectedValueOnce(new Error('queue not paused'));
+  const command = vi.fn(async (_bin, _args, options) => {
+    writeFileSync(
+      (options as { env: Record<string, string> }).env.WRANGLER_OUTPUT_FILE_PATH!,
+      JSON.stringify({ type: 'deploy', version: 1, worker_name: identity.workerName, version_id: 'version2' }),
+    );
+    return { status: 0, stdout: '', stderr: '' };
+  });
+  await expect(
+    transitionWorkerAdmission({
+      identity,
+      resources: { d1Id: 'db', kvId: 'kv', queueId: 'queue' } as never,
+      token: 'private',
+      admissionEnvironment,
+      zoneId: 'zone',
+      expectedVersionId: 'version1',
+      mode: 'smoke',
+      runCommand: command,
+    }),
+  ).rejects.toThrow('queue not paused');
+  expect(command).toHaveBeenCalledTimes(1);
+  expect(mocks.pause).toHaveBeenCalledTimes(2);
+  expect(mocks.read).toHaveBeenCalledTimes(1);
 });

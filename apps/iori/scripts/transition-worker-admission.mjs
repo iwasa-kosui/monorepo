@@ -34,6 +34,7 @@ export const transitionWorkerAdmission = async (
     signal,
     runCommand,
   });
+  await control.readQueuePause({ queueId: resources.queueId, paused: true });
   return control.readWorkerAdmission({
     resources,
     admissionEnvironment: { ...admissionEnvironment, IORI_ADMISSION_MODE: mode },

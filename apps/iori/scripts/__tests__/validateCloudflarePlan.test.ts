@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { validateCloudflarePlan } from '../validate-cloudflare-plan.mjs';
+import {
+  inspectCloudflarePlan,
+  inspectQueuePausePlan,
+  validateCloudflarePlan,
+  validateQueuePausePlan,
+} from '../validate-cloudflare-plan.mjs';
 
 describe('validateCloudflarePlan', () => {
   it('rejects deletion and replacement of durable production resources', () => {
@@ -160,5 +165,81 @@ describe('private migration storage ownership', () => {
         }),
       ).not.toEqual([]);
     }
+  });
+});
+
+describe('inspectCloudflarePlan', () => {
+  it('returns the same messages as validateCloudflarePlan with the address and actions', () => {
+    const plan = {
+      operation: 'reconcile' as const,
+      resource_changes: [
+        { address: 'cloudflare_d1_database.iori', change: { actions: ['delete', 'create'] } },
+        { address: 'cloudflare_r2_bucket.uploads', change: { actions: ['delete'] } },
+        { address: 'cloudflare_worker.iori', change: { actions: ['update'] } },
+        { address: 'cloudflare_workers_route.iori[0]', change: { actions: ['create'] } },
+        { address: 'cloudflare_queue.fedify', change: { actions: ['no-op'] } },
+      ],
+    };
+    const issues = inspectCloudflarePlan(plan);
+    expect(issues.map((issue) => issue.message)).toEqual(validateCloudflarePlan(plan));
+    expect(issues).toEqual([
+      {
+        message: 'cloudflare_d1_database.iori must not be replaced',
+        address: 'cloudflare_d1_database.iori',
+        actions: ['delete', 'create'],
+      },
+      {
+        message: 'cloudflare_r2_bucket.uploads must not be deleted',
+        address: 'cloudflare_r2_bucket.uploads',
+        actions: ['delete'],
+      },
+      {
+        message: 'cloudflare_worker.iori is not Terraform-owned',
+        address: 'cloudflare_worker.iori',
+        actions: ['update'],
+      },
+      {
+        message: 'cloudflare_workers_route.iori[0] is not allowed for reconcile',
+        address: 'cloudflare_workers_route.iori[0]',
+        actions: ['create'],
+      },
+    ]);
+  });
+
+  it('reports plan-level rejections without an address', () => {
+    const plan = {
+      operation: 'consumer-replacement' as const,
+      requireWorkerBindingsNoop: true,
+      resource_changes: [],
+    };
+    expect(inspectCloudflarePlan(plan)).toEqual([{ message: 'worker_bindings output must be an explicit no-op' }]);
+  });
+
+  it('keeps the Queue pause messages and adds the address and actions', () => {
+    const bindings = { d1_database_id: 'd1' };
+    const plan = {
+      operation: 'queue-pause' as const,
+      output_changes: { worker_bindings: { actions: ['no-op'], before: bindings, after: bindings } },
+      planned_values: { outputs: { worker_bindings: { value: bindings } } },
+      resource_changes: [
+        {
+          address: 'cloudflare_queue.fedify',
+          change: {
+            actions: ['update'],
+            before: { settings: { delivery_paused: false } },
+            after: { settings: { delivery_paused: true } },
+          },
+        },
+        { address: 'cloudflare_queue.fedify_dlq', change: { actions: ['update'] } },
+      ],
+    };
+    const issues = inspectQueuePausePlan(plan as never);
+    expect(issues.map((issue) => issue.message)).toEqual(validateQueuePausePlan(plan as never));
+    expect(issues).toEqual([{
+      message: 'Unrelated Queue operation',
+      address: 'cloudflare_queue.fedify_dlq',
+      actions: ['update'],
+    }]);
+    expect(inspectCloudflarePlan(plan as never)).toEqual(issues);
   });
 });

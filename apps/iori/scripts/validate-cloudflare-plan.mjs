@@ -70,27 +70,30 @@ const workerBindingOutputIsExplicitNoop = (plan) => {
  * @param {{ resource_changes?: readonly ResourceChange[], operation: 'reconcile' | 'consumer-replacement' | 'route-cutover', allowProductionRoute?: boolean }} plan
  * @returns {readonly string[]}
  */
-export const validateCloudflarePlan = (plan) => {
-  if (['queue-pause', 'queue-resume'].includes(plan.operation)) return validateQueuePausePlan(plan);
+export const validateCloudflarePlan = (plan) => inspectCloudflarePlan(plan).map((issue) => issue.message);
+
+export const inspectCloudflarePlan = (plan) => {
+  if (['queue-pause', 'queue-resume'].includes(plan.operation)) return inspectQueuePausePlan(plan);
   if (plan.requireWorkerBindingsNoop && !workerBindingOutputIsExplicitNoop(plan)) {
     return workerBindingOutputChanged(plan)
-      ? ['worker_bindings output must not change']
-      : ['worker_bindings output must be an explicit no-op'];
+      ? [{ message: 'worker_bindings output must not change' }]
+      : [{ message: 'worker_bindings output must be an explicit no-op' }];
   }
-  if (workerBindingOutputChanged(plan)) return ['worker_bindings output must not change'];
+  if (workerBindingOutputChanged(plan)) return [{ message: 'worker_bindings output must not change' }];
   return (plan.resource_changes ?? []).flatMap((change) => {
     const { address } = change;
     const actions = change.change.actions;
+    const issue = (message) => [{ message, address, actions }];
 
     if (address === 'cloudflare_r2_managed_domain.migration') {
       if (
         change.change.after?.enabled !== false || change.change.after_unknown?.enabled === true
         || actions.includes('delete')
       ) {
-        return [`${address} must keep public access disabled`];
+        return issue(`${address} must keep public access disabled`);
       }
     } else if (resourceTypeFromAddress(address) === 'cloudflare_r2_managed_domain') {
-      return [`${address} is not Terraform-owned`];
+      return issue(`${address} is not Terraform-owned`);
     }
     if (actions.length === 1 && actions[0] === 'no-op') return [];
 
@@ -99,50 +102,59 @@ export const validateCloudflarePlan = (plan) => {
 
     if (durableProductionResource(resourceType)) {
       if (isReplacement) {
-        return [`${address} must not be replaced`];
+        return issue(`${address} must not be replaced`);
       }
       if (actions.includes('delete')) {
-        return [`${address} must not be deleted`];
+        return issue(`${address} must not be deleted`);
       }
     }
 
     if (workerRuntimeResource(resourceType) || !terraformOwnedResourceTypes.has(resourceType)) {
-      return [`${address} is not Terraform-owned`];
+      return issue(`${address} is not Terraform-owned`);
     }
 
     if (!allowsChange({ operation: plan.operation, address, resourceType, actions })) {
-      return [`${address} is not allowed for ${plan.operation}`];
+      return issue(`${address} is not allowed for ${plan.operation}`);
     }
 
     if (plan.operation === 'route-cutover' && !plan.allowProductionRoute) {
-      return [`${address} requires the cutover plan`];
+      return issue(`${address} requires the cutover plan`);
     }
 
     return [];
   });
 };
 
-export const validateQueuePausePlan = (plan) => {
-  if (!workerBindingOutputIsExplicitNoop(plan)) return ['worker_bindings output must be an explicit no-op'];
+export const validateQueuePausePlan = (plan) => inspectQueuePausePlan(plan).map((issue) => issue.message);
+
+export const inspectQueuePausePlan = (plan) => {
+  if (!workerBindingOutputIsExplicitNoop(plan)) {
+    return [{ message: 'worker_bindings output must be an explicit no-op' }];
+  }
   const desired = plan.operation === 'queue-pause';
   const changes = plan.resource_changes;
-  if (!Array.isArray(changes)) return ['Queue state is required'];
+  if (!Array.isArray(changes)) return [{ message: 'Queue state is required' }];
   const queue = changes.find((item) => item.address === 'cloudflare_queue.fedify');
-  if (!queue || queue.change.after?.settings?.delivery_paused !== desired) return ['Queue pause state is required'];
+  if (!queue || queue.change.after?.settings?.delivery_paused !== desired) {
+    return [{ message: 'Queue pause state is required' }];
+  }
   return changes.flatMap(({ address, change }) => {
-    if (change.importing || change.actions?.length !== 1) return ['Invalid Queue operation'];
+    const issue = (message) => [{ message, address, actions: change.actions }];
+    if (change.importing || change.actions?.length !== 1) return issue('Invalid Queue operation');
     if (change.actions[0] === 'no-op' && JSON.stringify(change.before) === JSON.stringify(change.after)) return [];
-    if (address !== 'cloudflare_queue.fedify' || change.actions[0] !== 'update') return ['Unrelated Queue operation'];
+    if (address !== 'cloudflare_queue.fedify' || change.actions[0] !== 'update') {
+      return issue('Unrelated Queue operation');
+    }
     const before = structuredClone(change.before);
     const after = structuredClone(change.after);
     if (
       typeof before?.settings?.delivery_paused !== 'boolean' || typeof after?.settings?.delivery_paused !== 'boolean'
-    ) return ['Missing Queue pause state'];
+    ) return issue('Missing Queue pause state');
     delete before.settings.delivery_paused;
     delete after.settings.delivery_paused;
     return JSON.stringify(before) === JSON.stringify(after)
       ? []
-      : ['Queue operation must preserve all unrelated settings'];
+      : issue('Queue operation must preserve all unrelated settings');
   });
 };
 

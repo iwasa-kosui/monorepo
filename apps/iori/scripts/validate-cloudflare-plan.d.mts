@@ -20,6 +20,16 @@ export interface CloudflarePlan {
   };
 }
 
+export interface PlanIssue {
+  message: string;
+  address?: string;
+  actions?: readonly string[];
+}
+
 export function validateCloudflarePlan(plan: CloudflarePlan): readonly string[];
 
+export function inspectCloudflarePlan(plan: CloudflarePlan): readonly PlanIssue[];
+
 export function validateQueuePausePlan(plan: CloudflarePlan): readonly string[];
+
+export function inspectQueuePausePlan(plan: CloudflarePlan): readonly PlanIssue[];

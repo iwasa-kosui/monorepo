@@ -346,6 +346,30 @@ it('reads exact storage and Queue identities and refuses unpaused/unavailable/dr
   old['/d1/database/db-id'].name = 'old';
   await expect(fixtureApi(old).readResources(ids)).rejects.toThrow();
 });
+it('reads the Queue pause state and reports an unpaused Queue as queue-not-paused', async () => {
+  await expect(fixtureApi(resourceResponses()).readQueuePause({ queueId: ids.queueId, paused: true })).resolves.toEqual(
+    {
+      queueId: ids.queueId,
+      paused: true,
+    },
+  );
+  const resumed = resourceResponses();
+  resumed['/queues/queue-id'].settings.delivery_paused = false;
+  await expect(fixtureApi(resumed).readQueuePause({ queueId: ids.queueId, paused: true })).rejects.toMatchObject(
+    readbackFailure('queue-not-paused'),
+  );
+  await expect(fixtureApi(resumed).readQueuePause({ queueId: ids.queueId, paused: false })).resolves.toEqual({
+    queueId: ids.queueId,
+    paused: false,
+  });
+  await expect(fixtureApi(resourceResponses()).readQueuePause({ queueId: ids.queueId, paused: false })).rejects
+    .toMatchObject(readbackFailure('state-mismatch'));
+  const other = resourceResponses();
+  other['/queues/queue-id'].queue_id = 'other-id';
+  await expect(fixtureApi(other).readQueuePause({ queueId: ids.queueId, paused: true })).rejects.toMatchObject(
+    readbackFailure('state-mismatch'),
+  );
+});
 it('requires the expected paused consumer target and rejects unexpected producers', async () => {
   const responses = resourceResponses();
   (responses['/queues/queue-id'].consumers as unknown[]).push({

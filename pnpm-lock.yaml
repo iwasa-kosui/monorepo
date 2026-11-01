@@ -109,7 +109,7 @@ importers:
         version: 1.9.0(hono@4.11.1)
       '@hono/vite-dev-server':
         specifier: 0.24.0
-        version: 0.24.0(hono@4.11.1)(miniflare@4.20260310.0)(wrangler@4.20.0(@cloudflare/workers-types@4.20250604.0))
+        version: 0.24.0(hono@4.11.1)(miniflare@4.20260310.0)(wrangler@4.72.0(@cloudflare/workers-types@4.20250604.0))
       '@types/node':
         specifier: 24.10.4
         version: 24.10.4
@@ -171,8 +171,8 @@ importers:
         specifier: 3.1.2
         version: 3.1.2(@types/debug@4.1.12)(@types/node@24.10.4)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.1)(tsx@4.21.0)(yaml@2.8.2)
       wrangler:
-        specifier: 4.20.0
-        version: 4.20.0(@cloudflare/workers-types@4.20250604.0)
+        specifier: 4.72.0
+        version: 4.72.0(@cloudflare/workers-types@4.20250604.0)
       yaml:
         specifier: 2.8.2
         version: 2.8.2
@@ -11445,14 +11445,14 @@ snapshots:
     dependencies:
       hono: 4.11.1
 
-  '@hono/vite-dev-server@0.24.0(hono@4.11.1)(miniflare@4.20260310.0)(wrangler@4.20.0(@cloudflare/workers-types@4.20250604.0))':
+  '@hono/vite-dev-server@0.24.0(hono@4.11.1)(miniflare@4.20260310.0)(wrangler@4.72.0(@cloudflare/workers-types@4.20250604.0))':
     dependencies:
       '@hono/node-server': 1.19.6(hono@4.11.1)
       hono: 4.11.1
       minimatch: 9.0.5
     optionalDependencies:
       miniflare: 4.20260310.0
-      wrangler: 4.20.0(@cloudflare/workers-types@4.20250604.0)
+      wrangler: 4.72.0(@cloudflare/workers-types@4.20250604.0)
 
   '@humanfs/core@0.19.1': {}
 

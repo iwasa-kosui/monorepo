@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { assertFreshTargetState, createTargetIdentity, validateFreshTargetPlan } from '../fresh-target.mjs';
+import {
+  assertFreshTargetState,
+  createTargetIdentity,
+  inspectFreshTargetPlan,
+  validateFreshTargetPlan,
+} from '../fresh-target.mjs';
 
 const input = {
   environment: 'staging',
@@ -41,5 +46,56 @@ describe('fresh isolated target', () => {
         { ...change, change: { ...change.change, after: { ...change.change.after, name: 'iori' } } },
       ]
     ) expect(validateFreshTargetPlan({ resource_changes: [bad] }, identity, 'resources').length).toBeGreaterThan(0);
+  });
+  it('reports the address and actions of each rejected change', () => {
+    const identity = createTargetIdentity(input);
+    const change = {
+      address: 'cloudflare_d1_database.iori',
+      change: { actions: ['create'], before: null, after: { name: identity.names.d1, account_id: identity.accountId } },
+    };
+    expect(inspectFreshTargetPlan({ resource_changes: [change] }, identity, 'resources')).toEqual([]);
+    expect(
+      inspectFreshTargetPlan(
+        { resource_changes: [{ ...change, change: { ...change.change, actions: ['delete', 'create'] } }] },
+        identity,
+        'resources',
+      ),
+    ).toEqual([{
+      message: 'Invalid preparation change',
+      address: 'cloudflare_d1_database.iori',
+      actions: ['delete', 'create'],
+    }]);
+    expect(
+      inspectFreshTargetPlan(
+        { resource_changes: [{ ...change, address: 'cloudflare_workers_route.iori[0]' }] },
+        identity,
+        'resources',
+      ),
+    ).toEqual([{
+      message: 'Unexpected preparation resource',
+      address: 'cloudflare_workers_route.iori[0]',
+      actions: ['create'],
+    }]);
+    const queue = {
+      address: 'cloudflare_queue.fedify',
+      change: {
+        actions: ['update'],
+        before: {},
+        after: {
+          queue_name: identity.names.queue,
+          settings: { delivery_paused: true },
+          account_id: identity.accountId,
+        },
+      },
+    };
+    expect(inspectFreshTargetPlan({ resource_changes: [queue] }, identity, 'consumer')).toEqual([{
+      message: 'Preparation permits fresh creates only',
+      address: 'cloudflare_queue.fedify',
+      actions: ['update'],
+    }]);
+    expect(inspectFreshTargetPlan({}, identity, 'consumer')).toEqual([{ message: 'Invalid preparation plan' }]);
+    expect(validateFreshTargetPlan({ resource_changes: [queue] }, identity, 'consumer')).toEqual([
+      'Preparation permits fresh creates only',
+    ]);
   });
 });

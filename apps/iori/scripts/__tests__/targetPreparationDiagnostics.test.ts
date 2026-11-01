@@ -4,7 +4,9 @@ import {
   CONTROL_PLANE_APIS,
   controlPlaneApi,
   isPreparationReason,
+  planRejectionDetails,
   PREPARATION_STAGES,
+  preparationDetailLines,
   preparationFailureLine,
   withReason,
 } from '../target-preparation-diagnostics.mjs';
@@ -21,6 +23,7 @@ const representativeReasons = [
   'r2-too-large',
   'zones-request',
   'state-mismatch',
+  'queue-not-paused',
   'not-sealed',
   'worker-input',
   'worker-resources',
@@ -37,6 +40,10 @@ const representativeReasons = [
   'aborted',
   'state-present',
   'plan-rejected',
+  'plan-invalid',
+  'plan-bindings-changed',
+  'plan-queue-update',
+  'plan-transfer-domain-replace',
   'output-mismatch',
   'output-invalid',
   'result-invalid',
@@ -60,6 +67,7 @@ it('keeps the stage vocabulary fixed', () => {
     'tf-apply',
     'resource-read',
     'deploy',
+    'deploy-read',
     'attach',
     'attach-tf-plan',
     'attach-tf-apply',
@@ -153,4 +161,114 @@ it('maps request paths to a fixed API word', () => {
   expect(controlPlaneApi(`/zones/${'b'.repeat(32)}/workers/routes`)).toBe('zones');
   expect(controlPlaneApi(`${root}/unknown/secret-value`)).toBe('other');
   expect(controlPlaneApi('https://secret.invalid')).toBe('other');
+});
+it.each([
+  ['cloudflare_d1_database.iori', 'd1'],
+  ['cloudflare_r2_bucket.uploads', 'uploads'],
+  ['cloudflare_workers_kv_namespace.fedify', 'kv'],
+  ['cloudflare_queue.fedify', 'queue'],
+  ['cloudflare_queue.fedify_dlq', 'dlq'],
+  ['cloudflare_r2_bucket.migration', 'transfer'],
+  ['cloudflare_r2_managed_domain.migration', 'transfer-domain'],
+  ['cloudflare_queue_consumer.fedify', 'consumer'],
+  ['cloudflare_queue_consumer.fedify[0]', 'consumer'],
+  ['cloudflare_workers_route.iori', 'route'],
+  ['cloudflare_workers_route.iori[0]', 'route'],
+  ['cloudflare_worker.iori', 'other'],
+  ['https://secret.invalid/token', 'other'],
+  ['toString', 'other'],
+])('maps the address %s to the resource word %s', (address, word) => {
+  expect(planRejectionDetails([{ message: 'x', address, actions: ['update'] }])).toEqual([`plan-${word}-update`]);
+});
+it.each([
+  [['create'], 'create'],
+  [['update'], 'update'],
+  [['delete'], 'delete'],
+  [['no-op'], 'no-op'],
+  [['delete', 'create'], 'replace'],
+  [['create', 'delete'], 'replace'],
+  [['read'], 'other'],
+  [['create', 'update'], 'other'],
+  [['delete', 'create', 'update'], 'other'],
+  [[], 'other'],
+  [undefined, 'other'],
+])('maps the actions %j to the action word %s', (actions, word) => {
+  expect(planRejectionDetails([{ message: 'x', address: 'cloudflare_queue.fedify', actions }])).toEqual([
+    `plan-queue-${word}`,
+  ]);
+});
+it('maps issues without an address to plan-invalid and removes duplicates', () => {
+  expect(
+    planRejectionDetails([
+      { message: 'Invalid preparation plan' },
+      { message: 'a', address: 'cloudflare_queue.fedify', actions: ['update'] },
+      { message: 'b', address: 'cloudflare_queue.fedify', actions: ['update'] },
+      { message: 'worker_bindings output must not change' },
+    ]),
+  ).toEqual(['plan-invalid', 'plan-queue-update']);
+  expect(planRejectionDetails([])).toEqual([]);
+});
+it('accepts plan reasons only with a known resource word and action word', () => {
+  for (const reason of ['plan-queue-update', 'plan-transfer-domain-replace', 'plan-other-other', 'plan-d1-no-op']) {
+    expect(isPreparationReason(reason)).toBe(true);
+  }
+  for (
+    const reason of [
+      'plan-secret-update',
+      'plan-queue-modify',
+      'plan-queue-',
+      'plan--update',
+      'plan-queue-update\n',
+      'plan-queue-update\nIORI_DIAG stage=x',
+      'plan-queue-update-extra',
+      'Plan-queue-update',
+    ]
+  ) expect(isPreparationReason(reason)).toBe(false);
+});
+const detailsOf = (details: unknown) => ({ diagnostic: { reason: 'plan-rejected', details } });
+it('builds public lines from the details before the failure line shape', () => {
+  const lines = preparationDetailLines('attach-tf-plan', detailsOf(['plan-queue-update', 'plan-bindings-changed']));
+  expect(lines).toEqual([
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-queue-update',
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-bindings-changed',
+  ]);
+  for (const line of lines) expect(line).toMatch(publicLine);
+});
+it('limits the detail lines to eight and removes duplicates', () => {
+  const resources = ['d1', 'uploads', 'kv', 'queue', 'dlq', 'transfer', 'transfer-domain', 'consumer', 'route'];
+  const details = [...resources, ...resources, 'plan-queue-update'].map((word) =>
+    word.startsWith('plan-') ? word : `plan-${word}-create`
+  );
+  const lines = preparationDetailLines('tf-plan', detailsOf(details));
+  expect(lines).toHaveLength(8);
+  expect(new Set(lines).size).toBe(8);
+  expect(lines[0]).toMatch(/reason=plan-d1-create$/);
+  expect(lines[7]).toMatch(/reason=plan-consumer-create$/);
+  expect(preparationDetailLines('tf-plan', detailsOf(['plan-queue-update', 'plan-queue-update']))).toHaveLength(1);
+});
+it('drops details outside the vocabulary and returns nothing for missing or empty details', () => {
+  const lines = preparationDetailLines(
+    'tf-plan',
+    detailsOf([
+      'plan-secret-update',
+      'plan-queue-update\nIORI_DIAG stage=x',
+      403,
+      null,
+      'https://secret.invalid',
+      'plan-d1-create',
+    ]),
+  );
+  expect(lines).toEqual(['IORI_DIAG stage=prepare-tf-plan program=none exit=none signal=none reason=plan-d1-create']);
+  expect(preparationDetailLines('tf-plan', detailsOf([]))).toEqual([]);
+  expect(preparationDetailLines('tf-plan', detailsOf('plan-d1-create'))).toEqual([]);
+  expect(preparationDetailLines('tf-plan', reasonOf('plan-rejected'))).toEqual([]);
+  expect(preparationDetailLines('tf-plan', new Error('x'))).toEqual([]);
+  expect(preparationDetailLines('tf-plan', undefined)).toEqual([]);
+});
+it('uses prepare-unclassified for a detail line outside the stage list', () => {
+  const lines = preparationDetailLines('https://secret.invalid', detailsOf(['plan-d1-create']));
+  expect(lines).toEqual([
+    'IORI_DIAG stage=prepare-unclassified program=none exit=none signal=none reason=plan-d1-create',
+  ]);
+  expect(lines[0]).toMatch(publicLine);
 });

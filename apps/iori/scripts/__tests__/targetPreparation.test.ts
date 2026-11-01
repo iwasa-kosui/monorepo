@@ -127,6 +127,7 @@ const scenario = async (
 ) => {
   const stages: string[] = [];
   let applied = 0;
+  let queuePaused = true;
   const root = `/accounts/${identity.accountId}`;
   const script = `${root}/workers/scripts/${identity.workerName}`;
   const responses = (): Record<string, unknown> => ({
@@ -135,19 +136,22 @@ const scenario = async (
     [`${root}/r2/buckets/${identity.names.uploads}`]: { name: identity.names.uploads },
     [`${root}/r2/buckets/${identity.names.transfer}`]: { name: identity.names.transfer },
     [`${root}/r2/buckets/${identity.names.transfer}/domains/managed`]: { enabled: false },
-    [`${root}/queues/${ids.queueId}`]: queueState(
-      ids.queueId,
-      identity.names.queue,
-      applied === 2
-        ? [{
-          type: 'worker',
-          script_name: identity.workerName,
-          dead_letter_queue: identity.names.dlq,
-          consumer_id: 'consumer-id',
-          settings: consumerSettings,
-        }]
-        : [],
-    ),
+    [`${root}/queues/${ids.queueId}`]: {
+      ...queueState(
+        ids.queueId,
+        identity.names.queue,
+        applied === 2
+          ? [{
+            type: 'worker',
+            script_name: identity.workerName,
+            dead_letter_queue: identity.names.dlq,
+            consumer_id: 'consumer-id',
+            settings: consumerSettings,
+          }]
+          : [],
+      ),
+      ...(queuePaused ? {} : { settings: { delivery_paused: false } }),
+    },
     [`${root}/queues/${ids.dlqId}`]: queueState(ids.dlqId, identity.names.dlq, []),
     [`${script}/deployments`]: { deployments: [{ versions: [{ percentage: 100, version_id: 'version1' }] }] },
     [`${script}/versions/version1`]: { id: 'version1', resources: { bindings: workerBindingList } },
@@ -188,7 +192,7 @@ const scenario = async (
       stages.push(stage);
     },
   });
-  return { preparation, stages, runCommand };
+  return { preparation, stages, runCommand, fetchRequest, resumeQueue: () => (queuePaused = false) };
 };
 it('stops at fresh-check without running Terraform when the Cloudflare inventory read fails', async () => {
   const { preparation, stages, runCommand } = await scenario({ failWorkers: true });
@@ -221,4 +225,27 @@ it('reports every stage in order from fresh-check through attach-read', async ()
     'attach-tf-apply',
     'attach-read',
   ]);
+});
+it('reads the Queue pause state through the Queue API without reporting a stage', async () => {
+  const { preparation, stages, fetchRequest } = await scenario();
+  await preparation.prepareResources();
+  stages.length = 0;
+  fetchRequest.mockClear();
+  await expect(preparation.assertQueuePaused()).resolves.toBeUndefined();
+  expect(stages).toEqual([]);
+  expect(fetchRequest).toHaveBeenCalledTimes(1);
+  expect(fetchRequest.mock.calls[0]![0].pathname).toBe(
+    `/client/v4/accounts/${identity.accountId}/queues/${ids.queueId}`,
+  );
+});
+it('fails with queue-not-paused when the Queue API reports delivery resumed', async () => {
+  const { preparation, resumeQueue } = await scenario();
+  await preparation.prepareResources();
+  resumeQueue();
+  await expect(preparation.assertQueuePaused()).rejects.toMatchObject({ diagnostic: { reason: 'queue-not-paused' } });
+});
+it('rejects the Queue pause check before resources are established', async () => {
+  const { preparation, fetchRequest } = await scenario();
+  await expect(preparation.assertQueuePaused()).rejects.toThrow('Target resources have not been established.');
+  expect(fetchRequest).not.toHaveBeenCalled();
 });
