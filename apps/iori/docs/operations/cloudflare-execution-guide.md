@@ -585,6 +585,7 @@ IORI_ESTIMATE rows=<n> upload_count=<n> upload_duplicate_count=<n> upload_missin
   - `too-large`: 1 ファイルのサイズの上限 (32 MiB) を超える
   - `access`: 権限がなく、ファイルを調べるか開けない
   - `other`: 上のどれにも当たらない。親ディレクトリの realpath の不一致や、開く前後の stat の食い違いを含みます
+  - 1つのファイルが複数の原因に当たるときは、`owner`、`not-regular`、`too-large` の順で先に当たる原因として数えます。他ユーザー所有のシンボリックリンクは `owner` です
 - `upload_ext_webp_count`、`upload_ext_png_count`、`upload_ext_jpeg_count`、`upload_ext_gif_count` は、`upload_count` のファイルを拡張子別に数えた件数です。`jpg` は `jpeg` に数えます。`upload_failed_ext_webp_count` のように `failed` を含む項目は、開けなかったファイルを拡張子別に数えた件数です
 - 開けなかったファイルが 1 件でもあると、`estimate-source` は `IORI_ESTIMATE` の行を出した後で、`IORI_DIAG` の行を出して失敗します。`migrate-data` と `rehearse-migration` は freeze の前に失敗します。`IORI_DIAG` の `reason` は、件数が 1 以上の原因のうち、表の上にあるものです
 - `sample` は、3つの件数がすべて 1 以上なら `ok` です。どれかが 0 なら `insufficient` で、`rehearse-migration` は freeze の前に失敗します
@@ -623,7 +624,7 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 | `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                               |
 | `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す            |
 | `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                             |
-| `estimate-upload-open`        | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                                                                                                   |
+| `estimate-upload-open`        | estimate が開いたアップロードのファイルを閉じる処理など、原因別の6つの `reason` に当たらない段で失敗した                                                    |
 | `estimate-upload-missing`     | estimate が開けなかったアップロードのファイルのうち、ファイルがないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_missing_count` を見る           |
 | `estimate-upload-owner`       | estimate が開けなかったアップロードのファイルのうち、所有者が違うものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_owner_count` を見る               |
 | `estimate-upload-not-regular` | estimate が開けなかったアップロードのファイルのうち、通常のファイルでないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_not_regular_count` を見る |
@@ -633,6 +634,8 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 | `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                                      |
 | `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                              |
 | `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                                      |
+
+`reason` が `estimate-upload-missing`、`estimate-upload-owner`、`estimate-upload-not-regular`、`estimate-upload-too-large`、`estimate-upload-access`、`estimate-upload-other` のときは、ssh の失敗ではないので、`IORI_DIAG` の行は `program=none exit=none signal=none` で出ます。
 
 `estimate-` で始まる語彙は、旧環境への配備 (`deploy-iori.yml`) の後に効きます。配備の前の旧環境は `detail` を返さないので、サービス側の失敗は `reason=rejected` になります。
 

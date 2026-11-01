@@ -46,7 +46,8 @@ const uploadExtensions = ['webp', 'png', 'jpeg', 'gif'] as const;
 type UploadExtension = (typeof uploadExtensions)[number];
 const extensionOf = (filename: string) => {
   const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
-  return (extension === 'jpg' ? 'jpeg' : extension) as UploadExtension;
+  const normalized = extension === 'jpg' ? 'jpeg' : extension;
+  return uploadExtensions.find((known) => known === normalized);
 };
 const failureOf = (error: unknown) => {
   const reason = (error as { reason?: unknown } | null | undefined)?.reason;
@@ -154,6 +155,8 @@ export class SourceSnapshot {
         if (page.rows.length > 100) throw new Error('invalid_page');
         if (!page.rows.length) break;
         for (const { row } of page.rows) {
+          stage = 'estimate-query';
+          signal.throwIfAborted();
           stage = 'estimate-upload-row';
           const upload = this.uploadOf(row, sourceHostname);
           if (upload.kind === 'legacy') stage = 'estimate-upload-legacy-path';
@@ -162,13 +165,14 @@ export class SourceSnapshot {
             throw new Error('invalid_upload');
           }
           if (upload.kind === 'remote') continue;
+          const extension = extensionOf(upload.filename);
+          if (!extension) throw new Error('invalid_upload');
           const added = uploads.add(upload);
           if (added === 'conflict') throw new Error('invalid_upload');
           if (added === 'duplicate') continue;
           stage = 'estimate-upload-root';
           const path = join(await this.uploadRoot(), upload.filename);
           stage = 'estimate-upload-open';
-          const extension = extensionOf(upload.filename);
           extensions[extension] += 1;
           const opened = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false).catch((error: unknown) => {
             failures[failureOf(error)] += 1;

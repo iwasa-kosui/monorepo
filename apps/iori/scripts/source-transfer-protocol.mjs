@@ -111,6 +111,7 @@ const UPLOAD_FAILURE_COUNTS = Object.freeze([
   ['estimate-upload-access', 'upload_access_count'],
   ['estimate-upload-other', 'upload_other_count'],
 ]);
+export const ESTIMATE_UPLOAD_FAILURE_REASONS = Object.freeze(UPLOAD_FAILURE_COUNTS.map(([reason]) => reason));
 export const estimateUploadFailureReason = (estimate) =>
   UPLOAD_FAILURE_COUNTS.find(([, field]) => estimate[field] > 0)?.[0] ?? null;
 const fileSchema = z.object({

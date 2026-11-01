@@ -5,7 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { expect, it, vi } from 'vitest';
 
 import { estimateFailureLine, estimateFromEnvironment, estimateSource } from '../estimate-source.mjs';
-import { SOURCE_LIMITS, SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
+import {
+  ESTIMATE_UPLOAD_FAILURE_REASONS,
+  SOURCE_LIMITS,
+  SOURCE_REJECTION_DETAILS,
+  SOURCE_SSH_REASONS,
+} from '../source-transfer-protocol.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 
 const estimate = {
@@ -120,7 +125,7 @@ it.each(
   expect(failure.estimateLine).toContain(`${field}=2 `);
   expect(failure.estimateLine).toMatch(/^IORI_ESTIMATE .* sample=ok capacity=ok$/);
   expect(estimateFailureLine(failure)).toBe(
-    `IORI_DIAG stage=estimate-source program=ssh exit=none signal=none reason=${reason}`,
+    `IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=${reason}`,
   );
 });
 it('picks the first reason in the fixed order when several causes are counted', async () => {
@@ -205,11 +210,23 @@ it.each([
 });
 const publicDiagnostic =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
-it.each([...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS])(
+it.each(
+  [...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS].filter(reason =>
+    !ESTIMATE_UPLOAD_FAILURE_REASONS.includes(reason)
+  ),
+)(
   'writes the reason %s as one line the public log accepts',
   reason => {
     const line = estimateFailureLine(Object.assign(new Error('raw /home/secret'), { diagnostic: { reason, exit: 1 } }));
     expect(line).toBe(`IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=${reason}`);
+    expect(line).toMatch(publicDiagnostic);
+  },
+);
+it.each(ESTIMATE_UPLOAD_FAILURE_REASONS)(
+  'writes the upload reason %s without an ssh program, exit code or signal',
+  reason => {
+    const line = estimateFailureLine({ diagnostic: { reason, exit: 1, signal: 'SIGTERM' } });
+    expect(line).toBe(`IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=${reason}`);
     expect(line).toMatch(publicDiagnostic);
   },
 );
@@ -316,7 +333,7 @@ it('prints the estimate line before the diagnostic line and fails when uploads c
     expect(lines[0]).toMatch(/^IORI_ESTIMATE rows=5 upload_count=3 .* upload_owner_count=2 .* upload_access_count=1 /);
     expect(lines[0]).toContain('upload_failed_ext_png_count=3');
     expect(lines.slice(1)).toEqual([
-      'IORI_DIAG stage=estimate-source program=ssh exit=none signal=none reason=estimate-upload-owner',
+      'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=estimate-upload-owner',
       'Source estimate failed.',
       '',
     ]);

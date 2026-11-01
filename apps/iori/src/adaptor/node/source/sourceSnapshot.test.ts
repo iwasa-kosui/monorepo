@@ -250,6 +250,63 @@ it('counts an uppercase extension under its lowercase name', async () => {
     upload_ext_webp_count: 1,
   });
 });
+const pagedSnapshot = (base: string, uploadDir: string, pages: { row: unknown }[][]) =>
+  new SourceSnapshot({
+    base,
+    uploadDir,
+    origin,
+    createClient: async () => {
+      let fetched = 0;
+      return {
+        connect: async () => {},
+        end: async () => {},
+        query: async (sql: string) => {
+          if (sql.startsWith('SELECT COALESCE')) return { rows: [{ bytes: '100', count: '1' }] };
+          if (sql.startsWith('FETCH')) {
+            return { rows: pages[fetched++] ?? [] };
+          }
+          return { rows: [] };
+        },
+      };
+    },
+  });
+it('counts unopened uploads on later pages when the scan spans more than one page of 100 rows', async () => {
+  const [webp, gif] = [spareId('e'), spareId('f')];
+  const { base, uploadDir } = await setup();
+  const first = Array.from({ length: 100 }, () => ({ row: rowFor(imageId, 'png') }));
+  const second = [{ row: rowFor(webp, 'webp') }, { row: rowFor(gif, 'gif') }, { row: rowFor(imageId, 'png') }];
+  const estimate = await pagedSnapshot(base, uploadDir, [first, second]).estimate(new AbortController().signal);
+  expect(countsOf(estimate)).toEqual({
+    upload_count: 3,
+    upload_duplicate_count: 100,
+    upload_bytes: 5,
+    upload_missing_count: 2,
+    upload_ext_png_count: 1,
+    upload_ext_webp_count: 1,
+    upload_ext_gif_count: 1,
+    upload_failed_ext_webp_count: 1,
+    upload_failed_ext_gif_count: 1,
+  });
+});
+it('stops at the next row with the limit stage when the signal aborts while a page is being processed', async () => {
+  const { base, uploadDir } = await setup();
+  const controller = new AbortController();
+  let reads = 0;
+  const rows = Array.from({ length: 3 }, () => ({
+    row: {
+      imageId,
+      get url() {
+        reads += 1;
+        controller.abort();
+        return `/uploads/${imageId}.png`;
+      },
+    },
+  }));
+  await expect(pagedSnapshot(base, uploadDir, [rows]).estimate(controller.signal)).rejects.toThrow(
+    'source_estimate_failed:estimate-limit',
+  );
+  expect(reads).toBe(1);
+});
 it('estimates with the same fake client when nothing fails', async () => {
   expect(await estimateWith({})).toBe('estimated');
 });

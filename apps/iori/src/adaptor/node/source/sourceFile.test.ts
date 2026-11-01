@@ -59,6 +59,10 @@ it.each(['ENOENT', 'ENOTDIR'])('gives a lstat failure with %s the reason missing
   expect(await failure()).toMatchObject({ message: code, reason: 'missing' });
   expect(open).not.toHaveBeenCalled();
 });
+it.each(['ENOENT', 'ENOTDIR'])('gives an open failure with %s the reason missing', async (code) => {
+  vi.mocked(open).mockRejectedValueOnce(errno(code));
+  expect(await failure()).toMatchObject({ message: code, reason: 'missing' });
+});
 it.each(['EACCES', 'EPERM'])('gives a lstat or open failure with %s the reason access', async (code) => {
   vi.mocked(lstat).mockRejectedValueOnce(errno(code));
   expect(await failure()).toMatchObject({ message: code, reason: 'access' });

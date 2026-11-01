@@ -29,7 +29,7 @@ export const openSourceFile = async (path: string, maxBytes: number, privateFile
   if (before.size > maxBytes) throw unsafe('too-large');
   if (privateFile && (before.mode & 0o777) !== 0o600) throw unsafe('other');
   // A regular file may be replaced after lstat; never block opening a replacement FIFO.
-  const file = await attempt(() => open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK));
+  const file = await attempt(() => open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK), true);
   try {
     const stat = await attempt(() => file.stat());
     if (stat.uid !== before.uid || (privateFile && stat.uid !== process.getuid?.())) throw unsafe('owner');

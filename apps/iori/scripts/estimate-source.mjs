@@ -7,6 +7,7 @@ import { hasRehearsalSample, migrationBudget, REHEARSAL_D1_CAPACITY_BYTES } from
 import { assertExternalMigrationRoot } from './migration-path-safety.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
 import {
+  ESTIMATE_UPLOAD_FAILURE_REASONS,
   estimateUploadFailureReason,
   SOURCE_REJECTION_DETAILS,
   SOURCE_SSH_REASONS,
@@ -97,6 +98,9 @@ export const estimateFailureLine = (error) => {
   const exitSignal = typeof diagnostic.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(diagnostic.signal)
     ? diagnostic.signal
     : 'none';
+  if (ESTIMATE_UPLOAD_FAILURE_REASONS.includes(diagnostic.reason)) {
+    return `IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=${diagnostic.reason}`;
+  }
   return `IORI_DIAG stage=estimate-source program=ssh exit=${exit} signal=${exitSignal} reason=${diagnostic.reason}`;
 };
 
