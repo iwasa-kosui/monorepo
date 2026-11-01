@@ -307,6 +307,10 @@ const retryLine = (attempt: number) =>
 it.each([
   ['', 'smoke-token-empty'],
   [' padded-smoke-queue-token ', 'smoke-token-space'],
+  [`${'a'.repeat(10)}\n${'b'.repeat(10)}`, 'smoke-token-space'],
+  [`${'a'.repeat(20)}\u3042`, 'smoke-token-charset'],
+  [`${'a'.repeat(20)}\u0001`, 'smoke-token-charset'],
+  [`${'a'.repeat(15)}\n`, 'smoke-token-short'],
   ['short', 'smoke-token-short'],
   ['a'.repeat(1025), 'smoke-token-long'],
 ])('stops at inputs with %s before restoring when the smoke token is %j', async (token, reason) => {
@@ -321,6 +325,14 @@ it.each([
   expect(mocks.restore).not.toHaveBeenCalled();
   expect(stages.at(-1)).toBe('inputs');
 });
+it.each([`${smokeToken}\n`, `${smokeToken}\r\n`, `${smokeToken} `])(
+  'does not stop at inputs when the valid smoke token %j has trailing whitespace',
+  async (token) => {
+    await invoke({}, { IORI_PRIVATE_DIRECTORY: '/fixture', IORI_SMOKE_QUEUE_TOKEN: token });
+    expect(mocks.restore).toHaveBeenCalled();
+    expect(stages.at(-1)).not.toBe('inputs');
+  },
+);
 it('stops at inputs before restoring when the smoke token is missing', async () => {
   expect(await invoke({}, { IORI_PRIVATE_DIRECTORY: '/fixture' }).then(() => undefined, (thrown: unknown) => thrown))
     .toMatchObject({ diagnostic: { reason: 'smoke-token-empty' } });

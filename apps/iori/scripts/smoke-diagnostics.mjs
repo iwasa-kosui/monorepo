@@ -34,7 +34,7 @@ export const SMOKE_REQUEST_CAUSE_WORDS = Object.freeze([
   'redirect',
   OTHER_WORD,
 ]);
-export const SMOKE_TOKEN_CLASS_WORDS = Object.freeze(['empty', 'space', 'short', 'long', 'ok']);
+export const SMOKE_TOKEN_CLASS_WORDS = Object.freeze(['empty', 'space', 'charset', 'short', 'long', 'ok']);
 export const SMOKE_MAX_DETAIL_LINES = Object.keys(SMOKE_ITEM_WORDS).length + 1;
 const MIN_TOKEN_LENGTH = 16;
 const MAX_TOKEN_LENGTH = 1024;
@@ -95,9 +95,11 @@ export const smokeRequestCause = (error) => {
   return cause?.message === 'unexpected redirect' ? 'redirect' : OTHER_WORD;
 };
 
-export const smokeTokenDetail = (token) => {
-  if (typeof token !== 'string' || token.length === 0) return 'smoke-token-empty';
-  if (token !== token.trim() || /[\r\n]/.test(token)) return 'smoke-token-space';
+export const smokeTokenDetail = (input) => {
+  const token = typeof input === 'string' ? input.replace(/[\t\n\r ]+$/, '') : '';
+  if (token.length === 0) return 'smoke-token-empty';
+  if (/[\t\n\r ]/.test(token)) return 'smoke-token-space';
+  if (!/^[\x21-\x7e]+$/.test(token)) return 'smoke-token-charset';
   if (token.length < MIN_TOKEN_LENGTH) return 'smoke-token-short';
   return token.length > MAX_TOKEN_LENGTH ? 'smoke-token-long' : 'smoke-token-ok';
 };

@@ -193,6 +193,7 @@ it('accepts the preparation, source and cutover reasons only', () => {
       'smoke-failed',
       'smoke-token-empty',
       'smoke-token-space',
+      'smoke-token-charset',
       'smoke-token-short',
       'smoke-token-long',
       'verify-failed',

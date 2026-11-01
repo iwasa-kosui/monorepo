@@ -65,6 +65,7 @@ const FIXED_REASONS = new Set([
   'credentials-missing',
   'smoke-token-empty',
   'smoke-token-space',
+  'smoke-token-charset',
   'smoke-token-short',
   'smoke-token-long',
   'credential-not-distinct',

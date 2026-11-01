@@ -13,6 +13,7 @@ it('accepts the preparation, source and cutover words only', () => {
       'smoke-failed',
       'smoke-token-empty',
       'smoke-token-space',
+      'smoke-token-charset',
       'smoke-token-short',
       'smoke-token-long',
       'plan-rejected',

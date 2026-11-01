@@ -210,11 +210,28 @@ it('classifies the smoke token by its shape without its value or exact length', 
   expect(smokeTokenDetail(null)).toBe('smoke-token-empty');
   expect(smokeTokenDetail(5)).toBe('smoke-token-empty');
   expect(smokeTokenDetail('')).toBe('smoke-token-empty');
+  expect(smokeTokenDetail('\n')).toBe('smoke-token-empty');
+  expect(smokeTokenDetail(' \t\r\n')).toBe('smoke-token-empty');
+  expect(smokeTokenDetail(`${'a'.repeat(20)}\n`)).toBe('smoke-token-ok');
+  expect(smokeTokenDetail(`${'a'.repeat(20)}\r\n`)).toBe('smoke-token-ok');
+  expect(smokeTokenDetail(`${'a'.repeat(20)} `)).toBe('smoke-token-ok');
+  expect(smokeTokenDetail(`${'a'.repeat(20)} \t\n`)).toBe('smoke-token-ok');
   expect(smokeTokenDetail(` ${'a'.repeat(20)}`)).toBe('smoke-token-space');
-  expect(smokeTokenDetail(`${'a'.repeat(20)}\n`)).toBe('smoke-token-space');
+  expect(smokeTokenDetail(`\n${'a'.repeat(20)}`)).toBe('smoke-token-space');
+  expect(smokeTokenDetail(`\t${'a'.repeat(20)}\n`)).toBe('smoke-token-space');
+  expect(smokeTokenDetail(`${'a'.repeat(10)} ${'b'.repeat(10)}`)).toBe('smoke-token-space');
   expect(smokeTokenDetail(`${'a'.repeat(10)}\r\n${'b'.repeat(10)}`)).toBe('smoke-token-space');
   expect(smokeTokenDetail(`${'a'.repeat(10)}\n${'b'.repeat(10)}`)).toBe('smoke-token-space');
-  expect(smokeTokenDetail(' short ')).toBe('smoke-token-space');
+  expect(smokeTokenDetail(`${'a'.repeat(10)}\t${'b'.repeat(10)}`)).toBe('smoke-token-space');
+  expect(smokeTokenDetail(`${'a'.repeat(15)}\n`)).toBe('smoke-token-short');
+  expect(smokeTokenDetail(`${'a'.repeat(1025)}\n`)).toBe('smoke-token-long');
+  expect(smokeTokenDetail(`${'a'.repeat(1024)}\n`)).toBe('smoke-token-ok');
+  expect(smokeTokenDetail(`${'a'.repeat(20)}\u00e9`)).toBe('smoke-token-charset');
+  expect(smokeTokenDetail(`${'a'.repeat(20)}\u3042`)).toBe('smoke-token-charset');
+  expect(smokeTokenDetail(`${'a'.repeat(20)}\u0001`)).toBe('smoke-token-charset');
+  expect(smokeTokenDetail(`${'a'.repeat(10)}\u007f${'b'.repeat(10)}`)).toBe('smoke-token-charset');
+  expect(smokeTokenDetail(`${'a'.repeat(10)}\u00a0${'b'.repeat(10)}`)).toBe('smoke-token-charset');
+  expect(smokeTokenDetail(`\u3042${'a'.repeat(3)}`)).toBe('smoke-token-charset');
   expect(smokeTokenDetail('a'.repeat(15))).toBe('smoke-token-short');
   expect(smokeTokenDetail('a'.repeat(16))).toBe('smoke-token-ok');
   expect(smokeTokenDetail('a'.repeat(1024))).toBe('smoke-token-ok');
@@ -222,6 +239,7 @@ it('classifies the smoke token by its shape without its value or exact length', 
   expect(tokenDetails).toEqual([
     'smoke-token-empty',
     'smoke-token-space',
+    'smoke-token-charset',
     'smoke-token-short',
     'smoke-token-long',
     'smoke-token-ok',
@@ -239,6 +257,7 @@ it('accepts the fixed smoke words only', () => {
       'smoke-queue-none-token',
       'smoke-other-100-other',
       'smoke-token-empty',
+      'smoke-token-charset',
       'smoke-token-ok',
     ]
   ) {
@@ -338,6 +357,10 @@ it('puts the token class first and reports every item as token-unavailable when 
 });
 it.each([
   [' padded-smoke-queue-token ', 'smoke-token-space'],
+  [`${'a'.repeat(10)}\n${'b'.repeat(10)}`, 'smoke-token-space'],
+  [`${'a'.repeat(20)}\u3042`, 'smoke-token-charset'],
+  [`${'a'.repeat(20)}\u0001`, 'smoke-token-charset'],
+  [`${'a'.repeat(15)}\n`, 'smoke-token-short'],
   ['short', 'smoke-token-short'],
   ['a'.repeat(1025), 'smoke-token-long'],
 ])('puts %j first as %s without the value', async (token, word) => {
@@ -379,6 +402,10 @@ it.each([
   [undefined, 'smoke-token-empty'],
   ['', 'smoke-token-empty'],
   [' padded-smoke-queue-token ', 'smoke-token-space'],
+  [`${'a'.repeat(10)}\n${'b'.repeat(10)}`, 'smoke-token-space'],
+  [`${'a'.repeat(20)}\u3042`, 'smoke-token-charset'],
+  [`${'a'.repeat(20)}\u0001`, 'smoke-token-charset'],
+  [`${'a'.repeat(15)}\n`, 'smoke-token-short'],
   ['short', 'smoke-token-short'],
   ['a'.repeat(1025), 'smoke-token-long'],
 ])('rejects the malformed smoke token %j with the fixed reason %s and without its value', (token, word) => {
@@ -392,6 +419,14 @@ it.each([
   expect(thrown?.diagnostic?.reason).toBe(word);
   expect(JSON.stringify([thrown?.message, thrown?.diagnostic])).not.toContain('padded');
   expect(JSON.stringify([thrown?.message, thrown?.diagnostic])).not.toContain('aaaa');
+});
+it.each([
+  `${'a'.repeat(20)}\n`,
+  `${'a'.repeat(20)}\r\n`,
+  `${'a'.repeat(20)} `,
+  'a'.repeat(20),
+])('accepts the smoke token %j without throwing', (token) => {
+  expect(() => assertSmokeQueueToken(token)).not.toThrow();
 });
 it('accepts a well-formed smoke token without throwing', () => {
   expect(() => assertSmokeQueueToken(fixtureToken)).not.toThrow();

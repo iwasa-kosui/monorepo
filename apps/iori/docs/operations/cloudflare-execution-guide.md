@@ -439,7 +439,8 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 | `config-invalid`           | 設定、token、Terraform の入力が不正です                                                                                                                                                                                                                    |
 | `credentials-missing`      | 必須の secret がありません                                                                                                                                                                                                                                 |
 | `smoke-token-empty`        | `stage` が `prepare-inputs` の入口の検査で、smoke token が空です。値が空のときは `credentials-missing` が先に出ます。リソースは作られていません。区分の意味は、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の token の区分の表と同じです。 |
-| `smoke-token-space`        | `stage` が `prepare-inputs` の入口の検査で、smoke token の前後に空白があるか、値の途中に改行があります。リソースは作られていません。                                                                                                                       |
+| `smoke-token-space`        | `stage` が `prepare-inputs` の入口の検査で、smoke token の先頭に空白があるか、値の途中に空白や改行があります。リソースは作られていません。                                                                                                                 |
+| `smoke-token-charset`      | `stage` が `prepare-inputs` の入口の検査で、smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。リソースは作られていません。                                                                                                              |
 | `smoke-token-short`        | `stage` が `prepare-inputs` の入口の検査で、smoke token が16文字未満です。リソースは作られていません。                                                                                                                                                     |
 | `smoke-token-long`         | `stage` が `prepare-inputs` の入口の検査で、smoke token が1024文字を超えます。リソースは作られていません。                                                                                                                                                 |
 | `credential-not-distinct`  | staging の access token が smoke の token と同じです                                                                                                                                                                                                       |
@@ -1167,22 +1168,23 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 `reason` には、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表と同じ語が出ます。`cutover-route` だけに出る語は、次のとおりです。
 
-| `reason`                     | 意味                                                                                                                                                                    |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reviewed-main-required`     | レビュー済みの main が指定されていません。                                                                                                                              |
-| `reviewed-checkout-mismatch` | checkout がレビュー済みの main と一致しません。                                                                                                                         |
-| `reviewed-checkout-dirty`    | checkout に未 commit の変更があります。                                                                                                                                 |
-| `reviewed-main-changed`      | 実行中に main が変わりました。                                                                                                                                          |
-| `job-budget-exhausted`       | job の作業時間の上限に達しました。                                                                                                                                      |
-| `smoke-failed`               | smoke の検査が失敗しました。                                                                                                                                            |
-| `smoke-token-empty`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が空です。restore と Worker の smoke モードへの切り替えの前に止まります。                                       |
-| `smoke-token-space`          | `stage` が `cutover-inputs` の入口の検査で、smoke token の前後に空白があるか、値の途中に改行があります。restore と Worker の smoke モードへの切り替えの前に止まります。 |
-| `smoke-token-short`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が16文字未満です。restore と Worker の smoke モードへの切り替えの前に止まります。                               |
-| `smoke-token-long`           | `stage` が `cutover-inputs` の入口の検査で、smoke token が1024文字を超えます。restore と Worker の smoke モードへの切り替えの前に止まります。                           |
-| `verify-failed`              | 移行データの検証が失敗しました。                                                                                                                                        |
-| `deploy-failed`              | レビュー済みの Worker の version の deploy が失敗しました。                                                                                                             |
-| `source-not-quiescent`       | source の凍結、drain、identity のどれかを確認できません。                                                                                                               |
-| `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。                                                                                          |
+| `reason`                     | 意味                                                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reviewed-main-required`     | レビュー済みの main が指定されていません。                                                                                                                                       |
+| `reviewed-checkout-mismatch` | checkout がレビュー済みの main と一致しません。                                                                                                                                  |
+| `reviewed-checkout-dirty`    | checkout に未 commit の変更があります。                                                                                                                                          |
+| `reviewed-main-changed`      | 実行中に main が変わりました。                                                                                                                                                   |
+| `job-budget-exhausted`       | job の作業時間の上限に達しました。                                                                                                                                               |
+| `smoke-failed`               | smoke の検査が失敗しました。                                                                                                                                                     |
+| `smoke-token-empty`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が空です。restore と Worker の smoke モードへの切り替えの前に止まります。                                                |
+| `smoke-token-space`          | `stage` が `cutover-inputs` の入口の検査で、smoke token の先頭に空白があるか、値の途中に空白や改行があります。restore と Worker の smoke モードへの切り替えの前に止まります。    |
+| `smoke-token-charset`        | `stage` が `cutover-inputs` の入口の検査で、smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。restore と Worker の smoke モードへの切り替えの前に止まります。 |
+| `smoke-token-short`          | `stage` が `cutover-inputs` の入口の検査で、smoke token が16文字未満です。restore と Worker の smoke モードへの切り替えの前に止まります。                                        |
+| `smoke-token-long`           | `stage` が `cutover-inputs` の入口の検査で、smoke token が1024文字を超えます。restore と Worker の smoke モードへの切り替えの前に止まります。                                    |
+| `verify-failed`              | 移行データの検証が失敗しました。                                                                                                                                                 |
+| `deploy-failed`              | レビュー済みの Worker の version の deploy が失敗しました。                                                                                                                      |
+| `source-not-quiescent`       | source の凍結、drain、identity のどれかを確認できません。                                                                                                                        |
+| `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。                                                                                                   |
 
 `cutover-source` と `cutover-gate-*` では、source の接続の失敗として `not-ready`、`busy`、`rejected`、`invalid-response`、`spawn-failed`、`ssh-failed` と、`estimate-` で始まる語が出ます。意味は、[estimate-source で事前に確認する](#estimate-source-で事前に確認する)の `reason` の表に書いています。
 
@@ -1230,15 +1232,16 @@ staging を使う場合、作業者は staging の完了後に production に異
 | `token`            | smoke token が空なので、要求を送りませんでした。                                                                                        |
 | `other`            | 上のどれにも当たらない失敗です。                                                                                                        |
 
-token の区分の行の `reason` は `smoke-token-<区分>` の形です。`<区分>` は、次の表の上から順に判定します。
+token の区分の行の `reason` は `smoke-token-<区分>` の形です。判定は、smoke token の末尾の空白と改行を取り除いた値で行います。Worker に登録するときも末尾の空白は取り除かれるので、末尾に空白や改行があるだけの token は `ok` になります。`<区分>` は、次の表の上から順に判定します。
 
-| `<区分>` | 意味                                                                         |
-| -------- | ---------------------------------------------------------------------------- |
-| `empty`  | job に渡された smoke token が空です。                                        |
-| `space`  | smoke token の前後に空白があるか、値の途中に改行があります。                 |
-| `short`  | smoke token が16文字未満です。Worker は16文字未満の token を常に拒否します。 |
-| `long`   | smoke token が1024文字を超えます。                                           |
-| `ok`     | 上のどれにも当たりません。                                                   |
+| `<区分>`  | 意味                                                                         |
+| --------- | ---------------------------------------------------------------------------- |
+| `empty`   | 末尾の空白と改行を取り除くと、smoke token が空です。                         |
+| `space`   | smoke token の先頭に空白があるか、値の途中に空白や改行があります。           |
+| `charset` | smoke token が、空白を含まない ASCII の表示文字以外の文字を含みます。        |
+| `short`   | smoke token が16文字未満です。Worker は16文字未満の token を常に拒否します。 |
+| `long`    | smoke token が1024文字を超えます。                                           |
+| `ok`      | 上のどれにも当たりません。                                                   |
 
 この行は、job 側の値の形だけを示します。Worker に登録された値と一致するかは示しません。
 
