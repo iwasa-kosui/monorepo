@@ -177,7 +177,11 @@ export const runSourceDeployStep = async (
         }
         if ((current.mode & 0o777) !== 0o600) {
           await check();
-          await exec('sudo', ['-n', 'chmod', '600', sourceEnvironmentFile]);
+          try {
+            await exec('sudo', ['-n', 'chmod', '600', sourceEnvironmentFile]);
+          } catch {
+            throw new Error('Source configuration mode reset failed.');
+          }
           const after = await inspectConfiguration();
           if (after.dev !== current.dev || after.ino !== current.ino || (after.mode & 0o777) !== 0o600) {
             throw new Error('Source configuration mode reset failed.');

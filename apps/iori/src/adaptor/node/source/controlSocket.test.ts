@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { chmod, lstat, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { connect, createServer } from 'node:net';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -150,6 +150,24 @@ describe('private socket', () => {
       }
     } finally {
       skipChmod.value = false;
+      process.umask(before);
+    }
+  });
+  it('restores the umask when listen fails', async () => {
+    const { base, queue } = await setup();
+    let deep = base;
+    while (join(deep, 'control.sock').length <= 120) {
+      deep = join(deep, 'd'.repeat(40));
+      await mkdir(deep, { mode: 0o700 });
+    }
+    const control = await SourceControl.open({ base: deep, queue, revision: 'a'.repeat(40) });
+    const before = process.umask(0o022);
+    try {
+      await expect(listenControlSocket(control)).rejects.toMatchObject({
+        code: expect.stringMatching(/^(?:ENAMETOOLONG|EINVAL)$/),
+      });
+      expect(process.umask()).toBe(0o022);
+    } finally {
       process.umask(before);
     }
   });
