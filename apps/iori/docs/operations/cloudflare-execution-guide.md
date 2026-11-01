@@ -6,15 +6,15 @@
 
 2026-09-06 の実行前調査で確認した状態です。再開時は再確認してください。この文書の更新によって設定・配備・移行が実施済みになるわけではありません。
 
-| 対象               | 確認結果                                                                                                       | 次の作業                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 実装               | [Draft PR #486](https://github.com/iwasa-kosui/monorepo/pull/486)。`e49ab0e` の CI は全4ジョブ成功             | 最新の PR head をレビューし、明示承認後に merge              |
-| SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                                 | source の詳細診断                                            |
-| Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                                     | 第4節の確認表を埋める                                        |
-| Cloudflare         | Dashboard とローカル Wrangler は未認証                                                                         | 第1節のログインと権限設定                                    |
-| GitHub Environment | 2026-10-31 の readback で `staging` と `production` はともに reviewer 1件、保護ブランチ方式。`main` は保護済み | 第2節の readback で再確認                                    |
-| Secrets            | 新 workflow の35参照名のうち31名が不足。既存名の存在は値・権限の適合を保証しない                               | 第3節の入力を Environment ごとに準備                         |
-| 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                                 | staging を使う場合だけ、staging の完了後に production を開始 |
+| 対象               | 確認結果                                                                                                                                                                                                                                                                                                                                              | 次の作業                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 実装               | [Draft PR #486](https://github.com/iwasa-kosui/monorepo/pull/486)。`e49ab0e` の CI は全4ジョブ成功                                                                                                                                                                                                                                                    | 最新の PR head をレビューし、明示承認後に merge                         |
+| SSH                | `microblog` への既存認証と厳密な host-key 検証で `true` が成功                                                                                                                                                                                                                                                                                        | source の詳細診断                                                       |
+| Source             | 稼働状態、SHA、固定 Node/pnpm、freeze marker、容量は未確認                                                                                                                                                                                                                                                                                            | 第4節の確認表を埋める                                                   |
+| Cloudflare         | Dashboard とローカル Wrangler は未認証                                                                                                                                                                                                                                                                                                                | 第1節のログインと権限設定                                               |
+| GitHub Environment | 2026-10-31 の readback で `staging` と `production` はともに reviewer 1件、保護ブランチ方式。`main` は保護済み                                                                                                                                                                                                                                        | 第2節の readback で再確認                                               |
+| Secrets            | 2026-11-01 の readback で、production では新 workflow の35参照名のうち10名が未登録です。未登録の名前は、`IORI_ADMISSION_IDENTITY`、`IORI_MIGRATION_REHEARSAL`、`IORI_TRANSFER_R2_*` の4名、`IORI_APPLICATION_R2_*` の4名です。`VAPID_*` の3名は repo レベルの secret から解決されます。staging は使いません。既存名の存在は値・権限の適合を保証しない | R2 は第3.1節の手順、identity は第3.3節、rehearsal profile は第5節で準備 |
+| 実移行             | source の停止・凍結、resource 作成、import、route 切替は未実施                                                                                                                                                                                                                                                                                        | staging を使う場合だけ、staging の完了後に production を開始            |
 
 事前調査で拒否された操作は、当時の GitHub 保護設定変更案、source 診断スクリプトのローカル作成、直接 HTTP 取得です。その後、ユーザーが保護ブランチ方式を選択しました。上表の Environment と `main` の行は、2026-10-31 の API 読み戻しを反映しています。今回エージェントが設定変更を実行したわけではありません。source 診断など未実行の操作は、許可された端末で実施し、拒否された操作を別ツールで迂回しません。
 
@@ -84,7 +84,7 @@ source deploy は対象 path の `main` push でも起動します。この保�
 ### 3.1 Backend と用途別 credential
 
 1. 移行用の Terraform state bucket を別途作成します。アプリ画像用・移行 bundle 用 bucket と共有せず、既存 state を移動しません。
-2. 新しい staging generation と run ID を選び、非公開の作業記録に固定します。generation は先頭が小文字英字の8〜20文字の小文字英数字、run ID は英数字・`_`・`-` の1〜80文字です。
+2. 新しい generation と run ID を選び、非公開の作業記録に固定します。generation は先頭が小文字英字の8〜20文字の小文字英数字、run ID は英数字・`_`・`-` の1〜80文字です。
 3. [infra の操作別権限表](../../infra/cloudflare/README.md#environment-references)に従い、5用途の Cloudflare API token と、state・transfer・application 各用途の読み書き用／読み取り専用 S3 credential を分けます。
 4. S3 credential は対象 bucket に限定します。新規 bucket は `prepare-target` が作るため、transfer の書き込み権限は未作成の予定名へ事前に限定する必要があります。Dashboard では既存の bucket しか選べないので、transfer の書き込み token は「[未作成の bucket に限定した R2 S3 credential の作成](#未作成の-bucket-に限定した-r2-s3-credential-の作成)」の手順で作ります。手動で target bucket を先に作ると fresh-generation 検査に失敗します。
 5. Account の `workers.dev` subdomain を Dashboard で確認し、未登録なら `prepare-target` より前に登録します。staging の Worker hostname は `iori-staging-<generation>.<登録済みsubdomain>.workers.dev`、production は同じ形で environment 部分を `production` にします。固定 Wrangler の非対話 deploy に初回登録を任せると、リソース作成後に失敗して部分 generation が残るため、hosted job では登録しません。[workers.dev の設定](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)を参照してください。
@@ -750,7 +750,7 @@ SSH の secret、receipt の鍵、`IORI_MIGRATION_REHEARSAL` は渡しません�
 - Worker は Terraform の管理外です。`apps/iori/infra/cloudflare/` に Worker を作る resource はありません。
 - [cutover runbook](./cloudflare-cutover-runbook.md)は、旧リソースの adoption、state move、destroy をこの hosted workflow の経路に含めないと定めています。
 
-リソースの削除手順は、レビューして明示承認を得るまで未整備です。作業者は、承認を得るまで使い捨て generation のリソースと state を保持します。手順の整備は、[再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)の後続タスクです。削除手順は [#500](https://github.com/iwasa-kosui/monorepo/issues/500) で整えます。
+リソースの削除手順は、レビューして明示承認を得るまで未整備です。作業者は、承認を得るまで使い捨て generation のリソースと state を保持します。削除手順は [#500](https://github.com/iwasa-kosui/monorepo/issues/500) で整えます。
 
 #### 実データへの到達経路
 
@@ -829,7 +829,7 @@ gh run view "$iori_actions_run_id" --repo "$iori_repo" \
 
 HTTP body や raw log を取得・公開せず、各 job の sanitized status を確認します。dispatch が成功しただけでは移行成功ではありません。失敗・timeout・結果不明なら、新しい操作や再実行を始める前に第7節へ進みます。
 
-staging が完了したら、production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
+staging を使う場合は、staging が完了してから、production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
 
 **OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への要求で生成します。Worker はこの要求で R2 の `og/<article-id>.png` を探し、あれば返します。無ければ、公開済みの記事に限り Worker が PNG を生成し、R2 の `og/<article-id>.png` に保存して返します。記事の公開時には生成しません。次の点に注意してください。
 
