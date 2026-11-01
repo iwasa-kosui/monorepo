@@ -24,7 +24,9 @@ export const directory = async () => {
 export const removeExecutorRoots = async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 };
-export const fixture = async (config: { extraImageUrl?: string } = {}) => {
+export const missingUploadId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+export const fixture = async (config: { extraImageUrl?: string; missingUpload?: boolean } = {}) => {
+  const missing = config.missingUpload ? 1 : 0;
   const root = await directory();
   const sourceRoot = await directory();
   const target = expectedTargetFixture();
@@ -84,6 +86,7 @@ export const fixture = async (config: { extraImageUrl?: string } = {}) => {
   if (config.extraImageUrl !== undefined) {
     insertImage.run('cccccccc-cccc-4ccc-8ccc-cccccccccccc', post, config.extraImageUrl, 1);
   }
+  if (missing) insertImage.run('dddddddd-dddd-4ddd-8ddd-dddddddddddd', post, `/uploads/${missingUploadId}.png`, 1);
   sourceDb.prepare(
     'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).run(article, actor, 'user', post, 'fixture article', 'published', 1);
@@ -106,20 +109,20 @@ export const fixture = async (config: { extraImageUrl?: string } = {}) => {
       table_bytes: 10000,
       upload_bytes: 17,
       rows: 5,
-      upload_count: 2,
+      upload_count: 2 + missing,
       upload_duplicate_count: 1,
-      upload_missing_count: 0,
+      upload_missing_count: missing,
       upload_owner_count: 0,
       upload_not_regular_count: 0,
       upload_too_large_count: 0,
       upload_access_count: 0,
       upload_other_count: 0,
       upload_ext_webp_count: 0,
-      upload_ext_png_count: 2,
+      upload_ext_png_count: 2 + missing,
       upload_ext_jpeg_count: 0,
       upload_ext_gif_count: 0,
       upload_failed_ext_webp_count: 0,
-      upload_failed_ext_png_count: 0,
+      upload_failed_ext_png_count: missing,
       upload_failed_ext_jpeg_count: 0,
       upload_failed_ext_gif_count: 0,
       article_count: 1,
@@ -192,6 +195,7 @@ export const fixture = async (config: { extraImageUrl?: string } = {}) => {
         complete: true,
         identity: state.identity,
         totalBytes: files.reduce((sum, f) => sum + f.bytes, 0),
+        missingUploadCount: missing,
         files,
       };
       return inventory;

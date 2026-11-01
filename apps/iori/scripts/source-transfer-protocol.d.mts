@@ -2,7 +2,14 @@ import type { z } from 'zod';
 export type SourceIdentity = Readonly<{ main_sha: string; run_id: string }>;
 export type SourceFile = Readonly<{ id: string; path: string; bytes: number; checksum: string }>;
 export type SourceInventory = Readonly<
-  { schemaVersion: 1; complete: true; identity: SourceIdentity; totalBytes: number; files: SourceFile[] }
+  {
+    schemaVersion: 1;
+    complete: true;
+    identity: SourceIdentity;
+    totalBytes: number;
+    missingUploadCount: number;
+    files: SourceFile[];
+  }
 >;
 export const SOURCE_LIMITS: Readonly<
   {
@@ -19,7 +26,10 @@ export const SOURCE_LIMITS: Readonly<
 export const SOURCE_REJECTION_DETAILS: readonly string[];
 export const SOURCE_SSH_REASONS: readonly string[];
 export const ESTIMATE_UPLOAD_FAILURE_REASONS: readonly string[];
-export function estimateUploadFailureReason(estimate: Readonly<Record<string, unknown>>): string | null;
+export function estimateUploadFailureReason(
+  estimate: Readonly<Record<string, unknown>>,
+  allowedMissingUploads?: number,
+): string | null;
 export const sourceIdentitySchema: z.ZodType<SourceIdentity>;
 export function logicalFilePath(id: string): string;
 export function validateSourceInventory(value: unknown): SourceInventory;

@@ -196,11 +196,18 @@ export const createManifestExpectedProvider = ({
     if (expectedUploads.uniqueCount > 0 && uploadManifestPath === undefined) {
       throw new Error('R2 upload manifest is required for exported post images.');
     }
-    const uploads = uploadManifestPath === undefined
-      ? []
-      : JSON.parse(await readFile(uploadManifestPath, 'utf8')).objects ?? [];
+    const uploadManifest = uploadManifestPath === undefined
+      ? { objects: [], omittedCount: 0 }
+      : JSON.parse(await readFile(uploadManifestPath, 'utf8'));
+    const uploads = uploadManifest.objects ?? [];
     if (!Array.isArray(uploads)) throw new Error('R2 upload manifest objects are invalid.');
-    if (uploads.length !== expectedUploads.uniqueCount) throw new Error('R2 upload manifest is incomplete.');
+    const omittedCount = uploadManifest.omittedCount;
+    if (!Number.isSafeInteger(omittedCount) || omittedCount < 0) {
+      throw new Error('R2 upload manifest omitted count is invalid.');
+    }
+    if (uploads.length + omittedCount !== expectedUploads.uniqueCount) {
+      throw new Error('R2 upload manifest is incomplete.');
+    }
     if (new Set(uploads.map((object) => object?.key)).size !== uploads.length) {
       throw new Error('R2 upload manifest contains duplicate keys.');
     }

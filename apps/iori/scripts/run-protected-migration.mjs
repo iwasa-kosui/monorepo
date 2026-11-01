@@ -244,7 +244,9 @@ const assertPhaseArtifactContent = (phase, name, body, contract, expectedTarget)
       artifact?.schemaVersion === 1 && artifact.complete === true
       && digestPattern.test(artifact.schemaChecksum) && artifact.tables !== null && typeof artifact.tables === 'object'
       && !Array.isArray(artifact.tables) && Array.isArray(artifact.files),
-    r2_import_manifest: () => artifact?.schemaVersion === 1 && Array.isArray(artifact.objects),
+    r2_import_manifest: () =>
+      artifact?.schemaVersion === 1 && Array.isArray(artifact.objects)
+      && Number.isSafeInteger(artifact.omittedCount) && artifact.omittedCount >= 0,
     ogp_import_manifest: () => Array.isArray(artifact?.objects),
   }[name];
   if (isGeneratedManifest === undefined) {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { METADATA_BYTES, OBJECT_BYTES } from './migration-file-stream.mjs';
-import { objectManifestEnvelope, serializeObjectEntry } from './migration-object-import.mjs';
+import { objectManifestEnvelope, objectManifestTrailer, serializeObjectEntry } from './migration-object-import.mjs';
 import { SOURCE_LIMITS } from './source-transfer-protocol.mjs';
 export const MIGRATION_DEADLINE_MS = 5 * 60 * 60_000 + 45 * 60_000;
 export const CLEANUP_MARGIN_MS = 15 * 60_000;
@@ -71,11 +71,13 @@ export const migrationBudget = (
   const ogpEntry = { articleId: uuid, key: `og/${uuid}.png`, contentType: 'image/png', checksum: digest };
   const uploadManifestBytes = bounded(
     Buffer.byteLength(objectManifestEnvelope('uploads'))
-      + e.upload_count * (Buffer.byteLength(serializeObjectEntry(uploadEntry)) + 1) + 3,
+      + e.upload_count * (Buffer.byteLength(serializeObjectEntry(uploadEntry)) + 1)
+      + Buffer.byteLength(objectManifestTrailer('uploads', e.upload_count)),
   );
   const ogpManifestBytes = bounded(
     Buffer.byteLength(objectManifestEnvelope('ogp'))
-      + e.article_count * (Buffer.byteLength(serializeObjectEntry(ogpEntry)) + 1) + 3,
+      + e.article_count * (Buffer.byteLength(serializeObjectEntry(ogpEntry)) + 1)
+      + Buffer.byteLength(objectManifestTrailer('ogp', 0)),
   );
   const d1ManifestBytes = bounded(
     32768

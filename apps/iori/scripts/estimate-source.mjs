@@ -13,6 +13,7 @@ import {
   SOURCE_SSH_REASONS,
   validateSourceEstimate,
 } from './source-transfer-protocol.mjs';
+import { allowedMissingUploads } from './workflow-context.mjs';
 
 const ESTIMATE_LINE_COUNTS = Object.freeze([
   'rows',
@@ -47,14 +48,14 @@ const capacityIsSufficient = (estimate, availableBytes) => {
     return false;
   }
 };
-export const estimateSource = async ({ source, availableBytes, signal }) => {
+export const estimateSource = async ({ source, availableBytes, signal, allowedMissingUploads = 0 }) => {
   const { source_revision: _revision, ...rest } = await source.estimate(signal);
   const estimate = validateSourceEstimate(rest);
   const sample = hasRehearsalSample(estimate) ? 'ok' : 'insufficient';
   const capacity = capacityIsSufficient(estimate, availableBytes) ? 'ok' : 'insufficient';
   const counts = ESTIMATE_LINE_COUNTS.map((field) => `${field}=${estimate[field]}`).join(' ');
   const line = `IORI_ESTIMATE ${counts} sample=${sample} capacity=${capacity}`;
-  const reason = estimateUploadFailureReason(estimate);
+  const reason = estimateUploadFailureReason(estimate, allowedMissingUploads);
   if (reason) {
     throw Object.assign(new Error('Source upload files could not be opened.'), {
       diagnostic: { reason },
@@ -75,6 +76,7 @@ export const estimateFromEnvironment = async (
   };
   const root = required('IORI_MIGRATION_ROOT');
   await assertExternalMigrationRoot(root);
+  const allowed = allowedMissingUploads(env);
   const source = await createSource({
     host: required('IORI_SOURCE_SSH_HOST'),
     user: required('IORI_SOURCE_SSH_USER'),
@@ -83,7 +85,12 @@ export const estimateFromEnvironment = async (
     mainSha: required('MAIN_SHA'),
     runId: `estimate_${required('GITHUB_RUN_ID')}`,
   });
-  return estimateSource({ source, availableBytes: await availableBytes(root), signal });
+  return estimateSource({
+    source,
+    availableBytes: await availableBytes(root),
+    signal,
+    allowedMissingUploads: allowed,
+  });
 };
 
 const failureReasons = new Set([...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS]);

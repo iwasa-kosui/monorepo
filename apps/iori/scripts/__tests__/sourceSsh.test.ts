@@ -91,6 +91,7 @@ it.each([
       complete: true,
       identity: { main_sha: options.mainSha, run_id: options.runId },
       totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
+      missingUploadCount: 0,
       files,
     };
     if (fault === 'inventory') files[0].path = '../../outside';

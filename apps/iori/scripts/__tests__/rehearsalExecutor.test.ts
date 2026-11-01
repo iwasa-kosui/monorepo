@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { executeProtectedMigration, executionReservationKey } from '../execute-protected-migration.mjs';
@@ -465,5 +465,62 @@ it('rejects tampered profiles, other keys, hash mismatches and a different main 
   ] as const;
   for (const [text, key, sha] of cases) {
     expect(() => verifyRehearsalEnvelope(text, key, sha)).toThrow('Rehearsal profile verification failed.');
+  }
+});
+it('measures a profile and resumes once when the allowed missing count matches the one missing upload', async () => {
+  const f = await fixture({ missingUpload: true });
+  const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    const result = await rehearseProtectedMigration({ ...rehearsalOptions(f), allowedMissingUploads: 1 });
+    expect(result.status).toBe('measured');
+    expect(f.source.resume).toHaveBeenCalledTimes(1);
+    expect([...f.objects.keys()].filter(key => key.startsWith('post-images/')).sort()).toEqual([
+      'post-images/33333333-3333-4333-8333-333333333333/original',
+      'post-images/55555555-5555-4555-8555-555555555555/original',
+    ]);
+    const manifest = JSON.parse(await readFile(join(f.options.root, 'objects/r2-import-manifest.json'), 'utf8'));
+    expect(manifest.omittedCount).toBe(1);
+    expect(write.mock.calls.map(call => String(call[0])).filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
+      'IORI_NOTICE stage=export-missing-uploads count=1\n',
+    ]);
+  } finally {
+    write.mockRestore();
+    f.close();
+  }
+}, 30000);
+it.each([undefined, 0, 2])(
+  'fails before marking, reserving or freezing when the allowed missing count is %s and one upload is missing',
+  async allowedMissingUploads => {
+    const f = await fixture({ missingUpload: true });
+    try {
+      await expect(rehearseProtectedMigration({ ...rehearsalOptions(f), allowedMissingUploads })).rejects.toThrow(
+        'Source upload files could not be opened.',
+      );
+      expect(f.source.freeze).not.toHaveBeenCalled();
+      expect(f.source.resume).not.toHaveBeenCalled();
+      expect(f.remote.has(rehearsalTargetKey(f.options.expectedTarget))).toBe(false);
+      expect(f.remote.has(executionReservationKey(f.options.expectedTarget))).toBe(false);
+    } finally {
+      f.close();
+    }
+  },
+);
+it('resumes the source and does not transfer when the exported missing count differs from the allowed count', async () => {
+  const f = await fixture({ missingUpload: true });
+  const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    const exportSource = f.source.export;
+    f.source.export = async () => ({ ...await exportSource(), missingUploadCount: 2 });
+    const restore = vi.fn(f.source.restore);
+    f.source.restore = restore;
+    await expect(rehearseProtectedMigration({ ...rehearsalOptions(f), allowedMissingUploads: 1 })).rejects.toThrow(
+      'Source missing upload count mismatch.',
+    );
+    expect(restore).not.toHaveBeenCalled();
+    expect(f.source.resume).toHaveBeenCalledTimes(1);
+    expect(f.objects.size).toBe(0);
+  } finally {
+    write.mockRestore();
+    f.close();
   }
 });

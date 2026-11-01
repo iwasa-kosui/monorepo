@@ -112,8 +112,9 @@ const UPLOAD_FAILURE_COUNTS = Object.freeze([
   ['estimate-upload-other', 'upload_other_count'],
 ]);
 export const ESTIMATE_UPLOAD_FAILURE_REASONS = Object.freeze(UPLOAD_FAILURE_COUNTS.map(([reason]) => reason));
-export const estimateUploadFailureReason = (estimate) =>
-  UPLOAD_FAILURE_COUNTS.find(([, field]) => estimate[field] > 0)?.[0] ?? null;
+export const estimateUploadFailureReason = (estimate, allowedMissingUploads = 0) =>
+  UPLOAD_FAILURE_COUNTS.find(([reason, field]) => reason !== 'estimate-upload-missing' && estimate[field] > 0)?.[0]
+    ?? (estimate.upload_missing_count !== allowedMissingUploads ? 'estimate-upload-missing' : null);
 const fileSchema = z.object({
   id: z.string().max(100),
   path: z.string().max(120),
@@ -125,6 +126,7 @@ const inventorySchema = z.object({
   complete: z.literal(true),
   identity: sourceIdentitySchema,
   totalBytes: z.number().int().nonnegative().max(SOURCE_LIMITS.totalBytes),
+  missingUploadCount: count,
   files: z.array(fileSchema).max(SOURCE_LIMITS.inventoryFiles),
 }).strict();
 export const logicalFilePath = (id) => {
@@ -140,6 +142,7 @@ export const validateSourceInventory = (value) => {
   const inventory = inventorySchema.parse(value);
   const ids = new Set();
   let total = 0;
+  let uploads = 0;
   for (const file of inventory.files) {
     if (
       ids.has(file.id) || logicalFilePath(file.id) !== file.path
@@ -147,9 +150,11 @@ export const validateSourceInventory = (value) => {
     ) throw new Error('Invalid source inventory.');
     ids.add(file.id);
     total += file.bytes;
+    if (file.id.startsWith('upload.')) uploads += 1;
   }
   if (
-    total !== inventory.totalBytes || !ids.has('manifest.export')
+    total !== inventory.totalBytes || uploads + inventory.missingUploadCount > SOURCE_LIMITS.inventoryFiles
+    || !ids.has('manifest.export')
     || APPLICATION_TABLE_ORDER.some((table) => !ids.has(`table.${table}`))
   ) throw new Error('Invalid source inventory.');
   return inventory;

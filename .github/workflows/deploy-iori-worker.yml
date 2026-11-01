@@ -47,6 +47,10 @@ on:
         description: Required for resume-source only (destination_writes_not_enabled or destination_writes_reconciled); leave empty otherwise
         required: false
         type: string
+      allowed_missing_uploads:
+        description: estimate-source の upload_missing_count と同じ値（0 または正の整数）。estimate-source・rehearse-migration・migrate-data だけで使い、ほかの操作では空にする
+        required: false
+        type: string
 
 concurrency:
   group: deploy-iori-worker-production
@@ -61,6 +65,7 @@ env:
   IORI_GENERATION: ${{ inputs.generation }}
   IORI_MIGRATION_RUN_ID: ${{ inputs.migration_run_id }}
   IORI_RECOVERY: ${{ inputs.recovery }}
+  IORI_ALLOWED_MISSING_UPLOADS: ${{ inputs.allowed_missing_uploads }}
   WRANGLER_SEND_METRICS: "false"
   AWS_EC2_METADATA_DISABLED: "true"
 

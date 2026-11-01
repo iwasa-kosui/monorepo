@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -388,3 +388,57 @@ it('exports remote rows without copying anything for them', async () => {
   const inventory = await snapshot.export(identity, new AbortController().signal);
   expect(inventory.files.filter((file) => file.id.startsWith('upload.'))).toEqual([]);
 });
+it('skips an upload whose file is missing, counts it once and records the count in the persisted inventory', async () => {
+  const [webp, other] = [spareId('e'), spareId('f')];
+  const { snapshot, base } = await setup([
+    rowFor(imageId, 'png'),
+    rowFor(webp, 'webp'),
+    rowFor(webp, 'webp'),
+    rowFor(other, 'jpg'),
+  ]);
+  const inventory = await snapshot.export(identity, new AbortController().signal);
+  expect(inventory.missingUploadCount).toBe(2);
+  expect(inventory.files.filter((file) => file.id.startsWith('upload.')).map((file) => file.id)).toEqual([
+    `upload.${imageId}.png`,
+  ]);
+  const uploads = await readdir(join(base, 'exports', `${identity.main_sha}-${identity.run_id}`, 'uploads'));
+  expect(uploads).toEqual([`${imageId}.png`]);
+  const reloaded = new SourceSnapshot({
+    base,
+    uploadDir: join(base, 'originals'),
+    origin,
+    createClient: async () => {
+      throw new Error('unused');
+    },
+  });
+  expect((await reloaded.inventory(identity)).missingUploadCount).toBe(2);
+});
+it('exports a zero missing count when every referenced upload exists', async () => {
+  const { snapshot } = await setup();
+  expect((await snapshot.export(identity, new AbortController().signal)).missingUploadCount).toBe(0);
+});
+it('fails to export an upload that is not a regular file even when another upload is missing', async () => {
+  const [webp, jpg] = [spareId('e'), spareId('f')];
+  const { snapshot, uploadDir } = await setup([rowFor(webp, 'webp'), rowFor(jpg, 'jpg')]);
+  await symlink(join(uploadDir, 'unreferenced.txt'), join(uploadDir, `${jpg}.jpg`));
+  await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow();
+  await expect(snapshot.inventory(identity)).rejects.toThrow();
+});
+it('fails to export an oversized upload even when another upload is missing', async () => {
+  const [webp, gif] = [spareId('e'), spareId('f')];
+  const { snapshot, uploadDir } = await setup([rowFor(webp, 'webp'), rowFor(gif, 'gif')]);
+  await writeFile(join(uploadDir, `${gif}.gif`), '');
+  await truncate(join(uploadDir, `${gif}.gif`), SOURCE_LIMITS.uploadBytes + 1);
+  await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow();
+  await expect(snapshot.inventory(identity)).rejects.toThrow();
+});
+it.skipIf(process.getuid?.() === 0)(
+  'fails to export an upload the process cannot open even when another is missing',
+  async () => {
+    const webp = spareId('e');
+    const { snapshot, uploadDir } = await setup([rowFor(webp, 'webp'), rowFor(imageId, 'png')]);
+    await chmod(join(uploadDir, `${imageId}.png`), 0o000);
+    await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow();
+    await expect(snapshot.inventory(identity)).rejects.toThrow();
+  },
+);

@@ -21,6 +21,7 @@ export type ExecutorOptions = {
   signal?: AbortSignal;
   deadlineMs?: number;
   maxSqlFileBytes?: number;
+  allowedMissingUploads?: number;
   availableBytes?(root: string): Promise<number | bigint>;
   readTarget(
     input: { expectedTarget: ExpectedTarget; record: PreparationRecord; signal: AbortSignal },

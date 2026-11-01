@@ -3,6 +3,14 @@ import { join } from 'node:path';
 
 const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-failed-source'];
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
+const allowedMissingOperations = ['estimate-source', 'rehearse-migration', 'migrate-data'];
+const allowedMissingPattern = /^(?:0|[1-9][0-9]{0,5})$/;
+export const allowedMissingUploads = (env) => {
+  const value = env.IORI_ALLOWED_MISSING_UPLOADS ?? '';
+  if (value === '') return 0;
+  if (!allowedMissingPattern.test(value)) throw new Error('Protected workflow invocation is invalid.');
+  return Number(value);
+};
 export const parseWorkflowInvocation = (env) => {
   const operation = env.IORI_OPERATION;
   if (['reconcile-resources', 'replace-queue-consumer'].includes(operation)) {
@@ -37,6 +45,9 @@ export const parseWorkflowInvocation = (env) => {
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
     || (!recoveryOperation && env.IORI_RECOVERY)
     || (['release-pending-freeze', 'restart-failed-source'].includes(operation) && env.IORI_RECOVERY)
+    || (allowedMissingOperations.includes(operation)
+      ? Boolean(env.IORI_ALLOWED_MISSING_UPLOADS) && !allowedMissingPattern.test(env.IORI_ALLOWED_MISSING_UPLOADS)
+      : Boolean(env.IORI_ALLOWED_MISSING_UPLOADS))
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({
     operation,

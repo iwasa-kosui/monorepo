@@ -4,6 +4,7 @@ export function estimateSource(
     source: Pick<Awaited<ReturnType<typeof createSourceSshAdapter>>, 'estimate'>;
     availableBytes: number | bigint;
     signal?: AbortSignal;
+    allowedMissingUploads?: number;
   },
 ): Promise<string>;
 export function estimateFailureLine(error: unknown): string;

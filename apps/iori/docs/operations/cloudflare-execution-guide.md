@@ -555,6 +555,7 @@ dispatch の入力は次のとおりです。
 - `environment` に `production` を指定する。`staging` も受け付けるが、旧環境は production だけにあるため、production で実行する
 - `generation` と `migration_run_id` は空にする。値を与えると workflow が拒否する
 - `migration_main_sha` は指定しない
+- `allowed_missing_uploads` は、欠けたファイルを許容するときだけ指定する。省略すると `0` として扱う。意味は[欠けたファイルを許容する](#欠けたファイルを許容する)に書く
 
 run ID は、`estimate-source` が `estimate_<GITHUB_RUN_ID>` の形で内部に作ります。
 
@@ -587,12 +588,48 @@ IORI_ESTIMATE rows=<n> upload_count=<n> upload_duplicate_count=<n> upload_missin
   - `other`: 上のどれにも当たらない。親ディレクトリの realpath の不一致や、開く前後の stat の食い違いを含みます
   - 1つのファイルが複数の原因に当たるときは、`owner`、`not-regular`、`too-large` の順で先に当たる原因として数えます。他ユーザー所有のシンボリックリンクは `owner` です
 - `upload_ext_webp_count`、`upload_ext_png_count`、`upload_ext_jpeg_count`、`upload_ext_gif_count` は、`upload_count` のファイルを拡張子別に数えた件数です。`jpg` は `jpeg` に数えます。`upload_failed_ext_webp_count` のように `failed` を含む項目は、開けなかったファイルを拡張子別に数えた件数です
-- 開けなかったファイルが 1 件でもあると、`estimate-source` は `IORI_ESTIMATE` の行を出した後で、`IORI_DIAG` の行を出して失敗します。`migrate-data` と `rehearse-migration` は freeze の前に失敗します。`IORI_DIAG` の `reason` は、件数が 1 以上の原因のうち、表の上にあるものです
+- 原因が `missing` 以外のファイルが 1 件でもあるか、`upload_missing_count` が `allowed_missing_uploads` と違うと、`estimate-source` は `IORI_ESTIMATE` の行を出した後で、`IORI_DIAG` の行を出して失敗します。`migrate-data` と `rehearse-migration` は freeze の前に失敗します。`allowed_missing_uploads` を省略すると `0` なので、`missing` が 1 件でもあれば失敗します。`IORI_DIAG` の `reason` は、`missing` 以外で件数が 1 以上の原因のうち、表の上にあるものです。`missing` 以外の原因が無く、数が合わないときの `reason` は `estimate-upload-missing` です
 - `sample` は、3つの件数がすべて 1 以上なら `ok` です。どれかが 0 なら `insufficient` で、`rehearse-migration` は freeze の前に失敗します
 - `capacity` は、source の空き容量、D1 の上限 10 GB (`10000000000` バイト)、runner の空き容量の3つの判定です。すべて足りれば `ok` です
 - bytes の値は出しません。容量は `ok` と `insufficient` の判定だけを出します
 
 `sample=ok` と `capacity=ok` の両方が出たことを確認してから、`rehearse-migration` を dispatch します。`insufficient` が出た場合は、`rehearse-migration` を dispatch しません。
+
+#### 欠けたファイルを許容する
+
+旧環境の `post_images` に、ファイルが存在しない行が残っている場合があります。作業者は、このファイルを移行から外すために `allowed_missing_uploads` を使います。
+
+入力の決まりは次のとおりです。
+
+- `allowed_missing_uploads` は、`estimate-source`、`rehearse-migration`、`migrate-data` の dispatch だけで使います。ほかの operation に値を入れると、workflow が拒否します。
+- 値は `0` か、先頭が `0` ではない 6 桁以内の整数です。この形に合わない値は、workflow が拒否します。省略するか空にすると、`0` として扱います。
+- 作業者は、直前の `estimate-source` が出した `upload_missing_count` と同じ値を入れます。`estimate-source` にも同じ値を入れると、`estimate-source` が成功します。
+- 許容できるのは、原因が `missing` のファイルだけです。`owner`、`not-regular`、`too-large`、`access`、`other` の件数が 1 以上のときは、値に関係なく失敗します。
+- 数えた欠けの数が `allowed_missing_uploads` と完全に一致したときだけ、処理が先へ進みます。欠けの数が多くても少なくても失敗します。
+
+欠けたファイルの扱いは次のとおりです。
+
+- 欠けたファイルは R2 に移りません。D1 の `post_images` の行は、ほかの行と同じようにそのまま移ります。
+- 切替後に、Worker は欠けたファイルの URL に 404 を返します。旧環境でもファイルが無く 404 を返していたので、利用者に見える状態は変わりません。
+- export の後に、runner は次の 1 行を公開ログに出します。出すのは数だけです。ファイル名は出しません。
+
+```text
+IORI_NOTICE stage=export-missing-uploads count=<n>
+```
+
+- `r2_import_manifest` に `omittedCount` を記録します。値は R2 に移さなかったファイルの数です。key は書きません。`verify-import` と `cutover-route` は、`objects` の数に `omittedCount` を足した値が、重複を除いた `/uploads/` のファイルの数と等しいことを検査します。この 2 つの operation は、署名済みの manifest を信頼するので、`allowed_missing_uploads` を入力に要りません。
+
+値が合わないときの失敗は、次の 3 か所で起きます。
+
+| 失敗する位置                           | 失敗の内容                                                                                                         | source の状態                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| freeze の前の estimate                 | `estimate-upload-missing` で失敗する。`rehearse-migration` は印も実行予約も書かず、`migrate-data` は予約を書かない | 凍結しない                                                                    |
+| freeze と drain の後の estimate        | 欠けの数が変わっていた場合に、export の前に失敗する。転送しない                                                    | `migrate-data` は凍結が残る。`rehearse-migration` は自分で resume を 1 回呼ぶ |
+| export の後、restore（転送）の前の検査 | export が数えた欠けの数が違う場合に、転送の前に失敗する                                                            | `migrate-data` は凍結が残る。`rehearse-migration` は自分で resume を 1 回呼ぶ |
+
+`migrate-data` は、freeze の後に失敗しても、resume を呼びません。作業者は、凍結と実行予約を残したまま、第7.1節の手順で復旧します。`rehearse-migration` が呼ぶ resume に失敗した場合は、5.2 節の「凍結が残る可能性がある」場合と同じ扱いになります。
+
+freeze の後の失敗の詳しい理由（`Source missing upload count mismatch.` など）は、公開ログに出ません。作業者は、公開ログの `IORI_NOTICE` の `count` と、`allowed_missing_uploads` に入れた値を見比べて、不一致を判断します。
 
 source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
 
@@ -616,24 +653,24 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 
 旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
 
-| `reason`                      | 失敗した段                                                                                                                                                  |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                            |
-| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                                        |
-| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                                          |
-| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                               |
-| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す            |
-| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                             |
-| `estimate-upload-open`        | estimate が開いたアップロードのファイルを閉じる処理など、原因別の6つの `reason` に当たらない段で失敗した                                                    |
-| `estimate-upload-missing`     | estimate が開けなかったアップロードのファイルのうち、ファイルがないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_missing_count` を見る           |
-| `estimate-upload-owner`       | estimate が開けなかったアップロードのファイルのうち、所有者が違うものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_owner_count` を見る               |
-| `estimate-upload-not-regular` | estimate が開けなかったアップロードのファイルのうち、通常のファイルでないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_not_regular_count` を見る |
-| `estimate-upload-too-large`   | estimate が開けなかったアップロードのファイルのうち、サイズが上限を超えるものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_too_large_count` を見る   |
-| `estimate-upload-access`      | estimate が開けなかったアップロードのファイルのうち、権限がないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_access_count` を見る                |
-| `estimate-upload-other`       | estimate が開けなかったアップロードのファイルのうち、上のどれにも当たらないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_other_count` を見る     |
-| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                                      |
-| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                              |
-| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                                      |
+| `reason`                      | 失敗した段                                                                                                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                                        |
+| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                                                    |
+| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                                                      |
+| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                                           |
+| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す                        |
+| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                                         |
+| `estimate-upload-open`        | estimate が開いたアップロードのファイルを閉じる処理など、原因別の6つの `reason` に当たらない段で失敗した                                                                |
+| `estimate-upload-missing`     | estimate が開けなかったアップロードのファイルのうち、ファイルがないものの件数が `allowed_missing_uploads` と違う。件数は IORI_ESTIMATE の `upload_missing_count` を見る |
+| `estimate-upload-owner`       | estimate が開けなかったアップロードのファイルのうち、所有者が違うものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_owner_count` を見る                           |
+| `estimate-upload-not-regular` | estimate が開けなかったアップロードのファイルのうち、通常のファイルでないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_not_regular_count` を見る             |
+| `estimate-upload-too-large`   | estimate が開けなかったアップロードのファイルのうち、サイズが上限を超えるものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_too_large_count` を見る               |
+| `estimate-upload-access`      | estimate が開けなかったアップロードのファイルのうち、権限がないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_access_count` を見る                            |
+| `estimate-upload-other`       | estimate が開けなかったアップロードのファイルのうち、上のどれにも当たらないものの件数が 1 以上ある。件数は IORI_ESTIMATE の `upload_other_count` を見る                 |
+| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                                                  |
+| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                                          |
+| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                                                  |
 
 `reason` が `estimate-upload-missing`、`estimate-upload-owner`、`estimate-upload-not-regular`、`estimate-upload-too-large`、`estimate-upload-access`、`estimate-upload-other` のときは、ssh の失敗ではないので、`IORI_DIAG` の行は `program=none exit=none signal=none` で出ます。
 
@@ -653,11 +690,11 @@ source の配備 workflow (`deploy-iori.yml`) は、`apps/iori/**`、`packages/*
 ### 5.2 rehearse-migration の処理
 
 1. `rehearse-migration` は、transfer R2 bucket が非公開であることを検査してから、準備記録を読み取ります。続けて、application R2 の uploads bucket が非公開であることを検査します。検査の対象は `domains/managed` と `domains/custom` です。bucket が公開されている場合、`rehearse-migration` は freeze の前に失敗します。その後、移行先の状態を読み取り、フォントを読み込みます。`migrate-data` も同じ順序で同じ検査をします。
-2. source の estimate を取得します。件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。
+2. source の estimate を取得します。件数の `rows`、`upload_count`、`article_count` のどれかが 0 の場合、`rehearse-migration` は freeze する前に失敗します。原因が `missing` 以外のファイルが 1 件でもある場合と、`upload_missing_count` が `allowed_missing_uploads` と違う場合も、freeze する前に失敗します。
 3. 容量を判定します。判定は `migrate-data` と同じです。時間の判定はしません。`d1_capacity_bytes` は Workers Paid の D1 上限である `10000000000` に固定します。
 4. 手順 1〜3 を通った後で、`prepared-target/v1/<environment>/<generation>/rehearsal.json` を書きます。
 5. `migrate-data` と同じ実行予約を書き、読み戻して確認します。
-6. `rehearse-migration` は本番の source を freeze し、drain を行います。drain の後に、手順 2 と 3 の判定をもう一度実行します。その後に export と restore を行い、restore が終わった直後に resume します。
+6. `rehearse-migration` は本番の source を freeze し、drain を行います。drain の後に、手順 2 と 3 の判定をもう一度実行します。その後に export を行います。export の後、restore の前に、export が数えた欠けの数が `allowed_missing_uploads` と一致することを検査します。一致しない場合は転送せずに失敗します。一致した場合は restore を行い、restore が終わった直後に resume します。
 7. 凍結を解除した後に、D1 import、R2/OGP import、検証を行います。
 
 手順 1〜3 で失敗した場合、`rehearse-migration` は `rehearsal.json` を書いていません。この場合は、同じ generation で `rehearse-migration` を再実行できます。手順 4 以降で失敗した場合は、同じ generation では再実行できません。
@@ -887,17 +924,19 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
   -f migration_run_id="$iori_migration_run_id"
 ```
 
-| 順序     | Operation                                                    | 次へ進む条件                                                                                                                                                        |
-| -------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 計測の前 | `estimate-source`（`generation` と `migration_run_id` は空） | 出力が `sample=ok` と `capacity=ok`。freeze はしない。手順は[第5.1節](#estimate-source-で事前に確認する)                                                            |
-| 計測1    | `prepare-target`（使い捨て generation）                      | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                                                   |
-| 計測2    | `rehearse-migration`（使い捨て generation）                  | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない                               |
-| 計測3    | profile 登録（ローカル操作。dispatch はしない）              | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                                                       |
-| 計測の後 | `purge-rehearsal-target`（使い捨て generation）              | job が成功し、D1 の全 table と application R2 の uploads bucket が空。リソースは残る。手順は[第5.5節](#55-使い捨て-generation-の後片付け)                           |
-| 1        | `prepare-target`（本番用 generation）                        | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功 |
-| 2        | `migrate-data`                                               | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功                                                          |
-| 3        | `verify-import`                                              | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                    |
-| 4        | `cutover-route`                                              | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                           |
+`rehearse-migration` と `migrate-data` を dispatch するときは、上のコマンドに `-f allowed_missing_uploads=<n>` を足します。`<n>` には、直前の `estimate-source` の `upload_missing_count` と同じ値を入れます。欠けたファイルが無ければ、足しません。意味と失敗の位置は[欠けたファイルを許容する](#欠けたファイルを許容する)に書きます。`rehearse-migration` と `migrate-data` のどちらも、`allowed_missing_uploads` を同じ入力から受け取ります。
+
+| 順序     | Operation                                                    | 次へ進む条件                                                                                                                                                                                              |
+| -------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 計測の前 | `estimate-source`（`generation` と `migration_run_id` は空） | 出力が `sample=ok` と `capacity=ok`。freeze はしない。欠けたファイルがある場合は `allowed_missing_uploads` に `upload_missing_count` と同じ値を入れる。手順は[第5.1節](#estimate-source-で事前に確認する) |
+| 計測1    | `prepare-target`（使い捨て generation）                      | 本番用 generation とは別の generation で、順序 1 と同じ条件が成功                                                                                                                                         |
+| 計測2    | `rehearse-migration`（使い捨て generation）                  | transfer bucket に envelope が保存され、source の凍結が解除されている。この run ID では `verify-import` と `cutover-route` は進まない。欠けたファイルがある場合は `allowed_missing_uploads` を指定する    |
+| 計測3    | profile 登録（ローカル操作。dispatch はしない）              | [第5.4節](#54-profile-の登録)の手順で `IORI_MIGRATION_REHEARSAL` を登録し、一時ファイルを削除                                                                                                             |
+| 計測の後 | `purge-rehearsal-target`（使い捨て generation）              | job が成功し、D1 の全 table と application R2 の uploads bucket が空。リソースは残る。手順は[第5.5節](#55-使い捨て-generation-の後片付け)                                                                 |
+| 1        | `prepare-target`（本番用 generation）                        | VAPID の検査（[VAPID 値の確認](#vapid-値の確認)）が成功、Fresh state、sealed Worker、route absent、Queue 配送停止、consumer と prepared record の実 readback が成功                                       |
+| 2        | `migrate-data`                                               | source/profile/容量を事前検査後、凍結・drain、全 import・照合、署名 bundle と complete marker の保存が成功。欠けたファイルがある場合は `allowed_missing_uploads` を指定する                               |
+| 3        | `verify-import`                                              | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                                                                                          |
+| 4        | `cutover-route`                                              | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功                                                                 |
 
 上の表の operation に加えて、旧環境（source）に書き込む operation が2つあります。
 
