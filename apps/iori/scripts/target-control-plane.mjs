@@ -276,6 +276,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
   const readQueuePause = async ({ queueId, paused }) => {
     if (!safeId(queueId) || typeof paused !== 'boolean') fail('state-mismatch');
     const queue = (await get(`${root}/queues/${queueId}`)).result;
+    if (queue === null || typeof queue !== 'object') fail('state-mismatch');
     if (queue.queue_id !== queueId || queue.queue_name !== identity.names.queue) fail('state-mismatch');
     if (queue.settings?.delivery_paused !== paused) {
       fail(paused === true && queue.settings?.delivery_paused === false ? 'queue-not-paused' : 'state-mismatch');

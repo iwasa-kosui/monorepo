@@ -369,6 +369,8 @@ it('reads the Queue pause state and reports an unpaused Queue as queue-not-pause
   await expect(fixtureApi(other).readQueuePause({ queueId: ids.queueId, paused: true })).rejects.toMatchObject(
     readbackFailure('state-mismatch'),
   );
+  await expect(fixtureApi({ '/queues/queue-id': null }).readQueuePause({ queueId: ids.queueId, paused: true }))
+    .rejects.toMatchObject(readbackFailure('state-mismatch'));
 });
 it('requires the expected paused consumer target and rejects unexpected producers', async () => {
   const responses = resourceResponses();
