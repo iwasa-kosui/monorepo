@@ -8,11 +8,27 @@ const identity = createTargetIdentity({
   accountId: 'a'.repeat(32),
   backendBucket: 'tf-state',
 });
+const r2Bucket = (name: string) => ({
+  name,
+  creation_date: '2026-10-01T00:00:00.000Z',
+  location: 'apac',
+  jurisdiction: 'default',
+  storage_class: 'Standard',
+});
+const r2Response = (buckets: unknown[], extra: Record<string, unknown> = {}) => ({
+  success: true,
+  errors: [],
+  messages: [],
+  result: { buckets },
+  ...extra,
+});
 // Exact documented pagination shapes: D1/KV omit total_pages; Queue includes it; R2 uses a cursor.
 const inventoryResponse = (url: URL) => {
   if (url.pathname.endsWith('/workers/scripts')) return { success: true, result: [] };
   if (url.pathname.endsWith('/r2/buckets')) {
-    return { success: true, result: { buckets: [] }, result_info: { per_page: 100 } };
+    return r2Response([r2Bucket('iori-tfstate'), r2Bucket('iori-uploads')], {
+      result_info: { cursor: '', per_page: 100 },
+    });
   }
   return {
     success: true,
@@ -180,6 +196,42 @@ it('classifies pagination beyond one complete page as limit', async () => {
       () => Response.json({ success: true, result: [], result_info: offsetInfo(0, { total_count: 3 }) }),
     ),
   ).rejects.toMatchObject(readbackFailure('d1-limit'));
+});
+const twoBuckets = () => [r2Bucket('iori-tfstate'), r2Bucket('iori-uploads')];
+it.each([
+  ['without result_info', undefined],
+  ['with total_count and per_page', { total_count: 2, per_page: 100 }],
+  ['with only an empty cursor', { cursor: '' }],
+])('accepts a complete R2 list %s', async (_label, info) => {
+  await expect(
+    failureFor('r2', () => Response.json(r2Response(twoBuckets(), info === undefined ? {} : { result_info: info }))),
+  ).resolves.toEqual({ fresh: true, resourceCount: 0 });
+});
+it.each([
+  [
+    'twenty buckets without result_info',
+    () => r2Response(Array.from({ length: 20 }, (_, index) => r2Bucket(`bucket-${index}`))),
+  ],
+  ['a total_count larger than the buckets', () => r2Response(twoBuckets(), { result_info: { total_count: 3 } })],
+  ['a next cursor', () => r2Response(twoBuckets(), { result_info: { cursor: 'next', per_page: 100 } })],
+])('classifies an R2 list with %s as limit', async (_label, body) => {
+  await expect(failureFor('r2', () => Response.json(body()))).rejects.toMatchObject(readbackFailure('r2-limit'));
+});
+it.each([
+  ['a null result_info', () => r2Response(twoBuckets(), { result_info: null })],
+  ['a string per_page', () => r2Response(twoBuckets(), { result_info: { per_page: '100' } })],
+  ['a negative total_count', () => r2Response(twoBuckets(), { result_info: { total_count: -1 } })],
+  ['a total_count smaller than the buckets', () => r2Response(twoBuckets(), { result_info: { total_count: 1 } })],
+  ['an array result', () => ({ success: true, result: [] })],
+])('classifies an R2 list with %s as shape', async (_label, body) => {
+  await expect(failureFor('r2', () => Response.json(body()))).rejects.toMatchObject(readbackFailure('r2-shape'));
+});
+it.each([
+  ['uploads', identity.names.uploads],
+  ['transfer', identity.names.transfer],
+])('classifies an existing R2 %s bucket as exists', async (_label, name) => {
+  await expect(failureFor('r2', () => Response.json(r2Response([r2Bucket(name)]))))
+    .rejects.toMatchObject(readbackFailure('r2-exists'));
 });
 it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])(
   'classifies a fetch exception for %s as request',

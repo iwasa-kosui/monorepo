@@ -57,25 +57,38 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     if (
       items.length >= 100 || body.result_info?.cursor || body.result.cursor || body.result.truncated === true
     ) failApi(path, 'limit');
-    if (pagination !== 'none') {
+    if (pagination === 'cursor') {
+      const info = body.result_info;
+      if (info !== undefined && (info === null || typeof info !== 'object' || Array.isArray(info))) {
+        failApi(path, 'shape');
+      }
+      const perPage = info?.per_page;
+      if (perPage !== undefined && (!Number.isInteger(perPage) || perPage < 1 || items.length > perPage)) {
+        failApi(path, 'shape');
+      }
+      // Without result_info the API may ignore per_page and stop at 20 buckets with no cursor (cloudflare/workers-sdk#15103).
+      if (items.length >= (perPage ?? 20)) failApi(path, 'limit');
+      const totalCount = info?.total_count;
+      if (totalCount !== undefined) {
+        if (!Number.isInteger(totalCount) || totalCount < 0) failApi(path, 'shape');
+        if (totalCount > items.length) failApi(path, 'limit');
+        if (totalCount !== items.length) failApi(path, 'shape');
+      }
+    } else if (pagination !== 'none') {
       const info = body.result_info;
       if (!info || !Number.isInteger(info.per_page) || info.per_page < 1 || items.length > info.per_page) {
         failApi(path, 'shape');
       }
-      if (pagination === 'cursor') {
-        if (items.length >= info.per_page) failApi(path, 'limit');
-      } else {
-        if (!Number.isInteger(info.total_count)) failApi(path, 'shape');
-        if (info.total_count > items.length) failApi(path, 'limit');
-        if (
-          info.total_count !== items.length || info.page !== 1
-          || (info.count !== undefined && info.count !== items.length)
-        ) failApi(path, 'shape');
-        // D1 and KV expose count/page/per_page/total_count; total_pages is Queue-specific.
-        if (pagination === 'queue') {
-          if (!Number.isInteger(info.total_pages) || info.total_pages < 0) failApi(path, 'shape');
-          if (info.total_pages > 1) failApi(path, 'limit');
-        }
+      if (!Number.isInteger(info.total_count)) failApi(path, 'shape');
+      if (info.total_count > items.length) failApi(path, 'limit');
+      if (
+        info.total_count !== items.length || info.page !== 1
+        || (info.count !== undefined && info.count !== items.length)
+      ) failApi(path, 'shape');
+      // D1 and KV expose count/page/per_page/total_count; total_pages is Queue-specific.
+      if (pagination === 'queue') {
+        if (!Number.isInteger(info.total_pages) || info.total_pages < 0) failApi(path, 'shape');
+        if (info.total_pages > 1) failApi(path, 'limit');
       }
     }
     return items;
