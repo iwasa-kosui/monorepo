@@ -419,7 +419,7 @@ const readyState = {
 const notReadyError = () => Object.assign(new Error('Source control is not ready.'), { retryable: true });
 const withStatus = (status: () => Promise<typeof readyState>) => ({
   ...diagnosticDependencies,
-  statusRetryTimeoutMs: 5000,
+  statusRetryTimeoutMs: 200,
   statusRetryIntervalMs: 5,
   sourceFactory: async () => ({ status }),
   runCommand: async () => ({ stdout: '', stderr: '' }),
@@ -428,10 +428,13 @@ it('retries the status stage while source control is not ready and then succeeds
   let calls = 0;
   await deploySource(
     diagnosticOptions,
-    withStatus(async () => {
-      if (++calls < 3) throw notReadyError();
-      return readyState;
-    }),
+    {
+      ...withStatus(async () => {
+        if (++calls < 3) throw notReadyError();
+        return readyState;
+      }),
+      statusRetryTimeoutMs: 5000,
+    },
   );
   expect(calls).toBe(3);
 });
@@ -440,13 +443,10 @@ it('fails with one not-ready diagnostic when source control stays not ready', as
   let calls = 0;
   await expect(deploySource(
     diagnosticOptions,
-    {
-      ...withStatus(async () => {
-        calls++;
-        throw notReadyError();
-      }),
-      statusRetryTimeoutMs: 200,
-    },
+    withStatus(async () => {
+      calls++;
+      throw notReadyError();
+    }),
   )).rejects.toThrow('Source control is not ready.');
   expect(calls).toBeGreaterThan(1);
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
