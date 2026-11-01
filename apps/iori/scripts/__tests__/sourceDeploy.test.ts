@@ -562,7 +562,7 @@ it('does not read the unit state when the deployment is aborted during the statu
       async () => {},
       unitCalls,
     ),
-    statusRetryTimeoutMs: 60_000,
+    statusRetryTimeoutMs: 120_000,
     statusRetryIntervalMs: 60_000,
     signal: abort.signal,
   });
