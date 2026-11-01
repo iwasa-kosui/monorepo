@@ -228,8 +228,8 @@ it('keeps restarting the source unit longer than the deployment status wait', as
     if (header) section = header[1];
     else if (line.trim() !== '') sections.set(section, `${sections.get(section) ?? ''}${line}\n`);
   }
-  expect(sections.get('Unit')).toMatch(/^StartLimitIntervalSec\s*=\s*600$/m);
-  expect(sections.get('Unit')).toMatch(/^StartLimitBurst\s*=\s*60$/m);
+  expect(sections.get('Unit')).toMatch(/^StartLimitIntervalSec\s*=\s*180$/m);
+  expect(sections.get('Unit')).toMatch(/^StartLimitBurst\s*=\s*30$/m);
   expect(sections.get('Service')).toMatch(/^RestartSec\s*=\s*5s$/m);
   expect(sections.get('Service')).toMatch(/^Restart\s*=\s*always$/m);
   expect(sections.get('Service')).not.toMatch(/StartLimit/);

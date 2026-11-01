@@ -1,7 +1,7 @@
 [Unit]
 Description           = microblog
-StartLimitIntervalSec = 600
-StartLimitBurst       = 60
+StartLimitIntervalSec = 180
+StartLimitBurst       = 30
 
 [Service]
 User       = ec2-user
