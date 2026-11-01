@@ -112,6 +112,7 @@ export class SourceControl {
       control.#frozen = control.#identity !== undefined;
     } catch {
       control.#invalidState = true;
+      control.#frozen = true;
     }
     if (!control.#frozen) queue.resume();
     return control;

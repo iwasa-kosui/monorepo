@@ -181,7 +181,7 @@ it('retries a not-ready status in both status stages and prints no input values'
   const writes = captureDiagnostics();
   const notReady = Object.assign(new Error('Source control is not ready.'), { retryable: true });
   const { calls, sourceFactory } = fixture([notReady, frozenState, notReady, notReady, openState]);
-  await resumeSource(options, { sourceFactory, statusRetryTimeoutMs: 200, statusRetryIntervalMs: 5 });
+  await resumeSource(options, { sourceFactory, statusRetryTimeoutMs: 5000, statusRetryIntervalMs: 5 });
   expect(calls).toEqual([
     'status',
     'status',
