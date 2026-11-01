@@ -16,7 +16,7 @@
 4. route が absent であり、`enable_production_worker_route=false` と `enable_staging_worker_route=false` の通常 plan では route が作られないことを確認します。切替では対象 environment に対応する一方の flag だけを有効にし、指定した hostname・zone・Worker を照合します。
 5. `$RUNNER_TEMP` 配下の export/import ディレクトリが repository 外で mode `0700`、各ファイルが mode `0600` であることを確認します。生成 config と一時入力を含め、失敗時も job 終了時に削除します。
 6. hosted runner からの Lightsail SSH、Cloudflare API、state・移行用 R2 への接続を検査します。信頼する SSH host key と credential は Environment から渡します。移行用 bucket は `r2.dev`、custom domain、アプリからの配信を無効にします。
-7. ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。計測の前に `estimate-source` で件数と容量の判定を確認し、計測の後に `purge-rehearsal-target` で使い捨て generation のデータを削除します。`rehearse-migration` が作る throughput profile を[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)の手順で登録し、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
+7. `estimate-source` を実行する前に、この節の末尾にある「blog.kosui.me の DNS を proxied にする」の手順 0 から 6 を済ませます。ツール導入後の空き容量とピーク使用量、各 job の所要時間をリハーサルで確認します。計測の前に `estimate-source` で件数と容量の判定を確認し、計測の後に `purge-rehearsal-target` で使い捨て generation のデータを削除します。`rehearse-migration` が作る throughput profile を[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)の手順で登録し、[データ移行手順](./cloudflare-data-migration.md)の source/runner/D1/metadata/time 上限を確認します。別の新しい runner で bundle を復元し、全データの再検証が成功することを確認します。容量不足や timeout が未解消なら本番の停止を開始しません。
 8. メンテナンス中は旧 SSH deploy による再起動を抑止し、停止から切替または承認された復旧まで書き込み停止を維持します。旧 workflow の削除は AWS retirement の承認後に行います。
 
 移行元は Node process を起動したまま、新規 HTTP の受付を止めます。受付済み HTTP の本文送信・キャンセル処理、enqueue、dequeue、handler transaction の完了と、遅延行を含む Queue の深さ `0` を確認して consumer を一時停止します。`systemd` の停止を drain の証拠にしません。レビュー済み build の SHA と指定 SHA が一致する private source control を使い、export は同じ排他制御の下で既存の DB/TLS 設定を利用します。
@@ -44,7 +44,7 @@ source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push �
 0. secret `IORI_SOURCE_SSH_HOST` の値が `blog.kosui.me` でないことを確かめます。`blog.kosui.me` を proxied にすると、旧環境への SSH が Cloudflare に向かいます。その結果、`Deploy iori Worker` workflow の `migrate-data`、`cutover-route` の gate、`resume-source` と、`Deploy iori` workflow が止まります。値が `blog.kosui.me` の場合は、旧環境の IP アドレスに替えます。あわせて `IORI_SOURCE_SSH_KNOWN_HOSTS` も、その IP アドレスの行に替えます。
 1. 現在の A レコードの TTL を確かめます。2026-11-02 時点の値は 60 秒です。
 2. Cloudflare の Edge Certificates で、Universal SSL が `blog.kosui.me` を含み、状態が Active であることを確かめます。
-3. SSL/TLS の暗号化モードを Full (strict) にします。Flexible は使いません。
+3. Configuration Rule で `blog.kosui.me` だけを Full (strict) にします。zone の SSL/TLS の暗号化モードは変えません。Flexible は使いません。
 4. Security の設定が、`/inbox` への POST と `/users/kosui` への GET を challenge にしないことを確かめます。対象は Bot Fight Mode、Security Level、WAF です。Bot Fight Mode は off にします。あわせて、旧 origin の証明書の期限を控えます。
 5. A レコードを proxied にし、Always Use HTTPS を on にします。
 6. 5〜10分後に次を確かめます。問題があれば、A レコードを DNS only に戻します。
@@ -53,7 +53,7 @@ source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push �
    - `/inbox` への POST が 2xx のまま返る。
    - 52x のエラーが出ない。
    - `estimate-source` が通る。
-7. これ以降は、`prepare-target`、`migrate-data`、`cutover-route` を従来どおり実行します。
+7. 手順 6 を終えたら、第1節の手順 7 に戻ります。`estimate-source` を含むリハーサルを実施した後に、`prepare-target`、`migrate-data`、`cutover-route` を従来どおり実行します。
 
 ## 2. Staging rehearsal（任意）
 
@@ -135,7 +135,7 @@ HTTP を有効にした後は移行先の受付と配送を止め、移行先で
 
 `cutover-route` が route を作った後に、公開先を旧環境へ戻す場合は、次の順に実施します。
 
-1. Cloudflare の Workers Routes から `blog.kosui.me/*` の route を削除します。DNS は proxied のままにします。
+1. Cloudflare の Workers Routes から `blog.kosui.me/*` の route を削除します。DNS は proxied のままにします。この削除は Cloudflare Dashboard で行う緊急の戻しです。第6節の「route rollback は production environment approval を必要とする」が指す操作とは別の操作です。
 2. Worker が `active` に達していた場合は、その generation の配送 Queue の delivery を pause します。
 3. Terraform の state は修正しません。その generation では `terraform apply` を実行しません。`infra/cloudflare/main.tf` の route resource は `prevent_destroy = true` を指定しています。やり直すときは、新しい generation を使います。
 4. `resume-source` で旧環境の凍結を解きます。入力 `recovery` には次の値を指定します。手順は[実行手順の第7.1節](./cloudflare-execution-guide.md#71-凍結が残った場合の復旧)に従います。
