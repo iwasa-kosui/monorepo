@@ -756,3 +756,51 @@ it('publishes the stage and reason of the real cutover-migration CLI that stops 
     await rm(directory, { recursive: true, force: true });
   }
 });
+it('relays the fixed-vocabulary operation detail and stage lines to the public log', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=resource-consumer-script',
+    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=state-mismatch',
+    'IORI_DIAG stage=rehearse-migration program=none exit=none signal=none reason=aborted',
+    'IORI_DIAG stage=migrate-data program=none exit=none signal=none reason=resource-queue-paused',
+    'IORI_DIAG stage=deploy-worker-before program=none exit=none signal=none reason=worker-route',
+    'IORI_DIAG stage=deploy-worker-deploy program=none exit=none signal=none reason=deploy-failed',
+    'IORI_DIAG stage=deploy-worker-after program=none exit=none signal=none reason=mismatch',
+    'IORI_DIAG stage=unclassified program=none exit=none signal=none reason=unclassified',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=resource_consumer_script',
+    'IORI_DIAG stage=Deploy-worker-after program=none exit=none signal=none reason=mismatch',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
+it.each([
+  ['restore-protected-migration.mjs', 'verify-import', 'verify-import'],
+  ['rehearse-protected-migration.mjs', 'rehearse-migration', 'rehearse-migration'],
+  ['execute-protected-migration.mjs', 'migrate-data', 'migrate-data'],
+  ['deploy-active-worker.mjs', 'deploy-worker-before', 'deploy-worker'],
+])('publishes the stage line of the real %s CLI that fails without configuration', async (script, stage, operation) => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const error = await executeHostedOperation(
+      'operation',
+      fileURLToPath(new URL(`../${script}`, import.meta.url)),
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      operation,
+    ).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=config-invalid\n`,
+      'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(failedMessage);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

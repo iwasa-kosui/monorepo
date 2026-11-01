@@ -18,6 +18,7 @@ export const updateActiveWorker = async (
     fetchRequest,
     runCommand,
     checkMain = assertReviewedMain,
+    onStage = () => {},
   },
 ) => {
   const target = parseExpectedTarget(expectedTarget);
@@ -32,7 +33,11 @@ export const updateActiveWorker = async (
   const ids = { d1Id: r.d1.id, kvId: r.kv.id, queueId: r.queue.id, dlqId: r.dlq.id, consumerAttached: true };
   const environment = { ...admissionEnvironment(target), IORI_ADMISSION_MODE: 'active' };
   const before = await control.readActiveResources(ids);
-  if (before.consumerId !== r.consumer.id) throw new Error('Active consumer mismatch.');
+  if (before.consumerId !== r.consumer.id) {
+    throw Object.assign(new Error('Active consumer mismatch.'), {
+      diagnostic: { reason: 'state-mismatch', details: ['resource-consumer-id'] },
+    });
+  }
   const previousVersion = await control.readCurrentVersion();
   const beforeWorker = await control.readActiveWorker({
     resources: before,
@@ -42,6 +47,7 @@ export const updateActiveWorker = async (
     routePresent: true,
   });
   await checkMain(currentCodeSha, { signal });
+  onStage('deploy-worker-deploy');
   const versionId = await deployReviewedWorkerVersion({
     identity,
     resources: before,
@@ -50,6 +56,7 @@ export const updateActiveWorker = async (
     signal,
     runCommand,
   });
+  onStage('deploy-worker-after');
   const after = await control.readActiveResources(ids);
   if (!isDeepStrictEqual(before, after)) throw new Error('Active Queue configuration changed; retain current state.');
   const afterWorker = await control.readActiveWorker({

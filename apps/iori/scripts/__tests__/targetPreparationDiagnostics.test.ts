@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 
+import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import {
   CONTROL_PLANE_APIS,
   controlPlaneApi,

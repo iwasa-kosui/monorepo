@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
+import { operationFailureLines } from '../operation-diagnostics.mjs';
 import { updateActiveWorker } from '../update-active-worker.mjs';
 
 const mocks = vi.hoisted(() => ({
@@ -88,3 +89,31 @@ it.each(['consumer', 'Queue', 'route', 'deploy'])(
     expect(mocks.deploy.mock.calls.length).toBeLessThanOrEqual(1);
   },
 );
+it.each([
+  ['the Queue read before deploy', 'deploy-worker-before'],
+  ['the Queue read after deploy', 'deploy-worker-after'],
+  ['the deploy itself', 'deploy-worker-deploy'],
+])('reports the stage for a failure in %s', async (failure, expected) => {
+  if (failure === 'the Queue read before deploy') mocks.read.mockRejectedValueOnce(new Error('read'));
+  if (failure === 'the Queue read after deploy') {
+    mocks.read.mockResolvedValueOnce(resource).mockRejectedValueOnce(new Error('read'));
+  }
+  if (failure === 'the deploy itself') mocks.deploy.mockRejectedValueOnce(new Error('uncertain'));
+  let stage = 'deploy-worker-before';
+  await expect(updateActiveWorker({ ...options(), onStage: next => (stage = next) })).rejects.toThrow();
+  expect(stage).toBe(expected);
+});
+it('does not require onStage', async () => {
+  await expect(updateActiveWorker(options())).resolves.toMatchObject({ versionId: 'next' });
+});
+it('prints resource-consumer-id and state-mismatch at deploy-worker-before for a consumer id that differs', async () => {
+  mocks.read.mockResolvedValueOnce({ ...resource, consumerId: 'other' });
+  let stage = 'deploy-worker-before';
+  const failure = await updateActiveWorker({ ...options(), onStage: next => (stage = next) }).catch(
+    (error: unknown) => error,
+  );
+  expect(failure).toHaveProperty('message', 'Active consumer mismatch.');
+  const line = (reason: string) => `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=${reason}`;
+  expect(stage).toBe('deploy-worker-before');
+  expect(operationFailureLines(stage, failure)).toEqual([line('resource-consumer-id'), line('state-mismatch')]);
+});
