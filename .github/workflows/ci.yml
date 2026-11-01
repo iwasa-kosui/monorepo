@@ -67,6 +67,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
+          terraform_version: "1.17.1"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -139,8 +140,20 @@ jobs:
       - name: Build
         run: pnpm --filter iori run build
 
+      - name: Generate Cloudflare provider schema
+        run: |
+          # backend.tf の s3 backend があると -backend=false でも providers schema が失敗するため、provider の定義だけを複製する
+          schema_dir="$RUNNER_TEMP/iori-provider-schema"
+          mkdir -p "$schema_dir"
+          cp apps/iori/infra/cloudflare/versions.tf apps/iori/infra/cloudflare/.terraform.lock.hcl "$schema_dir/"
+          terraform -chdir="$schema_dir" init -input=false
+          terraform -chdir="$schema_dir" providers schema -json > "$RUNNER_TEMP/iori-provider-schema.json"
+          test -s "$RUNNER_TEMP/iori-provider-schema.json"
+
       - name: Test
         run: pnpm --filter iori run test:ci --maxWorkers=1 --no-file-parallelism
+        env:
+          IORI_PROVIDER_SCHEMA_PATH: ${{ runner.temp }}/iori-provider-schema.json
 
       - name: Test on workerd
         run: pnpm --filter iori run test:workerd
