@@ -61,7 +61,7 @@ it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route']
     }
   },
 );
-it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
+it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'diagnose-source'])(
   'materializes only the source SSH files for %s',
   async operation => {
     const runnerTemp = await createFixtureDirectory('iori-hosted-');
@@ -69,7 +69,9 @@ it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
       const paths = await createWorkflowDirectory(runnerTemp);
       const mapped = await materializeHostedValues({
         ...baseEnv(operation),
-        IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
+        ...(operation === 'diagnose-source'
+          ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
+          : { IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) }),
         IORI_RECOVERY: operation === 'resume-source' ? 'destination_writes_reconciled' : '',
         RUNNER_TEMP: runnerTemp,
         IORI_PRIVATE_DIRECTORY: paths.base,
@@ -90,10 +92,15 @@ it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
 it('maps the recovery operations to their fixed scripts', async () => {
   const text = await readFile(new URL('../hosted-workflow.mjs', import.meta.url), 'utf8');
   for (
-    const [name, script] of [['resume-source', 'resume-source.mjs'], [
-      'release-pending-freeze',
-      'release-pending-freeze.mjs',
-    ], ['restart-failed-source', 'restart-failed-source.mjs']]
+    const [name, script] of [
+      ['resume-source', 'resume-source.mjs'],
+      [
+        'release-pending-freeze',
+        'release-pending-freeze.mjs',
+      ],
+      ['restart-failed-source', 'restart-failed-source.mjs'],
+      ['diagnose-source', 'diagnose-source.mjs'],
+    ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
     expect((await lstat(new URL(`../${script}`, import.meta.url))).isFile()).toBe(true);
@@ -359,6 +366,27 @@ it('relays only the exact restart-precheck notice to the public log', async () =
     'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 queue_failed=1 drained=10',
     'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 drained=0 queue_failed=1',
     'IORI_NOTICE stage=other ingress_frozen=1 consumer_paused=1 queue_failed=1 drained=0',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
+it('relays only the exact source-diagnose notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted =
+    `IORI_NOTICE stage=source-diagnose active=failed sub=auto-restart restarts=12 exit_status=1 journal=module-not-found freeze=0 freeze_pending=0 mem_available_mb=312 disk_free_mb=5120 source_revision=${
+      'a'.repeat(40)
+    }`;
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    `${accepted} `,
+    `${accepted}\r`,
+    accepted.replace('journal=module-not-found', 'journal=Error: Cannot find module /home/ec2-user/x'),
+    accepted.replace('active=failed', 'active=secret-host'),
+    accepted.replace(/source_revision=.*/, 'source_revision=/home/ec2-user/monorepo'),
+    accepted.replace(/source_revision=.*/, `source_revision=${'a'.repeat(39)}`),
+    accepted.replace('freeze=0', 'freeze=2'),
+    accepted.replace('stage=source-diagnose', 'stage=other'),
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });

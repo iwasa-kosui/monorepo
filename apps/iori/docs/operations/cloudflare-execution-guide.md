@@ -861,7 +861,7 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 - `resume-source`: 凍結が残った source の凍結を解きます。
 - `release-pending-freeze`: 凍結の前段階で残った `freeze.pending` を退避します。
 
-この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。この2つの dispatch は `migration_main_sha` を必要とし、`resume-source` は `recovery` も必要とするため、上の例は使わず、第7.1節の例に従います。
+この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。この2つの dispatch は `migration_main_sha` を必要とし、`resume-source` は `recovery` も必要とするため、上の例は使わず、第7.1節の例に従います。旧環境の状態を読み取るだけの `diagnose-source` は、旧環境に書き込まないため、この2つには含みません。手順は第7.2節に書きます。
 
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 
@@ -1101,3 +1101,51 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 退避の途中で失敗した場合は、`freeze.pending` と退避先の両方が同じファイルとして残ります。再実行すると、`release-pending-freeze` は microblog を停止して確かめ直してから、`freeze.pending` の側だけを取り除き、microblog を起動します。
 
 空の `freeze.pending` や書きかけの `freeze.pending` は、identity を確かめられないので、`release-pending-freeze` は `pending-freeze-invalid` で失敗します。この場合、作業者は承認を得て手作業で判断します。
+
+### 7.2 旧環境の状態を読み取る
+
+`diagnose-source` は、旧環境の状態を読み取って、結果を Actions ログへ1行で出す operation です。旧環境のコマンド出力は公開ログに出ないので、旧環境が 502 を返しても、原因の見当がつかない場合があります。作業者は、そのような場合に `diagnose-source` を使います。
+
+`diagnose-source` は読み取り専用です。microblog の stop、start、restart、旧環境へのファイルの書き込み、`freeze.json` と `freeze.pending` の操作を、`diagnose-source` は行いません。
+
+input は `main_sha`、`operation`、`environment` の3つです。`main_sha` には現在の main の SHA を指定します。ほかの operation と同じ検査が、`main_sha` に対して働きます。`migration_main_sha`、`generation`、`migration_run_id`、`recovery` は空にします。`generation`、`migration_run_id`、`recovery` を渡すと、workflow は権限を使う前に失敗します。
+
+```bash
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha='<現在の main の SHA>' \
+  -f operation=diagnose-source \
+  -f environment=production
+```
+
+job は `resume-source` と `release-pending-freeze` と同じ job で動きます。job が受け取る secret は、旧環境への SSH に使う4つだけです。production では Environment の承認が必要です。
+
+`diagnose-source` は、旧環境の node で読み取りの処理を実行して、Actions ログへ次の1行を出します。
+
+```text
+IORI_NOTICE stage=source-diagnose active=failed sub=auto-restart restarts=12 exit_status=1 journal=module-not-found freeze=0 freeze_pending=0 mem_available_mb=312 disk_free_mb=5120 source_revision=<40桁の16進>
+```
+
+| 項目               | 値                                                                                                                                                                                   | 意味                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `active`           | `active`、`inactive`、`failed`、`activating`、`deactivating`、`reloading`、`maintenance`、`refreshing`、`other`                                                                      | `systemctl show microblog` の `ActiveState`。上の語彙に無い値は `other`                       |
+| `sub`              | `running`、`dead`、`exited`、`failed`、`auto-restart`、`start`、`stop` など systemd の既知の値と `other`                                                                             | `systemctl show microblog` の `SubState`。語彙に無い値は `other`                              |
+| `restarts`         | 0 から 999999 の整数                                                                                                                                                                 | `NRestarts`。上限を超える値は 999999 にします                                                 |
+| `exit_status`      | 0 から 255 の整数                                                                                                                                                                    | `ExecMainStatus`。上限を超える値は 255 にします                                               |
+| `journal`          | `none`、`module-not-found`、`syntax-error`、`env-invalid`、`port-in-use`、`out-of-memory`、`permission-denied`、`database-unavailable`、`uncaught-exception`、`other`、`unavailable` | 直近 200 行の journal の分類。後ろの行ほど優先します。`none` は失敗の兆候が無いことを示します |
+| `freeze`           | 0 または 1                                                                                                                                                                           | `~/.iori-migration/freeze.json` の有無                                                        |
+| `freeze_pending`   | 0 または 1                                                                                                                                                                           | `~/.iori-migration/freeze.pending` の有無                                                     |
+| `mem_available_mb` | 整数（MB）                                                                                                                                                                           | `/proc/meminfo` の `MemAvailable`                                                             |
+| `disk_free_mb`     | 整数（MB）                                                                                                                                                                           | home があるファイルシステムの空き                                                             |
+| `source_revision`  | 40桁の16進、または `unknown`                                                                                                                                                         | 配置済みの `dist/index.js` に焼き込まれた revision。1つに決まらない場合は `unknown`           |
+
+journal の生の行、パス、ホスト名、秘密値は、公開ログにも private ログにも出ません。旧環境側の処理が journal を読んで分類だけを返し、生の行は旧環境の外に出ません。
+
+journal の読み取りは、次の順に試します。`diagnose-source` は、新しい sudoers の設定を前提にしません。
+
+1. `sudo -n -l` で、`journalctl -u microblog -n 200 --no-pager -o cat` が許可されているかを確かめます。許可されていれば、`sudo -n` でそのコマンドを実行します。
+2. 許可されていない場合、または sudo での実行に失敗した場合は、sudo なしで同じコマンドを実行します。
+3. どちらも読めない場合、または journalctl が権限不足を報告した場合は、`journal=unavailable` を出します。この場合も、operation は成功します。
+
+`diagnose-source` の成功の条件は、値を集めて1行を出せたことです。microblog が `failed` でも、operation は成功します。旧環境へ接続できない場合や、`systemctl show` を読めない場合は失敗し、`IORI_DIAG` の行に `stage` と `reason` が出ます。`reason=diagnostic-invalid` は、旧環境で読んだ値が想定の形ではなかったことを示します。
+
+`source_revision` は、dist の中の40桁の16進の文字列が1つだけのときに限って値になります。この読み方は、dist を最後にビルドしたときの revision を示します。実行中のプロセスが返す `source_revision` とは別の経路です。

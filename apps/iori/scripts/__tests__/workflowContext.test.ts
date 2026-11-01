@@ -159,10 +159,10 @@ it('accepts the purge operation and lets its migration SHA differ from the code 
   expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_RUN_ID: '' })).toThrow();
   expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: 'Upper_Case' })).toThrow();
 });
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'estimate-source'])(
+it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'estimate-source', 'diagnose-source'])(
   'still requires the code SHA and migration SHA to match for %s',
   operation => {
-    const given = operation === 'estimate-source'
+    const given = ['estimate-source', 'diagnose-source'].includes(operation)
       ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
       : {};
     const invocation = { ...env, ...given, IORI_OPERATION: operation };
@@ -172,10 +172,15 @@ it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route',
     );
   },
 );
-it.each([undefined, ''])('accepts the estimate operation only without generation and run ID (%s)', empty => {
-  const estimate = { ...env, IORI_OPERATION: 'estimate-source', IORI_GENERATION: empty, IORI_MIGRATION_RUN_ID: empty };
+it.each([
+  ['estimate-source', undefined],
+  ['estimate-source', ''],
+  ['diagnose-source', undefined],
+  ['diagnose-source', ''],
+])('accepts %s only without generation and run ID (%s)', (operation, empty) => {
+  const estimate = { ...env, IORI_OPERATION: operation, IORI_GENERATION: empty, IORI_MIGRATION_RUN_ID: empty };
   expect(parseWorkflowInvocation(estimate)).toMatchObject({
-    operation: 'estimate-source',
+    operation,
     codeSha: env.MAIN_SHA,
     migrationSha: env.MAIN_SHA,
   });
@@ -194,6 +199,18 @@ it.each([undefined, ''])('accepts the estimate operation only without generation
   ).toThrow('Protected workflow invocation is invalid.');
   expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
   expect(() => parseWorkflowInvocation({ ...estimate, GITHUB_REF: 'refs/heads/feature' })).toThrow();
+});
+it('rejects diagnose-source with a recovery value, a stale main SHA or an unknown environment', () => {
+  const diagnose = { ...env, IORI_OPERATION: 'diagnose-source', IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' };
+  expect(() => parseWorkflowInvocation({ ...diagnose, IORI_RECOVERY: 'destination_writes_reconciled' })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+  expect(() => parseWorkflowInvocation({ ...diagnose, GITHUB_SHA: 'b'.repeat(40) })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+  expect(() => parseWorkflowInvocation({ ...diagnose, IORI_ENVIRONMENT: 'development' })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
 });
 it.each([
   'prepare-target',

@@ -121,7 +121,7 @@ it('runs the source recovery operations in one approved job holding only the sou
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const job = workflow.jobs['recover-source'];
   expect(job.if).toBe(
-    'inputs.operation == \'resume-source\' || inputs.operation == \'release-pending-freeze\' || inputs.operation == \'restart-failed-source\'',
+    'inputs.operation == \'resume-source\' || inputs.operation == \'release-pending-freeze\' || inputs.operation == \'restart-failed-source\' || inputs.operation == \'diagnose-source\'',
   );
   expect([job.needs].flat()).toEqual(['public-artifact-gate']);
   expect(job.environment).toBe('${{ inputs.environment }}');
@@ -145,7 +145,7 @@ it('exposes the recovery operations and inputs without a default recovery value'
   };
   const inputs = workflow.on.workflow_dispatch.inputs;
   expect(inputs.operation.options).toEqual(
-    expect.arrayContaining(['resume-source', 'release-pending-freeze', 'restart-failed-source']),
+    expect.arrayContaining(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'diagnose-source']),
   );
   expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
   expect(inputs.recovery.default).toBeUndefined();

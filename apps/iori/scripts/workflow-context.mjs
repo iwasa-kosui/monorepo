@@ -23,11 +23,12 @@ export const parseWorkflowInvocation = (env) => {
       'cutover-route',
       'deploy-worker',
       'estimate-source',
+      'diagnose-source',
       'purge-rehearsal-target',
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (operation === 'estimate-source'
+    || (['estimate-source', 'diagnose-source'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
         || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? ''))

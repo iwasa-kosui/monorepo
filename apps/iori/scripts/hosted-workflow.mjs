@@ -6,6 +6,7 @@ import { removePrivateWorkflowDirectory } from './cleanup-private-workflow-direc
 import { withCliSignal } from './cli-lifetime.mjs';
 import { runMigrationCommand } from './migration-command.mjs';
 import { createPrivateCommandLog } from './private-command-log.mjs';
+import { sourceDiagnoseNoticeLine } from './source-diagnose-remote.mjs';
 import {
   createWorkflowDirectory,
   parseWorkflowInvocation,
@@ -27,6 +28,7 @@ const operations = Object.freeze({
   'resume-source': 'resume-source.mjs',
   'release-pending-freeze': 'release-pending-freeze.mjs',
   'restart-failed-source': 'restart-failed-source.mjs',
+  'diagnose-source': 'diagnose-source.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -92,6 +94,7 @@ export const materializeHostedValues = async env => {
       'resume-source',
       'release-pending-freeze',
       'restart-failed-source',
+      'diagnose-source',
     ].includes(operation)
   ) {
     await put(
@@ -169,6 +172,7 @@ const writeDiagnosticLine = async line => {
       !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !estimateLine.test(line) && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
+      && !sourceDiagnoseNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
