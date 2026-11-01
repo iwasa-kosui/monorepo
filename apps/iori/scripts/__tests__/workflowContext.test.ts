@@ -58,14 +58,17 @@ it.each([undefined, '', 'destination_writes_not_enabled ', 'Destination_writes_r
     );
   },
 );
-it.each(['resume-source', 'release-pending-freeze'])('requires a 40 digit hex migration SHA for %s', (operation) => {
-  const recovery = operation === 'resume-source' ? 'destination_writes_reconciled' : undefined;
-  const valid = recoveryEnv(operation, recovery);
-  expect(parseWorkflowInvocation(valid)).toMatchObject({ migrationSha: frozenSha });
-  for (const sha of [undefined, '', 'b'.repeat(39), 'B'.repeat(40), `${'b'.repeat(39)}g`, `${frozenSha}0`]) {
-    expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_MAIN_SHA: sha })).toThrow();
-  }
-});
+it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
+  'requires a 40 digit hex migration SHA for %s',
+  (operation) => {
+    const recovery = operation === 'resume-source' ? 'destination_writes_reconciled' : undefined;
+    const valid = recoveryEnv(operation, recovery);
+    expect(parseWorkflowInvocation(valid)).toMatchObject({ migrationSha: frozenSha });
+    for (const sha of [undefined, '', 'b'.repeat(39), 'B'.repeat(40), `${'b'.repeat(39)}g`, `${frozenSha}0`]) {
+      expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_MAIN_SHA: sha })).toThrow();
+    }
+  },
+);
 it('accepts release-pending-freeze only without recovery and with a different migration SHA', () => {
   expect(parseWorkflowInvocation(recoveryEnv('release-pending-freeze'))).toMatchObject({
     operation: 'release-pending-freeze',
@@ -79,13 +82,29 @@ it('accepts release-pending-freeze only without recovery and with a different mi
     );
   }
 });
-it.each(['resume-source', 'release-pending-freeze'])('keeps the common checks for %s', (operation) => {
-  const valid = recoveryEnv(operation, operation === 'resume-source' ? 'destination_writes_reconciled' : undefined);
-  expect(() => parseWorkflowInvocation({ ...valid, GITHUB_REF: 'refs/heads/feature' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...valid, GITHUB_EVENT_NAME: 'push' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_RUN_ID: '../bad' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_RUN_ID: '' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...valid, IORI_ENVIRONMENT: 'development' })).toThrow();
+it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
+  'keeps the common checks for %s',
+  (operation) => {
+    const valid = recoveryEnv(operation, operation === 'resume-source' ? 'destination_writes_reconciled' : undefined);
+    expect(() => parseWorkflowInvocation({ ...valid, GITHUB_REF: 'refs/heads/feature' })).toThrow();
+    expect(() => parseWorkflowInvocation({ ...valid, GITHUB_EVENT_NAME: 'push' })).toThrow();
+    expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_RUN_ID: '../bad' })).toThrow();
+    expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_RUN_ID: '' })).toThrow();
+    expect(() => parseWorkflowInvocation({ ...valid, IORI_ENVIRONMENT: 'development' })).toThrow();
+  },
+);
+it('accepts restart-failed-source only without recovery and with a different migration SHA', () => {
+  expect(parseWorkflowInvocation(recoveryEnv('restart-failed-source'))).toMatchObject({
+    operation: 'restart-failed-source',
+    codeSha: env.MAIN_SHA,
+    migrationSha: frozenSha,
+  });
+  expect(parseWorkflowInvocation(recoveryEnv('restart-failed-source', ''))).toMatchObject({ migrationSha: frozenSha });
+  for (const recovery of ['destination_writes_not_enabled', 'destination_writes_reconciled', 'x']) {
+    expect(() => parseWorkflowInvocation(recoveryEnv('restart-failed-source', recovery))).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
 });
 it.each(['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker'])(
   'rejects a non-empty IORI_RECOVERY for %s',

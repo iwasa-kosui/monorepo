@@ -27,6 +27,7 @@ const operations = Object.freeze({
   source: 'deploy-source.mjs',
   'resume-source': 'resume-source.mjs',
   'release-pending-freeze': 'release-pending-freeze.mjs',
+  'restart-failed-source': 'restart-failed-source.mjs',
   'diagnose-source': 'diagnose-source.mjs',
 });
 const sourceInvocation = (env) => {
@@ -92,6 +93,7 @@ export const materializeHostedValues = async env => {
       'estimate-source',
       'resume-source',
       'release-pending-freeze',
+      'restart-failed-source',
       'diagnose-source',
     ].includes(operation)
   ) {
@@ -136,6 +138,9 @@ const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mo
 const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
 const alreadyRenamedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
 const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
+const restartPrecheckNoticeLine =
+  /^IORI_NOTICE stage=restart-precheck ingress_frozen=[01] consumer_paused=[01] queue_failed=[01] drained=[01]$/;
+const restartNoticeLine = /^IORI_NOTICE stage=restart-failed-source (?:recorded|stopped|started)=1$/;
 const estimateLine =
   /^IORI_ESTIMATE rows=(?:0|[1-9]\d{0,15}) upload_count=(?:0|[1-9]\d{0,15}) article_count=(?:0|[1-9]\d{0,15}) sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$/;
 const hostedReasons = [
@@ -166,7 +171,8 @@ const writeDiagnosticLine = async line => {
     if (
       !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
-      && !estimateLine.test(line) && !sourceDiagnoseNoticeLine.test(line)
+      && !estimateLine.test(line) && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
+      && !sourceDiagnoseNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

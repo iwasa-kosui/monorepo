@@ -913,6 +913,8 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 ### 7.1 凍結が残った場合の復旧
 
+凍結の前に失敗した場合、作業者は Deploy iori を同じ SHA で再実行します。
+
 凍結が残る状態は2つあります。
 
 - `~/.iori-migration/freeze.json` が残り、source が凍結したままの状態です。
@@ -920,7 +922,7 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 `freeze.pending` は rename の前の状態です。このため、凍結はまだ成立しておらず、export も始まっていません。
 
-旧環境への操作は、`resume-source` と `release-pending-freeze` の2つの operation からだけ行います。作業者は旧環境に直接入って `freeze.json` や `freeze.pending` を消しません。
+旧環境への操作は、`resume-source`、`release-pending-freeze`、`restart-failed-source` の3つの operation からだけ行います。作業者は旧環境に直接入って `freeze.json` や `freeze.pending` を消しません。
 
 #### `freeze.json` が残った場合
 
@@ -962,7 +964,7 @@ source 側の処理が終わった状態を、source は idle と呼びます。
 - `dequeue_work`: 0
 - `enqueue_work`: 0
 
-`queue_failed` が true の場合、source は resume を拒否します。`resume-source` は、`queue_failed` が true の場合、resume を送らずに `reason=source-queue-failed` で失敗します。
+`queue_failed` が true の場合、source は resume を拒否します。`resume-source` は、`queue_failed` が true の場合、resume を送らずに `reason=source-queue-failed` で失敗します。この場合、作業者は `restart-failed-source` で microblog を再起動してから、`resume-source` をやり直します。手順は[`queue_failed` で resume できない場合](#queue_failed-で-resume-できない場合)に書きます。
 
 次の項目は、source 側の処理が終わった証拠として使いません。
 
@@ -975,17 +977,81 @@ export、inventory、transfer などの control コマンドが実行中の間�
 `resume-source` は、次の3つの場合に resume を送らずに失敗します。
 
 - export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は、status が拒否されると `stage=resume-precheck` で失敗します。拒否の理由が control コマンドの実行中であれば `reason=source-not-idle` になります。それ以外の理由で拒否された場合は `reason=source-operation-failed` になります。
-- status が値を返し、`queue_failed` が true の場合、`resume-source` は `stage=resume-precheck` で `reason=source-queue-failed` として失敗します。
+- status が値を返し、`queue_failed` が true の場合、`resume-source` は `stage=resume-precheck` で `reason=source-queue-failed` として失敗します。作業者は `restart-failed-source` で再起動してから、`resume-source` をやり直します。
 - status が値を返し、`queue_failed` が false で、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でない場合、`resume-source` は `stage=resume-precheck` で `reason=source-not-idle` として失敗します。
 
 `resume-source` は idle になるまで待つ処理を持ちません。失敗した場合、作業者は次のとおり対応します。
 
-- `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。この失敗は、この PR の operation の範囲外です。復旧の経路はまだ決まっていません。作業者は旧環境に直接入らず、管理役に判断を仰ぎます。
+- `queue_failed` が true で `reason=source-queue-failed` の場合、`resume-source` では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。作業者は `restart-failed-source` を dispatch して microblog を再起動し、成功を確認してから `resume-source` をやり直します。手順は次の節に書きます。
 - `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。revision の不一致、identity の不一致、ssh の失敗が、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
 - `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。export などの control コマンドが実行中で、source が status か resume を拒否した場合も、この reason になります。作業者は時間を置いて再実行します。
 - resume が source 側で成功したのに応答が届かなかった場合、`resume-source` は失敗として報告します。再実行すると `reason=source-not-frozen` で失敗します。`source-not-frozen` は、凍結がすでに解除済みである可能性を示します。作業者は status か本番の応答で、凍結が解けていることを確かめます。
 
 rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-not-idle` で失敗します。export などの control コマンドが実行中の場合も、control コマンドは終わっていて HTTP や queue の処理が残っている場合も、reason は同じです。どちらの場合も、作業者は上の対応に従います。
+
+#### `queue_failed` で resume できない場合
+
+`resume-source` が `reason=source-queue-failed` で失敗した場合、作業者は `restart-failed-source` を dispatch します。この operation は microblog を停止して起動し直します。
+
+`restart-failed-source` は、次の3つの前提がそろわないと、旧環境を変えずに失敗します。
+
+- `freeze.json` があります。
+- `freeze.pending` がありません。
+- status の `queue_failed` が true です。
+
+`queue_failed` は microblog を再起動するまで true のまま残ります。このため、`restart-failed-source` は旧環境側で `queue_failed` を確かめ直しません。
+
+input は `main_sha`、`migration_main_sha`、`migration_run_id` です。`environment` と `generation` には、凍結した run と同じ値を入れます。`recovery` は渡しません。渡すとエラーになります。
+
+```bash
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha='<現在の main の SHA>' \
+  -f migration_main_sha='<凍結した run の main_sha>' \
+  -f operation=restart-failed-source \
+  -f environment='<凍結した run の environment>' \
+  -f generation='<凍結した run の generation>' \
+  -f migration_run_id='<凍結した run の run_id>'
+```
+
+`restart-failed-source` は次の順に動きます。
+
+1. status を読み、次の4項目を Actions ログに出します。この行は microblog を触る前の状態を示します。
+   `IORI_NOTICE stage=restart-precheck ingress_frozen=<0|1> consumer_paused=<0|1> queue_failed=<0|1> drained=<0|1>`
+2. 旧環境で `freeze.json` と再起動の記録を確かめ、sudo の許可を事前に検査します。条件を満たさなければ、記録を書かず microblog も停止せずに失敗します。
+3. 再起動の記録を `~/.iori-migration/queue-failed-restart.json` に書きます。書き終えると `IORI_NOTICE stage=restart-failed-source recorded=1` を出します。
+4. microblog を停止します。停止を確かめると `IORI_NOTICE stage=restart-failed-source stopped=1` を出します。
+5. microblog を起動します。起動すると `IORI_NOTICE stage=restart-failed-source started=1` を出します。
+6. status が応答するまで、約2分を上限に待ちます。応答した status が次の4つの条件をすべて満たすかを確かめます。
+   - `ingress_frozen` が true です。
+   - `consumer_paused` が true です。
+   - `queue_failed` が false です。
+   - identity が input と一致します。
+
+`restart-failed-source` は `freeze.json` を消しません。resume も自動では送りません。作業者は手順 6 の成功を Actions ログで確認してから、`freeze.json` が残った場合の手順で `resume-source` を dispatch します。
+
+失敗した場合、作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。`reason` ごとに、作業者は次のとおり対応します。
+
+- `source-queue-not-failed` の場合（`stage=restart-precheck`）、status の `queue_failed` が false です。再起動する対象ではありません。作業者は `resume-source` を dispatch します。
+- `freeze-not-committed` の場合、`freeze.json` がありません。凍結はまだ成立していません。作業者は旧環境に入らず、管理役に判断を戻します。
+- `freeze-invalid` の場合、`freeze.json` が読めないか、形式が正しくありません。作業者は旧環境に入らず、管理役に判断を戻します。
+- `pending-freeze-present` の場合、`freeze.pending` が残っています。作業者は `release-pending-freeze` の手順に従います。
+- `freeze-identity-mismatch` の場合、input の `migration_main_sha` か `migration_run_id` が、`freeze.json` の `main_sha` か `run_id` と違います。作業者は input を凍結した run の値に直して、再実行します。
+- `invalid-restart-operation` の場合、作業者は dispatch の input を見直してから再実行します。
+- `restart-record-invalid` と `restart-record-failed` の場合、作業者は旧環境に入らず、管理役に判断を戻します。前回の実行で記録の書き込みが途中で失敗した場合も、`restart-record-invalid` になります。
+- `service-control-not-permitted` の場合、記録を書く前に失敗しています。microblog は止まっておらず、記録も残っていません。作業者は旧環境に入らず、管理役に判断を戻します。管理役が許可を直した後は、再実行できます。
+- `service-stop-failed` と `service-not-stopped` の場合、記録を書いた後に失敗しています。microblog が停止したまま残る場合があります。再実行は `restart-already-attempted` で拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `service-start-failed` の場合、記録を書いた後に失敗しています。再実行は `restart-already-attempted` で拒否されます。microblog が停止したまま残ると、本番の配信が止まります。CI から start だけを行う operation はありません。作業者は旧環境に入らず、すぐに管理役に連絡します。
+- `restart-not-confirmed` の場合（`stage=restart-verify`）、応答した status が手順 6 の条件を満たしませんでした。記録が残っているので、再実行は拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `stage=restart-precheck` で `source-operation-failed` か `source-control-not-ready` になった場合、status を読めずに、旧環境を変える前に失敗しています。記録も残っていません。作業者は Actions ログで原因を確かめてから、再実行できます。原因には、control コマンドの実行中、ssh の失敗、identity の不一致などがあります。
+- `stage=restart-verify` で `source-control-not-ready` か `source-operation-failed` になった場合、microblog を起動した後に失敗しています。`source-control-not-ready` は、約2分以内に status が応答しなかったことを示します。記録が残っているので、再実行は拒否されます。作業者は旧環境に入らず、管理役に判断を戻します。
+- `restart-already-attempted` の場合、同じ凍結の記録がすでにあります。作業者は旧環境に入らず、管理役に判断を戻します。
+
+再起動の記録は、`~/.iori-migration/queue-failed-restart.json` に1つだけ置きます。`restart-failed-source` は、記録を次の2つの場合に分けて扱います。
+
+- 記録の `main_sha` と `run_id` が `freeze.json` と同じ場合、記録は同じ凍結のものです。2回目の実行は `reason=restart-already-attempted` で拒否されます。
+- 記録が以前の凍結のもの、つまり identity が違う場合、`restart-failed-source` は次回の実行時に記録を削除して、新しい記録に置き換えます。
+
+作業者は記録を手作業で消しません。
 
 #### `freeze.pending` が残った場合
 
