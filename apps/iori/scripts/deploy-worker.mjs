@@ -79,18 +79,21 @@ const preflightDeployment = () => {
   if (process.env.STAGING_ACCESS_TOKEN && process.env.STAGING_ACCESS_TOKEN === process.env.SMOKE_QUEUE_TOKEN) {
     throw new Error('Staging and smoke credentials must be distinct.');
   }
-  if (isDryRun) return;
+  if (isDryRun) return identity;
   for (const name of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']) requireEnv(name);
+  return identity;
 };
 
-preflightDeployment();
+const identity = preflightDeployment();
 const config = await createDeploymentWorkerConfig({ withoutQueueProducer });
 try {
   if (!isDryRun) deployWorker(config.path);
   putRequiredSecret('VAPID_PUBLIC_KEY', config.path);
   putRequiredSecret('VAPID_PRIVATE_KEY', config.path);
   putRequiredSecret('SMOKE_QUEUE_TOKEN', config.path);
-  if (process.env.STAGING_ACCESS_TOKEN) putRequiredSecret('STAGING_ACCESS_TOKEN', config.path);
+  if (identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN) {
+    putRequiredSecret('STAGING_ACCESS_TOKEN', config.path);
+  }
   deployWorker(config.path);
   if (!isDryRun && process.env.IORI_DEPLOYMENT_RESULT_PATH) {
     const records = readFileSync(outputPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
