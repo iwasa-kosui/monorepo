@@ -31,6 +31,8 @@ const MESSAGE_REASONS = new Map([
   ['Protected workflow invocation is invalid.', 'config-invalid'],
   ['Executor configuration is required.', 'config-invalid'],
   ['Invalid zone.', 'config-invalid'],
+  ['Migration target evidence is invalid.', 'identity-mismatch'],
+  ['Target readback configuration is required.', 'config-invalid'],
 ]);
 export const isCutoverReason = (reason) =>
   typeof reason === 'string' && (isPreparationReason(reason) || CUTOVER_REASONS.has(reason));

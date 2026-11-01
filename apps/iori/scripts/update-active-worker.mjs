@@ -33,7 +33,11 @@ export const updateActiveWorker = async (
   const ids = { d1Id: r.d1.id, kvId: r.kv.id, queueId: r.queue.id, dlqId: r.dlq.id, consumerAttached: true };
   const environment = { ...admissionEnvironment(target), IORI_ADMISSION_MODE: 'active' };
   const before = await control.readActiveResources(ids);
-  if (before.consumerId !== r.consumer.id) throw new Error('Active consumer mismatch.');
+  if (before.consumerId !== r.consumer.id) {
+    throw Object.assign(new Error('Active consumer mismatch.'), {
+      diagnostic: { reason: 'state-mismatch', details: ['resource-consumer-id'] },
+    });
+  }
   const previousVersion = await control.readCurrentVersion();
   const beforeWorker = await control.readActiveWorker({
     resources: before,

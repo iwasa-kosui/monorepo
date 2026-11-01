@@ -3,15 +3,18 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { deployReviewedWorkerVersion } from '../deploy-reviewed-worker-version.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
+import { targetIdentity } from '../migration-target-contract.mjs';
 import { OPERATION_STAGES, operationFailureLines } from '../operation-diagnostics.mjs';
+import { readSealedMigrationTarget } from '../read-sealed-migration-target.mjs';
 import { createSourceSshAdapter } from '../source-control-ssh.mjs';
 import { createTargetControlPlane } from '../target-control-plane.mjs';
 import { createFixtureDirectory } from './fixtureTemp.ts';
+import { expectedTargetFixture, preparationFixture } from './migrationTargetFixture.js';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn() }));
 vi.mock('../temporary-worker-config.mjs', () => ({ createDeploymentWorkerConfig: mocks.config }));
@@ -288,4 +291,64 @@ it('prints config-invalid for the configuration messages of the four operation s
       operationLine('migrate-data', 'config-invalid'),
     ]);
   }
+});
+describe('a real readSealedMigrationTarget failure', () => {
+  const target = expectedTargetFixture();
+  const sealedIdentity = targetIdentity(target);
+  const readbackResponses = (consumerId: string): Record<string, unknown> => ({
+    '/d1/database/db': { uuid: 'db', name: sealedIdentity.names.d1 },
+    '/storage/kv/namespaces/kv': { id: 'kv', title: sealedIdentity.names.kv },
+    [`/r2/buckets/${sealedIdentity.names.uploads}`]: { name: sealedIdentity.names.uploads },
+    [`/r2/buckets/${sealedIdentity.names.transfer}`]: { name: sealedIdentity.names.transfer },
+    [`/r2/buckets/${sealedIdentity.names.transfer}/domains/managed`]: { enabled: false },
+    '/queues/queue': queueResponse('queue', sealedIdentity.names.queue, [{
+      type: 'worker',
+      script: sealedIdentity.workerName,
+      dead_letter_queue: sealedIdentity.names.dlq,
+      consumer_id: consumerId,
+      settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
+    }]),
+    '/queues/dlq': queueResponse('dlq', sealedIdentity.names.dlq, []),
+  });
+  const read = (record: unknown, consumerId = 'consumer') =>
+    readSealedMigrationTarget({
+      expectedTarget: target,
+      record,
+      token: 'private-token',
+      zoneId: 'b'.repeat(32),
+      fetchRequest: (async (url: URL) => {
+        const result = readbackResponses(consumerId)[
+          url.pathname.replace(`/client/v4/accounts/${sealedIdentity.accountId}`, '')
+        ];
+        return Response.json(result === undefined ? { success: false } : { success: true, result });
+      }) as never,
+    }).catch((error: unknown) => error);
+  it('prints resource-consumer-id and state-mismatch for a consumer id that differs from the record', async () => {
+    const failure = await read(preparationFixture(), 'other-consumer');
+    expect(failure).toHaveProperty('message', 'Prepared consumer mismatch.');
+    expect(operationFailureLines('verify-import', failure)).toEqual([
+      operationLine('verify-import', 'resource-consumer-id'),
+      operationLine('verify-import', 'state-mismatch'),
+    ]);
+  });
+  it('prints identity-mismatch for a record that differs from the expected target', async () => {
+    const record = preparationFixture();
+    record.identity.run_id = 'production-run-002';
+    const failure = await read(record);
+    expect(failure).toHaveProperty('message', 'Migration target evidence is invalid.');
+    expect(operationFailureLines('verify-import', failure)).toEqual([
+      operationLine('verify-import', 'identity-mismatch'),
+    ]);
+  });
+  it('prints config-invalid for a missing token', async () => {
+    const failure = await readSealedMigrationTarget({
+      expectedTarget: target,
+      record: preparationFixture(),
+      token: '',
+      zoneId: 'b'.repeat(32),
+    }).catch((error: unknown) => error);
+    expect(operationFailureLines('verify-import', failure)).toEqual([
+      operationLine('verify-import', 'config-invalid'),
+    ]);
+  });
 });
