@@ -196,6 +196,7 @@ const imageRow = (imageId: string, url: string) => ({
 });
 const urlImageId = '88888888-8888-4888-8888-888888888888';
 const upperImageId = 'ABCDEF01-2345-4678-9ABC-DEF012345678';
+const sourceOrigin = 'https://blog.test';
 it('imports each local upload once under the key built from the URL and skips remote rows', async () => {
   const { importMigrationUploads } = await import('../migration-object-import.mjs');
   const { rm, readFile } = await import('node:fs/promises');
@@ -218,6 +219,7 @@ it('imports each local upload once under the key built from the URL and skips re
       manifestPath: fixture.manifestPath,
       outputDir: fixture.outputDir,
       bucket,
+      sourceOrigin,
     });
     expect(puts).toHaveLength(2);
     expect(puts).toEqual(expect.arrayContaining([
@@ -233,6 +235,11 @@ it('imports each local upload once under the key built from the URL and skips re
 });
 it.each([
   ['a legacy static path', [imageRow(urlImageId, `/static/uploads/${urlImageId}.jpg`)], 'upload-legacy-path'],
+  [
+    'an absolute URL under /uploads/ of the source origin',
+    [imageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.jpg`)],
+    'upload-same-origin',
+  ],
   ['an invalid path', [imageRow(urlImageId, `/uploads/../${urlImageId}.jpg`)], 'Invalid legacy upload.'],
   [
     'the same key with another extension',
@@ -253,7 +260,25 @@ it.each([
       manifestPath: fixture.manifestPath,
       outputDir: fixture.outputDir,
       bucket,
+      sourceOrigin,
     })).rejects.toThrow(message);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+it('rejects importing uploads without a source origin', async () => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm } = await import('node:fs/promises');
+  const fixture = await uploadsFixture([imageRow(urlImageId, 'https://remote.test/media/a.png')], {});
+  const bucket = { put: vi.fn(async () => {}) };
+  try {
+    await expect(importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+      sourceOrigin: undefined as unknown as string,
+    })).rejects.toThrow('source-origin-required');
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -269,6 +294,7 @@ it('writes an empty upload manifest when every post image is remote', async () =
       manifestPath: fixture.manifestPath,
       outputDir: fixture.outputDir,
       bucket,
+      sourceOrigin,
     });
     expect(JSON.parse(await readFile(result.manifestPath, 'utf8'))).toEqual({ schemaVersion: 1, objects: [] });
     expect(bucket.put).not.toHaveBeenCalled();

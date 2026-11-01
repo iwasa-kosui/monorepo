@@ -23,6 +23,7 @@ const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sqliteSchema = join(appRoot, 'drizzle-d1/0000_boring_xavin.sql');
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
+const sourceOrigin = 'https://blog.test';
 
 const temporaryDirectory = async (): Promise<string> => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'iori-data-migration-fixture-')));
@@ -144,6 +145,7 @@ const loadExpectedFor = async (postImages: readonly unknown[], uploadObjects?: r
     }),
   );
   return createManifestExpectedProvider({
+    sourceOrigin,
     exportManifestPath: manifestPath,
     d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
     uploadManifestPath: uploadObjects ? uploadManifestPath : undefined,
@@ -415,6 +417,7 @@ describe('Cloudflare data migration tooling', () => {
     const d1ImportManifestPath = join(importDirectory, 'd1-import-manifest.json');
     const d1ImportManifest = JSON.parse(await readFile(d1ImportManifestPath, 'utf8'));
     const expectedProvider = createManifestExpectedProvider({
+      sourceOrigin,
       exportManifestPath: join(exportDirectory, 'export-manifest.json'),
       d1ImportManifestPath,
     });
@@ -483,6 +486,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -525,6 +529,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: d1ManifestPath,
         uploadManifestPath,
@@ -693,6 +698,7 @@ describe('Cloudflare data migration tooling', () => {
     for (
       const [postImages, message] of [
         [[postImageRow(urlImageId, `/static/uploads/${urlImageId}.webp`)], 'upload-legacy-path'],
+        [[postImageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.webp`)], 'upload-same-origin'],
         [
           [
             postImageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.webp`),
@@ -717,6 +723,7 @@ describe('Cloudflare data migration tooling', () => {
         bucket: { put: async () => undefined },
         manifestPath,
         outputDir: await temporaryDirectory(),
+        sourceOrigin,
       })).rejects.toThrow(message);
     }
   });
@@ -748,6 +755,14 @@ describe('Cloudflare data migration tooling', () => {
     await expect(loadExpectedFor([postImageRow(urlImageId, `/static/uploads/${urlImageId}.webp`)])).rejects.toThrow(
       'upload-legacy-path',
     );
+    await expect(loadExpectedFor([postImageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.webp`)])).rejects
+      .toThrow('upload-same-origin');
+    await expect(
+      createManifestExpectedProvider({
+        exportManifestPath: 'unused',
+        sourceOrigin: undefined as unknown as string,
+      }).loadExpected(),
+    ).rejects.toThrow('source-origin-required');
     await expect(loadExpectedFor([postImageRow(urlImageId, 'data:image/png;base64,AAAA')])).rejects.toThrow(
       /invalid upload URL/,
     );
@@ -902,6 +917,7 @@ describe('Cloudflare data migration tooling', () => {
       }),
     );
     const expectedProvider = createManifestExpectedProvider({
+      sourceOrigin,
       exportManifestPath: manifestPath,
       d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
       uploadManifestPath,
@@ -941,6 +957,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
       }).loadExpected(),
@@ -976,6 +993,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -1014,6 +1032,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -1071,6 +1090,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,

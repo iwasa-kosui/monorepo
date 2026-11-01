@@ -32,6 +32,7 @@ export function createManifestExpectedProvider(input: {
   d1ImportManifestPath?: string;
   uploadManifestPath?: string;
   ogpManifestPath?: string;
+  sourceOrigin: string;
   signal?: AbortSignal;
 }): ExpectedProvider;
 export function createCloudflareActualProvider(input: {

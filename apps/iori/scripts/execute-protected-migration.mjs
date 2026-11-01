@@ -16,7 +16,13 @@ import { importMigrationOgp, importMigrationUploads } from './migration-object-i
 import { assertExternalMigrationRoot, isMigrationArtifactReference } from './migration-path-safety.mjs';
 import { assertMigrationBucketPrivate } from './migration-r2-storage.mjs';
 import { createMigrationR2Writer } from './migration-r2-writer.mjs';
-import { parseExpectedTarget, rehearsalTargetKey, targetHash, targetIdentity } from './migration-target-contract.mjs';
+import {
+  admissionEnvironment,
+  parseExpectedTarget,
+  rehearsalTargetKey,
+  targetHash,
+  targetIdentity,
+} from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
 import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
@@ -281,6 +287,7 @@ export const runProtectedPhases = async (options, target, plan) => {
       manifestPath: restored.manifestPath,
       outputDir: join(root, 'objects'),
       bucket,
+      sourceOrigin: admissionEnvironment(target).ORIGIN,
       signal,
     });
     const ogp = await importMigrationOgp({
@@ -301,6 +308,7 @@ export const runProtectedPhases = async (options, target, plan) => {
       d1ImportManifestPath: d1ManifestPath,
       uploadManifestPath: uploads.manifestPath,
       ogpManifestPath: ogp.manifestPath,
+      sourceOrigin: admissionEnvironment(target).ORIGIN,
       signal,
     });
     const failures = await verifyCloudflareImportWithProviders({ expectedProvider, actualProvider });

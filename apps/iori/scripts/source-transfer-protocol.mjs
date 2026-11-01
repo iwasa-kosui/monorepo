@@ -18,6 +18,7 @@ export const SOURCE_REJECTION_DETAILS = Object.freeze([
   'estimate-query',
   'estimate-upload-row',
   'estimate-upload-legacy-path',
+  'estimate-upload-same-origin',
   'estimate-upload-root',
   'estimate-upload-open',
   'estimate-too-large',

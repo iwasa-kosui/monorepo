@@ -14,7 +14,11 @@ import {
   assertExternalMigrationPath,
   assertExternalMigrationRoot,
 } from '../../../../scripts/migration-path-safety.mjs';
-import { classifyUploadUrl, createUploadTracker } from '../../../../scripts/migration-upload-rows.mjs';
+import {
+  classifyUploadUrl,
+  createUploadTracker,
+  requireSourceOrigin,
+} from '../../../../scripts/migration-upload-rows.mjs';
 import { guardPostgresClient } from '../../../../scripts/postgres-client-lifetime.mjs';
 import {
   logicalFilePath,
@@ -58,8 +62,15 @@ async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, d
 export class SourceSnapshot {
   #cache?: { key: string; inventory: SourceInventory; files: Map<string, SourceFile> };
   constructor(
-    private readonly options: { base: string; uploadDir: string; createClient: () => Promise<PostgresExportClient> },
-  ) {}
+    private readonly options: {
+      base: string;
+      uploadDir: string;
+      origin: string;
+      createClient: () => Promise<PostgresExportClient>;
+    },
+  ) {
+    requireSourceOrigin(options.origin);
+  }
   private key(identity: SourceIdentity) {
     const checked = sourceIdentitySchema.parse(identity);
     return `${checked.main_sha}-${checked.run_id}`;
@@ -115,7 +126,10 @@ export class SourceSnapshot {
           stage = 'estimate-upload-row';
           const upload = this.uploadOf(row);
           if (upload.kind === 'legacy') stage = 'estimate-upload-legacy-path';
-          if (upload.kind === 'legacy' || upload.kind === 'invalid') throw new Error('invalid_upload');
+          if (upload.kind === 'same-origin') stage = 'estimate-upload-same-origin';
+          if (upload.kind === 'legacy' || upload.kind === 'same-origin' || upload.kind === 'invalid') {
+            throw new Error('invalid_upload');
+          }
           if (upload.kind === 'remote') continue;
           const added = uploads.add(upload);
           if (added === 'conflict') throw new Error('invalid_upload');
@@ -167,7 +181,7 @@ export class SourceSnapshot {
     }
   }
   private uploadOf(row: unknown) {
-    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url);
+    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url, this.options.origin);
   }
   private async uploadRoot() {
     const root = resolve(this.options.uploadDir);
@@ -211,6 +225,7 @@ export class SourceSnapshot {
           signal.throwIfAborted();
           const upload = this.uploadOf(JSON.parse(line));
           if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+          if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
           if (upload.kind === 'invalid') throw new Error('invalid_upload');
           if (upload.kind === 'remote') continue;
           const added = seen.add(upload);

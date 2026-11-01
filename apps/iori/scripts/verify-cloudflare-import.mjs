@@ -10,7 +10,8 @@ import { createCloudflareImportTransportFromEnvironment } from './cloudflare-imp
 import { canonicalD1RowString } from './data-migration-mapping.mjs';
 import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
 import { assertExternalMigrationPath } from './migration-path-safety.mjs';
-import { classifyUploadUrl, createUploadTracker } from './migration-upload-rows.mjs';
+import { admissionEnvironment } from './migration-target-contract.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceOrigin } from './migration-upload-rows.mjs';
 
 const objectMap = (objects, keys) =>
   new Map((objects ?? keys?.map((key) => ({ key })) ?? []).map((object) => [object.key, object]));
@@ -138,9 +139,11 @@ export const createManifestExpectedProvider = ({
   d1ImportManifestPath,
   uploadManifestPath,
   ogpManifestPath,
+  sourceOrigin,
   signal,
 }) => ({
   loadExpected: async () => {
+    requireSourceOrigin(sourceOrigin);
     if (d1ImportManifestPath === undefined) throw new Error('D1 import manifest is required.');
     await assertExternalMigrationPath(exportManifestPath);
     await Promise.all(
@@ -164,8 +167,9 @@ export const createManifestExpectedProvider = ({
         signal,
         onRow: table === 'post_images'
           ? (row) => {
-            const upload = classifyUploadUrl(row.url);
+            const upload = classifyUploadUrl(row.url, sourceOrigin);
             if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+            if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
             if (upload.kind === 'invalid') throw new Error('Post image export row has an invalid upload URL.');
             if (upload.kind === 'local' && expectedUploads.add(upload) === 'conflict') {
               throw new Error('Post image export row has an invalid upload URL.');
@@ -390,6 +394,7 @@ const main = async () => {
     d1ImportManifestPath,
     uploadManifestPath: process.env.IORI_R2_IMPORT_MANIFEST,
     ogpManifestPath: process.env.IORI_OGP_IMPORT_MANIFEST,
+    sourceOrigin: admissionEnvironment(expectedTarget).ORIGIN,
   });
   const actualProvider = createCloudflareImportProvider(transport);
   process.exitCode = await runVerificationCli({ expectedProvider, actualProvider });

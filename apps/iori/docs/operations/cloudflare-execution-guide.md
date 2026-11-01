@@ -605,17 +605,18 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 
 旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
 
-| `reason`                      | 失敗した段                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `estimate-connect`            | DB への接続と transaction の開始                                                                              |
-| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                          |
-| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                            |
-| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す |
-| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                               |
-| `estimate-upload-open`        | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                                                     |
-| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                        |
-| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                |
-| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                        |
+| `reason`                      | 失敗した段                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                 |
+| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                             |
+| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                               |
+| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                    |
+| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す |
+| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                  |
+| `estimate-upload-open`        | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                                                                                        |
+| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                           |
+| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                   |
+| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                           |
 
 `estimate-` で始まる語彙は、旧環境への配備 (`deploy-iori.yml`) の後に効きます。配備の前の旧環境は `detail` を返さないので、サービス側の失敗は `reason=rejected` になります。
 

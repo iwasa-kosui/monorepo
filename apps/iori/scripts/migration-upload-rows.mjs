@@ -2,7 +2,19 @@ const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const localUpload = new RegExp(`^/uploads/(${uuid})\\.(gif|jpeg|jpg|png|webp)$`, 'i');
 const contentTypes = { gif: 'image/gif', jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
-export const classifyUploadUrl = (url) => {
+const absoluteUrl = /^https?:\/\//i;
+const sameOriginPrefixes = ['/uploads/', '/static/uploads/'];
+
+export const requireSourceOrigin = (sourceOrigin) => {
+  if (typeof sourceOrigin !== 'string' || !absoluteUrl.test(sourceOrigin)) throw new Error('source-origin-required');
+  try {
+    return new URL(sourceOrigin).origin;
+  } catch {
+    throw new Error('source-origin-required');
+  }
+};
+
+export const classifyUploadUrl = (url, sourceOrigin) => {
   if (typeof url !== 'string') return { kind: 'invalid' };
   const match = localUpload.exec(url);
   if (match !== null) {
@@ -14,7 +26,20 @@ export const classifyUploadUrl = (url) => {
       contentType: contentTypes[match[2].toLowerCase()],
     };
   }
-  if (/^https?:\/\//.test(url)) return { kind: 'remote' };
+  if (absoluteUrl.test(url)) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { kind: 'invalid' };
+    }
+    if (
+      sourceOrigin !== undefined
+      && parsed.origin === requireSourceOrigin(sourceOrigin)
+      && sameOriginPrefixes.some((prefix) => parsed.pathname.startsWith(prefix))
+    ) return { kind: 'same-origin' };
+    return { kind: 'remote' };
+  }
   if (url.startsWith('/static/uploads/')) return { kind: 'legacy' };
   return { kind: 'invalid' };
 };

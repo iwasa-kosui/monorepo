@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest';
 
-import { postImageObjectKey } from '../../src/adaptor/r2/postImageObjectStore.ts';
-import { ImageId } from '../../src/domain/image/imageId.ts';
-import { classifyUploadUrl, createUploadTracker } from '../migration-upload-rows.mjs';
+import { parseUploadFilenameImageId, postImageObjectKey } from '../../src/adaptor/r2/postImageObjectStore.ts';
+import { classifyUploadUrl, createUploadTracker, requireSourceOrigin } from '../migration-upload-rows.mjs';
 
 const uuid = '55555555-5555-4555-8555-555555555555';
 
@@ -53,6 +52,48 @@ it('classifies absolute http and https URLs as remote, including URLs longer tha
   expect(classifyUploadUrl(`https://remote.test/${'x'.repeat(100)}`.slice(0, 128))).toEqual({ kind: 'remote' });
 });
 
+const origin = 'https://example.com/';
+
+it('classifies absolute URLs under /uploads/ of the source origin as same-origin', () => {
+  expect(classifyUploadUrl(`https://example.com/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`https://Example.com:443/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(`HTTPS://EXAMPLE.com/uploads/${uuid}.webp`, 'https://example.com:443')).toEqual({
+    kind: 'same-origin',
+  });
+  expect(classifyUploadUrl(`https://example.com/static/uploads/${uuid}.webp`, origin)).toEqual({
+    kind: 'same-origin',
+  });
+});
+
+it('keeps absolute URLs outside /uploads/ or on another origin remote', () => {
+  expect(classifyUploadUrl(`https://other.example/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl(`http://example.com/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl(`https://example.com:8443/uploads/${uuid}.webp`, origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('https://example.com/other/a.png', origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('https://example.com/uploads/../other/a.png', origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl('HTTPS://other.example/x.png', origin)).toEqual({ kind: 'remote' });
+  expect(classifyUploadUrl(`https://example.com/uploads/${uuid}.webp`)).toEqual({ kind: 'remote' });
+});
+
+it('classifies absolute URLs that cannot be parsed as invalid', () => {
+  expect(classifyUploadUrl('https://', origin)).toEqual({ kind: 'invalid' });
+  expect(classifyUploadUrl('http://exa mple.com/uploads/a.png', origin)).toEqual({ kind: 'invalid' });
+});
+
+it('classifies a same-origin URL cut at 128 characters the same way as the full URL', () => {
+  const full = `https://example.com/uploads/${'x'.repeat(200)}.png`;
+  expect(classifyUploadUrl(full, origin)).toEqual({ kind: 'same-origin' });
+  expect(classifyUploadUrl(full.slice(0, 128), origin)).toEqual({ kind: 'same-origin' });
+});
+
+it('requires the source origin to be an absolute http or https URL', () => {
+  expect(requireSourceOrigin('https://Example.com:443/')).toBe('https://example.com');
+  expect(() => requireSourceOrigin(undefined)).toThrow('source-origin-required');
+  expect(() => requireSourceOrigin('')).toThrow('source-origin-required');
+  expect(() => requireSourceOrigin('example.com')).toThrow('source-origin-required');
+  expect(() => classifyUploadUrl('https://remote.test/a.png', 'example.com')).toThrow('source-origin-required');
+});
+
 it('classifies URLs under /static/uploads/ as legacy', () => {
   expect(classifyUploadUrl(`/static/uploads/${uuid}.png`)).toEqual({ kind: 'legacy' });
   expect(classifyUploadUrl('/static/uploads/anything')).toEqual({ kind: 'legacy' });
@@ -101,8 +142,7 @@ it.each([
   '/uploads/0192f1c2-7d3e-7a10-9b2c-3d4e5f607182.jpeg',
 ])('builds the same R2 key as the Worker reads for %s', (url) => {
   const upload = localOf(url);
-  const imageIdSource = upload.filename.replace(/\.(?:gif|jpe?g|png|webp)$/i, '');
-  const imageId = ImageId.parse(imageIdSource);
+  const imageId = parseUploadFilenameImageId(upload.filename);
   if (!imageId.ok) throw new Error('the Worker rejects the URL');
   expect(upload.key).toBe(postImageObjectKey(imageId.val));
 });

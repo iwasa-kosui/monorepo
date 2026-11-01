@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { executeProtectedMigration, executionReservationKey } from '../execute-protected-migration.mjs';
 import { APPLICATION_TABLE_ORDER } from '../export-postgres.mjs';
+import { admissionEnvironment } from '../migration-target-contract.mjs';
 import { createManifestExpectedProvider, verifyCloudflareImportWithProviders } from '../verify-cloudflare-import.mjs';
 import { restoreMigrationBundle } from '../migration-bundle.mjs';
 import { directory, fixture, removeExecutorRoots } from './migrationExecutorFixture.js';
@@ -52,6 +53,7 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
       d1ImportManifestPath: manifest('d1_import_manifest'),
       uploadManifestPath: manifest('r2_import_manifest'),
       ogpManifestPath: manifest('ogp_import_manifest'),
+      sourceOrigin: admissionEnvironment(f.options.expectedTarget).ORIGIN,
     });
     expect(await verifyCloudflareImportWithProviders({ expectedProvider, actualProvider: f.actualProvider })).toEqual(
       [],
@@ -60,6 +62,16 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
     f.close();
   }
 }, 30000);
+it('takes the source origin from the expected target and fails on a same-origin upload URL', async () => {
+  const f = await fixture({ extraImageUrl: 'https://blog.test/uploads/99999999-9999-4999-8999-999999999999.png' });
+  try {
+    expect(admissionEnvironment(f.options.expectedTarget).ORIGIN).toBe('https://blog.test');
+    await expect(executeProtectedMigration(f.options)).rejects.toThrow('upload-same-origin');
+    await expect(access(join(f.options.root, 'contract.json'))).rejects.toThrow();
+  } finally {
+    f.close();
+  }
+});
 it('rejects metadata preflight before reservation/freeze and post-drain growth before export', async () => {
   const f = await fixture();
   try {

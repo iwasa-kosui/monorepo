@@ -24,7 +24,7 @@ export const directory = async () => {
 export const removeExecutorRoots = async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 };
-export const fixture = async () => {
+export const fixture = async (config: { extraImageUrl?: string } = {}) => {
   const root = await directory();
   const sourceRoot = await directory();
   const target = expectedTargetFixture();
@@ -76,11 +76,14 @@ export const fixture = async () => {
     'note',
   );
   const insertImage = sourceDb.prepare('INSERT INTO post_images (imageId, postId, url, createdAt) VALUES (?, ?, ?, ?)');
-  insertImage.run(image, post, `/uploads/${image}.png`, 1);
+  insertImage.run(image, post, `/uploads/${image}.webp`, 1);
   insertImage.run('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', post, `/uploads/${urlImage}.png`, 1);
   insertImage.run('66666666-6666-4666-8666-666666666666', post, 'https://remote.test/media/a.png', 1);
   insertImage.run('77777777-7777-4777-8777-777777777777', post, `https://remote.test/${'y'.repeat(200)}.png`, 1);
   insertImage.run('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', post, `/uploads/${urlImage}.png`, 1);
+  if (config.extraImageUrl !== undefined) {
+    insertImage.run('cccccccc-cccc-4ccc-8ccc-cccccccccccc', post, config.extraImageUrl, 1);
+  }
   sourceDb.prepare(
     'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).run(article, actor, 'user', post, 'fixture article', 'published', 1);
@@ -148,7 +151,7 @@ export const fixture = async () => {
         }),
       });
       await mkdir(join(sourceRoot, 'uploads'));
-      await writeFile(join(sourceRoot, `uploads/${image}.png`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), {
+      await writeFile(join(sourceRoot, `uploads/${image}.webp`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), {
         mode: 0o600,
       });
       await writeFile(join(sourceRoot, `uploads/${urlImage}.png`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]), {
@@ -160,7 +163,7 @@ export const fixture = async () => {
           id: 'manifest.export',
           path: 'export/export-manifest.json',
         },
-        { id: `upload.${image}.png`, path: `uploads/${image}.png` },
+        { id: `upload.${image}.webp`, path: `uploads/${image}.webp` },
         {
           id: `upload.${urlImage}.png`,
           path: `uploads/${urlImage}.png`,

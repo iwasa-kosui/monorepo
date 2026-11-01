@@ -18,6 +18,7 @@ export function importR2Uploads(input: {
   bucket: MigrationBucket;
   manifestPath: string;
   outputDir: string;
+  sourceOrigin?: string;
 }): Promise<{ schemaVersion: number; objects: ImportedObject[]; manifestPath: string }>;
 
 export function backfillPublishedOgpImages(input: {

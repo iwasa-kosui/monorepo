@@ -15,6 +15,7 @@ const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
+const origin = 'https://blog.test';
 const identity = { main_sha: 'a'.repeat(40), run_id: 'fixture' };
 const imageId = '33333333-3333-4333-8333-333333333333';
 const urlImageId = '55555555-5555-4555-8555-555555555555';
@@ -40,6 +41,7 @@ const setup = async (rows: ImageRow[] = defaultRows) => {
   const snapshot = new SourceSnapshot({
     base,
     uploadDir,
+    origin,
     createClient: async () => {
       let images = false;
       let truncate = false;
@@ -101,6 +103,7 @@ const estimateWith = async (failure: Failure, uploadDir?: (base: string) => stri
   const failing = new SourceSnapshot({
     base: failure.missingBase ? join(base, 'missing') : base,
     uploadDir: uploadDir?.(base) ?? join(base, 'originals'),
+    origin,
     createClient: async () => {
       if (createFails) throw new Error('password=hunter2');
       let sent = false;
@@ -148,6 +151,16 @@ it.each<[string, Failure, string, ((base: string) => string)?, boolean?]>([
   ['non-string upload url', { row: { imageId, url: 42 } }, 'estimate-upload-row'],
   ['missing upload url', { row: { imageId } }, 'estimate-upload-row'],
   ['legacy upload url', { row: { imageId, url: `/static/uploads/${imageId}.png` } }, 'estimate-upload-legacy-path'],
+  [
+    'same-origin upload url',
+    { row: { imageId, url: `${origin}/uploads/${imageId}.png` } },
+    'estimate-upload-same-origin',
+  ],
+  [
+    'same-origin upload url cut at 128 characters',
+    { row: { imageId, url: `${origin}/static/uploads/${'x'.repeat(200)}.png`.slice(0, 128) } },
+    'estimate-upload-same-origin',
+  ],
   ['same key with another extension', {
     rowList: [{ imageId, url: `/uploads/${imageId}.png` }, { imageId, url: `/uploads/${imageId}.jpg` }],
   }, 'estimate-upload-row'],
@@ -217,6 +230,7 @@ it('fails on referenced upload symlinks or traversal without publishing inventor
 });
 it.each<[string, ImageRow[], string]>([
   ['a legacy url', [{ imageId, url: `/static/uploads/${imageId}.png` }], 'upload-legacy-path'],
+  ['a same-origin url', [{ imageId, url: `${origin}/uploads/${imageId}.png` }], 'upload-same-origin'],
   ['an invalid url', [{ imageId, url: 'data:image/png;base64,AAAA' }], 'invalid_upload'],
   [
     'the same key with another extension',
@@ -228,6 +242,15 @@ it.each<[string, ImageRow[], string]>([
   await writeFile(join(uploadDir, `${imageId}.jpg`), 'other image');
   await expect(snapshot.export(identity, new AbortController().signal)).rejects.toThrow(message);
   await expect(snapshot.inventory(identity)).rejects.toThrow();
+});
+it('requires the source origin', () => {
+  const createClient = async () => {
+    throw new Error('unused');
+  };
+  const options = { base: '/unused', uploadDir: '/unused', createClient };
+  expect(() => new SourceSnapshot(options as unknown as ConstructorParameters<typeof SourceSnapshot>[0])).toThrow(
+    'source-origin-required',
+  );
 });
 it('exports remote rows without copying anything for them', async () => {
   const { snapshot } = await setup([{ imageId, url: 'https://remote.test/media/a.png' }]);

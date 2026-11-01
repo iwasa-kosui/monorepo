@@ -3,7 +3,7 @@ import { open } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
 import { METADATA_BYTES, OBJECT_BYTES, readPrivateBounded, verifiedTableRows } from './migration-file-stream.mjs';
-import { classifyUploadUrl, createUploadTracker } from './migration-upload-rows.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceOrigin } from './migration-upload-rows.mjs';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const hash = (body) => createHash('sha256').update(body).digest('hex');
 export const objectManifestEnvelope = (kind) => kind === 'uploads' ? '{"schemaVersion":1,"objects":[' : '{"objects":[';
@@ -45,12 +45,14 @@ const table = async (manifestPath, name, signal) => {
   if (manifest.complete !== true || descriptor?.file !== `${name}.ndjson`) throw new Error('Invalid exported table.');
   return verifiedTableRows({ path: join(dirname(manifestPath), descriptor.file), descriptor, signal });
 };
-export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDir, bucket, signal }) => {
+export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDir, bucket, sourceOrigin, signal }) => {
+  requireSourceOrigin(sourceOrigin);
   const entries = async function*() {
     const seen = createUploadTracker();
     for await (const row of await table(manifestPath, 'post_images', signal)) {
-      const upload = classifyUploadUrl(row.url);
+      const upload = classifyUploadUrl(row.url, sourceOrigin);
       if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+      if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
       if (upload.kind === 'invalid') throw new Error('Invalid legacy upload.');
       if (upload.kind === 'remote') continue;
       const added = seen.add(upload);

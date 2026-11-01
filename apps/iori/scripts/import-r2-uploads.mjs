@@ -82,15 +82,16 @@ const writePrivateManifest = async ({ outputDir, filename, manifest }) => {
   return path;
 };
 
-export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputDir }) => {
+export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputDir, sourceOrigin }) => {
   await Promise.all([assertExternalMigrationPath(sourceDir), assertExternalMigrationPath(manifestPath)]);
   if (outputDir === undefined) throw new Error('An external R2 manifest directory is required.');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const objects = [];
   const seen = createUploadTracker();
   for await (const row of uploadsFromManifest(manifest, manifestPath)) {
-    const upload = classifyUploadUrl(row?.url);
+    const upload = classifyUploadUrl(row?.url, sourceOrigin);
     if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+    if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
     if (upload.kind === 'invalid') throw new Error('Upload manifest contains an invalid legacy upload.');
     if (upload.kind === 'remote') continue;
     const added = seen.add(upload);
