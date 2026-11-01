@@ -9,4 +9,5 @@ export function runInfrastructureCommand(program: string, args: string[], option
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  inspectOutput?: (result: { stdout: string; stderr: string }) => void;
 }): Promise<{ status: number; stdout: string; stderr: string }>;

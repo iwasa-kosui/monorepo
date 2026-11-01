@@ -257,6 +257,19 @@ it('wires real credential-free fixture execution, explicit portable PostgreSQL o
   expect(guard).toContain('IORI_ADMISSION_IDENTITY=');
   expect(guard).toContain('assert-workflow-output.mjs');
 });
+it('runs readonly Terraform init and validate in CI and fails when the tracked lock file changes', async () => {
+  const ci = await readWorkflow('ci.yml');
+  const lines = ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
+    .split('\n').map(line => line.trim());
+  const init = lines.indexOf(
+    'run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
+  );
+  expect(init).toBeGreaterThan(-1);
+  expect(lines[init + 1]).toBe('run_guarded terraform -chdir=apps/iori/infra/cloudflare validate');
+  expect(lines[init + 2]).toBe(
+    'run_guarded git diff --exit-code -- apps/iori/infra/cloudflare/.terraform.lock.hcl',
+  );
+});
 it('constructs the CI admission as a validated synthetic sealed identity', async () => {
   const { execFileSync } = await import('node:child_process');
   const { parseAdmission } = await import('../../src/workerAdmission.ts');

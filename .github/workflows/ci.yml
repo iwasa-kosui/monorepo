@@ -109,8 +109,9 @@ jobs:
           run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
           run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
-          run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
+          run_guarded git diff --exit-code -- apps/iori/infra/cloudflare/.terraform.lock.hcl
           run_guarded pnpm --silent --filter iori exec vitest run --reporter=tap scripts/__tests__/validateCloudflarePlan.test.ts
 
       - name: Verify credential-free migration fixture chain
