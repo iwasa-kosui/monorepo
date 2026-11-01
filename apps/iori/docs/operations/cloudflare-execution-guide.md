@@ -1194,6 +1194,62 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 分類の行の `reason` には、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の節と同じ語が出ます。この語には、prepare-target の節の語と、source の接続の失敗を表す語が含まれます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
 
+#### 移行先の読み取りの失敗
+
+`rehearse-migration`、`migrate-data`、`verify-import`、`cutover-route`、`purge-rehearsal-target` は、operation の本体を始める前に、runner が移行先を読み取ります。この読み取りの途中で失敗すると、公開ログに `stage=hosted-` で始まる次の行が出ます。`hosted-reviewed-main` は、読み取りの前に main を確かめる1回目の検査です。`hosted-main-recheck` は、読み取りの後にもう一度 main を確かめる2回目の検査です。2つの `stage` は別の語です。
+
+| `stage`                | 処理                                                        | 出る `reason`                                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hosted-target-read`   | `read-migration-target.mjs` の実行。`program=node` で出ます | `command-failed`（子プロセスが失敗した）、`aborted`。止まった処理は、この行の前に出る `target-read-` の行で分かります                                      |
+| `hosted-target-load`   | 読み取った結果のファイルの読み込みと検査                    | `fs-enoent`（ファイルが無い）、`target-input-invalid`（ファイルの種類か大きさか権限が不正）、`identity-mismatch`（内容が想定の形ではない）、`unclassified` |
+| `hosted-binding-write` | Worker の binding のファイルの書き込み                      | `fs-eexist`（ファイルが既にある）、`fs-enoent`、`fs-eacces`、`unclassified`                                                                                |
+| `hosted-main-recheck`  | 読み取りの後の、2回目の `reviewed-main` の検査              | `reviewed-checkout-mismatch`、`reviewed-checkout-dirty`、`reviewed-main-changed`、`command-failed`（git の実行が失敗した）、`aborted`                      |
+
+`hosted-main-recheck` の `reason` の意味は、次のとおりです。
+
+- `reviewed-checkout-mismatch`: checkout の HEAD がレビュー済みの SHA と違います。
+- `reviewed-checkout-dirty`: 追跡しているファイルに未 commit の変更があります。
+- `reviewed-main-changed`: `origin/main` がレビュー済みの SHA から進んでいます。
+- `command-failed`: git の実行が失敗しました。
+
+`read-migration-target.mjs` は、失敗すると、止まった処理を示す次の1行を子プロセスの stderr に出します。この行は `hosted-target-read` の行より前に、公開ログへ出ます。
+
+```text
+IORI_DIAG stage=target-read-<処理> program=<terraform|none> exit=<0-255|none> signal=<名前|none> reason=<語>
+```
+
+| `stage`                    | 処理                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `target-read-config`       | 設定の検査（`targetSetupConfiguration`）                                                   |
+| `target-read-path`         | 結果ファイルのパスの検査                                                                   |
+| `target-read-tf-setup`     | 作業ディレクトリと Terraform の入力の準備                                                  |
+| `target-read-tf-init`      | `terraform init`                                                                           |
+| `target-read-tf-show`      | `terraform show -json`。state が JSON でない場合と、state が空の場合も、この処理に入ります |
+| `target-read-tf-output`    | `terraform output -json` の実行                                                            |
+| `target-read-output-check` | `terraform output -json` の出力の解析と、想定の identity との照合                          |
+| `target-read-expected`     | 出力から期待する移行先を組み立てる処理                                                     |
+| `target-read-write`        | 結果ファイルの書き込み                                                                     |
+| `target-read-unclassified` | 上のどれにも当たらない処理                                                                 |
+
+`terraform init`、`terraform show`、`terraform output` が失敗した場合、`program=terraform` で出て、`exit` に Terraform の終了コードが入ります。`reason` は、Terraform の stderr を private ログの中で照合した、次の4つのどれかです。stderr の本文、パス、bucket 名は公開ログに出ません。
+
+| `reason`                | 照合する stderr の文字列                                                                                                                                                 | 意味                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `terraform-lock`        | `does not match any of the checksums recorded in the dependency lock file`、`Required plugins are not installed`、`Inconsistent dependency lock file`                    | `.terraform.lock.hcl` と、導入した provider が合いません                                                 |
+| `terraform-auth`        | `AccessDenied`、`InvalidAccessKeyId`、`SignatureDoesNotMatch`、`ExpiredToken`、`StatusCode: 401`、`StatusCode: 403`、`No valid credential sources found`                 | state の backend への認証か権限が失敗しています。読み取り専用の state 鍵の値と権限を、管理役が確かめます |
+| `terraform-unreachable` | `dial tcp`、`no such host`、`connection refused`、`connection reset by peer`、`i/o timeout`、`context deadline exceeded`、`TLS handshake timeout`、`send request failed` | backend か provider の registry に届きません                                                             |
+| `terraform-other`       | 上のどれにも当たらない stderr                                                                                                                                            | 原因は private ログにだけ残ります                                                                        |
+
+複数の文字列が当たる場合、`terraform-lock`、`terraform-auth`、`terraform-unreachable` の順に先に当たった語を出します。Terraform は長い文を折り返し、行頭に罫線の文字を付けるので、照合の前に色の制御文字と罫線を取り除き、空白を1つにまとめます。
+
+`terraform init` は `-lockfile=readonly` 付きで実行します。この指定により、`terraform init` は lock を書き換えません。lock には `linux_amd64` と `darwin_arm64` の h1 を記録しています。provider を更新するときは、`terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` で両方の platform を指定して lock を作り直します。lock が runner の platform に合わないと、`terraform init` の後の `terraform show` や `terraform plan` が `terraform-lock` で止まります。CI の `Generate Cloudflare provider schema` は、linux で lock の更新が要るかを検出します。
+
+`terraform show -json` と `terraform output -json` の出力の検査で失敗した場合、`program=none` で、`reason` は次のどれかです。
+
+- `output-invalid`: Terraform の出力が JSON ではありません。
+- `output-mismatch`: `target-read-tf-show` では state が空です。`target-read-output-check` では、出力が想定の identity と合いません。
+- `identity-mismatch`: `target-read-expected` で、出力から有効な移行先を組み立てられません。
+
 ## 7. 中断と引き継ぎ
 
 | 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                                                                                                                             |

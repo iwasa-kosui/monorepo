@@ -15,7 +15,15 @@ export const runInfrastructureCommand = async (program, args, options) => {
         timeout: 10 * 60_000,
         maxBuffer: 8_000_000,
         signal: options.signal,
-        captureOutput: log?.capture,
+        captureOutput: options.inspectOutput
+          ? async (result) => {
+            try {
+              await log?.capture(result);
+            } finally {
+              options.inspectOutput(result);
+            }
+          }
+          : log?.capture,
       }),
     };
   } finally {

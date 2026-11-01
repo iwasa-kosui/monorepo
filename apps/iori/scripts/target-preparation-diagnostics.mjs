@@ -65,6 +65,10 @@ const FIXED_REASONS = new Set([
   'credentials-missing',
   'credential-not-distinct',
   'vapid-rejected',
+  'terraform-auth',
+  'terraform-unreachable',
+  'terraform-lock',
+  'terraform-other',
   'unclassified',
 ]);
 const controlPlaneReason = new RegExp(

@@ -259,6 +259,23 @@ it('relays only exact fixed-vocabulary diagnostic lines to the public log', asyn
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays the fixed-vocabulary target-read diagnostics and refuses a Terraform line outside the vocabulary', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=terraform-auth',
+    'IORI_DIAG stage=target-read-tf-show program=terraform exit=none signal=SIGTERM reason=terraform-other',
+    'IORI_DIAG stage=target-read-output-check program=none exit=none signal=none reason=output-mismatch',
+    'IORI_DIAG stage=hosted-main-recheck program=none exit=none signal=none reason=reviewed-checkout-dirty',
+  ];
+  await publishChildDiagnostics([
+    ...accepted,
+    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=Access_Denied',
+    'IORI_DIAG stage=target-read-tf-init program=tofu exit=1 signal=none reason=terraform-auth',
+    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=terraform-auth extra=/home/secret',
+    'Error: api error AccessDenied: secret-bucket-name',
+  ].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
 it('relays the fixed-vocabulary prepare-target diagnostics to the public log', async () => {
   const writes = captureStderr();
   const lines = [

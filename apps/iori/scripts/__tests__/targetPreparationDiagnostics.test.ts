@@ -54,6 +54,10 @@ const representativeReasons = [
   'credentials-missing',
   'credential-not-distinct',
   'vapid-rejected',
+  'terraform-auth',
+  'terraform-unreachable',
+  'terraform-lock',
+  'terraform-other',
   'unclassified',
 ];
 it('keeps the stage vocabulary fixed', () => {

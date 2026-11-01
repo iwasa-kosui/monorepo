@@ -115,6 +115,10 @@ it('accepts the preparation, source and cutover reasons only', () => {
       'verify-failed',
       'deploy-failed',
       'source-not-quiescent',
+      'terraform-auth',
+      'terraform-unreachable',
+      'terraform-lock',
+      'terraform-other',
     ]
   ) expect(isCutoverReason(reason), reason).toBe(true);
   for (const reason of ['', 'Secret_Value', 'a/b', undefined, 3, 'https://x.invalid']) {

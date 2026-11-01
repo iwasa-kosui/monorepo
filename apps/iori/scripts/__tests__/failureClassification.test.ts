@@ -6,10 +6,21 @@ import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer
 const failure = (reason?: string, message = 'fixture-secret-message') =>
   Object.assign(new Error(message), reason ? { diagnostic: { reason } } : {});
 it('accepts the preparation, source and cutover words only', () => {
-  for (const reason of [...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS, 'smoke-failed', 'plan-rejected']) {
+  for (
+    const reason of [
+      ...SOURCE_SSH_REASONS,
+      ...SOURCE_REJECTION_DETAILS,
+      'smoke-failed',
+      'plan-rejected',
+      'terraform-auth',
+      'terraform-unreachable',
+      'terraform-lock',
+      'terraform-other',
+    ]
+  ) {
     expect(isCutoverReason(reason)).toBe(true);
   }
-  for (const reason of ['Smoke_Failed', 'https://secret.invalid', undefined, 7]) {
+  for (const reason of ['Smoke_Failed', 'https://secret.invalid', 'terraform-', 'terraform-secret', undefined, 7]) {
     expect(isCutoverReason(reason)).toBe(false);
   }
 });

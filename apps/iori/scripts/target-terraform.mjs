@@ -83,6 +83,7 @@ export const createTargetTerraform = (
     await run([
       'init',
       '-input=false',
+      '-lockfile=readonly',
       '-reconfigure',
       `-backend-config=bucket=${identity.backendBucket}`,
       `-backend-config=key=${identity.backendKey}`,

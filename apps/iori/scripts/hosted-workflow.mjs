@@ -132,7 +132,7 @@ export const materializeHostedValues = async env => {
 };
 // Only fixed-vocabulary diagnostics may reach the public Actions log.
 const diagnosticLine =
-  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
+  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|terraform|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
 const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
 const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
@@ -181,6 +181,8 @@ const hostedReasons = [
   ['Reviewed checkout mismatch.', 'reviewed-checkout-mismatch'],
   ['Tracked checkout is dirty.', 'reviewed-checkout-dirty'],
   ['Reviewed main changed.', 'reviewed-main-changed'],
+  ['Invalid target input.', 'target-input-invalid'],
+  ['Migration target evidence is invalid.', 'identity-mismatch'],
   ['Migration command failed; outcome may be uncertain.', 'command-failed'],
   ['Migration command aborted.', 'aborted'],
 ];
@@ -291,17 +293,25 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   }
   if (phase !== 'operate') throw new Error('Invalid hosted phase.');
   const runtime = await stage('materialize', () => materializeHostedValues(env));
-  const { assertReviewedMain } = await import('./reviewed-main.mjs');
-  await stage('reviewed-main', () => assertReviewedMain(selected.codeSha, { signal }));
+  await stage('reviewed-main', async () => {
+    const { assertReviewedMain } = await import('./reviewed-main.mjs');
+    return assertReviewedMain(selected.codeSha, { signal });
+  });
   if (
     ['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'purge-rehearsal-target'].includes(
       selected.operation,
     )
   ) {
-    await execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs);
+    await stage(
+      'target-read',
+      () => execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs),
+      'node',
+    );
     // The fixed target-reader output is private and is also the deployment binding authority.
-    const { loadExpectedTarget } = await import('./migration-target-input.mjs');
-    const target = await loadExpectedTarget(runtime.IORI_MIGRATION_EXPECTED_TARGET_PATH);
+    const target = await stage('target-load', async () => {
+      const { loadExpectedTarget } = await import('./migration-target-input.mjs');
+      return loadExpectedTarget(runtime.IORI_MIGRATION_EXPECTED_TARGET_PATH);
+    });
     const b = {
       d1_database_id: target.resources.d1.id,
       r2_bucket_name: target.resources.uploads.name,
@@ -310,10 +320,13 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
       worker_name: target.identity.worker_name,
     };
     const bindingPath = join(runtime.IORI_PRIVATE_DIRECTORY, 'config/worker-bindings.json');
-    await writeFile(bindingPath, JSON.stringify(b), { flag: 'wx', mode: 0o600 });
+    await stage('binding-write', () => writeFile(bindingPath, JSON.stringify(b), { flag: 'wx', mode: 0o600 }));
     runtime.IORI_WORKER_BINDINGS_PATH = bindingPath;
     runtime.IORI_REQUIRE_TERRAFORM_BINDINGS = 'true';
-    await assertReviewedMain(selected.codeSha, { signal });
+    await stage('main-recheck', async () => {
+      const { assertReviewedMain } = await import('./reviewed-main.mjs');
+      return assertReviewedMain(selected.codeSha, { signal });
+    });
   }
   await executeHostedOperation(
     selected.operation === 'source' ? 'deploy-source' : 'operation',

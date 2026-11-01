@@ -43,6 +43,7 @@ it('pins actual backend initialization to the generation and rejects old state b
   });
   await expect(api.initializeFresh()).rejects.toThrow();
   expect(command.mock.calls[0]![1]).toContain(`-backend-config=key=${identity.backendKey}`);
+  expect(command.mock.calls[0]![1]).toContain('-lockfile=readonly');
   expect(command.mock.calls.some(([, args]) => args.includes('plan') || args.includes('apply'))).toBe(false);
 });
 it('validates a fresh create plan before the fixed apply and returns generation-correlated outputs', async () => {
