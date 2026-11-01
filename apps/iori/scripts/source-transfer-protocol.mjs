@@ -27,6 +27,7 @@ export const SOURCE_REJECTION_DETAILS = Object.freeze([
   'estimate-upload-too-large',
   'estimate-upload-access',
   'estimate-upload-other',
+  'estimate-export-owner',
   'estimate-too-large',
   'estimate-limit',
   'estimate-other',

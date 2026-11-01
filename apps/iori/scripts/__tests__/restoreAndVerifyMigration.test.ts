@@ -56,7 +56,7 @@ const setup = async (url: string) => {
       end: async () => {},
       query: async (sql: string) => {
         if (sql.startsWith('DECLARE')) {
-          table = /FROM "([a-z_]+)"/.exec(sql)![1]!;
+          table = /FROM "([a-z_]+)" AS row/.exec(sql)![1]!;
           sent = false;
         }
         if (sql.startsWith('FETCH') && table === 'post_images' && !sent) {

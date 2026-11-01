@@ -349,7 +349,7 @@ describe('Cloudflare data migration tooling', () => {
         },
         query: async (sql) => {
           if (sql.startsWith('DECLARE')) {
-            cursorTable = sql.includes('FROM "actors"') ? 'actors' : '';
+            cursorTable = /FROM "([a-z_]+)" AS row/.exec(sql)![1] === 'actors' ? 'actors' : '';
             delivered = false;
           }
           if (sql.startsWith('FETCH') && cursorTable === 'actors' && !delivered) {
@@ -401,7 +401,7 @@ describe('Cloudflare data migration tooling', () => {
         end: async () => undefined,
         query: async (sql) => {
           if (sql.startsWith('DECLARE')) {
-            cursorTable = sql.includes('FROM "posts"') ? 'posts' : '';
+            cursorTable = /FROM "([a-z_]+)" AS row/.exec(sql)![1] === 'posts' ? 'posts' : '';
             delivered = false;
           }
           if (sql.startsWith('FETCH') && cursorTable === 'posts' && !delivered) {

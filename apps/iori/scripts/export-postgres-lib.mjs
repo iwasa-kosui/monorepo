@@ -41,6 +41,72 @@ export const APPLICATION_TABLE_ORDER = [
   'federated_timeline_items',
 ];
 
+const ME =
+  'SELECT "local_actors"."actorId" FROM "local_actors" INNER JOIN "users" ON "users"."userId" = "local_actors"."userId"';
+export const EXPORT_OWNER_ACTOR_IDS = ME;
+const LIKE_SCOPE = `"actorId" IN (${ME}) OR "postId" IN (SELECT "postId" FROM "posts" WHERE "actorId" IN (${ME}))`;
+const EMOJI_REACT_SCOPE = LIKE_SCOPE;
+const POST_IDS = [
+  `SELECT "postId" FROM "posts" WHERE "actorId" IN (${ME})`,
+  `SELECT "postId" FROM "likes" WHERE "actorId" IN (${ME})`,
+  `SELECT "postId" FROM "emoji_reacts" WHERE "actorId" IN (${ME})`,
+  'SELECT "rootPostId" FROM "articles"',
+  'SELECT "postId" FROM "local_posts"',
+].join(' UNION ');
+const ACTOR_IDS = [
+  ME,
+  `SELECT "followerId" FROM "follows" WHERE "followingId" IN (${ME})`,
+  `SELECT "followingId" FROM "follows" WHERE "followerId" IN (${ME})`,
+  `SELECT "actorId" FROM "likes" WHERE (${LIKE_SCOPE})`,
+  `SELECT "actorId" FROM "emoji_reacts" WHERE (${EMOJI_REACT_SCOPE})`,
+  `SELECT "actorId" FROM "posts" WHERE "postId" IN (${POST_IDS})`,
+  'SELECT "mutedActorId" FROM "mutes"',
+  'SELECT "authorActorId" FROM "articles"',
+].join(' UNION ');
+const ACTOR_SCOPE = `"actorId" IN (${ACTOR_IDS})`;
+const POST_SCOPE = `"postId" IN (${POST_IDS})`;
+const LIKE_ID_SCOPE = `"likeId" IN (SELECT "likeId" FROM "likes" WHERE ${LIKE_SCOPE})`;
+
+// 旧 DB の行のうち、本人の投稿と本人に関わる相手だけを移す。範囲外の行は旧 DB に残す。
+export const EXPORT_ROW_SCOPE = Object.freeze({
+  users: null,
+  actors: ACTOR_SCOPE,
+  instance_actor_keys: null,
+  domain_events: 'false',
+  relays: null,
+  keys: null,
+  user_passwords: null,
+  sessions: 'false',
+  local_actors: null,
+  remote_actors: ACTOR_SCOPE,
+  follows: `"followerId" IN (${ME}) OR "followingId" IN (${ME})`,
+  posts: POST_SCOPE,
+  remote_posts: POST_SCOPE,
+  local_posts: null,
+  likes: LIKE_SCOPE,
+  local_likes: LIKE_ID_SCOPE,
+  remote_likes: LIKE_ID_SCOPE,
+  post_images: POST_SCOPE,
+  notifications: 'false',
+  notification_likes: 'false',
+  notification_follows: 'false',
+  notification_emoji_reacts: 'false',
+  notification_replies: 'false',
+  push_subscriptions: null,
+  reposts: 'false',
+  timeline_items: 'false',
+  emoji_reacts: EMOJI_REACT_SCOPE,
+  mutes: null,
+  articles: null,
+  link_previews: POST_SCOPE,
+  federated_timeline_items: 'false',
+});
+
+if (
+  Object.keys(EXPORT_ROW_SCOPE).length !== APPLICATION_TABLE_ORDER.length
+  || !APPLICATION_TABLE_ORDER.every(table => Object.hasOwn(EXPORT_ROW_SCOPE, table))
+) throw new Error('EXPORT_ROW_SCOPE must cover exactly APPLICATION_TABLE_ORDER.');
+
 export const EXPORT_LIMITS = Object.freeze({
   rowBytes: 8 * 1024 * 1024,
   pageRows: 16,
@@ -85,7 +151,9 @@ export const exportPostgres = async (
     for (const table of APPLICATION_TABLE_ORDER) {
       signal?.throwIfAborted();
       await client.query(
-        `DECLARE iori_export NO SCROLL CURSOR FOR SELECT CASE WHEN octet_length(to_jsonb(row)::text) <= ${EXPORT_LIMITS.rowBytes} THEN to_jsonb(row) ELSE NULL END AS row FROM "${table}" AS row`,
+        `DECLARE iori_export NO SCROLL CURSOR FOR SELECT CASE WHEN octet_length(to_jsonb(row)::text) <= ${EXPORT_LIMITS.rowBytes} THEN to_jsonb(row) ELSE NULL END AS row FROM "${table}" AS row${
+          EXPORT_ROW_SCOPE[table] === null ? '' : ` WHERE ${EXPORT_ROW_SCOPE[table]}`
+        }`,
       );
       const records = async function*() {
         while (true) {

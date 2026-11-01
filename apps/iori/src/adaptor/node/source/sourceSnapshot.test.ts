@@ -50,6 +50,7 @@ const setup = async (rows: ImageRow[] = defaultRows) => {
         connect: async () => {},
         end: async () => {},
         query: async (sql: string) => {
+          if (sql.includes('AS owner')) return { rows: [{ count: '1' }] };
           if (sql.startsWith('SELECT COALESCE')) return { rows: [{ bytes: '100', count: '1' }] };
           if (sql.startsWith('DECLARE')) {
             images = sql.includes('post_images');
@@ -90,6 +91,7 @@ type Failure = {
   at?: (sql: string) => boolean;
   connect?: boolean;
   bytes?: string;
+  owners?: string;
   row?: unknown;
   abort?: boolean;
   drop?: boolean;
@@ -119,6 +121,7 @@ const estimateWith = async (failure: Failure, uploadDir?: (base: string) => stri
         end: async () => {},
         query: async (sql: string) => {
           if (failure.at?.(sql)) throw new Error('password=hunter2');
+          if (sql.includes('AS owner')) return { rows: [{ count: failure.owners ?? '1' }] };
           if (sql.startsWith('SELECT COALESCE')) return { rows: [{ bytes: failure.bytes ?? '100', count: '1' }] };
           if (sql.startsWith('FETCH') && !sent) {
             sent = true;
@@ -141,6 +144,10 @@ it.each<[string, Failure, string, ((base: string) => string)?, boolean?]>([
   ['connect', { connect: true }, 'estimate-connect'],
   ['BEGIN', { at: (sql) => sql.startsWith('BEGIN') }, 'estimate-connect'],
   ['SET LOCAL', { at: (sql) => sql.startsWith('SET LOCAL') }, 'estimate-connect'],
+  ['owner SELECT', { at: (sql) => sql.includes('AS owner') }, 'estimate-query'],
+  ['owner result', { owners: 'not a number' }, 'estimate-query'],
+  ['no owner', { owners: '0' }, 'estimate-export-owner'],
+  ['two owners', { owners: '2' }, 'estimate-export-owner'],
   ['table SELECT', { at: (sql) => sql.startsWith('SELECT COALESCE') }, 'estimate-query'],
   ['table result', { bytes: 'not a number' }, 'estimate-query'],
   ['DECLARE', { at: (sql) => sql.startsWith('DECLARE') }, 'estimate-query'],
@@ -261,6 +268,7 @@ const pagedSnapshot = (base: string, uploadDir: string, pages: { row: unknown }[
         connect: async () => {},
         end: async () => {},
         query: async (sql: string) => {
+          if (sql.includes('AS owner')) return { rows: [{ count: '1' }] };
           if (sql.startsWith('SELECT COALESCE')) return { rows: [{ bytes: '100', count: '1' }] };
           if (sql.startsWith('FETCH')) {
             return { rows: pages[fetched++] ?? [] };

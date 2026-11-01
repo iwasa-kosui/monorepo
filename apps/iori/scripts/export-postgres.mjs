@@ -1,5 +1,11 @@
 import { fileURLToPath } from 'node:url';
-export { APPLICATION_TABLE_ORDER, EXPORT_LIMITS, exportPostgres } from './export-postgres-lib.mjs';
+export {
+  APPLICATION_TABLE_ORDER,
+  EXPORT_LIMITS,
+  EXPORT_OWNER_ACTOR_IDS,
+  EXPORT_ROW_SCOPE,
+  exportPostgres,
+} from './export-postgres-lib.mjs';
 
 // Direct CLI booleans cannot prove quiescence. Use the fixed private source-control client.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
