@@ -114,6 +114,7 @@ pnpm format
 pnpm exec tsc --noEmit
 
 # 本番ビルド
+pnpm --filter result run build
 pnpm build
 ```
 

@@ -1,13 +1,17 @@
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import {
   executeHostedOperation,
+  hostedFailureMessage,
   materializeHostedValues,
   publishChildDiagnostics,
   runHostedWorkflow,
 } from '../hosted-workflow.mjs';
+import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
+import { preparationFailureReport } from '../prepare-migration-target.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 const baseEnv = (operation: string) => ({
@@ -260,6 +264,20 @@ it('relays only the exact configuration owner notice to the public log', async (
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact configuration mode notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=644',
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=0888',
+    'IORI_NOTICE stage=remote-configuration-mode previous_mode=01644',
+    'IORI_NOTICE stage=remote-install previous_mode=0644',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('relays only the exact release-pending-freeze notice to the public log', async () => {
   const writes = captureStderr();
   const accepted = 'IORI_NOTICE stage=release-pending-freeze renamed=1';
@@ -350,6 +368,7 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-frozen',
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-operation-failed',
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed',
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-idle',
     'IORI_DIAG stage=resume-verify program=ssh exit=none signal=none reason=resume-not-confirmed',
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',
@@ -463,6 +482,84 @@ it('relays a failed child diagnostic and its hosted diagnostic without raw child
       'IORI_DIAG stage=hosted-deploy-source program=node exit=1 signal=none reason=command-failed\n',
     ]);
     expect(writes.join('')).not.toContain('PRIVATE KEY');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+const runExitingChild = async (operation: string, exitCode: number) => {
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const script = join(directory, 'child.mjs');
+    await writeFile(script, `process.exit(${exitCode});\n`);
+    const result = await executeHostedOperation(
+      'operation',
+      script,
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      operation,
+    ).then(() => undefined, (error: unknown) => error);
+    return result;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+const stoppedMessage =
+  'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.';
+const failedMessage = 'Protected workflow step failed; retain remote state for reviewed recovery.';
+it('classifies a prepare-target child that exits with 78 as stopped before resources', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('prepare-target', 78);
+  expect(error).toBeInstanceOf(Error);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(stoppedMessage);
+});
+it('keeps command-failed for a prepare-target child that exits with 1', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('prepare-target', 1);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(failedMessage);
+});
+it('keeps command-failed for another operation that exits with 78', async () => {
+  const writes = captureStderr();
+  const error = await runExitingChild('migrate-data', 78);
+  expect(writes).toEqual([
+    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=command-failed\n',
+  ]);
+  expect(hostedFailureMessage(error)).toBe(failedMessage);
+});
+it('selects the stopped message only for the marked error and accepts both messages as workflow output', () => {
+  expect(hostedFailureMessage(new Error('x'))).toBe(failedMessage);
+  expect(hostedFailureMessage(undefined)).toBe(failedMessage);
+  expect(assertWorkflowOutput(stoppedMessage)).toEqual([]);
+  expect(assertWorkflowOutput(failedMessage)).toEqual([]);
+  expect(preparationFailureReport(false).message).toBe(stoppedMessage);
+});
+it('reports the real prepare-migration-target CLI that stops before resources as stopped', async () => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const error = await executeHostedOperation(
+      'operation',
+      fileURLToPath(new URL('../prepare-migration-target.mjs', import.meta.url)),
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      'prepare-target',
+    ).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(stoppedMessage);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

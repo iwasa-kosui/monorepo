@@ -131,6 +131,7 @@ export const materializeHostedValues = async env => {
 const diagnosticLine =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
+const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
 const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
 const alreadyRenamedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze already_renamed=1$/;
 const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/;
@@ -165,9 +166,9 @@ const hostedCodeReasons = {
 const writeDiagnosticLine = async line => {
   try {
     if (
-      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !releaseNoticeLine.test(line)
-      && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line) && !estimateLine.test(line)
-      && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
+      !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
+      && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
+      && !estimateLine.test(line) && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
@@ -176,7 +177,7 @@ const writeDiagnosticLine = async line => {
 export const publishChildDiagnostics = async stderr => {
   for (const line of String(stderr).split('\n')) await writeDiagnosticLine(line);
 };
-const hostedStage = async (name, operation, program = 'none') => {
+const hostedStage = async (name, operation, program = 'none', classify = () => undefined) => {
   try {
     return await operation();
   } catch (error) {
@@ -186,7 +187,7 @@ const hostedStage = async (name, operation, program = 'none') => {
     const exitSignal = program === 'node' && typeof error?.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(error.signal)
       ? error.signal
       : 'none';
-    const reason = hostedReasons.find(([message]) => error?.message === message)?.[1]
+    const reason = classify(error) ?? hostedReasons.find(([message]) => error?.message === message)?.[1]
       ?? (error?.spawnFailed === true ? 'spawn-failed' : undefined)
       ?? hostedCodeReasons[error?.code] ?? 'unclassified';
     await writeDiagnosticLine(
@@ -217,8 +218,22 @@ const execute = async (program, args, env, signal, timeout) => {
     await log.close();
   }
 };
-export const executeHostedOperation = (name, scriptPath, env, signal, timeout) =>
-  hostedStage(name, () => execute(process.execPath, [scriptPath], env, signal, timeout), 'node');
+const stoppedBeforeResources = new WeakSet();
+const preparationStopped = (operation, error) => operation === 'prepare-target' && error?.exitCode === 78;
+export const executeHostedOperation = (name, scriptPath, env, signal, timeout, operation) =>
+  hostedStage(
+    name,
+    async () => {
+      try {
+        return await execute(process.execPath, [scriptPath], env, signal, timeout);
+      } catch (error) {
+        if (preparationStopped(operation, error)) stoppedBeforeResources.add(error);
+        throw error;
+      }
+    },
+    'node',
+    error => preparationStopped(operation, error) ? 'stopped-before-resources' : undefined,
+  );
 export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const stage = (name, operation, program) => phase === 'operate' ? hostedStage(name, operation, program) : operation();
   let selected;
@@ -277,13 +292,16 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     runtime,
     signal,
     remainingMs,
+    selected.operation,
   );
 };
-const emitStatus = async success => {
-  const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
-  const message = success
-    ? 'Protected workflow step completed.'
+export const hostedFailureMessage = error =>
+  stoppedBeforeResources.has(error)
+    ? 'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.'
     : 'Protected workflow step failed; retain remote state for reviewed recovery.';
+const emitStatus = async (success, error) => {
+  const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
+  const message = success ? 'Protected workflow step completed.' : hostedFailureMessage(error);
   if (assertWorkflowOutput(message).length) {
     process.exitCode = 1;
     return;
@@ -295,10 +313,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   withCliSignal(signal =>
     phase === 'init' ? initializeHostedWorkflow(process.env) : runHostedWorkflow(phase, process.env, signal)
   )
-    .then(() => emitStatus(true)).catch(async () => {
+    .then(() => emitStatus(true)).catch(async error => {
       process.exitCode = 1;
       try {
-        await emitStatus(false);
+        await emitStatus(false, error);
       } catch { /* keep failure without raw diagnostics */ }
     });
 }

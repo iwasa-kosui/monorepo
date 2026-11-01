@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 
 import { admissionEnvironment, expectedTargetFromOutputs, targetIdentity } from '../migration-target-contract.mjs';
-import { prepareMigrationTarget } from '../prepare-migration-target.mjs';
+import { preparationFailureReport, prepareMigrationTarget } from '../prepare-migration-target.mjs';
 import { expectedTargetFixture } from './migrationTargetFixture.js';
 const fixture = () => {
   const target = expectedTargetFixture();
@@ -131,4 +131,16 @@ it('keeps paused preparation strict while the separate active-output policy reta
   expect(activeTargetFromOutputs({ ...config, outputs })).toEqual(target);
   outputs.targetIdentity.dlq_settings.delivery_paused = false;
   expect(() => activeTargetFromOutputs({ ...config, outputs })).toThrow();
+});
+it('reports exit code 78 when preparation stopped before creating resources', () => {
+  expect(preparationFailureReport(false)).toEqual({
+    message: 'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.',
+    exitCode: 78,
+  });
+});
+it('reports exit code 1 when resource preparation had started', () => {
+  expect(preparationFailureReport(true)).toEqual({
+    message: 'Target preparation failed; retain generation and any record for reviewed recovery.',
+    exitCode: 1,
+  });
 });

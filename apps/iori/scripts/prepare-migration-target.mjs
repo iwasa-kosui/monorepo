@@ -44,6 +44,14 @@ export const prepareMigrationTarget = async ({ config, preparation, deploy, stor
   };
   return writePreparationRecord({ storage, expectedTarget, record });
 };
+export const preparationFailureReport = (resourcePreparationStarted) =>
+  resourcePreparationStarted
+    ? { message: 'Target preparation failed; retain generation and any record for reviewed recovery.', exitCode: 1 }
+    : {
+      message:
+        'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.',
+      exitCode: 78,
+    };
 const main = async (cliSignal) => {
   const config = targetSetupConfiguration(process.env);
   for (
@@ -103,11 +111,8 @@ const main = async (cliSignal) => {
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch(() => {
-    console.error(
-      resourcePreparationStarted
-        ? 'Target preparation failed; retain generation and any record for reviewed recovery.'
-        : 'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.',
-    );
-    process.exitCode = 1;
+    const { message, exitCode } = preparationFailureReport(resourcePreparationStarted);
+    console.error(message);
+    process.exitCode = exitCode;
   });
 }

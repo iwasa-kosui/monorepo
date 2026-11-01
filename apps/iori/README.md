@@ -116,6 +116,7 @@ pnpm format
 pnpm exec tsc --noEmit
 
 # Production build
+pnpm --filter result run build
 pnpm build
 ```
 

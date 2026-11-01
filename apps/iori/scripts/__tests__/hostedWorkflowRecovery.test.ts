@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { runHostedWorkflow } from '../hosted-workflow.mjs';
+import { hostedFailureMessage, runHostedWorkflow } from '../hosted-workflow.mjs';
 import { runMigrationCommand } from '../migration-command.mjs';
 import { assertReviewedMain } from '../reviewed-main.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
@@ -56,3 +56,45 @@ it.each([
     }
   },
 );
+it('reports prepare-target stopped before resources when the operation command exits with 78', async () => {
+  const writes: string[] = [];
+  const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(
+    ((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write,
+  );
+  vi.mocked(runMigrationCommand).mockRejectedValueOnce(
+    Object.assign(new Error('Migration command failed; outcome may be uncertain.'), { exitCode: 78, signal: null }),
+  );
+  const runnerTemp = await createFixtureDirectory('iori-hosted-');
+  try {
+    const paths = await createWorkflowDirectory(runnerTemp);
+    const error = await runHostedWorkflow('operate', {
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_SHA: codeSha,
+      MAIN_SHA: codeSha,
+      IORI_MIGRATION_RUN_ID: 'run1',
+      IORI_ENVIRONMENT: 'staging',
+      IORI_GENERATION: 'fixture1',
+      IORI_OPERATION: 'prepare-target',
+      IORI_JOB_STARTED_AT: String(Date.now() - 60_000),
+      RUNNER_TEMP: runnerTemp,
+      IORI_PRIVATE_DIRECTORY: paths.base,
+      IORI_PRIVATE_LOG_DIRECTORY: paths.logs,
+    }, new AbortController().signal).then(() => undefined, (reason: unknown) => reason);
+    const commands = vi.mocked(runMigrationCommand).mock.calls as unknown as [string, string[]][];
+    expect(commands.map(([, args]) => args)).toEqual([['apps/iori/scripts/prepare-migration-target.mjs']]);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(
+      'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.',
+    );
+  } finally {
+    stderr.mockRestore();
+    await rm(runnerTemp, { recursive: true, force: true });
+  }
+});

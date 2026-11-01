@@ -1,3 +1,4 @@
+pnpm --filter result run build
 pnpm build
 ssh microblog "sudo mkdir -p /opt/microblog"
 ssh microblog "sudo mkdir -p /etc/systemd/system/microblog.service.d"

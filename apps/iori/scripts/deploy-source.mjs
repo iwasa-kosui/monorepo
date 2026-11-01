@@ -60,6 +60,7 @@ const fixedReasons = [
   ['Unsupported source pnpm.', 'source-pnpm-version'],
   ['Source configuration unavailable.', 'source-config-unavailable'],
   ['Source configuration owner reset failed.', 'config-owner-reset-failed'],
+  ['Source configuration mode reset failed.', 'config-mode-reset-failed'],
   ['Source deployment is blocked.', 'source-deploy-blocked'],
   ['Invalid source build closure.', 'source-build-closure-invalid'],
   ['Invalid source command.', 'source-command-invalid'],
@@ -107,6 +108,7 @@ const sshReasons = [
   [['Could not resolve hostname'], 'ssh-dns'],
 ];
 const ownerNotice = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
+const modeNotice = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
 const classifyFailure = (program, error, stderr) => {
   const text = `${error?.message ?? ''}\n${stderr}`;
   const fixed = fixedReasons.find(([needle]) => text.includes(needle));
@@ -199,7 +201,9 @@ export const deploySource = async (options, {
         captureOutput: async (result) => {
           current.stderr = result.stderr;
           if (program === 'ssh') {
-            for (const line of result.stderr.split('\n')) if (ownerNotice.test(line)) process.stderr.write(`${line}\n`);
+            for (const line of result.stderr.split('\n')) {
+              if (ownerNotice.test(line) || modeNotice.test(line)) process.stderr.write(`${line}\n`);
+            }
           }
           await log?.capture(result);
         },
