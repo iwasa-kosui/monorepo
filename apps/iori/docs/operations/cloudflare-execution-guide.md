@@ -131,6 +131,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - 計測では、段階 A を計測1 の前に行います。段階 B は計測2 の前に行い、`transfer-read-only` と `application-write` の作成と疎通確認だけを実行します。`transfer-read-only` は、準備記録を読む `purge-rehearsal-target` のために、`prepare-target` の後に作ります。計測の完了条件では、登録済みの secret は 6 つです。
 - 計測用の `EXPIRES_ON` は、計測2 の実施予定日に 7 日を足した日時にします。`transfer-read-only` には期限がないので、削除を忘れると残ります。
 - 計測用と本番用の generation は、production Environment の同じ secret 名を使います。本番用の段階 A は、計測用の `IORI_TRANSFER_R2_WRITE` を上書きします。本番用の段階 B は、計測用の `IORI_TRANSFER_R2_READ_ONLY` と `IORI_APPLICATION_R2_WRITE` を、本番用 generation の bucket に限定した token の値で上書きします。上書きされた値では、計測用 generation の bucket に認証できないので、`purge-rehearsal-target` が失敗します。このため、作業者とユーザーは、計測1〜計測3 と `purge-rehearsal-target` をすべて終えてから本番用の段階 A を行います。
+- `deploy-iori-worker.yml` の `TODO(iori-cutover)` を戻すまで、workflow は `IORI_APPLICATION_R2_WRITE` ではなく `IORI_TRANSFER_R2_WRITE` を読みます。作業者は、本番用の段階 B の前に `TODO(iori-cutover)` の箇所を戻します。
 - `purge-rehearsal-target` が成功した後に、作業者が Dashboard の token 一覧で計測用の子 token を削除します。`purge-rehearsal-target` が失敗した場合は、同じ入力で再実行するので、成功するまで計測用の子 token を削除しません。5.4 節の envelope の取得は wrangler で行うので、計測用の子 token を使いません。計測用 generation のリソースと state は、5.x 節の後片付けに従って扱います。
 
 未作成の bucket を対象にする token は、`IORI_TRANSFER_R2_WRITE` の 1 つだけです。残りの 3 つは、`prepare-target` が bucket を作った後に作ります。この順序にすると、作成した直後の値で S3 の疎通を確かめられます。GitHub は secret の値を返さないので、登録した後には確かめられません。
