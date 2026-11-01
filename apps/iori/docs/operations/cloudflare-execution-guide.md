@@ -457,7 +457,7 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 
 `<resource>` は `d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかです。`<action>` は `create`、`update`、`delete`、`replace`、`no-op`、`other` のどれかです。例として、`plan-queue-update` は fedify の Queue の更新を表します。
 
-リソースの読み取り（`prepare-resource-read`、`prepare-attach-read`、cutover-route の読み取りの段）が `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
+リソースの読み取り（`prepare-resource-read`、`prepare-attach-read`、`cutover-gate-smoke`、`cutover-gate-route`、`cutover-gate-active`、`cutover-gate-queue`、`cutover-read-resume`）が `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
 
 | `reason`                     | 意味                                                                                   |
 | ---------------------------- | -------------------------------------------------------------------------------------- |
@@ -479,7 +479,7 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 | `resource-consumer-settings` | consumer の batch size、待ち時間、再試行の回数、再試行の間隔のどれかが期待と違います。 |
 | `resource-domain-public`     | transfer の bucket の r2.dev の公開 URL が無効になっていません。                       |
 
-Cloudflare Queues API は、consumer の Worker 名を `script` で返します。Terraform の provider の定義は `script_name` と書いていますが、2026-11-01 の読み取りでは、`GET /queues/{queue_id}` の応答の consumer に `script_name` はありませんでした。読み取りは `script` を使い、`script` が無いときだけ `script_name` を使います。
+Cloudflare Queues API は、consumer の Worker 名を `script` で返します。Terraform の provider の定義は `script_name` と書いていますが、2026-11-01 の読み取りでは、`GET /queues/{queue_id}` の応答の consumer に `script_name` はありませんでした。読み取りは `script` を使い、`script` が無いときだけ `script_name` を使います。2026-11-01 の `GET /queues/{queue_id}` の読み取りでは、次のキーを確かめました。`result` は `queue_id`、`queue_name`、`settings`、`created_on`、`modified_on`、`producers_total_count`、`producers`、`consumers_total_count`、`consumers` を持ちます。`result.settings` は `delivery_delay`、`delivery_paused`、`message_retention_period` を持ちます。`result.consumers[]` の要素は `script`、`dead_letter_queue`、`settings`、`consumer_id`、`type` を持ち、`dead_letter_queue` は DLQ の名前です。consumer の `settings` は `batch_size`、`max_retries`、`max_wait_time_ms`、`retry_delay` を持ちます。`result.producers[]` の要素は `script` と `type` を持ちます。Dashboard が表示する HTTP Push の producer は、API の `producers` には入っていません。
 
 ### 3.3 Identity の照合
 
@@ -1111,7 +1111,7 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 ### 6.3 cutover-route の失敗した段
 
-`cutover-route` が失敗すると、公開ログに `IORI_DIAG stage=cutover-<段> program=none exit=none signal=none reason=<分類>` の行が出ます。plan を拒否したときは、この行の前に `plan-` で始まる詳細の行が最大8行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
+`cutover-route` が失敗すると、公開ログに `IORI_DIAG stage=cutover-<段> program=none exit=none signal=none reason=<分類>` の行が出ます。plan を拒否したときは、この行の前に `plan-` で始まる詳細の行が最大8行出ます。`reason` が `state-mismatch` のときは、外れた条件を示す `resource-` で始まる行が最大8行出ます。語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。行には固定の語だけが入り、メッセージの本文や ID は入りません。
 
 どの段で止まった場合も、作業者は source の凍結を解かず、`cutover-route` を自動で再実行しません。作業者は、[cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従って、記録を残してレビューに戻します。
 

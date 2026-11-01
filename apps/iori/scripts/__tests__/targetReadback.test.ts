@@ -853,7 +853,8 @@ describe('the resource readback names the conditions that differ', () => {
   });
   it('reads a consumer that has only script, the key of the actual response', async () => {
     const responses = attachedResponses((consumer) => {
-      expect(consumer).not.toHaveProperty('script_name');
+      delete consumer.script_name;
+      consumer.script = identity.workerName;
     });
     await expect(readAttached(responses)).resolves.toMatchObject({ consumerId: 'consumer-id' });
   });
@@ -881,6 +882,13 @@ describe('the resource readback names the conditions that differ', () => {
     const responses = attachedResponses((consumer) => {
       consumer.script_name = 'old-worker';
       delete consumer.script;
+    });
+    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
+  });
+  it('names resource-consumer-script when neither script nor script_name is present', async () => {
+    const responses = attachedResponses((consumer) => {
+      delete consumer.script;
+      delete consumer.script_name;
     });
     await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
   });
