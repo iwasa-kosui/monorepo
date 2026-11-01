@@ -78,7 +78,7 @@ it.each([
     { ...frozenState, identity: { main_sha: sha, run_id: 'run_2' } },
     'source-identity-mismatch',
   ],
-  ['the queue has failed', { ...frozenState, queue_failed: true }, 'source-not-idle'],
+  ['the queue has failed', { ...frozenState, queue_failed: true }, 'source-queue-failed'],
   ['an HTTP request is in flight', { ...frozenState, http_inflight: 1 }, 'source-not-idle'],
   ['queue dequeue work is running', { ...frozenState, dequeue_work: 1 }, 'source-not-idle'],
   ['queue enqueue work is running', { ...frozenState, enqueue_work: 1 }, 'source-not-idle'],
@@ -109,6 +109,25 @@ it('reports source-not-idle without a retry when the source rejects resume while
   expect(calls).toEqual(['status', 'resume:destination_writes_reconciled', 'status']);
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-not-idle\n',
+  ]);
+});
+it('reports source-queue-failed without a retry when the source rejects resume after the queue failed', async () => {
+  const writes = captureDiagnostics();
+  const { calls, sourceFactory } = fixture([frozenState, { ...frozenState, queue_failed: true }], async () => {
+    throw new Error('Source operation failed.');
+  });
+  await expect(resumeSource(options, { sourceFactory })).rejects.toThrow('Source queue has failed.');
+  expect(calls).toEqual(['status', 'resume:destination_writes_reconciled', 'status']);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-queue-failed\n',
+  ]);
+});
+it('reports source-queue-failed before source-not-idle when both apply', async () => {
+  const writes = captureDiagnostics();
+  const { sourceFactory } = fixture([{ ...frozenState, queue_failed: true, http_inflight: 1 }]);
+  await expect(resumeSource(options, { sourceFactory })).rejects.toThrow('Source queue has failed.');
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed\n',
   ]);
 });
 it.each([

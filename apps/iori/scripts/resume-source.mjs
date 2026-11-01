@@ -5,8 +5,11 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
 import { createStageRunner, readSourceStatus } from './source-recovery.mjs';
 
-const isIdle = (state) =>
-  state.http_inflight === 0 && state.dequeue_work === 0 && state.enqueue_work === 0 && !state.queue_failed;
+const isIdle = (state) => state.http_inflight === 0 && state.dequeue_work === 0 && state.enqueue_work === 0;
+const assertResumable = (state) => {
+  if (state.queue_failed) throw new Error('Source queue has failed.');
+  if (!isIdle(state)) throw new Error('Source is not idle.');
+};
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
 export const resumeSource = async (options, {
   sourceFactory = createSourceSshAdapter,
@@ -31,7 +34,7 @@ export const resumeSource = async (options, {
     if (state.identity?.main_sha !== mainSha || state.identity?.run_id !== runId) {
       throw new Error('Source identity mismatch.');
     }
-    if (!isIdle(state)) throw new Error('Source is not idle.');
+    assertResumable(state);
   });
   await stage('resume', async () => {
     current.program = 'ssh';
@@ -39,7 +42,7 @@ export const resumeSource = async (options, {
       await source.resume(recovery, signal);
     } catch (error) {
       const state = await source.status(signal).catch(() => undefined);
-      if (state && !isIdle(state)) throw new Error('Source is not idle.');
+      if (state) assertResumable(state);
       throw error;
     }
   });

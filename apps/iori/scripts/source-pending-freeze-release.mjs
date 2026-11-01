@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { lstat, open, rename } from 'node:fs/promises';
+import { link, lstat, open, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -56,35 +56,53 @@ export const runPendingFreezeRelease = async (
     }
   };
   const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
-  const inspect = async () => {
-    if (!await absent(join(base, 'freeze.json'))) throw new Error('Source freeze is already committed.');
-    let before;
-    let identity;
+  const readMarker = async (path) => {
     try {
-      before = await lstat(pendingPath);
+      const before = await lstat(path);
       if (!before.isFile() || before.uid !== uid || before.size > pendingLimitBytes) throw new Error();
-      const file = await open(pendingPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
         const opened = await file.stat();
         if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) throw new Error();
         const buffer = Buffer.alloc(pendingLimitBytes + 1);
         const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
         if (bytesRead > pendingLimitBytes) throw new Error();
-        identity = sourceIdentitySchema.parse(JSON.parse(buffer.toString('utf8', 0, bytesRead)));
+        const identity = sourceIdentitySchema.parse(JSON.parse(buffer.toString('utf8', 0, bytesRead)));
+        return { before, identity };
       } finally {
         await file.close();
       }
     } catch {
       throw new Error('Source pending freeze is invalid.');
     }
+  };
+  const assertIdentity = (identity) => {
     if (identity.main_sha !== sha || identity.run_id !== runId) {
       throw new Error('Source pending freeze identity mismatch.');
     }
-    if (!await absent(rejectedPath)) throw new Error('Source release destination exists.');
-    return before;
+  };
+  const inspect = async () => {
+    if (!await absent(join(base, 'freeze.json'))) throw new Error('Source freeze is already committed.');
+    if (await absent(pendingPath)) {
+      if (await absent(rejectedPath)) throw new Error('Source pending freeze is invalid.');
+      const { before, identity } = await readMarker(rejectedPath);
+      assertIdentity(identity);
+      return { kind: 'renamed', before };
+    }
+    const { before, identity } = await readMarker(pendingPath);
+    assertIdentity(identity);
+    if (await absent(rejectedPath)) return { kind: 'pending', before };
+    const existing = await lstat(rejectedPath);
+    if (existing.dev === before.dev && existing.ino === before.ino) return { kind: 'linked', before };
+    throw new Error('Source release destination exists.');
   };
   await check();
   const planned = await inspect();
+  if (planned.kind === 'renamed') {
+    process.stderr.write('IORI_NOTICE stage=release-pending-freeze already_renamed=1\n');
+    await service('start', 'Source service start failed.');
+    return;
+  }
   await service('stop', 'Source service stop failed.');
   let state = '';
   await exec('systemctl', ['is-active', 'microblog'], async (result) => {
@@ -94,18 +112,30 @@ export const runPendingFreezeRelease = async (
   signal?.throwIfAborted();
   if (!['inactive', 'failed'].includes(state)) throw new Error('Source service is not stopped.');
   await check();
-  const before = await inspect();
-  if (before.dev !== planned.dev || before.ino !== planned.ino) throw new Error('Source pending freeze is invalid.');
+  const { kind, before } = await inspect();
+  if (kind !== planned.kind || before.dev !== planned.before.dev || before.ino !== planned.before.ino) {
+    throw new Error('Source pending freeze is invalid.');
+  }
   await check();
+  const same = (stat) => stat.dev === before.dev && stat.ino === before.ino;
+  if (kind === 'pending') {
+    try {
+      await link(pendingPath, rejectedPath);
+    } catch (error) {
+      throw new Error(
+        error?.code === 'EEXIST' ? 'Source release destination exists.' : 'Source release rename verification failed.',
+      );
+    }
+  }
   try {
-    await rename(pendingPath, rejectedPath);
+    if (!same(await lstat(rejectedPath)) || !same(await lstat(pendingPath))) throw new Error();
+    await unlink(pendingPath);
   } catch {
     throw new Error('Source release rename verification failed.');
   }
   process.stderr.write('IORI_NOTICE stage=release-pending-freeze renamed=1\n');
   try {
-    const moved = await lstat(rejectedPath);
-    if (moved.dev !== before.dev || moved.ino !== before.ino) throw new Error();
+    if (!same(await lstat(rejectedPath))) throw new Error();
   } catch {
     throw new Error('Source release rename verification failed.');
   }

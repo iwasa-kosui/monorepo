@@ -176,11 +176,29 @@ it('relays only the exact release-pending-freeze notice to the public log', asyn
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact already renamed notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=release-pending-freeze already_renamed=1';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    `${accepted} `,
+    `${accepted}\r`,
+    'IORI_NOTICE stage=release-pending-freeze already_renamed=0',
+    'IORI_NOTICE stage=release-pending-freeze already_renamed=11',
+    'IORI_NOTICE stage=release-pending-freeze already_renamed=1 path=/home/secret/freeze.pending.rejected-run1',
+    'IORI_NOTICE stage=other already_renamed=1',
+    'IORI_NOTICE stage=release-pending-freeze already_renamed',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('relays the recovery diagnostics reasons within the public vocabulary', async () => {
   const writes = captureStderr();
   const lines = [
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-frozen',
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-operation-failed',
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed',
     'IORI_DIAG stage=resume-verify program=ssh exit=none signal=none reason=resume-not-confirmed',
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',

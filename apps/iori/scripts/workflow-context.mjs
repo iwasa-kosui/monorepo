@@ -29,6 +29,7 @@ export const parseWorkflowInvocation = (env) => {
     || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? '')
     || (operation !== 'deploy-worker' && !recoveryOperation && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
+    || (!recoveryOperation && env.IORI_RECOVERY)
     || (operation === 'release-pending-freeze' && env.IORI_RECOVERY)
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({

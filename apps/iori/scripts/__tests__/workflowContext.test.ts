@@ -87,6 +87,19 @@ it.each(['resume-source', 'release-pending-freeze'])('keeps the common checks fo
   expect(() => parseWorkflowInvocation({ ...valid, IORI_MIGRATION_RUN_ID: '' })).toThrow();
   expect(() => parseWorkflowInvocation({ ...valid, IORI_ENVIRONMENT: 'development' })).toThrow();
 });
+it.each(['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker'])(
+  'rejects a non-empty IORI_RECOVERY for %s',
+  (operation) => {
+    const valid = { ...env, IORI_OPERATION: operation };
+    expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
+    expect(parseWorkflowInvocation({ ...valid, IORI_RECOVERY: '' })).toMatchObject({ operation });
+    for (const recovery of ['destination_writes_not_enabled', 'destination_writes_reconciled', 'x']) {
+      expect(() => parseWorkflowInvocation({ ...valid, IORI_RECOVERY: recovery })).toThrow(
+        'Protected workflow invocation is invalid.',
+      );
+    }
+  },
+);
 it('keeps requiring equal code and migration SHAs for the other non-deploy operations', () => {
   for (const operation of ['prepare-target', 'migrate-data', 'verify-import', 'cutover-route']) {
     expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, IORI_MIGRATION_MAIN_SHA: frozenSha }))

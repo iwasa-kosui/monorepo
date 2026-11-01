@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -245,6 +245,196 @@ it('reports a failed start without retrying and keeps the renamed marker', async
   expect(calls).toEqual([stop, isActive, start]);
   expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
 });
+it('fails on the second inspection without renaming or starting when a committed freeze appears during the stop', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const calls: string[] = [];
+  const { runCommand: inner } = commands('inactive', calls);
+  const runCommand = async (program: string, args: string[], options: object) => {
+    if (args.includes('stop')) {
+      await writeFile(join(base, 'freeze.json'), JSON.stringify({ main_sha: sha, run_id: runId }), { mode: 0o600 });
+    }
+    return inner(program, args, options as never);
+  };
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source freeze is already committed.',
+  );
+  expect(calls).toEqual([stop, isActive]);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(true);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(false);
+  expect(writes).toEqual([]);
+});
+it('fails without changing anything when the rejected destination is a dangling symlink', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  await symlink('/nonexistent-fixture', join(base, `freeze.pending.rejected-${runId}`));
+  const { calls, runCommand } = commands('inactive');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source release destination exists.',
+  );
+  expect(calls).toEqual([]);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(true);
+  expect((await lstat(join(base, `freeze.pending.rejected-${runId}`))).isSymbolicLink()).toBe(true);
+  expect(writes).toEqual([]);
+});
+it('fails at link without removing the pending marker when a dangling symlink appears just before the link', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const { calls, runCommand } = commands('inactive');
+  let checks = 0;
+  // The fourth guard call is the last one before the link: initial, stop, post-stop, then pre-link.
+  const guard = async () => {
+    if (++checks === 4) await symlink('/nonexistent-fixture', join(base, `freeze.pending.rejected-${runId}`));
+  };
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand, guard })).rejects.toThrow(
+    'Source release destination exists.',
+  );
+  expect(checks).toBe(4);
+  expect(calls).toEqual([stop, isActive]);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(true);
+  expect((await lstat(join(base, `freeze.pending.rejected-${runId}`))).isSymbolicLink()).toBe(true);
+  expect(writes).toEqual([]);
+});
+const alreadyRenamed = 'IORI_NOTICE stage=release-pending-freeze already_renamed=1\n';
+const setupRenamed = async (content: string | null = JSON.stringify({ main_sha: sha, run_id: runId })) => {
+  const { home, base } = await setup(null);
+  if (content !== null) await writeFile(join(base, `freeze.pending.rejected-${runId}`), content, { mode: 0o600 });
+  return { home, base };
+};
+it('only starts and does not stop or link when the marker was already renamed', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed();
+  const before = await lstat(join(base, `freeze.pending.rejected-${runId}`));
+  const { calls, runCommand } = commands('inactive');
+  await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
+  expect(calls).toEqual([start]);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(false);
+  const after = await lstat(join(base, `freeze.pending.rejected-${runId}`));
+  expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
+  expect(writes).toEqual([alreadyRenamed]);
+});
+it('reports a failed start for an already renamed marker without retrying', async () => {
+  captureStderr();
+  const { home, base } = await setupRenamed();
+  const calls: string[] = [];
+  const runCommand = async (program: string, args: string[]) => {
+    calls.push([program, ...args].join(' '));
+    throw new Error('Migration command failed; outcome may be uncertain.');
+  };
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source service start failed.',
+  );
+  expect(calls).toEqual([start]);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
+});
+it.each([
+  ['is a symlink', null, 'Source pending freeze is invalid.'],
+  ['is not JSON', 'not-json', 'Source pending freeze is invalid.'],
+  ['has an extra key', JSON.stringify({ main_sha: sha, run_id: runId, extra: 1 }), 'Source pending freeze is invalid.'],
+  [
+    'is too large',
+    JSON.stringify({ main_sha: sha, run_id: runId, padding: 'x'.repeat(2048) }),
+    'Source pending freeze is invalid.',
+  ],
+  [
+    'has another run ID',
+    JSON.stringify({ main_sha: sha, run_id: 'run_2' }),
+    'Source pending freeze identity mismatch.',
+  ],
+  [
+    'has another main SHA',
+    JSON.stringify({ main_sha: 'b'.repeat(40), run_id: runId }),
+    'Source pending freeze identity mismatch.',
+  ],
+])('does not treat the marker as renamed when the rejected file %s', async (label, content, message) => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed(content);
+  if (label === 'is a symlink') {
+    await writeFile(join(home, 'target.json'), JSON.stringify({ main_sha: sha, run_id: runId }));
+    await symlink(join(home, 'target.json'), join(base, `freeze.pending.rejected-${runId}`));
+  }
+  const { calls, runCommand } = commands('inactive');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(message);
+  expect(calls).toEqual([]);
+  expect(await exists(join(base, 'freeze.pending'))).toBe(false);
+  expect(writes).toEqual([]);
+});
+it('does not treat the marker as renamed when the rejected file is owned by another user', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed();
+  const { calls, runCommand } = commands('inactive');
+  await expect(
+    runPendingFreezeRelease({ sha, runId }, { home, uid: uid + 1, runCommand, guard: async () => {} }),
+  ).rejects.toThrow('Source pending freeze is invalid.');
+  expect(calls).toEqual([]);
+  expect(await exists(join(base, `freeze.pending.rejected-${runId}`))).toBe(true);
+  expect(writes).toEqual([]);
+});
+it('does not treat the marker as renamed when a committed freeze exists', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setupRenamed();
+  await writeFile(join(base, 'freeze.json'), JSON.stringify({ main_sha: sha, run_id: runId }));
+  const { calls, runCommand } = commands('inactive');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source freeze is already committed.',
+  );
+  expect(calls).toEqual([]);
+  expect(writes).toEqual([]);
+});
+it('stops, then only unlinks the pending marker and starts when a hard link was left by an interrupted rename', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const pendingPath = join(base, 'freeze.pending');
+  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
+  await link(pendingPath, rejectedPath);
+  const before = await lstat(rejectedPath);
+  const calls: string[] = [];
+  const pendingAtCall: Record<string, boolean> = {};
+  const { runCommand: inner } = commands('inactive', calls);
+  const runCommand = async (program: string, args: string[], options: object) => {
+    pendingAtCall[[program, ...args].join(' ')] = await exists(pendingPath);
+    return inner(program, args, options as never);
+  };
+  await runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand });
+  expect(calls).toEqual([stop, isActive, start]);
+  // The marker is still present while stopping and is gone by the time the service starts.
+  expect(pendingAtCall).toEqual({ [stop]: true, [isActive]: true, [start]: false });
+  const after = await lstat(rejectedPath);
+  expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
+  expect(after.nlink).toBe(1);
+  // A link call would fail with EEXIST on the existing destination, so success also proves it was skipped.
+  expect(writes).toEqual(['IORI_NOTICE stage=release-pending-freeze renamed=1\n']);
+});
+it('does not unlink or start when the service is not stopped and a hard link was left', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const pendingPath = join(base, 'freeze.pending');
+  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
+  await link(pendingPath, rejectedPath);
+  const { calls, runCommand } = commands('active');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source service is not stopped.',
+  );
+  expect(calls).toEqual([stop, isActive]);
+  const [pending, rejected] = [await lstat(pendingPath), await lstat(rejectedPath)];
+  expect([pending.dev, pending.ino]).toEqual([rejected.dev, rejected.ino]);
+  expect(writes).toEqual([]);
+});
+it('fails without stopping when both files exist with different inodes', async () => {
+  const writes = captureStderr();
+  const { home, base } = await setup();
+  const pendingPath = join(base, 'freeze.pending');
+  const rejectedPath = join(base, `freeze.pending.rejected-${runId}`);
+  await writeFile(rejectedPath, JSON.stringify({ main_sha: sha, run_id: runId }), { mode: 0o600 });
+  const { calls, runCommand } = commands('inactive');
+  await expect(runPendingFreezeRelease({ sha, runId }, { home, uid, runCommand })).rejects.toThrow(
+    'Source release destination exists.',
+  );
+  expect(calls).toEqual([]);
+  const [pending, rejected] = [await lstat(pendingPath), await lstat(rejectedPath)];
+  expect(pending.ino).not.toBe(rejected.ino);
+  expect(writes).toEqual([]);
+});
 it.each([
   [{ sha: 'a'.repeat(39), runId }],
   [{ sha, runId: '../bad' }],
@@ -382,4 +572,32 @@ it('relays the rename notice even when the remote stage fails afterwards', async
     },
   })).rejects.toThrow('x');
   expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${notice}\n`]);
+});
+it('relays the already renamed notice exactly and nothing near it', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=release-pending-freeze already_renamed=1';
+  await releasePendingFreeze(options, {
+    sourceFactory: sourceWith([openState]),
+    runCommand: async (_program, _args, commandOptions) => {
+      await commandOptions.captureOutput?.({
+        stdout: '',
+        stderr: [
+          accepted,
+          `${accepted} extra=/home/secret`,
+          `${accepted} path=/home/secret/freeze.pending.rejected-run_1`,
+          ` ${accepted}`,
+          `${accepted} `,
+          `${accepted}\r`,
+          'IORI_NOTICE stage=release-pending-freeze already_renamed=0',
+          'IORI_NOTICE stage=release-pending-freeze already_renamed=11',
+          'IORI_NOTICE stage=release-pending-freeze already_renamed=',
+          'IORI_NOTICE stage=release-pending-freeze already_renamed',
+          'IORI_NOTICE stage=other already_renamed=1',
+          'secret-user@secret-host.invalid: noise',
+        ].join('\n'),
+      });
+      return { stdout: '', stderr: '' };
+    },
+  });
+  expect(writes).toEqual([`${accepted}\n`]);
 });

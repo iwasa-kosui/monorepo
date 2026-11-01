@@ -71,6 +71,7 @@ const fixedReasons = [
   ['Source prerequisite readiness failed.', 'readiness-failed'],
   ['Source is not frozen.', 'source-not-frozen'],
   ['Source identity mismatch.', 'source-identity-mismatch'],
+  ['Source queue has failed.', 'source-queue-failed'],
   ['Source is not idle.', 'source-not-idle'],
   ['Source resume was not confirmed.', 'resume-not-confirmed'],
   ['Invalid source release operation.', 'invalid-release-operation'],

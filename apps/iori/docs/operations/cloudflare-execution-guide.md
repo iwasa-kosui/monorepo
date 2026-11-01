@@ -307,7 +307,7 @@ source 側と adapter 側には、次の時間上限があります。
 1. service user で、`$HOME/.iori-migration/freeze.json` と `freeze.pending` の有無を確認します。確認の方法は、第4節の「凍結」の行と同じです。どちらかがあれば、再配備も再起動もしません。再起動では凍結が解除されないためです。
 2. 使い捨て generation で通常の書き込みを有効にしていないことを確認します。`rehearse-migration` は署名つき bundle を公開しないため、5.3 のとおり `cutover-route` は進みません。
 3. 復旧を明示的に承認した後、[第7.1節](#71-凍結が残った場合の復旧)の「`freeze.json` が残った場合」に従って、`resume-source` を dispatch します。`migration_main_sha` と `migration_run_id` には、失敗した `rehearse-migration` と同じ `main_sha` と `run_id` を指定します。`recovery` には、手順 2 で書き込み未有効を確認しているため、`destination_writes_not_enabled` を指定します。`resume-source` は、resume を送る前に、source が凍結していること、source が idle であること、凍結の identity が input と一致することを status で確かめます。
-4. 復旧の条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) に従います。`resume-source` が `reason=source-operation-failed` か `reason=source-not-idle` で失敗した場合、作業者は時間を置いてから `resume-source` を再実行します。`recovery` の値の選び方と失敗の意味は、第7.1節に書きます。
+4. 復旧の条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback) に従います。`resume-source` が失敗した場合の対応は、第7.1節の「`freeze.json` が残った場合」に従います。`recovery` の値の選び方と失敗の意味も、第7.1節に書きます。
 5. resume の後に、`freeze.json` と `freeze.pending` が無いことを、手順 1 と同じ方法でもう一度確認します。
 
 `freeze.pending` が残っている場合、source control は `invalid_freeze_state` を返して、resume を含むすべてのコマンドを拒否します。この場合、`resume-source` は使えません。作業者は第7.1節の「`freeze.pending` が残った場合」に従って、`release-pending-freeze` を dispatch します。
@@ -449,12 +449,12 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 | 3     | `verify-import`                                 | 別の新しい runner で bundle を復元し、署名・D1/R2/OGP の実データを再検証して成功                                                          |
 | 4     | `cutover-route`                                 | 同じ job 内の fresh restore、workers.dev smoke、route、canonical smoke、source 凍結の照合、HTTP 有効化、Queue の最後の再開と smoke が成功 |
 
-上の4つの operation に加えて、旧環境（source）に書き込む operation が2つあります。
+上の表の operation に加えて、旧環境（source）に書き込む operation が2つあります。
 
 - `resume-source`: 凍結が残った source の凍結を解きます。
 - `release-pending-freeze`: 凍結の前段階で残った `freeze.pending` を退避します。
 
-この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。
+この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。この2つの dispatch は `migration_main_sha` を必要とし、`resume-source` は `recovery` も必要とするため、上の例は使わず、第7.1節の例に従います。
 
 Actions が返した run を開き、対象 operation、environment、generation、run ID、event SHA を確認して Environment の pending deployment を承認します。承認を回避するために Environment 設定を緩めません。run の識別には dispatch 直後の一覧も使えますが、「最新の1件」だけで断定せず日時と入力を照合します。
 
@@ -524,6 +524,19 @@ staging が完了したら、production に異なる generation・リソース�
 - `migration_run_id`: 凍結した run の `run_id`
 - `recovery`: 移行先の書き込み状況
 
+このほかに、`operation` に `resume-source` を指定します。`environment` と `generation` には、凍結した run と同じ値を入れます。
+
+```bash
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha='<現在の main の SHA>' \
+  -f migration_main_sha='<凍結した run の main_sha>' \
+  -f operation=resume-source \
+  -f environment='<凍結した run の environment>' \
+  -f generation='<凍結した run の generation>' \
+  -f migration_run_id='<凍結した run の run_id>' \
+  -f recovery='<destination_writes_not_enabled または destination_writes_reconciled>'
+```
+
 `recovery` に既定値はありません。作業者は次のとおりに値を選びます。自動処理は `recovery` の値を推測しません。
 
 - 移行先に通常の書き込みを有効にしていないと確認できたときだけ、`destination_writes_not_enabled` を入力します。
@@ -542,7 +555,7 @@ source 側の処理が終わった状態を、source は idle と呼びます。
 - `dequeue_work`: 0
 - `enqueue_work`: 0
 
-`queue_failed` が true の場合、source は resume を拒否します。`resume-source` は、`queue_failed` が true の場合も idle でないとみなし、resume を送らずに `reason=source-not-idle` で失敗します。
+`queue_failed` が true の場合、source は resume を拒否します。`resume-source` は、`queue_failed` が true の場合、resume を送らずに `reason=source-queue-failed` で失敗します。
 
 次の項目は、source 側の処理が終わった証拠として使いません。
 
@@ -552,25 +565,61 @@ source 側の処理が終わった状態を、source は idle と呼びます。
 
 export、inventory、transfer などの control コマンドが実行中の間、source は status を含むすべての control コマンドを拒否します。このとき status は値を返しません。status の項目では、実行中の control コマンドを観測できません。
 
-`resume-source` は、次の2つの場合に resume を送らずに失敗します。
+`resume-source` は、次の3つの場合に resume を送らずに失敗します。
 
 - export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は `stage=resume-precheck` で `reason=source-operation-failed` として失敗します。
-- status が値を返し、source が idle でない場合、`resume-source` は `stage=resume-precheck` で `reason=source-not-idle` として失敗します。
+- status が値を返し、`queue_failed` が true の場合、`resume-source` は `stage=resume-precheck` で `reason=source-queue-failed` として失敗します。
+- status が値を返し、`queue_failed` が false で、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でない場合、`resume-source` は `stage=resume-precheck` で `reason=source-not-idle` として失敗します。
 
-どちらの場合も、作業者は時間を置いてから `resume-source` を再実行します。`resume-source` は idle になるまで待つ処理を持ちません。
+`resume-source` は idle になるまで待つ処理を持ちません。失敗した場合、作業者は次のとおり対応します。
 
-rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、上の2つの失敗のどちらにもなりえます。export などの control コマンドが実行中であれば `reason=source-operation-failed` で、control コマンドは終わっていて HTTP や queue の処理が残っていれば `reason=source-not-idle` で失敗します。どちらの場合も、作業者は時間を置いてから `resume-source` を再実行します。
+- `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。作業者は承認を得て、手作業で対応します。
+- `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。control コマンドの実行中（`control_busy`）だけでなく、revision の不一致、identity の不一致、ssh の失敗でも、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
+- `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。作業者は時間を置いて再実行します。
+- resume が source 側で成功したのに応答が届かなかった場合、`resume-source` は失敗として報告します。再実行すると `reason=source-not-frozen` で失敗します。`source-not-frozen` は、凍結がすでに解除済みである可能性を示します。作業者は status か本番の応答で、凍結が解けていることを確かめます。
+
+rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-operation-failed` と `reason=source-not-idle` のどちらにもなりえます。export などの control コマンドが実行中であれば `reason=source-operation-failed` で、control コマンドは終わっていて HTTP や queue の処理が残っていれば `reason=source-not-idle` で失敗します。どちらの場合も、作業者は上の対応に従います。
 
 #### `freeze.pending` が残った場合
 
-作業者は `release-pending-freeze` を dispatch します。input は `main_sha`、`migration_main_sha`、`migration_run_id` です。`recovery` は空にします。
+作業者は `release-pending-freeze` を dispatch します。input は `main_sha`、`migration_main_sha`、`migration_run_id` です。`environment` と `generation` には、凍結した run と同じ値を入れます。`recovery` は渡しません。
+
+```bash
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha='<現在の main の SHA>' \
+  -f migration_main_sha='<凍結した run の main_sha>' \
+  -f operation=release-pending-freeze \
+  -f environment='<凍結した run の environment>' \
+  -f generation='<凍結した run の generation>' \
+  -f migration_run_id='<凍結した run の run_id>'
+```
+
+次の手順は、初回の実行の動きです。再実行の動きは、手順の後に書きます。
 
 `release-pending-freeze` は次の順に動きます。
 
 1. microblog を停止する前に、`freeze.json` が無いこと、`freeze.pending` が通常ファイルで同じ uid の所有であること、`freeze.pending` の中身の `main_sha` と `run_id` が input の `migration_main_sha` と `migration_run_id` に一致すること、退避先の `freeze.pending.rejected-<migration_run_id>` が無いことを確かめます。条件を満たさなければ、microblog を停止せずに失敗します。
 2. microblog を停止し、停止したことを確かめます。
 3. 停止したあとに、手順 1 と同じ条件をもう一度確かめます。あわせて、`freeze.pending` が手順 1 で確かめたファイルと同じファイルであることを確かめます。停止の間にファイルが変わっていた場合は、失敗します。
-4. 手順 3 の条件を満たした場合だけ、`freeze.pending` を `freeze.pending.rejected-<migration_run_id>` へ rename で退避します。削除はしません。
+4. 手順 3 の条件を満たした場合だけ、`freeze.pending.rejected-<migration_run_id>` を新しく作る形で、`freeze.pending` を退避します。退避先がすでにある場合は、上書きせずに失敗します。`freeze.pending` の削除はしません。
 5. microblog を起動し、status で凍結していないことを確かめます。
 
 条件を満たさない場合、`release-pending-freeze` はそれ以降の操作をせずに失敗します。手順 1 で失敗した場合、`release-pending-freeze` は microblog を停止していません。手順 2 の停止のあとに、手順 3 の再検査、手順 4 の rename、手順 5 の起動のどこかで失敗した場合は、microblog が停止したまま残る場合があります。作業者は Actions ログの `IORI_DIAG` 行の `stage` と `reason` を確認します。
+
+`reason` ごとに、作業者は次のとおり対応します。
+
+- `service-stop-failed`、`service-not-stopped`、`release-rename-failed` の場合、作業者は原因を確かめてから `release-pending-freeze` を再実行します。microblog が停止したまま残っている場合があります。
+- 停止後の再検査が `freeze-committed`、`pending-freeze-invalid`、`pending-identity-mismatch`、`release-target-exists` のどれかで失敗した場合も、作業者は原因を確かめてから `release-pending-freeze` を再実行します。microblog が停止したまま残っている場合があります。
+- `service-start-failed`、`release-not-confirmed` の場合、作業者は `release-pending-freeze` を再実行します。再実行は退避済みとして扱われ、起動と確認だけを行います。
+
+再実行したときの事前検査で、次の3つの条件がそろうことがあります。
+
+- `freeze.json` も `freeze.pending` もありません。
+- `freeze.pending.rejected-<migration_run_id>` が通常ファイルで、同じ uid が所有しています。
+- その中身の `main_sha` と `run_id` が input と一致します。
+
+この場合、`release-pending-freeze` は退避済みとして扱います。停止と退避を飛ばし、microblog を起動して、status で凍結していないことを確かめます。Actions ログには `IORI_NOTICE stage=release-pending-freeze already_renamed=1` が出ます。
+
+退避の途中で失敗した場合は、`freeze.pending` と退避先の両方が同じファイルとして残ります。再実行すると、`release-pending-freeze` は microblog を停止して確かめ直してから、`freeze.pending` の側だけを取り除き、microblog を起動します。
+
+空の `freeze.pending` や書きかけの `freeze.pending` は、identity を確かめられないので、`release-pending-freeze` は `pending-freeze-invalid` で失敗します。この場合、作業者は承認を得て手作業で判断します。
