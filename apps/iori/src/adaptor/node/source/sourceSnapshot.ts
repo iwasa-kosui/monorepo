@@ -277,6 +277,7 @@ export class SourceSnapshot {
       const source = imageRows.createReadStream({ encoding: 'utf8', signal });
       const lines = createInterface({ input: source, crlfDelay: Infinity });
       const seen = createUploadTracker();
+      let missingUploadCount = 0;
       try {
         for await (const line of lines) {
           signal.throwIfAborted();
@@ -291,14 +292,26 @@ export class SourceSnapshot {
           const original = join(await this.uploadRoot(), upload.filename);
           const id = `upload.${upload.filename}`;
           const path = logicalFilePath(id);
-          add({ id, path, ...await hashOrCopy(original, SOURCE_LIMITS.uploadBytes, signal, join(root, path)) });
+          try {
+            add({ id, path, ...await hashOrCopy(original, SOURCE_LIMITS.uploadBytes, signal, join(root, path)) });
+          } catch (error) {
+            if (failureOf(error) !== 'missing') throw error;
+            missingUploadCount += 1;
+          }
         }
       } finally {
         lines.close();
         source.destroy();
         await imageRows.close();
       }
-      const inventory = validateSourceInventory({ schemaVersion: 1, complete: true, identity, totalBytes, files });
+      const inventory = validateSourceInventory({
+        schemaVersion: 1,
+        complete: true,
+        identity,
+        totalBytes,
+        missingUploadCount,
+        files,
+      });
       const text = JSON.stringify(inventory);
       if (Buffer.byteLength(text) > SOURCE_LIMITS.inventoryBytes) throw new Error('inventory_too_large');
       signal.throwIfAborted();

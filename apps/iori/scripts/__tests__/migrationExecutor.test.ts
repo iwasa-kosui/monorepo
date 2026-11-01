@@ -6,7 +6,7 @@ import { APPLICATION_TABLE_ORDER } from '../export-postgres.mjs';
 import { admissionEnvironment } from '../migration-target-contract.mjs';
 import { createManifestExpectedProvider, verifyCloudflareImportWithProviders } from '../verify-cloudflare-import.mjs';
 import { restoreMigrationBundle } from '../migration-bundle.mjs';
-import { directory, fixture, removeExecutorRoots } from './migrationExecutorFixture.js';
+import { directory, fixture, missingUploadId, removeExecutorRoots } from './migrationExecutorFixture.js';
 afterEach(removeExecutorRoots);
 it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files for fresh verification', async () => {
   const f = await fixture();
@@ -191,3 +191,121 @@ it('charges hosted setup time before deciding whether source freeze fits', async
     f.close();
   }
 });
+const noticeLines = (write: { mock: { calls: unknown[][] } }) =>
+  write.mock.calls.map(call => String(call[0])).filter(line => line.startsWith('IORI_NOTICE'));
+const uploadKeys = [
+  'post-images/33333333-3333-4333-8333-333333333333/original',
+  'post-images/55555555-5555-4555-8555-555555555555/original',
+];
+it('migrates the other uploads and records the omitted count when the allowed missing count matches', async () => {
+  const f = await fixture({ missingUpload: true });
+  const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads: 1 })).resolves.toMatchObject({
+      status: 'published',
+    });
+    expect(noticeLines(write)).toEqual(['IORI_NOTICE stage=export-missing-uploads count=1\n']);
+    expect([...f.objects.keys()].filter(key => key.startsWith('post-images/')).sort()).toEqual(uploadKeys);
+    const root = f.options.root;
+    const uploadManifestPath = join(root, 'objects/r2-import-manifest.json');
+    const uploadManifest = JSON.parse(await readFile(uploadManifestPath, 'utf8'));
+    expect(uploadManifest.objects).toHaveLength(2);
+    expect(uploadManifest.omittedCount).toBe(1);
+    expect(JSON.stringify(uploadManifest)).not.toContain(missingUploadId);
+    const expectedProvider = createManifestExpectedProvider({
+      exportManifestPath: join(root, 'source/export/export-manifest.json'),
+      d1ImportManifestPath: join(root, 'sql/d1-import-manifest.json'),
+      uploadManifestPath,
+      ogpManifestPath: join(root, 'objects/ogp-import-manifest.json'),
+      sourceOrigin: admissionEnvironment(f.options.expectedTarget).ORIGIN,
+    });
+    expect(await verifyCloudflareImportWithProviders({ expectedProvider, actualProvider: f.actualProvider })).toEqual(
+      [],
+    );
+  } finally {
+    write.mockRestore();
+    f.close();
+  }
+}, 30000);
+it.each([undefined, 0, 2])(
+  'fails before reservation and freeze when the allowed missing count is %s and one upload is missing',
+  async allowedMissingUploads => {
+    const f = await fixture({ missingUpload: true });
+    try {
+      await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads })).rejects.toThrow(
+        'Source upload files could not be opened.',
+      );
+      expect(f.source.freeze).not.toHaveBeenCalled();
+      expect(f.remote.has(executionReservationKey(f.options.expectedTarget))).toBe(false);
+    } finally {
+      f.close();
+    }
+  },
+);
+it.each(
+  [
+    'upload_owner_count',
+    'upload_not_regular_count',
+    'upload_too_large_count',
+    'upload_access_count',
+    'upload_other_count',
+  ] as const,
+)('fails on %s even when the allowed missing count matches', async field => {
+  const f = await fixture({ missingUpload: true });
+  try {
+    f.source.estimate.mockResolvedValue({ ...await f.source.estimate(), [field]: 1 });
+    await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads: 1 })).rejects.toThrow(
+      'Source upload files could not be opened.',
+    );
+    expect(f.source.freeze).not.toHaveBeenCalled();
+  } finally {
+    f.close();
+  }
+});
+it('fails after freeze and before export when the missing count changes after the drain', async () => {
+  const f = await fixture({ missingUpload: true });
+  try {
+    const estimate = await f.source.estimate();
+    f.source.estimate.mockResolvedValueOnce(estimate).mockResolvedValueOnce({ ...estimate, upload_missing_count: 2 });
+    await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads: 1 })).rejects.toThrow(
+      'Source upload files could not be opened.',
+    );
+    expect(f.calls).toContain('freeze');
+    expect(f.calls).not.toContain('export');
+  } finally {
+    f.close();
+  }
+});
+it('fails before the transfer when the exported missing count differs from the allowed count', async () => {
+  const f = await fixture({ missingUpload: true });
+  const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  try {
+    const exportSource = f.source.export;
+    f.source.export = async () => ({ ...await exportSource(), missingUploadCount: 2 });
+    const restore = vi.fn(f.source.restore);
+    f.source.restore = restore;
+    await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads: 1 })).rejects.toThrow(
+      'Source missing upload count mismatch.',
+    );
+    expect(restore).not.toHaveBeenCalled();
+    expect(noticeLines(write)).toEqual(['IORI_NOTICE stage=export-missing-uploads count=2\n']);
+    expect(f.objects.size).toBe(0);
+  } finally {
+    write.mockRestore();
+    f.close();
+  }
+});
+it.each([-1, 1.5, Number.NaN])(
+  'refuses the invalid allowed missing count %s before any source operation',
+  async value => {
+    const f = await fixture();
+    try {
+      await expect(executeProtectedMigration({ ...f.options, allowedMissingUploads: value })).rejects.toThrow(
+        'Invalid allowed missing upload count.',
+      );
+      expect(f.calls).toEqual([]);
+    } finally {
+      f.close();
+    }
+  },
+);

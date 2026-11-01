@@ -220,6 +220,8 @@ it('imports each local upload once under the key built from the URL and skips re
       outputDir: fixture.outputDir,
       bucket,
       sourceOrigin,
+      sentFilenames: new Set([`${urlImageId}.jpg`, `${upperImageId}.PNG`]),
+      missingUploadCount: 0,
     });
     expect(puts).toHaveLength(2);
     expect(puts).toEqual(expect.arrayContaining([
@@ -266,6 +268,8 @@ it.each([
       outputDir: fixture.outputDir,
       bucket,
       sourceOrigin,
+      sentFilenames: new Set([`${urlImageId}.jpg`, `${urlImageId}.png`]),
+      missingUploadCount: 0,
     })).rejects.toThrow(message);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
@@ -283,6 +287,8 @@ it('rejects importing uploads without a source origin', async () => {
       outputDir: fixture.outputDir,
       bucket,
       sourceOrigin: undefined as unknown as string,
+      sentFilenames: new Set<string>(),
+      missingUploadCount: 0,
     })).rejects.toThrow('source-origin-required');
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
@@ -300,9 +306,100 @@ it('writes an empty upload manifest when every post image is remote', async () =
       outputDir: fixture.outputDir,
       bucket,
       sourceOrigin,
+      sentFilenames: new Set<string>(),
+      missingUploadCount: 0,
     });
-    expect(JSON.parse(await readFile(result.manifestPath, 'utf8'))).toEqual({ schemaVersion: 1, objects: [] });
+    expect(JSON.parse(await readFile(result.manifestPath, 'utf8'))).toEqual({
+      schemaVersion: 1,
+      objects: [],
+      omittedCount: 0,
+    });
     expect(bucket.put).not.toHaveBeenCalled();
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+const missingFilename = `${upperImageId}.PNG`;
+const missingRows = () => [
+  imageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.jpg`),
+  imageRow('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', `/uploads/${missingFilename}`),
+];
+it('skips uploads outside the sent set without reading them and records only their count in the manifest', async () => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm, readFile } = await import('node:fs/promises');
+  const fixture = await uploadsFixture(missingRows(), { [`${urlImageId}.jpg`]: [1, 2] });
+  const bucket = { put: vi.fn(async () => {}) };
+  try {
+    const result = await importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+      sourceOrigin,
+      sentFilenames: new Set([`${urlImageId}.jpg`]),
+      missingUploadCount: 1,
+    });
+    expect(result).toMatchObject({ count: 1, omittedCount: 1 });
+    expect(bucket.put).toHaveBeenCalledTimes(1);
+    const text = await readFile(result.manifestPath, 'utf8');
+    expect(JSON.parse(text)).toMatchObject({ omittedCount: 1 });
+    expect(JSON.parse(text).objects).toHaveLength(1);
+    expect(text).not.toContain(missingFilename);
+    expect(text).not.toContain(upperImageId);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+it.each([
+  ['more omitted uploads than the exported count', new Set([`${urlImageId}.jpg`]), 0],
+  ['fewer omitted uploads than the exported count', new Set([`${urlImageId}.jpg`, missingFilename]), 1],
+  ['a sent file that no post image row refers to', new Set([`${urlImageId}.jpg`, `${urlImageId}.png`]), 1],
+])('fails when the sent files and the missing count do not match the rows: %s', async (_name, sent, missing) => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm, readFile } = await import('node:fs/promises');
+  const fixture = await uploadsFixture(missingRows(), {
+    [`${urlImageId}.jpg`]: [1, 2],
+    [missingFilename]: [3],
+    [`${urlImageId}.png`]: [4],
+  });
+  const bucket = { put: vi.fn(async () => {}) };
+  try {
+    await expect(importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+      sourceOrigin,
+      sentFilenames: sent,
+      missingUploadCount: missing,
+    })).rejects.toThrow('Upload import does not match the exported files.');
+    await expect(readFile(`${fixture.outputDir}/r2-import-manifest.json`, 'utf8')).resolves.not.toMatch(
+      /omittedCount/,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+it.each([
+  [undefined, 0],
+  [new Set<string>(), undefined],
+  [new Set<string>(), -1],
+  [new Set<string>(), 1.5],
+  [['a'], 0],
+])('requires the sent set and a non-negative integer missing count (%j, %j)', async (sent, missing) => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm } = await import('node:fs/promises');
+  const fixture = await uploadsFixture([imageRow(urlImageId, 'https://remote.test/media/a.png')], {});
+  try {
+    await expect(importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket: { put: vi.fn(async () => {}) },
+      sourceOrigin,
+      sentFilenames: sent as never,
+      missingUploadCount: missing as never,
+    })).rejects.toThrow('Invalid upload import inputs.');
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }

@@ -7,9 +7,11 @@ import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from '.
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const hash = (body) => createHash('sha256').update(body).digest('hex');
 export const objectManifestEnvelope = (kind) => kind === 'uploads' ? '{"schemaVersion":1,"objects":[' : '{"objects":[';
+export const objectManifestTrailer = (kind, omittedCount) =>
+  kind === 'uploads' ? `],"omittedCount":${omittedCount}}\n` : ']}\n';
 export const serializeObjectEntry = (value) => JSON.stringify(value);
 /** Metadata is streamed too; failed output remains private and incomplete. */
-const writeObjects = async ({ entries, bucket, outputDir, filename, kind, signal }) => {
+const writeObjects = async ({ entries, bucket, outputDir, filename, kind, omittedCount = () => 0, signal }) => {
   const root = await prepareExternalMigrationDirectory(outputDir);
   const manifestPath = join(root, filename);
   const output = await open(manifestPath, 'wx', 0o600);
@@ -33,7 +35,7 @@ const writeObjects = async ({ entries, bucket, outputDir, filename, kind, signal
       await write((count ? ',' : '') + encoded);
       count++;
     }
-    await write(']}\n');
+    await write(objectManifestTrailer(kind, omittedCount()));
     return { manifestPath, count, bytes };
   } finally {
     await output.close();
@@ -45,10 +47,17 @@ const table = async (manifestPath, name, signal) => {
   if (manifest.complete !== true || descriptor?.file !== `${name}.ndjson`) throw new Error('Invalid exported table.');
   return verifiedTableRows({ path: join(dirname(manifestPath), descriptor.file), descriptor, signal });
 };
-export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDir, bucket, sourceOrigin, signal }) => {
+export const importMigrationUploads = async (
+  { sourceDir, manifestPath, outputDir, bucket, sourceOrigin, sentFilenames, missingUploadCount, signal },
+) => {
   const sourceHostname = requireSourceHostname(sourceOrigin);
+  if (!(sentFilenames instanceof Set) || !Number.isSafeInteger(missingUploadCount) || missingUploadCount < 0) {
+    throw new Error('Invalid upload import inputs.');
+  }
+  let omitted = 0;
   const entries = async function*() {
     const seen = createUploadTracker();
+    const localFilenames = new Set();
     for await (const row of await table(manifestPath, 'post_images', signal)) {
       const upload = classifyUploadUrl(row.url, sourceHostname);
       if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
@@ -58,6 +67,11 @@ export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDi
       const added = seen.add(upload);
       if (added === 'conflict') throw new Error('Invalid legacy upload.');
       if (added === 'duplicate') continue;
+      localFilenames.add(upload.filename);
+      if (!sentFilenames.has(upload.filename)) {
+        omitted++;
+        continue;
+      }
       const body = await readPrivateBounded(join(sourceDir, upload.filename), OBJECT_BYTES, signal);
       yield {
         body,
@@ -65,15 +79,22 @@ export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDi
         metadata: { imageId: upload.uuid },
       };
     }
+    if (
+      seen.uniqueCount !== sentFilenames.size + missingUploadCount
+      || [...sentFilenames].some((filename) => !localFilenames.has(filename))
+      || omitted !== missingUploadCount
+    ) throw new Error('Upload import does not match the exported files.');
   };
-  return writeObjects({
+  const result = await writeObjects({
     entries: entries(),
     bucket,
     outputDir,
     filename: 'r2-import-manifest.json',
     kind: 'uploads',
+    omittedCount: () => omitted,
     signal,
   });
+  return { ...result, omittedCount: omitted };
 };
 export const importMigrationOgp = async ({ manifestPath, outputDir, bucket, generate, signal }) => {
   const entries = async function*() {

@@ -118,7 +118,11 @@ const replacePostImages = async (directory: string, manifestPath: string, postIm
   };
   await writeFile(manifestPath, JSON.stringify(manifest));
 };
-const loadExpectedFor = async (postImages: readonly unknown[], uploadObjects?: readonly { key: string }[]) => {
+const loadExpectedFor = async (
+  postImages: readonly unknown[],
+  uploadObjects?: readonly { key: string }[],
+  omittedCount: unknown = 0,
+) => {
   const fixtureDirectory = await temporaryDirectory();
   const d1Directory = await temporaryDirectory();
   const manifestPath = await writeFixtureManifest(fixtureDirectory);
@@ -130,6 +134,7 @@ const loadExpectedFor = async (postImages: readonly unknown[], uploadObjects?: r
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount,
         objects: uploadObjects.map((object) => ({ ...object, checksum: 'a'.repeat(64), contentType: 'image/webp' })),
       }),
     );
@@ -466,6 +471,7 @@ describe('Cloudflare data migration tooling', () => {
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount: 0,
         objects: [{
           key: 'post-images/33333333-3333-4333-8333-333333333333/original',
           checksum: 'a'.repeat(64),
@@ -509,6 +515,7 @@ describe('Cloudflare data migration tooling', () => {
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount: 0,
         objects: [{
           key: 'post-images/33333333-3333-4333-8333-333333333333/original',
           checksum: 'a'.repeat(64),
@@ -735,6 +742,42 @@ describe('Cloudflare data migration tooling', () => {
     expect(expected.tables?.post_images?.count).toBe(mixedPostImages.length);
   });
 
+  it('accepts omitted uploads counted in the manifest and keeps them out of the expected objects', async () => {
+    const key = `post-images/${urlImageId}/original`;
+    const otherImageId = '99999999-9999-4999-8999-999999999999';
+    const rows = [
+      ...mixedPostImages,
+      postImageRow('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', `/uploads/${otherImageId}.png`),
+    ];
+    const expected = await loadExpectedFor(rows, [{ key }], 1);
+    expect(expected.r2Objects?.map((object) => object.key)).toEqual([key]);
+    await expect(loadExpectedFor(rows, [{ key }], 0)).rejects.toThrow(/incomplete/);
+    await expect(loadExpectedFor(rows, [{ key }], 2)).rejects.toThrow(/incomplete/);
+    await expect(loadExpectedFor(rows, [], 1)).rejects.toThrow(/incomplete/);
+    await expect(loadExpectedFor(rows, [{ key: `post-images/${otherImageId}/original` }, { key }], 1)).rejects.toThrow(
+      /incomplete/,
+    );
+  });
+
+  it('rejects an omitted upload count that is absent or not a non-negative integer', async () => {
+    const key = `post-images/${urlImageId}/original`;
+    for (const omittedCount of [Symbol('absent'), -1, 0.5, '1', null]) {
+      await expect(loadExpectedFor(mixedPostImages, [{ key }], omittedCount)).rejects.toThrow(
+        'R2 upload manifest omitted count is invalid.',
+      );
+    }
+  });
+
+  it('rejects an object outside the exported uploads even when the omitted count fills the gap', async () => {
+    const otherImageId = '99999999-9999-4999-8999-999999999999';
+    const rows = [
+      ...mixedPostImages,
+      postImageRow('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', `/uploads/${otherImageId}.png`),
+    ];
+    await expect(loadExpectedFor(rows, [{ key: 'post-images/ffffffff-ffff-4fff-8fff-ffffffffffff/original' }], 1))
+      .rejects.toThrow(/unexpected object/);
+  });
+
   it('needs no upload manifest when every post image is remote', async () => {
     const expected = await loadExpectedFor([mixedPostImages[1], mixedPostImages[2]]);
     expect(expected.r2Objects).toEqual([]);
@@ -899,6 +942,7 @@ describe('Cloudflare data migration tooling', () => {
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount: 0,
         objects: [{
           key: 'post-images/33333333-3333-4333-8333-333333333333/original',
           checksum: createHash('sha256').update(image).digest('hex'),
@@ -974,6 +1018,7 @@ describe('Cloudflare data migration tooling', () => {
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount: 0,
         objects: [{
           key: 'post-images/33333333-3333-4333-8333-333333333333/original',
           contentType: 'image/webp',
@@ -1012,6 +1057,7 @@ describe('Cloudflare data migration tooling', () => {
     await writeFile(
       uploadManifestPath,
       JSON.stringify({
+        omittedCount: 0,
         objects: [{
           key: 'post-images/33333333-3333-4333-8333-333333333333/original',
           checksum: 'a'.repeat(64),
@@ -1076,7 +1122,10 @@ describe('Cloudflare data migration tooling', () => {
       checksum: 'a'.repeat(64),
       contentType: 'image/webp',
     };
-    await writeFile(uploadManifestPath, JSON.stringify({ objects: [duplicateUpload, duplicateUpload] }));
+    await writeFile(
+      uploadManifestPath,
+      JSON.stringify({ objects: [duplicateUpload, duplicateUpload], omittedCount: 0 }),
+    );
     await writeFile(
       ogpManifestPath,
       JSON.stringify({

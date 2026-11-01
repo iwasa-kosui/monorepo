@@ -150,9 +150,12 @@ it('exposes the recovery operations and inputs without a default recovery value'
   );
   expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
   expect(inputs.recovery.default).toBeUndefined();
+  expect(inputs.allowed_missing_uploads).toEqual({ description: expect.any(String), required: false, type: 'string' });
+  expect(inputs.allowed_missing_uploads.default).toBeUndefined();
   expect(inputs.migration_main_sha.required).toBe(false);
   expect(inputs.migration_run_id.required).toBe(false);
   expect(workflow.env.IORI_RECOVERY).toBe('${{ inputs.recovery }}');
+  expect(workflow.env.IORI_ALLOWED_MISSING_UPLOADS).toBe('${{ inputs.allowed_missing_uploads }}');
   expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
   expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
 });

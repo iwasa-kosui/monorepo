@@ -134,7 +134,68 @@ it('picks the first reason in the fixed order when several causes are counted', 
   expect(failure.diagnostic).toEqual({ reason: 'estimate-upload-too-large' });
   const both = sourceWith({ upload_owner_count: 3, upload_missing_count: 1, upload_not_regular_count: 1 });
   const first = await estimateSource({ source: both.source, availableBytes: AVAILABLE }).catch(error => error);
-  expect(first.diagnostic).toEqual({ reason: 'estimate-upload-missing' });
+  expect(first.diagnostic).toEqual({ reason: 'estimate-upload-owner' });
+});
+it('succeeds with the estimate line when the missing count equals the allowed count', async () => {
+  const { source } = sourceWith({ upload_missing_count: 3, upload_failed_ext_png_count: 3 });
+  const line = await estimateSource({ source, availableBytes: AVAILABLE, allowedMissingUploads: 3 });
+  expect(line).toContain('upload_missing_count=3 ');
+  expect(line).toMatch(/^IORI_ESTIMATE .* sample=ok capacity=ok$/);
+});
+it.each([0, 2, 4])(
+  'fails with estimate-upload-missing when 3 uploads are missing and %s are allowed',
+  async allowed => {
+    const { source } = sourceWith({ upload_missing_count: 3 });
+    const failure = await estimateSource({ source, availableBytes: AVAILABLE, allowedMissingUploads: allowed }).catch(
+      error => error,
+    );
+    expect(failure.diagnostic).toEqual({ reason: 'estimate-upload-missing' });
+    expect(failure.estimateLine).toContain('upload_missing_count=3 ');
+  },
+);
+it('fails with estimate-upload-missing when nothing is missing but missing uploads are allowed', async () => {
+  const { source } = sourceWith();
+  const failure = await estimateSource({ source, availableBytes: AVAILABLE, allowedMissingUploads: 1 }).catch(
+    error => error,
+  );
+  expect(failure.diagnostic).toEqual({ reason: 'estimate-upload-missing' });
+});
+it.each(
+  [
+    ['upload_owner_count', 'estimate-upload-owner'],
+    ['upload_not_regular_count', 'estimate-upload-not-regular'],
+    ['upload_too_large_count', 'estimate-upload-too-large'],
+    ['upload_access_count', 'estimate-upload-access'],
+    ['upload_other_count', 'estimate-upload-other'],
+  ] as const,
+)('fails with the reason of %s even when the allowed missing count matches', async (field, reason) => {
+  const { source } = sourceWith({ upload_missing_count: 3, [field]: 1 });
+  const failure = await estimateSource({ source, availableBytes: AVAILABLE, allowedMissingUploads: 3 }).catch(
+    error => error,
+  );
+  expect(failure.diagnostic).toEqual({ reason });
+});
+it('reads the allowed missing count from the environment and rejects a value the workflow would refuse', async () => {
+  await withRoot(async root => {
+    const { source } = sourceWith({ upload_missing_count: 3, upload_failed_ext_png_count: 3 });
+    const createSource = vi.fn(async (_options: unknown) => source);
+    const deps = { createSource: createSource as never, availableBytes: async () => AVAILABLE };
+    await expect(
+      estimateFromEnvironment(cliEnvironment(root, { IORI_ALLOWED_MISSING_UPLOADS: '3' }), undefined, deps),
+    ).resolves.toContain('upload_missing_count=3 ');
+    await expect(estimateFromEnvironment(cliEnvironment(root, { IORI_ALLOWED_MISSING_UPLOADS: '2' }), undefined, deps))
+      .rejects.toMatchObject({ diagnostic: { reason: 'estimate-upload-missing' } });
+    await expect(estimateFromEnvironment(cliEnvironment(root), undefined, deps)).rejects.toMatchObject({
+      diagnostic: { reason: 'estimate-upload-missing' },
+    });
+    createSource.mockClear();
+    for (const value of ['03', '-1', '1.5', '1000000', 'x']) {
+      await expect(
+        estimateFromEnvironment(cliEnvironment(root, { IORI_ALLOWED_MISSING_UPLOADS: value }), undefined, deps),
+      ).rejects.toThrow('Protected workflow invocation is invalid.');
+    }
+    expect(createSource).not.toHaveBeenCalled();
+  });
 });
 it('propagates a source failure without printing a line', async () => {
   const source = {

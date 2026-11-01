@@ -123,7 +123,7 @@ export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputD
     });
     objects.push(object);
   }
-  const result = { schemaVersion: manifest.schemaVersion, objects };
+  const result = { schemaVersion: manifest.schemaVersion, objects, omittedCount: 0 };
   return {
     ...result,
     manifestPath: await writePrivateManifest({ outputDir, filename: 'r2-import-manifest.json', manifest: result }),

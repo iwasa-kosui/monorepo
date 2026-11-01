@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 
 import {
+  allowedMissingUploads,
   createWorkflowDirectory,
   parseWorkflowInvocation,
   workflowTimeBudget,
@@ -119,6 +120,57 @@ it.each(['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import'
     }
   },
 );
+it.each(['estimate-source', 'rehearse-migration', 'migrate-data'])(
+  'accepts an allowed missing upload count for %s and reads it as a number',
+  operation => {
+    const given = operation === 'estimate-source' ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' } : {};
+    const valid = { ...env, ...given, IORI_OPERATION: operation };
+    expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
+    expect(parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: '' })).toMatchObject({ operation });
+    for (const [value, count] of [['0', 0], ['3', 3], ['10', 10], ['999999', 999999]] as const) {
+      const invocation = { ...valid, IORI_ALLOWED_MISSING_UPLOADS: value };
+      expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+      expect(allowedMissingUploads(invocation)).toBe(count);
+    }
+    for (const value of ['00', '03', '-1', '+1', '1.5', '1e3', '0x1', ' 1', '1 ', '1000000', 'x']) {
+      expect(() => parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow(
+        'Protected workflow invocation is invalid.',
+      );
+      expect(() => allowedMissingUploads({ IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow();
+    }
+  },
+);
+it('reads an absent or empty allowed missing upload count as zero', () => {
+  expect(allowedMissingUploads({})).toBe(0);
+  expect(allowedMissingUploads({ IORI_ALLOWED_MISSING_UPLOADS: '' })).toBe(0);
+});
+it.each([
+  'prepare-target',
+  'verify-import',
+  'cutover-route',
+  'deploy-worker',
+  'purge-rehearsal-target',
+  'diagnose-source',
+  'resume-source',
+  'release-pending-freeze',
+  'restart-failed-source',
+])('rejects a non-empty allowed missing upload count for %s', operation => {
+  const recovery = ['resume-source', 'release-pending-freeze', 'restart-failed-source'].includes(operation);
+  const valid = {
+    ...env,
+    IORI_OPERATION: operation,
+    ...(operation === 'diagnose-source' ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' } : {}),
+    ...(recovery ? { IORI_MIGRATION_MAIN_SHA: frozenSha } : {}),
+    ...(operation === 'resume-source' ? { IORI_RECOVERY: 'destination_writes_reconciled' } : {}),
+  };
+  expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
+  expect(parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: '' })).toMatchObject({ operation });
+  for (const value of ['0', '3', 'x']) {
+    expect(() => parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
 it('keeps requiring equal code and migration SHAs for the other non-deploy operations', () => {
   for (const operation of ['prepare-target', 'migrate-data', 'verify-import', 'cutover-route']) {
     expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, IORI_MIGRATION_MAIN_SHA: frozenSha }))

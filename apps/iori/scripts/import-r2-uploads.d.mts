@@ -19,7 +19,7 @@ export function importR2Uploads(input: {
   manifestPath: string;
   outputDir: string;
   sourceOrigin?: string;
-}): Promise<{ schemaVersion: number; objects: ImportedObject[]; manifestPath: string }>;
+}): Promise<{ schemaVersion: number; objects: ImportedObject[]; omittedCount: number; manifestPath: string }>;
 
 export function backfillPublishedOgpImages(input: {
   articles: readonly { articleId: string; status: string; title: string }[];

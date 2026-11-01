@@ -46,7 +46,10 @@ import {
   createManifestExpectedProvider,
   verifyCloudflareImportWithProviders,
 } from './verify-cloudflare-import.mjs';
-import { workflowTimeBudget } from './workflow-context.mjs';
+import {
+  allowedMissingUploads as allowedMissingUploadsFromEnvironment,
+  workflowTimeBudget,
+} from './workflow-context.mjs';
 
 export const executionReservationKey = (input) => {
   const { identity: i } = parseExpectedTarget(input);
@@ -73,6 +76,10 @@ export const runProtectedPhases = async (options, target, plan) => {
   if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > MIGRATION_DEADLINE_MS) {
     throw new Error('Invalid migration deadline.');
   }
+  const allowedMissingUploads = options.allowedMissingUploads ?? 0;
+  if (!Number.isSafeInteger(allowedMissingUploads) || allowedMissingUploads < 0) {
+    throw new Error('Invalid allowed missing upload count.');
+  }
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   const timer = setTimeout(() => controller.abort(new Error('Migration deadline exceeded.')), deadlineMs);
@@ -82,7 +89,9 @@ export const runProtectedPhases = async (options, target, plan) => {
     const { source_revision, ...estimate } = await source.estimate(callSignal);
     if (source_revision !== target.identity.main_sha) throw new Error('Source revision mismatch.');
     validateSourceEstimate(estimate);
-    if (estimateUploadFailureReason(estimate)) throw new Error('Source upload files could not be opened.');
+    if (estimateUploadFailureReason(estimate, allowedMissingUploads)) {
+      throw new Error('Source upload files could not be opened.');
+    }
     plan.budget({
       estimate,
       availableBytes: await (options.availableBytes ?? freeBytes)(root),
@@ -269,6 +278,10 @@ export const runProtectedPhases = async (options, target, plan) => {
     if (
       inventory.identity.main_sha !== target.identity.main_sha || inventory.identity.run_id !== target.identity.run_id
     ) throw new Error('Source inventory identity mismatch.');
+    process.stderr.write(`IORI_NOTICE stage=export-missing-uploads count=${inventory.missingUploadCount}\n`);
+    if (inventory.missingUploadCount !== allowedMissingUploads) {
+      throw new Error('Source missing upload count mismatch.');
+    }
     const restored = await frozenCall(frozenSignal => source.restore(join(root, 'source'), frozenSignal));
     stopFreezeLimit();
     await completePhase('export-postgres', { postgres_export_manifest: restored.manifestPath });
@@ -294,6 +307,10 @@ export const runProtectedPhases = async (options, target, plan) => {
       outputDir: join(root, 'objects'),
       bucket,
       sourceOrigin: admissionEnvironment(target).ORIGIN,
+      sentFilenames: new Set(
+        inventory.files.filter((file) => file.id.startsWith('upload.')).map((file) => file.id.slice(7)),
+      ),
+      missingUploadCount: inventory.missingUploadCount,
       signal,
     });
     const ogp = await importMigrationOgp({
@@ -382,6 +399,7 @@ export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
     if (!process.env[key]) throw new Error('Executor configuration is required.');
     return process.env[key];
   };
+  const allowedMissingUploads = allowedMissingUploadsFromEnvironment(process.env);
   const root = required('IORI_MIGRATION_ROOT');
   await assertExternalMigrationRoot(root);
   const receiptPublicKey = await loadReceiptPublicKey(
@@ -444,6 +462,7 @@ export const runExecutorCli = async (cliSignal, { run, withRehearsal }) => {
       receiptPublicKey,
       receiptPrivateKey,
       ...(withRehearsal ? { rehearsal } : {}),
+      allowedMissingUploads,
       source,
       storage,
       bucket,

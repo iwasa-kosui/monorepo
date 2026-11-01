@@ -142,6 +142,7 @@ const restartPrecheckNoticeLine =
   /^IORI_NOTICE stage=restart-precheck ingress_frozen=[01] consumer_paused=[01] queue_failed=[01] drained=[01]$/;
 const restartNoticeLine = /^IORI_NOTICE stage=restart-failed-source (?:recorded|stopped|started)=1$/;
 const estimateCount = '(?:0|[1-9]\\d{0,15})';
+const exportMissingNoticeLine = new RegExp(`^IORI_NOTICE stage=export-missing-uploads count=${estimateCount}$`);
 const estimateLine = new RegExp(
   `^IORI_ESTIMATE ${
     [
@@ -194,7 +195,8 @@ const writeDiagnosticLine = async line => {
     if (
       !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
-      && !estimateLine.test(line) && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
+      && !estimateLine.test(line) && !exportMissingNoticeLine.test(line) && !restartPrecheckNoticeLine.test(line)
+      && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');

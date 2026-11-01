@@ -497,6 +497,32 @@ it('relays only the exact estimate line to the public log', async () => {
   ].join('\n'));
   expect(writes).toEqual([`${estimateLine}\n`, `${minimalEstimateLine}\n`, `${largestEstimateLine}\n`]);
 });
+it('relays only the exact export-missing-uploads notice with a bare count to the public log', async () => {
+  const writes = captureStderr();
+  const notice = 'IORI_NOTICE stage=export-missing-uploads count=';
+  await publishChildDiagnostics([
+    `${notice}0`,
+    `${notice}3`,
+    `${notice}9007199254740991`,
+    `${notice}`,
+    `${notice}-1`,
+    `${notice}+1`,
+    `${notice}03`,
+    `${notice}1.5`,
+    `${notice}1e3`,
+    `${notice}12345678901234567`,
+    `${notice}3 `,
+    ` ${notice}3`,
+    `${notice}3 file=0aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png`,
+    `${notice}/home/secret`,
+    `${notice}3 count=4`,
+    'IORI_NOTICE stage=export-missing-uploads file=0aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png',
+    'IORI_NOTICE stage=export-missing-uploads  count=3',
+    'IORI_NOTICE stage=export-missing count=3',
+    `${notice}3`.replace('IORI_NOTICE', 'IORI_DIAG'),
+  ].join('\n'));
+  expect(writes).toEqual([`${notice}0\n`, `${notice}3\n`, `${notice}9007199254740991\n`]);
+});
 it('relays the estimate line from a child process and keeps byte counts out of the public log', async () => {
   const writes = captureStderr();
   const directory = await createFixtureDirectory('iori-hosted-');

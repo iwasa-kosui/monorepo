@@ -359,6 +359,19 @@ describe('Worker fixture', () => {
     await expect(webfinger.json()).resolves.toMatchObject({ subject: 'acct:fixture@worker.example.invalid' });
   });
 
+  it('returns 404 for an upload URL without an R2 object, as for a migrated post image row whose file was missing', async () => {
+    const env = makeEnv(new FixtureD1(await makeSeed()));
+    const missingImageId = ImageId.generate();
+    const get = vi.spyOn(env.UPLOADS, 'get');
+    const response = await worker.fetch(
+      new Request(`${origin}/uploads/${missingImageId}.png`),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(response.status).toBe(404);
+    expect(get).toHaveBeenCalledWith(expect.stringContaining(String(missingImageId)));
+  });
+
   it('updates the seeded D1 actor logo through Worker fetch', async () => {
     const db = new FixtureD1(await makeSeed());
     const form = new FormData();

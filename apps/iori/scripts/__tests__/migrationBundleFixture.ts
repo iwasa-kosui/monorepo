@@ -52,7 +52,7 @@ export const validContract = async (artifactBodies: Record<string, unknown> = {}
             tables: {},
             files: [],
           },
-          r2_import_manifest: { schemaVersion: 1, objects: [] },
+          r2_import_manifest: { schemaVersion: 1, objects: [], omittedCount: 0 },
           ogp_import_manifest: { objects: [] },
         };
         const body = JSON.stringify(
