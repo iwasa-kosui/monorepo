@@ -8,6 +8,7 @@ import { createPrivateCommandLog } from './private-command-log.mjs';
 import { assertReviewedMain } from './reviewed-main.mjs';
 import { createSourceBuildManifest } from './source-build-manifest.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
+import { sourceUnitStatusNoticeLine } from './source-diagnose-remote.mjs';
 
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
 export const sourceDeploymentSshArguments = ({ user, identityFile, knownHostsFile }) => [
@@ -185,7 +186,7 @@ export const deploySource = async (options, {
     ssh: sourceDeploymentSshArguments(options),
   }));
   const signal = AbortSignal.any([...(suppliedSignal ? [suppliedSignal] : []), AbortSignal.timeout(50 * 60_000)]);
-  const execute = async (program, args, input) => {
+  const execute = async (program, args, input, timeout = 16 * 60_000) => {
     current.program = ['ssh', 'rsync'].includes(program) ? program : 'none';
     current.stderr = '';
     const directory = process.env.IORI_PRIVATE_LOG_DIRECTORY;
@@ -194,7 +195,7 @@ export const deploySource = async (options, {
       return await runCommand(program, args, {
         cwd: appRoot,
         env: process.env,
-        timeout: 16 * 60_000,
+        timeout,
         killGraceMs: 15000,
         maxBuffer: 8_000_000,
         signal,
@@ -203,7 +204,9 @@ export const deploySource = async (options, {
           current.stderr = result.stderr;
           if (program === 'ssh') {
             for (const line of result.stderr.split('\n')) {
-              if (ownerNotice.test(line) || modeNotice.test(line)) process.stderr.write(`${line}\n`);
+              if (ownerNotice.test(line) || modeNotice.test(line) || sourceUnitStatusNoticeLine.test(line)) {
+                process.stderr.write(`${line}\n`);
+              }
             }
           }
           await log?.capture(result);
@@ -214,35 +217,55 @@ export const deploySource = async (options, {
     }
   };
   let manifest;
-  const remote = (phase) =>
-    stage(`remote-${phase}`, async () => {
-      await checkMain(mainSha, { signal });
-      const script = await build({
-        stdin: {
-          contents:
-            `import {runSourceDeployStep,captureSourceCommandOutput} from './scripts/source-deploy-operations.mjs';
+  const bootstrap = async (phase, timeoutMs) => {
+    const script = await build({
+      stdin: {
+        contents:
+          `import {runSourceDeployStep,captureSourceCommandOutput} from './scripts/source-deploy-operations.mjs';
           import {withCliSignal} from './scripts/cli-lifetime.mjs';
           if (process.version !== 'v24.12.0') throw new Error('Unsupported source Node.');
           await withCliSignal(signal => runSourceDeployStep(${JSON.stringify({ phase, sha: mainSha, manifest })},
-            {signal,captureOutput:captureSourceCommandOutput}), {timeoutMs: 15*60*1000});`,
-          resolveDir: appRoot,
-        },
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        write: false,
-      });
-      const input = script.outputFiles[0].text;
-      if (Buffer.byteLength(input) > 1024 * 1024) throw new Error('Source bootstrap is too large.');
-      await execute('ssh', [
+            {signal,captureOutput:captureSourceCommandOutput}), {timeoutMs: ${timeoutMs}});`,
+        resolveDir: appRoot,
+      },
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+    });
+    const input = script.outputFiles[0].text;
+    if (Buffer.byteLength(input) > 1024 * 1024) throw new Error('Source bootstrap is too large.');
+    return input;
+  };
+  const runBootstrap = (input, timeout) =>
+    execute(
+      'ssh',
+      [
         ...ssh,
         '--',
         host,
         '"$HOME/.nvm/versions/node/v24.12.0/bin/node"',
         '--input-type=module',
         '-',
-      ], input);
+      ],
+      input,
+      timeout,
+    );
+  const remote = (phase) =>
+    stage(`remote-${phase}`, async () => {
+      await checkMain(mainSha, { signal });
+      await runBootstrap(await bootstrap(phase, 15 * 60 * 1000));
     });
+  const reportUnitStatus = async () => {
+    const saved = { ...current };
+    try {
+      if (signal.aborted) return;
+      await runBootstrap(await bootstrap('unit-status', 60_000), 90_000);
+    } catch {
+    } finally {
+      Object.assign(current, saved);
+    }
+  };
   const dist = await stage('manifest', async () => {
     await checkMain(mainSha, { signal });
     return inspectDist(mainSha, signal);
@@ -270,19 +293,24 @@ export const deploySource = async (options, {
   await stage('status', async () => {
     current.program = 'ssh';
     const deadline = Date.now() + statusRetryTimeoutMs;
-    let state;
-    while (state === undefined) {
-      try {
-        state = await source.status(signal);
-      } catch (error) {
-        if (error?.retryable !== true || Date.now() + statusRetryIntervalMs > deadline) throw error;
-        await waitForRetry(statusRetryIntervalMs, signal);
+    try {
+      let state;
+      while (state === undefined) {
+        try {
+          state = await source.status(signal);
+        } catch (error) {
+          if (error?.retryable !== true || Date.now() + statusRetryIntervalMs > deadline) throw error;
+          await waitForRetry(statusRetryIntervalMs, signal);
+        }
       }
+      if (
+        state.source_revision !== mainSha || state.ingress_frozen || state.consumer_paused
+        || state.queue_failed || state.identity !== null
+      ) throw new Error('Source prerequisite readiness failed.');
+    } catch (error) {
+      await reportUnitStatus();
+      throw error;
     }
-    if (
-      state.source_revision !== mainSha || state.ingress_frozen || state.consumer_paused
-      || state.queue_failed || state.identity !== null
-    ) throw new Error('Source prerequisite readiness failed.');
   });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

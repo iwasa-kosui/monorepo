@@ -9,6 +9,7 @@ import {
   verifySourceBuildManifest,
 } from './source-build-manifest.mjs';
 import { assertSourceDeployAllowed } from './source-deploy-guard.mjs';
+import { formatUnitStatusNotice, parseUnitStatus } from './source-diagnose-remote.mjs';
 
 const inspectOwnedCheckout = async (home, uid) => {
   for (const path of [join(home, 'monorepo'), join(home, 'monorepo/apps/iori')]) {
@@ -85,6 +86,7 @@ export const runSourceDeployStep = async (
       'configuration-owner',
       'install',
       'restart',
+      'unit-status',
     ].includes(phase)
   ) {
     throw new Error('Invalid source deployment operation.');
@@ -96,6 +98,23 @@ export const runSourceDeployStep = async (
     signal?.throwIfAborted();
     await guard({ home, uid });
   };
+  if (phase === 'unit-status') {
+    signal?.throwIfAborted();
+    const { stdout } = await runCommand('systemctl', [
+      'show',
+      'microblog',
+      '--property=ActiveState,SubState,Result,NRestarts',
+    ], {
+      cwd: home,
+      env: { ...process.env, PATH: '/usr/bin:/bin', LC_ALL: 'C' },
+      timeout: 30_000,
+      maxBuffer: 1_000_000,
+      signal,
+      captureOutput: async () => {},
+    });
+    process.stderr.write(`${formatUnitStatusNotice(parseUnitStatus(stdout))}\n`);
+    return;
+  }
   await check();
   if (phase === 'check') return;
   await inspectCheckout(home, uid);
