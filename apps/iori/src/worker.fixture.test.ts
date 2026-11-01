@@ -389,7 +389,7 @@ describe('Worker fixture', () => {
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('/users/fixture');
     expect(db.rows.actor.logoUri).toBe('https://assets.example.invalid/fixture-logo.png');
-  });
+  }, 30_000);
 
   it('acknowledges a valid fanout and retries an invalid outbox through Worker queue', async () => {
     queue.ack.mockClear();

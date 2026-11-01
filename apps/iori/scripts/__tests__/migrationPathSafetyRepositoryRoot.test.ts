@@ -25,3 +25,18 @@ it('resolves the repository root once and reuses it', async () => {
   expect(execFileSync).toHaveBeenCalledTimes(1);
   expect(execFileSync).toHaveBeenCalledWith('git', ['rev-parse', '--show-toplevel'], expect.anything());
 });
+
+it('does not keep a failed repository root lookup and runs git rev-parse again on the next call', async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'iori-paths-'));
+  directories.push(root);
+  vi.resetModules();
+  const fresh = await import('../migration-path-safety.mjs');
+  execFileSync.mockClear();
+  execFileSync.mockImplementationOnce(() => {
+    throw new Error('git failed');
+  });
+  await expect(fresh.assertExternalMigrationPath(root)).rejects.toThrow('git failed');
+  await expect(fresh.assertExternalMigrationPath(root)).resolves.toBeTypeOf('string');
+  expect(execFileSync).toHaveBeenCalledTimes(2);
+  expect(execFileSync).toHaveBeenLastCalledWith('git', ['rev-parse', '--show-toplevel'], expect.anything());
+});
