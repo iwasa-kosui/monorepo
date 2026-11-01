@@ -79,6 +79,25 @@ describe('private socket', () => {
       await server.close();
     }
   });
+  it.each([
+    ['control_busy', 'control_busy'],
+    ['identity_mismatch', 'control_rejected'],
+  ])('answers a command rejected with %s as %s', async (message, expected) => {
+    const { base, control } = await setup();
+    vi.spyOn(control, 'command').mockRejectedValue(new Error(message));
+    const server = await listenControlSocket(control);
+    try {
+      const response = JSON.parse(
+        await request(
+          join(base, 'control.sock'),
+          JSON.stringify({ op: 'status', main_sha: 'a'.repeat(40), run_id: '123' }) + '\n',
+        ),
+      );
+      expect(response).toEqual({ ok: false, error: expected });
+    } finally {
+      await server.close();
+    }
+  });
   it('never removes an unrelated file and rejects public directories and symlinks', async () => {
     const { base, control, queue } = await setup();
     const path = join(base, 'control.sock');

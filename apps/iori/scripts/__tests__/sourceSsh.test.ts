@@ -265,6 +265,7 @@ const exitingSpawn = (code: number) => () => {
 };
 it.each([
   [75, 'Source control is not ready.', true],
+  [76, 'Source is not idle.', false],
   [255, 'Source operation failed.', false],
   [1, 'Source operation failed.', false],
 ])('maps the status exit code %d to "%s"', async (code, message, retryable) => {
@@ -279,5 +280,12 @@ it('does not mark exit code 75 from another operation as retryable', async () =>
   const adapter = await createSourceSshAdapter(options, { spawnProcess: exitingSpawn(75) });
   const failure = await adapter.freeze().catch((error) => error);
   expect(failure.message).toBe('Source operation failed.');
+  expect(failure.retryable).toBeUndefined();
+});
+it('reports exit code 76 from an operation other than status as not idle', async () => {
+  const { options } = await setup();
+  const adapter = await createSourceSshAdapter(options, { spawnProcess: exitingSpawn(76) });
+  const failure = await adapter.freeze().catch((error) => error);
+  expect(failure.message).toBe('Source is not idle.');
   expect(failure.retryable).toBeUndefined();
 });

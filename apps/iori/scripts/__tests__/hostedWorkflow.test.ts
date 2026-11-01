@@ -328,6 +328,7 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-frozen',
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-operation-failed',
     'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed',
+    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-not-idle',
     'IORI_DIAG stage=resume-verify program=ssh exit=none signal=none reason=resume-not-confirmed',
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',

@@ -105,9 +105,11 @@ export async function listenControlSocket(control: SourceControl) {
           if (streaming) socket.end();
           else socket.end(JSON.stringify({ ok: true, state }) + '\n');
         },
-        () => {
+        (error: unknown) => {
           if (streaming) socket.destroy();
-          else socket.end('{"ok":false,"error":"control_rejected"}\n');
+          else if (error instanceof Error && error.message === 'control_busy') {
+            socket.end('{"ok":false,"error":"control_busy"}\n');
+          } else socket.end('{"ok":false,"error":"control_rejected"}\n');
         },
       );
     });

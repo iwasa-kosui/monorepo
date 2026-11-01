@@ -460,6 +460,7 @@ sudo chown <previous_uid>:<previous_gid> /etc/systemd/system/microblog.service.d
 - `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
 - `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
 - `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
+- `reason=source-not-idle`（`stage=status`）の場合、アプリが control コマンドの実行中のために status を拒否しました。作業者は、実行中の operation（export など）が終わるのを待ってから再実行します。
 - `reason=unclassified` の場合、失敗は既知の分類に当たりません。作業者は分類表（`apps/iori/scripts/deploy-source.mjs`）への追加を検討します。
 
 ### 4.2 旧版へ戻す
@@ -581,7 +582,7 @@ IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient
 
 source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
 
-`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。source の control socket は、拒否の理由を問わず `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
+`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。`IORI_DIAG` 行は出しません。source の control socket は、control コマンドの実行中に拒否したときだけ `control_busy` を返します。CI のクライアントは `control_busy` を終了コード 76 にし、ssh アダプタは終了コード 76 を `Source is not idle.` に対応づけます。`IORI_DIAG` を出す operation では、この場合の reason が `source-not-idle` になります。`estimate-source` は `IORI_DIAG` を出さないので、`control_busy` の場合も表示は `Source estimate failed.` のままです。source の control socket は、control コマンドの実行中以外の拒否では、理由を問わず従来どおり `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
 
 `main_sha` には、次の2つを同時に満たす値が必要です。
 
@@ -957,18 +958,18 @@ export、inventory、transfer などの control コマンドが実行中の間�
 
 `resume-source` は、次の3つの場合に resume を送らずに失敗します。
 
-- export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は `stage=resume-precheck` で `reason=source-operation-failed` として失敗します。
+- export などの control コマンドが実行中の間は、source が status を拒否します。`resume-source` は、status が拒否されると `stage=resume-precheck` で失敗します。拒否の理由が control コマンドの実行中であれば `reason=source-not-idle` になります。それ以外の理由で拒否された場合は `reason=source-operation-failed` になります。
 - status が値を返し、`queue_failed` が true の場合、`resume-source` は `stage=resume-precheck` で `reason=source-queue-failed` として失敗します。
 - status が値を返し、`queue_failed` が false で、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でない場合、`resume-source` は `stage=resume-precheck` で `reason=source-not-idle` として失敗します。
 
 `resume-source` は idle になるまで待つ処理を持ちません。失敗した場合、作業者は次のとおり対応します。
 
 - `queue_failed` が true で `reason=source-queue-failed` の場合、この operation では復旧できません。source の queue の失敗は、凍結の marker を残したまま再起動しないと解消しません。凍結の marker がある間は、source 配備も止まります。この失敗は、この PR の operation の範囲外です。復旧の経路はまだ決まっていません。作業者は旧環境に直接入らず、管理役に判断を仰ぎます。
-- `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。control コマンドの実行中（`control_busy`）だけでなく、revision の不一致、identity の不一致、ssh の失敗でも、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
-- `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。作業者は時間を置いて再実行します。
+- `reason=source-operation-failed` の場合、作業者は時間を置いて1〜2回再実行します。それでも同じ reason で失敗する場合、作業者は別の原因を疑います。revision の不一致、identity の不一致、ssh の失敗が、この reason になります。identity の main_sha や run_id が input と違う場合は、ssh アダプタが先に検出するので、reason は `source-operation-failed` になります。source が凍結しているのに identity を持たない場合は、`reason=source-identity-mismatch` で失敗します。
+- `reason=source-not-idle` の場合、`http_inflight`、`dequeue_work`、`enqueue_work` のどれかが 0 でなく、HTTP や queue の作業が残っています。export などの control コマンドが実行中で、source が status か resume を拒否した場合も、この reason になります。作業者は時間を置いて再実行します。
 - resume が source 側で成功したのに応答が届かなかった場合、`resume-source` は失敗として報告します。再実行すると `reason=source-not-frozen` で失敗します。`source-not-frozen` は、凍結がすでに解除済みである可能性を示します。作業者は status か本番の応答で、凍結が解けていることを確かめます。
 
-rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-operation-failed` と `reason=source-not-idle` のどちらにもなりえます。export などの control コマンドが実行中であれば `reason=source-operation-failed` で、control コマンドは終わっていて HTTP や queue の処理が残っていれば `reason=source-not-idle` で失敗します。どちらの場合も、作業者は上の対応に従います。
+rehearse-migration は、30 分の上限で中断した直後に resume を1回試します。このとき source 側の export がまだ動いていると、source は resume を拒否し、凍結が残ります。この状態で作業者が `resume-source` を dispatch すると、`reason=source-not-idle` で失敗します。export などの control コマンドが実行中の場合も、control コマンドは終わっていて HTTP や queue の処理が残っている場合も、reason は同じです。どちらの場合も、作業者は上の対応に従います。
 
 #### `freeze.pending` が残った場合
 
