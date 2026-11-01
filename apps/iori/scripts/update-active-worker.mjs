@@ -18,6 +18,7 @@ export const updateActiveWorker = async (
     fetchRequest,
     runCommand,
     checkMain = assertReviewedMain,
+    onStage = () => {},
   },
 ) => {
   const target = parseExpectedTarget(expectedTarget);
@@ -50,6 +51,7 @@ export const updateActiveWorker = async (
     signal,
     runCommand,
   });
+  onStage('deploy-worker-after');
   const after = await control.readActiveResources(ids);
   if (!isDeepStrictEqual(before, after)) throw new Error('Active Queue configuration changed; retain current state.');
   const afterWorker = await control.readActiveWorker({

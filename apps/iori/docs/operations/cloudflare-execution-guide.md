@@ -457,7 +457,7 @@ Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<�
 
 `<resource>` は `d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかです。`<action>` は `create`、`update`、`delete`、`replace`、`no-op`、`other` のどれかです。例として、`plan-queue-update` は fedify の Queue の更新を表します。
 
-リソースの読み取り（`prepare-resource-read`、`prepare-attach-read`、`cutover-gate-smoke`、`cutover-gate-route`、`cutover-gate-active`、`cutover-gate-queue`、`cutover-read-resume`）が `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
+リソースの読み取り（`prepare-resource-read`、`prepare-attach-read`、`cutover-gate-smoke`、`cutover-gate-route`、`cutover-gate-active`、`cutover-gate-queue`、`cutover-read-resume`、`cutover-restore`、`verify-import`、`rehearse-migration`、`migrate-data`、`deploy-worker-before`、`deploy-worker-after`）が `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
 
 | `reason`                     | 意味                                                                                   |
 | ---------------------------- | -------------------------------------------------------------------------------------- |
@@ -1162,6 +1162,21 @@ staging を使う場合、作業者は staging の完了後に production に異
 | `mismatch`                   | 移行先の記録、consumer、または配送の再開の後の consumer が期待と一致しません。 |
 
 `cutover-source` と `cutover-gate-*` では、source の接続の失敗として `not-ready`、`busy`、`rejected`、`invalid-response`、`spawn-failed`、`ssh-failed` と、`estimate-` で始まる語が出ます。意味は、[estimate-source で事前に確認する](#estimate-source-で事前に確認する)の `reason` の表に書いています。
+
+### 6.4 verify-import、rehearse-migration、migrate-data、deploy-worker の失敗の行
+
+次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
+
+| `stage`                | operation と時点                                                    |
+| ---------------------- | ------------------------------------------------------------------- |
+| `verify-import`        | verify-import                                                       |
+| `rehearse-migration`   | rehearse-migration                                                  |
+| `migrate-data`         | migrate-data                                                        |
+| `deploy-worker-before` | deploy-worker で、レビュー済みの Worker の version を deploy する前 |
+| `deploy-worker-after`  | deploy-worker で、レビュー済みの Worker の version を deploy した後 |
+| `unclassified`         | 上のどれにも当たらない段                                            |
+
+分類の行の `reason` には、prepare-target の節と同じ語が出ます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。
 
 ## 7. 中断と引き継ぎ
 

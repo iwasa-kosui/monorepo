@@ -8,3 +8,5 @@ export function planRejectionDetails(
   issues: readonly { message: string; address?: string; actions?: readonly string[] }[],
 ): string[];
 export function preparationDetailLines(stage: unknown, error: unknown): string[];
+export const OPERATION_STAGES: readonly string[];
+export function operationFailureLines(stage: unknown, error: unknown): string[];

@@ -1,9 +1,12 @@
 import { expect, it } from 'vitest';
 
+import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import {
   CONTROL_PLANE_APIS,
   controlPlaneApi,
   isPreparationReason,
+  OPERATION_STAGES,
+  operationFailureLines,
   planRejectionDetails,
   PREPARATION_STAGES,
   preparationDetailLines,
@@ -302,4 +305,126 @@ it('uses prepare-unclassified for a detail line outside the stage list', () => {
     'IORI_DIAG stage=prepare-unclassified program=none exit=none signal=none reason=plan-d1-create',
   ]);
   expect(lines[0]).toMatch(publicLine);
+});
+const operationLine = (stage: string, reason: string) =>
+  `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=${reason}`;
+const operationFailure = (reason?: string, details?: unknown, message = 'fixture-secret-message') =>
+  Object.assign(
+    new Error(message),
+    reason === undefined && details === undefined
+      ? {}
+      : { diagnostic: { ...(reason === undefined ? {} : { reason }), ...(details === undefined ? {} : { details }) } },
+  );
+it('pins the operation stage vocabulary', () => {
+  expect(OPERATION_STAGES).toEqual([
+    'verify-import',
+    'rehearse-migration',
+    'migrate-data',
+    'deploy-worker-before',
+    'deploy-worker-after',
+  ]);
+  expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
+});
+it('keeps every operation stage line within the public relay pattern and the workflow output check', () => {
+  for (const stage of [...OPERATION_STAGES, 'unclassified']) {
+    const [line] = operationFailureLines(stage, operationFailure('state-mismatch'));
+    expect(line).toBe(operationLine(stage, 'state-mismatch'));
+    expect(line).toMatch(publicLine);
+    expect(assertWorkflowOutput(line!)).toEqual([]);
+  }
+});
+it('prints the allowed details first and the classification last', () => {
+  const lines = operationFailureLines(
+    'verify-import',
+    operationFailure('state-mismatch', ['resource-consumer-script', 'resource-d1']),
+  );
+  expect(lines).toEqual([
+    operationLine('verify-import', 'resource-consumer-script'),
+    operationLine('verify-import', 'resource-d1'),
+    operationLine('verify-import', 'state-mismatch'),
+  ]);
+  expect(lines.join('\n')).not.toContain('fixture-secret-message');
+});
+it('removes duplicate details and keeps at most eight', () => {
+  const details = [
+    'resource-d1',
+    'resource-d1',
+    'resource-kv',
+    'resource-r2',
+    'resource-queue-identity',
+    'resource-queue-paused',
+    'resource-queue-shape',
+    'resource-queue-created',
+    'resource-dlq-attached',
+    'resource-consumer-count',
+  ];
+  const lines = operationFailureLines('migrate-data', operationFailure('state-mismatch', details));
+  expect(lines).toHaveLength(9);
+  expect(lines.slice(0, 8).map(line => line.split('reason=')[1])).toEqual([
+    'resource-d1',
+    'resource-kv',
+    'resource-r2',
+    'resource-queue-identity',
+    'resource-queue-paused',
+    'resource-queue-shape',
+    'resource-queue-created',
+    'resource-dlq-attached',
+  ]);
+  expect(lines[8]).toBe(operationLine('migrate-data', 'state-mismatch'));
+});
+it('drops details outside the allowed vocabulary', () => {
+  const lines = operationFailureLines(
+    'migrate-data',
+    operationFailure('mismatch', ['https://secret.invalid', 'Resource D1', 7, null, 'resource-d1']),
+  );
+  expect(lines).toEqual([operationLine('migrate-data', 'resource-d1'), operationLine('migrate-data', 'mismatch')]);
+  expect(operationFailureLines('migrate-data', operationFailure('mismatch', 'resource-d1'))).toEqual([
+    operationLine('migrate-data', 'mismatch'),
+  ]);
+});
+it('classifies by diagnostic reason, then abort names, then unclassified', () => {
+  expect(operationFailureLines('rehearse-migration', operationFailure('plan-rejected'))).toEqual([
+    operationLine('rehearse-migration', 'plan-rejected'),
+  ]);
+  expect(operationFailureLines('rehearse-migration', operationFailure('https://secret.invalid'))).toEqual([
+    operationLine('rehearse-migration', 'unclassified'),
+  ]);
+  for (const name of ['AbortError', 'TimeoutError']) {
+    expect(operationFailureLines('rehearse-migration', Object.assign(new Error('x'), { name }))).toEqual([
+      operationLine('rehearse-migration', 'aborted'),
+    ]);
+  }
+  expect(operationFailureLines('rehearse-migration', new Error('x'))).toEqual([
+    operationLine('rehearse-migration', 'unclassified'),
+  ]);
+  expect(operationFailureLines('rehearse-migration', undefined)).toEqual([
+    operationLine('rehearse-migration', 'unclassified'),
+  ]);
+  expect(operationFailureLines('rehearse-migration', 'text')).toEqual([
+    operationLine('rehearse-migration', 'unclassified'),
+  ]);
+});
+it('uses stage=unclassified for a stage outside the vocabulary', () => {
+  for (const stage of ['unknown', undefined, 'prepare-inputs', 'https://secret.invalid']) {
+    expect(operationFailureLines(stage, operationFailure('mismatch'))).toEqual([
+      operationLine('unclassified', 'mismatch'),
+    ]);
+  }
+});
+it('reads the first inner error of an AggregateError that has no diagnostic', () => {
+  const inner = operationFailure('state-mismatch', ['resource-consumer-script']);
+  const aggregate = new AggregateError([inner, new Error('resume')], 'fixture-secret-message');
+  expect(operationFailureLines('rehearse-migration', aggregate)).toEqual([
+    operationLine('rehearse-migration', 'resource-consumer-script'),
+    operationLine('rehearse-migration', 'state-mismatch'),
+  ]);
+  const aborted = new AggregateError([Object.assign(new Error('x'), { name: 'AbortError' })], 'x');
+  expect(operationFailureLines('rehearse-migration', aborted)).toEqual([
+    operationLine('rehearse-migration', 'aborted'),
+  ]);
+  expect(operationFailureLines('rehearse-migration', new AggregateError([], 'x'))).toEqual([
+    operationLine('rehearse-migration', 'unclassified'),
+  ]);
+  const own = Object.assign(new AggregateError([inner], 'x'), { diagnostic: { reason: 'mismatch' } });
+  expect(operationFailureLines('rehearse-migration', own)).toEqual([operationLine('rehearse-migration', 'mismatch')]);
 });

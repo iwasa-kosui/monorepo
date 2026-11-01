@@ -7,10 +7,11 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { activeTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { assertReviewedMain } from './reviewed-main.mjs';
+import { operationFailureLines } from './target-preparation-diagnostics.mjs';
 import { createTargetTerraform } from './target-terraform.mjs';
 import { updateActiveWorker } from './update-active-worker.mjs';
 import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.mjs';
-const main = async (cliSignal) => {
+const main = async (cliSignal, onStage) => {
   const invocation = parseWorkflowInvocation(process.env);
   if (invocation.operation !== 'deploy-worker') throw new Error('Invalid normal deployment operation.');
   const { remainingMs } = workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT));
@@ -36,6 +37,7 @@ const main = async (cliSignal) => {
     token: config.token,
     zoneId: config.zoneId,
     signal,
+    onStage,
   });
   const after = await terraform.initializeActive();
   if (
@@ -44,7 +46,15 @@ const main = async (cliSignal) => {
   ) throw new Error('Active backend state changed; retain current state.');
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  withCliSignal(main).then(() => console.log('Reviewed active Worker update completed.')).catch(() => {
+  let deployStage = 'deploy-worker-before';
+  withCliSignal(signal =>
+    main(signal, (stage) => {
+      deployStage = stage;
+    })
+  ).then(() => console.log('Reviewed active Worker update completed.')).catch((error) => {
+    try {
+      process.stderr.write(`${operationFailureLines(deployStage, error).join('\n')}\n`);
+    } catch {}
     console.error('Active Worker update failed; retain current state for reviewed recovery.');
     process.exitCode = 1;
   });

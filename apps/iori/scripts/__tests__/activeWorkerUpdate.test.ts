@@ -88,3 +88,20 @@ it.each(['consumer', 'Queue', 'route', 'deploy'])(
     expect(mocks.deploy.mock.calls.length).toBeLessThanOrEqual(1);
   },
 );
+it.each([
+  ['the Queue read before deploy', 'deploy-worker-before'],
+  ['the Queue read after deploy', 'deploy-worker-after'],
+  ['the deploy itself', 'deploy-worker-before'],
+])('reports the stage for a failure in %s', async (failure, expected) => {
+  if (failure === 'the Queue read before deploy') mocks.read.mockRejectedValueOnce(new Error('read'));
+  if (failure === 'the Queue read after deploy') {
+    mocks.read.mockResolvedValueOnce(resource).mockRejectedValueOnce(new Error('read'));
+  }
+  if (failure === 'the deploy itself') mocks.deploy.mockRejectedValueOnce(new Error('uncertain'));
+  let stage = 'deploy-worker-before';
+  await expect(updateActiveWorker({ ...options(), onStage: next => (stage = next) })).rejects.toThrow();
+  expect(stage).toBe(expected);
+});
+it('does not require onStage', async () => {
+  await expect(updateActiveWorker(options())).resolves.toMatchObject({ versionId: 'next' });
+});
