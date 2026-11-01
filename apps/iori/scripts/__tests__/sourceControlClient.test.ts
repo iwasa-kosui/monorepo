@@ -74,6 +74,23 @@ it('keeps other rejections and unsafe control paths as ordinary failures', async
   expect(unsafe.message).toBe('Unsafe source control.');
   expect(unsafe.notReady).toBeUndefined();
 });
+it('passes a rejection with a detail through unchanged as an ordinary failure', async () => {
+  const base = await setup();
+  const response = '{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n';
+  await listenWith(base, response);
+  const chunks: Buffer[] = [];
+  const output = new Writable({
+    write(chunk, _encoding, done) {
+      chunks.push(chunk);
+      done();
+    },
+  });
+  const rejected = await requestSourceControl({ args, output, base }).catch((error) => error);
+  expect(rejected.message).toBe('Source control rejected.');
+  expect(rejected.notReady).toBeUndefined();
+  expect(rejected.busy).toBeUndefined();
+  expect(Buffer.concat(chunks).toString('utf8')).toBe(response);
+});
 it('marks the control_busy response as busy', async () => {
   const base = await setup();
   await listenWith(base, '{"ok":false,"error":"control_busy"}\n');

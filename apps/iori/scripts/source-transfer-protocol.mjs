@@ -12,6 +12,25 @@ export const SOURCE_LIMITS = Object.freeze({
   transferMs: 5 * 60_000,
   estimateMs: 60_000,
 });
+export const SOURCE_REJECTION_DETAILS = Object.freeze([
+  'estimate-connect',
+  'estimate-query',
+  'estimate-upload-row',
+  'estimate-upload-root',
+  'estimate-upload-open',
+  'estimate-too-large',
+  'estimate-limit',
+  'estimate-other',
+]);
+export const SOURCE_SSH_REASONS = Object.freeze([
+  'not-ready',
+  'busy',
+  'rejected',
+  'invalid-response',
+  'spawn-failed',
+  'aborted',
+  'ssh-failed',
+]);
 export const sourceIdentitySchema = z.object({
   main_sha: z.string().regex(/^[a-f0-9]{40}$/),
   run_id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),

@@ -1,8 +1,11 @@
-import { chmod, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, it, vi } from 'vitest';
 
-import { estimateFromEnvironment, estimateSource } from '../estimate-source.mjs';
-import { SOURCE_LIMITS } from '../source-transfer-protocol.mjs';
+import { estimateFailureLine, estimateFromEnvironment, estimateSource } from '../estimate-source.mjs';
+import { SOURCE_LIMITS, SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 
 const estimate = {
@@ -151,6 +154,83 @@ it.each([
       expect(createSource).not.toHaveBeenCalled();
     }
   });
+});
+const publicDiagnostic =
+  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
+it.each([...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS])(
+  'writes the reason %s as one line the public log accepts',
+  reason => {
+    const line = estimateFailureLine(Object.assign(new Error('raw /home/secret'), { diagnostic: { reason, exit: 1 } }));
+    expect(line).toBe(`IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=${reason}`);
+    expect(line).toMatch(publicDiagnostic);
+  },
+);
+it('writes the exit code and signal only within their public ranges', () => {
+  const diagnostic = (exit: unknown, signal: unknown) =>
+    estimateFailureLine({ diagnostic: { reason: 'aborted', exit, signal } });
+  expect(diagnostic(undefined, 'SIGTERM')).toBe(
+    'IORI_DIAG stage=estimate-source program=ssh exit=none signal=SIGTERM reason=aborted',
+  );
+  expect(diagnostic(255, undefined)).toContain('exit=255 signal=none');
+  expect(diagnostic(256, 'sigterm')).toContain('exit=none signal=none');
+  expect(diagnostic(-1, 'SIGTERM extra')).toContain('exit=none signal=none');
+});
+it.each([
+  new Error('Source operation failed.'),
+  { diagnostic: { reason: 'relation "articles" does not exist', exit: 1 } },
+  { diagnostic: { reason: 'source.example.test', exit: 1 } },
+  { diagnostic: { reason: 'unclassified', exit: 1 } },
+  undefined,
+])('writes an unclassified line for a failure without a known reason', error => {
+  const line = estimateFailureLine(error);
+  expect(line).toBe('IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified');
+  expect(line).toMatch(publicDiagnostic);
+});
+const runCli = (env: Record<string, string>) =>
+  new Promise<{ code: number | null; stderr: string; stdout: string }>(resolve => {
+    execFile(
+      process.execPath,
+      [fileURLToPath(new URL('../estimate-source.mjs', import.meta.url))],
+      { env },
+      (error, stdout, stderr) =>
+        resolve({ code: error ? (typeof error.code === 'number' ? error.code : null) : 0, stdout, stderr }),
+    );
+  });
+it('prints exactly one diagnostic line and then fails when the source rejects the estimate', async () => {
+  await withRoot(async root => {
+    const bin = join(root, 'bin');
+    await mkdir(bin);
+    await writeFile(
+      join(bin, 'ssh'),
+      '#!/bin/sh\nprintf \'%s\\n\' \'{"ok":false,"error":"control_rejected","detail":"estimate-query"}\'\n'
+        + 'echo "PRIVATE relation articles at source.example.test" >&2\nexit 1\n',
+      { mode: 0o755 },
+    );
+    await writeFile(join(root, 'id'), 'synthetic', { mode: 0o600 });
+    await writeFile(join(root, 'known_hosts'), 'synthetic', { mode: 0o600 });
+    const result = await runCli({
+      PATH: `${bin}:/usr/bin:/bin`,
+      ...cliEnvironment(root, {
+        IORI_SOURCE_SSH_IDENTITY_FILE: join(root, 'id'),
+        IORI_SOURCE_SSH_KNOWN_HOSTS_FILE: join(root, 'known_hosts'),
+      }) as Record<string, string>,
+    });
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr.split('\n').filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+      'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=estimate-query',
+    ]);
+    expect(result.stderr).toBe(
+      'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=estimate-query\nSource estimate failed.\n',
+    );
+  });
+});
+it('prints one unclassified diagnostic line when the configuration is missing', async () => {
+  const result = await runCli({ PATH: '/usr/bin:/bin' });
+  expect(result.code).toBe(1);
+  expect(result.stderr).toBe(
+    'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified\nSource estimate failed.\n',
+  );
 });
 it('refuses a migration root that is not private or not absolute before creating the source', async () => {
   await withRoot(async root => {

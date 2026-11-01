@@ -584,7 +584,42 @@ IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient
 
 source が凍結中の場合、`estimate-source` は失敗します。凍結中とは、source に `freeze.json` があり、別の run の identity が残っている状態です。`estimate-source` の run ID は `estimate_<GITHUB_RUN_ID>` なので、凍結した run の ID と一致しません。source は identity が一致しない command を `identity_mismatch` で拒否します。
 
-`estimate-source` は、失敗すると `Source estimate failed.` の固定文言だけを出します。`IORI_DIAG` 行は出しません。source の control socket は、control コマンドの実行中に拒否したときだけ `control_busy` を返します。CI のクライアントは `control_busy` を終了コード 76 にし、ssh アダプタは終了コード 76 を `Source is not idle.` に対応づけます。`IORI_DIAG` を出す operation では、この場合の reason が `source-not-idle` になります。`estimate-source` は `IORI_DIAG` を出さないので、`control_busy` の場合も表示は `Source estimate failed.` のままです。source の control socket は、control コマンドの実行中以外の拒否では、理由を問わず従来どおり `control_rejected` を返します。このため、CI の側からは、`identity_mismatch` と `revision_mismatch` などの理由を区別できません。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
+`estimate-source` は、失敗すると `IORI_DIAG` の1行と、`Source estimate failed.` の固定文言を stderr に出します。Actions の公開ログに残るのは `IORI_DIAG` の行だけです。`Source estimate failed.` は公開ログに出ません。
+
+```text
+IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|none> reason=<分類>
+```
+
+`reason` は固定の語彙から選びます。ssh の stderr、旧環境の応答の生の文字列、パス、ホスト名は出しません。runner 側の語彙の意味は次のとおりです。
+
+| `reason`           | 意味                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `not-ready`        | 旧環境の control socket がまだ使えません。ssh は終了コード 75 で終わりました                                                                           |
+| `busy`             | 旧環境が別の control コマンドを実行中です。ssh は終了コード 76 で終わりました                                                                          |
+| `rejected`         | 旧環境が応答しましたが、拒否でした。拒否の理由は区別できません。たとえば `identity_mismatch` と `revision_mismatch` は、どちらも `rejected` になります |
+| `invalid-response` | 旧環境の応答を JSON として読めないか、形が想定と違います                                                                                               |
+| `spawn-failed`     | runner が ssh を起動できませんでした                                                                                                                   |
+| `aborted`          | 時間切れか取り消しのために、runner が ssh を止めました                                                                                                 |
+| `ssh-failed`       | 上のどれにも当たらない、0 以外の終了です。ssh の接続や認証の失敗と、旧環境側の node の失敗を含みます                                                   |
+
+旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
+
+| `reason`               | 失敗した段                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `estimate-connect`     | DB への接続と transaction の開始                                               |
+| `estimate-query`       | table ごとの SELECT、`post_images` の cursor、COMMIT                           |
+| `estimate-upload-row`  | `post_images` の行の形と、url の形                                             |
+| `estimate-upload-root` | `UPLOAD_DIR` の realpath の確認                                                |
+| `estimate-upload-open` | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                      |
+| `estimate-too-large`   | 全体のサイズか、ファイル数の上限の超過                                         |
+| `estimate-limit`       | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断 |
+| `estimate-other`       | 上のどの段にも当たらない失敗。空き容量の取得を含みます                         |
+
+`estimate-` で始まる語彙は、旧環境への配備 (`deploy-iori.yml`) の後に効きます。配備の前の旧環境は `detail` を返さないので、サービス側の失敗は `reason=rejected` になります。
+
+PostgreSQL の接続の切断は、`estimate-connect` か `estimate-query` になります。
+
+`reason` が `busy` になるのは、source の control socket が、control コマンドの実行中に拒否したときだけです。この場合、source は `control_busy` を返し、CI のクライアントは `control_busy` を終了コード 76 にします。`estimate-source` が失敗したときは、作業者が 5.2 節で凍結が残った場合の手順 1 と同じ方法で、`freeze.json` と `freeze.pending` の有無を確認します。
 
 `main_sha` には、次の2つを同時に満たす値が必要です。
 

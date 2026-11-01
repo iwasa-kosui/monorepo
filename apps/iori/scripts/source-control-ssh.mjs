@@ -7,6 +7,7 @@ import { assertExternalMigrationPath, assertExternalMigrationRoot } from './migr
 import { sourceCommandArguments } from './source-control-client.mjs';
 import {
   SOURCE_LIMITS,
+  SOURCE_REJECTION_DETAILS,
   sourceIdentitySchema,
   validateSourceEstimate,
   validateSourceInventory,
@@ -78,13 +79,18 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
       ], { stdio: ['ignore', 'pipe', 'pipe'], shell: false });
       let closed = false;
       let force;
+      let spawnFailed = false;
+      let timedOut = false;
+      let closeSignal;
       const exited = new Promise((resolve) => {
         child.once('error', () => {
           closed = true;
+          spawnFailed = true;
           resolve(undefined);
         });
-        child.once('close', (code) => {
+        child.once('close', (code, exitSignal) => {
           closed = true;
+          closeSignal = exitSignal;
           resolve(code);
         });
       });
@@ -106,20 +112,37 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
         : op === 'drain'
         ? 310_000
         : SOURCE_LIMITS.estimateMs + 10_000;
-      const timer = setTimeout(cancel, milliseconds);
+      const timer = setTimeout(() => {
+        timedOut = true;
+        cancel();
+      }, milliseconds);
       signal?.addEventListener('abort', cancel, { once: true });
       try {
         const result = await consume(child.stdout);
         if (await exited !== 0) throw new Error();
         return result;
-      } catch {
+      } catch (cause) {
         if (!child.stdout.readableEnded) cancel();
         const code = await exited;
+        const reason = spawnFailed
+          ? 'spawn-failed'
+          : signal?.aborted || timedOut
+          ? 'aborted'
+          : code === 75
+          ? 'not-ready'
+          : code === 76
+          ? 'busy'
+          : cause?.sourceReason ?? (code === 0 ? 'invalid-response' : 'ssh-failed');
+        const diagnostic = {
+          reason,
+          exit: Number.isInteger(code) ? code : undefined,
+          signal: typeof closeSignal === 'string' ? closeSignal : undefined,
+        };
         if (op === 'status' && code === 75) {
-          throw Object.assign(new Error('Source control is not ready.'), { retryable: true });
+          throw Object.assign(new Error('Source control is not ready.'), { retryable: true, diagnostic });
         }
-        if (code === 76) throw new Error('Source is not idle.');
-        throw new Error('Source operation failed.');
+        if (code === 76) throw Object.assign(new Error('Source is not idle.'), { diagnostic });
+        throw Object.assign(new Error('Source operation failed.'), { diagnostic });
       } finally {
         clearTimeout(timer);
         clearTimeout(force);
@@ -136,6 +159,13 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
           chunks.push(chunk);
         }
         const response = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (response?.ok === false) {
+          throw Object.assign(new Error(), {
+            sourceReason: response.error === 'control_rejected' && SOURCE_REJECTION_DETAILS.includes(response.detail)
+              ? response.detail
+              : 'rejected',
+          });
+        }
         if (response?.ok !== true) throw new Error();
         const state = validateSourceState(response.state);
         if (
@@ -150,9 +180,13 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
       estimate: async (signal) => {
         try {
           const state = await metadata('estimate', undefined, signal);
-          return { ...validateSourceEstimate(state.estimate), source_revision: state.source_revision };
-        } catch {
-          throw new Error('Source operation failed.');
+          try {
+            return { ...validateSourceEstimate(state.estimate), source_revision: state.source_revision };
+          } catch {
+            throw Object.assign(new Error(), { diagnostic: { reason: 'invalid-response', exit: 0 } });
+          }
+        } catch (error) {
+          throw Object.assign(new Error('Source operation failed.'), { diagnostic: error?.diagnostic });
         }
       },
       freeze: (signal) => metadata('freeze', undefined, signal),

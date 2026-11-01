@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER } from '../export-postgres-lib.mjs';
 import { createSourceSshAdapter } from '../source-control-ssh.mjs';
+import { SOURCE_LIMITS } from '../source-transfer-protocol.mjs';
 import { createFixtureDirectory } from './fixtureTemp.ts';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -288,4 +289,132 @@ it('reports exit code 76 from an operation other than status as not idle', async
   const failure = await adapter.freeze().catch((error) => error);
   expect(failure.message).toBe('Source is not idle.');
   expect(failure.retryable).toBeUndefined();
+});
+const respondingSpawn = (stdout: string, code: number) => () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: () => true,
+  });
+  queueMicrotask(() => {
+    child.stdout.end(stdout);
+    child.stderr.end('PRIVATE SHOULD NOT ESCAPE');
+    child.emit('close', code);
+  });
+  return child;
+};
+const estimateFailure = async (spawnProcess: never, signal?: AbortSignal) => {
+  const { options } = await setup();
+  const adapter = await createSourceSshAdapter(options, { spawnProcess });
+  return adapter.estimate(signal).catch((error) => error);
+};
+it.each([
+  [75, 'not-ready'],
+  [76, 'busy'],
+  [255, 'ssh-failed'],
+  [1, 'ssh-failed'],
+])('gives an estimate that ends with exit code %d the reason %s', async (code, reason) => {
+  const failure = await estimateFailure(exitingSpawn(code) as never);
+  expect(failure.message).toBe('Source operation failed.');
+  expect(failure.diagnostic).toEqual({ reason, exit: code, signal: undefined });
+});
+it.each([
+  ['{"ok":false,"error":"control_rejected"}\n', 'rejected'],
+  ['{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n', 'estimate-query'],
+  ['{"ok":false,"error":"control_rejected","detail":"estimate-limit"}\n', 'estimate-limit'],
+  ['{"ok":false,"error":"control_rejected","detail":"password=hunter2"}\n', 'rejected'],
+  ['{"ok":false,"error":"control_rejected","detail":["estimate-query"]}\n', 'rejected'],
+  ['{"ok":false,"error":"identity_mismatch","detail":"estimate-query"}\n', 'rejected'],
+])('gives the rejected response %j the reason %s', async (stdout, reason) => {
+  const failure = await estimateFailure(respondingSpawn(stdout, 1) as never);
+  expect(failure.diagnostic).toEqual({ reason, exit: 1, signal: undefined });
+  expect(JSON.stringify(failure.diagnostic)).not.toContain('PRIVATE');
+});
+it('gives an estimate whose response cannot be used the reason invalid-response', async () => {
+  const unusable = await estimateFailure(respondingSpawn('not json', 0) as never);
+  expect(unusable.diagnostic).toEqual({ reason: 'invalid-response', exit: 0, signal: undefined });
+  const invalid = await estimateFailure(
+    respondingSpawn(JSON.stringify({ ok: true, state: { ...state, identity: null, estimate: {} } }), 0) as never,
+  );
+  expect(invalid.diagnostic).toEqual({ reason: 'invalid-response', exit: 0 });
+});
+it('gives an estimate whose process cannot start the reason spawn-failed', async () => {
+  const spawnProcess = () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: () => true,
+    });
+    queueMicrotask(() => {
+      child.stdout.end();
+      child.emit('error', new Error('spawn ssh ENOENT'));
+    });
+    return child;
+  };
+  const failure = await estimateFailure(spawnProcess as never);
+  expect(failure.diagnostic).toEqual({ reason: 'spawn-failed', exit: undefined, signal: undefined });
+});
+it.each([
+  [75, 'not-ready'],
+  [76, 'busy'],
+])('prefers the exit code %d over a rejected response with a detail', async (code, reason) => {
+  const failure = await estimateFailure(
+    respondingSpawn('{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n', code) as never,
+  );
+  expect(failure.diagnostic).toEqual({ reason, exit: code, signal: undefined });
+});
+it('keeps both retryable and the diagnostic for a status that ends with exit code 75', async () => {
+  const { options } = await setup();
+  const adapter = await createSourceSshAdapter(options, { spawnProcess: exitingSpawn(75) });
+  const failure = await adapter.status().catch((error) => error);
+  expect(failure.message).toBe('Source control is not ready.');
+  expect(failure.retryable).toBe(true);
+  expect(failure.diagnostic).toEqual({ reason: 'not-ready', exit: 75, signal: undefined });
+});
+it('gives an estimate that exceeds its time limit the reason aborted', async () => {
+  const { options } = await setup();
+  let started!: () => void;
+  const spawned = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const spawnProcess = () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: () => {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+        return true;
+      },
+    });
+    started();
+    return child;
+  };
+  const adapter = await createSourceSshAdapter(options, { spawnProcess: spawnProcess as never });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    const pending = adapter.estimate().catch((error) => error);
+    await spawned;
+    await vi.advanceTimersByTimeAsync(SOURCE_LIMITS.estimateMs + 10_000);
+    const failure = await pending;
+    expect(failure.diagnostic).toEqual({ reason: 'aborted', exit: undefined, signal: 'SIGTERM' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it('gives an aborted estimate the reason aborted and the signal that ended the process', async () => {
+  const abort = new AbortController();
+  const spawnProcess = () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: () => {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+        return true;
+      },
+    });
+    queueMicrotask(() => abort.abort());
+    return child;
+  };
+  const failure = await estimateFailure(spawnProcess as never, abort.signal);
+  expect(failure.diagnostic).toEqual({ reason: 'aborted', exit: undefined, signal: 'SIGTERM' });
 });

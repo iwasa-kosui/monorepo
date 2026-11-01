@@ -68,12 +68,19 @@ export class SourceSnapshot {
     return join(this.options.base, 'exports', this.key(identity));
   }
   async estimate(signal: AbortSignal) {
-    const client = await this.options.createClient();
+    let stage = 'estimate-connect';
+    let client: PostgresExportClient;
+    try {
+      client = await this.options.createClient();
+    } catch {
+      throw new Error(`source_estimate_failed:${stage}`);
+    }
     let tableBytes = 0;
     let uploadBytes = 0;
     let rows = 0;
     let images = 0;
     let articles = 0;
+    const limit = signal;
     const lifetime = guardPostgresClient(client, signal);
     signal = lifetime.signal;
     try {
@@ -81,6 +88,7 @@ export class SourceSnapshot {
       await client.connect();
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       await client.query('SET LOCAL statement_timeout = \'30s\'');
+      stage = 'estimate-query';
       for (const table of APPLICATION_TABLE_ORDER) {
         signal.throwIfAborted();
         const result = await client.query(
@@ -89,27 +97,38 @@ export class SourceSnapshot {
         tableBytes += number.parse(result.rows[0]?.bytes);
         rows += number.parse(result.rows[0]?.count);
         if (table === 'articles') articles = number.parse(result.rows[0]?.count);
-        if (tableBytes > SOURCE_LIMITS.totalBytes) throw new Error('source_too_large');
+        if (tableBytes > SOURCE_LIMITS.totalBytes) {
+          stage = 'estimate-too-large';
+          throw new Error('source_too_large');
+        }
       }
       await client.query(
         'DECLARE iori_images NO SCROLL CURSOR FOR SELECT CASE WHEN octet_length(url) <= 128 THEN jsonb_build_object(\'imageId\', "imageId", \'url\', url) ELSE NULL END AS row FROM post_images',
       );
       while (true) {
+        stage = 'estimate-query';
         signal.throwIfAborted();
         const page = await client.query('FETCH FORWARD 100 FROM iori_images');
         if (page.rows.length > 100) throw new Error('invalid_page');
         if (!page.rows.length) break;
         for (const { row } of page.rows) {
-          const path = await this.uploadPath(row);
+          stage = 'estimate-upload-row';
+          const name = this.uploadName(row);
+          stage = 'estimate-upload-root';
+          const path = join(await this.uploadRoot(), name);
+          stage = 'estimate-upload-open';
           const { file, stat } = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false);
           await file.close();
           uploadBytes += stat.size;
           if (++images > SOURCE_LIMITS.inventoryFiles - 32 || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes) {
+            stage = 'estimate-too-large';
             throw new Error('source_too_large');
           }
         }
       }
+      stage = 'estimate-query';
       await client.query('COMMIT');
+      stage = 'estimate-other';
       const fs = await statfs(this.options.base);
       const source_free_bytes = number.parse(fs.bavail * fs.bsize);
       const source_required_bytes = tableBytes * 24 + uploadBytes * 2 + 64 * 1024 ** 2;
@@ -132,18 +151,25 @@ export class SourceSnapshot {
       try {
         await client.query('ROLLBACK');
       } catch { /* Abort closes connection. */ }
-      throw new Error('source_estimate_failed');
+      throw new Error(`source_estimate_failed:${limit.aborted ? 'estimate-limit' : stage}`);
     } finally {
       await lifetime.cleanup();
     }
   }
-  private async uploadPath(row: unknown) {
+  private uploadName(row: unknown) {
     const parsed = upload.parse(row);
     const match = /^\/uploads\/([0-9a-f-]{36})\.(gif|jpeg|jpg|png|webp)$/i.exec(parsed.url);
     if (!match || match[1].toLowerCase() !== parsed.imageId.toLowerCase()) throw new Error('invalid_upload');
+    return `${match[1]}.${match[2]}`;
+  }
+  private async uploadRoot() {
     const root = resolve(this.options.uploadDir);
     if (await realpath(root) !== root) throw new Error('unsafe_upload_root');
-    return join(root, `${match[1]}.${match[2]}`);
+    return root;
+  }
+  private async uploadPath(row: unknown) {
+    const name = this.uploadName(row);
+    return join(await this.uploadRoot(), name);
   }
   async export(identity: SourceIdentity, signal: AbortSignal): Promise<SourceInventory> {
     const parent = join(this.options.base, 'exports');

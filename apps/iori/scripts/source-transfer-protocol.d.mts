@@ -16,6 +16,8 @@ export const SOURCE_LIMITS: Readonly<
     estimateMs: number;
   }
 >;
+export const SOURCE_REJECTION_DETAILS: readonly string[];
+export const SOURCE_SSH_REASONS: readonly string[];
 export const sourceIdentitySchema: z.ZodType<SourceIdentity>;
 export function logicalFilePath(id: string): string;
 export function validateSourceInventory(value: unknown): SourceInventory;
