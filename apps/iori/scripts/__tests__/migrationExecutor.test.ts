@@ -40,6 +40,13 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
       join(fresh, contract.phases.find((phase: any) => phase.artifacts[name]).artifacts[name].path);
     expect(JSON.parse(await readFile(manifest('d1_import_manifest'), 'utf8')).files.length).toBeGreaterThan(1);
     for (const table of APPLICATION_TABLE_ORDER) await access(join(fresh, `source/export/${table}.ndjson`));
+    const uploadKeys = [
+      'post-images/33333333-3333-4333-8333-333333333333/original',
+      'post-images/55555555-5555-4555-8555-555555555555/original',
+    ];
+    expect([...f.objects.keys()].filter(key => key.startsWith('post-images/')).sort()).toEqual(uploadKeys);
+    const uploadManifest = JSON.parse(await readFile(manifest('r2_import_manifest'), 'utf8'));
+    expect(uploadManifest.objects.map((object: { key: string }) => object.key).sort()).toEqual(uploadKeys);
     const expectedProvider = createManifestExpectedProvider({
       exportManifestPath: manifest('postgres_export_manifest'),
       d1ImportManifestPath: manifest('d1_import_manifest'),

@@ -14,6 +14,7 @@ const estimate = {
   upload_bytes: 8,
   rows: 5,
   upload_count: 3,
+  upload_duplicate_count: 1,
   article_count: 2,
   source_free_bytes: 10_000_000_000,
   source_required_bytes: 64_000_000,
@@ -37,7 +38,9 @@ const AVAILABLE = 10_000_000_000;
 it('reports a sufficient sample and capacity in one fixed line without any byte counts', async () => {
   const { source } = sourceWith();
   const line = await estimateSource({ source, availableBytes: AVAILABLE });
-  expect(line).toBe('IORI_ESTIMATE rows=5 upload_count=3 article_count=2 sample=ok capacity=ok');
+  expect(line).toBe(
+    'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=ok',
+  );
   expect(line).not.toContain('\n');
   expect(line).not.toMatch(/bytes|10000|64000000|128000000/);
 });
@@ -72,7 +75,7 @@ it('marks capacity insufficient when the runner has too little free space, for n
 it('judges both fields independently', async () => {
   const { source } = sourceWith({ rows: 0, table_bytes: 3_000_000_000 });
   expect(await estimateSource({ source, availableBytes: 100_000_000_000 })).toBe(
-    'IORI_ESTIMATE rows=0 upload_count=3 article_count=2 sample=insufficient capacity=insufficient',
+    'IORI_ESTIMATE rows=0 upload_count=3 upload_duplicate_count=1 article_count=2 sample=insufficient capacity=insufficient',
   );
 });
 it('calls only the read-only estimate operation, once', async () => {
@@ -131,7 +134,9 @@ it('builds the source adapter from the environment with an estimate_ run ID and 
       runId: 'estimate_12345',
     });
     expect(availableBytes).toHaveBeenCalledWith(root);
-    expect(line).toBe('IORI_ESTIMATE rows=5 upload_count=3 article_count=2 sample=ok capacity=ok');
+    expect(line).toBe(
+      'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=ok',
+    );
   });
 });
 it.each([

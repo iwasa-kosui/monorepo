@@ -176,3 +176,103 @@ it('renders with the actual isolated Satori/Sharp implementation and no Pg graph
   );
   expect(source).not.toMatch(/Pg|scripts\//);
 });
+const uploadsFixture = async (rows: unknown[], files: Record<string, number[]>) => {
+  const { migrationSourceFixture } = await import('./migrationSourceFixture.js');
+  const { join } = await import('node:path');
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const fixture = await migrationSourceFixture({ post_images: rows });
+  const sourceDir = join(fixture.root, 'uploads');
+  await mkdir(sourceDir, { mode: 0o700 });
+  for (const [name, bytes] of Object.entries(files)) {
+    await writeFile(join(sourceDir, name), Buffer.from(bytes), { mode: 0o600 });
+  }
+  return { ...fixture, sourceDir, outputDir: join(fixture.root, 'objects') };
+};
+const imageRow = (imageId: string, url: string) => ({
+  imageId,
+  postId: '22222222-2222-4222-8222-222222222222',
+  url,
+  createdAt: '2026-01-02T03:04:05.000Z',
+});
+const urlImageId = '88888888-8888-4888-8888-888888888888';
+const upperImageId = 'ABCDEF01-2345-4678-9ABC-DEF012345678';
+it('imports each local upload once under the key built from the URL and skips remote rows', async () => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm, readFile } = await import('node:fs/promises');
+  const fixture = await uploadsFixture([
+    imageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.jpg`),
+    imageRow('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'https://remote.test/media/a.png'),
+    imageRow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', `https://remote.test/${'y'.repeat(200)}.png`),
+    imageRow('dddddddd-dddd-4ddd-8ddd-dddddddddddd', `/uploads/${urlImageId}.jpg`),
+    imageRow('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', `/uploads/${upperImageId}.PNG`),
+  ], { [`${urlImageId}.jpg`]: [1, 2], [`${upperImageId}.PNG`]: [3, 4, 5] });
+  const puts: Array<{ key: string; contentType?: string; imageId?: string }> = [];
+  const bucket = {
+    put: vi.fn(async (key: string, _body: Uint8Array, options: any) => {
+      puts.push({ key, contentType: options.httpMetadata.contentType, imageId: options.customMetadata.imageId });
+    }),
+  };
+  try {
+    const result = await importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+    });
+    expect(puts).toHaveLength(2);
+    expect(puts).toEqual(expect.arrayContaining([
+      { key: `post-images/${upperImageId}/original`, contentType: 'image/png', imageId: upperImageId },
+      { key: `post-images/${urlImageId}/original`, contentType: 'image/jpeg', imageId: urlImageId },
+    ]));
+    expect(result.count).toBe(2);
+    expect(JSON.parse(await readFile(result.manifestPath, 'utf8')).objects.map((object: { key: string }) => object.key))
+      .toEqual(puts.map((put) => put.key));
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+it.each([
+  ['a legacy static path', [imageRow(urlImageId, `/static/uploads/${urlImageId}.jpg`)], 'upload-legacy-path'],
+  ['an invalid path', [imageRow(urlImageId, `/uploads/../${urlImageId}.jpg`)], 'Invalid legacy upload.'],
+  [
+    'the same key with another extension',
+    [
+      imageRow(urlImageId, `/uploads/${urlImageId}.jpg`),
+      imageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.png`),
+    ],
+    'Invalid legacy upload.',
+  ],
+])('rejects %s when importing uploads', async (_name, rows, message) => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm } = await import('node:fs/promises');
+  const fixture = await uploadsFixture(rows, { [`${urlImageId}.jpg`]: [1], [`${urlImageId}.png`]: [1] });
+  const bucket = { put: vi.fn(async () => {}) };
+  try {
+    await expect(importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+    })).rejects.toThrow(message);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+it('writes an empty upload manifest when every post image is remote', async () => {
+  const { importMigrationUploads } = await import('../migration-object-import.mjs');
+  const { rm, readFile } = await import('node:fs/promises');
+  const fixture = await uploadsFixture([imageRow(urlImageId, 'https://remote.test/media/a.png')], {});
+  const bucket = { put: vi.fn(async () => {}) };
+  try {
+    const result = await importMigrationUploads({
+      sourceDir: fixture.sourceDir,
+      manifestPath: fixture.manifestPath,
+      outputDir: fixture.outputDir,
+      bucket,
+    });
+    expect(JSON.parse(await readFile(result.manifestPath, 'utf8'))).toEqual({ schemaVersion: 1, objects: [] });
+    expect(bucket.put).not.toHaveBeenCalled();
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
