@@ -9,6 +9,7 @@ export function createTargetTerraform(
     hostname: string;
     runCommand?: InfrastructureCommand;
     signal?: AbortSignal;
+    onStage?: (stage: string) => void;
   },
 ): Readonly<{
   changeRoute(input: { establishedBindings: Record<string, string> }): Promise<{ applied: true }>;

@@ -332,7 +332,7 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - このため、`prepare-target` は Cloudflare のリソースを作る前に、次の検査を自動で行います（`scripts/vapid-origin-check.mjs`）。
   - `VAPID_PRIVATE_KEY` から導いた公開鍵が、`VAPID_PUBLIC_KEY` と一致すること。2 つの鍵は、パディングなしの base64url でなければなりません。Worker の Web Push の実装も、パディングなしの base64url しか受け付けません。
   - staging 以外の environment（今回の移行では production）で、`ORIGIN` の `/api/v1/push/vapid-public-key` が返す `publicKey` が、`VAPID_PUBLIC_KEY` と一致すること。staging を使う場合、staging には `prepare-target` の時点で応答するアプリがないので、staging ではこの照合を行いません。
-- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、`IORI_DIAG` 行の `reason` と固定の文言で、失敗の種類が出ます。
+- 検査の結果（`VAPID key pair match` と `Origin VAPID public key match` の `yes`、`no`、`skipped`）と、失敗時の文言は、runner の private ログにだけ記録されます。private ログは job の終わりに削除されるので、作業者は後から読めません。Actions の公開ログには、`IORI_DIAG` 行の `reason` と固定の文言で、失敗の種類が出ます。公開ログに `IORI_DIAG stage=prepare-<段>` の行がある場合、作業者は下の「[prepare-target の失敗した段](#prepare-target-の失敗した段)」の表で、止まった段を先に確かめます。
   - `prepare-target` がリソースを作る前に止まった場合、子プロセスは終了コード 78 で終わります。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources` と、「Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.」が出ます。後者は private ログにある子プロセスの文言と同じです。
   - `prepare-target` がリソースを作り始める段階に入った後に失敗した場合、子プロセスは終了コード 1 で終わります。この段階に入っても、リソースが作られたとは限りません。公開ログには `IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed` と、「Protected workflow step failed; retain remote state for reviewed recovery.」が出ます。
 - 公開ログに `reason=stopped-before-resources` が出ている場合、`prepare-target` はリソースを作る前に止まっています。リソースは作られていないので、作業者は Dashboard を確かめずに、同じ generation で再実行してよいです。原因は private ログにしか残らないため、作業者は次の順に確かめます。
@@ -357,6 +357,80 @@ gh secret set IORI_MIGRATION_RECEIPT_PUBLIC_KEY \
   < "$iori_ops_dir/receipt-public.pem"
 gh secret list --repo "$iori_repo" --env "$iori_environment"
 ```
+
+### prepare-target の失敗した段
+
+`prepare-target` が失敗すると、子プロセスは `hosted-operation` の行より前に、止まった段を示す `IORI_DIAG` の行を1行出します。終了コードと `hosted-operation` の行は変わりません。
+
+```text
+IORI_DIAG stage=prepare-<段> program=none exit=none signal=none reason=<分類>
+```
+
+公開ログに出るのは固定の語彙と数だけです。URL、ID、応答の本文、例外の文言は出ません。作業者は `stage` で止まった段を、`reason` で原因の種別を見分けます。
+
+`stage` の語彙と、段ごとに同じ generation でやり直せるかどうかは、次のとおりです。
+
+| `stage`                   | 処理                                                                                         | 同じ generation でやり直せるか                                                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prepare-inputs`          | 設定と必須 secret の検査                                                                     | 終了コードは 78 です。リソースは作られていません。作業者は入力を直して、同じ generation でやり直せます                                                                                                                                                               |
+| `prepare-vapid`           | VAPID 値の検査                                                                               | 終了コードは 78 です。リソースは作られていません。作業者は入力を直して、同じ generation でやり直せます                                                                                                                                                               |
+| `prepare-setup`           | transfer storage と作業ディレクトリの準備、Cloudflare API の token と Terraform の設定の検査 | 終了コードは 78 です。リソースは作られていません。作業者は入力を直して、同じ generation でやり直せます                                                                                                                                                               |
+| `prepare-fresh-check`     | Cloudflare API でリソースが無いことを確かめる読み取り                                        | 終了コードは 1 です。読み取りだけなので、リソースも state も作られていません。`-exists` 以外は、作業者は原因を直して同じ generation でやり直せます。`-exists` は同じ名前のリソースが既にあるので、作業者は同じ generation では進めず、既存のリソースをレビューします |
+| `prepare-tf-init`         | Terraform の backend の初期化                                                                | 終了コードは 1 です。リソースは作られていません。作業者は上で説明した手順で backend bucket の object を確かめ、1つも無ければ同じ generation でやり直せます                                                                                                           |
+| `prepare-tf-show`         | state が空であることの確認                                                                   | `reason` が `state-present` のときは、state が既にあるので、作業者は同じ generation では進めずレビューします。それ以外は、`prepare-tf-init` と同じ判断です                                                                                                           |
+| `prepare-tf-plan`         | リソースの plan と検査                                                                       | リソースは作られていません。作業者は `prepare-tf-init` と同じ判断をします                                                                                                                                                                                            |
+| `prepare-tf-apply`        | リソースの apply と出力の突合                                                                | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-resource-read`   | 作ったリソースの読み取り                                                                     | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-deploy`          | sealed の Worker の配備                                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-attach`          | Worker が sealed で配備されたことの確認                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-attach-tf-plan`  | consumer の plan と検査                                                                      | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-attach-tf-apply` | consumer の apply                                                                            | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-attach-read`     | consumer を付けた後の読み取り                                                                | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-readback`        | Terraform の出力と読み取った状態の突合                                                       | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-record`          | 準備の記録の書き込み                                                                         | リソースが一部できている可能性があります。作業者は同じ generation でやり直さず、generation と記録を残してレビューします                                                                                                                                              |
+| `prepare-unclassified`    | 段が分からない                                                                               | 終了コード 1 として扱います。作業者は上で説明した backend bucket の確認手順で判断します                                                                                                                                                                              |
+
+Cloudflare API の読み取りが失敗したときの `reason` は、`<api>-<種別>` の形です。`<api>` は読み取りの対象を、`<種別>` は失敗の種類を表します。
+
+| `<api>`   | 対象                           |
+| --------- | ------------------------------ |
+| `workers` | Worker の一覧                  |
+| `d1`      | D1                             |
+| `kv`      | KV                             |
+| `queues`  | Queue                          |
+| `r2`      | R2                             |
+| `zones`   | Zone の route                  |
+| `other`   | 上のどれにも当たらない読み取り |
+
+| `<種別>`        | 意味                                                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http-<status>` | API が成功以外の HTTP status を返しました。status は数だけ出ます。たとえば `workers-http-403` は、Worker の一覧の読み取りが 403 を返したことを示します。403 なら token の権限を、5xx なら一時的な失敗を疑います |
+| `request`       | 通信の失敗、30 秒の timeout、redirect のどれかです                                                                                                                                                              |
+| `too-large`     | 応答が 2,000,000 byte を超えました                                                                                                                                                                              |
+| `shape`         | 応答の形が想定と違います                                                                                                                                                                                        |
+| `limit`         | 一覧が 100 件以上あるか、続きのページがあります。この確認は1ページで全件を見る前提なので、作業者が件数を減らすか確認の方法を見直すまで、同じ generation でも通りません                                          |
+| `exists`        | generation の名前のリソースが既にあります。`prepare-fresh-check` だけで出ます                                                                                                                                   |
+
+`prepare-fresh-check` 以外の段で Cloudflare の読み取りが期待と違ったときは `state-mismatch` が、Worker が sealed でないときは `not-sealed` が `reason` に出ます。
+
+`reason` のその他の語彙は、次のとおりです。
+
+| `reason`                  | 意味                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `config-invalid`          | 設定、token、Terraform の入力が不正です                                                   |
+| `credentials-missing`     | 必須の secret がありません                                                                |
+| `credential-not-distinct` | staging の access token が smoke の token と同じです                                      |
+| `vapid-rejected`          | VAPID 値の検査で失敗しました                                                              |
+| `command-failed`          | terraform または Worker の配備コマンドが失敗しました。出力は private のログにだけ残ります |
+| `state-present`           | Terraform の state が既にあります                                                         |
+| `plan-rejected`           | plan に想定外の変更が含まれています                                                       |
+| `output-invalid`          | Terraform の出力が読めません                                                              |
+| `output-mismatch`         | Terraform の出力が想定と違います                                                          |
+| `result-invalid`          | Worker の配備結果が読めません                                                             |
+| `identity-mismatch`       | 配備した Worker の名前が想定と違います                                                    |
+| `mismatch`                | 準備後の読み取りと Terraform の出力が合いません                                           |
+| `aborted`                 | 中断または timeout です                                                                   |
+| `unclassified`            | 上のどれにも当たりません                                                                  |
 
 ### 3.3 Identity の照合
 
@@ -988,12 +1062,12 @@ staging を使う場合、作業者は staging の完了後に production に異
 
 ## 7. 中断と引き継ぎ
 
-| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                 |
-| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                                                                           |
-| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
-| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                     |
-| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                         |
+| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                                                                                                                                                                                       |
+| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。`stage=prepare-<段>` の行を見て、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表で判断する。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
+| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                                                                                                                                 |
+| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                                                                                                                                     |
 
 具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
 

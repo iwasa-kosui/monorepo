@@ -178,3 +178,118 @@ it('selects the staging route switch without enabling the production switch and 
   expect(calls[0]).toContain('-var=queue_delivery_paused=true');
   expect(calls.some(args => args.includes('apply'))).toBe(false);
 });
+const terraformFailure = (reason: string) => ({
+  message: 'Target Terraform operation failed.',
+  diagnostic: { reason },
+});
+const stagedTerraform = async (runCommand: (program: string, args: string[]) => unknown) => {
+  const stages: string[] = [];
+  const api = createTargetTerraform({
+    identity,
+    backendEndpoint: `https://${'b'.repeat(32)}.r2.cloudflarestorage.com`,
+    privateDirectory: await mkdtemp(join(tmpdir(), 'target-stage-')),
+    zoneId: 'c'.repeat(32),
+    hostname: 'staging.test',
+    runCommand: runCommand as never,
+    onStage: (stage: string) => {
+      stages.push(stage);
+    },
+  });
+  return { api, stages };
+};
+const freshPlan = {
+  resource_changes: [{
+    address: 'cloudflare_d1_database.iori',
+    change: { actions: ['create'], before: null, after: { account_id: identity.accountId, name: identity.names.d1 } },
+  }],
+};
+const stageOutput = (plan: unknown, output: unknown) => (_program: string, args: string[]) => ({
+  status: 0,
+  stdout: args.includes('show') ? (args.length > 3 ? JSON.stringify(plan) : '{}') : args.includes('output')
+    ? JSON.stringify(output)
+    : '',
+  stderr: '',
+});
+it('reports init, show, plan and apply stages before each fixed Terraform step', async () => {
+  const workerBindings = {
+    d1_database_id: 'db',
+    kv_namespace_id: 'kv',
+    worker_name: identity.workerName,
+    r2_bucket_name: identity.names.uploads,
+    queue_name: identity.names.queue,
+  };
+  const targetIdentity = {
+    account_id: identity.accountId,
+    environment: identity.environment,
+    generation: identity.generation,
+    backend_key: identity.backendKey,
+    worker_name: identity.workerName,
+    queue_id: 'queue',
+    dlq_id: 'dlq',
+    queue_settings: { delivery_paused: true },
+  };
+  const { api, stages } = await stagedTerraform(stageOutput(freshPlan, {
+    worker_bindings: { value: workerBindings },
+    target_identity: { value: targetIdentity },
+    migration_storage: { value: { bucket_name: identity.names.transfer, environment: identity.environment } },
+  }));
+  await api.initializeFresh();
+  await api.prepare('resources');
+  expect(stages).toEqual(['tf-init', 'tf-show', 'tf-plan', 'tf-apply']);
+});
+it('classifies a nonzero command status and a command launch failure as command-failed', async () => {
+  const failing = await stagedTerraform(() => ({ status: 1, stdout: '', stderr: 'secret' }));
+  await expect(failing.api.initializeFresh()).rejects.toMatchObject(terraformFailure('command-failed'));
+  expect(failing.stages).toEqual(['tf-init']);
+  const rejecting = await stagedTerraform(() => Promise.reject(new Error('spawn failed')));
+  await expect(rejecting.api.initializeFresh()).rejects.toMatchObject({
+    message: 'spawn failed',
+    diagnostic: { reason: 'command-failed' },
+  });
+});
+it('leaves an abort to the caller instead of labelling it command-failed', async () => {
+  const controller = new AbortController();
+  const api = createTargetTerraform({
+    identity,
+    backendEndpoint: `https://${'b'.repeat(32)}.r2.cloudflarestorage.com`,
+    privateDirectory: await mkdtemp(join(tmpdir(), 'target-abort-')),
+    zoneId: 'c'.repeat(32),
+    hostname: 'staging.test',
+    signal: controller.signal,
+    runCommand: async () => {
+      controller.abort();
+      throw new Error('terminated');
+    },
+  });
+  const error = await api.initializeFresh().then(() => undefined, (reason: unknown) => reason);
+  expect(error).toMatchObject({ name: 'AbortError' });
+  expect(error).not.toHaveProperty('diagnostic');
+});
+it('classifies existing state as state-present and unreadable JSON as output-invalid', async () => {
+  const present = await stagedTerraform(() => ({
+    status: 0,
+    stdout: JSON.stringify({ values: { root_module: { resources: [{ address: 'old' }] } } }),
+    stderr: '',
+  }));
+  await expect(present.api.initializeFresh()).rejects.toMatchObject(terraformFailure('state-present'));
+  expect(present.stages).toEqual(['tf-init', 'tf-show']);
+  const broken = await stagedTerraform(() => ({ status: 0, stdout: '{not json', stderr: '' }));
+  await expect(broken.api.initializeFresh()).rejects.toMatchObject(terraformFailure('output-invalid'));
+});
+it('classifies a rejected plan as plan-rejected and a different output as output-mismatch', async () => {
+  const rejected = await stagedTerraform(stageOutput({}, {}));
+  await rejected.api.initializeFresh();
+  await expect(rejected.api.prepare('resources')).rejects.toMatchObject(terraformFailure('plan-rejected'));
+  expect(rejected.stages).toEqual(['tf-init', 'tf-show', 'tf-plan']);
+  const mismatched = await stagedTerraform(stageOutput(freshPlan, {}));
+  await mismatched.api.initializeFresh();
+  await expect(mismatched.api.prepare('resources')).rejects.toMatchObject(terraformFailure('output-mismatch'));
+  expect(mismatched.stages).toEqual(['tf-init', 'tf-show', 'tf-plan', 'tf-apply']);
+});
+it('prefixes the consumer stages with attach and classifies its rejected plan', async () => {
+  const consumer = await stagedTerraform(stageOutput({}, {}));
+  await expect(consumer.api.prepare('consumer', { establishedBindings: { worker_name: identity.workerName } }))
+    .rejects.toMatchObject(terraformFailure('plan-rejected'));
+  expect(consumer.stages).toEqual(['attach-tf-plan']);
+  await expect(consumer.api.prepare('consumer')).rejects.toMatchObject(terraformFailure('plan-rejected'));
+});

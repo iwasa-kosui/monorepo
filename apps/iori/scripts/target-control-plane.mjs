@@ -1,15 +1,17 @@
 import { parseAdmission } from '../src/workerAdmission.ts';
 import { createTargetIdentity } from './fresh-target.mjs';
+import { controlPlaneApi } from './target-preparation-diagnostics.mjs';
 
-const fail = () => {
-  throw new Error('Target readback failed.');
+const fail = (reason) => {
+  throw Object.assign(new Error('Target readback failed.'), { diagnostic: { reason } });
 };
+const failApi = (path, kind) => fail(`${controlPlaneApi(path)}-${kind}`);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const safeId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id);
 /** REST is used here only by the protected operator, never in the Worker graph. All responses stay private. */
 export const createTargetControlPlane = ({ identity: supplied, token, fetchRequest = fetch, signal }) => {
   const identity = createTargetIdentity(supplied);
-  if (typeof token !== 'string' || token.length === 0) fail();
+  if (typeof token !== 'string' || token.length === 0) fail('config-invalid');
   const root = `/accounts/${identity.accountId}`;
   const get = async (path) => {
     try {
@@ -19,10 +21,10 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         redirect: 'error',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
       });
-      if (!response.ok) fail();
+      if (!response.ok) failApi(path, `http-${response.status}`);
       // Bounded body even when Content-Length is absent or dishonest.
       const reader = response.body?.getReader();
-      if (!reader) fail();
+      if (!reader) failApi(path, 'shape');
       const chunks = [];
       let size = 0;
       while (true) {
@@ -31,39 +33,49 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         size += item.value.byteLength;
         if (size > 2_000_000) {
           await reader.cancel();
-          fail();
+          failApi(path, 'too-large');
         }
         chunks.push(item.value);
       }
-      const body = JSON.parse(await new Blob(chunks).text());
-      if (body.success !== true || body.result === undefined) fail();
+      let body;
+      try {
+        body = JSON.parse(await new Blob(chunks).text());
+      } catch {
+        failApi(path, 'shape');
+      }
+      if (body.success !== true || body.result === undefined) failApi(path, 'shape');
       return body;
-    } catch {
-      fail();
+    } catch (error) {
+      if (error?.diagnostic) throw error;
+      failApi(path, 'request');
     }
   };
   const list = async (path, pagination) => {
     const body = await get(path);
-    const items = pagination === 'cursor' ? body.result.buckets : body.result;
+    const items = pagination === 'cursor' ? body.result?.buckets : body.result;
+    if (!Array.isArray(items)) failApi(path, 'shape');
     if (
-      !Array.isArray(items) || items.length >= 100 || body.result_info?.cursor || body.result.cursor
-      || body.result.truncated === true
-    ) fail();
+      items.length >= 100 || body.result_info?.cursor || body.result.cursor || body.result.truncated === true
+    ) failApi(path, 'limit');
     if (pagination !== 'none') {
       const info = body.result_info;
-      if (!info || !Number.isInteger(info.per_page) || info.per_page < 1 || items.length > info.per_page) fail();
+      if (!info || !Number.isInteger(info.per_page) || info.per_page < 1 || items.length > info.per_page) {
+        failApi(path, 'shape');
+      }
       if (pagination === 'cursor') {
-        if (items.length >= info.per_page) fail();
+        if (items.length >= info.per_page) failApi(path, 'limit');
       } else {
+        if (!Number.isInteger(info.total_count)) failApi(path, 'shape');
+        if (info.total_count > items.length) failApi(path, 'limit');
         if (
-          !Number.isInteger(info.total_count) || info.total_count !== items.length || info.page !== 1
+          info.total_count !== items.length || info.page !== 1
           || (info.count !== undefined && info.count !== items.length)
-        ) fail();
+        ) failApi(path, 'shape');
         // D1 and KV expose count/page/per_page/total_count; total_pages is Queue-specific.
-        if (
-          pagination === 'queue'
-          && (!Number.isInteger(info.total_pages) || info.total_pages < 0 || info.total_pages > 1)
-        ) fail();
+        if (pagination === 'queue') {
+          if (!Number.isInteger(info.total_pages) || info.total_pages < 0) failApi(path, 'shape');
+          if (info.total_pages > 1) failApi(path, 'limit');
+        }
       }
     }
     return items;
@@ -78,12 +90,13 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ];
     for (const [path, key, names, pagination] of specs) {
       const items = await list(path, pagination);
-      if (items.some((item) => typeof item?.[key] !== 'string' || names.includes(item[key]))) fail();
+      if (items.some((item) => typeof item?.[key] !== 'string')) failApi(path, 'shape');
+      if (items.some((item) => names.includes(item[key]))) failApi(path, 'exists');
     }
     return { fresh: true, resourceCount: 0 };
   };
   const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }, paused) => {
-    if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail();
+    if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail('state-mismatch');
     const [d1, kv, uploads, transfer, queue, dlq] = await Promise.all([
       get(`${root}/d1/database/${d1Id}`),
       get(`${root}/storage/kv/namespaces/${kvId}`),
@@ -95,21 +108,21 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     if (
       d1.uuid !== d1Id || d1.name !== identity.names.d1 || kv.id !== kvId || kv.title !== identity.names.kv
       || uploads.name !== identity.names.uploads || transfer.name !== identity.names.transfer
-    ) fail();
+    ) fail('state-mismatch');
     for (const [q, id, name] of [[queue, queueId, identity.names.queue], [dlq, dlqId, identity.names.dlq]]) {
       if (
         q.queue_id !== id || q.queue_name !== name || q.settings?.delivery_paused !== (id === queueId ? paused : true)
         || !Array.isArray(q.consumers) || !Array.isArray(q.producers)
         || !Number.isInteger(q.consumers_total_count) || q.consumers_total_count !== q.consumers.length
         || !Number.isInteger(q.producers_total_count) || q.producers_total_count !== q.producers.length
-      ) fail();
-      if (!q.created_on || !Number.isFinite(Date.parse(q.created_on))) fail();
+      ) fail('state-mismatch');
+      if (!q.created_on || !Number.isFinite(Date.parse(q.created_on))) fail('state-mismatch');
     }
     if (
       dlq.consumers.length !== 0 || dlq.producers.length !== 0 || queue.consumers.length !== Number(consumerAttached)
-    ) fail();
+    ) fail('state-mismatch');
     if (queue.producers.some((producer) => producer.type !== 'worker' || producer.script !== identity.workerName)) {
-      fail();
+      fail('state-mismatch');
     }
     if (consumerAttached) {
       const consumer = queue.consumers[0];
@@ -118,10 +131,10 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         || consumer.dead_letter_queue !== identity.names.dlq || !safeId(consumer.consumer_id)
         || consumer.settings?.batch_size !== 1 || consumer.settings?.max_wait_time_ms !== 1000
         || consumer.settings?.max_retries !== 3 || consumer.settings?.retry_delay !== 30
-      ) fail();
+      ) fail('state-mismatch');
     }
     const publicAccess = (await get(`${root}/r2/buckets/${identity.names.transfer}/domains/managed`)).result;
-    if (publicAccess.enabled !== false) fail();
+    if (publicAccess.enabled !== false) fail('state-mismatch');
     return {
       identity,
       d1Id,
@@ -143,13 +156,13 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
     paused,
   ) => {
-    if (typeof routePresent !== 'boolean') fail();
-    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail();
+    if (typeof routePresent !== 'boolean') fail('state-mismatch');
+    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail('state-mismatch');
     const admission = parseAdmission(admissionEnvironment);
     if (
       !admission || admission.environment !== identity.environment
       || admission.generation !== identity.generation || !safeId(zoneId) || !safeId(expectedVersionId)
-    ) fail();
+    ) fail('state-mismatch');
     const script = `${root}/workers/scripts/${identity.workerName}`;
     const [deployments, version, subdomain, routes] = await Promise.all([
       get(`${script}/deployments`),
@@ -166,9 +179,11 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       || !Array.isArray(routes)
       || routes.filter((route) => route.script === identity.workerName).length !== Number(routePresent)
       || routes.some((route) => route.script === identity.workerName && route.pattern !== `${admission.hostname}/*`)
-    ) fail();
+    ) fail('state-mismatch');
     const bindings = version.resources?.bindings;
-    if (!Array.isArray(bindings) || new Set(bindings.map((b) => b.name)).size !== bindings.length) fail();
+    if (!Array.isArray(bindings) || new Set(bindings.map((b) => b.name)).size !== bindings.length) {
+      fail('state-mismatch');
+    }
     const expected = [
       { name: 'DB', type: 'd1', id: resources.d1Id },
       { name: 'UPLOADS', type: 'r2_bucket', bucket_name: identity.names.uploads },
@@ -185,7 +200,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       expected.some((entry) =>
         !bindings.some((binding) => Object.entries(entry).every(([key, value]) => binding[key] === value))
       )
-    ) fail();
+    ) fail('state-mismatch');
     const extraNames = new Set([
       'VAPID_SUBJECT',
       'VAPID_PUBLIC_KEY',
@@ -195,7 +210,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ]);
     if (
       bindings.some((binding) => !expected.some((item) => item.name === binding.name) && !extraNames.has(binding.name))
-    ) fail();
+    ) fail('state-mismatch');
     for (
       const name of [
         'VAPID_PUBLIC_KEY',
@@ -204,7 +219,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         ...(identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
       ]
     ) {
-      if (!bindings.some((binding) => binding.name === name && binding.type === 'secret_text')) fail();
+      if (!bindings.some((binding) => binding.name === name && binding.type === 'secret_text')) fail('state-mismatch');
     }
     // Return only reviewed metadata: never secret values or the raw version bindings.
     return {
@@ -221,7 +236,9 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
   const readActiveResources = (input) => readResourceState({ ...input, consumerAttached: true }, false);
   const readWorkerAdmission = (input) => readWorkerState(input, true);
   const readActiveWorker = (input) => {
-    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'active' || input.routePresent !== true) fail();
+    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'active' || input.routePresent !== true) {
+      fail('state-mismatch');
+    }
     return readWorkerState(input, false);
   };
   const readCurrentVersion = async () => {
@@ -230,20 +247,20 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     if (
       !Array.isArray(versions) || versions.length !== 1 || versions[0].percentage !== 100
       || !safeId(versions[0].version_id)
-    ) fail();
+    ) fail('state-mismatch');
     return versions[0].version_id;
   };
   const readSealedWorker = async (input) => {
-    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'sealed') fail();
+    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'sealed') fail('not-sealed');
     return readWorkerAdmission(input);
   };
   const readQueuePause = async ({ queueId, paused }) => {
-    if (!safeId(queueId) || typeof paused !== 'boolean') fail();
+    if (!safeId(queueId) || typeof paused !== 'boolean') fail('state-mismatch');
     const queue = (await get(`${root}/queues/${queueId}`)).result;
     if (
       queue.queue_id !== queueId || queue.queue_name !== identity.names.queue
       || queue.settings?.delivery_paused !== paused
-    ) fail();
+    ) fail('state-mismatch');
     return { queueId, paused };
   };
   return Object.freeze({
