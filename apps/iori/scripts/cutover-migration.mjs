@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -9,6 +10,7 @@ import { targetSetupConfiguration } from './migration-target-setup.mjs';
 import { restoreAndVerifyMigration } from './restore-and-verify-migration.mjs';
 import { assertReviewedMain } from './reviewed-main.mjs';
 import { smokeReviewedTarget } from './reviewed-smoke.mjs';
+import { assertSmokeQueueToken, isAllSmokeServiceUnavailable } from './smoke-diagnostics.mjs';
 import { createSourceSshAdapter } from './source-control-ssh.mjs';
 import { validateSourceState } from './source-transfer-protocol.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
@@ -17,6 +19,26 @@ import { createTargetTerraform } from './target-terraform.mjs';
 import { transitionWorkerAdmission } from './transition-worker-admission.mjs';
 import { workflowTimeBudget } from './workflow-context.mjs';
 
+const SMOKE_RETRY_WAITS_MS = [10_000, 20_000, 30_000];
+const SMOKE_RETRY_WINDOW_MS = 120_000;
+const smokeWithRetry = async (run, { sleep, report, now, signal }) => {
+  const startedAt = now();
+  for (let attempt = 1;; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const wait = SMOKE_RETRY_WAITS_MS[attempt - 1];
+      if (
+        wait === undefined || !isAllSmokeServiceUnavailable(error?.diagnostic?.details)
+        || now() - startedAt + wait > SMOKE_RETRY_WINDOW_MS
+      ) throw error;
+      report(
+        `IORI_DIAG stage=cutover-smoke-worker program=none exit=none signal=none reason=smoke-retry-${attempt}-all-503`,
+      );
+      await sleep(wait, signal);
+    }
+  }
+};
 export const cutoverMigration = async ({ env, startedAt, signal }, {
   restore = restoreAndVerifyMigration,
   setup = targetSetupConfiguration,
@@ -26,11 +48,15 @@ export const cutoverMigration = async ({ env, startedAt, signal }, {
   controlFactory = createTargetControlPlane,
   transition = transitionWorkerAdmission,
   smoke = smokeReviewedTarget,
+  sleep = (ms, signal) => delay(ms, undefined, { signal }),
+  report = (line) => process.stderr.write(`${line}\n`),
+  now = () => Date.now(),
   onStage = () => {},
 } = {}) => {
   onStage('inputs');
   const config = setup(env);
   const budget = workflowTimeBudget(startedAt);
+  assertSmokeQueueToken(env.IORI_SMOKE_QUEUE_TOKEN);
   signal = AbortSignal.any([signal, AbortSignal.timeout(budget.remainingMs)]);
   const verification = new AbortController();
   const timer = setTimeout(() => verification.abort(), budget.verificationMs);
@@ -109,7 +135,10 @@ export const cutoverMigration = async ({ env, startedAt, signal }, {
   versionId = smokeVersion.versionId;
   mode = 'smoke';
   onStage('smoke-worker');
-  await smoke({ target, hostname: target.admission.workerHostname, token: env.IORI_SMOKE_QUEUE_TOKEN, signal });
+  await smokeWithRetry(
+    () => smoke({ target, hostname: target.admission.workerHostname, token: env.IORI_SMOKE_QUEUE_TOKEN, signal }),
+    { sleep, report, now, signal },
+  );
   await gate('gate-route');
   onStage('read-smoke');
   await read();

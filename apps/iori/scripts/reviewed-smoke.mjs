@@ -1,5 +1,5 @@
 import { DEFAULT_STAGING_SMOKE_CHECKS, runCloudflareSmoke } from './run-cloudflare-smoke.mjs';
-import { smokeFailureDetails } from './smoke-diagnostics.mjs';
+import { smokeFailureDetails, smokeTokenDetail } from './smoke-diagnostics.mjs';
 export const smokeReviewedTarget = async ({ target, hostname, token, signal, fetchRequest }) => {
   const a = target.admission;
   if (![a.workerHostname, a.hostname].includes(hostname)) throw new Error('Invalid smoke host.');
@@ -34,7 +34,7 @@ export const smokeReviewedTarget = async ({ target, hostname, token, signal, fet
   signal.throwIfAborted();
   if (!result.ok) {
     throw Object.assign(new Error('Reviewed smoke failed.'), {
-      diagnostic: { reason: 'smoke-failed', details: smokeFailureDetails(result.checks) },
+      diagnostic: { reason: 'smoke-failed', details: [smokeTokenDetail(token), ...smokeFailureDetails(result.checks)] },
     });
   }
   return { checks: result.checks.length };
