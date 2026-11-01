@@ -66,11 +66,13 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       if (perPage !== undefined && (!Number.isInteger(perPage) || perPage < 1 || items.length > perPage)) {
         failApi(path, 'shape');
       }
+      // Without result_info the API may ignore per_page and stop at 20 buckets with no cursor (cloudflare/workers-sdk#15103).
       if (items.length >= (perPage ?? 20)) failApi(path, 'limit');
       const totalCount = info?.total_count;
       if (totalCount !== undefined) {
         if (!Number.isInteger(totalCount) || totalCount < 0) failApi(path, 'shape');
         if (totalCount > items.length) failApi(path, 'limit');
+        if (totalCount !== items.length) failApi(path, 'shape');
       }
     } else if (pagination !== 'none') {
       const info = body.result_info;

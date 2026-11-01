@@ -221,12 +221,16 @@ it.each([
   ['a null result_info', () => r2Response(twoBuckets(), { result_info: null })],
   ['a string per_page', () => r2Response(twoBuckets(), { result_info: { per_page: '100' } })],
   ['a negative total_count', () => r2Response(twoBuckets(), { result_info: { total_count: -1 } })],
+  ['a total_count smaller than the buckets', () => r2Response(twoBuckets(), { result_info: { total_count: 1 } })],
   ['an array result', () => ({ success: true, result: [] })],
 ])('classifies an R2 list with %s as shape', async (_label, body) => {
   await expect(failureFor('r2', () => Response.json(body()))).rejects.toMatchObject(readbackFailure('r2-shape'));
 });
-it('classifies an existing R2 bucket as exists', async () => {
-  await expect(failureFor('r2', () => Response.json(r2Response([r2Bucket(identity.names.uploads)]))))
+it.each([
+  ['uploads', identity.names.uploads],
+  ['transfer', identity.names.transfer],
+])('classifies an existing R2 %s bucket as exists', async (_label, name) => {
+  await expect(failureFor('r2', () => Response.json(r2Response([r2Bucket(name)]))))
     .rejects.toMatchObject(readbackFailure('r2-exists'));
 });
 it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])(
