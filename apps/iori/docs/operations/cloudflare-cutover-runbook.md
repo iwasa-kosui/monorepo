@@ -62,7 +62,7 @@ pnpm --filter @iwasa-kosui/iori exec node scripts/run-cloudflare-smoke.mjs \
 
 5. `smoke` のまま staging route を準備して実状態を読み戻し、staging の canonical hostname で完全な smoke checklist を再実行します。その成功後に source freeze と同じ target identity を再確認して HTTP を `active` にします。Queue を最後に再開し、有効化後にも完全な smoke を行います。staging の通常認証を通して sign-in/sign-up、timeline、post/reply/delete、upload/image retrieval、ActivityPub follow/like/repost/undo/relay、Queue retry/DLQ、Web Push、OGP PNG を手動確認します。記録は counts、timestamp、pass/fail だけにします。
 
-staging を使う場合、staging の route creation に進むためには、schema migration、D1 row-count verification、R2 checksum verification、OGP backfill、queue drain rehearsal、workers.dev smoke のすべてが pass でなければならない。staging を使わない場合、production の route creation に進む条件は第3節の手順 5 から 9 です。
+staging を使う場合、staging の route creation に進むためには、schema migration、D1 row-count verification、R2 checksum verification、OGP backfill、queue drain rehearsal、workers.dev smoke のすべてが pass でなければならない。staging を使わない場合、production の route creation に進む条件は第3節の手順 1 から 9 です。
 
 ## 3. Production cutover
 
