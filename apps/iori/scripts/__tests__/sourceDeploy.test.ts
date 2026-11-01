@@ -472,6 +472,147 @@ it('does not retry a status failure that is not marked retryable', async () => {
   )).rejects.toThrow('Source operation failed.');
   expect(calls).toBe(1);
 });
+const unitNotice = 'IORI_NOTICE stage=status-unit active=failed sub=failed result=start-limit-hit restarts=5';
+const unitStatusCall = (options: { input?: string }) => /"?phase"?: "unit-status"/.test(options.input ?? '');
+const withUnitStatus = (
+  status: () => Promise<typeof readyState>,
+  onUnitStatus: (options: {
+    captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void>;
+  }) => Promise<void>,
+  unitCalls: string[] = [],
+) => ({
+  ...withStatus(status),
+  runCommand: async (
+    _program: string,
+    _args: string[],
+    options: { input?: string; captureOutput?: (output: { stdout: string; stderr: string }) => Promise<void> },
+  ) => {
+    if (unitStatusCall(options)) {
+      unitCalls.push('unit-status');
+      await onUnitStatus(options);
+    }
+    return { stdout: '', stderr: '' };
+  },
+});
+it('reads the unit state once and prints one fixed notice when the status stage stays not ready', async () => {
+  const writes = captureDiagnostics();
+  const unitCalls: string[] = [];
+  await expect(deploySource(
+    diagnosticOptions,
+    withUnitStatus(async () => {
+      throw notReadyError();
+    }, async options => {
+      await options.captureOutput?.({
+        stdout: '',
+        stderr: [unitNotice, `${unitNotice} extra=/home/secret`, 'ActiveState=failed'].join('\n'),
+      });
+    }, unitCalls),
+  )).rejects.toThrow('Source control is not ready.');
+  expect(unitCalls).toEqual(['unit-status']);
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${unitNotice}\n`]);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
+  ]);
+  expect(writes.join('')).not.toMatch(/secret|extra|ActiveState/);
+});
+it('reads the unit state once when the readiness check fails', async () => {
+  const unitCalls: string[] = [];
+  await expect(deploySource(
+    diagnosticOptions,
+    withUnitStatus(async () => ({ ...readyState, queue_failed: true }), async () => {}, unitCalls),
+  )).rejects.toThrow('Source prerequisite readiness failed.');
+  expect(unitCalls).toEqual(['unit-status']);
+});
+it('keeps the original failure and diagnostic when the unit state cannot be read', async () => {
+  const writes = captureDiagnostics();
+  const unitCalls: string[] = [];
+  await expect(deploySource(
+    diagnosticOptions,
+    withUnitStatus(async () => {
+      throw notReadyError();
+    }, async options => {
+      await options.captureOutput?.({ stdout: '', stderr: 'ssh: Permission denied (publickey).' });
+      throw Object.assign(new Error('x'), { exitCode: 255 });
+    }, unitCalls),
+  )).rejects.toThrow('Source control is not ready.');
+  expect(unitCalls).toEqual(['unit-status']);
+  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([]);
+  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
+    'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
+  ]);
+});
+it('does not read the unit state when the status stage succeeds', async () => {
+  const unitCalls: string[] = [];
+  await deploySource(diagnosticOptions, withUnitStatus(async () => readyState, async () => {}, unitCalls));
+  expect(unitCalls).toEqual([]);
+});
+it('does not read the unit state when the deployment is aborted during the status stage', async () => {
+  const abort = new AbortController();
+  const unitCalls: string[] = [];
+  let statusCalls = 0;
+  const deploying = deploySource(diagnosticOptions, {
+    ...withUnitStatus(
+      async () => {
+        statusCalls++;
+        throw notReadyError();
+      },
+      async () => {},
+      unitCalls,
+    ),
+    statusRetryTimeoutMs: 60_000,
+    statusRetryIntervalMs: 60_000,
+    signal: abort.signal,
+  });
+  const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
+  await vi.waitFor(() => expect(statusCalls).toBe(1));
+  abort.abort();
+  await failed;
+  expect(unitCalls).toEqual([]);
+});
+const unitStatusStep = async (stdout: string) => {
+  const calls: { program: string; args: string[] }[] = [];
+  const writes = captureDiagnostics();
+  const run = runSourceDeployStep({ phase: 'unit-status', sha }, {
+    home: '/fixture',
+    uid: 1,
+    guard: async () => {
+      throw new Error('guard must not run for a read-only unit check');
+    },
+    runCommand: async (program, args) => {
+      calls.push({ program, args });
+      return { stdout, stderr: '' };
+    },
+  });
+  return { calls, writes, run };
+};
+it('prints the start-limit-hit result of the unit with a single read-only systemctl show', async () => {
+  const { calls, writes, run } = await unitStatusStep(
+    'ActiveState=failed\nSubState=failed\nResult=start-limit-hit\nNRestarts=5\n',
+  );
+  await run;
+  expect(calls).toEqual([{
+    program: 'systemctl',
+    args: ['show', 'microblog', '--property=ActiveState,SubState,Result,NRestarts'],
+  }]);
+  expect(writes).toEqual([`${unitNotice}\n`]);
+});
+it('maps unknown unit values to other and caps the restart count', async () => {
+  const { writes, run } = await unitStatusStep(
+    'ActiveState=/home/secret\nSubState=Error: x\nResult=banana\nNRestarts=99999999999\n',
+  );
+  await run;
+  expect(writes).toEqual(['IORI_NOTICE stage=status-unit active=other sub=other result=other restarts=999999\n']);
+});
+it('maps a missing Result to other and rejects output without the unit states', async () => {
+  const missing = await unitStatusStep('ActiveState=active\nSubState=running\nNRestarts=0\n');
+  await missing.run;
+  expect(missing.writes).toEqual([
+    'IORI_NOTICE stage=status-unit active=active sub=running result=other restarts=0\n',
+  ]);
+  const invalid = await unitStatusStep('Result=success\nNRestarts=0\n');
+  await expect(invalid.run).rejects.toThrow('Invalid source diagnostic.');
+  expect(invalid.writes).toEqual([]);
+});
 it('stops waiting between status attempts when the deployment is aborted', async () => {
   const abort = new AbortController();
   let calls = 0;

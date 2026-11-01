@@ -219,6 +219,22 @@ it('shares exact production source serialization and delegates to early guarded 
   expect(sourceScript.indexOf('remote(\'check\')')).toBeLessThan(sourceScript.indexOf('remote(\'checkout\')'));
   expect(sourceScript.indexOf('remote(\'dist-check\')')).toBeLessThan(sourceScript.indexOf('execute(\'rsync\''));
 });
+it('keeps restarting the source unit longer than the deployment status wait', async () => {
+  const unit = await readFile(resolve(repositoryRoot, 'apps/iori/microblog.service'), 'utf8');
+  const sections = new Map<string, string>();
+  let section = '';
+  for (const line of unit.split('\n')) {
+    const header = /^\[(\w+)\]$/.exec(line);
+    if (header) section = header[1];
+    else if (line.trim() !== '') sections.set(section, `${sections.get(section) ?? ''}${line}\n`);
+  }
+  expect(sections.get('Unit')).toMatch(/^StartLimitIntervalSec\s*=\s*600$/m);
+  expect(sections.get('Unit')).toMatch(/^StartLimitBurst\s*=\s*60$/m);
+  expect(sections.get('Service')).toMatch(/^RestartSec\s*=\s*5s$/m);
+  expect(sections.get('Service')).toMatch(/^Restart\s*=\s*always$/m);
+  expect(sections.get('Service')).not.toMatch(/StartLimit/);
+  expect(sections.get('Unit')).not.toMatch(/RestartSec/);
+});
 it('wires real credential-free fixture execution, explicit portable PostgreSQL opt-in and sealed CI identity', async () => {
   const ci = await readWorkflow('ci.yml');
   const steps = ci.jobs.iori.steps;

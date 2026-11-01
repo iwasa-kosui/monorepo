@@ -1,7 +1,15 @@
 export const activeStates: readonly string[];
 export const subStates: readonly string[];
 export const journalClasses: readonly string[];
+export const unitResults: readonly string[];
 export const sourceDiagnoseNoticeLine: RegExp;
+export const sourceUnitStatusNoticeLine: RegExp;
+export function parseUnitStatus(
+  text: string,
+): { active: string; sub: string; result: string; restarts: number };
+export function formatUnitStatusNotice(
+  values: { active: string; sub: string; result: string; restarts: number },
+): string;
 export function parseSystemctlShow(
   text: string,
 ): { active: string; sub: string; restarts: number; exitStatus: number };

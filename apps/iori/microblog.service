@@ -1,12 +1,15 @@
 [Unit]
-Description = microblog
+Description           = microblog
+StartLimitIntervalSec = 600
+StartLimitBurst       = 60
 
 [Service]
-User      = ec2-user
-Group     = ec2-user
-ExecStart = /usr/local/bin/microblog
-Restart   = always
-Type      = simple
+User       = ec2-user
+Group      = ec2-user
+ExecStart  = /usr/local/bin/microblog
+Restart    = always
+RestartSec = 5s
+Type       = simple
 
 [Install]
 WantedBy = multi-user.target

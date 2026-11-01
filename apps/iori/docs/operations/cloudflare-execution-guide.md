@@ -477,6 +477,8 @@ mode を元に戻す必要があるかどうかは、管理役が判断します
 - `reason=remote-command-failed` の場合、旧環境で実行した git、pnpm、sudo のいずれかが失敗しています。作業者は `stage` から対象のコマンドを絞ります。
 - `reason=readiness-failed`（`stage=status`）の場合、再起動後のアプリが応答した revision が配備した SHA と一致しないか、ingress の凍結、consumer の停止、queue の失敗のいずれかの状態です。配備はこの場合に再試行しません。
 - `reason=source-control-not-ready`（`stage=status`）の場合、再起動したアプリが、上限 120 秒のあいだ control socket で応答できる状態になりませんでした。配備は status 段階で、socket が無い場合、接続を拒否された場合、アプリが準備中と応答した場合の3つだけを 3 秒間隔で再試行します。作業者は旧環境の microblog サービスが起動しているかと、起動に失敗していないかを確認します。
+- `IORI_NOTICE stage=status-unit active=<状態> sub=<副状態> result=<結果> restarts=<回数>` の行は、status 段階が失敗したときに、配備が microblog サービスの状態を読み取り専用の `systemctl show` で1回だけ読んだ結果です。配備は、この読み取りが失敗しても元の失敗を変えず、行を出さないだけです。配備は、サービスの再起動も `reset-failed` も実行しません。`result=start-limit-hit` の場合、systemd が起動回数の上限に達したために自動の再起動を止めています。作業者は旧環境に入らず、管理役に手動の `systemctl restart microblog` を依頼するか、次の配備を実行します。
+- microblog サービスの unit（`apps/iori/microblog.service`）は、`Restart=always` と `RestartSec=5s` で再起動します。unit は `[Unit]` に `StartLimitIntervalSec=600` と `StartLimitBurst=60` を置くので、起動の失敗が続くと、systemd は約 300 秒のあいだ自動で再起動を試みます。この時間は、配備の status 確認が待つ 120 秒より長い時間です。
 - `reason=source-operation-failed`（`stage=status`）の場合、status の確認が、再試行の対象でない理由で失敗しました。ssh の接続失敗、control socket の mode や所有者の不正、応答の形式の不正が該当します。作業者は同じ行の `exit` を見て、255 なら ssh の接続を、それ以外なら旧環境の `~/.iori-migration` と control socket の状態を確認します。
 - `reason=source-not-idle`（`stage=status`）の場合、アプリが control コマンドの実行中のために status を拒否しました。作業者は、実行中の operation（export など）が終わるのを待ってから再実行します。
 - `prepare-target` の分類として、`reason=stopped-before-resources`（`stage=hosted-operation`、`exit=78`）の場合、`prepare-target` がリソースを作る前に止まっています。作業者は、[VAPID 値の確認](#vapid-値の確認)の `reason=stopped-before-resources` の項目に従って原因を確かめ、同じ generation で再実行します。
