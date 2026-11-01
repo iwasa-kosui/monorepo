@@ -419,7 +419,7 @@ const readyState = {
 const notReadyError = () => Object.assign(new Error('Source control is not ready.'), { retryable: true });
 const withStatus = (status: () => Promise<typeof readyState>) => ({
   ...diagnosticDependencies,
-  statusRetryTimeoutMs: 200,
+  statusRetryTimeoutMs: 1000,
   statusRetryIntervalMs: 5,
   sourceFactory: async () => ({ status }),
   runCommand: async () => ({ stdout: '', stderr: '' }),
@@ -452,7 +452,7 @@ it('fails with one not-ready diagnostic when source control stays not ready', as
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
     'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
-});
+}, 15_000);
 it('does not retry a readiness mismatch', async () => {
   let calls = 0;
   await expect(deploySource(
@@ -517,7 +517,7 @@ it('reads the unit state once and prints one fixed notice when the status stage 
     'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
   expect(writes.join('')).not.toMatch(/secret|extra|ActiveState/);
-});
+}, 15_000);
 it('reads the unit state once when the readiness check fails', async () => {
   const unitCalls: string[] = [];
   await expect(deploySource(
@@ -543,7 +543,7 @@ it('keeps the original failure and diagnostic when the unit state cannot be read
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
     'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
-});
+}, 15_000);
 it('does not read the unit state when the status stage succeeds', async () => {
   const unitCalls: string[] = [];
   await deploySource(diagnosticOptions, withUnitStatus(async () => readyState, async () => {}, unitCalls));

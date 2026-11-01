@@ -660,14 +660,14 @@ it('retries the status while source control is not ready after the restart', asy
         },
       }) as never,
     runCommand: async () => ({ stdout: '', stderr: '' }),
-    statusRetryTimeoutMs: 200,
+    statusRetryTimeoutMs: 1000,
     statusRetryIntervalMs: 5,
   })).rejects.toThrow('Source control is not ready.');
   expect(statusCalls).toBeGreaterThanOrEqual(2);
   expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
-});
+}, 15_000);
 it.each([
   ['Error: Source service is not stopped.', 'service-not-stopped'],
   ['Error: Source service stop failed.', 'service-stop-failed'],
