@@ -164,9 +164,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build packages/result
-        run: pnpm --filter result run build
-
       - name: Lint
         run: pnpm --filter nen-diagnosis run lint
 
