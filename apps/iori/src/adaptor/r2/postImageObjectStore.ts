@@ -1,6 +1,6 @@
 import type { R2Bucket, R2ObjectBody, R2PutOptions } from '@cloudflare/workers-types';
 
-import type { ImageId } from '../../domain/image/imageId.ts';
+import { ImageId } from '../../domain/image/imageId.ts';
 import type { PostImageObjectStore, PutPostImageObjectInput } from '../../ports/postImageObjectStore.ts';
 
 export type PostImageR2Bucket = Pick<R2Bucket, 'get' | 'put'>;
@@ -28,6 +28,9 @@ export const postImageObjectKey = (
     imageId,
     config.extension ?? defaultExtension,
   ].join('/');
+
+export const parseUploadFilenameImageId = (filename: string) =>
+  ImageId.parse(filename.replace(/\.(?:gif|jpe?g|png|webp)$/i, ''));
 
 const customMetadataFrom = (
   input: PutPostImageObjectInput,

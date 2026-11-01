@@ -14,6 +14,11 @@ import {
   assertExternalMigrationPath,
   assertExternalMigrationRoot,
 } from '../../../../scripts/migration-path-safety.mjs';
+import {
+  classifyUploadUrl,
+  createUploadTracker,
+  requireSourceHostname,
+} from '../../../../scripts/migration-upload-rows.mjs';
 import { guardPostgresClient } from '../../../../scripts/postgres-client-lifetime.mjs';
 import {
   logicalFilePath,
@@ -29,7 +34,6 @@ import { openSourceFile } from './sourceFile.ts';
 
 export type FileTransfer = (metadata: SourceFile, stream: Readable) => Promise<void>;
 const number = z.coerce.number().int().nonnegative().safe();
-const upload = z.object({ imageId: z.string().uuid(), url: z.string() });
 async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, destination?: string) {
   const { file, stat } = await openSourceFile(path, maxBytes, destination === undefined);
   let output: Awaited<ReturnType<typeof open>> | undefined;
@@ -58,7 +62,12 @@ async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, d
 export class SourceSnapshot {
   #cache?: { key: string; inventory: SourceInventory; files: Map<string, SourceFile> };
   constructor(
-    private readonly options: { base: string; uploadDir: string; createClient: () => Promise<PostgresExportClient> },
+    private readonly options: {
+      base: string;
+      uploadDir: string;
+      origin: string;
+      createClient: () => Promise<PostgresExportClient>;
+    },
   ) {}
   private key(identity: SourceIdentity) {
     const checked = sourceIdentitySchema.parse(identity);
@@ -69,6 +78,12 @@ export class SourceSnapshot {
   }
   async estimate(signal: AbortSignal) {
     let stage = 'estimate-connect';
+    let sourceHostname: string;
+    try {
+      sourceHostname = requireSourceHostname(this.options.origin);
+    } catch {
+      throw new Error('source_estimate_failed:estimate-other');
+    }
     let client: PostgresExportClient;
     try {
       client = await this.options.createClient();
@@ -78,7 +93,7 @@ export class SourceSnapshot {
     let tableBytes = 0;
     let uploadBytes = 0;
     let rows = 0;
-    let images = 0;
+    const uploads = createUploadTracker();
     let articles = 0;
     const limit = signal;
     const lifetime = guardPostgresClient(client, signal);
@@ -103,7 +118,7 @@ export class SourceSnapshot {
         }
       }
       await client.query(
-        'DECLARE iori_images NO SCROLL CURSOR FOR SELECT CASE WHEN octet_length(url) <= 128 THEN jsonb_build_object(\'imageId\', "imageId", \'url\', url) ELSE NULL END AS row FROM post_images',
+        'DECLARE iori_images NO SCROLL CURSOR FOR SELECT jsonb_build_object(\'imageId\', "imageId", \'url\', left(url, 128)) AS row FROM post_images',
       );
       while (true) {
         stage = 'estimate-query';
@@ -113,14 +128,26 @@ export class SourceSnapshot {
         if (!page.rows.length) break;
         for (const { row } of page.rows) {
           stage = 'estimate-upload-row';
-          const name = this.uploadName(row);
+          const upload = this.uploadOf(row, sourceHostname);
+          if (upload.kind === 'legacy') stage = 'estimate-upload-legacy-path';
+          if (upload.kind === 'same-origin') stage = 'estimate-upload-same-origin';
+          if (upload.kind === 'legacy' || upload.kind === 'same-origin' || upload.kind === 'invalid') {
+            throw new Error('invalid_upload');
+          }
+          if (upload.kind === 'remote') continue;
+          const added = uploads.add(upload);
+          if (added === 'conflict') throw new Error('invalid_upload');
+          if (added === 'duplicate') continue;
           stage = 'estimate-upload-root';
-          const path = join(await this.uploadRoot(), name);
+          const path = join(await this.uploadRoot(), upload.filename);
           stage = 'estimate-upload-open';
           const { file, stat } = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false);
           await file.close();
           uploadBytes += stat.size;
-          if (++images > SOURCE_LIMITS.inventoryFiles - 32 || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes) {
+          if (
+            uploads.uniqueCount > SOURCE_LIMITS.inventoryFiles - 32
+            || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes
+          ) {
             stage = 'estimate-too-large';
             throw new Error('source_too_large');
           }
@@ -139,7 +166,8 @@ export class SourceSnapshot {
         table_bytes: tableBytes,
         upload_bytes: uploadBytes,
         rows,
-        upload_count: images,
+        upload_count: uploads.uniqueCount,
+        upload_duplicate_count: uploads.duplicateCount,
         article_count: articles,
         source_free_bytes,
         source_required_bytes,
@@ -156,22 +184,16 @@ export class SourceSnapshot {
       await lifetime.cleanup();
     }
   }
-  private uploadName(row: unknown) {
-    const parsed = upload.parse(row);
-    const match = /^\/uploads\/([0-9a-f-]{36})\.(gif|jpeg|jpg|png|webp)$/i.exec(parsed.url);
-    if (!match || match[1].toLowerCase() !== parsed.imageId.toLowerCase()) throw new Error('invalid_upload');
-    return `${match[1]}.${match[2]}`;
+  private uploadOf(row: unknown, sourceHostname: string) {
+    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url, sourceHostname);
   }
   private async uploadRoot() {
     const root = resolve(this.options.uploadDir);
     if (await realpath(root) !== root) throw new Error('unsafe_upload_root');
     return root;
   }
-  private async uploadPath(row: unknown) {
-    const name = this.uploadName(row);
-    return join(await this.uploadRoot(), name);
-  }
   async export(identity: SourceIdentity, signal: AbortSignal): Promise<SourceInventory> {
+    const sourceHostname = requireSourceHostname(this.options.origin);
     const parent = join(this.options.base, 'exports');
     await assertExternalMigrationPath(parent);
     await validatePrivateDirectory(parent);
@@ -202,15 +224,20 @@ export class SourceSnapshot {
       );
       const source = imageRows.createReadStream({ encoding: 'utf8', signal });
       const lines = createInterface({ input: source, crlfDelay: Infinity });
-      const seen = new Set<string>();
+      const seen = createUploadTracker();
       try {
         for await (const line of lines) {
           signal.throwIfAborted();
-          const original = await this.uploadPath(JSON.parse(line));
-          const filename = original.slice(original.lastIndexOf('/') + 1);
-          const id = `upload.${filename}`;
-          if (seen.has(id)) throw new Error('duplicate_upload');
-          seen.add(id);
+          const upload = this.uploadOf(JSON.parse(line), sourceHostname);
+          if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+          if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
+          if (upload.kind === 'invalid') throw new Error('invalid_upload');
+          if (upload.kind === 'remote') continue;
+          const added = seen.add(upload);
+          if (added === 'conflict') throw new Error('invalid_upload');
+          if (added === 'duplicate') continue;
+          const original = join(await this.uploadRoot(), upload.filename);
+          const id = `upload.${upload.filename}`;
           const path = logicalFilePath(id);
           add({ id, path, ...await hashOrCopy(original, SOURCE_LIMITS.uploadBytes, signal, join(root, path)) });
         }

@@ -24,7 +24,7 @@ export const directory = async () => {
 export const removeExecutorRoots = async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 };
-export const fixture = async () => {
+export const fixture = async (config: { extraImageUrl?: string } = {}) => {
   const root = await directory();
   const sourceRoot = await directory();
   const target = expectedTargetFixture();
@@ -59,7 +59,8 @@ export const fixture = async () => {
   const actor = '11111111-1111-4111-8111-111111111111',
     post = '22222222-2222-4222-8222-222222222222',
     image = '33333333-3333-4333-8333-333333333333',
-    article = '44444444-4444-4444-8444-444444444444';
+    article = '44444444-4444-4444-8444-444444444444',
+    urlImage = '55555555-5555-4555-8555-555555555555';
   sourceDb.prepare('INSERT INTO actors (actorId, uri, inboxUrl, type) VALUES (?, ?, ?, ?)').run(
     actor,
     'https://fixture.test/' + 'x'.repeat(600),
@@ -74,12 +75,15 @@ export const fixture = async () => {
     1,
     'note',
   );
-  sourceDb.prepare('INSERT INTO post_images (imageId, postId, url, createdAt) VALUES (?, ?, ?, ?)').run(
-    image,
-    post,
-    `/uploads/${image}.png`,
-    1,
-  );
+  const insertImage = sourceDb.prepare('INSERT INTO post_images (imageId, postId, url, createdAt) VALUES (?, ?, ?, ?)');
+  insertImage.run(image, post, `/uploads/${image}.webp`, 1);
+  insertImage.run('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', post, `/uploads/${urlImage}.png`, 1);
+  insertImage.run('66666666-6666-4666-8666-666666666666', post, 'https://remote.test/media/a.png', 1);
+  insertImage.run('77777777-7777-4777-8777-777777777777', post, `https://remote.test/${'y'.repeat(200)}.png`, 1);
+  insertImage.run('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', post, `/uploads/${urlImage}.png`, 1);
+  if (config.extraImageUrl !== undefined) {
+    insertImage.run('cccccccc-cccc-4ccc-8ccc-cccccccccccc', post, config.extraImageUrl, 1);
+  }
   sourceDb.prepare(
     'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).run(article, actor, 'user', post, 'fixture article', 'published', 1);
@@ -100,9 +104,10 @@ export const fixture = async () => {
     estimate: vi.fn(async () => ({
       source_revision: target.identity.main_sha,
       table_bytes: 10000,
-      upload_bytes: 8,
+      upload_bytes: 17,
       rows: 5,
-      upload_count: 1,
+      upload_count: 2,
+      upload_duplicate_count: 1,
       article_count: 1,
       source_free_bytes: 10_000_000_000,
       source_required_bytes: 64_000_000,
@@ -146,13 +151,24 @@ export const fixture = async () => {
         }),
       });
       await mkdir(join(sourceRoot, 'uploads'));
-      await writeFile(join(sourceRoot, `uploads/${image}.png`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), {
+      await writeFile(join(sourceRoot, `uploads/${image}.webp`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), {
         mode: 0o600,
       });
-      const paths = [...APPLICATION_TABLE_ORDER.map(name => ({ id: `table.${name}`, path: `export/${name}.ndjson` })), {
-        id: 'manifest.export',
-        path: 'export/export-manifest.json',
-      }, { id: `upload.${image}.png`, path: `uploads/${image}.png` }];
+      await writeFile(join(sourceRoot, `uploads/${urlImage}.png`), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]), {
+        mode: 0o600,
+      });
+      const paths = [
+        ...APPLICATION_TABLE_ORDER.map(name => ({ id: `table.${name}`, path: `export/${name}.ndjson` })),
+        {
+          id: 'manifest.export',
+          path: 'export/export-manifest.json',
+        },
+        { id: `upload.${image}.webp`, path: `uploads/${image}.webp` },
+        {
+          id: `upload.${urlImage}.png`,
+          path: `uploads/${urlImage}.png`,
+        },
+      ];
       const files = await Promise.all(paths.map(async entry => {
         const body = await readFile(join(sourceRoot, entry.path));
         return { ...entry, bytes: body.length, checksum: createHash('sha256').update(body).digest('hex') };
@@ -302,6 +318,7 @@ export const fixture = async () => {
     source,
     calls,
     remote,
+    objects,
     actualProvider,
     uploadsBucket,
     close: () => {

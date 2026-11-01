@@ -451,13 +451,14 @@ it('relays the estimate-source failure diagnostics and refuses lines with raw te
   ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
-const estimateLine = 'IORI_ESTIMATE rows=5 upload_count=3 article_count=2 sample=ok capacity=insufficient';
+const estimateLine =
+  'IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 article_count=2 sample=ok capacity=insufficient';
 it('relays only the exact estimate line to the public log', async () => {
   const writes = captureStderr();
   await publishChildDiagnostics([
     estimateLine,
-    'IORI_ESTIMATE rows=0 upload_count=0 article_count=0 sample=insufficient capacity=ok',
-    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 article_count=1 sample=ok capacity=ok',
+    'IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 article_count=0 sample=insufficient capacity=ok',
+    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 article_count=1 sample=ok capacity=ok',
     `${estimateLine} table_bytes=10000`,
     `${estimateLine} extra=/home/secret`,
     ` ${estimateLine}`,
@@ -476,11 +477,13 @@ it('relays only the exact estimate line to the public log', async () => {
     estimateLine.replace('capacity=insufficient', 'capacity=unknown'),
     estimateLine.replace('IORI_ESTIMATE', 'IORI_NOTICE'),
     estimateLine.replace('rows=5 upload_count=3', 'upload_count=3 rows=5'),
+    estimateLine.replace(' upload_duplicate_count=1', ''),
+    estimateLine.replace('upload_duplicate_count=1', 'upload_duplicate_count=-1'),
   ].join('\n'));
   expect(writes).toEqual([
     `${estimateLine}\n`,
-    'IORI_ESTIMATE rows=0 upload_count=0 article_count=0 sample=insufficient capacity=ok\n',
-    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 article_count=1 sample=ok capacity=ok\n',
+    'IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 article_count=0 sample=insufficient capacity=ok\n',
+    'IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 article_count=1 sample=ok capacity=ok\n',
   ]);
 });
 it('relays the estimate line from a child process and keeps byte counts out of the public log', async () => {

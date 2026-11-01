@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { APPLICATION_TABLE_ORDER } from './export-postgres-lib.mjs';
+import { classifyUploadUrl } from './migration-upload-rows.mjs';
 
 export const SOURCE_LIMITS = Object.freeze({
   totalBytes: 10 * 1024 ** 3,
@@ -16,6 +17,8 @@ export const SOURCE_REJECTION_DETAILS = Object.freeze([
   'estimate-connect',
   'estimate-query',
   'estimate-upload-row',
+  'estimate-upload-legacy-path',
+  'estimate-upload-same-origin',
   'estimate-upload-root',
   'estimate-upload-open',
   'estimate-too-large',
@@ -65,6 +68,7 @@ export const validateSourceEstimate = (value) => {
     upload_bytes: count,
     rows: count,
     upload_count: count,
+    upload_duplicate_count: count,
     article_count: count,
     source_free_bytes: count,
     source_required_bytes: count,
@@ -95,10 +99,10 @@ const inventorySchema = z.object({
 export const logicalFilePath = (id) => {
   if (id === 'manifest.export') return 'export/export-manifest.json';
   if (id.startsWith('table.') && APPLICATION_TABLE_ORDER.includes(id.slice(6))) return `export/${id.slice(6)}.ndjson`;
-  const upload =
-    /^upload\.([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(gif|jpeg|jpg|png|webp)$/i
-      .exec(id);
-  if (upload) return `uploads/${upload[1]}.${upload[2]}`;
+  if (id.startsWith('upload.')) {
+    const upload = classifyUploadUrl(`/uploads/${id.slice(7)}`);
+    if (upload.kind === 'local' && upload.filename === id.slice(7)) return `uploads/${upload.filename}`;
+  }
   throw new Error('Invalid source file.');
 };
 export const validateSourceInventory = (value) => {

@@ -76,7 +76,7 @@ it.each(['estimate', 'export'].flatMap((operation) => ['query', 'io', 'end'].map
         const base = ${JSON.stringify(base)};
         const action = ${JSON.stringify(operation)} === 'export'
           ? () => exportPostgres({outputDir: base + '/export', createClient})
-          : () => new SourceSnapshot({base, uploadDir:base, createClient}).estimate(new AbortController().signal);
+          : () => new SourceSnapshot({base, uploadDir:base, origin:'https://blog.test', createClient}).estimate(new AbortController().signal);
         action().then(() => { process.exitCode = 2; }, () => {
           if (!closed) { process.exitCode = 3; return; }
           client._handleErrorEvent(new Error('synthetic late disconnect'));

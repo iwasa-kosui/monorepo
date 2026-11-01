@@ -10,6 +10,8 @@ import { createCloudflareImportTransportFromEnvironment } from './cloudflare-imp
 import { canonicalD1RowString } from './data-migration-mapping.mjs';
 import { APPLICATION_TABLE_ORDER } from './export-postgres.mjs';
 import { assertExternalMigrationPath } from './migration-path-safety.mjs';
+import { admissionEnvironment } from './migration-target-contract.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from './migration-upload-rows.mjs';
 
 const objectMap = (objects, keys) =>
   new Map((objects ?? keys?.map((key) => ({ key })) ?? []).map((object) => [object.key, object]));
@@ -137,9 +139,11 @@ export const createManifestExpectedProvider = ({
   d1ImportManifestPath,
   uploadManifestPath,
   ogpManifestPath,
+  sourceOrigin,
   signal,
 }) => ({
   loadExpected: async () => {
+    const sourceHostname = requireSourceHostname(sourceOrigin);
     if (d1ImportManifestPath === undefined) throw new Error('D1 import manifest is required.');
     await assertExternalMigrationPath(exportManifestPath);
     await Promise.all(
@@ -151,7 +155,7 @@ export const createManifestExpectedProvider = ({
     ]);
     const exportTables = assertCompleteTableManifest(exportManifest, 'Export manifest', { requireFiles: true });
     const d1Tables = assertCompleteTableManifest(d1ImportManifest, 'D1 import manifest');
-    const expectedUploadKeys = new Set();
+    const expectedUploads = createUploadTracker();
     const expectedOgpKeys = new Set();
     let publishedArticleCount = 0;
     for (const table of APPLICATION_TABLE_ORDER) {
@@ -163,10 +167,13 @@ export const createManifestExpectedProvider = ({
         signal,
         onRow: table === 'post_images'
           ? (row) => {
-            if (typeof row.imageId !== 'string' || row.imageId.length === 0) {
-              throw new Error('Post image export row has an invalid identifier.');
+            const upload = classifyUploadUrl(row.url, sourceHostname);
+            if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+            if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
+            if (upload.kind === 'invalid') throw new Error('Post image export row has an invalid upload URL.');
+            if (upload.kind === 'local' && expectedUploads.add(upload) === 'conflict') {
+              throw new Error('Post image export row has an invalid upload URL.');
             }
-            expectedUploadKeys.add(`post-images/${row.imageId}/original`);
           }
           : table === 'articles'
           ? (row) => {
@@ -186,15 +193,14 @@ export const createManifestExpectedProvider = ({
         checksum: d1Tables[table].checksum,
       }]),
     );
-    const expectedUploads = exportTables.post_images.count;
-    if (expectedUploads > 0 && uploadManifestPath === undefined) {
+    if (expectedUploads.uniqueCount > 0 && uploadManifestPath === undefined) {
       throw new Error('R2 upload manifest is required for exported post images.');
     }
     const uploads = uploadManifestPath === undefined
       ? []
       : JSON.parse(await readFile(uploadManifestPath, 'utf8')).objects ?? [];
     if (!Array.isArray(uploads)) throw new Error('R2 upload manifest objects are invalid.');
-    if (uploads.length !== expectedUploads) throw new Error('R2 upload manifest is incomplete.');
+    if (uploads.length !== expectedUploads.uniqueCount) throw new Error('R2 upload manifest is incomplete.');
     if (new Set(uploads.map((object) => object?.key)).size !== uploads.length) {
       throw new Error('R2 upload manifest contains duplicate keys.');
     }
@@ -209,10 +215,7 @@ export const createManifestExpectedProvider = ({
     ) {
       throw new Error('R2 upload manifest object metadata is incomplete.');
     }
-    if (expectedUploadKeys.size !== expectedUploads) {
-      throw new Error('Post image export contains duplicate identifiers.');
-    }
-    if (uploads.some((object) => !expectedUploadKeys.has(object.key))) {
+    if (uploads.some((object) => !expectedUploads.has(object.key))) {
       throw new Error('R2 upload manifest contains an unexpected object.');
     }
     if (publishedArticleCount > 0 && ogpManifestPath === undefined) {
@@ -391,6 +394,7 @@ const main = async () => {
     d1ImportManifestPath,
     uploadManifestPath: process.env.IORI_R2_IMPORT_MANIFEST,
     ogpManifestPath: process.env.IORI_OGP_IMPORT_MANIFEST,
+    sourceOrigin: admissionEnvironment(expectedTarget).ORIGIN,
   });
   const actualProvider = createCloudflareImportProvider(transport);
   process.exitCode = await runVerificationCli({ expectedProvider, actualProvider });

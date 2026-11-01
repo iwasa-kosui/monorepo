@@ -18,6 +18,7 @@ const sourceBase = defaultControlBase();
 const sourceSnapshot = new SourceSnapshot({
   base: sourceBase,
   uploadDir: process.env.UPLOAD_DIR || join(process.cwd(), 'uploads'),
+  origin: Env.getInstance().ORIGIN,
   createClient: async () =>
     new Client({
       connectionString: Env.getInstance().DATABASE_URL,

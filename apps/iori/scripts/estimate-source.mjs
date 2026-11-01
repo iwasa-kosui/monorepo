@@ -26,7 +26,7 @@ export const estimateSource = async ({ source, availableBytes, signal }) => {
   const estimate = validateSourceEstimate(rest);
   const sample = hasRehearsalSample(estimate) ? 'ok' : 'insufficient';
   const capacity = capacityIsSufficient(estimate, availableBytes) ? 'ok' : 'insufficient';
-  return `IORI_ESTIMATE rows=${estimate.rows} upload_count=${estimate.upload_count} article_count=${estimate.article_count} sample=${sample} capacity=${capacity}`;
+  return `IORI_ESTIMATE rows=${estimate.rows} upload_count=${estimate.upload_count} upload_duplicate_count=${estimate.upload_duplicate_count} article_count=${estimate.article_count} sample=${sample} capacity=${capacity}`;
 };
 
 export const estimateFromEnvironment = async (

@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
 import { METADATA_BYTES, OBJECT_BYTES, readPrivateBounded, verifiedTableRows } from './migration-file-stream.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from './migration-upload-rows.mjs';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const hash = (body) => createHash('sha256').update(body).digest('hex');
 export const objectManifestEnvelope = (kind) => kind === 'uploads' ? '{"schemaVersion":1,"objects":[' : '{"objects":[';
@@ -44,20 +45,24 @@ const table = async (manifestPath, name, signal) => {
   if (manifest.complete !== true || descriptor?.file !== `${name}.ndjson`) throw new Error('Invalid exported table.');
   return verifiedTableRows({ path: join(dirname(manifestPath), descriptor.file), descriptor, signal });
 };
-export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDir, bucket, signal }) => {
+export const importMigrationUploads = async ({ sourceDir, manifestPath, outputDir, bucket, sourceOrigin, signal }) => {
+  const sourceHostname = requireSourceHostname(sourceOrigin);
   const entries = async function*() {
+    const seen = createUploadTracker();
     for await (const row of await table(manifestPath, 'post_images', signal)) {
-      const match = typeof row.url === 'string' && /^\/uploads\/([a-f0-9-]{36})\.(gif|jpe?g|png|webp)$/i.exec(row.url);
-      if (!uuid.test(row.imageId ?? '') || !match || match[1].toLowerCase() !== row.imageId.toLowerCase()) {
-        throw new Error('Invalid legacy upload.');
-      }
-      const body = await readPrivateBounded(join(sourceDir, `${match[1]}.${match[2]}`), OBJECT_BYTES, signal);
-      const extension = match[2].toLowerCase();
-      const contentType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+      const upload = classifyUploadUrl(row.url, sourceHostname);
+      if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+      if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
+      if (upload.kind === 'invalid') throw new Error('Invalid legacy upload.');
+      if (upload.kind === 'remote') continue;
+      const added = seen.add(upload);
+      if (added === 'conflict') throw new Error('Invalid legacy upload.');
+      if (added === 'duplicate') continue;
+      const body = await readPrivateBounded(join(sourceDir, upload.filename), OBJECT_BYTES, signal);
       yield {
         body,
-        object: { imageId: row.imageId, key: `post-images/${row.imageId}/original`, contentType, checksum: hash(body) },
-        metadata: { imageId: row.imageId },
+        object: { imageId: upload.uuid, key: upload.key, contentType: upload.contentType, checksum: hash(body) },
+        metadata: { imageId: upload.uuid },
       };
     }
   };

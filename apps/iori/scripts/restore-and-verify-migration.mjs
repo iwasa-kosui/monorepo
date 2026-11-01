@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { createCloudflareImportTransport } from './cloudflare-import-provider.mjs';
 import { restoreMigrationBundle } from './migration-bundle.mjs';
 import { METADATA_BYTES, readPrivateBounded } from './migration-file-stream.mjs';
-import { targetIdentity } from './migration-target-contract.mjs';
+import { admissionEnvironment, targetIdentity } from './migration-target-contract.mjs';
 import { loadExpectedTarget } from './migration-target-input.mjs';
 import { transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { readSealedMigrationTarget } from './read-sealed-migration-target.mjs';
@@ -82,6 +82,7 @@ export const restoreAndVerifyMigration = async ({ env, signal }) => {
     d1ImportManifestPath: artifactPath('d1_import_manifest'),
     uploadManifestPath: artifactPath('r2_import_manifest'),
     ogpManifestPath: artifactPath('ogp_import_manifest'),
+    sourceOrigin: admissionEnvironment(target).ORIGIN,
     signal,
   });
   if ((await verifyCloudflareImportWithProviders({ expectedProvider, actualProvider })).length) {

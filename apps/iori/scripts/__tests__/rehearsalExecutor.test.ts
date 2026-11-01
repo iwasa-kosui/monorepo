@@ -87,9 +87,9 @@ it(
         ),
       ).toBe(true);
       const profile = parseMigrationRehearsal(JSON.parse(envelope.profile), 'a'.repeat(40));
-      expect(profile.bytes_per_second).toBeCloseTo((10008 * 3 + 240000) / 6, 6);
+      expect(profile.bytes_per_second).toBeCloseTo((10017 * 3 + 240000) / 6, 6);
       expect(profile.rows_per_second).toBeCloseTo(5 * 3 / 2, 6);
-      expect(profile.files_per_second).toBeCloseTo((1 * 3 + 65 * 2) / 2.5, 6);
+      expect(profile.files_per_second).toBeCloseTo((2 * 3 + 65 * 2) / 2.5, 6);
       expect(profile.ogp_per_second).toBeCloseTo(1 / 0.5, 6);
       expect(profile.d1_capacity_bytes).toBe(10_000_000_000);
       expect(verifyRehearsalEnvelope(text, f.options.receiptPublicKey, 'a'.repeat(40))).toBe(envelope.profile);

@@ -9,6 +9,7 @@ import { generateOgImageOnDemand, type OgImageFailureLog } from './adaptor/ogIma
 import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
 import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
+import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
@@ -25,7 +26,6 @@ import { createWorkerUsersRouter } from './adaptor/routes/workerUsersRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
 import { Actor } from './domain/actor/actor.ts';
 import { ArticleId } from './domain/article/articleId.ts';
-import { ImageId } from './domain/image/imageId.ts';
 import { Instant } from './domain/instant/instant.ts';
 import { Session } from './domain/session/session.ts';
 import { SessionId } from './domain/session/sessionId.ts';
@@ -230,8 +230,7 @@ export default {
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
       servePage: async (pageRequest) => createWorkerPageFallback(pageRequest, await pageIdentity(pageRequest, runtime)),
       serveUpload: async (filename) => {
-        const imageIdSource = filename.replace(/\.(?:gif|jpe?g|png|webp)$/i, '');
-        const imageIdResult = ImageId.parse(imageIdSource);
+        const imageIdResult = parseUploadFilenameImageId(filename);
         if (!imageIdResult.ok) {
           return undefined;
         }

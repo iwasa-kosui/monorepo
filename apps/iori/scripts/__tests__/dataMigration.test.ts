@@ -23,6 +23,7 @@ const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sqliteSchema = join(appRoot, 'drizzle-d1/0000_boring_xavin.sql');
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
+const sourceOrigin = 'https://blog.test';
 
 const temporaryDirectory = async (): Promise<string> => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'iori-data-migration-fixture-')));
@@ -91,6 +92,65 @@ const writeFixtureManifest = async (directory: string): Promise<string> => {
     { encoding: 'utf8', mode: 0o600 },
   );
   return manifestPath;
+};
+
+const urlImageId = '77777777-7777-4777-8777-777777777777';
+const postImageRow = (imageId: string, url: string) => ({
+  imageId,
+  postId: '22222222-2222-4222-8222-222222222222',
+  url,
+  createdAt: '2026-01-02T03:04:05.000Z',
+});
+const mixedPostImages = [
+  postImageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.webp`),
+  postImageRow('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'https://remote.test/media/a.png'),
+  postImageRow('cccccccc-cccc-4ccc-8ccc-cccccccccccc', `https://remote.test/${'y'.repeat(200)}.png`),
+  postImageRow('dddddddd-dddd-4ddd-8ddd-dddddddddddd', `/uploads/${urlImageId}.webp`),
+];
+const replacePostImages = async (directory: string, manifestPath: string, postImages: readonly unknown[]) => {
+  const contents = postImages.length === 0 ? '' : `${postImages.map((row) => JSON.stringify(row)).join('\n')}\n`;
+  await writeFile(join(directory, 'post_images.ndjson'), contents);
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.tables.post_images = {
+    file: 'post_images.ndjson',
+    count: postImages.length,
+    checksum: createHash('sha256').update(contents).digest('hex'),
+  };
+  await writeFile(manifestPath, JSON.stringify(manifest));
+};
+const loadExpectedFor = async (postImages: readonly unknown[], uploadObjects?: readonly { key: string }[]) => {
+  const fixtureDirectory = await temporaryDirectory();
+  const d1Directory = await temporaryDirectory();
+  const manifestPath = await writeFixtureManifest(fixtureDirectory);
+  await replacePostImages(fixtureDirectory, manifestPath, postImages);
+  await convertD1Import({ manifestPath, schemaPath: sqliteSchema, outputDir: d1Directory });
+  const uploadManifestPath = join(fixtureDirectory, 'r2-import-manifest.json');
+  const ogpManifestPath = join(fixtureDirectory, 'ogp-import-manifest.json');
+  if (uploadObjects) {
+    await writeFile(
+      uploadManifestPath,
+      JSON.stringify({
+        objects: uploadObjects.map((object) => ({ ...object, checksum: 'a'.repeat(64), contentType: 'image/webp' })),
+      }),
+    );
+  }
+  await writeFile(
+    ogpManifestPath,
+    JSON.stringify({
+      objects: [{
+        key: 'og/55555555-5555-4555-8555-555555555555.png',
+        checksum: 'b'.repeat(64),
+        contentType: 'image/png',
+      }],
+    }),
+  );
+  return createManifestExpectedProvider({
+    sourceOrigin,
+    exportManifestPath: manifestPath,
+    d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
+    uploadManifestPath: uploadObjects ? uploadManifestPath : undefined,
+    ogpManifestPath,
+  }).loadExpected();
 };
 
 afterEach(async () => {
@@ -357,6 +417,7 @@ describe('Cloudflare data migration tooling', () => {
     const d1ImportManifestPath = join(importDirectory, 'd1-import-manifest.json');
     const d1ImportManifest = JSON.parse(await readFile(d1ImportManifestPath, 'utf8'));
     const expectedProvider = createManifestExpectedProvider({
+      sourceOrigin,
       exportManifestPath: join(exportDirectory, 'export-manifest.json'),
       d1ImportManifestPath,
     });
@@ -425,6 +486,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -467,6 +529,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: d1ManifestPath,
         uploadManifestPath,
@@ -608,6 +671,107 @@ describe('Cloudflare data migration tooling', () => {
       manifestPath,
       outputDir: await temporaryDirectory(),
     })).rejects.toThrow('invalid legacy upload');
+  });
+
+  it('imports each local upload once under the key built from the URL, and skips remote rows', async () => {
+    const fixtureDirectory = await temporaryDirectory();
+    const uploadDirectory = join(fixtureDirectory, 'uploads');
+    await mkdir(uploadDirectory);
+    const image = new Uint8Array([5, 6, 7]);
+    await writeFile(join(uploadDirectory, `${urlImageId}.webp`), image);
+    const manifestPath = await writeFixtureManifest(fixtureDirectory);
+    await replacePostImages(fixtureDirectory, manifestPath, mixedPostImages);
+    const puts: Array<{ key: string; imageId?: string }> = [];
+
+    const result = await importR2Uploads({
+      sourceDir: uploadDirectory,
+      bucket: { put: async (key, _body, options) => void puts.push({ key, imageId: options.customMetadata?.imageId }) },
+      manifestPath,
+      outputDir: await temporaryDirectory(),
+    });
+
+    expect(puts).toEqual([{ key: `post-images/${urlImageId}/original`, imageId: urlImageId }]);
+    expect(result.objects).toHaveLength(1);
+  });
+
+  it('rejects a legacy static upload path and the same key with another extension', async () => {
+    for (
+      const [postImages, message] of [
+        [[postImageRow(urlImageId, `/static/uploads/${urlImageId}.webp`)], 'upload-legacy-path'],
+        [[postImageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.webp`)], 'upload-same-origin'],
+        [
+          [
+            postImageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.webp`),
+            postImageRow(
+              'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              `/uploads/${urlImageId}.png`,
+            ),
+          ],
+          'invalid legacy upload',
+        ],
+      ] as const
+    ) {
+      const fixtureDirectory = await temporaryDirectory();
+      const uploadDirectory = join(fixtureDirectory, 'uploads');
+      await mkdir(uploadDirectory);
+      await writeFile(join(uploadDirectory, `${urlImageId}.webp`), new Uint8Array([1]));
+      await writeFile(join(uploadDirectory, `${urlImageId}.png`), new Uint8Array([1]));
+      const manifestPath = await writeFixtureManifest(fixtureDirectory);
+      await replacePostImages(fixtureDirectory, manifestPath, postImages);
+      await expect(importR2Uploads({
+        sourceDir: uploadDirectory,
+        bucket: { put: async () => undefined },
+        manifestPath,
+        outputDir: await temporaryDirectory(),
+        sourceOrigin,
+      })).rejects.toThrow(message);
+    }
+  });
+
+  it('expects one R2 object per unique local URL and ignores remote rows and duplicates', async () => {
+    const key = `post-images/${urlImageId}/original`;
+    const expected = await loadExpectedFor(mixedPostImages, [{ key }]);
+    expect(expected.r2Objects?.map((object) => object.key)).toEqual([key]);
+    expect(expected.tables?.post_images?.count).toBe(mixedPostImages.length);
+  });
+
+  it('needs no upload manifest when every post image is remote', async () => {
+    const expected = await loadExpectedFor([mixedPostImages[1], mixedPostImages[2]]);
+    expect(expected.r2Objects).toEqual([]);
+  });
+
+  it('rejects a manifest keyed by imageId instead of the URL UUID', async () => {
+    await expect(
+      loadExpectedFor(mixedPostImages, [{ key: 'post-images/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original' }]),
+    ).rejects.toThrow(/unexpected object/);
+  });
+
+  it('rejects a manifest that lists a duplicate row as a second object', async () => {
+    const key = `post-images/${urlImageId}/original`;
+    await expect(loadExpectedFor(mixedPostImages, [{ key }, { key }])).rejects.toThrow(/incomplete/);
+  });
+
+  it('rejects legacy and invalid post image URLs and the same key with another extension', async () => {
+    await expect(loadExpectedFor([postImageRow(urlImageId, `/static/uploads/${urlImageId}.webp`)])).rejects.toThrow(
+      'upload-legacy-path',
+    );
+    await expect(loadExpectedFor([postImageRow(urlImageId, `https://blog.test/uploads/${urlImageId}.webp`)])).rejects
+      .toThrow('upload-same-origin');
+    await expect(
+      createManifestExpectedProvider({
+        exportManifestPath: 'unused',
+        sourceOrigin: undefined as unknown as string,
+      }).loadExpected(),
+    ).rejects.toThrow('source-origin-required');
+    await expect(loadExpectedFor([postImageRow(urlImageId, 'data:image/png;base64,AAAA')])).rejects.toThrow(
+      /invalid upload URL/,
+    );
+    await expect(
+      loadExpectedFor([
+        postImageRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `/uploads/${urlImageId}.webp`),
+        postImageRow('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', `/uploads/${urlImageId}.png`),
+      ], [{ key: `post-images/${urlImageId}/original` }]),
+    ).rejects.toThrow(/invalid upload URL/);
   });
 
   it('backfills only published OGP PNG objects through the offline pipeline boundary', async () => {
@@ -753,6 +917,7 @@ describe('Cloudflare data migration tooling', () => {
       }),
     );
     const expectedProvider = createManifestExpectedProvider({
+      sourceOrigin,
       exportManifestPath: manifestPath,
       d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
       uploadManifestPath,
@@ -792,6 +957,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
       }).loadExpected(),
@@ -827,6 +993,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -865,6 +1032,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,
@@ -922,6 +1090,7 @@ describe('Cloudflare data migration tooling', () => {
 
     await expect(
       createManifestExpectedProvider({
+        sourceOrigin,
         exportManifestPath: manifestPath,
         d1ImportManifestPath: join(d1Directory, 'd1-import-manifest.json'),
         uploadManifestPath,

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { executeProtectedMigration, executionReservationKey } from '../execute-protected-migration.mjs';
 import { APPLICATION_TABLE_ORDER } from '../export-postgres.mjs';
+import { admissionEnvironment } from '../migration-target-contract.mjs';
 import { createManifestExpectedProvider, verifyCloudflareImportWithProviders } from '../verify-cloudflare-import.mjs';
 import { restoreMigrationBundle } from '../migration-bundle.mjs';
 import { directory, fixture, removeExecutorRoots } from './migrationExecutorFixture.js';
@@ -40,11 +41,19 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
       join(fresh, contract.phases.find((phase: any) => phase.artifacts[name]).artifacts[name].path);
     expect(JSON.parse(await readFile(manifest('d1_import_manifest'), 'utf8')).files.length).toBeGreaterThan(1);
     for (const table of APPLICATION_TABLE_ORDER) await access(join(fresh, `source/export/${table}.ndjson`));
+    const uploadKeys = [
+      'post-images/33333333-3333-4333-8333-333333333333/original',
+      'post-images/55555555-5555-4555-8555-555555555555/original',
+    ];
+    expect([...f.objects.keys()].filter(key => key.startsWith('post-images/')).sort()).toEqual(uploadKeys);
+    const uploadManifest = JSON.parse(await readFile(manifest('r2_import_manifest'), 'utf8'));
+    expect(uploadManifest.objects.map((object: { key: string }) => object.key).sort()).toEqual(uploadKeys);
     const expectedProvider = createManifestExpectedProvider({
       exportManifestPath: manifest('postgres_export_manifest'),
       d1ImportManifestPath: manifest('d1_import_manifest'),
       uploadManifestPath: manifest('r2_import_manifest'),
       ogpManifestPath: manifest('ogp_import_manifest'),
+      sourceOrigin: admissionEnvironment(f.options.expectedTarget).ORIGIN,
     });
     expect(await verifyCloudflareImportWithProviders({ expectedProvider, actualProvider: f.actualProvider })).toEqual(
       [],
@@ -53,6 +62,16 @@ it('executes real export/conversion/SQL/S3/OGP/signatures and restores all files
     f.close();
   }
 }, 30000);
+it('takes the source origin from the expected target and fails on a same-origin upload URL', async () => {
+  const f = await fixture({ extraImageUrl: 'https://blog.test/uploads/99999999-9999-4999-8999-999999999999.png' });
+  try {
+    expect(admissionEnvironment(f.options.expectedTarget).ORIGIN).toBe('https://blog.test');
+    await expect(executeProtectedMigration(f.options)).rejects.toThrow('upload-same-origin');
+    await expect(access(join(f.options.root, 'contract.json'))).rejects.toThrow();
+  } finally {
+    f.close();
+  }
+});
 it('rejects metadata preflight before reservation/freeze and post-drain growth before export', async () => {
   const f = await fixture();
   try {

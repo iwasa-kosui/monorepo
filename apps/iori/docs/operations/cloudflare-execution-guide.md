@@ -573,10 +573,11 @@ job に渡す secret は、`IORI_SOURCE_SSH_HOST`、`IORI_SOURCE_SSH_USER`、`IO
 成功すると、Actions ログに次の1行だけを出します。
 
 ```text
-IORI_ESTIMATE rows=<n> upload_count=<n> article_count=<n> sample=ok|insufficient capacity=ok|insufficient
+IORI_ESTIMATE rows=<n> upload_count=<n> upload_duplicate_count=<n> article_count=<n> sample=ok|insufficient capacity=ok|insufficient
 ```
 
-- `rows`、`upload_count`、`article_count` は件数です。件数は公開してよいと管理担当が判断しました
+- `rows`、`upload_count`、`upload_duplicate_count`、`article_count` は件数です。件数は公開してよいと管理担当が判断しました
+- `upload_count` は、`/uploads/` の形の URL を持つ `post_images` の行のうち、同じ URL を除いたファイルの数です。`upload_duplicate_count` は、同じファイルを参照して除いた行の数です。`https://` か `http://` で始まる URL の行は、どちらにも数えません
 - `sample` は、3つの件数がすべて 1 以上なら `ok` です。どれかが 0 なら `insufficient` で、`rehearse-migration` は freeze の前に失敗します
 - `capacity` は、source の空き容量、D1 の上限 10 GB (`10000000000` バイト)、runner の空き容量の3つの判定です。すべて足りれば `ok` です
 - bytes の値は出しません。容量は `ok` と `insufficient` の判定だけを出します
@@ -605,16 +606,18 @@ IORI_DIAG stage=estimate-source program=ssh exit=<0-255|none> signal=<名前|non
 
 旧環境のサービスは、`estimate` が失敗した段を、拒否の応答に `detail` として載せます。runner は、この値が次の語彙に当たるときだけ、`reason` に使います。
 
-| `reason`               | 失敗した段                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `estimate-connect`     | DB への接続と transaction の開始                                               |
-| `estimate-query`       | table ごとの SELECT、`post_images` の cursor、COMMIT                           |
-| `estimate-upload-row`  | `post_images` の行の形と、url の形                                             |
-| `estimate-upload-root` | `UPLOAD_DIR` の realpath の確認                                                |
-| `estimate-upload-open` | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                      |
-| `estimate-too-large`   | 全体のサイズか、ファイル数の上限の超過                                         |
-| `estimate-limit`       | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断 |
-| `estimate-other`       | 上のどの段にも当たらない失敗。空き容量の取得を含みます                         |
+| `reason`                      | 失敗した段                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `estimate-connect`            | DB への接続と transaction の開始                                                                                                                 |
+| `estimate-query`              | table ごとの SELECT、`post_images` の cursor、COMMIT                                                                                             |
+| `estimate-upload-row`         | `post_images` の行の形と、url の形                                                                                                               |
+| `estimate-upload-legacy-path` | post_images に `/static/uploads/` の形の URL が残っている。移行の前に旧環境の DB の URL を `/uploads/` に直す                                    |
+| `estimate-upload-same-origin` | post_images に移行元と同じ origin の `/uploads/` を指す絶対 URL が残っている。移行の前に旧環境の DB の URL を `/uploads/<ファイル名>` の形に直す |
+| `estimate-upload-root`        | `UPLOAD_DIR` の realpath の確認                                                                                                                  |
+| `estimate-upload-open`        | upload ファイルを開く処理、stat、1 ファイルのサイズの確認                                                                                        |
+| `estimate-too-large`          | 全体のサイズか、ファイル数の上限の超過                                                                                                           |
+| `estimate-limit`              | 制限時間 (60 秒) の超過、または runner との接続 (ssh か control socket) の切断                                                                   |
+| `estimate-other`              | 上のどの段にも当たらない失敗。空き容量の取得を含みます                                                                                           |
 
 `estimate-` で始まる語彙は、旧環境への配備 (`deploy-iori.yml`) の後に効きます。配備の前の旧環境は `detail` を返さないので、サービス側の失敗は `reason=rejected` になります。
 

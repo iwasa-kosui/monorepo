@@ -8,37 +8,15 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { assertExternalMigrationPath, prepareExternalMigrationDirectory } from './migration-path-safety.mjs';
+import { classifyUploadUrl, createUploadTracker, requireSourceHostname } from './migration-upload-rows.mjs';
 
 const execFileAsync = promisify(execFile);
-const legacyUploadPath =
-  /^\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(gif|jpeg|jpg|png|webp)$/i;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const contentTypeFor = (extension) =>
-  ({
-    gif: 'image/gif',
-    jpeg: 'image/jpeg',
-    jpg: 'image/jpeg',
-    png: 'image/png',
-    webp: 'image/webp',
-  })[extension.toLowerCase()];
-
 const checksum = (body) => createHash('sha256').update(body).digest('hex');
-const postImageKey = (imageId) => `post-images/${imageId}/original`;
 const ogpKey = (articleId) => `og/${articleId}.png`;
 const pngSignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const isPng = (body) => pngSignature.every((byte, index) => body[index] === byte);
-
-const legacyUpload = (upload) => {
-  const match = typeof upload.url === 'string' ? legacyUploadPath.exec(upload.url) : null;
-  if (match === null || typeof upload.imageId !== 'string' || !uuid.test(upload.imageId)) {
-    throw new Error('Upload manifest contains an invalid legacy upload.');
-  }
-  if (match[1].toLowerCase() !== upload.imageId.toLowerCase()) {
-    throw new Error('Upload manifest contains an invalid legacy upload.');
-  }
-  return { filename: `${match[1]}.${match[2]}`, contentType: contentTypeFor(match[2]) };
-};
 
 const uploadsFromManifest = async function*(manifest, manifestPath) {
   if (manifest.uploads !== undefined) {
@@ -104,13 +82,23 @@ const writePrivateManifest = async ({ outputDir, filename, manifest }) => {
   return path;
 };
 
-export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputDir }) => {
+export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputDir, sourceOrigin }) => {
   await Promise.all([assertExternalMigrationPath(sourceDir), assertExternalMigrationPath(manifestPath)]);
   if (outputDir === undefined) throw new Error('An external R2 manifest directory is required.');
+  const sourceHostname = sourceOrigin === undefined ? undefined : requireSourceHostname(sourceOrigin);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const objects = [];
-  for await (const upload of uploadsFromManifest(manifest, manifestPath)) {
-    const { filename, contentType } = legacyUpload(upload);
+  const seen = createUploadTracker();
+  for await (const row of uploadsFromManifest(manifest, manifestPath)) {
+    const upload = classifyUploadUrl(row?.url, sourceHostname);
+    if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+    if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
+    if (upload.kind === 'invalid') throw new Error('Upload manifest contains an invalid legacy upload.');
+    if (upload.kind === 'remote') continue;
+    const added = seen.add(upload);
+    if (added === 'conflict') throw new Error('Upload manifest contains an invalid legacy upload.');
+    if (added === 'duplicate') continue;
+    const { filename, contentType } = upload;
     const source = join(sourceDir, filename);
     await assertExternalMigrationPath(source);
     let sourceStat;
@@ -124,14 +112,14 @@ export const importR2Uploads = async ({ sourceDir, bucket, manifestPath, outputD
     }
     const body = new Uint8Array(await readFile(source));
     const object = {
-      imageId: upload.imageId,
-      key: postImageKey(upload.imageId),
+      imageId: upload.uuid,
+      key: upload.key,
       contentType,
       checksum: checksum(body),
     };
     await bucket.put(object.key, body, {
       httpMetadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' },
-      customMetadata: { imageId: upload.imageId, sha256: object.checksum },
+      customMetadata: { imageId: upload.uuid, sha256: object.checksum },
     });
     objects.push(object);
   }

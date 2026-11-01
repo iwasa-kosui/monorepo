@@ -37,6 +37,7 @@ export function createSourceSshAdapter(options: SourceSshOptions, testOptions?: 
       upload_bytes: number;
       rows: number;
       upload_count: number;
+      upload_duplicate_count: number;
       article_count: number;
       source_free_bytes: number;
       source_required_bytes: number;
