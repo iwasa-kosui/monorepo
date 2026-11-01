@@ -66,7 +66,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       if (perPage !== undefined && (!Number.isInteger(perPage) || perPage < 1 || items.length > perPage)) {
         failApi(path, 'shape');
       }
-      // Without result_info the API may ignore per_page and stop at 20 buckets with no cursor (cloudflare/workers-sdk#15103).
+      // The default page stops at 20 buckets with no cursor, and without result_info we cannot confirm per_page took effect (cloudflare/workers-sdk#15103).
       if (items.length >= (perPage ?? 20)) failApi(path, 'limit');
       const totalCount = info?.total_count;
       if (totalCount !== undefined) {
