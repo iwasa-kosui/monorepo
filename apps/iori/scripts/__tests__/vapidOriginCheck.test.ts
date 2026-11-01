@@ -149,13 +149,23 @@ it('rejects in production when the origin key differs', async () => {
   })).rejects.toThrow('Origin VAPID public key does not match.');
   expect(log.mock.calls[1]).toEqual(['Origin VAPID public key match: no']);
 });
-it('skips the origin check outside production without calling fetch', async () => {
+it('skips the origin check in staging without calling fetch', async () => {
   const pair = keyPair();
   const log = vi.fn();
   const fetchRequest = originFetch(pair.publicKey);
   await assertVapidBeforePreparation({ environment: 'staging', origin, ...pair, fetchRequest, log });
   expect(fetchRequest).not.toHaveBeenCalled();
   expect(log).toHaveBeenLastCalledWith('Origin VAPID public key match: skipped');
+});
+it.each(['', 'preview'])('checks the origin when the environment is %j', async environment => {
+  const pair = keyPair();
+  const log = vi.fn();
+  const fetchRequest = originFetch(keyPair().publicKey);
+  await expect(assertVapidBeforePreparation({ environment, origin, ...pair, fetchRequest, log })).rejects.toThrow(
+    'Origin VAPID public key does not match.',
+  );
+  expect(fetchRequest).toHaveBeenCalledTimes(1);
+  expect(log).toHaveBeenLastCalledWith('Origin VAPID public key match: no');
 });
 it('rejects a mismatched key pair without calling fetch', async () => {
   const pair = keyPair();

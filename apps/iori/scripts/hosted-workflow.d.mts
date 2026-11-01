@@ -14,4 +14,6 @@ export function executeHostedOperation(
   env: Record<string, string | undefined>,
   signal: AbortSignal,
   timeout: number,
+  operation?: string,
 ): Promise<unknown>;
+export function hostedFailureMessage(error: unknown): string;
