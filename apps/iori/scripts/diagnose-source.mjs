@@ -6,6 +6,7 @@ import { withCliSignal } from './cli-lifetime.mjs';
 import { sourceDeploymentSshArguments } from './deploy-source.mjs';
 import { runMigrationCommand } from './migration-command.mjs';
 import { createPrivateCommandLog } from './private-command-log.mjs';
+import { assertSourceSshTarget } from './source-control-ssh.mjs';
 import { sourceDiagnoseNoticeLine } from './source-diagnose-remote.mjs';
 import { createStageRunner } from './source-recovery.mjs';
 
@@ -13,7 +14,10 @@ const appRoot = fileURLToPath(new URL('../', import.meta.url));
 export const diagnoseSource = async (options, { runCommand = runMigrationCommand, signal: suppliedSignal } = {}) => {
   const { host } = options;
   const { current, stage } = createStageRunner();
-  const ssh = await stage('inputs', async () => sourceDeploymentSshArguments(options));
+  const ssh = await stage('inputs', async () => {
+    assertSourceSshTarget(options);
+    return sourceDeploymentSshArguments(options);
+  });
   const signal = AbortSignal.any([...(suppliedSignal ? [suppliedSignal] : []), AbortSignal.timeout(5 * 60_000)]);
   await stage('diagnose-remote', async () => {
     const script = await build({

@@ -33,7 +33,9 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
 
-## 2. Staging rehearsal
+## 2. Staging rehearsal（任意）
+
+ユーザーの判断により、今回の移行は staging を使わず production だけで行います。この節は staging を使う場合だけ実施します。staging を使わない場合は、この節を飛ばして第3節へ進みます。第3節の production cutover は、この節の完了を前提条件にしません。
 
 throughput profile の計測は、この節の staging rehearsal では行いません。`production` Environment の `rehearse-migration` が行います。手順は[実行手順の第5節](./cloudflare-execution-guide.md#5-実測-profile-の作成と登録)に従います。
 
@@ -60,11 +62,11 @@ pnpm --filter @iwasa-kosui/iori exec node scripts/run-cloudflare-smoke.mjs \
 
 5. `smoke` のまま staging route を準備して実状態を読み戻し、staging の canonical hostname で完全な smoke checklist を再実行します。その成功後に source freeze と同じ target identity を再確認して HTTP を `active` にします。Queue を最後に再開し、有効化後にも完全な smoke を行います。staging の通常認証を通して sign-in/sign-up、timeline、post/reply/delete、upload/image retrieval、ActivityPub follow/like/repost/undo/relay、Queue retry/DLQ、Web Push、OGP PNG を手動確認します。記録は counts、timestamp、pass/fail だけにします。
 
-route creation に進むためには、schema migration、D1 row-count verification、R2 checksum verification、OGP backfill、queue drain rehearsal、workers.dev smoke のすべてが pass でなければならない。
+staging を使う場合、staging の route creation に進むためには、schema migration、D1 row-count verification、R2 checksum verification、OGP backfill、queue drain rehearsal、workers.dev smoke のすべてが pass でなければならない。staging を使わない場合、production の route creation に進む条件は第3節の手順 5 から 9 です。
 
 ## 3. Production cutover
 
-以下の順序は変更しない。
+staging rehearsal の実施有無にかかわらず、この節の手順を実施できます。以下の順序は変更しない。
 
 1. メンテナンスを告知し、準備済み generation の記録、独立した Terraform の期待値、現在の sealed Worker、binding、配送停止を照合します。KV は準備時から空の状態を維持します。
 2. 移行元と runner の容量・所要時間を検査し、実行 ID を一度だけ予約します。
@@ -134,7 +136,7 @@ cutover 後 14 日間は Lightsail、PostgreSQL、upload backup、AWS state を�
 
 ## 7. Terraform/Wrangler ownership と最終受入れ
 
-staging/production import 後に、secure runner で Terraform state と saved plan を確認します。Terraform の管理対象は D1、R2、KV、Queue、DLQ、Queue consumer、route に限定します。Worker version/deployment/binding/secret は state に含めず、Wrangler が Worker version と producer binding を管理します。Wrangler config に Queue consumer 定義を置きません。route は cutover plan 前には `absent`、`cutover-route` の reviewed plan 後に `present` とします。本番の Terraform 操作には `TF_VAR_public_hostname` を渡します。state/plan/config の生データは公開しません。
+production の import 後に、secure runner で Terraform state と saved plan を確認します。staging を使った場合は、staging の import 後にも同じ確認を行います。Terraform の管理対象は D1、R2、KV、Queue、DLQ、Queue consumer、route に限定します。Worker version/deployment/binding/secret は state に含めず、Wrangler が Worker version と producer binding を管理します。Wrangler config に Queue consumer 定義を置きません。route は cutover plan 前には `absent`、`cutover-route` の reviewed plan 後に `present` とします。本番の Terraform 操作には `TF_VAR_public_hostname` を渡します。state/plan/config の生データは公開しません。
 
 Worker binding は GitHub の個別 ID/name secret から渡さず、Terraform sensitive `worker_bindings` output を各 job の mode `0600` ファイルへ生成します。protected Worker name と output の worker name が一致すること、saved plan の `worker_bindings` output が no-op であることを deploy 前に検証します。移行データは専用の非公開 R2 から `$RUNNER_TEMP` 配下へ復元します。Environment は接続設定と鍵を供給し、永続ホスト上の絶対パスを渡す方式から変更します。config は各 job で再生成し、bundle に含めません。内容は log、summary、GitHub artifact、cache に出しません。
 

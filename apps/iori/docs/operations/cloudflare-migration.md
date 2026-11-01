@@ -4,13 +4,13 @@
 
 この文書は移行の案内です。実装状況、実行条件、操作手順は次の文書で管理します。以前の skeleton 実装と self-hosted runner の手順は、これらへ統合しました。
 
-| 文書                                                                                                         | 内容                                             |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| [完全移行の設計](../../../../docs/superpowers/specs/2026-08-16-iori-cloudflare-complete-migration-design.md) | 構成、所有境界、公開情報の制約、受入基準         |
-| [再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)                          | 実装・検証の状況と、本番操作までの残条件         |
-| [データ移行手順](./cloudflare-data-migration.md)                                                             | 凍結、snapshot、D1/R2/OGP、署名と bundle の復元  |
-| [Cutover runbook](./cloudflare-cutover-runbook.md)                                                           | staging、本番切替、復旧、14 日間の保持と撤去承認 |
-| [Terraform の案内](../../infra/cloudflare/README.md)                                                         | generation、backend、sensitive output と管理範囲 |
+| 文書                                                                                                         | 内容                                                    |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| [完全移行の設計](../../../../docs/superpowers/specs/2026-08-16-iori-cloudflare-complete-migration-design.md) | 構成、所有境界、公開情報の制約、受入基準                |
+| [再開計画](../../../../docs/superpowers/plans/2026-09-05-iori-cloudflare-resume.md)                          | 実装・検証の状況と、本番操作までの残条件                |
+| [データ移行手順](./cloudflare-data-migration.md)                                                             | 凍結、snapshot、D1/R2/OGP、署名と bundle の復元         |
+| [Cutover runbook](./cloudflare-cutover-runbook.md)                                                           | 任意の staging、本番切替、復旧、14 日間の保持と撤去承認 |
+| [Terraform の案内](../../infra/cloudflare/README.md)                                                         | generation、backend、sensitive output と管理範囲        |
 
 ## 移行後の構成
 
@@ -35,6 +35,6 @@ Terraform は D1、R2、KV、Queue、DLQ、consumer、route を所有します�
 - 途中失敗を自動再開せず、移行元の凍結も自動解除しません。復旧は runbook の明示的な判断に従います。
 - 本番の接続情報、export、SQL、manifest、state、config、response body は Git、公開ログ、GitHub artifact/cache に保存しません。
 
-実装の検証と実環境での移行は別に記録します。protected Environment の承認者・main 制限、用途別の credential、移行元への事前デプロイ、接続・容量・時間を含む匿名化 staging リハーサルを完了してから本番操作へ進みます。
+実装の検証と実環境での移行は別に記録します。protected Environment の承認者・main 制限、用途別の credential、移行元への事前デプロイ、接続・容量・時間の確認を完了してから本番操作へ進みます。ユーザーの判断により、今回の移行は staging を使わず production だけで行います。匿名化 staging リハーサルは任意であり、本番操作の前提条件ではありません。staging を使う場合だけ、cutover runbook の staging 手順で接続・容量・時間を事前に確認します。
 
 cutover 後 14 日間は旧環境、backup、state と移行 bundle を保持します。通常の投稿・削除で変わる live data の監視と、保存した bundle の完全性確認を分けます。AWS 撤去と backup 削除は、それぞれの保持条件と明示承認を満たした後に別の変更で実施します。

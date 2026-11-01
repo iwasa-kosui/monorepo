@@ -24,14 +24,18 @@ const privateInput = async (path) => {
   return resolved;
 };
 
+export const assertSourceSshTarget = ({ host, user }) => {
+  if (
+    typeof host !== 'string' || host.length > 253 || !/^[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*$/.test(host)
+    || typeof user !== 'string' || !/^[a-z_][a-z0-9_-]{0,31}$/.test(user)
+  ) throw new Error('Invalid source inputs.');
+};
+
 // Production CLI callers use the native spawn. The second argument is solely a fixture transport seam.
 export const createSourceSshAdapter = async (options, { spawnProcess = spawn } = {}) => {
   try {
     const { host, user, mainSha, runId } = options;
-    if (
-      typeof host !== 'string' || host.length > 253 || !/^[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*$/.test(host)
-      || typeof user !== 'string' || !/^[a-z_][a-z0-9_-]{0,31}$/.test(user)
-    ) throw new Error();
+    assertSourceSshTarget({ host, user });
     const identity = sourceIdentitySchema.parse({ main_sha: mainSha, run_id: runId });
     const identityFile = await privateInput(options.identityFile);
     const knownHostsFile = await privateInput(options.knownHostsFile);
