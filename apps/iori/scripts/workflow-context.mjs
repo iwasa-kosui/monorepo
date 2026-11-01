@@ -1,7 +1,7 @@
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const recoveryOperations = ['resume-source', 'release-pending-freeze'];
+const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-failed-source'];
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
 export const parseWorkflowInvocation = (env) => {
   const operation = env.IORI_OPERATION;
@@ -35,7 +35,7 @@ export const parseWorkflowInvocation = (env) => {
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
     || (!recoveryOperation && env.IORI_RECOVERY)
-    || (operation === 'release-pending-freeze' && env.IORI_RECOVERY)
+    || (['release-pending-freeze', 'restart-failed-source'].includes(operation) && env.IORI_RECOVERY)
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({
     operation,

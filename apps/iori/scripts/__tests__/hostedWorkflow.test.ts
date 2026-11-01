@@ -57,7 +57,7 @@ it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route']
     }
   },
 );
-it.each(['resume-source', 'release-pending-freeze'])(
+it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source'])(
   'materializes only the source SSH files for %s',
   async operation => {
     const runnerTemp = await createFixtureDirectory('iori-hosted-');
@@ -89,7 +89,7 @@ it('maps the recovery operations to their fixed scripts', async () => {
     const [name, script] of [['resume-source', 'resume-source.mjs'], [
       'release-pending-freeze',
       'release-pending-freeze.mjs',
-    ]]
+    ], ['restart-failed-source', 'restart-failed-source.mjs']]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
     expect((await lstat(new URL(`../${script}`, import.meta.url))).isFile()).toBe(true);
@@ -308,6 +308,42 @@ it('relays only the exact stopped notice to the public log', async () => {
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
 });
+it('relays only the exact restart-failed-source notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE stage=restart-failed-source recorded=1',
+    'IORI_NOTICE stage=restart-failed-source stopped=1',
+    'IORI_NOTICE stage=restart-failed-source started=1',
+  ];
+  await publishChildDiagnostics([
+    ...accepted,
+    ...accepted.map(line => `${line} extra=/home/secret`),
+    ...accepted.map(line => ` ${line}`),
+    ...accepted.map(line => `${line}\r`),
+    'IORI_NOTICE stage=restart-failed-source recorded=0',
+    'IORI_NOTICE stage=restart-failed-source stopped=11',
+    'IORI_NOTICE stage=restart-failed-source restarted=1',
+    'IORI_NOTICE stage=restart-failed-source started',
+    'IORI_NOTICE stage=other recorded=1',
+  ].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the exact restart-precheck notice to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = 'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 queue_failed=1 drained=0';
+  await publishChildDiagnostics([
+    accepted,
+    `${accepted} extra=/home/secret`,
+    ` ${accepted}`,
+    `${accepted}\r`,
+    'IORI_NOTICE stage=restart-precheck ingress_frozen=2 consumer_paused=1 queue_failed=1 drained=0',
+    'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 queue_failed=1',
+    'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 queue_failed=1 drained=10',
+    'IORI_NOTICE stage=restart-precheck ingress_frozen=1 consumer_paused=1 drained=0 queue_failed=1',
+    'IORI_NOTICE stage=other ingress_frozen=1 consumer_paused=1 queue_failed=1 drained=0',
+  ].join('\n'));
+  expect(writes).toEqual([`${accepted}\n`]);
+});
 it('relays the recovery diagnostics reasons within the public vocabulary', async () => {
   const writes = captureStderr();
   const lines = [
@@ -318,6 +354,9 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=pending-identity-mismatch',
     'IORI_DIAG stage=release-verify program=ssh exit=none signal=none reason=release-not-confirmed',
     'IORI_DIAG stage=release-remote program=ssh exit=1 signal=none reason=service-control-not-permitted',
+    'IORI_DIAG stage=restart-precheck program=ssh exit=none signal=none reason=source-queue-not-failed',
+    'IORI_DIAG stage=restart-remote program=ssh exit=1 signal=none reason=restart-already-attempted',
+    'IORI_DIAG stage=restart-verify program=ssh exit=none signal=none reason=restart-not-confirmed',
   ];
   await publishChildDiagnostics(lines.join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));

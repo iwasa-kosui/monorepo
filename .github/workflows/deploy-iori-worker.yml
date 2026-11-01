@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       migration_main_sha:
-        description: Immutable migration SHA (required for resume-source and release-pending-freeze; defaults to main_sha when empty otherwise; for purge-rehearsal-target, the SHA used when rehearse-migration ran)
+        description: Immutable migration SHA (required for resume-source, release-pending-freeze and restart-failed-source; defaults to main_sha when empty otherwise; for purge-rehearsal-target, the SHA used when rehearse-migration ran)
         required: false
         type: string
       operation:
@@ -26,6 +26,7 @@ on:
           - deploy-worker
           - resume-source
           - release-pending-freeze
+          - restart-failed-source
           - reconcile-resources
           - replace-queue-consumer
       environment:
@@ -615,7 +616,7 @@ jobs:
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
 
   recover-source:
-    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze'
+    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze' || inputs.operation == 'restart-failed-source'
     needs: public-artifact-gate
     runs-on: ubuntu-latest
     timeout-minutes: 360
