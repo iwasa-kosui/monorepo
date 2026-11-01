@@ -119,7 +119,8 @@ const journalRules = [
   ],
 ];
 const uncaughtException = /UnhandledPromiseRejection|\bUncaught\b|^\s+at\s+\S/;
-const exitLine = /Main process exited|Failed with result/;
+const failedMainExit = /Main process exited, code=(?:exited, status=[1-9]|killed, status=(?!15\/TERM)|dumped)/;
+const exitLine = new RegExp(`Failed with result|${failedMainExit.source}`);
 const classifyLine = (line) => journalRules.find(([, pattern]) => pattern.test(line))?.[0];
 const classifyRange = (range) => {
   for (let index = range.length - 1; index >= 0; index -= 1) {
@@ -140,7 +141,7 @@ export const analyzeJournal = (text) => {
   lines.forEach((line, index) => {
     const name = classifyLine(line);
     if (name) counts[name] += 1;
-    if (/Main process exited/.test(line)) exits += 1;
+    if (failedMainExit.test(line)) exits += 1;
     if (/Scheduled restart job/.test(line)) scheduledRestarts += 1;
     if (!exitLine.test(line)) return;
     sawExit = true;

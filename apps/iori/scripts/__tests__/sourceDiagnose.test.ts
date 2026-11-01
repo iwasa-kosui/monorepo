@@ -64,6 +64,46 @@ it('reports none without an exit line and other when only the exit lines are pre
   expect(analyzeJournal(`TypeError: x\n    at main (a.js:1:2)\n${restart}`).journal).toBe('none');
   expect(analyzeJournal(`${exited}\n${failed}`).journal).toBe('other');
 });
+const plannedRestart = [
+  'Error: fetch failed',
+  '    at node:internal/deps/undici/undici:1:2',
+  'Stopping microblog.service...',
+  'microblog.service: Main process exited, code=killed, status=15/TERM',
+  'microblog.service: Deactivated successfully.',
+  'Started microblog.service.',
+];
+const addrInUse = 'Error: listen EADDRINUSE: address already in use :::8000';
+it('does not treat a planned restart by SIGTERM as an exit', () => {
+  const result = analyzeJournal(plannedRestart.join('\n'));
+  expect(result.journal).toBe('none');
+  expect(result.exits).toBe(0);
+  expect(result.counts['uncaught-exception']).toBe(0);
+});
+it.each([
+  ['status=15/TERM', 'code=killed, status=15/TERM', 0],
+  ['status=9/KILL', 'code=killed, status=9/KILL', 1],
+  ['status=6/ABRT', 'code=dumped, status=6/ABRT', 1],
+  ['status=1/FAILURE', 'code=exited, status=1/FAILURE', 1],
+  ['status=0/SUCCESS', 'code=exited, status=0/SUCCESS', 0],
+])('counts the main process exit with %s as %i exits', (_label, code, expected) => {
+  const result = analyzeJournal(`    at a (a.js:1:2)\nmicroblog.service: Main process exited, ${code}`);
+  expect(result.exits).toBe(expected);
+  expect(result.counts['uncaught-exception']).toBe(expected);
+});
+it('counts only the crashes of a crash loop that follows a planned restart', () => {
+  const crash = [
+    addrInUse,
+    '    at Server.setupListenHandle (node:net:1:1)',
+    exited,
+    failed,
+    restart,
+    'Started microblog.',
+  ];
+  const result = analyzeJournal([...plannedRestart, ...crash, ...crash].join('\n'));
+  expect(result).toMatchObject({ journal: 'port-in-use', exits: 2, scheduledRestarts: 2 });
+  expect(result.counts['port-in-use']).toBe(2);
+  expect(result.counts['uncaught-exception']).toBe(0);
+});
 it('prefers the most recent specific line in the range over older ones', () => {
   const text = [
     'Error: listen EADDRINUSE: address already in use :::8000',
