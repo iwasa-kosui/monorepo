@@ -17,6 +17,7 @@ export function prepareMigrationTarget(input: {
   };
   preparation: {
     prepareResources(): Promise<Outputs>;
+    assertQueuePaused(): Promise<void>;
     attachSealedConsumer(
       input: { admissionEnvironment: Record<string, string>; zoneId: string; expectedVersionId: string },
     ): Promise<

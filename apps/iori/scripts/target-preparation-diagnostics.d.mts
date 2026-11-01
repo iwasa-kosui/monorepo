@@ -4,3 +4,7 @@ export function controlPlaneApi(path: string): string;
 export function isPreparationReason(reason: unknown): boolean;
 export function withReason(error: unknown, reason: string): Error & { diagnostic: { reason: string } };
 export function preparationFailureLine(stage: unknown, error: unknown, aborted: boolean): string;
+export function planRejectionDetails(
+  issues: readonly { message: string; address?: string; actions?: readonly string[] }[],
+): string[];
+export function preparationDetailLines(stage: unknown, error: unknown): string[];

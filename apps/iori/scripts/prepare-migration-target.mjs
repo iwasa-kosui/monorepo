@@ -8,7 +8,7 @@ import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { expectedTargetFromOutputs } from './migration-target-contract.mjs';
 import { targetSetupConfiguration, transferStorageFromEnvironment } from './migration-target-setup.mjs';
 import { createTargetPreparation } from './prepare-target.mjs';
-import { preparationFailureLine, withReason } from './target-preparation-diagnostics.mjs';
+import { preparationDetailLines, preparationFailureLine, withReason } from './target-preparation-diagnostics.mjs';
 import { writePreparationRecord } from './target-preparation-record.mjs';
 import { assertVapidBeforePreparation } from './vapid-origin-check.mjs';
 const appRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -26,6 +26,8 @@ export const prepareMigrationTarget = async ({ config, preparation, deploy, stor
   if (deployed.workerName !== config.identity.workerName) {
     throw withReason(new Error('Prepared Worker identity mismatch.'), 'identity-mismatch');
   }
+  onStage('deploy-read');
+  await preparation.assertQueuePaused();
   onStage('attach');
   const final = await preparation.attachSealedConsumer({
     admissionEnvironment: config.admissionEnvironment,
@@ -153,7 +155,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   withCliSignal(main).then(() => console.log('Fresh target preparation completed.')).catch((error) => {
     const { message, exitCode } = preparationFailureReport(resourcePreparationStarted);
     try {
-      process.stderr.write(`${preparationFailureLine(preparationStage, error, preparationSignal?.aborted === true)}\n`);
+      const lines = [
+        ...preparationDetailLines(preparationStage, error),
+        preparationFailureLine(preparationStage, error, preparationSignal?.aborted === true),
+      ];
+      process.stderr.write(`${lines.join('\n')}\n`);
     } catch {}
     console.error(message);
     process.exitCode = exitCode;

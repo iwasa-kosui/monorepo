@@ -2,15 +2,17 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertFreshTargetState, createTargetIdentity, validateFreshTargetPlan } from './fresh-target.mjs';
+import { assertFreshTargetState, createTargetIdentity, inspectFreshTargetPlan } from './fresh-target.mjs';
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
-import { validateRouteCutoverPlan } from './route-cutover-plan.mjs';
-import { withReason } from './target-preparation-diagnostics.mjs';
-import { validateCloudflarePlan } from './validate-cloudflare-plan.mjs';
+import { inspectRouteCutoverPlan } from './route-cutover-plan.mjs';
+import { planRejectionDetails, withReason } from './target-preparation-diagnostics.mjs';
+import { inspectCloudflarePlan } from './validate-cloudflare-plan.mjs';
 
 const infra = fileURLToPath(new URL('../infra/cloudflare/', import.meta.url));
-const fail = (reason) => {
-  throw Object.assign(new Error('Target Terraform operation failed.'), { diagnostic: { reason } });
+const fail = (reason, details) => {
+  throw Object.assign(new Error('Target Terraform operation failed.'), {
+    diagnostic: { reason, ...(details ? { details } : {}) },
+  });
 };
 const parsePrivateJson = (source) => {
   try {
@@ -120,13 +122,23 @@ export const createTargetTerraform = (
       '-var=enable_staging_worker_route=false',
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
-    if (validateFreshTargetPlan(plan, identity, stage).length) fail('plan-rejected');
-    if (
-      stage === 'consumer'
-      && (JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
-        || validateCloudflarePlan({ ...plan, operation: 'consumer-replacement', requireWorkerBindingsNoop: true })
-          .length)
-    ) fail('plan-rejected');
+    const freshIssues = inspectFreshTargetPlan(plan, identity, stage);
+    if (freshIssues.length) fail('plan-rejected', planRejectionDetails(freshIssues));
+    if (stage === 'consumer') {
+      const bindingsChanged =
+        JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings);
+      const cloudflareIssues = inspectCloudflarePlan({
+        ...plan,
+        operation: 'consumer-replacement',
+        requireWorkerBindingsNoop: true,
+      });
+      if (bindingsChanged || cloudflareIssues.length) {
+        fail('plan-rejected', [
+          ...(bindingsChanged ? ['plan-bindings-changed'] : []),
+          ...planRejectionDetails(cloudflareIssues),
+        ]);
+      }
+    }
     onStage(`${stagePrefix}tf-apply`);
     await run(['apply', '-input=false', path]);
     const outputs = parsePrivateJson(await run(['output', '-json']));
@@ -173,6 +185,7 @@ export const createTargetTerraform = (
     return result;
   };
   const changeQueuePause = async ({ paused, establishedBindings, routeEnabled }) => {
+    onStage('queue-plan');
     if (typeof paused !== 'boolean' || typeof routeEnabled !== 'boolean' || !establishedBindings) fail('plan-rejected');
     const path = join(privateDirectory, 'queue-control.tfplan');
     await run([
@@ -186,20 +199,24 @@ export const createTargetTerraform = (
       `-var=enable_staging_worker_route=${routeEnabled && identity.environment === 'staging'}`,
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
-    if (
-      JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
-      || validateCloudflarePlan({
-        ...plan,
-        operation: paused ? 'queue-pause' : 'queue-resume',
-        requireWorkerBindingsNoop: true,
-      }).length
-    ) fail('plan-rejected');
+    const bindingsChanged =
+      JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings);
+    const issues = inspectCloudflarePlan({
+      ...plan,
+      operation: paused ? 'queue-pause' : 'queue-resume',
+      requireWorkerBindingsNoop: true,
+    });
+    if (bindingsChanged || issues.length) {
+      fail('plan-rejected', [...(bindingsChanged ? ['plan-bindings-changed'] : []), ...planRejectionDetails(issues)]);
+    }
+    onStage('queue-apply');
     await run(['apply', '-input=false', path]);
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
   const initializeEstablished = () => initializeExisting(true);
   const initializeActive = () => initializeExisting(false);
   const changeRoute = async ({ establishedBindings }) => {
+    onStage('route-plan');
     if (!establishedBindings) fail('plan-rejected');
     const path = join(privateDirectory, 'route-control.tfplan');
     await run([
@@ -213,10 +230,13 @@ export const createTargetTerraform = (
       `-var=enable_staging_worker_route=${identity.environment === 'staging'}`,
     ]);
     const plan = parsePrivateJson(await run(['show', '-json', path]));
-    if (
-      JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings)
-      || validateRouteCutoverPlan(plan, { hostname, workerName: identity.workerName, zoneId }).length
-    ) fail('plan-rejected');
+    const bindingsChanged =
+      JSON.stringify(plan.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings);
+    const issues = inspectRouteCutoverPlan(plan, { hostname, workerName: identity.workerName, zoneId });
+    if (bindingsChanged || issues.length) {
+      fail('plan-rejected', [...(bindingsChanged ? ['plan-bindings-changed'] : []), ...planRejectionDetails(issues)]);
+    }
+    onStage('route-apply');
     await run(['apply', '-input=false', path]);
     return { applied: true };
   };

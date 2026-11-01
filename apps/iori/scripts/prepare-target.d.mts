@@ -24,6 +24,7 @@ export function createTargetPreparation(
       summary: { freshGeneration: true; storageResources: 4; queues: 2; queuePaused: true; consumerCount: 0 };
     }
   >;
+  assertQueuePaused(): Promise<void>;
   attachSealedConsumer(
     input: { admissionEnvironment: Record<string, string>; zoneId: string; expectedVersionId: string },
   ): Promise<

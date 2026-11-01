@@ -44,14 +44,15 @@ const contains = (actual, expected) =>
   Object.entries(expected).every(([key, value]) =>
     value !== null && typeof value === 'object' ? contains(actual?.[key], value) : actual?.[key] === value
   );
-export const validateFreshTargetPlan = (plan, identity, stage) => {
+export const inspectFreshTargetPlan = (plan, identity, stage) => {
   if (!['resources', 'consumer'].includes(stage) || !Array.isArray(plan.resource_changes)) {
-    return ['Invalid preparation plan'];
+    return [{ message: 'Invalid preparation plan' }];
   }
   const resources = expectedResources(identity);
   return plan.resource_changes.flatMap(({ address, change }) => {
+    const issue = (message) => [{ message, address, actions: change?.actions }];
     if (!change || change.importing || change.generated_config || change.actions?.length !== 1) {
-      return ['Invalid preparation change'];
+      return issue('Invalid preparation change');
     }
     if (stage === 'consumer' && address === 'cloudflare_queue_consumer.fedify[0]') {
       return change.actions[0] === 'create' && change.before === null && contains(change.after, {
@@ -64,19 +65,21 @@ export const validateFreshTargetPlan = (plan, identity, stage) => {
         })
           && typeof change.after?.queue_id === 'string'
         ? []
-        : ['Invalid consumer creation'];
+        : issue('Invalid consumer creation');
     }
     const expected = resources[address];
     if (!expected || !contains(change.after, { ...expected, account_id: identity.accountId })) {
-      return ['Unexpected preparation resource'];
+      return issue('Unexpected preparation resource');
     }
     if (change.actions[0] === 'no-op') {
       return JSON.stringify(change.before) === JSON.stringify(change.after)
         ? []
-        : ['Changed no-op resource'];
+        : issue('Changed no-op resource');
     }
     return stage === 'resources' && change.actions[0] === 'create' && change.before === null
       ? []
-      : ['Preparation permits fresh creates only'];
+      : issue('Preparation permits fresh creates only');
   });
 };
+export const validateFreshTargetPlan = (plan, identity, stage) =>
+  inspectFreshTargetPlan(plan, identity, stage).map((issue) => issue.message);

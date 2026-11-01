@@ -1,16 +1,25 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import { validateCloudflarePlan } from './validate-cloudflare-plan.mjs';
-export const validateRouteCutoverPlan = (plan, { hostname, workerName, zoneId }) => {
-  const issues = validateCloudflarePlan({
+import { inspectCloudflarePlan } from './validate-cloudflare-plan.mjs';
+export const validateRouteCutoverPlan = (plan, expected) =>
+  inspectRouteCutoverPlan(plan, expected).map(issue => issue.message);
+export const inspectRouteCutoverPlan = (plan, { hostname, workerName, zoneId }) => {
+  const issues = [...inspectCloudflarePlan({
     ...plan,
     operation: 'route-cutover',
     allowProductionRoute: true,
     requireWorkerBindingsNoop: true,
-  });
+  })];
   const changes = plan.resource_changes;
-  if (!Array.isArray(changes)) return [...issues, 'Route state is required'];
-  if (changes.some(item => item.change?.importing)) issues.push('Route preparation must not import resources');
+  if (!Array.isArray(changes)) return [...issues, { message: 'Route state is required' }];
+  const imported = changes.find(item => item.change?.importing);
+  if (imported) {
+    issues.push({
+      message: 'Route preparation must not import resources',
+      address: imported.address,
+      actions: imported.change.actions,
+    });
+  }
   const routes = changes.filter(item =>
     item.address.startsWith('cloudflare_workers_route.') || item.address.startsWith('cloudflare_worker_route.')
   );
@@ -23,13 +32,19 @@ export const validateRouteCutoverPlan = (plan, { hostname, workerName, zoneId })
     || route.change.after?.zone_id !== zoneId || route.change.after?.pattern !== `${hostname}/*`
     || route.change.after?.script !== workerName
     || ['zone_id', 'pattern', 'script'].some(key => route.change.after_unknown?.[key] === true)
-  ) issues.push('Only the selected route may be prepared');
+  ) {
+    issues.push({
+      message: 'Only the selected route may be prepared',
+      ...(routes.length === 1 ? { address: route.address, actions: route.change.actions } : {}),
+    });
+  }
   for (const name of ['fedify', 'fedify_dlq']) {
-    const queue = changes.find(item => item.address === `cloudflare_queue.${name}`)?.change;
+    const address = `cloudflare_queue.${name}`;
+    const queue = changes.find(item => item.address === address)?.change;
     if (
       !queue || queue.actions?.length !== 1 || queue.actions[0] !== 'no-op' || queue.importing
       || queue.after?.settings?.delivery_paused !== true || !isDeepStrictEqual(queue.before, queue.after)
-    ) issues.push('Queues must remain paused');
+    ) issues.push({ message: 'Queues must remain paused', address, ...(queue ? { actions: queue.actions } : {}) });
   }
   return issues;
 };

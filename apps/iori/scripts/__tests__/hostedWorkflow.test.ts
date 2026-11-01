@@ -271,6 +271,20 @@ it('relays the fixed-vocabulary prepare-target diagnostics to the public log', a
   ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
+it('relays the plan rejection detail lines before the plan-rejected line of prepare-target', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-queue-update',
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-bindings-changed',
+    'IORI_DIAG stage=prepare-deploy-read program=none exit=none signal=none reason=queue-not-paused',
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-rejected',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-Queue_update',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
 it('relays only the exact configuration owner notice to the public log', async () => {
   const writes = captureStderr();
   const accepted = 'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002';
@@ -684,6 +698,47 @@ it('reports the real prepare-migration-target CLI that stops before resources as
       'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
     ]);
     expect(hostedFailureMessage(error)).toBe(stoppedMessage);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+it('relays the fixed-vocabulary cutover detail and stage lines to the public log', async () => {
+  const writes = captureStderr();
+  const lines = [
+    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-queue-update',
+    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-bindings-changed',
+    'IORI_DIAG stage=cutover-queue-plan program=none exit=none signal=none reason=plan-dlq-update',
+    'IORI_DIAG stage=cutover-queue-plan program=none exit=none signal=none reason=plan-rejected',
+    'IORI_DIAG stage=cutover-gate-smoke program=none exit=none signal=none reason=source-not-quiescent',
+    'IORI_DIAG stage=cutover-smoke-canonical program=none exit=none signal=none reason=smoke-failed',
+  ];
+  await publishChildDiagnostics([
+    ...lines,
+    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-Queue_update',
+    'IORI_DIAG stage=cutover-Route-plan program=none exit=none signal=none reason=plan-rejected',
+  ].join('\n'));
+  expect(writes).toEqual(lines.map(line => `${line}\n`));
+});
+it('publishes the stage and reason of the real cutover-migration CLI that stops at its inputs', async () => {
+  const writes = captureStderr();
+  const directory = await createFixtureDirectory('iori-hosted-');
+  try {
+    const logs = join(directory, 'logs');
+    await mkdir(logs, { mode: 0o700 });
+    const error = await executeHostedOperation(
+      'operation',
+      fileURLToPath(new URL('../cutover-migration.mjs', import.meta.url)),
+      { IORI_PRIVATE_LOG_DIRECTORY: logs },
+      new AbortController().signal,
+      60_000,
+      'cutover-route',
+    ).then(() => undefined, (reason: unknown) => reason);
+    expect(error).toBeInstanceOf(Error);
+    expect(writes).toEqual([
+      'IORI_DIAG stage=cutover-inputs program=none exit=none signal=none reason=config-invalid\n',
+      'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
+    ]);
+    expect(hostedFailureMessage(error)).toBe(failedMessage);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

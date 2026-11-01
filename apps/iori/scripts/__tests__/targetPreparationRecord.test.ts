@@ -62,6 +62,7 @@ it('publishes after resources, sealed deployment and paused consumer readback on
       calls.push('resources');
       return outputs;
     }),
+    assertQueuePaused: vi.fn(async () => {}),
     attachSealedConsumer: vi.fn(async () => {
       calls.push('consumer');
       return {
@@ -101,11 +102,12 @@ const stagedFixture = () => {
   let body: Buffer = Buffer.alloc(0);
   const preparation = {
     prepareResources: async () => outputs,
-    attachSealedConsumer: async () => ({
+    assertQueuePaused: async () => {},
+    attachSealedConsumer: vi.fn(async () => ({
       ...outputs,
       resources: { consumerId: 'consumer', queuePaused: true },
       worker: { versionId: 'version', mode: 'sealed', previewsEnabled: false, routeCount: 0 },
-    }),
+    })),
   };
   const storage = {
     assertPrivate: async () => {
@@ -125,7 +127,7 @@ it('reports the deploy, attach, readback and record stages in order', async () =
   const { config, preparation, storage, onStage, calls } = stagedFixture();
   const deploy = async () => ({ workerName: config.identity.workerName, versionId: 'version' });
   await prepareMigrationTarget({ config, preparation, deploy, storage, onStage });
-  expect(calls).toEqual(['deploy', 'attach', 'readback', 'record', 'privacy']);
+  expect(calls).toEqual(['deploy', 'deploy-read', 'attach', 'readback', 'record', 'privacy']);
 });
 it('classifies a Worker name mismatch as identity-mismatch before attaching', async () => {
   const { config, preparation, storage, onStage, calls } = stagedFixture();
@@ -136,6 +138,16 @@ it('classifies a Worker name mismatch as identity-mismatch before attaching', as
   });
   expect(calls).toEqual(['deploy']);
 });
+it('does not attach when the Queue is not paused after deployment', async () => {
+  const { config, preparation, storage, onStage, calls } = stagedFixture();
+  const deploy = async () => ({ workerName: config.identity.workerName, versionId: 'version' });
+  const reason = Object.assign(new Error('x'), { diagnostic: { reason: 'queue-not-paused' } });
+  const stopped = { ...preparation, assertQueuePaused: vi.fn(async () => Promise.reject(reason)) };
+  await expect(prepareMigrationTarget({ config, preparation: stopped, deploy, storage, onStage })).rejects.toBe(reason);
+  expect(calls).toEqual(['deploy', 'deploy-read']);
+  expect(preparation.attachSealedConsumer).not.toHaveBeenCalled();
+  expect(stopped.attachSealedConsumer).not.toHaveBeenCalled();
+});
 it('classifies a readback mismatch as mismatch at the readback stage', async () => {
   const { config, preparation, storage, onStage, calls } = stagedFixture();
   const deploy = async () => ({ workerName: config.identity.workerName, versionId: 'other-version' });
@@ -143,7 +155,7 @@ it('classifies a readback mismatch as mismatch at the readback stage', async () 
     message: 'Prepared target readback mismatch.',
     diagnostic: { reason: 'mismatch' },
   });
-  expect(calls).toEqual(['deploy', 'attach', 'readback']);
+  expect(calls).toEqual(['deploy', 'deploy-read', 'attach', 'readback']);
   const broken = { ...preparation, attachSealedConsumer: async () => ({ resources: {}, worker: {} }) } as never;
   await expect(prepareMigrationTarget({ config, preparation: broken, deploy, storage, onStage })).rejects.toMatchObject(
     {

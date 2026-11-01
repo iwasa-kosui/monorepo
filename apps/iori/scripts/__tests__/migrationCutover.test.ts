@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   worker: vi.fn(),
   transition: vi.fn(),
   smoke: vi.fn(),
+  terraformArgs: undefined as { onStage: (stage: string) => void } | undefined,
 }));
 vi.mock('../restore-and-verify-migration.mjs', () => ({ restoreAndVerifyMigration: mocks.restore }));
 vi.mock('../migration-target-setup.mjs', () => ({ targetSetupConfiguration: mocks.setup }));
@@ -23,11 +24,14 @@ vi.mock('../source-control-ssh.mjs', () => ({ createSourceSshAdapter: async () =
 vi.mock(
   '../target-terraform.mjs',
   () => ({
-    createTargetTerraform: () => ({
-      initializeEstablished: mocks.established,
-      changeRoute: mocks.route,
-      changeQueuePause: mocks.queue,
-    }),
+    createTargetTerraform: (args: { onStage: (stage: string) => void }) => {
+      mocks.terraformArgs = args;
+      return {
+        initializeEstablished: mocks.established,
+        changeRoute: mocks.route,
+        changeQueuePause: mocks.queue,
+      };
+    },
   }),
 );
 vi.mock(
@@ -44,9 +48,11 @@ vi.mock(
 vi.mock('../transition-worker-admission.mjs', () => ({ transitionWorkerAdmission: mocks.transition }));
 vi.mock('../reviewed-smoke.mjs', () => ({ smokeReviewedTarget: mocks.smoke }));
 const calls: string[] = [];
+const stages: string[] = [];
 beforeEach(() => {
   vi.resetAllMocks();
   calls.length = 0;
+  stages.length = 0;
   const { config, outputs, target } = targetOutputsFixture();
   mocks.setup.mockReturnValue(config);
   mocks.restore.mockImplementation(async () => {
@@ -75,9 +81,13 @@ beforeEach(() => {
     return { versionId: `${input.mode}-version` };
   });
   mocks.route.mockImplementation(async () => {
+    mocks.terraformArgs!.onStage('route-plan');
+    mocks.terraformArgs!.onStage('route-apply');
     calls.push('route');
   });
   mocks.queue.mockImplementation(async () => {
+    mocks.terraformArgs!.onStage('queue-plan');
+    mocks.terraformArgs!.onStage('queue-apply');
     calls.push('resume-Queue-last');
   });
   mocks.smoke.mockImplementation(async () => {
@@ -90,7 +100,8 @@ const invoke = () =>
     env: { IORI_PRIVATE_DIRECTORY: '/fixture' },
     startedAt: Date.now(),
     signal: new AbortController().signal,
-  });
+  }, { onStage: stage => stages.push(stage) });
+const rejection = () => invoke().then(() => undefined, (error: unknown) => error);
 it('freshly verifies in the same invocation and retains the exact version chain through Queue-last', async () => {
   await invoke();
   expect(calls).toEqual([
@@ -111,23 +122,110 @@ it('freshly verifies in the same invocation and retains the exact version chain 
   });
   expect(mocks.worker).toHaveBeenCalledWith(expect.objectContaining({ expectedVersionId: 'active-version' }));
 });
-it.each(['verify', 'source', 'smoke', 'route', 'active'])(
-  'stops %s failure without Queue resume or rollback',
-  async failure => {
-    if (failure === 'verify') mocks.restore.mockRejectedValueOnce(new Error('fixture'));
-    if (failure === 'source') mocks.status.mockResolvedValueOnce({});
-    if (failure === 'smoke') mocks.smoke.mockRejectedValueOnce(new Error('fixture'));
-    if (failure === 'route') mocks.route.mockRejectedValueOnce(new Error('fixture'));
-    if (failure === 'active') {
-      mocks.transition.mockResolvedValueOnce({ versionId: 'smoke-version' }).mockRejectedValueOnce(
-        new Error('fixture'),
-      );
-    }
-    await expect(invoke()).rejects.toThrow();
-    expect(mocks.queue).not.toHaveBeenCalled();
-    expect(mocks.transition.mock.calls.length).toBeLessThanOrEqual(2);
-  },
-);
+it('reports every cutover stage in order', async () => {
+  await invoke();
+  expect(stages).toEqual([
+    'inputs',
+    'main-check',
+    'restore',
+    'tf-init',
+    'target-check',
+    'source',
+    'gate-smoke',
+    'to-smoke',
+    'smoke-worker',
+    'gate-route',
+    'read-smoke',
+    'route-plan',
+    'route-apply',
+    'read-route',
+    'smoke-canonical',
+    'gate-active',
+    'to-active',
+    'gate-queue',
+    'read-active',
+    'queue-plan',
+    'queue-apply',
+    'read-resume',
+    'smoke-final',
+  ]);
+  expect(mocks.terraformArgs!.onStage).toBeTypeOf('function');
+});
+it.each([
+  ['verify', 'restore'],
+  ['source', 'gate-smoke'],
+  ['smoke', 'smoke-worker'],
+  ['route', 'route-plan'],
+  ['active', 'to-active'],
+])('stops %s failure without Queue resume or rollback and records the failed stage', async (failure, stage) => {
+  if (failure === 'verify') mocks.restore.mockRejectedValueOnce(new Error('fixture'));
+  if (failure === 'source') mocks.status.mockResolvedValueOnce({});
+  if (failure === 'smoke') mocks.smoke.mockRejectedValueOnce(new Error('fixture'));
+  if (failure === 'route') {
+    mocks.route.mockImplementationOnce(async () => {
+      mocks.terraformArgs!.onStage('route-plan');
+      throw new Error('fixture');
+    });
+  }
+  if (failure === 'active') {
+    mocks.transition.mockResolvedValueOnce({ versionId: 'smoke-version' }).mockRejectedValueOnce(
+      new Error('fixture'),
+    );
+  }
+  await expect(invoke()).rejects.toThrow();
+  expect(stages.at(-1)).toBe(stage);
+  expect(mocks.queue).not.toHaveBeenCalled();
+  expect(mocks.transition.mock.calls.length).toBeLessThanOrEqual(2);
+});
+it('marks a consumer that differs from the prepared target as mismatch at the gate', async () => {
+  mocks.active.mockResolvedValueOnce({ consumerId: 'other' });
+  expect(await rejection()).toMatchObject({
+    message: 'Cutover consumer mismatch.',
+    diagnostic: { reason: 'mismatch' },
+  });
+  expect(stages.at(-1)).toBe('gate-smoke');
+});
+it('marks a source that is not drained as source-not-quiescent at the gate', async () => {
+  const { config } = targetOutputsFixture();
+  mocks.status.mockResolvedValueOnce({
+    source_revision: config.mainSha,
+    identity: { main_sha: config.mainSha, run_id: config.runId },
+    ingress_frozen: true,
+    consumer_paused: true,
+    queue_failed: false,
+    drained: false,
+    http_inflight: 0,
+    queue_depth: 1,
+    dequeue_work: 0,
+    enqueue_work: 0,
+  });
+  expect(await rejection()).toMatchObject({
+    message: 'Source quiescence is unavailable.',
+    diagnostic: { reason: 'source-not-quiescent' },
+  });
+  expect(stages.at(-1)).toBe('gate-smoke');
+});
+it('marks a target that differs from the prepared record as mismatch', async () => {
+  const original = mocks.restore.getMockImplementation()!;
+  mocks.restore.mockImplementationOnce(async (...args) => {
+    const result = await original(...args);
+    return { ...result, target: { ...result.target, generation: 'other' } };
+  });
+  expect(await rejection()).toMatchObject({
+    message: 'Cutover target mismatch.',
+    diagnostic: { reason: 'mismatch' },
+  });
+  expect(stages.at(-1)).toBe('target-check');
+});
+it('marks an activated Queue consumer that differs from the prepared target as mismatch', async () => {
+  for (let gate = 0; gate < 4; gate += 1) mocks.active.mockResolvedValueOnce({ consumerId: 'consumer' });
+  mocks.active.mockResolvedValueOnce({ consumerId: 'other' });
+  expect(await rejection()).toMatchObject({
+    message: 'Activated consumer mismatch.',
+    diagnostic: { reason: 'mismatch' },
+  });
+  expect(stages.at(-1)).toBe('read-resume');
+});
 it('does not allocate all job time to restoration or restart the first-step clock', async () => {
   await expect(
     cutoverMigration({ env: {}, startedAt: Date.now() - 331 * 60_000, signal: new AbortController().signal }),

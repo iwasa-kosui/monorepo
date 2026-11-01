@@ -45,5 +45,9 @@ export const createTargetPreparation = (options) => {
     resources = await control.readResources({ ...resources, consumerAttached: true });
     return { ...outputs, resources, worker, summary: { queuePaused: true, consumerCount: 1, sealedWorker: true } };
   };
-  return Object.freeze({ prepareResources, attachSealedConsumer });
+  const assertQueuePaused = async () => {
+    if (!resources || !outputs) throw new Error('Target resources have not been established.');
+    await control.readQueuePause({ queueId: resources.queueId, paused: true });
+  };
+  return Object.freeze({ prepareResources, attachSealedConsumer, assertQueuePaused });
 };
