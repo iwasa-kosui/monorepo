@@ -36,6 +36,7 @@ it('pins the operation stage vocabulary', () => {
     'rehearse-migration',
     'migrate-data',
     'deploy-worker-before',
+    'deploy-worker-migrate',
     'deploy-worker-deploy',
     'deploy-worker-after',
   ]);
@@ -277,6 +278,76 @@ it('prints deploy-failed for a real deployment that the command reports as faile
   expect(operationFailureLines('deploy-worker-deploy', failure)).toEqual([
     operationLine('deploy-worker-deploy', 'deploy-failed'),
   ]);
+});
+describe('a real deployment with D1 migrations', () => {
+  const admissionEnvironment = {
+    IORI_ADMISSION_MODE: 'active',
+    IORI_ADMISSION_IDENTITY: 'fixture-identity',
+    ORIGIN: 'https://staging.test',
+  };
+  const deployInput = async (runCommand: unknown, onStage: (stage: string) => void) => {
+    const path = join(await mkdtemp(join(tmpdir(), 'operation-d1-migrate-')), 'wrangler.json');
+    await writeFile(
+      path,
+      JSON.stringify({
+        name: identity.workerName,
+        vars: admissionEnvironment,
+        d1_databases: [{ binding: 'DB', database_id: 'db' }],
+        kv_namespaces: [{ id: 'kv' }],
+        r2_buckets: [{ bucket_name: identity.names.uploads }],
+        queues: { producers: [{ queue: identity.names.queue }] },
+      }),
+    );
+    mocks.config.mockResolvedValue({ path, cleanup: vi.fn() });
+    return {
+      path,
+      input: {
+        identity,
+        resources: { d1Id: 'db', kvId: 'kv', queueId: 'queue' } as never,
+        admissionEnvironment,
+        mode: 'active' as const,
+        signal: new AbortController().signal,
+        runCommand: runCommand as never,
+        migrateD1: true,
+        onStage,
+      },
+    };
+  };
+  it('applies the D1 migrations to the binding before it deploys with the same config', async () => {
+    const calls: string[][] = [];
+    const runCommand = vi.fn(async (_program: string, args: string[], options: { env: Record<string, string> }) => {
+      calls.push(args);
+      if (args[2] === 'deploy') {
+        await writeFile(
+          options.env.WRANGLER_OUTPUT_FILE_PATH!,
+          `${JSON.stringify({ type: 'deploy', version: 1, worker_name: identity.workerName, version_id: 'next' })}\n`,
+        );
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+    const stages: string[] = [];
+    const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
+    expect(calls).toEqual([
+      ['exec', 'wrangler', 'd1', 'migrations', 'apply', 'DB', '--remote', '--config', path],
+      ['exec', 'wrangler', 'deploy', '--config', path, '--minify'],
+    ]);
+    expect(stages).toEqual(['deploy-worker-migrate', 'deploy-worker-deploy']);
+  });
+  it.each([
+    ['reports a failed exit status', async () => ({ status: 1, stdout: 'private diagnostic', stderr: '' })],
+    ['rejects', async () => Promise.reject(new Error('Migration command failed; outcome may be uncertain.'))],
+  ])('does not deploy and prints command-failed at deploy-worker-migrate when the migration %s', async (_name, run) => {
+    const runCommand = vi.fn(run);
+    const stages: string[] = [];
+    const { input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['deploy-worker-migrate']);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'command-failed'),
+    ]);
+  });
 });
 it('prints config-invalid for the configuration messages of the four operation scripts', () => {
   for (

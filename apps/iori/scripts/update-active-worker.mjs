@@ -55,6 +55,8 @@ export const updateActiveWorker = async (
     mode: 'active',
     signal,
     runCommand,
+    migrateD1: true,
+    onStage,
   });
   onStage('deploy-worker-after');
   const after = await control.readActiveResources(ids);

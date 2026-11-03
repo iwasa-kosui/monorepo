@@ -4,9 +4,19 @@ import { join } from 'node:path';
 
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { readPrivateBounded } from './migration-file-stream.mjs';
+import { withReason } from './target-preparation-diagnostics.mjs';
 import { createDeploymentWorkerConfig } from './temporary-worker-config.mjs';
 export const deployReviewedWorkerVersion = async (
-  { identity, resources, admissionEnvironment, mode, signal, runCommand = runInfrastructureCommand },
+  {
+    identity,
+    resources,
+    admissionEnvironment,
+    mode,
+    signal,
+    runCommand = runInfrastructureCommand,
+    migrateD1 = false,
+    onStage = () => {},
+  },
 ) => {
   if (!['sealed', 'smoke', 'active'].includes(mode)) throw new Error('Invalid Worker mode.');
   signal.throwIfAborted();
@@ -14,6 +24,7 @@ export const deployReviewedWorkerVersion = async (
   const directory = await mkdtemp(join(await realpath(tmpdir()), 'iori-admission-'));
   const outputPath = join(directory, 'deployment.ndjson');
   await writeFile(outputPath, '', { mode: 0o600 });
+  let migrationFailure;
   try {
     const rendered = JSON.parse(await readFile(config.path, 'utf8'));
     if (
@@ -26,6 +37,50 @@ export const deployReviewedWorkerVersion = async (
       || rendered.queues?.producers?.[0]?.queue !== identity.names.queue
     ) throw new Error('Admission configuration mismatch.');
     signal.throwIfAborted();
+    if (migrateD1) {
+      onStage('deploy-worker-migrate');
+      let migration;
+      try {
+        migration = await runCommand('pnpm', [
+          'exec',
+          'wrangler',
+          'd1',
+          'migrations',
+          'apply',
+          'DB',
+          '--remote',
+          '--config',
+          config.path,
+        ], {
+          signal,
+          cwd: new URL('..', import.meta.url).pathname,
+          shell: false,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            WRANGLER_LOG_PATH: join(directory, 'wrangler-d1-migrate.log'),
+            WRANGLER_SEND_METRICS: 'false',
+          },
+        });
+      } catch {
+        migrationFailure = withReason(new Error('D1 migration failed; retain current state.'), 'command-failed');
+        throw migrationFailure;
+      }
+      await writeFile(
+        join(directory, 'd1-migrate-diagnostic.txt'),
+        `${migration.stdout ?? ''}\n${migration.stderr ?? ''}`,
+        {
+          mode: 0o600,
+        },
+      );
+      signal.throwIfAborted();
+      if (migration.status !== 0) {
+        migrationFailure = withReason(new Error('D1 migration failed; retain current state.'), 'command-failed');
+        throw migrationFailure;
+      }
+      onStage('deploy-worker-deploy');
+    }
     const result = await runCommand('pnpm', ['exec', 'wrangler', 'deploy', '--config', config.path, '--minify'], {
       signal,
       cwd: new URL('..', import.meta.url).pathname,
@@ -53,7 +108,8 @@ export const deployReviewedWorkerVersion = async (
       throw new Error('Admission version evidence unavailable.');
     }
     return deployed.version_id;
-  } catch {
+  } catch (error) {
+    if (error === migrationFailure) throw error;
     throw new Error('Reviewed Worker deployment failed; retain current state.');
   } finally {
     await config.cleanup();

@@ -65,6 +65,7 @@ it('keeps immutable migration identity while recording a different reviewed code
     expect.objectContaining({
       mode: 'active',
       admissionEnvironment: expect.objectContaining({ IORI_ADMISSION_MODE: 'active' }),
+      migrateD1: true,
     }),
   );
   expect(input.checkMain).toHaveBeenCalledTimes(2);
@@ -102,6 +103,23 @@ it.each([
   let stage = 'deploy-worker-before';
   await expect(updateActiveWorker({ ...options(), onStage: next => (stage = next) })).rejects.toThrow();
   expect(stage).toBe(expected);
+});
+it('reports the D1 migration stage and does not read the Worker after the migration fails', async () => {
+  mocks.deploy.mockImplementationOnce(async ({ onStage }: { onStage: (stage: string) => void }) => {
+    onStage('deploy-worker-migrate');
+    throw Object.assign(new Error('D1 migration failed; retain current state.'), {
+      diagnostic: { reason: 'command-failed' },
+    });
+  });
+  let stage = 'deploy-worker-before';
+  const failure = await updateActiveWorker({ ...options(), onStage: next => (stage = next) }).catch(
+    (error: unknown) => error,
+  );
+  expect(stage).toBe('deploy-worker-migrate');
+  expect(operationFailureLines(stage, failure)).toEqual([
+    'IORI_DIAG stage=deploy-worker-migrate program=none exit=none signal=none reason=command-failed',
+  ]);
+  expect(mocks.read).toHaveBeenCalledTimes(1);
 });
 it('does not require onStage', async () => {
   await expect(updateActiveWorker(options())).resolves.toMatchObject({ versionId: 'next' });

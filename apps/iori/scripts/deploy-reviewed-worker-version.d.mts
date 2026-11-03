@@ -8,5 +8,7 @@ export function deployReviewedWorkerVersion(
     mode: 'sealed' | 'smoke' | 'active';
     signal: AbortSignal;
     runCommand?: InfrastructureCommand;
+    migrateD1?: boolean;
+    onStage?: (stage: string) => void;
   },
 ): Promise<string>;
