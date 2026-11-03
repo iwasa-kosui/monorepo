@@ -3,7 +3,8 @@ import { useCallback, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import { withFavourited, withReblogged } from '../api/status.ts';
+import { failureMessage, favourite, reblog, unfavourite, unreblog } from '../api/mastodonClient.ts';
+import { withReblogged, withUpdatedStatus } from '../api/status.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -60,14 +61,9 @@ export const usePostActions = ({
     async (postId: string) => {
       setLikingPostId(postId);
       try {
-        const res = await client.v1.like.$post({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          updateTimelineItem(postId, (status) => withFavourited(status, true));
-          updateThreadPost?.(postId, (status) => withFavourited(status, true));
-        } else if ('error' in result) {
-          console.error('Failed to like:', result.error);
-        }
+        const updated = await favourite(postId);
+        updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
       } catch (error) {
         console.error('Failed to like:', error);
       } finally {
@@ -81,18 +77,12 @@ export const usePostActions = ({
     async (postId: string) => {
       setUndoingLikePostId(postId);
       try {
-        const res = await client.v1.like.$delete({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          updateTimelineItem(postId, (status) => withFavourited(status, false));
-          updateThreadPost?.(postId, (status) => withFavourited(status, false));
-        } else if ('error' in result) {
-          console.error('Failed to undo like:', result.error);
-          alert(`Failed to undo like: ${result.error}`);
-        }
+        const updated = await unfavourite(postId);
+        updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
       } catch (error) {
         console.error('Failed to undo like:', error);
-        alert('Failed to undo like. Please try again.');
+        alert(failureMessage('undo like', error));
       } finally {
         setUndoingLikePostId(null);
       }
@@ -104,18 +94,16 @@ export const usePostActions = ({
     async (postId: string) => {
       setRepostingPostId(postId);
       try {
-        const res = await client.v1.repost.$post({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          await refreshTimeline();
-          updateThreadPost?.(postId, (status) => withReblogged(status, true));
-        } else if ('error' in result) {
-          console.error('Failed to repost:', result.error);
-          alert(`Failed to repost: ${result.error}`);
-        }
+        const boost = await reblog(postId);
+        await refreshTimeline();
+        const original = boost.reblog;
+        updateThreadPost?.(
+          postId,
+          (status) => original === null ? withReblogged(status, true) : withUpdatedStatus(status, original),
+        );
       } catch (error) {
         console.error('Failed to repost:', error);
-        alert('Failed to repost. Please try again.');
+        alert(failureMessage('repost', error));
       } finally {
         setRepostingPostId(null);
       }
@@ -130,18 +118,12 @@ export const usePostActions = ({
       }
       setUndoingRepostPostId(postId);
       try {
-        const res = await client.v1.repost.$delete({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          await refreshTimeline();
-          updateThreadPost?.(postId, (status) => withReblogged(status, false));
-        } else if ('error' in result) {
-          console.error('Failed to undo repost:', result.error);
-          alert(`Failed to undo repost: ${result.error}`);
-        }
+        const original = await unreblog(postId);
+        await refreshTimeline();
+        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, original));
       } catch (error) {
         console.error('Failed to undo repost:', error);
-        alert('Failed to undo repost. Please try again.');
+        alert(failureMessage('undo repost', error));
       } finally {
         setUndoingRepostPostId(null);
       }

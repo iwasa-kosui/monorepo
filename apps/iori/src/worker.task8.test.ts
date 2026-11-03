@@ -52,7 +52,6 @@ const runtime = vi.hoisted(() => ({
     signUpUseCase: {},
     sendReplyUseCase: {},
     deletePostUseCase: {},
-    sendFollowRequestUseCase: {},
     subscribePushUseCase: {},
     unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',

@@ -11,22 +11,14 @@ const createDeps = () => ({
   signUpUseCase: { run: vi.fn(async () => RA.ok({ user: { username: 'newuser' } })) },
   sendReplyUseCase: { run: vi.fn() },
   deletePostUseCase: { run: vi.fn() },
-  sendFollowRequestUseCase: { run: vi.fn() },
   subscribePushUseCase: { run: vi.fn() },
   unsubscribePushUseCase: { run: vi.fn() },
-  uploads: {
-    put: vi.fn(async (input) => ({
-      key: `post-images/${input.imageId}/original`,
-      url: `/uploads/${input.imageId}.png`,
-    })),
-    get: vi.fn(),
-  },
   vapidPublicKey: 'public-key',
   createContext: vi.fn(() => ({})),
 });
 
 describe('createWorkerCoreApiRouter', () => {
-  it('mounts the remaining Worker API contracts and no longer serves the replaced post listings', async () => {
+  it('mounts the remaining Worker API contracts and no longer serves the replaced follow and post listings', async () => {
     const deps = createDeps();
     const app = createIoriApp({
       federationMiddleware: undefined,
@@ -59,7 +51,7 @@ describe('createWorkerCoreApiRouter', () => {
       200,
       400,
       401,
-      400,
+      404,
       404,
       404,
       200,
@@ -67,7 +59,7 @@ describe('createWorkerCoreApiRouter', () => {
     ]);
   });
 
-  it('stores uploads in R2 with their actual content type', async () => {
+  it('no longer serves the replaced upload endpoint', async () => {
     const deps = createDeps();
     const app = createIoriApp({
       federationMiddleware: undefined,
@@ -85,13 +77,6 @@ describe('createWorkerCoreApiRouter', () => {
       body: form,
     });
 
-    expect(response.status).toBe(200);
-    expect(deps.uploads.put).toHaveBeenCalledWith(expect.objectContaining({
-      contentType: 'image/png',
-      contentLength: 3,
-    }));
-    await expect(response.json()).resolves.toMatchObject({
-      url: expect.stringMatching(/^\/uploads\/[0-9a-f-]+\.png$/),
-    });
+    expect(response.status).toBe(404);
   });
 });

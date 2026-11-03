@@ -1,6 +1,9 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { follow, isMastodonApiError, searchAccount } from '../api/mastodonClient.ts';
+import { parseFollowTarget } from './followTarget.ts';
+
 const FollowPage = () => {
   const params = new URLSearchParams(window.location.search);
   const initialUri = params.get('uri') ?? '';
@@ -17,20 +20,26 @@ const FollowPage = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/v1/follow', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle }),
-      });
-
-      if (response.ok) {
-        setSuccess(true);
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to follow');
+      const target = parseFollowTarget(handle, window.location.host);
+      if (target.type === 'local') {
+        setError('Local accounts cannot be followed');
+        return;
       }
-    } catch {
-      setError('Network error. Please try again.');
+      if (target.type === 'unsupported') {
+        setError('Enter a handle (e.g., @user@example.com) or an https URL');
+        return;
+      }
+      const account = await searchAccount(target.query);
+      if (account === undefined) {
+        setError('Account not found');
+        return;
+      }
+      await follow(account.id);
+      setSuccess(true);
+    } catch (error) {
+      setError(
+        isMastodonApiError(error) ? error.message : 'Network error. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }

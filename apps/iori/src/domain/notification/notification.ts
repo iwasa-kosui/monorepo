@@ -350,6 +350,64 @@ const markAsRead = (
 
 export type NotificationsReadStore = Agg.Store<NotificationsRead>;
 
+export type NotificationDismissedPayload = Readonly<{
+  notificationId: NotificationId;
+  userId: UserId;
+}>;
+
+export type NotificationDismissed = NotificationEvent<
+  undefined,
+  'notification.notificationDismissed',
+  NotificationDismissedPayload
+>;
+
+const dismissNotification = (notification: Notification, now: Instant): NotificationDismissed => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.notificationDismissed',
+    { notificationId: notification.notificationId, userId: notification.recipientUserId },
+    now,
+  );
+};
+
+export type NotificationDismissedStore = Agg.Store<NotificationDismissed>;
+
+export type NotificationsClearedPayload = Readonly<{ userId: UserId }>;
+
+export type NotificationsCleared = NotificationEvent<
+  undefined,
+  'notification.notificationsCleared',
+  NotificationsClearedPayload
+>;
+
+const clearNotifications = (userId: UserId, now: Instant): NotificationsCleared => {
+  // 全件削除は特定の通知に紐づかないので、集約IDは新しく採番する
+  return NotificationEvent.create(
+    { notificationId: NotificationId.generate() },
+    undefined,
+    'notification.notificationsCleared',
+    { userId },
+    now,
+  );
+};
+
+export type NotificationsClearedStore = Agg.Store<NotificationsCleared>;
+
+export type NotificationNotFoundError = Readonly<{
+  type: 'NotificationNotFoundError';
+  message: string;
+  detail: { notificationId: NotificationId };
+}>;
+
+export const NotificationNotFoundError = {
+  create: (notificationId: NotificationId): NotificationNotFoundError => ({
+    type: 'NotificationNotFoundError',
+    message: `The notification with ID "${notificationId}" was not found.`,
+    detail: { notificationId },
+  }),
+} as const;
+
 export const Notification = {
   ...schema,
   createLikeNotification,
@@ -360,6 +418,8 @@ export const Notification = {
   createReplyNotification,
   deleteReplyNotification,
   markAsRead,
+  dismissNotification,
+  clearNotifications,
   toAggregateId,
 } as const;
 

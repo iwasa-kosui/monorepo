@@ -13,6 +13,7 @@ import {
   updateStatusesByPostId,
   withFavourited,
   withReblogged,
+  withUpdatedStatus,
 } from './status.ts';
 
 const localAccount = {
@@ -108,6 +109,23 @@ describe('status updates', () => {
 
     expect(updated.reblogged).toBe(true);
     expect(updated.reblog).toBeNull();
+  });
+
+  it('replaces a plain status with the server response', () => {
+    const response = status('p1', { favourited: true, favourites_count: 3 });
+
+    expect(withUpdatedStatus(status('p1'), response)).toBe(response);
+  });
+
+  it('replaces the original inside a boost and copies the viewer flags to the boost', () => {
+    const boost = status('r1', { reblog: status('p1') });
+    const response = status('p1', { favourited: true, favourites_count: 3 });
+
+    const updated = withUpdatedStatus(boost, response);
+
+    expect(updated.id).toBe('r1');
+    expect(updated.favourited).toBe(true);
+    expect(updated.reblog).toBe(response);
   });
 
   it('updates every status that shows the post, including boosts of it', () => {

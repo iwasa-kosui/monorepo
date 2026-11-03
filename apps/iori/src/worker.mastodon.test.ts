@@ -6,6 +6,7 @@ import {
   AccountSchema,
   CredentialAccountSchema,
   InstanceV2Schema,
+  MediaAttachmentSchema,
   NotificationSchema,
   StatusSchema,
 } from './adaptor/mastodon/entities.ts';
@@ -48,9 +49,25 @@ const setup = () => {
     Date.UTC(2025, 0, 2),
     'local',
   );
+  const objects = new Map<string, { body: ArrayBufferView<ArrayBuffer>; httpMetadata?: { contentType?: string } }>();
   const env = {
     DB: fixture.binding,
-    UPLOADS: { get: async () => null, put: async () => undefined, head: async () => null },
+    UPLOADS: {
+      get: async (key: string) => {
+        const object = objects.get(key);
+        return object === undefined
+          ? null
+          : { body: new Blob([object.body]).stream(), httpMetadata: object.httpMetadata };
+      },
+      put: async (
+        key: string,
+        body: ArrayBufferView<ArrayBuffer>,
+        options: { httpMetadata?: { contentType?: string } },
+      ) => {
+        objects.set(key, { body, httpMetadata: options.httpMetadata });
+      },
+      head: async () => null,
+    },
     FEDIFY_KV: { get: async () => null },
     FEDIFY_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },
     ASSETS: {
@@ -66,7 +83,7 @@ const setup = () => {
   } as unknown as IoriWorkerEnv;
   const request = (path: string, init?: RequestInit) =>
     worker.fetch(new Request(`${origin}${path}`, init), env, executionContext);
-  return { request, sqlite };
+  return { request, sqlite, objects };
 };
 
 describe('Worker の Mastodon 互換 API', () => {
@@ -173,13 +190,13 @@ describe('Worker の Mastodon 互換 API', () => {
 
     const [v1, v2] = await Promise.all([
       request('/api/v1/statuses/abc/favourited_by?q=1', { headers }),
-      request('/api/v2/media', { method: 'POST', headers }),
+      request('/api/v2/suggestions', { method: 'POST', headers }),
     ]);
 
     expect([v1.status, v2.status]).toEqual([404, 404]);
     expect(await v1.json()).toEqual({ error: 'Record not found' });
     expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: GET /api/v1/statuses/abc/favourited_by');
-    expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: POST /api/v2/media');
+    expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: POST /api/v2/suggestions');
     warn.mockRestore();
   });
 
@@ -370,6 +387,81 @@ describe('Worker の Mastodon 互換 API', () => {
       warn.mockRestore();
     });
 
+    it('置き換えた独自の書き込み API のパスは Cookie があっても未実装として 404 を返す', async () => {
+      const { request } = setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin, 'Content-Type': 'application/json' };
+      const body = JSON.stringify({ postId: crypto.randomUUID(), actorId: crypto.randomUUID(), handle: '@a@b.test' });
+
+      const responses = await Promise.all([
+        request('/api/v1/like', { method: 'POST', headers, body }),
+        request('/api/v1/like', { method: 'DELETE', headers, body }),
+        request('/api/v1/repost', { method: 'POST', headers, body }),
+        request('/api/v1/repost', { method: 'DELETE', headers, body }),
+        request('/api/v1/mute', { method: 'POST', headers, body }),
+        request('/api/v1/mute', { method: 'DELETE', headers, body }),
+        request('/api/v1/follow', { method: 'POST', headers, body }),
+        request(`/remote-users/${crypto.randomUUID()}/follow`, { method: 'POST', headers }),
+        request(`/remote-users/${crypto.randomUUID()}/unfollow`, { method: 'POST', headers }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404]);
+      warn.mockRestore();
+    });
+
+    it('Cookie の利用者の いいね、ミュート、通知の削除を実際の配線で処理する', async () => {
+      const { request, sqlite } = setup();
+      const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin };
+      const postId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        actorId,
+        '<p>mine</p>',
+        Date.UTC(2025, 0, 3),
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      const remoteId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').run(
+        remoteId,
+        'https://remote.example/users/alice',
+        'https://remote.example/users/alice/inbox',
+        'remote',
+      );
+      sqlite.prepare('INSERT INTO remote_actors(actorId,url,username) VALUES (?,?,?)').run(
+        remoteId,
+        'https://remote.example/@alice',
+        'alice',
+      );
+      const notificationId = crypto.randomUUID();
+      sqlite.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      )
+        .run(notificationId, userId, 'follow', 0, Date.UTC(2025, 0, 4));
+      sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)').run(
+        notificationId,
+        remoteId,
+      );
+
+      const favourite = await request(`/api/v1/statuses/${postId}/favourite`, { method: 'POST', headers });
+      const mute = await request(`/api/v1/accounts/${remoteId}/mute`, { method: 'POST', headers });
+      const dismiss = await request(`/api/v2/notifications/ungrouped-${notificationId}/dismiss`, {
+        method: 'POST',
+        headers,
+      });
+      const clear = await request('/api/v1/notifications/clear', { method: 'POST', headers });
+      const crossOrigin = await request(`/api/v1/statuses/${postId}/unfavourite`, {
+        method: 'POST',
+        headers: { Cookie: headers.Cookie, Origin: 'https://evil.example' },
+      });
+
+      expect(StatusSchema.parse(await favourite.json())).toMatchObject({ id: postId, favourited: true });
+      expect(await mute.json()).toMatchObject({ id: remoteId, muting: true });
+      expect([dismiss.status, clear.status, crossOrigin.status]).toEqual([200, 200, 403]);
+      expect(sqlite.prepare('SELECT count(*) AS n FROM notifications').get()).toEqual({ n: 0 });
+      expect(sqlite.prepare('SELECT count(*) AS n FROM likes').get()).toEqual({ n: 1 });
+    });
+
     it('accounts/lookup、accounts/relationships、favourites、mutes を Mastodon の形で返す', async () => {
       const { request, sqlite } = setup();
       const headers = { Cookie: `sessionId=${sessionId}` };
@@ -402,6 +494,116 @@ describe('Worker の Mastodon 互換 API', () => {
       expect(await relationships.json()).toMatchObject([{ id: actorId, following: false, muting: false }]);
       expect((await favourites.json() as Array<{ id: string }>).map((status) => status.id)).toEqual([postId]);
       expect(await mutes.json()).toEqual([]);
+    });
+  });
+
+  describe('メディアとプロフィール画像', () => {
+    const png = () => {
+      const bytes = new Uint8Array(32);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      return bytes;
+    };
+    const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin };
+    const form = (values: Record<string, string | File>) => {
+      const body = new FormData();
+      for (const [key, value] of Object.entries(values)) body.set(key, value);
+      return body;
+    };
+
+    it('POST /api/v2/media が R2 と media_uploads に保存し、返した url で画像を配信できる', async () => {
+      const { request, sqlite, objects } = setup();
+
+      const created = await request('/api/v2/media', {
+        method: 'POST',
+        headers,
+        body: form({ file: new File([png()], 'a.png', { type: 'image/png' }), description: '猫' }),
+      });
+
+      expect(created.status).toBe(200);
+      const media = MediaAttachmentSchema.parse(await created.json());
+      expect(media).toMatchObject({ type: 'image', description: '猫', url: `${origin}/uploads/${media.id}.png` });
+      expect(objects.has(`post-images/${media.id}/original`)).toBe(true);
+      expect(
+        sqlite.prepare('SELECT userId, url, mimeType, description FROM media_uploads WHERE mediaId = ?').get(media.id),
+      )
+        .toMatchObject({ userId, url: media.url, mimeType: 'image/png', description: '猫' });
+      const served = await request(`/uploads/${media.id}.png`);
+      expect(served.status).toBe(200);
+      expect(served.headers.get('Content-Type')).toBe('image/png');
+      expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    });
+
+    it('PUT で説明を更新して GET に反映し、他人には見せない', async () => {
+      const { request, sqlite } = setup();
+      const created = await request('/api/v2/media', {
+        method: 'POST',
+        headers,
+        body: form({ file: new File([png()], 'a.png', { type: 'image/png' }) }),
+      });
+      const { id } = await created.json() as { id: string };
+      const strangerId = crypto.randomUUID();
+      const strangerSession = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(strangerId, 'stranger');
+      sqlite.prepare('INSERT INTO sessions(sessionId,userId,expires) VALUES (?,?,?)').run(
+        strangerSession,
+        strangerId,
+        Date.now() + 60_000,
+      );
+
+      const put = await request(`/api/v1/media/${id}`, { method: 'PUT', headers, body: form({ description: '犬' }) });
+      const get = await request(`/api/v1/media/${id}`, { headers });
+      const stranger = await request(`/api/v1/media/${id}`, { headers: { Cookie: `sessionId=${strangerSession}` } });
+
+      expect(put.status).toBe(200);
+      expect(await get.json()).toMatchObject({ id, description: '犬' });
+      expect(stranger.status).toBe(404);
+      expect(sqlite.prepare('SELECT description FROM media_uploads WHERE mediaId = ?').get(id))
+        .toMatchObject({ description: '犬' });
+      expect(
+        sqlite.prepare('SELECT eventName FROM domain_events WHERE aggregateName = \'mediaUpload\' ORDER BY occurredAt')
+          .all(),
+      )
+        .toEqual([{ eventName: 'mediaUpload.created' }, { eventName: 'mediaUpload.descriptionUpdated' }]);
+    });
+
+    it('PATCH /api/v1/accounts/update_credentials が avatar を保存し、logoUri と verify_credentials に反映する', async () => {
+      const { request, sqlite, objects } = setup();
+
+      const response = await request('/api/v1/accounts/update_credentials', {
+        method: 'PATCH',
+        headers,
+        body: form({ avatar: new File([png()], 'a.png', { type: 'image/png' }) }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = CredentialAccountSchema.parse(await response.json());
+      expect(body.avatar).toMatch(new RegExp(`^${origin}/uploads/[0-9a-f-]{36}\\.png$`));
+      expect(objects.size).toBe(1);
+      expect(sqlite.prepare('SELECT logoUri FROM actors WHERE actorId = ?').get(actorId)).toEqual({
+        logoUri: body.avatar,
+      });
+      const verified = await request('/api/v1/accounts/verify_credentials', { headers });
+      expect(await verified.json()).toMatchObject({ avatar: body.avatar });
+    });
+
+    it('置き換えた POST /api/v1/upload と POST /users/:username は 404 にして、logoUri を変えない', async () => {
+      const { request, sqlite } = setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const upload = await request('/api/v1/upload', {
+        method: 'POST',
+        headers,
+        body: form({ file: new File([png()], 'a.png', { type: 'image/png' }) }),
+      });
+      const users = await request('/users/kosui', {
+        method: 'POST',
+        headers,
+        body: new URLSearchParams({ logoUri: 'https://cdn.example/logo.png' }),
+      });
+
+      expect([upload.status, users.status]).toEqual([404, 404]);
+      expect(sqlite.prepare('SELECT logoUri FROM actors WHERE actorId = ?').get(actorId)).toEqual({ logoUri: null });
+      warn.mockRestore();
     });
   });
 

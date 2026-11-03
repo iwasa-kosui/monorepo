@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  failureMessage,
+  favourite,
   fetchAccount,
   fetchAccountStatuses,
   fetchFavourites,
@@ -12,11 +14,27 @@ import {
   fetchRelationships,
   fetchStatus,
   fetchStatusContext,
+  follow,
+  isMastodonApiError,
   isNotFoundError,
   isUnauthorizedError,
+  isUnprocessableError,
   lookupAccount,
+  mute,
   parseLinkHeader,
+  parseRetryAfter,
+  reblog,
   saveNotificationsMarker,
+  searchAccount,
+  searchStatuses,
+  summarizeTimeline,
+  unfavourite,
+  unfollow,
+  unmute,
+  unreblog,
+  updateAvatar,
+  updateMedia,
+  uploadMedia,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -77,12 +95,40 @@ describe('parseLinkHeader', () => {
   });
 });
 
-const jsonResponse = (body: unknown, init: { status?: number; link?: string } = {}) =>
+describe('parseRetryAfter', () => {
+  const now = new Date('2026-01-01T00:00:00Z');
+
+  it('reads digits as seconds', () => {
+    expect(parseRetryAfter('3600', now)).toBe(3600);
+    expect(parseRetryAfter('0', now)).toBe(0);
+  });
+
+  it('reads an HTTP date as the seconds from now', () => {
+    expect(parseRetryAfter('Thu, 01 Jan 2026 01:00:00 GMT', now)).toBe(3600);
+  });
+
+  it('turns an HTTP date in the past into 0', () => {
+    expect(parseRetryAfter('Wed, 31 Dec 2025 23:00:00 GMT', now)).toBe(0);
+  });
+
+  it('returns undefined for a value that is neither seconds nor an HTTP date', () => {
+    for (const value of [null, '', 'abc', '-5', '120abc', '1.5']) {
+      expect(parseRetryAfter(value, now)).toBeUndefined();
+    }
+  });
+
+  it('keeps a huge number of seconds as it is', () => {
+    expect(parseRetryAfter('99999999999999999999', now)).toBe(1e20);
+  });
+});
+
+const jsonResponse = (body: unknown, init: { status?: number; link?: string; retryAfter?: string } = {}) =>
   new Response(JSON.stringify(body), {
     status: init.status ?? 200,
     headers: {
       'Content-Type': 'application/json',
       ...(init.link === undefined ? {} : { Link: init.link }),
+      ...(init.retryAfter === undefined ? {} : { 'Retry-After': init.retryAfter }),
     },
   });
 
@@ -272,7 +318,243 @@ describe('mastodon client requests', () => {
     expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
   });
 
+  it.each([
+    ['favourite', favourite, '/api/v1/statuses/s1/favourite'],
+    ['unfavourite', unfavourite, '/api/v1/statuses/s1/unfavourite'],
+    ['reblog', reblog, '/api/v1/statuses/s1/reblog'],
+    ['unreblog', unreblog, '/api/v1/statuses/s1/unreblog'],
+    ['follow', follow, '/api/v1/accounts/s1/follow'],
+    ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
+    ['mute', mute, '/api/v1/accounts/s1/mute'],
+    ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+  ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
+    const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
+
+    const body = await action('s1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe(path);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(body).toEqual({ id: 's1' });
+  });
+
+  it('encodes the id in a write path', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b' }));
+
+    await follow('a/b');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/a%2Fb/follow');
+  });
+
+  it('throws an unprocessable error carrying the server message when the reblog is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: Reblog of this status is not allowed' }, { status: 422 }));
+
+    const error = await reblog('s1').catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: Reblog of this status is not allowed');
+    expect(failureMessage('repost', error)).toBe(
+      'Failed to repost: Validation failed: Reblog of this status is not allowed',
+    );
+  });
+
+  it('throws on a failed follow and keeps the generic failure message for a network error', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: local account' }, { status: 422 }));
+
+    const error = await follow('a1').catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect(failureMessage('follow', new TypeError('Failed to fetch'))).toBe('Failed to follow. Please try again.');
+  });
+
+  it('searches an account with resolve=true and returns the first account', async () => {
+    const fetchMock = stubFetch(jsonResponse({ accounts: [{ id: 'a1' }, { id: 'a2' }], statuses: [], hashtags: [] }));
+
+    const account = await searchAccount('alice@remote.example');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v2/search?q=alice%40remote.example&resolve=true&type=accounts');
+    expect(account).toEqual({ id: 'a1' });
+  });
+
+  it('returns undefined when the search finds no account', async () => {
+    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
+
+    expect(await searchAccount('nobody@remote.example')).toBeUndefined();
+  });
+
   it('does not treat a network failure as an unauthorized error', () => {
     expect(isUnauthorizedError(new TypeError('Failed to fetch'))).toBe(false);
+  });
+
+  it('searches statuses with the query and limit through a same-origin GET', async () => {
+    const payload = {
+      statuses: [],
+      terms: { original: ['a'], expanded: [] },
+      dropped_original: [],
+      expansion: 'skipped',
+    };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await searchStatuses('猫 犬', 20);
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    const parsed = new URL(String(url), 'http://localhost');
+    expect(parsed.pathname).toBe('/api/iori/v1/search/statuses');
+    expect(parsed.searchParams.get('q')).toBe('猫 犬');
+    expect(parsed.searchParams.get('limit')).toBe('20');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('posts the summary request as JSON without authorization headers', async () => {
+    const payload = { summary: 'text [1]', citations: [], remaining_today: 19 };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await summarizeTimeline({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/timeline/summaries');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
+    expect(result).toEqual(payload);
+  });
+
+  it('carries Retry-After on a 429 from the summary request', async () => {
+    stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter: '3600' }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(429);
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(3600);
+  });
+
+  it('leaves retryAfterSeconds unset when Retry-After is not readable', async () => {
+    for (const retryAfter of ['abc', '-5', '120abc', '']) {
+      stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter }));
+
+      const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+      expect(isMastodonApiError(error) && error.retryAfterSeconds).toBeUndefined();
+    }
+  });
+
+  it('carries a huge Retry-After as it is', async () => {
+    stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter: '99999999999999999999' }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(1e20);
+  });
+
+  it('leaves retryAfterSeconds unset when Retry-After is absent', async () => {
+    stubFetch(jsonResponse({ error: 'bad gateway' }, { status: 502 }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('rejects the summary request with an unauthorized error on 401', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
+  });
+});
+
+describe('mastodon client media and avatar writes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const callOf = (fetchMock: ReturnType<typeof stubFetch>) =>
+    (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+  const image = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
+  const attachment = { id: 'm1', type: 'image', url: 'https://iori.example/uploads/m1.png' };
+
+  it('uploads a file to /api/v2/media as same-origin multipart without a Content-Type header', async () => {
+    const fetchMock = stubFetch(jsonResponse(attachment));
+    const file = image();
+
+    const media = await uploadMedia(file);
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v2/media');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ Accept: 'application/json' });
+    const body = init.body as FormData;
+    expect(body.get('file')).toBe(file);
+    expect(body.has('description')).toBe(false);
+    expect(media).toEqual(attachment);
+  });
+
+  it('sends the description when uploading with one', async () => {
+    const fetchMock = stubFetch(jsonResponse(attachment));
+
+    await uploadMedia(image(), '猫の写真');
+
+    expect((callOf(fetchMock)[1].body as FormData).get('description')).toBe('猫の写真');
+  });
+
+  it('rejects an upload with the server message', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The file is too large. Max size: 5MB' }, { status: 422 }));
+
+    const error = await uploadMedia(image()).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The file is too large. Max size: 5MB');
+  });
+
+  it('updates the media description with a same-origin PUT', async () => {
+    const fetchMock = stubFetch(jsonResponse({ ...attachment, description: '犬' }));
+
+    const media = await updateMedia('m 1', '犬');
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v1/media/m%201');
+    expect(init.method).toBe('PUT');
+    expect(init.credentials).toBe('same-origin');
+    expect((init.body as FormData).get('description')).toBe('犬');
+    expect(media.description).toBe('犬');
+  });
+
+  it('rejects a media update for a missing media as not found', async () => {
+    stubFetch(jsonResponse({ error: 'Record not found' }, { status: 404 }));
+
+    expect(isNotFoundError(await updateMedia('missing', 'x').catch((e: unknown) => e))).toBe(true);
+  });
+
+  it('sends the avatar to update_credentials with a same-origin PATCH and returns the account', async () => {
+    const account = { id: 'a1', username: 'kosui', avatar: 'https://iori.example/uploads/a.png' };
+    const fetchMock = stubFetch(jsonResponse(account));
+    const file = image();
+
+    const result = await updateAvatar(file);
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v1/accounts/update_credentials');
+    expect(init.method).toBe('PATCH');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ Accept: 'application/json' });
+    expect((init.body as FormData).get('avatar')).toBe(file);
+    expect(result).toEqual(account);
+  });
+
+  it('rejects an avatar update with the server message', async () => {
+    stubFetch(
+      jsonResponse({ error: 'Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP' }, {
+        status: 422,
+      }),
+    );
+
+    const error = await updateAvatar(image()).catch((e: unknown) => e);
+
+    expect((error as Error).message).toBe('Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP');
   });
 });
