@@ -1,46 +1,55 @@
-import { Actor } from '../../domain/actor/actor.ts';
-import { LocalActor } from '../../domain/actor/localActor.ts';
-import { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import { IORI_EMOJI_REACTION_TYPE, type Notification, type Status } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type {
-  EmojiReactNotificationWithDetails,
-  FollowNotificationWithDetails,
-  LikeNotificationWithDetails,
-  NotificationWithDetails,
-  ReplyNotificationWithDetails,
-} from '../../domain/notification/notification.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import { accountHandle, accountHref } from '../api/status.ts';
 
 type Props = Readonly<{
-  notification: NotificationWithDetails;
-  sanitizedContent: string;
+  notification: Notification;
   recipientUsername: string;
 }>;
 
-const LikeNotificationItem = ({
-  notification,
-  sanitizedContent,
-  recipientUsername,
+const createdAtOf = (notification: Notification): Instant => Date.parse(notification.created_at) as Instant;
+
+const PostQuote = ({
+  status,
+  postUrl,
+  createdAt,
 }: {
-  notification: LikeNotificationWithDetails;
-  sanitizedContent: string;
-  recipientUsername: string;
-}) => {
-  const { likerActor, likedPost, createdAt } = notification;
+  status: Status | undefined;
+  postUrl: string;
+  createdAt: Instant;
+}) => (
+  <>
+    {status !== undefined && (
+      <div
+        role='button'
+        class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
+      >
+        <div
+          class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
+          dangerouslySetInnerHTML={{ __html: status.content }}
+        />
+      </div>
+    )}
+    <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
+      <time
+        dateTime={new Date(createdAt).toISOString()}
+        class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+      >
+        {Instant.formatRelative(createdAt)}
+      </time>
+    </a>
+  </>
+);
 
-  const handle = Actor.match({
-    onLocal: LocalActor.getHandle,
-    onRemote: (x) => RemoteActor.getHandle(x) ?? likerActor.uri,
-  })(likerActor);
+const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
+  const { account, status } = notification;
+  const createdAt = createdAtOf(notification);
 
-  const actorUrl = Actor.match({
-    onLocal: (x) => x.uri,
-    onRemote: (x) => `/remote-users/${x.id}`,
-  })(likerActor);
-
-  const postUrl = `/users/${recipientUsername}/posts/${likedPost.postId}`;
-
-  const logoUrl = safeUrl(likerActor.logoUri);
+  const handle = accountHandle(account);
+  const actorUrl = accountHref(account);
+  const postUrl = `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -87,47 +96,20 @@ const LikeNotificationItem = ({
             </span>
           </div>
 
-          <div
-            role='button'
-            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
-          >
-            <div
-              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
-              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-            />
-          </div>
-          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
-            <time
-              dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-            >
-              {Instant.formatRelative(createdAt)}
-            </time>
-          </a>
+          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} />
         </div>
       </div>
     </article>
   );
 };
 
-const FollowNotificationItem = ({
-  notification,
-}: {
-  notification: FollowNotificationWithDetails;
-}) => {
-  const { followerActor, createdAt } = notification;
+const FollowNotificationItem = ({ notification }: Pick<Props, 'notification'>) => {
+  const { account } = notification;
+  const createdAt = createdAtOf(notification);
 
-  const handle = Actor.match({
-    onLocal: LocalActor.getHandle,
-    onRemote: (x) => RemoteActor.getHandle(x) ?? followerActor.uri,
-  })(followerActor);
-
-  const actorUrl = Actor.match({
-    onLocal: (x) => x.uri,
-    onRemote: (x) => `/remote-users/${x.id}`,
-  })(followerActor);
-
-  const logoUrl = safeUrl(followerActor.logoUri);
+  const handle = accountHandle(account);
+  const actorUrl = accountHref(account);
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -183,36 +165,21 @@ const FollowNotificationItem = ({
   );
 };
 
-const EmojiReactNotificationItem = ({
-  notification,
-  sanitizedContent,
-  recipientUsername,
-}: {
-  notification: EmojiReactNotificationWithDetails;
-  sanitizedContent: string;
-  recipientUsername: string;
-}) => {
-  const { reactorActor, reactedPost, createdAt } = notification;
-  const { emoji, emojiImageUrl } = notification.notification;
+const EmojiReactNotificationItem = ({ notification, recipientUsername }: Props) => {
+  const { account, status, iori } = notification;
+  const createdAt = createdAtOf(notification);
+  const emoji = iori?.emoji ?? '';
 
-  const handle = Actor.match({
-    onLocal: LocalActor.getHandle,
-    onRemote: (x) => RemoteActor.getHandle(x) ?? reactorActor.uri,
-  })(reactorActor);
+  const handle = accountHandle(account);
+  const actorUrl = accountHref(account);
+  const postUrl = `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
 
-  const actorUrl = Actor.match({
-    onLocal: (x) => x.uri,
-    onRemote: (x) => `/remote-users/${x.id}`,
-  })(reactorActor);
-
-  const postUrl = `/users/${recipientUsername}/posts/${reactedPost.postId}`;
-
-  const safeEmojiImageUrl = safeUrl(emojiImageUrl);
+  const safeEmojiImageUrl = safeUrl(iori?.url);
   const emojiDisplay = safeEmojiImageUrl
     ? <img src={safeEmojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
     : <span class='text-lg'>{emoji}</span>;
 
-  const logoUrl = safeUrl(reactorActor.logoUri);
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -249,53 +216,22 @@ const EmojiReactNotificationItem = ({
             </span>
           </div>
 
-          <div
-            role='button'
-            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
-          >
-            <div
-              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
-              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-            />
-          </div>
-          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
-            <time
-              dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-            >
-              {Instant.formatRelative(createdAt)}
-            </time>
-          </a>
+          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} />
         </div>
       </div>
     </article>
   );
 };
 
-const ReplyNotificationItem = ({
-  notification,
-  sanitizedContent,
-  recipientUsername,
-}: {
-  notification: ReplyNotificationWithDetails;
-  sanitizedContent: string;
-  recipientUsername: string;
-}) => {
-  const { replierActor, createdAt, notification: { originalPostId } } = notification;
+const MentionNotificationItem = ({ notification, recipientUsername }: Props) => {
+  const { account, status } = notification;
+  const createdAt = createdAtOf(notification);
 
-  const handle = Actor.match({
-    onLocal: LocalActor.getHandle,
-    onRemote: (x) => RemoteActor.getHandle(x) ?? replierActor.uri,
-  })(replierActor);
-
-  const actorUrl = Actor.match({
-    onLocal: (x) => x.uri,
-    onRemote: (x) => `/remote-users/${x.id}`,
-  })(replierActor);
-
-  const postUrl = `/users/${recipientUsername}/posts/${originalPostId}`;
-
-  const logoUrl = safeUrl(replierActor.logoUri);
+  const handle = accountHandle(account);
+  const actorUrl = accountHref(account);
+  // 旧 UI と同じく、返信そのものではなく返信先の投稿へリンクする
+  const postUrl = `/users/${recipientUsername}/posts/${status?.in_reply_to_id ?? status?.id ?? ''}`;
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -342,67 +278,24 @@ const ReplyNotificationItem = ({
             </span>
           </div>
 
-          <div
-            role='button'
-            class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
-          >
-            <div
-              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
-              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-            />
-          </div>
-          <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
-            <time
-              dateTime={new Date(createdAt).toISOString()}
-              class='block mt-2 text-xs text-charcoal-light dark:text-gray-500 cursor-pointer hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-            >
-              {Instant.formatRelative(createdAt)}
-            </time>
-          </a>
+          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} />
         </div>
       </div>
     </article>
   );
 };
 
-export const NotificationItem = ({ notification, sanitizedContent, recipientUsername }: Props) => {
-  if (notification.notification.type === 'like') {
-    return (
-      <LikeNotificationItem
-        notification={notification as LikeNotificationWithDetails}
-        sanitizedContent={sanitizedContent}
-        recipientUsername={recipientUsername}
-      />
-    );
+export const NotificationItem = ({ notification, recipientUsername }: Props) => {
+  switch (notification.type) {
+    case 'favourite':
+      return <LikeNotificationItem notification={notification} recipientUsername={recipientUsername} />;
+    case 'follow':
+      return <FollowNotificationItem notification={notification} />;
+    case IORI_EMOJI_REACTION_TYPE:
+      return <EmojiReactNotificationItem notification={notification} recipientUsername={recipientUsername} />;
+    case 'mention':
+      return <MentionNotificationItem notification={notification} recipientUsername={recipientUsername} />;
+    default:
+      return null;
   }
-
-  if (notification.notification.type === 'follow') {
-    return (
-      <FollowNotificationItem
-        notification={notification as FollowNotificationWithDetails}
-      />
-    );
-  }
-
-  if (notification.notification.type === 'emojiReact') {
-    return (
-      <EmojiReactNotificationItem
-        notification={notification as EmojiReactNotificationWithDetails}
-        sanitizedContent={sanitizedContent}
-        recipientUsername={recipientUsername}
-      />
-    );
-  }
-
-  if (notification.notification.type === 'reply') {
-    return (
-      <ReplyNotificationItem
-        notification={notification as ReplyNotificationWithDetails}
-        sanitizedContent={sanitizedContent}
-        recipientUsername={recipientUsername}
-      />
-    );
-  }
-
-  return null;
 };

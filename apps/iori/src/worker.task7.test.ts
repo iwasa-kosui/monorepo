@@ -31,10 +31,6 @@ const runtime = vi.hoisted(() => ({
     sendEmojiReactUseCase: {},
     undoEmojiReactUseCase: {},
   },
-  notifications: {
-    getUnreadNotificationCountUseCase: {},
-    getNotificationsUseCase: {},
-  },
   articles: {
     getArticleWithThreadUseCase: {},
     getArticlesUseCase: {},
@@ -103,5 +99,6 @@ describe('Task 7 Worker route mounting', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 401, 400, 401, 401]);
+    expect(await responses[1]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });

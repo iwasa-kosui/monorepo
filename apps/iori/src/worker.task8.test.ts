@@ -37,10 +37,6 @@ const runtime = vi.hoisted(() => ({
     sendEmojiReactUseCase: {},
     undoEmojiReactUseCase: {},
   },
-  notifications: {
-    getUnreadNotificationCountUseCase: {},
-    getNotificationsUseCase: {},
-  },
   articles: {
     getArticleWithThreadUseCase: {},
     getArticlesUseCase: {},

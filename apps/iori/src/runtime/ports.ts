@@ -20,7 +20,13 @@ import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/art
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
+import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
 import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
+import type {
+  NotificationCountResolverSinceMarker,
+  NotificationResolverByUserIdAndId,
+  NotificationsResolverByPage,
+} from '../domain/notification/notification.ts';
 import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
 import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
@@ -34,6 +40,8 @@ import type { SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { TimelineItemsResolverByActorIds } from '../domain/timeline/timelineItem.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
+import type { TextEmbedder } from '../ports/textEmbedder.ts';
+import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
@@ -43,13 +51,12 @@ import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
-import type { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
-import type { GetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -111,6 +118,11 @@ export type IoriMastodonRuntimePorts = Readonly<{
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   statusAssembler: StatusAssembler;
+  notificationsResolverByPage: NotificationsResolverByPage;
+  notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
+  notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
+  markersResolverByUserId: MarkersResolverByUserId;
+  saveMarkersUseCase: SaveMarkersUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -125,10 +137,6 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoRepostUseCase: UndoRepostUseCase;
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
-}>;
-export type IoriNotificationsRuntimePorts = Readonly<{
-  getUnreadNotificationCountUseCase: GetUnreadNotificationCountUseCase;
-  getNotificationsUseCase: GetNotificationsUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
@@ -168,12 +176,13 @@ export type IoriRuntimePorts = Readonly<{
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
-  notifications: IoriNotificationsRuntimePorts;
   articles: IoriArticlesRuntimePorts;
   mutesRelays: IoriMutesRelaysRuntimePorts;
   core: IoriCoreRuntimePorts;
   uploads: UploadObjectStore;
   federation: Federation<void>;
+  textGenerator?: TextGenerator;
+  textEmbedder?: TextEmbedder;
 }>;
 
 /** Worker-facing alias used to make the runtime boundary explicit. */

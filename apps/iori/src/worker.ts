@@ -1,4 +1,4 @@
-import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types';
+import type { ExecutionContext, MessageBatch, ScheduledController } from '@cloudflare/workers-types';
 import { federation } from '@fedify/hono';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
@@ -18,11 +18,12 @@ import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMasto
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMastodonFallbackRouter.ts';
+import { createWorkerMastodonMarkersRouter } from './adaptor/routes/workerMastodonMarkersRouter.ts';
+import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
-import { createWorkerNotificationsApiRouter } from './adaptor/routes/workerNotificationsApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import {
   createWorkerPageActionsRouter,
@@ -41,6 +42,7 @@ import { SessionId } from './domain/session/sessionId.ts';
 import { Username } from './domain/user/username.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
+import { dispatchScheduled, scheduledTasks } from './scheduled/scheduledTasks.ts';
 import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
 import {
   admissionRejected,
@@ -98,6 +100,11 @@ type IoriWorkerHandler = Readonly<{
   ) => Response | Promise<Response>;
   queue: (
     batch: MessageBatch<unknown>,
+    env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
+  ) => Promise<void>;
+  scheduled: (
+    controller: ScheduledController,
     env: IoriWorkerEnv,
     executionCtx: ExecutionContext,
   ) => Promise<void>;
@@ -216,10 +223,6 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerNotificationsApiRouter(runtime.notifications),
-        );
-        app.route(
-          '/api',
           createWorkerArticlesApiRouter({
             ...runtime.articles,
             createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
@@ -264,6 +267,8 @@ export default {
         app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
@@ -359,5 +364,24 @@ export default {
         (promise) => executionCtx.waitUntil(promise),
       );
     }
+  },
+  scheduled: async (
+    controller: ScheduledController,
+    env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
+  ): Promise<void> => {
+    const identity = parseAdmission(env);
+    if (!identity || identity.mode !== 'active') {
+      console.info('iori scheduled: skipped because admission is not active.', {
+        cron: controller.cron,
+        mode: identity?.mode,
+      });
+      return;
+    }
+    await dispatchScheduled(controller.cron, scheduledTasks, {
+      env,
+      scheduledTime: new Date(controller.scheduledTime),
+      waitUntil: (promise) => executionCtx.waitUntil(promise),
+    });
   },
 } satisfies IoriWorkerHandler;

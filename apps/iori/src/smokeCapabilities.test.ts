@@ -8,6 +8,8 @@ it('permits generated reads and rejects SQL side effects and unsupported syntax'
       'select "user_id", "username" from "users" where "users"."username" = ?',
       'select count(*) from "posts"',
       'select "articleId", "title", "status" from "articles" where "articles"."articleId" = ? limit ?',
+      'SELECT "a", "b" FROM "users", "actors"',
+      'SELECT "a" FROM "users" LEFT JOIN "actors" ON "users"."id" = "actors"."id" AND "actors"."id" IN (?, ?) WHERE "a" IN (?, ?)',
     ]
   ) expect(isReviewedSmokeSelect(sql)).toBe(true);
   for (
@@ -26,6 +28,14 @@ it('permits generated reads and rejects SQL side effects and unsupported syntax'
       'SELECT \';DELETE FROM users\'',
       'SELECT (SELECT 1)',
       'SELECT * FROM pragma_table_info(?)',
+      'SELECT * FROM "users", "sqlite_master"',
+      'SELECT * FROM "users","sessions","user_passwords"',
+      'SELECT * FROM "users" LEFT JOIN "actors" ON "users"."id" = "actors"."id", "sqlite_master"',
+      'SELECT * FROM "users" AS "a", "pragma_database_list"',
+      'SELECT "a" FROM "users" WHERE "a" IN "sessions"',
+      'SELECT "a" FROM "users" WHERE "a" IN "main"."sessions"',
+      'SELECT count(*) FROM "users" WHERE (?, "user_id", ?) IN "sessions"',
+      'SELECT * FROM "users" ) , "sqlite_master"',
     ]
   ) expect(isReviewedSmokeSelect(sql)).toBe(false);
 });

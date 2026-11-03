@@ -609,6 +609,14 @@ describe('a state close to a production wrangler deployment', () => {
     const { api, input } = await wranglerFixture('production', [stagingAccessToken]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-extra'));
   });
+  it('accepts an AI binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'ai' }]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+  });
+  it('rejects an AI binding whose type is not ai', async () => {
+    const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
+    await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-mismatch'));
+  });
   it('reads the same thirteen bindings of staging', async () => {
     const { api, input } = await wranglerFixture('staging', [stagingAccessToken]);
     await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
