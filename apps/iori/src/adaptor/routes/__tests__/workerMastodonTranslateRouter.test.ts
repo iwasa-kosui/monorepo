@@ -198,6 +198,20 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(calls).toEqual([]);
   });
 
+  it('公開範囲が不明の旧データのリモート投稿は、フォロー中なら訳せる', async () => {
+    const { generator } = createStubTextGenerator(reply);
+    const t = await seedPosts({ textGenerator: generator });
+    const legacy = t.seed.addRemotePost(t.alice, Date.UTC(2020, 0, 7), {
+      content: '<p>Legacy post</p>',
+      visibility: null,
+    });
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+
+    const response = await t.request(pathOf(legacy.postId), postJson({}, t.me.bearer));
+
+    expect(response.status).toBe(200);
+  });
+
   it('日本語の投稿は 403 にする', async () => {
     const { generator, calls } = createStubTextGenerator(reply);
     const t = await seedPosts({ textGenerator: generator });
