@@ -1,4 +1,4 @@
-import { type Announce, type InboxContext, isActor, Note } from '@fedify/fedify';
+import { type Announce, type DocumentLoader, type InboxContext, isActor, Note } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -9,7 +9,7 @@ import type {
 import { FederatedTimelineItem } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { RemotePostUpserter } from '../../../domain/post/post.ts';
+import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
@@ -24,6 +24,18 @@ export type OnAnnounceDeps = Readonly<{
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
 }>;
+
+const extractAttachmentsOrEmpty = async (
+  note: Note,
+  documentLoader: DocumentLoader,
+): Promise<RemotePostAttachment[]> => {
+  try {
+    return await extractAttachments(note, documentLoader);
+  } catch (error) {
+    getLogger().warn(`Failed to extract attachments for: ${note.id?.href} - ${String(error)}`);
+    return [];
+  }
+};
 
 export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxContext<unknown>, activity: Announce) => {
   const actorId = activity.actorId;
@@ -121,7 +133,10 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   const contentText = String(note.content ?? '');
   const authorIcon = await author.getIcon();
-  const attachments = await extractAttachments(note, documentLoaderOptions.documentLoader ?? ctx.documentLoader);
+  const attachments = await extractAttachmentsOrEmpty(
+    note,
+    documentLoaderOptions.documentLoader ?? ctx.documentLoader,
+  );
 
   return RA.flow(
     deps.addReceivedRepostUseCase.run({
@@ -199,7 +214,7 @@ const processRelayAnnounce = async (
 
   const contentText = String(note.content ?? '');
   const authorIcon = await author.getIcon();
-  const attachments = await extractAttachments(note, ctx.documentLoader);
+  const attachments = await extractAttachmentsOrEmpty(note, ctx.documentLoader);
 
   // Upsert the remote post using the existing upserter
   // Use the remote post upserter to create/get the post

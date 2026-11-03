@@ -1,4 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
@@ -52,7 +53,11 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
         altText: attachment.altText,
         createdAt: now,
       }));
-      await deps.postImageCreatedStore.store(images);
+      try {
+        await deps.postImageCreatedStore.store(images);
+      } catch (error) {
+        getLogger().warn(`Failed to store images for remote post ${identity.uri}: ${String(error)}`);
+      }
     }
     return RA.ok(event.aggregateState);
   },

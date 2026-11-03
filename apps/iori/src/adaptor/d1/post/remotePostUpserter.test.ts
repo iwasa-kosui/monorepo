@@ -18,9 +18,10 @@ const identity = {
 
 const createDeps = (existing: RemotePost | undefined) => {
   const postImageCreatedStore = { store: vi.fn(async () => {}) };
+  const postCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) };
   const deps = {
     postResolverByUri: { resolve: vi.fn(async () => RA.ok(existing)) },
-    postCreatedStore: { store: vi.fn(async () => RA.ok(undefined)) },
+    postCreatedStore,
     postImageCreatedStore,
     remoteActorCreatedStore: { store: vi.fn(async () => RA.ok(undefined)) },
     logoUriUpdatedStore: { store: vi.fn(async () => RA.ok(undefined)) },
@@ -28,7 +29,7 @@ const createDeps = (existing: RemotePost | undefined) => {
       resolve: vi.fn(async () => RA.ok({ id: ActorId.generate(), logoUri: undefined })),
     },
   };
-  return { deps: deps as never, postImageCreatedStore };
+  return { deps: deps as never, postImageCreatedStore, postCreatedStore };
 };
 
 describe('createD1RemotePostUpserter', () => {
@@ -56,5 +57,24 @@ describe('createD1RemotePostUpserter', () => {
 
     expect(result.ok).toBe(true);
     expect(postImageCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('does not store attachments when the post store rejects', async () => {
+    const { deps, postImageCreatedStore, postCreatedStore } = createDeps(undefined);
+    postCreatedStore.store.mockRejectedValueOnce(new Error('post store failed'));
+
+    await expect(createD1RemotePostUpserter(deps).resolve(identity)).rejects.toThrow('post store failed');
+
+    expect(postImageCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('returns the created post even when the image store rejects', async () => {
+    const { deps, postImageCreatedStore } = createDeps(undefined);
+    postImageCreatedStore.store.mockRejectedValueOnce(new Error('image store failed'));
+
+    const result = await createD1RemotePostUpserter(deps).resolve(identity);
+
+    expect(result.ok).toBe(true);
+    expect(postImageCreatedStore.store).toHaveBeenCalledOnce();
   });
 });
