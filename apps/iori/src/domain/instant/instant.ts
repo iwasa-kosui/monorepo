@@ -55,10 +55,15 @@ const formatRelative = (instant: Instant, locale: string = 'ja-JP'): string => {
   return new Date(instant).toLocaleDateString(locale);
 };
 
+const JST_OFFSET_MS = 9 * HOUR;
+
+const toJstDate = (instant: Instant): string => new Date(instant + JST_OFFSET_MS).toISOString().slice(0, 10);
+
 export const Instant = {
   ...schema,
   now,
   addDuration,
   toDate: (instant: Instant): Date => new Date(instant),
   formatRelative,
+  toJstDate,
 } as const;

@@ -9,6 +9,7 @@ import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
+import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
@@ -25,7 +26,12 @@ import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverBy
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1LogoUriUpdatedStore } from '../../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../../d1/actor/remoteActorCreatedStore.ts';
+import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
+import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
+import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -39,6 +45,7 @@ import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1
 import { createD1LikeResolver } from '../../../d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../../../d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../../../d1/like/localLikeDeletedStore.ts';
+import { createD1TimelineLinkTrendsResolverByUserId } from '../../../d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../../../d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResolverByUserId.ts';
 import { createD1MuteCreatedStore } from '../../../d1/mute/muteCreatedStore.ts';
@@ -75,6 +82,7 @@ import { createD1UserResolver } from '../../../d1/user/userResolver.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
+import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
@@ -141,6 +149,7 @@ export const setupReadApi = (
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
   });
+  const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
@@ -311,6 +320,21 @@ export const setupReadApi = (
           saveMarkersUseCase: SaveMarkersUseCase.create({
             markersResolverByUserId,
             markerSavedStore: createD1MarkerSavedStore(db),
+          }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriDigestRouter({
+          authn,
+          digestResolverByUserIdAndDigestDate: createD1DigestResolverByUserIdAndDigestDate(db),
+          digestResolverByUserId: createD1DigestResolverByUserId(db),
+          timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+          hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
+          digestSubscriptionResolverByUserId,
+          saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
+            digestSubscriptionResolverByUserId,
+            digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
           }),
         }),
       );

@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const timestamp = () => integer({ mode: 'timestamp_ms' });
 
@@ -408,6 +408,51 @@ export const feedEntriesTable = sqliteTable('feed_entries', {
   index('feed_entries_fetched_at_idx').on(table.fetchedAt),
 ]);
 
+export const digestSubscriptionsTable = sqliteTable('digest_subscriptions', {
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
+export const digestsTable = sqliteTable('digests', {
+  digestId: text('digestId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  digestDate: text('digestDate').notNull(),
+  articleId: text('articleId').notNull().references(() => articlesTable.articleId),
+  createdAt: timestamp().notNull(),
+  pushSentAt: timestamp(),
+}, (table) => [
+  uniqueIndex('digests_user_id_digest_date_unique').on(table.userId, table.digestDate),
+  index('digests_digest_date_idx').on(table.digestDate),
+]);
+
+export const digestItemsTable = sqliteTable('digest_items', {
+  digestItemId: text('digestItemId').primaryKey(),
+  digestId: text('digestId').notNull().references(() => digestsTable.digestId),
+  feedEntryId: text('feedEntryId').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  rank: integer('rank').notNull(),
+  score: real('score'),
+  summary: text('summary'),
+  reasonInterestSourceId: text('reasonInterestSourceId'),
+  feedback: text('feedback'),
+}, (table) => [
+  uniqueIndex('digest_items_digest_id_rank_unique').on(table.digestId, table.rank),
+]);
+
+export const digestTrendsTable = sqliteTable('digest_trends', {
+  digestId: text('digestId').notNull().references(() => digestsTable.digestId),
+  kind: text('kind').notNull(),
+  rank: integer('rank').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.digestId, table.kind, table.rank] }),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -448,4 +493,8 @@ export const schema = {
   oauthAccessTokensTable,
   feedSourcesTable,
   feedEntriesTable,
+  digestSubscriptionsTable,
+  digestsTable,
+  digestItemsTable,
+  digestTrendsTable,
 } as const;
