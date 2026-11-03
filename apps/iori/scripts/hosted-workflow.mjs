@@ -23,6 +23,7 @@ const operations = Object.freeze({
   'release-pending-freeze': 'release-pending-freeze.mjs',
   'restart-failed-source': 'restart-failed-source.mjs',
   'diagnose-source': 'diagnose-source.mjs',
+  'delete-rehearsal-d1': 'delete-rehearsal-d1.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -115,6 +116,8 @@ const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/
 const restartPrecheckNoticeLine =
   /^IORI_NOTICE stage=restart-precheck ingress_frozen=[01] consumer_paused=[01] queue_failed=[01] drained=[01]$/;
 const restartNoticeLine = /^IORI_NOTICE stage=restart-failed-source (?:recorded|stopped|started)=1$/;
+const rehearsalNoticeLine =
+  /^IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse[1-5] state=(?:present|absent|empty|not-empty|ambiguous|check-failed|deleted|delete-failed|remaining)$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -146,6 +149,7 @@ const writeDiagnosticLine = async line => {
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
+      && !rehearsalNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

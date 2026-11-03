@@ -42,6 +42,8 @@ const FIXED_REASONS = new Set([
   'resource-ambiguous',
   'api-forbidden',
   'api-failed',
+  'rehearsal-d1-not-empty',
+  'rehearsal-d1-remaining',
   'resolve-d1',
   'resolve-kv',
   'resolve-queue',

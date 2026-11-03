@@ -35,6 +35,7 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'public-artifact-gate',
     'deploy-worker',
     'put-worker-secrets',
+    'delete-rehearsal-d1',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -103,6 +104,7 @@ it('exposes the recovery operations and inputs without a default recovery value'
       'diagnose-source',
       'reconcile-resources',
       'replace-queue-consumer',
+      'delete-rehearsal-d1',
     ]),
   );
   expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
@@ -133,6 +135,32 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
   const inputs =
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
   expect(inputs.operation.options).toContain('put-worker-secrets');
+});
+it('gives delete-rehearsal-d1 only the account and the deploy token, and no input that names a database', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['delete-rehearsal-d1'];
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'delete-rehearsal-d1\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toContain('delete-rehearsal-d1');
+  expect(Object.keys(inputs)).toEqual([
+    'main_sha',
+    'migration_main_sha',
+    'operation',
+    'environment',
+    'generation',
+    'migration_run_id',
+    'recovery',
+  ]);
 });
 it('lets diagnose-source start without generation or run ID', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
