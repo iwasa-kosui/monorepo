@@ -10,6 +10,8 @@ describe('D1 schema', () => {
       'articlesTable',
       'domainEventsTable',
       'emojiReactsTable',
+      'feedEntriesTable',
+      'feedSourcesTable',
       'federatedTimelineItemsTable',
       'followsTable',
       'instanceActorKeysTable',

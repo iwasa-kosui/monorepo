@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { admissionFixture } from '../../src/testing/admissionFixture.ts';
+import { scheduledTasks } from '../../src/scheduled/scheduledTasks.ts';
 import { createDeploymentWorkerConfig, stripJsonc } from '../temporary-worker-config.mjs';
 
 const readAppFile = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -21,6 +22,7 @@ const readDeployedConfig = async () => {
       assets: { run_worker_first: unknown };
       placement: unknown;
       ai: unknown;
+      triggers: unknown;
     };
   } finally {
     await config.cleanup();
@@ -112,6 +114,21 @@ describe('placement', () => {
 describe('ai', () => {
   it('declares the AI binding in the deployment config built from the template', async () => {
     expect((await readDeployedConfig()).ai).toEqual({ binding: 'AI' });
+  });
+});
+
+describe('triggers', () => {
+  it('declares the cron expressions in the deployment config built from the template', async () => {
+    expect((await readDeployedConfig()).triggers).toEqual({ crons: ['0 0,3,6,9,12,15,18,21 * * *'] });
+  });
+
+  it('registers a task for exactly the cron expressions in the template', async () => {
+    const { crons } = (await readDeployedConfig()).triggers as { crons: string[] };
+    expect(Object.keys(scheduledTasks).sort()).toEqual([...crons].sort());
+  });
+
+  it('does not declare crons in the local config', async () => {
+    expect(await readAppFile('workers/iori/wrangler.local.jsonc')).not.toContain('"triggers"');
   });
 });
 
