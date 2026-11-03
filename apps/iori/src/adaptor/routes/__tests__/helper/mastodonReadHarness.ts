@@ -15,6 +15,7 @@ import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
 import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
+import { createTranslatePostUseCase } from '../../../../useCase/translatePost.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
@@ -28,6 +29,8 @@ import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsReso
 import { createD1LogoUriUpdatedStore } from '../../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../../d1/actor/remoteActorCreatedStore.ts';
 import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
+import { createD1AiTranslationUsageRecorder } from '../../../d1/aiTranslation/aiTranslationUsageRecorder.ts';
+import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTranslationStore.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -94,6 +97,7 @@ import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRo
 import { createWorkerMastodonNotificationsRouter } from '../../workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from '../../workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from '../../workerMastodonTimelinesRouter.ts';
+import { createWorkerMastodonTranslateRouter } from '../../workerMastodonTranslateRouter.ts';
 import { createWorkerMastodonViewerListsRouter } from '../../workerMastodonViewerListsRouter.ts';
 import { createOAuthHarness, ORIGIN } from './oauthHarness.ts';
 
@@ -105,6 +109,7 @@ afterEach(() => {
 export const setupReadApi = (
   options: Readonly<{
     textGenerator?: TextGenerator;
+    translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
   }> = {},
 ) => {
@@ -316,6 +321,21 @@ export const setupReadApi = (
           }),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerMastodonTranslateRouter({
+          authn,
+          actorResolverByUserId,
+          translatePost: createTranslatePostUseCase({
+            postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+            postTranslationStore: createD1PostTranslationStore(db),
+            aiTranslationUsageRecorder: createD1AiTranslationUsageRecorder(db),
+            textGenerator: options.textGenerator,
+            translationTimeoutMs: options.translationTimeoutMs,
+            htmlToPlainText,
+          }),
         }),
       );
       root.route(

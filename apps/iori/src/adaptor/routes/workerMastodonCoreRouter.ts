@@ -30,6 +30,7 @@ export type WorkerMastodonCoreRouterDeps = Readonly<{
     description: string;
     contactUsername: Username;
     vapidPublicKey: string | undefined;
+    translationEnabled?: boolean;
   }>;
 }>;
 
@@ -124,6 +125,7 @@ export const createWorkerMastodonCoreRouter = ({
     ioriVersion: IORI_VERSION,
     contactAccount: await resolveContactAccount(requestUrl),
     vapidPublicKey: instance.vapidPublicKey ?? null,
+    translationEnabled: instance.translationEnabled ?? false,
   });
 
   const respondWithCredentials = async (c: Context<MastodonAuthEnv>, userId: UserId | undefined) => {
@@ -207,7 +209,10 @@ export const createWorkerMastodonCoreRouter = ({
       const ids = [...(c.req.queries('id[]') ?? []), ...(c.req.queries('id') ?? [])];
       return c.json(ids.map((id) => ({ id, accounts: [] })));
     })
-    .get('/v1/instance/translation_languages', (c) => c.json({}))
+    .get(
+      '/v1/instance/translation_languages',
+      (c) => c.json(instance.translationEnabled === true ? { und: ['ja'] } : {}),
+    )
     .get('/v1/instance/languages', (c) => c.json(languages))
     .get('/v1/trends/statuses', (c) => c.json([]))
     .get('/v1/trends/tags', (c) => c.json([]))

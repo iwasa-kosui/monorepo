@@ -16,7 +16,10 @@ import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) => {
+const setup = (
+  { failUserResolve = false, translationEnabled = false }: { failUserResolve?: boolean; translationEnabled?: boolean } =
+    {},
+) => {
   const h = createOAuthHarness();
   const authn = createMastodonAuthn({
     verifyAccessTokenUseCase: h.memory.useCases.verifyAccessTokenUseCase,
@@ -83,6 +86,7 @@ const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) 
       description: 'A microblog by kosui',
       contactUsername: Username.orThrow('kosui'),
       vapidPublicKey: 'vapid-key',
+      translationEnabled,
     },
   });
   const app = createIoriApp({
@@ -457,6 +461,26 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({});
+    });
+
+    it('instance/translation_languages は AI が設定されていれば und から ja への翻訳を返す', async () => {
+      const response = await setup({ translationEnabled: true }).request('/api/v1/instance/translation_languages');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ und: ['ja'] });
+    });
+
+    it('v2/instance の translation.enabled は AI の設定に従う', async () => {
+      const enabled = setup({ translationEnabled: true });
+      enabled.addUser(crypto.randomUUID(), 'kosui');
+      const disabled = setup();
+      disabled.addUser(crypto.randomUUID(), 'kosui');
+
+      const enabledBody = InstanceV2Schema.parse(await (await enabled.request('/api/v2/instance')).json());
+      const disabledBody = InstanceV2Schema.parse(await (await disabled.request('/api/v2/instance')).json());
+
+      expect(enabledBody.configuration.translation).toEqual({ enabled: true });
+      expect(disabledBody.configuration.translation).toEqual({ enabled: false });
     });
 
     it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {

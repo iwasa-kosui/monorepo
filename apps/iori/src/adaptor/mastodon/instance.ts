@@ -7,6 +7,7 @@ export type BuildInstanceProps = Readonly<{
   ioriVersion: string;
   contactAccount: Account | null;
   vapidPublicKey: string | null;
+  translationEnabled?: boolean;
   contactEmail?: string;
   thumbnailUrl?: string;
 }>;
@@ -57,7 +58,7 @@ export const buildInstanceV2 = (props: BuildInstanceProps): InstanceV2 => ({
     statuses: { ...statuses },
     media_attachments: { ...mediaAttachments(), description_limit: 1500 },
     polls: { ...polls },
-    translation: { enabled: false },
+    translation: { enabled: props.translationEnabled ?? false },
   },
   registrations: { enabled: false, approval_required: false, message: null, url: null },
   api_versions: { mastodon: 2 },

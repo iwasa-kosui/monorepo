@@ -177,6 +177,17 @@ export const StatusSchema = z.object({
 });
 export type Status = z.infer<typeof StatusSchema>;
 
+export const TranslationSchema = z.object({
+  content: z.string(),
+  spoiler_text: z.string(),
+  language: z.string(),
+  detected_source_language: z.string(),
+  provider: z.string(),
+  media_attachments: z.array(z.object({ id: z.string(), description: z.string() })),
+  poll: z.null(),
+});
+export type Translation = z.infer<typeof TranslationSchema>;
+
 export const NotificationTypeSchema = z.enum([
   'mention',
   'status',

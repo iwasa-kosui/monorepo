@@ -63,6 +63,16 @@ describe('buildInstanceV2', () => {
     expect(instance.configuration.urls).not.toHaveProperty('streaming');
   });
 
+  it('sets configuration.translation.enabled from translationEnabled', () => {
+    expect(buildInstanceV2(props).configuration.translation).toEqual({ enabled: false });
+    expect(buildInstanceV2({ ...props, translationEnabled: false }).configuration.translation).toEqual({
+      enabled: false,
+    });
+    expect(buildInstanceV2({ ...props, translationEnabled: true }).configuration.translation).toEqual({
+      enabled: true,
+    });
+  });
+
   it('omits configuration.vapid when there is no key', () => {
     const instance = buildInstanceV2({ ...props, vapidPublicKey: null });
 
