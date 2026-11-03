@@ -88,7 +88,7 @@ const LikedPostsPage = () => {
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
-            data.statuses.map((status) => <PostView key={status.id} status={status} />)
+            data.statuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
           )
           : (
             <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>

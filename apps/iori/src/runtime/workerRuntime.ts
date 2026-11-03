@@ -10,6 +10,8 @@ import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCr
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../adaptor/d1/actor/remoteActorCreatedStore.ts';
 import { createD1AiSummaryUsageRecorder } from '../adaptor/d1/aiSummary/aiSummaryUsageRecorder.ts';
+import { createD1AiTranslationUsageRecorder } from '../adaptor/d1/aiTranslation/aiTranslationUsageRecorder.ts';
+import { createD1PostTranslationStore } from '../adaptor/d1/aiTranslation/postTranslationStore.ts';
 import { createD1ArticleCreatedStore } from '../adaptor/d1/article/articleCreatedStore.ts';
 import { createD1ArticleDeletedStore } from '../adaptor/d1/article/articleDeletedStore.ts';
 import { createD1ArticlePublishedStore } from '../adaptor/d1/article/articlePublishedStore.ts';
@@ -162,6 +164,7 @@ import { createSignUpUseCase } from '../useCase/signUp.ts';
 import { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
 import { createSummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
+import { createTranslatePostUseCase } from '../useCase/translatePost.ts';
 import { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
@@ -322,6 +325,13 @@ export const createWorkerRuntimePorts = async (
         homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
         postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
         aiSummaryUsageRecorder: createD1AiSummaryUsageRecorder(db),
+        textGenerator,
+        htmlToPlainText,
+      }),
+      translatePost: createTranslatePostUseCase({
+        postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+        postTranslationStore: createD1PostTranslationStore(db),
+        aiTranslationUsageRecorder: createD1AiTranslationUsageRecorder(db),
         textGenerator,
         htmlToPlainText,
       }),

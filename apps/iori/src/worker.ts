@@ -24,6 +24,7 @@ import { createWorkerMastodonMediaRouter } from './adaptor/routes/workerMastodon
 import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
+import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMastodonTranslateRouter.ts';
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
@@ -236,6 +237,7 @@ export default {
               description: SITE_DESCRIPTION,
               contactUsername: Username.parseOrThrow('kosui'),
               vapidPublicKey: runtime.core.vapidPublicKey,
+              translationEnabled: runtime.textGenerator !== undefined,
             },
           }),
         );
@@ -269,6 +271,7 @@ export default {
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));

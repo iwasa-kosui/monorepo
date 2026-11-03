@@ -285,6 +285,7 @@ const ThreadModal = () => {
                         <PostView
                           status={post}
                           currentAccountId={currentAccountId}
+                          isLoggedIn
                           onReply={reply.openReplyDialog}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.id}
@@ -312,6 +313,7 @@ const ThreadModal = () => {
                     <PostView
                       status={threadData.currentPost}
                       currentAccountId={currentAccountId}
+                      isLoggedIn
                       onReply={reply.openReplyDialog}
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.id}
@@ -340,6 +342,7 @@ const ThreadModal = () => {
                           <PostView
                             status={post}
                             currentAccountId={currentAccountId}
+                            isLoggedIn
                             onReply={reply.openReplyDialog}
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.id}
@@ -652,6 +655,7 @@ const TimelineList = () => {
             isEmojiReacting={actionState.emojiReactingPostId === postId}
             myReactions={actionState.myReactions.get(postId)}
             currentAccountId={me.id}
+            isLoggedIn
             isSelected={selectedIndex === index}
             dataIndex={index}
             isEmojiPickerOpen={emojiPickerOpenForIndex === index}

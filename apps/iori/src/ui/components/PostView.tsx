@@ -1,9 +1,11 @@
 import { useRef, useState } from 'hono/jsx';
 
-import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
+import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { translationErrorMessage } from '../api/translation.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
@@ -24,6 +26,7 @@ type Props = Readonly<{
   isEmojiReacting?: boolean;
   myReactions?: readonly string[];
   currentAccountId?: string;
+  isLoggedIn?: boolean;
   isSelected?: boolean;
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
@@ -50,6 +53,7 @@ export const PostView = (
     isEmojiReacting,
     myReactions,
     currentAccountId,
+    isLoggedIn,
     isSelected,
     dataIndex,
     isEmojiPickerOpen,
@@ -74,6 +78,12 @@ export const PostView = (
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const lastTapTime = useRef<number>(0);
+  const isTranslatingRef = useRef(false);
+  const [translation, setTranslation] = useState<Translation | null>(null);
+  const [isTranslationShown, setIsTranslationShown] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const canTranslate = isLoggedIn === true && post.visibility !== 'direct' && post.language === 'und';
 
   // Generate link to post detail page
   const postDetailLink = isLocalPost ? statusHref(post) : safeAbsoluteUrl(post.uri);
@@ -133,6 +143,26 @@ export const PostView = (
           onRepost(post.id);
         }
       }
+    }
+  };
+
+  const handleTranslateClick = async () => {
+    if (isTranslatingRef.current) return;
+    if (translation !== null) {
+      setIsTranslationShown(!isTranslationShown);
+      return;
+    }
+    isTranslatingRef.current = true;
+    setIsTranslating(true);
+    setTranslationError('');
+    try {
+      setTranslation(await translate(post.id));
+      setIsTranslationShown(true);
+    } catch (error) {
+      setTranslationError(translationErrorMessage(isMastodonApiError(error) ? error.status : undefined));
+    } finally {
+      isTranslatingRef.current = false;
+      setIsTranslating(false);
     }
   };
 
@@ -271,6 +301,15 @@ export const PostView = (
             class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
+          {isTranslationShown && translation !== null && (
+            <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
+              <div
+                class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
+                dangerouslySetInnerHTML={{ __html: translation.content }}
+              />
+              <p class='text-xs text-warm-gray-dark dark:text-gray-500'>Workers AI で翻訳</p>
+            </div>
+          )}
           {images.length > 0 && (
             <div
               class={`mt-3 grid gap-2 ${
@@ -341,6 +380,29 @@ export const PostView = (
             </div>
           )}
           <div class='mt-3 flex items-center justify-end gap-4'>
+            {canTranslate && (
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleTranslateClick();
+                }}
+                class={`flex items-center gap-1 text-sm transition-colors ${
+                  isTranslating
+                    ? 'text-charcoal-light/50 dark:text-gray-500 cursor-wait'
+                    : 'text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+                }`}
+                disabled={isTranslating}
+              >
+                {isTranslating
+                  ? '翻訳しています'
+                  : translation === null
+                  ? '翻訳'
+                  : isTranslationShown
+                  ? '原文のみ表示'
+                  : '翻訳を表示'}
+              </button>
+            )}
             {/* Reply button */}
             {onReply && (
               <button
@@ -511,6 +573,7 @@ export const PostView = (
               </button>
             )}
           </div>
+          {translationError !== '' && <p class='mt-2 text-sm text-red-600 dark:text-red-400'>{translationError}</p>}
           {/* Reactions display */}
           {(reactions.length > 0 || (myReactions?.length ?? 0) > 0) && (
             <div class='mt-2 flex flex-wrap items-center gap-1'>

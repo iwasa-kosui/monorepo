@@ -5,6 +5,7 @@ import type {
   Notification,
   Relationship,
   Status,
+  Translation,
 } from '../../adaptor/mastodon/entities.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
@@ -211,6 +212,8 @@ export const unfavourite = (id: string): Promise<Status> => post<Status>(statusA
 export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
 
 export const unreblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unreblog'));
+
+export const translate = (id: string): Promise<Translation> => post<Translation>(statusActionPath(id, 'translate'));
 
 export const follow = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'follow'));

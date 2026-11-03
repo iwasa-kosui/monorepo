@@ -146,6 +146,17 @@ describe('toStatus', () => {
     expect(status.account).toEqual(account);
   });
 
+  it.each([
+    ['<p></p>', null],
+    ['<p>   </p>', null],
+    ['<p>こんにちは</p>', 'ja'],
+    ['<p>カタカナ</p>', 'ja'],
+    ['<p>漢字 日本</p>', 'und'],
+    ['<p>hello</p>', 'und'],
+  ])('sets language for %s to %s', (content, expected) => {
+    expect(toStatus({ ...localPost, content }, options).language).toBe(expected);
+  });
+
   it('uses the URI of a remote post', () => {
     const status = toStatus(remotePost, options);
 
@@ -357,5 +368,6 @@ describe('toReblogStatus', () => {
     expect(status.reblog).toEqual(reblog);
     expect(status.content).toBe('');
     expect(status.favourited).toBe(true);
+    expect(status.language).toBe(reblog.language);
   });
 });

@@ -7,6 +7,7 @@ describe('D1 schema', () => {
     expect(Object.keys(schema).sort()).toEqual([
       'actorsTable',
       'aiSummaryUsagesTable',
+      'aiTranslationUsagesTable',
       'articleBodiesTable',
       'articlesTable',
       'digestItemsTable',
@@ -39,6 +40,7 @@ describe('D1 schema', () => {
       'oauthApplicationsTable',
       'oauthAuthorizationCodesTable',
       'postImagesTable',
+      'postTranslationsTable',
       'postsTable',
       'pushSubscriptionsTable',
       'relaysTable',
