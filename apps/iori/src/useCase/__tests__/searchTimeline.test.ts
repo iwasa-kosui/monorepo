@@ -178,7 +178,26 @@ describe('SearchTimelineUseCase', () => {
     expect(result.terms.expanded).toEqual([]);
     expect(result.postIds).toEqual([hit]);
     expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '旅行', weight: 2 }]);
-    expect(warn).toHaveBeenCalledWith('timeline search expansion failed: QueryExpansionTimeoutError');
+    expect(warn).toHaveBeenCalledWith(
+      'timeline search expansion failed: QueryExpansionTimeoutError: The query expansion did not finish within 10 ms.',
+    );
+    warn.mockRestore();
+  });
+
+  it('AiError で失敗したときは、種類と message を 200 文字までに切り詰めてログに出す', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const longMessage = 'x'.repeat(300);
+    const generator: TextGenerator = {
+      summarize: () => RA.err({ type: 'AiError', message: longMessage }),
+      generate: () => RA.err({ type: 'AiError', message: longMessage }),
+    };
+    const { me, addPost, search } = setup({ textGenerator: generator });
+    addPost(me, '旅行の写真', 1000);
+
+    const result = await expectOk(search('旅行'));
+
+    expect(result.expansion).toBe('failed');
+    expect(warn).toHaveBeenCalledWith(`timeline search expansion failed: AiError: ${'x'.repeat(200)}`);
     warn.mockRestore();
   });
 
