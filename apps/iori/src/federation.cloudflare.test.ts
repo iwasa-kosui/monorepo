@@ -127,6 +127,8 @@ describe('Cloudflare Fedify message queue', () => {
       keys: [{ jwk: 'k'.repeat(size) }],
     });
     const estimate = (message: unknown) => new TextEncoder().encode(JSON.stringify(message)).byteLength + 256;
+    const outboxMessageOfBytes = (index: number, bytes: number) =>
+      outboxMessage(index, bytes - estimate(outboxMessage(index, 0)));
     const bodiesOf = (sendBatch: ReturnType<typeof vi.fn>) =>
       sendBatch.mock.calls.map((call) => (call[0] as { body: { id: string } }[]).map((request) => request.body));
 
@@ -199,7 +201,10 @@ describe('Cloudflare Fedify message queue', () => {
         ...workerEnv,
         FEDIFY_QUEUE: { sendBatch } as never,
       }, vi.fn());
-      const oversized = outboxMessage(1, 130_000);
+      const oversized = {
+        ...outboxMessage(1, 130_000),
+        activityId: 'https://worker.example.invalid/users/kosui/posts/abc',
+      };
 
       await expect(queue.enqueueMany?.([outboxMessage(0, 100), oversized, outboxMessage(2, 100)])).resolves
         .toBeUndefined();
@@ -209,7 +214,9 @@ describe('Cloudflare Fedify message queue', () => {
       expect(error).toHaveBeenCalledWith('Fedify queue message too large; dropped.', {
         bytes: estimate(oversized),
         type: 'outbox',
+        id: 'message-1',
         activityType: 'Create',
+        activityId: 'https://worker.example.invalid/users/kosui/posts/abc',
       });
       expect(JSON.stringify(error.mock.calls)).not.toMatch(/kkkk|remote1\.example|jwk/);
       error.mockRestore();
@@ -253,9 +260,41 @@ describe('Cloudflare Fedify message queue', () => {
       expect(error).toHaveBeenCalledWith('Fedify queue message too large; dropped.', {
         bytes: estimate(outboxMessage(1, 130_000)),
         type: 'outbox',
+        id: 'message-1',
         activityType: 'Create',
       });
       error.mockRestore();
+    });
+
+    it('sends a message whose estimated size is exactly 120,000 bytes', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+      const message = outboxMessageOfBytes(0, 120_000);
+      expect(estimate(message)).toBe(120_000);
+
+      await queue.enqueueMany?.([message]);
+
+      expect(bodiesOf(sendBatch).flat().map((body) => body.id)).toEqual(['message-0']);
+      expect(error).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
+
+    it('sends messages whose estimated sizes total exactly 240,000 bytes in one sendBatch', async () => {
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+      const messages = Array.from({ length: 4 }, (_, index) => outboxMessageOfBytes(index, 60_000));
+      expect(messages.reduce((sum, message) => sum + estimate(message), 0)).toBe(240_000);
+
+      await queue.enqueueMany?.(messages);
+
+      expect(bodiesOf(sendBatch).map((batch) => batch.length)).toEqual([4]);
     });
   });
 

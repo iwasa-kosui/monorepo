@@ -90,12 +90,14 @@ const textEncoder = new TextEncoder();
 const estimateMessageBytes = (message: Message): number =>
   textEncoder.encode(JSON.stringify(message)).byteLength + QUEUE_MESSAGE_OVERHEAD_BYTES;
 
-const isTooLarge = (message: Message, bytes: number): boolean => {
+const dropIfTooLarge = (message: Message, bytes: number): boolean => {
   if (bytes <= QUEUE_MESSAGE_MAX_BYTES) return false;
   console.error('Fedify queue message too large; dropped.', {
     bytes,
     type: message.type,
+    id: message.id,
     ...('activityType' in message ? { activityType: message.activityType } : {}),
+    ...('activityId' in message ? { activityId: message.activityId } : {}),
   });
   return true;
 };
@@ -107,7 +109,7 @@ const splitIntoBatches = (messages: readonly Message[]): Message[][] => {
   let currentBytes = 0;
   for (const message of messages) {
     const bytes = estimateMessageBytes(message);
-    if (isTooLarge(message, bytes)) continue;
+    if (dropIfTooLarge(message, bytes)) continue;
     if (
       current.length > 0
       && (current.length >= QUEUE_BATCH_MAX_MESSAGES || currentBytes + bytes > QUEUE_BATCH_MAX_BYTES)
@@ -129,7 +131,7 @@ const createWorkersMessageQueue = (
 ): MessageQueue => {
   const queue = new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
   const enqueue = async (message: Message, options?: MessageQueueEnqueueOptions): Promise<void> => {
-    if (isTooLarge(message, estimateMessageBytes(message))) return;
+    if (dropIfTooLarge(message, estimateMessageBytes(message))) return;
     await queue.enqueue(message, options);
   };
   const enqueueMany = async (messages: readonly Message[], options?: MessageQueueEnqueueOptions): Promise<void> => {
