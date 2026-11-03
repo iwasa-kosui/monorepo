@@ -2,6 +2,10 @@ import sanitizeHtml from 'sanitize-html';
 
 const hexOrRgb = [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/];
 
+const markupClasses = ['mention', 'u-url', 'hashtag', 'invisible', 'ellipsis', 'h-card'];
+
+const isAbsoluteHttpUrl = (href: string): boolean => /^https?:\/\//i.test(href);
+
 export const sanitizeStatusContent = (html: string): string =>
   sanitizeHtml(html, {
     allowedTags: [
@@ -32,6 +36,8 @@ export const sanitizeStatusContent = (html: string): string =>
       code: ['class'],
     },
     allowedClasses: {
+      a: markupClasses,
+      span: markupClasses,
       pre: ['shiki', 'shiki-themes', 'shiki-dark', 'shiki-light', 'github-light', 'github-dark'],
       code: [
         'language-javascript',
@@ -48,6 +54,15 @@ export const sanitizeStatusContent = (html: string): string =>
     allowedSchemes: ['http', 'https'],
     allowedSchemesAppliedToAttributes: ['href'],
     allowProtocolRelative: false,
+    transformTags: {
+      a: (tagName, attribs) => {
+        const { href, ...rest } = attribs;
+        return {
+          tagName,
+          attribs: href !== undefined && isAbsoluteHttpUrl(href.trim()) ? attribs : rest,
+        };
+      },
+    },
     allowedStyles: {
       '*': {
         'color': hexOrRgb,

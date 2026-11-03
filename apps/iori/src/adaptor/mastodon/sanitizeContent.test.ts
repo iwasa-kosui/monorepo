@@ -40,6 +40,22 @@ describe('sanitizeStatusContent', () => {
     expect(sanitizeStatusContent(html)).toBe(html);
   });
 
+  it('keeps only the Mastodon classes on a and span', () => {
+    const sanitized = sanitizeStatusContent(
+      '<span class="fixed inset-0 z-50 invisible">x</span><a href="https://example.com" class="fixed mention">y</a>',
+    );
+
+    expect(sanitized).toBe('<span class="invisible">x</span><a href="https://example.com" class="mention">y</a>');
+  });
+
+  it('removes a relative href but keeps the text of the link', () => {
+    const sanitized = sanitizeStatusContent(
+      '<a href="/relative" class="mention">y</a><a href="https://example.com">z</a>',
+    );
+
+    expect(sanitized).toBe('<a class="mention">y</a><a href="https://example.com">z</a>');
+  });
+
   it('removes tags and attributes that are not allowed', () => {
     const sanitized = sanitizeStatusContent('<iframe src="https://x.example"></iframe><div id="a"><p>ok</p></div>');
 

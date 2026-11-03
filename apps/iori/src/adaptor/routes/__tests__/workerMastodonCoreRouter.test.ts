@@ -13,7 +13,7 @@ import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const setup = () => {
+const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) => {
   const h = createOAuthHarness();
   const authn = createMastodonAuthn({
     verifyAccessTokenUseCase: h.memory.useCases.verifyAccessTokenUseCase,
@@ -36,7 +36,14 @@ const setup = () => {
   };
   const router = createWorkerMastodonCoreRouter({
     authn,
-    userResolver: { resolve: (userId: string) => RA.ok(users.get(userId)) } as never,
+    userResolver: {
+      resolve: (userId: string) => {
+        if (failUserResolve) {
+          throw new Error('boom');
+        }
+        return RA.ok(users.get(userId));
+      },
+    } as never,
     userResolverByUsername: {
       resolve: (username: string) => RA.ok([...users.values()].find((user) => user.username === username)),
     } as never,
@@ -146,6 +153,20 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(response.status).toBe(403);
       expect(await response.json()).toEqual({ error: 'This action is outside the authorized scopes' });
+    });
+
+    it('例外が起きたら JSON の 500 を返す', async () => {
+      const h = setup({ failUserResolve: true });
+      const { token, userId } = await h.issueUserToken('read:accounts');
+      h.addUser(userId, 'kosui');
+
+      const response = await h.request('/api/v1/accounts/verify_credentials', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
     });
 
     it('認証がなければ 401 にする', async () => {

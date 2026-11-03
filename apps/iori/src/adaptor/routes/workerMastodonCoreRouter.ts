@@ -12,7 +12,7 @@ import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
-import { actorNotFound, internalServerError } from './helper/mastodonErrors.ts';
+import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -137,6 +137,7 @@ export const createWorkerMastodonCoreRouter = ({
   });
 
   const app = new Hono<MastodonAuthEnv>()
+    .onError(handleInternalError)
     .get('/v1/accounts/verify_credentials', authn.requireUser(readAccounts, profileScope), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {
