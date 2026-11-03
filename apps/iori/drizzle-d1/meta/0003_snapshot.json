@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "78b98a4a-eefc-4cbe-a0e6-1f4ddedec6a6",
-  "prevId": "2982b7f3-9ac5-495f-aa72-852759581047",
+  "id": "c71e6151-2210-43a3-a43e-90c370611903",
+  "prevId": "aadd1b38-9a3e-489c-a043-d7ccfd8080d9",
   "tables": {
     "actors": {
       "name": "actors",
@@ -409,6 +409,14 @@
           ],
           "isUnique": false
         },
+        "federated_timeline_items_received_at_id_idx": {
+          "name": "federated_timeline_items_received_at_id_idx",
+          "columns": [
+            "receivedAt",
+            "federatedTimelineItemId"
+          ],
+          "isUnique": false
+        },
         "federated_timeline_items_post_id_idx": {
           "name": "federated_timeline_items_post_id_idx",
           "columns": [
@@ -445,211 +453,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "feed_entries": {
-      "name": "feed_entries",
-      "columns": {
-        "feedEntryId": {
-          "name": "feedEntryId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "feedSourceId": {
-          "name": "feedSourceId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "guid": {
-          "name": "guid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "publishedAt": {
-          "name": "publishedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "hatenaBookmarkCount": {
-          "name": "hatenaBookmarkCount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fetchedAt": {
-          "name": "fetchedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "feed_entries_feed_source_guid_unique": {
-          "name": "feed_entries_feed_source_guid_unique",
-          "columns": [
-            "feedSourceId",
-            "guid"
-          ],
-          "isUnique": true
-        },
-        "feed_entries_url_idx": {
-          "name": "feed_entries_url_idx",
-          "columns": [
-            "url"
-          ],
-          "isUnique": false
-        },
-        "feed_entries_published_at_idx": {
-          "name": "feed_entries_published_at_idx",
-          "columns": [
-            "publishedAt"
-          ],
-          "isUnique": false
-        },
-        "feed_entries_fetched_at_idx": {
-          "name": "feed_entries_fetched_at_idx",
-          "columns": [
-            "fetchedAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "feed_entries_feedSourceId_feed_sources_feedSourceId_fk": {
-          "name": "feed_entries_feedSourceId_feed_sources_feedSourceId_fk",
-          "tableFrom": "feed_entries",
-          "tableTo": "feed_sources",
-          "columnsFrom": [
-            "feedSourceId"
-          ],
-          "columnsTo": [
-            "feedSourceId"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "feed_sources": {
-      "name": "feed_sources",
-      "columns": {
-        "feedSourceId": {
-          "name": "feedSourceId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "etag": {
-          "name": "etag",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lastModified": {
-          "name": "lastModified",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lastFetchedAt": {
-          "name": "lastFetchedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lastError": {
-          "name": "lastError",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "feed_sources_url_unique": {
-          "name": "feed_sources_url_unique",
-          "columns": [
-            "url"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -1126,7 +929,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "local_posts_in_reply_to_uri_idx": {
+          "name": "local_posts_in_reply_to_uri_idx",
+          "columns": [
+            "inReplyToUri"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "local_posts_postId_posts_postId_fk": {
           "name": "local_posts_postId_posts_postId_fk",
@@ -1976,6 +1787,23 @@
             "actorId"
           ],
           "isUnique": false
+        },
+        "posts_created_at_post_id_idx": {
+          "name": "posts_created_at_post_id_idx",
+          "columns": [
+            "createdAt",
+            "postId"
+          ],
+          "isUnique": false
+        },
+        "posts_actor_id_created_at_post_id_idx": {
+          "name": "posts_actor_id_created_at_post_id_idx",
+          "columns": [
+            "actorId",
+            "createdAt",
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2252,6 +2080,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -2261,6 +2096,13 @@
             "uri"
           ],
           "isUnique": true
+        },
+        "remote_posts_in_reply_to_uri_idx": {
+          "name": "remote_posts_in_reply_to_uri_idx",
+          "columns": [
+            "inReplyToUri"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2336,6 +2178,15 @@
             "announceActivityUri"
           ],
           "isUnique": true
+        },
+        "reposts_actor_id_created_at_repost_id_idx": {
+          "name": "reposts_actor_id_created_at_repost_id_idx",
+          "columns": [
+            "actorId",
+            "createdAt",
+            "repostId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2468,7 +2319,16 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "timeline_items_created_at_id_idx": {
+          "name": "timeline_items_created_at_id_idx",
+          "columns": [
+            "createdAt",
+            "timelineItemId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "timeline_items_actorId_actors_actorId_fk": {
           "name": "timeline_items_actorId_actors_actorId_fk",

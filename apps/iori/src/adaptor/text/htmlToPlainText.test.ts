@@ -18,6 +18,24 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('<h1>T</h1><p>a<br>b</p><ul><li>c</li><li>d</li></ul>', 100)).toBe('T\na\nb\nc\nd');
   });
 
+  it('turns the closing tags of pre, lists, blockquote and table into line breaks', () => {
+    expect(htmlToPlainText('<pre><code>x</code></pre>次の段落', 100)).toBe('x\n次の段落');
+    expect(htmlToPlainText('<ul><li>a</li></ul>b', 100)).toBe('a\n\nb');
+    expect(htmlToPlainText('<ol><li>a</li></ol>b', 100)).toBe('a\n\nb');
+    expect(htmlToPlainText('<blockquote>a</blockquote>b', 100)).toBe('a\nb');
+    expect(htmlToPlainText('<table><tr><td>a</td></tr></table>b', 100)).toBe('a\n\nb');
+  });
+
+  it('separates table cells with a space', () => {
+    expect(htmlToPlainText('<td>a</td><td>b</td>', 100)).toBe('a b');
+    expect(htmlToPlainText('<th>a</th><th>b</th>', 100)).toBe('a b');
+  });
+
+  it('turns hr into a line break', () => {
+    expect(htmlToPlainText('a<hr>b', 100)).toBe('a\nb');
+    expect(htmlToPlainText('a<hr/>b', 100)).toBe('a\nb');
+  });
+
   it('strips the remaining tags', () => {
     expect(htmlToPlainText('<a href="https://example.com">link</a> <b>bold</b>', 100)).toBe('link bold');
   });
@@ -26,6 +44,12 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('&amp; &lt; &gt; &quot; &#39; &apos; a&nbsp;b &#65; &#x42; &#x1F600;', 100)).toBe(
       '& < > " \' \' a b A B \u{1F600}',
     );
+  });
+
+  it('decodes common named entities', () => {
+    expect(
+      htmlToPlainText('&hellip;&mdash;&ndash;&rsquo;&lsquo;&rdquo;&ldquo;&middot;&copy;&reg;&trade;&yen;&times;', 100),
+    ).toBe('…—–’‘”“·©®™¥×');
   });
 
   it('keeps out-of-range numeric references as they are', () => {

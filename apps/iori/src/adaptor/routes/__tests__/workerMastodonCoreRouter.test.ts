@@ -13,7 +13,7 @@ import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const setup = () => {
+const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) => {
   const h = createOAuthHarness();
   const authn = createMastodonAuthn({
     verifyAccessTokenUseCase: h.memory.useCases.verifyAccessTokenUseCase,
@@ -36,7 +36,14 @@ const setup = () => {
   };
   const router = createWorkerMastodonCoreRouter({
     authn,
-    userResolver: { resolve: (userId: string) => RA.ok(users.get(userId)) } as never,
+    userResolver: {
+      resolve: (userId: string) => {
+        if (failUserResolve) {
+          throw new Error('boom');
+        }
+        return RA.ok(users.get(userId));
+      },
+    } as never,
     userResolverByUsername: {
       resolve: (username: string) => RA.ok([...users.values()].find((user) => user.username === username)),
     } as never,
@@ -148,6 +155,20 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(await response.json()).toEqual({ error: 'This action is outside the authorized scopes' });
     });
 
+    it('例外が起きたら JSON の 500 を返す', async () => {
+      const h = setup({ failUserResolve: true });
+      const { token, userId } = await h.issueUserToken('read:accounts');
+      h.addUser(userId, 'kosui');
+
+      const response = await h.request('/api/v1/accounts/verify_credentials', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
+    });
+
     it('認証がなければ 401 にする', async () => {
       const h = setup();
 
@@ -206,6 +227,10 @@ describe('createWorkerMastodonCoreRouter', () => {
     const emptyArrays: ReadonlyArray<readonly [string, string | undefined]> = [
       ['/api/v1/custom_emojis', undefined],
       ['/api/v1/accounts/abc/featured_tags', undefined],
+      ['/api/v1/accounts/abc/endorsements', undefined],
+      ['/api/v1/trends/statuses', undefined],
+      ['/api/v1/trends/tags', undefined],
+      ['/api/v1/trends/links', undefined],
       ['/api/v1/filters', 'read:filters'],
       ['/api/v2/filters', 'read:filters'],
       ['/api/v1/lists', 'read:lists'],
@@ -247,6 +272,49 @@ describe('createWorkerMastodonCoreRouter', () => {
         expect(denied.status).toBe(403);
       },
     );
+
+    it('instance/languages は日本語と英語を認証なしで返す', async () => {
+      const response = await setup().request('/api/v1/instance/languages');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual([{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }]);
+    });
+
+    it('instance/translation_languages は空のオブジェクトを認証なしで返す', async () => {
+      const response = await setup().request('/api/v1/instance/translation_languages');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({});
+    });
+
+    it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {
+      const h = setup();
+      const { token } = await h.issueUserToken('read:follows');
+
+      const response = await h.request('/api/v1/accounts/familiar_followers?id[]=a&id[]=b&id=c', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual([
+        { id: 'a', accounts: [] },
+        { id: 'b', accounts: [] },
+        { id: 'c', accounts: [] },
+      ]);
+    });
+
+    it('familiar_followers は認証がなければ 401、スコープが違えば 403 にする', async () => {
+      const h = setup();
+      const { token } = await h.issueUserToken('read:statuses');
+
+      const anonymous = await h.request('/api/v1/accounts/familiar_followers?id[]=a');
+      const denied = await h.request('/api/v1/accounts/familiar_followers?id[]=a', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(anonymous.status).toBe(401);
+      expect(denied.status).toBe(403);
+    });
 
     it('preferences を返す', async () => {
       const h = setup();

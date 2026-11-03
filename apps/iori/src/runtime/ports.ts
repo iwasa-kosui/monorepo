@@ -1,19 +1,35 @@
 import type { Context, Federation } from '@fedify/fedify';
 import type { RA, ResultAsync } from '@iwasa-kosui/result';
 
+import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import type { StatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
+import type {
+  ActorIdsResolverByFollowerIdWithPagination,
+  ActorIdsResolverByFollowingIdWithPagination,
+} from '../domain/actor/accountProfile.ts';
 import type { AccountStatsResolverByActorId } from '../domain/actor/accountStats.ts';
-import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
+import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
+import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
 import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
-import type { PostWithAuthor, ThreadResolver } from '../domain/post/post.ts';
+import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
+import type {
+  LocalPostsResolverByPage,
+  PostsWithAuthorResolverByPostIds,
+  PostWithAuthor,
+  ThreadResolver,
+} from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
+import type { RepostResolverById } from '../domain/repost/repost.ts';
 import type { SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
+import type { TimelineItemsResolverByActorIds } from '../domain/timeline/timelineItem.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
@@ -26,11 +42,9 @@ import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
-import type { GetFederatedTimelineUseCase } from '../useCase/getFederatedTimeline.ts';
 import type { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
 import type { GetMutesUseCase } from '../useCase/getMutes.ts';
 import type { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
-import type { GetServerTimelineUseCase } from '../useCase/getServerTimeline.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { GetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
 import type { GetUserPostsUseCase } from '../useCase/getUserPosts.ts';
@@ -81,7 +95,20 @@ export type IoriMastodonRuntimePorts = Readonly<{
   userResolver: UserResolver;
   userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
+  actorResolverById: ActorResolverById;
   accountStatsResolver: AccountStatsResolverByActorId;
+  actorsResolverByFollowerId: ActorsResolverByFollowerId;
+  mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
+  timelineItemsResolverByActorIds: TimelineItemsResolverByActorIds;
+  localPostsResolverByPage: LocalPostsResolverByPage;
+  accountStatusItemsResolverByActorId: AccountStatusItemsResolverByActorId;
+  federatedTimelineItemsResolver: FederatedTimelineItemsResolver;
+  postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
+  repostResolverById: RepostResolverById;
+  threadResolver: ThreadResolver;
+  actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
+  actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
+  statusAssembler: StatusAssembler;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -124,7 +151,6 @@ export type IoriCoreRuntimePorts = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   sendFollowRequestUseCase: SendFollowRequestUseCase;
-  getFederatedTimelineUseCase: GetFederatedTimelineUseCase;
   getUserPostsUseCase: GetUserPostsUseCase;
   getRemoteActorPostsUseCase: Readonly<{
     run: (
@@ -143,8 +169,6 @@ export type IoriCoreRuntimePorts = Readonly<{
       { message: string }
     >;
   }>;
-  getServerTimelineUseCase: GetServerTimelineUseCase;
-  threadResolver: ThreadResolver;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;

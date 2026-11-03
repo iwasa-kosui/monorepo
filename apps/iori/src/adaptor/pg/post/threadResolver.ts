@@ -1,6 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import { ImageId } from '../../../domain/image/imageId.ts';
 import type { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import {
   LocalPost,
@@ -242,6 +243,7 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
         inReplyToUri: row.remote_posts.inReplyToUri,
+        visibility: null,
         type: 'remote',
       }),
       username: Username.orThrow(row.remote_actors?.username ?? 'unknown'),
@@ -290,6 +292,7 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
         inReplyToUri: row.remote_posts.inReplyToUri,
+        visibility: null,
         type: 'remote',
       }),
       username: Username.orThrow(row.remote_actors?.username ?? 'unknown'),
@@ -365,6 +368,7 @@ async function getPostImages(postId: string): Promise<PostImage[]> {
     .execute();
 
   return imageRows.map((row) => ({
+    imageId: ImageId.orThrow(row.imageId),
     url: row.url,
     altText: row.altText,
   }));
@@ -384,7 +388,7 @@ async function getPostImagesByIds(postIds: string[]): Promise<Map<string, PostIm
   for (const imageRow of imageRows) {
     if (postIds.includes(imageRow.postId)) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
   }

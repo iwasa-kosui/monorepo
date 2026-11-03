@@ -5,6 +5,19 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   quot: '"',
   apos: '\'',
   nbsp: ' ',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  rsquo: '’',
+  lsquo: '‘',
+  rdquo: '”',
+  ldquo: '“',
+  middot: '·',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  yen: '¥',
+  times: '×',
 };
 
 const decodeCodePoint = (match: string, codePoint: number): string => {
@@ -14,11 +27,14 @@ const decodeCodePoint = (match: string, codePoint: number): string => {
 };
 
 const decodeEntities = (text: string): string =>
-  text.replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(amp|lt|gt|quot|apos|nbsp));/g, (match, dec, hex, named) => {
-    if (dec !== undefined) return decodeCodePoint(match, Number.parseInt(dec, 10));
-    if (hex !== undefined) return decodeCodePoint(match, Number.parseInt(hex, 16));
-    return NAMED_ENTITIES[named as string] ?? match;
-  });
+  text.replace(
+    /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(amp|lt|gt|quot|apos|nbsp|hellip|mdash|ndash|rsquo|lsquo|rdquo|ldquo|middot|copy|reg|trade|yen|times));/g,
+    (match, dec, hex, named) => {
+      if (dec !== undefined) return decodeCodePoint(match, Number.parseInt(dec, 10));
+      if (hex !== undefined) return decodeCodePoint(match, Number.parseInt(hex, 16));
+      return NAMED_ENTITIES[named as string] ?? match;
+    },
+  );
 
 export const htmlToPlainText = (html: string, maxChars: number): string => {
   const text = decodeEntities(
@@ -26,7 +42,9 @@ export const htmlToPlainText = (html: string, maxChars: number): string => {
       .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
       .replace(/<!--[\s\S]*?-->/g, '')
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/(?:p|div|li|h[1-6]|tr)\s*>/gi, '\n')
+      .replace(/<hr\b[^>]*>/gi, '\n')
+      .replace(/<\/(?:p|div|li|h[1-6]|tr|blockquote|pre|ul|ol|table)\s*>/gi, '\n')
+      .replace(/<\/(?:td|th)\s*>/gi, ' ')
       .replace(/<[^>]*>/g, ''),
   )
     .split('\n')

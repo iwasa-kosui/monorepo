@@ -19,7 +19,7 @@ export const updateActiveWorker = async (
     onStage = () => {},
   },
 ) => {
-  const target = parseExpectedTarget(expectedTarget, { backend: false });
+  const target = parseExpectedTarget(expectedTarget);
   if (!/^[a-f0-9]{40}$/.test(currentCodeSha ?? '')) throw new Error('Invalid reviewed code revision.');
   signal.throwIfAborted();
   await checkMain(currentCodeSha, { signal });

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { admissionFixture } from '../../src/testing/admissionFixture.ts';
 import { scheduledTasks } from '../../src/scheduled/scheduledTasks.ts';
-import { createDeploymentWorkerConfig } from '../temporary-worker-config.mjs';
+import { createDeploymentWorkerConfig, stripJsonc } from '../temporary-worker-config.mjs';
 
 const readAppFile = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -141,5 +141,41 @@ describe('public/_headers', () => {
       '/static/chunks/*',
       '  Cache-Control: public, max-age=31536000, immutable',
     ]);
+  });
+});
+
+describe('stripJsonc', () => {
+  it('keeps // and /* inside strings', () => {
+    expect(stripJsonc('{"url": "https://example.com/a"}')).toBe('{"url": "https://example.com/a"}');
+    expect(stripJsonc('{"a": "a/*b*/c"}')).toBe('{"a": "a/*b*/c"}');
+  });
+
+  it('handles escaped quotes and backslashes in strings', () => {
+    expect(stripJsonc('{"a": "a\\"//b"}')).toBe('{"a": "a\\"//b"}');
+    expect(stripJsonc('{"a": "\\\\"} // c')).toBe('{"a": "\\\\"} ');
+  });
+
+  it('removes line comments and block comments outside strings', () => {
+    expect(stripJsonc('{"a": 1, // line\n"b": /* block */ 2}')).toBe('{"a": 1, \n"b":  2}');
+  });
+
+  it('keeps the newline after a line comment', () => {
+    expect(stripJsonc('{\n// first\n"a": 1\n}')).toBe('{\n\n"a": 1\n}');
+  });
+
+  it('removes trailing commas outside strings only', () => {
+    expect(JSON.parse(stripJsonc('{"a": [1, 2,], "b": ",}",\n}'))).toEqual({ a: [1, 2], b: ',}' });
+    expect(JSON.parse(stripJsonc('[1,/*x*/]'))).toEqual([1]);
+    expect(JSON.parse(stripJsonc('{"a":1,// c\n}'))).toEqual({ a: 1 });
+    expect(JSON.parse(stripJsonc('[1, {"a":2,},]'))).toEqual([1, { a: 2 }]);
+  });
+
+  it('leaves an unclosed block comment so that JSON.parse fails', () => {
+    expect(() => JSON.parse(stripJsonc('{"a": 1} /* open'))).toThrow();
+  });
+
+  it('does not treat /*/ as a closed block comment', () => {
+    expect(() => JSON.parse(stripJsonc('{"a":1/*/}'))).toThrow();
+    expect(JSON.parse(stripJsonc('{"a":/**/1}'))).toEqual({ a: 1 });
   });
 });

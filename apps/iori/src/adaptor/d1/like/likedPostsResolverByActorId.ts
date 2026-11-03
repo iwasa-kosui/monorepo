@@ -1,12 +1,14 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -45,10 +47,10 @@ export const createD1LikedPostsResolverByActorId = (
     if (postIds.length === 0) return RA.ok([]);
 
     const imageRows = await db.select().from(postImagesTable).where(inArray(postImagesTable.postId, postIds));
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const image of imageRows) {
       const images = imagesByPostId.get(image.postId) ?? [];
-      images.push({ url: image.url, altText: image.altText });
+      images.push({ imageId: ImageId.orThrow(image.imageId), url: image.url, altText: image.altText });
       imagesByPostId.set(image.postId, images);
     }
 
@@ -117,6 +119,7 @@ export const createD1LikedPostsResolverByActorId = (
           createdAt: row.posts.createdAt.getTime(),
           uri: row.remote_posts.uri,
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: toVisibility(row.remote_posts.visibility),
           type: 'remote',
         })
         : (() => {

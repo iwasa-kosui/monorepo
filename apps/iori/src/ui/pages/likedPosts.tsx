@@ -2,6 +2,7 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { PostView } from '../components/PostView.tsx';
+import { postToStatus } from '../legacyConversion.ts';
 
 type PostWithAuthor = {
   postId: string;
@@ -81,8 +82,7 @@ const LikedPostsPage = () => {
             data.posts.map((post) => (
               <PostView
                 key={post.postId}
-                post={post as never}
-                currentUserId={data.user.id as never}
+                status={postToStatus(post as never)}
               />
             ))
           )

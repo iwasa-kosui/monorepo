@@ -1,5 +1,5 @@
 import { Follow as ActivityPubFollow, Undo } from '@fedify/fedify';
-import { RA, type ResultAsync } from '@iwasa-kosui/result';
+import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type {
@@ -15,18 +15,13 @@ import {
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { MuteResolver } from '../domain/mute/mute.ts';
-import type {
-  PostsResolverByActorIds,
-  PostsResolverByActorIdWithPagination,
-  PostWithAuthor,
-} from '../domain/post/post.ts';
+import type { PostsResolverByActorIds, PostsResolverByActorIdWithPagination } from '../domain/post/post.ts';
 import type { SessionResolver, SessionWithUserAndActorResolver } from '../domain/session/session.ts';
-import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
+import type { UserResolver, UserWithLocalActorResolverByUsername } from '../domain/user/user.ts';
 import {
   composeSessionWithUserAndActorResolver,
-  resolveLocalActorWith,
   resolveSessionWithUserAndActorWith,
-  resolveUserByUsernameWith,
+  resolveUserWithLocalActorByUsernameWith,
 } from '../useCase/helper/resolve.ts';
 import type { IoriCoreRuntimePorts, WorkerRemoteActorAction } from './ports.ts';
 
@@ -133,23 +128,21 @@ export const createWorkerRemoteActorActions = (
 
 export const createWorkerGetUserPostsUseCase = (
   deps: Readonly<{
-    userResolverByUsername: UserResolverByUsername;
-    actorResolverByUserId: ActorResolverByUserId;
+    userWithLocalActorResolverByUsername: UserWithLocalActorResolverByUsername;
     actorsResolverByFollowerId: ActorsResolverByFollowerId;
     actorsResolverByFollowingId: ActorsResolverByFollowingId;
     postsResolverByActorIds: PostsResolverByActorIds;
   }>,
 ): IoriCoreRuntimePorts['getUserPostsUseCase'] => ({
   run: async ({ username, createdAt }) => {
-    const user = await resolveUserByUsernameWith(deps.userResolverByUsername)(username);
-    if (!user.ok) return user;
-    const actor = await resolveLocalActorWith(deps.actorResolverByUserId)(user.val.id);
-    if (!actor.ok) return actor;
+    const found = await resolveUserWithLocalActorByUsernameWith(deps.userWithLocalActorResolverByUsername)(username);
+    if (!found.ok) return found;
+    const { user, actor } = found.val;
     const [following, followers, posts] = await Promise.all([
-      deps.actorsResolverByFollowerId.resolve(actor.val.id),
-      deps.actorsResolverByFollowingId.resolve(actor.val.id),
+      deps.actorsResolverByFollowerId.resolve(actor.id),
+      deps.actorsResolverByFollowingId.resolve(actor.id),
       deps.postsResolverByActorIds.resolve({
-        actorIds: [actor.val.id],
+        actorIds: [actor.id],
         currentActorId: undefined,
         createdAt,
       }),
@@ -158,8 +151,8 @@ export const createWorkerGetUserPostsUseCase = (
     if (!followers.ok) return followers;
     if (!posts.ok) return posts;
     return RA.ok({
-      user: user.val,
-      actor: actor.val,
+      user,
+      actor,
       following: following.val,
       followers: followers.val,
       posts: posts.val,
@@ -214,18 +207,5 @@ export const createWorkerGetRemoteActorPostsUseCase = (
       isMuted: mute.ok && mute.val !== undefined,
       posts: posts.val,
     });
-  },
-});
-
-export const createWorkerGetServerTimelineUseCase = (
-  localPostsResolver: Readonly<{
-    resolve: (
-      input: Readonly<{ createdAt: Instant | undefined; limit?: number }>,
-    ) => ResultAsync<PostWithAuthor[], never>;
-  }>,
-): IoriCoreRuntimePorts['getServerTimelineUseCase'] => ({
-  run: async ({ createdAt, limit }) => {
-    const posts = await localPostsResolver.resolve({ createdAt, limit });
-    return posts.ok ? RA.ok({ posts: posts.val }) : posts;
   },
 });

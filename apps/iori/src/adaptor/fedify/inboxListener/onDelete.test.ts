@@ -44,6 +44,7 @@ describe('createOnDelete', () => {
               createdAt: Date.now() as never,
               uri: 'https://remote.example/posts/1',
               inReplyToUri: null,
+              visibility: null,
             }),
         },
         timelineItemsResolverByPostId: {

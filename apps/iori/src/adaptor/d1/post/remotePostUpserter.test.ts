@@ -13,6 +13,7 @@ const identity = {
     inboxUrl: 'https://remote.example/users/alice/inbox',
   },
   inReplyToUri: null,
+  visibility: null,
   attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
 };
 
@@ -48,6 +49,19 @@ describe('createD1RemotePostUpserter', () => {
         altText: null,
       }),
     ]);
+  });
+
+  it('records the visibility of a new post', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve({ ...identity, visibility: 'unlisted' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val.visibility).toBe('unlisted');
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({ aggregateState: expect.objectContaining({ visibility: 'unlisted' }) }),
+    );
   });
 
   it('does not store attachments when the post already exists', async () => {

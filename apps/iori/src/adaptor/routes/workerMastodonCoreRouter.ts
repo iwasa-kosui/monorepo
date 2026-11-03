@@ -6,16 +6,15 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { User, UserResolver, UserResolverByUsername } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
+import { defaultImageUrls } from '../mastodon/defaultImages.ts';
 import type { Account, CredentialAccount, Marker, Preferences } from '../mastodon/entities.ts';
 import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
+import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
-
-export const DEFAULT_AVATAR_PATH = '/default-avatar.png';
-export const DEFAULT_HEADER_PATH = '/default-header.png';
 
 export type WorkerMastodonCoreRouterDeps = Readonly<{
   authn: MastodonAuthn;
@@ -34,6 +33,11 @@ export type WorkerMastodonCoreRouterDeps = Readonly<{
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
+
+type AccountLookup =
+  | Readonly<{ kind: 'ok'; account: CredentialAccount }>
+  | Readonly<{ kind: 'noActor' }>
+  | Readonly<{ kind: 'failed' }>;
 
 const scope = (value: string): Scope => Scope.orThrow(value);
 const readScope = scope('read');
@@ -57,6 +61,8 @@ const preferences: Preferences = {
   'reading:expand:spoilers': false,
 };
 
+const languages = [{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }] as const;
+
 const markerKeys = ['home', 'notifications'] as const;
 
 const readLastReadId = (body: RequestBody, key: string): string | undefined => {
@@ -77,31 +83,37 @@ export const createWorkerMastodonCoreRouter = ({
   accountStatsResolver,
   instance,
 }: WorkerMastodonCoreRouterDeps): Hono<MastodonAuthEnv> => {
-  const resolveAccount = async (user: User, requestUrl: string): Promise<CredentialAccount | undefined> => {
+  const resolveAccount = async (user: User, requestUrl: string): Promise<AccountLookup> => {
     const actor = await actorResolverByUserId.resolve(user.id);
-    if (!actor.ok || actor.val === undefined) {
-      return undefined;
+    if (!actor.ok) {
+      return { kind: 'failed' };
+    }
+    if (actor.val === undefined) {
+      return { kind: 'noActor' };
     }
     const stats = await accountStatsResolver.resolve(actor.val.id);
     if (!stats.ok) {
-      return undefined;
+      return { kind: 'failed' };
     }
     const account: Account = toAccount({ type: 'local', user, actor: actor.val }, {
-      defaultAvatarUrl: new URL(DEFAULT_AVATAR_PATH, requestUrl).href,
-      defaultHeaderUrl: new URL(DEFAULT_HEADER_PATH, requestUrl).href,
+      ...defaultImageUrls(requestUrl),
+      baseUrl: requestUrl,
       ...stats.val,
     });
     return {
-      ...account,
-      source: {
-        privacy: 'public',
-        sensitive: false,
-        language: null,
-        note: '',
-        fields: [],
-        discoverable: null,
-        indexable: false,
-        follow_requests_count: 0,
+      kind: 'ok',
+      account: {
+        ...account,
+        source: {
+          privacy: 'public',
+          sensitive: false,
+          language: null,
+          note: '',
+          fields: [],
+          discoverable: null,
+          indexable: false,
+          follow_requests_count: 0,
+        },
       },
     };
   };
@@ -111,7 +123,8 @@ export const createWorkerMastodonCoreRouter = ({
     if (!user.ok || user.val === undefined) {
       return null;
     }
-    return await resolveAccount(user.val, requestUrl) ?? null;
+    const lookup = await resolveAccount(user.val, requestUrl);
+    return lookup.kind === 'ok' ? lookup.account : null;
   };
 
   const instanceProps = async (requestUrl: string) => ({
@@ -124,22 +137,39 @@ export const createWorkerMastodonCoreRouter = ({
   });
 
   const app = new Hono<MastodonAuthEnv>()
+    .onError(handleInternalError)
     .get('/v1/accounts/verify_credentials', authn.requireUser(readAccounts, profileScope), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {
         return c.json(invalidToken, 401);
       }
       const user = await userResolver.resolve(userId);
-      if (!user.ok || user.val === undefined) {
+      if (!user.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (user.val === undefined) {
         return c.json(invalidToken, 401);
       }
-      const account = await resolveAccount(user.val, c.req.url);
-      return account === undefined ? c.json(invalidToken, 401) : c.json(account);
+      const lookup = await resolveAccount(user.val, c.req.url);
+      if (lookup.kind === 'failed') {
+        return c.json(internalServerError, 500);
+      }
+      return lookup.kind === 'noActor' ? c.json(actorNotFound, 422) : c.json(lookup.account);
     })
     .get('/v1/instance', async (c) => c.json(buildInstanceV1(await instanceProps(c.req.url))))
     .get('/v2/instance', async (c) => c.json(buildInstanceV2(await instanceProps(c.req.url))))
     .get('/v1/custom_emojis', (c) => c.json([]))
     .get('/v1/accounts/:id/featured_tags', (c) => c.json([]))
+    .get('/v1/accounts/:id/endorsements', authn.optionalAuth, (c) => c.json([]))
+    .get('/v1/accounts/familiar_followers', authn.requireUser(readFollows), (c) => {
+      const ids = [...(c.req.queries('id[]') ?? []), ...(c.req.queries('id') ?? [])];
+      return c.json(ids.map((id) => ({ id, accounts: [] })));
+    })
+    .get('/v1/instance/translation_languages', (c) => c.json({}))
+    .get('/v1/instance/languages', (c) => c.json(languages))
+    .get('/v1/trends/statuses', (c) => c.json([]))
+    .get('/v1/trends/tags', (c) => c.json([]))
+    .get('/v1/trends/links', (c) => c.json([]))
     .get('/v1/preferences', authn.requireUser(readAccounts), (c) => c.json(preferences))
     .get('/v1/markers', authn.requireUser(readStatuses), (c) => c.json({}))
     .post('/v1/markers', authn.requireUser(writeStatuses), async (c) => {

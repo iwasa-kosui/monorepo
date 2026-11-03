@@ -28,21 +28,21 @@ export async function timelineCommand(args: string[]): Promise<void> {
     }
   }
 
-  const pathMap: Record<string, string> = {
-    home: '/api/v1/home',
-    federated: '/api/v1/federated',
-    server: '/api/v1/server-timeline',
+  const endpointMap: Record<string, { path: string; params?: Record<string, string> }> = {
+    home: { path: '/api/v1/home' },
+    federated: { path: '/api/v1/timelines/public', params: { remote: 'true' } },
+    server: { path: '/api/v1/timelines/public', params: { local: 'true' } },
   };
 
-  const apiPath = pathMap[type];
-  if (!apiPath) {
+  const endpoint = endpointMap[type];
+  if (!endpoint) {
     console.error(`Unknown timeline type: ${type}. Use home, federated, or server.`);
     process.exit(1);
   }
 
   const client = createClient(session.baseUrl, session.sessionId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await client.get<any>(apiPath);
+  const data = await client.get<any>(endpoint.path, endpoint.params);
 
   if (json) {
     printJson(data);
@@ -62,27 +62,24 @@ export async function timelineCommand(args: string[]): Promise<void> {
 
 // Each endpoint returns a different shape; normalize to DisplayItem[]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractItems(type: string, data: Record<string, any>): DisplayItem[] {
-  if (type === 'home' || type === 'federated') {
+function extractItems(type: string, data: any): DisplayItem[] {
+  if (type === 'home') {
     // home: { timelineItems: [{ post: PostWithAuthor, ... }] }
-    // federated: { items: [{ post: PostWithAuthor, ... }] }
-    const raw = (type === 'home' ? data.timelineItems : data.items) ?? [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return raw.map((item: any) => ({
+    return (data.timelineItems ?? []).map((item: any) => ({
       postId: item.post.postId,
       content: item.post.content,
       createdAt: item.post.createdAt,
       username: item.post.username,
     }));
   }
-  if (type === 'server') {
-    // server-timeline: { posts: [PostWithAuthor] } (flat, no post nesting)
+  if (type === 'federated' || type === 'server') {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data.posts ?? []).map((post: any) => ({
-      postId: post.postId,
-      content: post.content,
-      createdAt: post.createdAt,
-      username: post.username,
+    return (Array.isArray(data) ? data : []).map((status: any) => ({
+      postId: status.id,
+      content: status.content,
+      createdAt: status.created_at,
+      username: status.account.acct,
     }));
   }
   return [];

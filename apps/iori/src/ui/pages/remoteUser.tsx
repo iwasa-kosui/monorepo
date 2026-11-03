@@ -10,8 +10,9 @@ import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { debounce } from '../../helper/debounce.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { PostView } from '../components/PostView.tsx';
+import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
-import { appendUniquePosts } from '../hooks/postsMerge.ts';
+import { postToStatus } from '../legacyConversion.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -269,7 +270,7 @@ export const RemoteUserPage = ({
           posts.map((post) => (
             <PostView
               key={post.postId}
-              post={post}
+              status={postToStatus(post)}
               onLike={onLike}
               isLiking={likingPostId === post.postId}
             />
@@ -321,7 +322,7 @@ const App = () => {
       if (latest && !('error' in latest) && data && !('error' in data)) {
         setData({
           ...latest,
-          posts: appendUniquePosts(data.posts, latest.posts),
+          posts: appendUniqueBy(data.posts, latest.posts, (post) => post.postId),
         });
       } else {
         setData(latest);

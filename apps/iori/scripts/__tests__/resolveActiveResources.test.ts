@@ -217,9 +217,8 @@ it('leaves an aborted signal as aborted instead of classifying it as an API fail
   const failure = await control.resolveActiveResources().catch((error: unknown) => error);
   expect(operationFailureLines('deploy-worker-resolve', failure)).toEqual([line('aborted')]);
 });
-it('builds an active target without a backend bucket from the resolved ids', () => {
+it('builds an active target from the resolved ids', () => {
   const fixture = expectedTargetFixture();
-  const { backend_bucket: _bucket, ...withoutBucket } = fixture.identity;
   const target = activeTargetFromResolvedIds({
     identity: createTargetIdentity({
       environment: 'production',
@@ -231,8 +230,6 @@ it('builds an active target without a backend bucket from the resolved ids', () 
     admission: fixture.admission,
     resolved: { d1Id: 'db', kvId: 'kv', queueId: 'queue', dlqId: 'dlq', consumerId: 'consumer' },
   });
-  expect(target).toEqual({ ...fixture, identity: withoutBucket });
-  expect(parseExpectedTarget(target, { backend: false })).toEqual(target);
-  expect(() => parseExpectedTarget(target)).toThrow();
-  expect(() => parseExpectedTarget(fixture, { backend: false })).toThrow();
+  expect(target).toEqual(fixture);
+  expect(parseExpectedTarget(target)).toEqual(target);
 });

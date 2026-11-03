@@ -25,6 +25,9 @@ const embedText = (text: string, dimensions: number): readonly number[] => {
 export const createStubEmbedder = (
   dimensions: number,
 ): Readonly<{ embedder: TextEmbedder; calls: EmbedRequest[] }> => {
+  if (!Number.isInteger(dimensions) || dimensions <= 0) {
+    throw new RangeError(`dimensions must be a positive integer: ${dimensions}`);
+  }
   const calls: EmbedRequest[] = [];
   return {
     embedder: {
