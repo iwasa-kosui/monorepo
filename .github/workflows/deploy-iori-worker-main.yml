@@ -3,7 +3,32 @@ name: Deploy iori Worker (main)
 on:
   push:
     branches: [main]
-    paths: ["apps/iori/**", "packages/**", ".github/workflows/deploy-iori-worker-main.yml"]
+    paths:
+      - "apps/iori/src/**"
+      - "!apps/iori/src/**/*.test.ts"
+      - "!apps/iori/src/**/*.test.tsx"
+      - "!apps/iori/src/**/__tests__/**"
+      - "!apps/iori/src/testing/**"
+      - "apps/iori/public/**"
+      - "apps/iori/drizzle-d1/**"
+      - "apps/iori/workers/iori/wrangler.template.jsonc"
+      - "apps/iori/infra/cloudflare/*.tf"
+      - "apps/iori/infra/cloudflare/.terraform.lock.hcl"
+      - "apps/iori/scripts/**"
+      - "!apps/iori/scripts/__tests__/**"
+      - "!apps/iori/scripts/**/*.d.mts"
+      - "apps/iori/package.json"
+      - "apps/iori/tsconfig.json"
+      - "apps/iori/vite.config.js"
+      - "packages/result/src/**"
+      - "!packages/result/src/**/*.test.ts"
+      - "packages/result/package.json"
+      - "packages/result/tsconfig.json"
+      - "packages/result/tsconfig.build.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-iori-worker-main.yml"
 
 concurrency:
   group: deploy-iori-worker-production
