@@ -15,6 +15,7 @@ import {
   UserNotFoundError,
   type UserResolver,
   type UserResolverByUsername,
+  type UserWithLocalActorResolverByUsername,
 } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -44,6 +45,18 @@ export const resolveUserByUsernameWith =
     RA.flow(
       userResolverByUsername.resolve(username),
       RA.andThen((user) => user ? RA.ok(user) : RA.err(UserNotFoundError.create({ username }))),
+    );
+
+export const resolveUserWithLocalActorByUsernameWith =
+  (resolver: UserWithLocalActorResolverByUsername) =>
+  (username: Username): RA<{ user: User; actor: LocalActor }, UserNotFoundError> =>
+    RA.flow(
+      resolver.resolve(username),
+      RA.andThen((found) => {
+        if (!found) return RA.err(UserNotFoundError.create({ username }));
+        if (!found.actor) return RA.err(UserNotFoundError.create({ userId: found.user.id }));
+        return RA.ok({ user: found.user, actor: found.actor });
+      }),
     );
 
 export const resolveLocalActorWith =
