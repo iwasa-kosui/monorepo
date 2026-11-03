@@ -257,6 +257,7 @@ export const RemoteUserPage = ({
               status={status}
               onLike={onLike}
               isLiking={likingPostId === status.id}
+              isLoggedIn={isLoggedIn}
             />
           ))
         )}

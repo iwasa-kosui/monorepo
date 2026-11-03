@@ -3,7 +3,7 @@ import { useCallback, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import { failureMessage, favourite, reblog, unfavourite, unreblog } from '../api/mastodonClient.ts';
+import { deleteStatus, failureMessage, favourite, reblog, unfavourite, unreblog } from '../api/mastodonClient.ts';
 import { withReblogged, withUpdatedStatus } from '../api/status.ts';
 
 const client = hc<APIRouterType>('/api');
@@ -135,20 +135,12 @@ export const usePostActions = ({
     async (postId: string) => {
       setDeletingPostId(postId);
       try {
-        const res = await client.v1.posts[':postId'].$delete({
-          param: { postId },
-        });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          removePost(postId);
-          onPostDeleted?.(postId);
-        } else if ('error' in result) {
-          console.error('Failed to delete:', result.error);
-          alert(`Failed to delete: ${result.error}`);
-        }
+        await deleteStatus(postId);
+        removePost(postId);
+        onPostDeleted?.(postId);
       } catch (error) {
         console.error('Failed to delete:', error);
-        alert('Failed to delete the post. Please try again.');
+        alert(failureMessage('delete', error));
       } finally {
         setDeletingPostId(null);
       }

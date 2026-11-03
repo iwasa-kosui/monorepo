@@ -32,6 +32,7 @@ import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscri
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
+import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
 import type {
   NotificationCountResolverSinceMarker,
@@ -85,6 +86,7 @@ import type { createSignUpUseCase } from '../useCase/signUp.ts';
 import type { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
 import type { SummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
+import type { TranslatePostUseCase } from '../useCase/translatePost.ts';
 import type { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import type { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
@@ -144,12 +146,14 @@ export type IoriMastodonRuntimePorts = Readonly<{
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
+  translatePost: TranslatePostUseCase;
   notificationsResolverByPage: NotificationsResolverByPage;
   notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
   uploadMediaUseCase: UploadMediaUseCase;
+  mediaUploadResolver: MediaUploadResolver;
   getMediaUploadUseCase: GetMediaUploadUseCase;
   updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase;
   updateAvatarUseCase: UpdateAvatarUseCase;

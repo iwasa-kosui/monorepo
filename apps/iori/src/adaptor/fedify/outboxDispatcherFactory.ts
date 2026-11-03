@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { PostsResolverByActorId } from '../../domain/post/post.ts';
+import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 
@@ -38,7 +39,7 @@ export const createOutboxDispatcher = (
               attribution: ctx.getActorUri(identifier),
               to: PUBLIC_COLLECTION,
               cc: ctx.getFollowersUri(identifier),
-              content: post.content,
+              content: sanitizePostContent(post.content),
               mediaType: 'text/html',
               published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
               url: ctx.getObjectUri(Note, { identifier, id: post.postId }),

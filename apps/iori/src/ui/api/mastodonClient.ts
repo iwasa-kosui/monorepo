@@ -5,6 +5,7 @@ import type {
   Notification,
   Relationship,
   Status,
+  Translation,
 } from '../../adaptor/mastodon/entities.ts';
 import type { IoriDigestRequestResponse } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
@@ -213,6 +214,8 @@ export const reblog = (id: string): Promise<Status> => post<Status>(statusAction
 
 export const unreblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unreblog'));
 
+export const translate = (id: string): Promise<Translation> => post<Translation>(statusActionPath(id, 'translate'));
+
 export const follow = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'follow'));
 
@@ -237,6 +240,34 @@ export const saveNotificationsMarker = async (lastReadId: string): Promise<void>
     body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
   });
   if (!res.ok) throw await toApiError(res);
+};
+
+export type CreateStatusParams = Readonly<{
+  status: string;
+  in_reply_to_id?: string;
+  media_ids?: readonly string[];
+  content_type: string;
+}>;
+
+export const createStatus = async (params: CreateStatusParams): Promise<Status> => {
+  const res = await fetch('/api/v1/statuses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Status;
+};
+
+export const deleteStatus = async (id: string): Promise<Status> => {
+  const res = await fetch(`/api/v1/statuses/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Status;
 };
 
 const send = async <T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: FormData): Promise<T> => {

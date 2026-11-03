@@ -175,7 +175,7 @@ const SearchPage = () => {
                 {summary.result.citations.map((citation) => (
                   <li key={citation.n}>
                     <p class={noticeClass}>[{citation.n}]</p>
-                    <PostView status={citation.status} />
+                    <PostView status={citation.status} isLoggedIn />
                   </li>
                 ))}
               </ol>
@@ -193,7 +193,7 @@ const SearchPage = () => {
             {searched.expansion === 'failed' && <p>検索語の展開に失敗したため、入力した語だけで検索しました</p>}
           </div>
           {searched.statuses.length > 0
-            ? searched.statuses.map((status) => <PostView key={status.id} status={status} />)
+            ? searched.statuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
             : (
               <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
                 <p class='text-charcoal-light dark:text-gray-400'>該当する投稿はありません</p>

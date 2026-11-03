@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "7122e6e8-cb6a-4a0c-a10b-0c91fd5fe707",
-  "prevId": "47c92825-d0a2-4a7f-b495-8f5c3b508210",
+  "prevId": "0fc99818-5a86-411c-a283-0f0e7960259c",
   "tables": {
     "actors": {
       "name": "actors",
@@ -112,6 +112,59 @@
             "day"
           ],
           "name": "ai_summary_usages_userId_day_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ai_translation_usages": {
+      "name": "ai_translation_usages",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "day": {
+          "name": "day",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ai_translation_usages_userId_users_userId_fk": {
+          "name": "ai_translation_usages_userId_users_userId_fk",
+          "tableFrom": "ai_translation_usages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ai_translation_usages_userId_day_pk": {
+          "columns": [
+            "userId",
+            "day"
+          ],
+          "name": "ai_translation_usages_userId_day_pk"
         }
       },
       "uniqueConstraints": {},
@@ -2712,6 +2765,87 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "post_translations": {
+      "name": "post_translations",
+      "columns": {
+        "postId": {
+          "name": "postId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "targetLanguage": {
+          "name": "targetLanguage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceHash": {
+          "name": "sourceHash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detectedSourceLanguage": {
+          "name": "detectedSourceLanguage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "post_translations_postId_posts_postId_fk": {
+          "name": "post_translations_postId_posts_postId_fk",
+          "tableFrom": "post_translations",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "postId"
+          ],
+          "columnsTo": [
+            "postId"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "post_translations_postId_targetLanguage_pk": {
+          "columns": [
+            "postId",
+            "targetLanguage"
+          ],
+          "name": "post_translations_postId_targetLanguage_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

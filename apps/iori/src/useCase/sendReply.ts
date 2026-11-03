@@ -4,8 +4,7 @@ import { Temporal } from '@js-temporal/polyfill';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
-import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
-import { ImageId } from '../domain/image/imageId.ts';
+import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -26,23 +25,24 @@ import {
 import type { PostId } from '../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
-import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  content: string;
-  imageUrls: string[];
-  request: Request;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & PostImagesInput
+  & Readonly<{
+    postId: PostId;
+    content: string;
+    request: Request;
+    ctx: RequestContext<unknown>;
+  }>;
 
-type Ok = void;
+type Ok = Readonly<{ post: Post; user: User }>;
 
 export type RemoteNoteLookupError = Readonly<{
   type: 'RemoteNoteLookupError';
@@ -99,8 +99,7 @@ const create = ({
   origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   type ResolvedPost = LocalPost | RemotePost;
@@ -124,8 +123,7 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the parent post
       RA.andBind('parentPost', ({ postId }) => resolvePostOrErr(postId)),
@@ -164,19 +162,12 @@ const create = ({
         return timelineItemCreatedStore.store(timelineItemEvent);
       }),
       // Store images
-      RA.andBind('images', async ({ replyPost, imageUrls }) => {
-        if (imageUrls.length > 0) {
-          const images: PostImage[] = imageUrls.map((url) => ({
-            imageId: ImageId.generate(),
-            postId: replyPost.postId,
-            url,
-            altText: null,
-            createdAt: now,
-          }));
+      RA.andBind('images', async (input) => {
+        const images = toPostImages(input.replyPost.postId, input, now);
+        if (images.length > 0) {
           await postImageCreatedStore.store(images);
-          return RA.ok(images);
         }
-        return RA.ok([]);
+        return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
       RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri }) => {
@@ -388,7 +379,7 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.map(() => undefined),
+      RA.map(({ replyPost, user }) => ({ post: replyPost, user })),
     );
 
   return { run };

@@ -1,14 +1,17 @@
-import { hc } from 'hono/client';
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import { fetchStatus, fetchStatusContext, fetchVerifyCredentials, isNotFoundError } from '../api/mastodonClient.ts';
+import {
+  createStatus,
+  deleteStatus,
+  fetchStatus,
+  fetchStatusContext,
+  fetchVerifyCredentials,
+  isNotFoundError,
+} from '../api/mastodonClient.ts';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
-
-const client = hc<APIRouterType>('/api');
 
 type ThreadData = {
   ancestors: readonly Status[];
@@ -107,21 +110,9 @@ const LocalPostPage = () => {
 
     setIsSendingReply(true);
     try {
-      const res = await client.v1.reply.$post({
-        json: {
-          postId: replyToPostId,
-          content,
-          imageUrls: [],
-        },
-      });
-      const data = await res.json();
-
-      if ('error' in data) {
-        alert(data.error);
-      } else {
-        setReplyToPostId(null);
-        fetchThread();
-      }
+      await createStatus({ status: content, in_reply_to_id: replyToPostId, content_type: 'text/markdown' });
+      setReplyToPostId(null);
+      fetchThread();
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -136,21 +127,13 @@ const LocalPostPage = () => {
 
     setDeletingPostId(postId);
     try {
-      const res = await client.v1.posts[':postId'].$delete({
-        param: { postId },
-      });
-      const data = await res.json();
-
-      if ('error' in data) {
-        alert(data.error);
+      await deleteStatus(postId);
+      // If the deleted post is the current post, navigate back to user page
+      if (threadData?.currentPost?.id === postId) {
+        window.location.href = `/users/${username}`;
       } else {
-        // If the deleted post is the current post, navigate back to user page
-        if (threadData?.currentPost?.id === postId) {
-          window.location.href = `/users/${username}`;
-        } else {
-          // Otherwise, refresh the thread
-          fetchThread();
-        }
+        // Otherwise, refresh the thread
+        fetchThread();
       }
     } catch (err) {
       alert((err as Error).message);
@@ -245,6 +228,7 @@ const LocalPostPage = () => {
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}
@@ -258,6 +242,7 @@ const LocalPostPage = () => {
                 onDelete={isLoggedIn ? handleDelete : undefined}
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
+                isLoggedIn={isLoggedIn}
               />
             </div>
           )}
@@ -271,6 +256,7 @@ const LocalPostPage = () => {
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}

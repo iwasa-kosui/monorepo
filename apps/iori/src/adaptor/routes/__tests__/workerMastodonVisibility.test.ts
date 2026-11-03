@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
-import { createMockRequestContext } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
 import { GetTimelineUseCase } from '../../../useCase/getTimeline.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../../d1/actor/actorsResolverByFollowerId.ts';
@@ -69,12 +68,6 @@ describe('ログイン中の閲覧者に宛先外の private と direct のリ�
               actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(t.db),
               mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(t.db),
             }),
-            createPostUseCase: {
-              run: async () => {
-                throw new Error('unused');
-              },
-            },
-            createContext: () => createMockRequestContext(),
           }),
         );
       },

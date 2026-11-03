@@ -7,6 +7,7 @@ export type BuildInstanceProps = Readonly<{
   ioriVersion: string;
   contactAccount: Account | null;
   vapidPublicKey: string | null;
+  translationEnabled?: boolean;
   contactEmail?: string;
   thumbnailUrl?: string;
 }>;
@@ -16,8 +17,10 @@ const languages = (): string[] => ['ja', 'en'];
 
 const toVersion = (ioriVersion: string): string => `4.3.0 (compatible; iori ${ioriVersion})`;
 
+export const MAX_STATUS_CHARACTERS = 10000;
+
 const statuses = {
-  max_characters: 10000,
+  max_characters: MAX_STATUS_CHARACTERS,
   max_media_attachments: 4,
   characters_reserved_per_url: 23,
 } as const;
@@ -57,7 +60,7 @@ export const buildInstanceV2 = (props: BuildInstanceProps): InstanceV2 => ({
     statuses: { ...statuses },
     media_attachments: { ...mediaAttachments(), description_limit: 1500 },
     polls: { ...polls },
-    translation: { enabled: false },
+    translation: { enabled: props.translationEnabled ?? false },
   },
   registrations: { enabled: false, approval_required: false, message: null, url: null },
   api_versions: { mastodon: 2 },
@@ -88,4 +91,5 @@ export const buildInstanceV1 = (props: BuildInstanceProps): InstanceV1 => ({
   },
   contact_account: props.contactAccount,
   rules: [],
+  pleroma: { metadata: { post_formats: ['text/plain', 'text/markdown'] } },
 });

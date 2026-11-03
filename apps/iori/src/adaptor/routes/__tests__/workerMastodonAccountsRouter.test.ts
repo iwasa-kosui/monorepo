@@ -142,6 +142,69 @@ describe('GET /api/v1/accounts/:id', () => {
   });
 });
 
+describe('GET /api/v1/accounts', () => {
+  it('複数の id[] を指定すると Account の配列を入力順で返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+
+    const response = await t.request(
+      `/api/v1/accounts?id[]=${bob.actorId}&id[]=${me.actorId}&id[]=${alice.actorId}`,
+    );
+
+    expect(response.status).toBe(200);
+    const accounts = ((await response.json()) as unknown[]).map((item) => AccountSchema.parse(item));
+    expect(accounts.map((account) => account.id)).toEqual([bob.actorId, me.actorId, alice.actorId]);
+    expect(accounts.map((account) => account.acct)).toEqual(['bob@remote.example', 'kosui', 'alice@remote.example']);
+  });
+
+  it('存在しない UUID と UUID でない ID を除いて 200 にする', async () => {
+    const t = setupReadApi();
+    const alice = t.seed.addRemoteActor('alice');
+
+    const response = await t.request(
+      `/api/v1/accounts?id[]=${t.seed.uuid()}&id[]=not-an-id&id[]=${alice.actorId}&id=${alice.actorId}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json() as Array<{ id: string }>).map((item) => item.id)).toEqual([alice.actorId]);
+  });
+
+  it('id を指定しなければ 200 で空配列を返す', async () => {
+    const t = setupReadApi();
+
+    const response = await t.request('/api/v1/accounts');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+  });
+
+  it('41 件の異なる ID を指定すると 422 にする', async () => {
+    const t = setupReadApi();
+    const query = Array.from({ length: 41 }, () => `id[]=${t.seed.uuid()}`).join('&');
+
+    const response = await t.request(`/api/v1/accounts?${query}`);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Too many accounts requested' });
+  });
+
+  it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const statusesOnly = await t.bearerFor('read:statuses');
+    const path = `/api/v1/accounts?id[]=${me.actorId}`;
+
+    const [forbidden, cookie] = await Promise.all([
+      t.request(path, { headers: statusesOnly }),
+      t.request(path, { headers: { Cookie: `sessionId=${me.sessionId}` } }),
+    ]);
+
+    expect([forbidden.status, cookie.status]).toEqual([403, 200]);
+  });
+});
+
 describe('GET /api/v1/accounts/lookup', () => {
   const lookup = (t: ReturnType<typeof setupReadApi>, acct: string, init?: RequestInit) =>
     t.request(`/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`, init);

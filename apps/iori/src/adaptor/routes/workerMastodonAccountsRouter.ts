@@ -102,6 +102,7 @@ const parseAcct = (acct: string, localHost: string): AcctLookup | undefined => {
 };
 
 const accountIdPattern = '[0-9a-fA-F-]+';
+const maxAccountsPerRequest = 40;
 
 export const createWorkerMastodonAccountsRouter = ({
   authn,
@@ -232,6 +233,21 @@ export const createWorkerMastodonAccountsRouter = ({
     .post(`/v1/accounts/:id{${accountIdPattern}}/unfollow`, authn.requireUser(writeFollows), actOnAccount(unfollow))
     .post(`/v1/accounts/:id{${accountIdPattern}}/mute`, authn.requireUser(writeMutes), actOnAccount(mute))
     .post(`/v1/accounts/:id{${accountIdPattern}}/unmute`, authn.requireUser(writeMutes), actOnAccount(unmute))
+    .get('/v1/accounts', authn.optionalAuth, async (c) => {
+      const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
+      const ids = [...new Set([...(c.req.queries('id[]') ?? []), ...(c.req.queries('id') ?? [])])];
+      if (ids.length > maxAccountsPerRequest) {
+        return c.json({ error: 'Too many accounts requested' }, 422);
+      }
+      const actorIds = ids.flatMap((id) => {
+        const parsed = ActorId.parse(id);
+        return parsed.ok ? [parsed.val] : [];
+      });
+      return c.json(await statusAssembler.assembleAccounts({ actorIds, requestUrl: c.req.url }));
+    })
     .get('/v1/accounts/lookup', authn.optionalAuth, async (c) => {
       const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);
       if (rejection !== undefined) {

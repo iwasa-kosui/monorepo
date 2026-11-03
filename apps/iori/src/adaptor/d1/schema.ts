@@ -199,6 +199,26 @@ export const aiSummaryUsagesTable = sqliteTable('ai_summary_usages', {
   primaryKey({ columns: [table.userId, table.day] }),
 ]);
 
+export const aiTranslationUsagesTable = sqliteTable('ai_translation_usages', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  day: text('day').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.day] }),
+]);
+
+export const postTranslationsTable = sqliteTable('post_translations', {
+  postId: text('postId').notNull().references(() => postsTable.postId, { onDelete: 'cascade' }),
+  targetLanguage: text('targetLanguage').notNull(),
+  sourceHash: text('sourceHash').notNull(),
+  content: text('content').notNull(),
+  detectedSourceLanguage: text('detectedSourceLanguage').notNull(),
+  model: text('model').notNull(),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.postId, table.targetLanguage] }),
+]);
+
 export const notificationLikesTable = sqliteTable('notification_likes', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
   likerActorId: text('likerActorId').notNull().references(() => actorsTable.actorId),
@@ -524,6 +544,8 @@ export const schema = {
   notificationsTable,
   mastodonMarkersTable,
   aiSummaryUsagesTable,
+  aiTranslationUsagesTable,
+  postTranslationsTable,
   notificationLikesTable,
   notificationFollowsTable,
   pushSubscriptionsTable,

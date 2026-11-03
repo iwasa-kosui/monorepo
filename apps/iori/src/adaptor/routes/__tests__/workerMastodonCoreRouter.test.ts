@@ -9,14 +9,22 @@ import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
-import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
+import {
+  CredentialAccountSchema,
+  ExtendedDescriptionSchema,
+  InstanceV1Schema,
+  InstanceV2Schema,
+} from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) => {
+const setup = (
+  { failUserResolve = false, translationEnabled = false }: { failUserResolve?: boolean; translationEnabled?: boolean } =
+    {},
+) => {
   const h = createOAuthHarness();
   const authn = createMastodonAuthn({
     verifyAccessTokenUseCase: h.memory.useCases.verifyAccessTokenUseCase,
@@ -83,6 +91,7 @@ const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) 
       description: 'A microblog by kosui',
       contactUsername: Username.orThrow('kosui'),
       vapidPublicKey: 'vapid-key',
+      translationEnabled,
     },
   });
   const app = createIoriApp({
@@ -386,6 +395,14 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
     });
 
+    it('v1 に pleroma.metadata.post_formats を足し、version は Mastodon 互換のままにする', async () => {
+      const response = await setup().request('/api/v1/instance');
+
+      const body = InstanceV1Schema.parse(await response.json());
+      expect(body.pleroma).toEqual({ metadata: { post_formats: ['text/plain', 'text/markdown'] } });
+      expect(body.version).toMatch(/^4\.3\.0 \(compatible; iori \S+\)$/);
+    });
+
     it('連絡先の利用者がいなければ contact_account を null にする', async () => {
       const h = setup();
 
@@ -457,6 +474,33 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({});
+    });
+
+    it('instance/translation_languages は AI が設定されていれば und から ja への翻訳を返す', async () => {
+      const response = await setup({ translationEnabled: true }).request('/api/v1/instance/translation_languages');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ und: ['ja'] });
+    });
+
+    it('v2/instance の translation.enabled は AI の設定に従う', async () => {
+      const enabled = setup({ translationEnabled: true });
+      enabled.addUser(crypto.randomUUID(), 'kosui');
+      const disabled = setup();
+      disabled.addUser(crypto.randomUUID(), 'kosui');
+
+      const enabledBody = InstanceV2Schema.parse(await (await enabled.request('/api/v2/instance')).json());
+      const disabledBody = InstanceV2Schema.parse(await (await disabled.request('/api/v2/instance')).json());
+
+      expect(enabledBody.configuration.translation).toEqual({ enabled: true });
+      expect(disabledBody.configuration.translation).toEqual({ enabled: false });
+    });
+
+    it('instance/extended_description は空の説明を認証なしで返す', async () => {
+      const response = await setup().request('/api/v1/instance/extended_description');
+
+      expect(response.status).toBe(200);
+      expect(ExtendedDescriptionSchema.parse(await response.json())).toEqual({ updated_at: null, content: '' });
     });
 
     it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {

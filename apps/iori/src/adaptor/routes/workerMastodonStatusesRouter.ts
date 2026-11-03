@@ -4,30 +4,41 @@ import { type Context, Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
+import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
   Post,
   type PostsWithAuthorResolverByPostIds,
   type PostWithAuthor,
   type ThreadResolver,
 } from '../../domain/post/post.ts';
+import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import type { CreatePostUseCase } from '../../useCase/createPost.ts';
+import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
+import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
 import type { SendLikeUseCase } from '../../useCase/sendLike.ts';
+import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { Status } from '../mastodon/entities.ts';
+import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
 import {
   isSourceVisibleToAnonymous,
   type StatusAssembler,
   StatusAssemblyError,
   type StatusSource,
 } from '../mastodon/statusAssembler.ts';
+import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { resolveViewer } from './helper/mastodonViewer.ts';
+import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import {
   getMastodonPrincipal,
   type MastodonAuthEnv,
@@ -43,6 +54,10 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
   statusAssembler: StatusAssembler;
+  mediaUploadResolver: MediaUploadResolver;
+  createPostUseCase: CreatePostUseCase;
+  sendReplyUseCase: SendReplyUseCase;
+  deletePostUseCase: DeletePostUseCase;
   sendLikeUseCase: SendLikeUseCase;
   undoLikeUseCase: UndoLikeUseCase;
   sendRepostUseCase: SendRepostUseCase;
@@ -58,11 +73,51 @@ const cannotReblog = { error: 'Validation failed: Private and direct statuses ca
 const readStatuses = Scope.orThrow('read:statuses');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
+const MAX_MEDIA_ATTACHMENTS = 4;
+
+const validationFailed = (message: string) => ({ error: `Validation failed: ${message}` });
+
+const isOmitted = (value: unknown): boolean => value === undefined || value === null;
+
+const validateStatusParams = (body: RequestBody): string | undefined => {
+  const visibility = body['visibility'];
+  if (!isOmitted(visibility) && visibility !== 'public') {
+    return 'Only public visibility is supported';
+  }
+  const spoilerText = body['spoiler_text'];
+  if (!isOmitted(spoilerText) && spoilerText !== '') {
+    return 'Content warnings are not supported';
+  }
+  if (bodyBoolean(body, 'sensitive')) {
+    return 'Sensitive is not supported';
+  }
+  const contentType = body['content_type'];
+  if (!isOmitted(contentType) && contentType !== 'text/plain' && contentType !== 'text/markdown') {
+    return 'Content type must be text/plain or text/markdown';
+  }
+  const scheduledAt = body['scheduled_at'];
+  if (typeof scheduledAt === 'string' && scheduledAt !== '') {
+    return 'Scheduled statuses are not supported';
+  }
+  if (Object.keys(body).some((key) => key === 'poll' || key.startsWith('poll['))) {
+    return 'Polls are not supported';
+  }
+  const status = bodyString(body, 'status');
+  if (status !== undefined && [...status].length > MAX_STATUS_CHARACTERS) {
+    return `Text character limit of ${MAX_STATUS_CHARACTERS} exceeded`;
+  }
+  return undefined;
+};
 
 const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
   switch (err.type) {
     case 'PostNotFoundError':
       return c.json(recordNotFound, 404);
+    case 'UnauthorizedError':
+      return c.json(recordNotFound, 404);
+    case 'UserNotFoundError':
+    case 'SessionExpiredError':
+      return c.json(invalidToken, 401);
     case 'RemoteNoteLookupError':
       return c.json({ error: 'The remote server could not be reached' }, 502);
     default:
@@ -78,6 +133,10 @@ export const createWorkerMastodonStatusesRouter = ({
   repostResolver,
   threadResolver,
   statusAssembler,
+  mediaUploadResolver,
+  createPostUseCase,
+  sendReplyUseCase,
+  deletePostUseCase,
   sendLikeUseCase,
   undoLikeUseCase,
   sendRepostUseCase,
@@ -190,8 +249,113 @@ export const createWorkerMastodonStatusesRouter = ({
     return status === undefined ? c.json(recordNotFound, 404) : c.json(status);
   };
 
+  const assemblePost = async (
+    c: Context<MastodonAuthEnv>,
+    post: PostWithAuthor,
+    viewerActorId: ActorId,
+  ): Promise<Status | undefined> => {
+    const [status] = await statusAssembler.assemble({
+      sources: [{ type: 'post', post }],
+      viewerActorId,
+      requestUrl: c.req.url,
+    });
+    return status;
+  };
+
+  const resolveOwnedMedia = resolveOwnedMediaUpload(mediaUploadResolver);
+
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
+    .post('/v1/statuses', authn.requireUser(writeStatuses), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const body = await readRequestBody(c);
+      const invalid = validateStatusParams(body);
+      if (invalid !== undefined) {
+        return c.json(validationFailed(invalid), 422);
+      }
+      const text = bodyString(body, 'status') ?? '';
+      const mediaIds = [...new Set(bodyStringList(body, 'media_ids[]', 'media_ids').filter((id) => id !== ''))];
+      if (text.trim() === '' && mediaIds.length === 0) {
+        return c.json(validationFailed('Text can\'t be blank'), 422);
+      }
+      if (mediaIds.length > MAX_MEDIA_ATTACHMENTS) {
+        return c.json(validationFailed(`Too many media attachments (limit: ${MAX_MEDIA_ATTACHMENTS})`), 422);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const medias: MediaUpload[] = [];
+      for (const mediaId of mediaIds) {
+        const parsed = MediaId.parse(mediaId);
+        const media = parsed.ok ? await resolveOwnedMedia({ userId, mediaId: parsed.val }) : undefined;
+        if (media === undefined || !media.ok) {
+          if (media !== undefined && media.err.type !== 'MediaNotFoundError') {
+            throw new StatusAssemblyError('Failed to resolve the media');
+          }
+          return c.json(validationFailed('Media attachment is not found'), 422);
+        }
+        medias.push(media.val);
+      }
+      const rawReplyTo = body['in_reply_to_id'];
+      let replyTo: PostWithAuthor | undefined;
+      if (!isOmitted(rawReplyTo) && rawReplyTo !== '') {
+        const replyToId = PostId.parse(rawReplyTo);
+        replyTo = replyToId.ok ? await resolvePost(replyToId.val, viewer.val.id) : undefined;
+        if (replyTo === undefined) {
+          return c.json(recordNotFound, 404);
+        }
+      }
+      const content = body['content_type'] === 'text/markdown'
+        ? await PostContent.fromMarkdown(text)
+        : plainTextToHtml(text);
+      const input = {
+        userId,
+        content,
+        images: medias.map((media) => ({ url: media.url, altText: media.description })),
+        ctx: createContext(c.req.raw),
+      };
+      const created = replyTo === undefined
+        ? await createPostUseCase.run(input)
+        : await sendReplyUseCase.run({ ...input, postId: replyTo.postId, request: c.req.raw });
+      if (!created.ok) {
+        return failed(c, created.err);
+      }
+      const post = await resolvePost(created.val.post.postId, viewer.val.id);
+      const status = post === undefined ? undefined : await assemblePost(c, post, viewer.val.id);
+      if (status === undefined) {
+        throw new StatusAssemblyError('Failed to resolve the created status');
+      }
+      return c.json(status);
+    })
+    .delete('/v1/statuses/:id', authn.requireUser(writeStatuses), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, viewerActorId, post } = acting.val;
+      if (post.type !== 'local' || post.userId !== userId) {
+        return c.json(recordNotFound, 404);
+      }
+      const status = await assemblePost(c, post, viewerActorId);
+      if (status === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const deleted = await deletePostUseCase.run({
+        userId,
+        postId: post.postId,
+        ctx: createContext(c.req.raw),
+      });
+      return deleted.ok
+        ? c.json({ ...status, text: htmlToPlainText(post.content, Number.POSITIVE_INFINITY) })
+        : failed(c, deleted.err);
+    })
     .post('/v1/statuses/:id/favourite', authn.requireUser(writeFavourites), async (c) => {
       const acting = await resolveActingPost(c);
       if (!acting.ok) {

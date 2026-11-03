@@ -5,20 +5,14 @@ import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
 import { Password } from '../../domain/password/password.ts';
-import { PostContent } from '../../domain/post/postContent.ts';
-import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
-import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
-import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { createSignUpUseCase } from '../../useCase/signUp.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { UnsubscribePushUseCase } from '../../useCase/unsubscribePush.ts';
 
 export type WorkerCoreApiRouterDeps = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
-  sendReplyUseCase: SendReplyUseCase;
-  deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   vapidPublicKey: string | undefined;
@@ -46,50 +40,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
         : c.json({ error: result.err.message }, 400);
     },
   );
-
-  app.post(
-    '/v1/reply',
-    sValidator(
-      'json',
-      z.object({
-        postId: PostId.zodType,
-        content: z.string().min(1),
-        imageUrls: z.optional(z.array(z.string())),
-      }),
-    ),
-    async (c) => {
-      const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-      if (sessionId === undefined) return c.json({ error: 'Invalid session' }, 401);
-      const body = c.req.valid('json');
-      const result = await deps.sendReplyUseCase.run({
-        sessionId,
-        postId: body.postId,
-        content: await PostContent.fromMarkdown(body.content),
-        imageUrls: body.imageUrls ?? [],
-        request: c.req.raw,
-        ctx: deps.createContext(c.req.raw),
-      });
-      return result.ok
-        ? c.json({ success: true })
-        : c.json({ error: `Failed to reply: ${JSON.stringify(result.err)}` }, 400);
-    },
-  );
-
-  app.delete('/v1/posts/:postId', async (c) => {
-    const postId = PostId.parse(c.req.param('postId'));
-    if (!postId.ok) return c.json({ error: 'Invalid post ID' }, 400);
-    const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-    if (sessionId === undefined) return c.json({ error: 'Unauthorized' }, 401);
-    const result = await deps.deletePostUseCase.run({
-      sessionId,
-      postId: postId.val,
-      ctx: deps.createContext(c.req.raw),
-    });
-    if (result.ok) return c.json({ success: true });
-    if (result.err.type === 'UnauthorizedError') return c.json({ error: result.err.message }, 403);
-    if (result.err.type === 'PostNotFoundError') return c.json({ error: result.err.message }, 404);
-    return c.json({ error: `Failed to delete: ${JSON.stringify(result.err)}` }, 400);
-  });
 
   app.get('/v1/push/vapid-public-key', (c) =>
     deps.vapidPublicKey === undefined

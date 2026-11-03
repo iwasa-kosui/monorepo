@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
 
+import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 
@@ -30,7 +31,7 @@ const getInstance = () => {
                 attribution: ctx.getActorUri(identifier),
                 to: PUBLIC_COLLECTION,
                 cc: ctx.getFollowersUri(identifier),
-                content: post.content,
+                content: sanitizePostContent(post.content),
                 mediaType: 'text/html',
                 published: Temporal.Instant.fromEpochMilliseconds(
                   post.createdAt,
