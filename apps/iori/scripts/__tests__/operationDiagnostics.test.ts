@@ -1,12 +1,16 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
-import { deployReviewedWorkerVersion } from '../deploy-reviewed-worker-version.mjs';
+import {
+  decideD1Baseline,
+  deployReviewedWorkerVersion,
+  parseInitialMigrationTables,
+} from '../deploy-reviewed-worker-version.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
 import { targetIdentity } from '../migration-target-contract.mjs';
 import { OPERATION_STAGES, operationFailureLines } from '../operation-diagnostics.mjs';
@@ -313,7 +317,13 @@ describe('a real deployment with D1 migrations', () => {
       },
     };
   };
-  it('applies the D1 migrations to the binding before it deploys with the same config', async () => {
+  const initialName = '0000_boring_xavin.sql';
+  const initialTables = async () =>
+    parseInitialMigrationTables(
+      await readFile(new URL(`../../drizzle-d1/${initialName}`, import.meta.url), 'utf8'),
+    );
+  const d1Json = (results: unknown[]) => JSON.stringify([{ results, success: true, meta: {} }]);
+  const scenario = (present: string[], count?: number) => {
     const calls: string[][] = [];
     const runCommand = vi.fn(async (_program: string, args: string[], options: { env: Record<string, string> }) => {
       calls.push(args);
@@ -323,21 +333,165 @@ describe('a real deployment with D1 migrations', () => {
           `${JSON.stringify({ type: 'deploy', version: 1, worker_name: identity.workerName, version_id: 'next' })}\n`,
         );
       }
+      const sql = args[args.indexOf('--command') + 1] ?? '';
+      if (sql.startsWith('SELECT name FROM sqlite_master')) {
+        return { status: 0, stdout: d1Json(present.map((name) => ({ name }))), stderr: '' };
+      }
+      if (sql.startsWith('SELECT COUNT(*)')) return { status: 0, stdout: d1Json([{ count }]), stderr: '' };
       return { status: 0, stdout: '', stderr: '' };
     });
+    return { calls, runCommand };
+  };
+  const execute = (path: string, sql: string, json: boolean) => [
+    'exec',
+    'wrangler',
+    'd1',
+    'execute',
+    'DB',
+    '--remote',
+    '--config',
+    path,
+    ...(json ? ['--json'] : []),
+    '--command',
+    sql,
+  ];
+  const readSql = (tables: string[]) =>
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${
+      ['d1_migrations', ...tables].map((name) => `'${name}'`).join(', ')
+    })`;
+  const countSql = 'SELECT COUNT(*) AS count FROM d1_migrations';
+  const baselineSql = `CREATE TABLE IF NOT EXISTS d1_migrations(
+\t\tid         INTEGER PRIMARY KEY AUTOINCREMENT,
+\t\tname       TEXT UNIQUE,
+\t\tapplied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
+  const applyArgs = (
+    path: string,
+  ) => ['exec', 'wrangler', 'd1', 'migrations', 'apply', 'DB', '--remote', '--config', path];
+  const deployArgs = (path: string) => ['exec', 'wrangler', 'deploy', '--config', path, '--minify'];
+  it('applies the D1 migrations without a baseline when the migration table already has rows', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(['d1_migrations', ...tables], 1);
     const stages: string[] = [];
     const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
     await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
     expect(calls).toEqual([
-      ['exec', 'wrangler', 'd1', 'migrations', 'apply', 'DB', '--remote', '--config', path],
-      ['exec', 'wrangler', 'deploy', '--config', path, '--minify'],
+      execute(path, readSql(tables), true),
+      execute(path, countSql, true),
+      applyArgs(path),
+      deployArgs(path),
     ]);
     expect(stages).toEqual(['deploy-worker-migrate', 'deploy-worker-deploy']);
+  });
+  it('records the baseline before the migration when the schema exists without migration records', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(tables);
+    const { path, input } = await deployInput(runCommand, () => {});
+    await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
+    expect(calls).toEqual([
+      execute(path, readSql(tables), true),
+      execute(path, baselineSql, false),
+      applyArgs(path),
+      deployArgs(path),
+    ]);
+  });
+  it('records the baseline when the migration table exists with no rows and the schema exists', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(['d1_migrations', ...tables], 0);
+    const { path, input } = await deployInput(runCommand, () => {});
+    await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
+    expect(calls).toEqual([
+      execute(path, readSql(tables), true),
+      execute(path, countSql, true),
+      execute(path, baselineSql, false),
+      applyArgs(path),
+      deployArgs(path),
+    ]);
+  });
+  it('applies the migrations from the start without a baseline on a new database', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario([]);
+    const { path, input } = await deployInput(runCommand, () => {});
+    await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
+    expect(calls).toEqual([execute(path, readSql(tables), true), applyArgs(path), deployArgs(path)]);
+  });
+  it('applies the migrations without a baseline when only an empty migration table exists', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(['d1_migrations'], 0);
+    const { path, input } = await deployInput(runCommand, () => {});
+    await expect(deployReviewedWorkerVersion(input)).resolves.toBe('next');
+    expect(calls).toEqual([
+      execute(path, readSql(tables), true),
+      execute(path, countSql, true),
+      applyArgs(path),
+      deployArgs(path),
+    ]);
+  });
+  it('stops with d1-baseline-mismatch and does not write, apply or deploy when only part of the schema exists', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(tables.slice(1));
+    const stages: string[] = [];
+    const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(calls).toEqual([execute(path, readSql(tables), true)]);
+    expect(stages).toEqual(['deploy-worker-migrate']);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'd1-baseline-mismatch'),
+    ]);
+  });
+  it.each([
+    ['is not JSON', 'not json'],
+    ['is not an array', JSON.stringify({ results: [] })],
+    ['reports a failed statement', JSON.stringify([{ results: [], success: false }])],
+    ['has rows without a name', JSON.stringify([{ results: [{ other: 1 }], success: true }])],
+  ])('stops with d1-baseline-mismatch before any write when the read output %s', async (_name, stdout) => {
+    const calls: string[][] = [];
+    const runCommand = vi.fn(async (_program: string, args: string[]) => {
+      calls.push(args);
+      return { status: 0, stdout, stderr: '' };
+    });
+    const stages: string[] = [];
+    const { input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(calls).toHaveLength(1);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'd1-baseline-mismatch'),
+    ]);
+  });
+  it('stops with d1-baseline-mismatch when the row count is not a number', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario(['d1_migrations', ...tables], undefined);
+    const stages: string[] = [];
+    const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(calls).toEqual([execute(path, readSql(tables), true), execute(path, countSql, true)]);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'd1-baseline-mismatch'),
+    ]);
+  });
+  it('stops with command-failed and does not apply or deploy when the baseline write fails', async () => {
+    const tables = await initialTables();
+    const calls: string[][] = [];
+    const runCommand = vi.fn(async (_program: string, args: string[]) => {
+      calls.push(args);
+      const sql = args[args.indexOf('--command') + 1] ?? '';
+      return sql.startsWith('SELECT')
+        ? { status: 0, stdout: d1Json(tables.map((name) => ({ name }))), stderr: '' }
+        : { status: 1, stdout: '', stderr: '' };
+    });
+    const stages: string[] = [];
+    const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(calls).toEqual([execute(path, readSql(tables), true), execute(path, baselineSql, false)]);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'command-failed'),
+    ]);
   });
   it.each([
     ['reports a failed exit status', async () => ({ status: 1, stdout: 'private diagnostic', stderr: '' })],
     ['rejects', async () => Promise.reject(new Error('Migration command failed; outcome may be uncertain.'))],
-  ])('does not deploy and prints command-failed at deploy-worker-migrate when the migration %s', async (_name, run) => {
+  ])('does not deploy and prints command-failed at deploy-worker-migrate when the read %s', async (_name, run) => {
     const runCommand = vi.fn(run);
     const stages: string[] = [];
     const { input } = await deployInput(runCommand, (stage) => stages.push(stage));
@@ -348,6 +502,51 @@ describe('a real deployment with D1 migrations', () => {
       operationLine('deploy-worker-migrate', 'command-failed'),
     ]);
   });
+  it('does not deploy and prints command-failed at deploy-worker-migrate when the migration fails', async () => {
+    const tables = await initialTables();
+    const { calls, runCommand } = scenario([]);
+    runCommand.mockImplementation(async (_program: string, args: string[]) => {
+      calls.push(args);
+      return args[3] === 'migrations'
+        ? { status: 1, stdout: 'private diagnostic', stderr: '' }
+        : { status: 0, stdout: d1Json([]), stderr: '' };
+    });
+    const stages: string[] = [];
+    const { path, input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion(input).catch((error: unknown) => error);
+    expect(calls).toEqual([execute(path, readSql(tables), true), applyArgs(path)]);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'command-failed'),
+    ]);
+  });
+  it('parses the table names that the initial migration creates', () => {
+    expect(
+      parseInitialMigrationTables(
+        'CREATE TABLE `actors` (\n\t`id` text\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `actors_uri_unique` ON `actors` (`uri`);\nCREATE TABLE `domain_events` (\n\t`eventId` text\n);',
+      ),
+    ).toEqual(['actors', 'domain_events']);
+    expect(parseInitialMigrationTables('CREATE INDEX `x` ON `y` (`z`);')).toEqual([]);
+  });
+  it('lists every table that the real initial migration creates', async () => {
+    const tables = await initialTables();
+    expect(tables).toContain('actors');
+    expect(tables).toContain('domain_events');
+    expect(tables.length).toBeGreaterThan(5);
+  });
+  it.each([
+    [['a', 'b'], ['a', 'b', 'd1_migrations'], 3, 'apply'],
+    [['a', 'b'], ['a', 'b'], undefined, 'baseline'],
+    [['a', 'b'], ['a', 'b', 'd1_migrations'], 0, 'baseline'],
+    [['a', 'b'], [], undefined, 'apply'],
+    [['a', 'b'], ['d1_migrations'], 0, 'apply'],
+    [['a', 'b'], ['a'], undefined, 'mismatch'],
+    [['a', 'b'], ['a', 'd1_migrations'], 0, 'mismatch'],
+  ])(
+    'decides the baseline for %j with present %j and %s rows as %s',
+    (initialTables, presentTables, rows, expected) => {
+      expect(decideD1Baseline({ initialTables, presentTables, migrationRows: rows })).toBe(expected);
+    },
+  );
 });
 it('prints config-invalid for the configuration messages of the four operation scripts', () => {
   for (
