@@ -167,6 +167,7 @@ const create = ({
         return RA.flow(
           timelineSearchCandidatesResolver.resolve({
             actorIds,
+            currentActorId: viewerActorId,
             terms: patterns,
             limit: CANDIDATE_LIMIT,
           }),
