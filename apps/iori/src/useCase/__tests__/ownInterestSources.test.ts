@@ -261,6 +261,30 @@ describe('EmbedOwnInterestSourcesUseCase', () => {
     expect(await embed.run(run)).toEqual({ ok: true, val: { embedded: 20, skipped: 0 } });
   });
 
+  it('まとめての埋め込みが失敗したら 1 件ずつ埋め込み直し、一部でも成功すれば ok を返す', async () => {
+    const calls: number[] = [];
+    const partial: TextEmbedder = {
+      embed: async ({ texts }) => {
+        calls.push(texts.length);
+        if (texts.length > 1 || texts[0] === '投稿 1') return Result.err({ type: 'AiError', message: 'unavailable' });
+        return Result.ok([Array.from({ length: 1024 }, () => 1)]);
+      },
+    };
+    const { seed, me, run, sync, buildEmbed, rows } = setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (let i = 0; i < 3; i += 1) seed.addLocalPost(me, POST_AT + i, { content: `投稿 ${i}`, timeline: false });
+    await sync.run(run);
+
+    expect(await buildEmbed(partial).run(run)).toEqual({ ok: true, val: { embedded: 2, skipped: 1 } });
+
+    expect(calls).toEqual([3, 1, 1, 1]);
+    expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
+    expect(error).toHaveBeenCalledWith(
+      'iori interest sources: embedding an entry failed.',
+      expect.objectContaining({ kind: 'own_post' }),
+    );
+  });
+
   it('次元が 1024 でないベクトルは書かず、error ログを出して他は続ける', async () => {
     const mixed: TextEmbedder = {
       embed: async ({ texts }) =>

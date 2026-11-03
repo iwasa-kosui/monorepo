@@ -210,6 +210,64 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
     );
   });
 
+  it('kosui.me の origin でない記事は .md を取らず、title と description を使う', async () => {
+    const { userId, site, useCase, fetchText, stub } = setup();
+    const externalPostUrl = 'https://example.test/blog/post-x';
+    const lookalikeUrl = 'https://kosui.me.example.test/blog/post-y';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    site.feed = ok({
+      body: feedXml([
+        { title: '外部記事', url: externalPostUrl, description: '外部の説明' },
+        { title: '紛らわしい記事', url: lookalikeUrl, description: '紛らわしい説明' },
+      ]),
+    });
+
+    const result = await useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: true, val: { created: 2, embedded: 2 } });
+    expect(fetchText.mock.calls.map(([url]) => url)).toEqual([KOSUI_FEED_URL]);
+    expect([...(stub.calls[0]?.texts ?? [])].sort()).toEqual(
+      ['外部記事\n外部の説明', '紛らわしい記事\n紛らわしい説明'].sort(),
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('.md の取得に失敗した記事に既存の行があれば、差分から外して行をそのまま残す', async () => {
+    const { userId, site, useCase, rows, rowOf, stub } = setup();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await useCase.run({ userId });
+    const before = rowOf(POST_URL);
+    site.markdowns = {};
+
+    const second = await useCase.run({ userId });
+
+    expect(second).toEqual({ ok: true, val: { created: 0, changed: 0, deleted: 0, embedded: 0 } });
+    expect(rowOf(POST_URL)).toEqual(before);
+    expect(rows().every((row) => row.deletedAt === null)).toBe(true);
+    expect(stub.calls).toHaveLength(1);
+  });
+
+  it('.md の取得に失敗した記事に削除済みの行しかなければ、title と description で復活させる', async () => {
+    const { userId, site, useCase, rowOf, clock } = setup();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await useCase.run({ userId });
+    site.feed = ok({ body: feedXml(defaultItems.filter((item) => item.url !== POST_URL)) });
+    clock.value = Instant.orThrow(NOW + 1000);
+    await useCase.run({ userId });
+    expect(rowOf(POST_URL).deletedAt).toBe(NOW + 1000);
+    site.feed = ok({ body: feedXml(defaultItems) });
+    site.markdowns = {};
+    clock.value = Instant.orThrow(NOW + 2000);
+
+    const third = await useCase.run({ userId });
+
+    expect(third).toEqual({ ok: true, val: { created: 0, changed: 1, deleted: 0, embedded: 1 } });
+    expect(rowOf(POST_URL)).toMatchObject({
+      deletedAt: null,
+      contentHash: await sha256Hex('記事 A\n記事の説明'),
+    });
+  });
+
   it('.md は同時に 4 件までしか取らない', async () => {
     const { userId, site, buildUseCase, stub } = setup();
     const items = Array.from({ length: 10 }, (_, i): FeedItem => ({
@@ -289,6 +347,33 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
 
     expect(second).toEqual({ ok: true, val: { created: 0, changed: 0, deleted: 0, embedded: 3 } });
     expect(rows().every((row) => row.embeddedAt === NOW && row.bytes === 4096)).toBe(true);
+  });
+
+  it('まとめての埋め込みが失敗したら 1 件ずつ埋め込み直し、成功分だけ保存する', async () => {
+    const calls: number[] = [];
+    const partial: TextEmbedder = {
+      embed: async ({ texts }) => {
+        calls.push(texts.length);
+        if (texts.length > 1) return Result.err({ type: 'AiError', message: 'batch failed' });
+        return texts[0]?.startsWith('登壇 A') === true
+          ? Result.err({ type: 'AiError', message: 'entry failed' })
+          : Result.ok([Array.from({ length: 1024 }, () => 1)]);
+      },
+    };
+    const { userId, useCase, rows } = setup({ textEmbedder: partial });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await useCase.run({ userId });
+
+    expect(result).toEqual({ ok: true, val: { created: 3, changed: 0, deleted: 0, embedded: 2 } });
+    expect(calls).toEqual([3, 1, 1, 1]);
+    expect(rows().filter((row) => row.embeddedAt === null).map((row) => row.kind)).toEqual(['kosui_talk']);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith('iori interest sources: embedding an entry failed.', {
+      interestSourceId: expect.any(String),
+      kind: 'kosui_talk',
+      message: 'entry failed',
+    });
   });
 
   it('次元が 1024 でないベクトルは書かず、error ログを出して他の行は続ける', async () => {

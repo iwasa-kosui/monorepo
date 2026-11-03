@@ -27,7 +27,8 @@ import { applyInterestSourceDiff } from './helper/applyInterestSourceDiff.ts';
 import { embedInterestSources, type EmbedTarget } from './helper/embedInterestSources.ts';
 import type { UseCase } from './useCase.ts';
 
-export const KOSUI_FEED_URL = 'https://kosui.me/feed.xml';
+export const KOSUI_ORIGIN = 'https://kosui.me';
+export const KOSUI_FEED_URL = `${KOSUI_ORIGIN}/feed.xml`;
 export const KOSUI_FEED_MAX_ITEMS = 100;
 export const KOSUI_MARKDOWN_FETCH_CONCURRENCY = 4;
 const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 2 * 1024 * 1024, maxRedirects: 3 } as const;
@@ -71,6 +72,8 @@ type KosuiEntry = Readonly<{
   desired: DesiredInterestSource;
 }>;
 
+const isKosuiUrl = (url: string): boolean => URL.canParse(url) && new URL(url).origin === KOSUI_ORIGIN;
+
 const keyOf = (kind: InterestSourceKind, ref: string): string => `${kind}\n${ref}`;
 
 const create = ({
@@ -105,12 +108,14 @@ const create = ({
     const seenUrls = new Set<string>();
     const items = parsed.val.filter((item) => !seenUrls.has(item.url) && seenUrls.add(item.url));
     const markdowns = new Map<string, string>();
+    const markdownFailedUrls = new Set<string>();
     await runWithConcurrency(
-      items.filter((item) => classifyKosuiEntry(item.title).kind === 'kosui_post'),
+      items.filter((item) => classifyKosuiEntry(item.title).kind === 'kosui_post' && isKosuiUrl(item.url)),
       KOSUI_MARKDOWN_FETCH_CONCURRENCY,
       async (item) => {
         const markdown = await fetchMarkdown(item.url);
         if (markdown !== undefined) markdowns.set(item.url, markdown);
+        else markdownFailedUrls.add(item.url);
       },
     );
     const timestamp = now();
@@ -137,9 +142,16 @@ const create = ({
     let deleted = 0;
     for (const kind of KOSUI_KINDS) {
       const existing = await interestSourcesResolverByUserIdAndKindIncludingDeleted.resolve({ userId, kind });
+      const retainedRefs = new Set(
+        existing.val
+          .filter((source) => source.deletedAt === null && markdownFailedUrls.has(source.ref))
+          .map((source) => source.ref),
+      );
       const diff = InterestSourceDiff.compute(
-        existing.val,
-        entries.filter((entry) => entry.kind === kind).map((entry) => entry.desired),
+        existing.val.filter((source) => !retainedRefs.has(source.ref)),
+        entries
+          .filter((entry) => entry.kind === kind && !retainedRefs.has(entry.desired.ref))
+          .map((entry) => entry.desired),
       );
       const applied = await applyInterestSourceDiff(
         { interestSourceCreatedStore, interestSourceContentChangedStore, interestSourceDeletedStore, now },
