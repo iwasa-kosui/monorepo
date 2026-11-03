@@ -1,3 +1,7 @@
-import { Post } from '../post/post.ts';
+import type { Post } from '../post/post.ts';
 
-export const isSummarizable = (post: Post): boolean => Post.isVisibleToAnonymous(post);
+export const isSummarizable = (post: Post): boolean =>
+  post.type === 'local'
+  || post.visibility === 'public'
+  || post.visibility === 'unlisted'
+  || post.visibility === 'private';

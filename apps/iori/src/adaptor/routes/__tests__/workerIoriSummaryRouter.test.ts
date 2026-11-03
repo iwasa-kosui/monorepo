@@ -43,7 +43,13 @@ const seedTimeline = async (options: Parameters<typeof setupReadApi>[0] = {}) =>
     content: '<p>京都の秘密</p>',
     visibility: 'private',
   });
+  t.seed.addRemotePost(alice, day(2) + 5, {
+    content: '<p>京都の宛先指定</p>',
+    visibility: 'direct',
+    recipientActorUris: [`${ORIGIN}/users/kosui`],
+  });
   t.seed.addRemotePost(bob, day(2) + 2, { content: '<p>京都のフォロー外</p>', visibility: 'public' });
+  t.seed.addRemotePost(bob, day(2) + 6, { content: '<p>京都のフォロー外の限定</p>', visibility: 'private' });
   t.seed.addRemotePost(carol, day(2) + 3, { content: '<p>京都のミュート</p>', visibility: 'public' });
   t.seed.addLocalPost(me, day(2) + 4, { content: '<p>京都の削除済み</p>', deletedAt: day(3) });
   const outside = t.seed.addRemotePost(alice, Date.UTC(2020, 0, 10), {
@@ -124,7 +130,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 
-  it('検索の要約は本人とフォロー中の公開の投稿だけを AI に渡し、応答を返す', async () => {
+  it('検索の要約は本人とフォロー中の公開とフォロワー限定の投稿だけを AI に渡し、応答を返す', async () => {
     const { generator, calls } = createStubTextGenerator(replyByKind('- 京都の話 [1]\n- 旅行 [2][9]'));
     const t = await seedTimeline({ textGenerator: generator });
 
@@ -135,16 +141,17 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(summarizeCalls).toHaveLength(1);
     const documents = 'documents' in summarizeCalls[0]! ? summarizeCalls[0].documents : [];
     expect(documents.map((document) => document.split('\n')[1])).toEqual(
-      expect.arrayContaining(['京都で旅行した', '京都の旅行計画', '京都の期間外']),
+      expect.arrayContaining(['京都で旅行した', '京都の旅行計画', '京都の秘密', '京都の期間外']),
     );
-    expect(documents.join('\n')).not.toContain('京都の秘密');
+    expect(documents.join('\n')).not.toContain('京都の宛先指定');
+    expect(documents.join('\n')).not.toContain('京都のフォロー外の限定');
     expect(documents.join('\n')).not.toContain('京都のフォロー外');
     expect(documents.join('\n')).not.toContain('京都のミュート');
     expect(documents.join('\n')).not.toContain('京都の削除済み');
     const body = (await response.json()) as Record<string, unknown>;
     expect(body).toMatchObject({
       summary: '- 京都の話 [1]\n- 旅行 [2][9]',
-      used_status_count: 3,
+      used_status_count: 4,
       excluded_non_public_count: 1,
       truncated: false,
       model: '@cf/meta/llama-4-scout-17b-16e-instruct',
@@ -164,22 +171,24 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
   });
 
   it('検索の要約は since と until の範囲外の投稿を除く', async () => {
-    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2]'));
+    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
     const t = await seedTimeline({ textGenerator: generator });
 
     const response = await t.request(PATH, post({ q: '京都', ...period }, t.me.bearer));
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { source_status_ids: string[]; used_status_count: number };
-    expect(body.used_status_count).toBe(2);
-    expect(body.source_status_ids).toHaveLength(2);
-    expect(body.source_status_ids).toEqual(expect.arrayContaining([t.mine.postId, t.fromAlice.postId]));
+    expect(body.used_status_count).toBe(3);
+    expect(body.source_status_ids).toHaveLength(3);
+    expect(body.source_status_ids).toEqual(
+      expect.arrayContaining([t.mine.postId, t.privateFromAlice.postId, t.fromAlice.postId]),
+    );
     expect(body.source_status_ids).not.toContain(t.outside.postId);
     expect(calls.some((call) => 'documents' in call && call.documents.join('').includes('期間外'))).toBe(false);
   });
 
-  it('期間の要約は本人とフォロー中（ミュート除く）の公開の投稿を、削除済みと期間外を除いて渡す', async () => {
-    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2]'));
+  it('期間の要約は本人とフォロー中（ミュート除く）の公開とフォロワー限定の投稿を、削除済みと期間外を除いて渡す', async () => {
+    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
     const t = await seedTimeline({ textGenerator: generator });
 
     const response = await t.request(PATH, post(period, t.me.bearer));
@@ -188,18 +197,20 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(calls).toHaveLength(1);
     const documents = 'documents' in calls[0]! ? calls[0].documents : [];
     expect(documents).toEqual([
-      expect.stringMatching(/^\[1\] @alice 2020-01-02 21:00（JST）\n京都の旅行計画$/),
-      expect.stringMatching(/^\[2\] @kosui 2020-01-01 21:00（JST）\n京都で旅行した$/),
+      expect.stringMatching(/^\[1\] @alice 2020-01-02 21:00（JST）\n京都の秘密$/),
+      expect.stringMatching(/^\[2\] @alice 2020-01-02 21:00（JST）\n京都の旅行計画$/),
+      expect.stringMatching(/^\[3\] @kosui 2020-01-01 21:00（JST）\n京都で旅行した$/),
     ]);
     const { citations, ...body } = (await response.json()) as { citations: CitationBody[] };
     expect(citations.map(({ n, status }) => [n, status.id])).toEqual([
-      [1, t.fromAlice.postId],
-      [2, t.mine.postId],
+      [1, t.privateFromAlice.postId],
+      [2, t.fromAlice.postId],
+      [3, t.mine.postId],
     ]);
     expect(body).toEqual({
-      summary: '- 話題 [1][2]',
-      source_status_ids: [t.fromAlice.postId, t.mine.postId],
-      used_status_count: 2,
+      summary: '- 話題 [1][2][3]',
+      source_status_ids: [t.privateFromAlice.postId, t.fromAlice.postId, t.mine.postId],
+      used_status_count: 3,
       excluded_non_public_count: 1,
       truncated: false,
       model: '@cf/meta/llama-4-scout-17b-16e-instruct',
@@ -216,8 +227,8 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
 
     const body = (await response.json()) as { source_status_ids: string[]; citations: CitationBody[] };
     expect(body.citations.map(({ n, status }) => [n, status.id, status.content])).toEqual([
-      [1, t.fromAlice.postId, '<p>京都の旅行計画</p>'],
-      [2, t.mine.postId, '<p>京都で旅行した</p>'],
+      [1, t.privateFromAlice.postId, '<p>京都の秘密</p>'],
+      [2, t.fromAlice.postId, '<p>京都の旅行計画</p>'],
     ]);
     expect(body.source_status_ids).toEqual(body.citations.map(({ status }) => status.id));
   });

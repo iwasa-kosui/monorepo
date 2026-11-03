@@ -270,7 +270,7 @@ describe('SummarizeTimelineUseCase', () => {
     });
   });
 
-  it('公開と未収載とローカルの投稿だけを送り、除いた件数を返す', async () => {
+  it('公開と未収載とフォロワー限定とローカルの投稿だけを送り、除いた件数を返す', async () => {
     const t = setup();
     const ids = t.store(
       makePost('public', { visibility: 'public' }),
@@ -284,12 +284,12 @@ describe('SummarizeTimelineUseCase', () => {
 
     const result = await expectOk(t.summarize({ q: 'x' }));
 
-    expect(result.excludedNonPublicCount).toBe(3);
-    expect(result.usedPostCount).toBe(3);
+    expect(result.excludedNonPublicCount).toBe(2);
+    expect(result.usedPostCount).toBe(4);
     const documents = documentsOf(t.calls[0]!).join('\n');
     expect(documents).toContain('public');
     expect(documents).toContain('local');
-    expect(documents).not.toContain('private');
+    expect(documents).toContain('private');
     expect(documents).not.toContain('direct');
     expect(documents).not.toContain('unknown');
   });
@@ -313,10 +313,10 @@ describe('SummarizeTimelineUseCase', () => {
     expect(t.usage.recorder.reserve).not.toHaveBeenCalled();
   });
 
-  it('すべて非公開でも summary を null にして、除いた件数を返し、回数を消費しない', async () => {
+  it('すべて送れない投稿でも summary を null にして、除いた件数を返し、回数を消費しない', async () => {
     const t = setup();
     t.setSearchResult(
-      t.store(makePost('private', { visibility: 'private' }), makePost('direct', { visibility: 'direct' })),
+      t.store(makePost('unknown', { visibility: null }), makePost('direct', { visibility: 'direct' })),
     );
 
     const result = await expectOk(t.summarize({ q: 'x' }));
