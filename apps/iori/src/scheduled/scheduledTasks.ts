@@ -1,5 +1,5 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { collectFeedsTask } from './feedTasks.ts';
+import { collectFeedsTask, detectRadarVolumeTask, refreshHatenaBookmarkCountsTask } from './feedTasks.ts';
 
 export type ScheduledTaskContext = Readonly<{
   env: IoriWorkerEnv;
@@ -11,7 +11,8 @@ export type ScheduledTaskTable = Readonly<Record<string, readonly ScheduledTask[
 
 // キーは wrangler の triggers.crons の式と一字一句同じにする（event.cron で照合するため）
 export const scheduledTasks: ScheduledTaskTable = {
-  '0 0,3,6,9,12,15,18,21 * * *': [collectFeedsTask],
+  '0 0,3,6,9,12,15,18,21 * * *': [collectFeedsTask, refreshHatenaBookmarkCountsTask],
+  '15 20 * * 1': [detectRadarVolumeTask],
 };
 
 export const dispatchScheduled = async (

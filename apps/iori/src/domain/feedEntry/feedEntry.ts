@@ -4,6 +4,7 @@ import z from 'zod/v4';
 import { Schema } from '../../helper/schema.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { FeedSourceKind } from '../feedSource/feedSource.ts';
 import { FeedSourceId } from '../feedSource/feedSourceId.ts';
 import { Instant } from '../instant/instant.ts';
 import { FeedEntryId } from './feedEntryId.ts';
@@ -105,6 +106,10 @@ export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<
 >;
 export type FeedEntriesResolverByFetchedBefore = Agg.Resolver<
   { fetchedBefore: Instant; limit: number },
+  ReadonlyArray<FeedEntry>
+>;
+export type FeedEntriesResolverByFetchedSinceExcludingKinds = Agg.Resolver<
+  { fetchedSince: Instant; excludedKinds: ReadonlyArray<FeedSourceKind>; limit: number },
   ReadonlyArray<FeedEntry>
 >;
 
