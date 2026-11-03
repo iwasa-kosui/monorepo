@@ -18,5 +18,6 @@ export {
   type ArticleUnpublished,
   type ArticleUnpublishedStore,
   type ArticleWithBodyCreatedStore,
+  type ArticleWithDependentsDeletedStore,
 } from './article.ts';
 export { ArticleId, ArticleIdSym } from './articleId.ts';
