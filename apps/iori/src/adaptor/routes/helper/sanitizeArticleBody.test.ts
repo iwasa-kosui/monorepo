@@ -26,6 +26,24 @@ describe('sanitizeArticleBody', () => {
     expect(html).not.toContain('href');
   });
 
+  it.each([
+    ['大文字混じりの scheme', '<a href="JaVaScRiPt:alert(1)">link</a>'],
+    ['scheme の途中にタブ', '<a href="java\tscript:alert(1)">link</a>'],
+    ['scheme の途中に改行', '<a href="java&#10;script:alert(1)">link</a>'],
+    ['scheme の途中に制御文字', '<a href="java&#1;script:alert(1)">link</a>'],
+    ['先頭に空白', '<a href="  javascript:alert(1)">link</a>'],
+    ['data: の href', '<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">link</a>'],
+  ])('%s の href を消す', (_label, input) => {
+    const html = sanitizeArticleBody(input);
+
+    expect(html).not.toContain('href');
+    expect(html).not.toMatch(/javascript|data:/i);
+  });
+
+  it('span の class を消す', () => {
+    expect(sanitizeArticleBody('<span class="fixed inset-0">a</span>')).toBe('<span>a</span>');
+  });
+
   it('img を消す', () => {
     expect(sanitizeArticleBody('<p>a</p><img src="https://example.com/a.png" onerror="alert(1)">')).toBe('<p>a</p>');
   });

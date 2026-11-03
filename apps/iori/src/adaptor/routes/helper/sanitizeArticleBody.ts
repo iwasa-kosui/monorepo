@@ -50,7 +50,6 @@ export const sanitizeArticleBody = (html: string) =>
     allowedAttributes: {
       'a': ['href', 'rel'],
       'pre': ['class'],
-      'span': ['class'],
     },
     allowedSchemes: ['https', 'http'],
     allowProtocolRelative: false,
