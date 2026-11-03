@@ -35,10 +35,10 @@ const SUMMARY_MAX_OUTPUT_TOKENS = 512;
 const SUMMARY_TIMEOUT_MS = 30_000;
 const SUMMARY_INPUT_MAX_CHARS = 1000;
 const NEW_ENTRIES_LIMIT = 10;
-const TRENDS_LIMIT = 10;
+export const TRENDS_LIMIT = 10;
 const RADAR_LIMIT = 1;
 const HOUR_MS = 60 * 60 * 1000;
-const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
+export const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
 type Input = Readonly<{ userId: UserId }>;
 

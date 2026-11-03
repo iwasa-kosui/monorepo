@@ -2,6 +2,7 @@ import { afterEach } from 'vitest';
 
 import { createIoriApp } from '../../../../appFactory.tsx';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
+import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
@@ -13,13 +14,19 @@ import { createD1ActorResolverById } from '../../../d1/actor/actorResolverById.t
 import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
+import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
+import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
+import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../../../d1/follow/actorIdsResolverByFollowsWithPagination.ts';
 import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
+import { createD1TimelineLinkTrendsResolverByUserId } from '../../../d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../../../d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResolverByUserId.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
@@ -39,6 +46,7 @@ import { createD1TimelineSearchCandidatesResolver } from '../../../d1/timelineSe
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
+import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
@@ -72,6 +80,7 @@ export const setupReadApi = (
   });
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
@@ -185,6 +194,21 @@ export const setupReadApi = (
           saveMarkersUseCase: SaveMarkersUseCase.create({
             markersResolverByUserId,
             markerSavedStore: createD1MarkerSavedStore(db),
+          }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriDigestRouter({
+          authn,
+          digestResolverByUserIdAndDigestDate: createD1DigestResolverByUserIdAndDigestDate(db),
+          digestResolverByUserId: createD1DigestResolverByUserId(db),
+          timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+          hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
+          digestSubscriptionResolverByUserId,
+          saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
+            digestSubscriptionResolverByUserId,
+            digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
           }),
         }),
       );

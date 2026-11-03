@@ -5,11 +5,13 @@ import type { Article } from '../../domain/article/article.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { PostView } from '../components/PostView.tsx';
 import { postToStatus } from '../legacyConversion.ts';
+import { buildDigestPublishConfirmMessage, type DigestPublishNotice } from './digestPublishConfirm.ts';
 
 type ArticleData = {
   article: Article;
   thread: PostWithAuthor[];
   body?: { html: string };
+  digest?: DigestPublishNotice;
 };
 
 const getIsLoggedIn = (): boolean => {
@@ -61,6 +63,9 @@ const ArticleDetailPage = () => {
 
   const handlePublish = async () => {
     if (!data) return;
+
+    const confirmMessage = data.digest === undefined ? undefined : buildDigestPublishConfirmMessage(data.digest);
+    if (confirmMessage !== undefined && !confirm(confirmMessage)) return;
 
     setIsPublishing(true);
     try {
