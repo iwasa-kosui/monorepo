@@ -1,3 +1,4 @@
+import { createD1AccountStatsResolverByActorId } from '../adaptor/d1/actor/accountStatsResolverByActorId.ts';
 import { createD1ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../adaptor/d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolverByUserId.ts';
@@ -37,6 +38,21 @@ import { createD1ReplyNotificationCreatedStore } from '../adaptor/d1/notificatio
 import { createD1NotificationsReadStore } from '../adaptor/d1/notification/notificationsReadStore.ts';
 import { createD1NotificationsResolverByUserId } from '../adaptor/d1/notification/notificationsResolverByUserId.ts';
 import { createD1UnreadNotificationCountResolverByUserId } from '../adaptor/d1/notification/unreadNotificationCountResolverByUserId.ts';
+import { createD1AccessTokenIssuedStore } from '../adaptor/d1/oauth/accessTokenIssuedStore.ts';
+import {
+  createD1AccessTokenResolverByTokenHash,
+  createD1AccessTokensResolverByAuthorizationCodeHash,
+  createD1AccessTokenUsageRecorder,
+} from '../adaptor/d1/oauth/accessTokenResolvers.ts';
+import { createD1AccessTokenRevokedStore } from '../adaptor/d1/oauth/accessTokenRevokedStore.ts';
+import { createD1AuthorizationCodeConsumedStore } from '../adaptor/d1/oauth/authorizationCodeConsumedStore.ts';
+import { createD1AuthorizationCodeIssuedStore } from '../adaptor/d1/oauth/authorizationCodeIssuedStore.ts';
+import { createD1AuthorizationCodeResolverByCodeHash } from '../adaptor/d1/oauth/authorizationCodeResolverByCodeHash.ts';
+import { createD1OAuthApplicationRegisteredStore } from '../adaptor/d1/oauth/oauthApplicationRegisteredStore.ts';
+import {
+  createD1OAuthApplicationResolver,
+  createD1OAuthApplicationResolverByClientId,
+} from '../adaptor/d1/oauth/oauthApplicationResolvers.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../adaptor/d1/post/postDeletedStore.ts';
@@ -84,6 +100,7 @@ import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
+import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetFederatedTimelineUseCase } from '../useCase/getFederatedTimeline.ts';
@@ -92,7 +109,10 @@ import { GetMutesUseCase } from '../useCase/getMutes.ts';
 import { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { createGetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
+import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
+import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
+import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -107,6 +127,8 @@ import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
+import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
+import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import {
@@ -154,6 +176,10 @@ export const createWorkerRuntimePorts = async (
     logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
   });
+  const oauthApplicationResolverByClientId = createD1OAuthApplicationResolverByClientId(db);
+  const accessTokenResolverByTokenHash = createD1AccessTokenResolverByTokenHash(db);
+  const accessTokenRevokedStore = createD1AccessTokenRevokedStore(db);
+  const authorizationCodeResolverByCodeHash = createD1AuthorizationCodeResolverByCodeHash(db);
   const remoteActorActions = createWorkerRemoteActorActions({
     sessionResolver,
     userResolver,
@@ -174,6 +200,44 @@ export const createWorkerRuntimePorts = async (
         sessionStartedStore: createD1SessionStartedStore(db),
         argon2idDerive: lazyWorkerArgon2idDerive,
       }),
+    },
+    oauth: {
+      registerOAuthApplicationUseCase: RegisterOAuthApplicationUseCase.create({
+        oauthApplicationRegisteredStore: createD1OAuthApplicationRegisteredStore(db),
+      }),
+      validateAuthorizationRequestUseCase: ValidateAuthorizationRequestUseCase.create({
+        oauthApplicationResolverByClientId,
+      }),
+      issueAuthorizationCodeUseCase: IssueAuthorizationCodeUseCase.create({
+        sessionResolver,
+        oauthApplicationResolverByClientId,
+        authorizationCodeIssuedStore: createD1AuthorizationCodeIssuedStore(db),
+      }),
+      exchangeTokenUseCase: ExchangeTokenUseCase.create({
+        oauthApplicationResolverByClientId,
+        authorizationCodeResolverByCodeHash,
+        authorizationCodeConsumedStore: createD1AuthorizationCodeConsumedStore(db),
+        accessTokenIssuedStore: createD1AccessTokenIssuedStore(db),
+        accessTokenRevokedStore,
+        accessTokensResolverByAuthorizationCodeHash: createD1AccessTokensResolverByAuthorizationCodeHash(db),
+      }),
+      revokeTokenUseCase: RevokeTokenUseCase.create({
+        oauthApplicationResolverByClientId,
+        accessTokenResolverByTokenHash,
+        accessTokenRevokedStore,
+      }),
+      verifyAccessTokenUseCase: VerifyAccessTokenUseCase.create({
+        accessTokenResolverByTokenHash,
+        accessTokenUsageRecorder: createD1AccessTokenUsageRecorder(db),
+      }),
+      oauthApplicationResolver: createD1OAuthApplicationResolver(db),
+      sessionResolver,
+    },
+    mastodon: {
+      userResolver,
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      actorResolverByUserId,
+      accountStatsResolver: createD1AccountStatsResolverByActorId(db),
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({

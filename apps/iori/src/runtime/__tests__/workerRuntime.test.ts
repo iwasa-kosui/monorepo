@@ -17,6 +17,10 @@ describe('createWorkerRuntimePorts', () => {
 
     expect(runtime.db).toBeDefined();
     expect(runtime.auth.signInUseCase.run).toBeTypeOf('function');
+    expect(runtime.oauth.verifyAccessTokenUseCase.run).toBeTypeOf('function');
+    expect(runtime.oauth.exchangeTokenUseCase.run).toBeTypeOf('function');
+    expect(runtime.mastodon.accountStatsResolver.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.userResolverByUsername.resolve).toBeTypeOf('function');
     expect(runtime.timeline.getTimelineUseCase.run).toBeTypeOf('function');
     expect(runtime.posting.createPostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendLikeUseCase.run).toBeTypeOf('function');

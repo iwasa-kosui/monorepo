@@ -39,6 +39,8 @@ import { createKeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcherFac
 import { createObjectDispatcher } from './adaptor/fedify/objectDispatcherFactory.ts';
 import { createOutboxDispatcher } from './adaptor/fedify/outboxDispatcherFactory.ts';
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
+import { IORI_VERSION } from './adaptor/mastodon/ioriVersion.ts';
+import { buildNodeInfo } from './adaptor/mastodon/nodeinfo.ts';
 import { createContextLoaderFactory } from './federationContext.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
@@ -190,6 +192,7 @@ export const createCloudflareFederationRuntime = async (
     instanceActorKeyPairsResolver: createD1InstanceActorKeyPairsResolver(db),
   });
 
+  federationBuilder.setNodeInfoDispatcher('/nodeinfo/2.1', () => buildNodeInfo(IORI_VERSION));
   federationBuilder.setObjectDispatcher(Note, '/users/{identifier}/posts/{id}', objectDispatcher.ofNote);
   federationBuilder.setObjectDispatcher(Article, '/users/{identifier}/articles/{id}', objectDispatcher.ofArticle);
   const inboxListener = createCloudflareInboxListener(db, {

@@ -1,6 +1,8 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { resolveNextPath } from './signInNext.ts';
+
 const SignInPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +22,10 @@ const SignInPage = () => {
       });
 
       if (response.ok) {
-        window.location.href = '/';
+        window.location.href = resolveNextPath(
+          new URLSearchParams(window.location.search).get('next'),
+          window.location.origin,
+        );
         return;
       }
 

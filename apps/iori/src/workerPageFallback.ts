@@ -1,6 +1,8 @@
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
 import { renderBottomNav, renderPostModal, renderSidebar } from './workerPageNav.tsx';
 
+export const SITE_DESCRIPTION = 'A microblog by kosui';
+
 type WorkerPage = Readonly<{
   entry: string;
   title: string;
@@ -69,7 +71,7 @@ export const createWorkerPageFallback = async (
     <link rel="apple-touch-icon" href="/icon-192.png">
     <meta name="theme-color" content="#1a1918">
     <title>${escapeHtml(page.title)}</title>
-    <meta name="description" content="A microblog by kosui">
+    <meta name="description" content="${SITE_DESCRIPTION}">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>${layoutStyle}</style>
     <script>${tailwindConfigScript}</script>

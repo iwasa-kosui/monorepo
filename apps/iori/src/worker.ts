@@ -10,11 +10,16 @@ import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
 import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
+import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
+import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
+import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
+import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMastodonFallbackRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
 import { createWorkerNotificationsApiRouter } from './adaptor/routes/workerNotificationsApiRouter.ts';
+import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import {
   createWorkerPageActionsRouter,
   createWorkerRemoteFollowRedirectRouter,
@@ -29,6 +34,7 @@ import { ArticleId } from './domain/article/articleId.ts';
 import { Instant } from './domain/instant/instant.ts';
 import { Session } from './domain/session/session.ts';
 import { SessionId } from './domain/session/sessionId.ts';
+import { Username } from './domain/user/username.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
 import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
@@ -41,7 +47,7 @@ import {
   smokeMarker,
 } from './workerAdmission.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
-import { createWorkerPageFallback } from './workerPageFallback.ts';
+import { createWorkerPageFallback, SITE_DESCRIPTION } from './workerPageFallback.ts';
 
 import './logging.cloudflare.ts';
 
@@ -230,6 +236,27 @@ export default {
             createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
           }),
         );
+        const authn = createMastodonAuthn({
+          verifyAccessTokenUseCase: runtime.oauth.verifyAccessTokenUseCase,
+          sessionResolver: runtime.oauth.sessionResolver,
+        });
+        app.route('/', createWorkerOAuthRouter(runtime.oauth));
+        app.route('/api', createWorkerMastodonAppsRouter({ ...runtime.oauth, authn }));
+        app.route(
+          '/api',
+          createWorkerMastodonCoreRouter({
+            ...runtime.mastodon,
+            authn,
+            instance: {
+              domain: admission.identity.hostname,
+              title: admission.identity.hostname,
+              description: SITE_DESCRIPTION,
+              contactUsername: Username.parseOrThrow('kosui'),
+              vapidPublicKey: runtime.core.vapidPublicKey,
+            },
+          }),
+        );
+        app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
       servePage: async (pageRequest) => createWorkerPageFallback(pageRequest, await pageIdentity(pageRequest, runtime)),

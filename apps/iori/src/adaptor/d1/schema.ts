@@ -29,7 +29,9 @@ export const domainEventsTable = sqliteTable('domain_events', {
   eventName: text('eventName').notNull(),
   eventPayload: text('eventPayload'),
   occurredAt: timestamp().notNull(),
-});
+}, (table) => [
+  index('domain_events_aggregate_id_idx').on(table.aggregateId),
+]);
 
 export const actorsTable = sqliteTable('actors', {
   actorId: text('actorId').primaryKey(),
@@ -64,6 +66,7 @@ export const followsTable = sqliteTable('follows', {
     .references(() => actorsTable.actorId),
 }, (table) => [
   uniqueIndex('follower_following_unique').on(table.followerId, table.followingId),
+  index('follows_following_id_idx').on(table.followingId),
 ]);
 
 export const userPasswordsTable = sqliteTable('user_passwords', {
@@ -90,7 +93,9 @@ export const postsTable = sqliteTable('posts', {
   createdAt: timestamp().notNull(),
   type: text('type').notNull(),
   deletedAt: timestamp(),
-});
+}, (table) => [
+  index('posts_actor_id_idx').on(table.actorId),
+]);
 
 export const remotePostsTable = sqliteTable('remote_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
@@ -289,6 +294,47 @@ export const federatedTimelineItemsTable = sqliteTable('federated_timeline_items
   index('federated_timeline_items_post_id_idx').on(table.postId),
 ]);
 
+export const oauthApplicationsTable = sqliteTable('oauth_applications', {
+  id: text('id').primaryKey(),
+  clientId: text('clientId').notNull(),
+  clientSecretHash: text('clientSecretHash').notNull(),
+  name: text('name').notNull(),
+  website: text('website'),
+  redirectUris: text('redirectUris').notNull(),
+  scopes: text('scopes').notNull(),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('oauth_applications_client_id_unique').on(table.clientId),
+]);
+
+export const oauthAuthorizationCodesTable = sqliteTable('oauth_authorization_codes', {
+  codeHash: text('codeHash').primaryKey(),
+  applicationId: text('applicationId').notNull().references(() => oauthApplicationsTable.id),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  redirectUri: text('redirectUri').notNull(),
+  scopes: text('scopes').notNull(),
+  codeChallenge: text('codeChallenge'),
+  codeChallengeMethod: text('codeChallengeMethod'),
+  expiresAt: timestamp().notNull(),
+  consumedAt: timestamp(),
+  createdAt: timestamp().notNull(),
+});
+
+export const oauthAccessTokensTable = sqliteTable('oauth_access_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('tokenHash').notNull(),
+  applicationId: text('applicationId').notNull().references(() => oauthApplicationsTable.id),
+  userId: text('userId').references(() => usersTable.userId),
+  authorizationCodeHash: text('authorizationCodeHash'),
+  scopes: text('scopes').notNull(),
+  createdAt: timestamp().notNull(),
+  revokedAt: timestamp(),
+  lastUsedAt: timestamp(),
+}, (table) => [
+  uniqueIndex('oauth_access_tokens_token_hash_unique').on(table.tokenHash),
+  index('oauth_access_tokens_authorization_code_hash_idx').on(table.authorizationCodeHash),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -321,4 +367,7 @@ export const schema = {
   linkPreviewsTable,
   relaysTable,
   federatedTimelineItemsTable,
+  oauthApplicationsTable,
+  oauthAuthorizationCodesTable,
+  oauthAccessTokensTable,
 } as const;

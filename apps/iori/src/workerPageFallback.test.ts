@@ -20,6 +20,15 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain(`data-user-id="${userId}"`);
   });
 
+  it('renders the sign-in entry when the query carries a next path', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/sign-in?next=%2Foauth%2Fauthorize%3Fclient_id%3Dabc'),
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.text()).toContain('/static/signIn.js');
+  });
+
   it('embeds the tailwind config and the style block shared with LayoutClient', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
     const html = await response?.text();

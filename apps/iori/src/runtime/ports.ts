@@ -3,19 +3,25 @@ import type { RA, ResultAsync } from '@iwasa-kosui/result';
 
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
+import type { AccountStatsResolverByActorId } from '../domain/actor/accountStats.ts';
+import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { Instant } from '../domain/instant/instant.ts';
+import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
 import type { PostWithAuthor, ThreadResolver } from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
+import type { SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
+import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
 import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
+import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetFederatedTimelineUseCase } from '../useCase/getFederatedTimeline.ts';
@@ -26,7 +32,10 @@ import type { GetServerTimelineUseCase } from '../useCase/getServerTimeline.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { GetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
 import type { GetUserPostsUseCase } from '../useCase/getUserPosts.ts';
+import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
+import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
+import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -41,6 +50,8 @@ import type { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import type { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
+import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
+import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -53,6 +64,22 @@ export type WorkerRemoteActorAction = (
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
+}>;
+export type IoriOAuthRuntimePorts = Readonly<{
+  registerOAuthApplicationUseCase: RegisterOAuthApplicationUseCase;
+  validateAuthorizationRequestUseCase: ValidateAuthorizationRequestUseCase;
+  issueAuthorizationCodeUseCase: IssueAuthorizationCodeUseCase;
+  exchangeTokenUseCase: ExchangeTokenUseCase;
+  revokeTokenUseCase: RevokeTokenUseCase;
+  verifyAccessTokenUseCase: VerifyAccessTokenUseCase;
+  oauthApplicationResolver: OAuthApplicationResolver;
+  sessionResolver: SessionResolver;
+}>;
+export type IoriMastodonRuntimePorts = Readonly<{
+  userResolver: UserResolver;
+  userResolverByUsername: UserResolverByUsername;
+  actorResolverByUserId: ActorResolverByUserId;
+  accountStatsResolver: AccountStatsResolverByActorId;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -126,6 +153,8 @@ export type IoriCoreRuntimePorts = Readonly<{
 export type IoriRuntimePorts = Readonly<{
   db: IoriD1Db;
   auth: IoriAuthRuntimePorts;
+  oauth: IoriOAuthRuntimePorts;
+  mastodon: IoriMastodonRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
