@@ -21,6 +21,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/follow', { entry: 'follow', title: 'Follow | blog.kosui.me' }],
   ['/likes', { entry: 'likedPosts', title: 'Liked posts | blog.kosui.me' }],
   ['/notifications', { entry: 'notifications', title: 'Notifications | blog.kosui.me' }],
+  ['/search', { entry: 'search', title: '検索 | blog.kosui.me' }],
   ['/sign-in', { entry: 'signIn', title: 'Sign in | blog.kosui.me' }],
   ['/sign-up', { entry: 'signUp', title: 'Sign up | blog.kosui.me' }],
 ]);

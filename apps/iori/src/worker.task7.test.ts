@@ -46,7 +46,6 @@ const runtime = vi.hoisted(() => ({
     signUpUseCase: {},
     sendReplyUseCase: {},
     deletePostUseCase: {},
-    sendFollowRequestUseCase: {},
     subscribePushUseCase: {},
     unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
@@ -71,7 +70,7 @@ vi.mock('./adaptor/fedify/activityPubObjectNotFound.ts', () => ({
 import worker from './worker.ts';
 
 describe('Task 7 Worker route mounting', () => {
-  it('mounts social, notification, article, mute, and relay API groups', async () => {
+  it('mounts notification, article, and relay API groups and no longer mounts the replaced like, mute, and remote-user follow routes', async () => {
     const env = admissionFixture() as never;
     const executionContext = {} as ExecutionContext;
     const responses = await Promise.all([
@@ -96,9 +95,16 @@ describe('Task 7 Worker route mounting', () => {
         executionContext,
       ),
       worker.fetch(new Request('https://worker.test/api/v1/relays'), env, executionContext),
+      worker.fetch(
+        new Request('https://worker.test/remote-users/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/follow', {
+          method: 'POST',
+        }),
+        env,
+        executionContext,
+      ),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 400, 401, 401]);
+    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 401, 404]);
     expect(await responses[1]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });

@@ -12,15 +12,15 @@ import {
 } from '../domain/mute/mute.ts';
 import { MuteId } from '../domain/mute/muteId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  mutedActorId: ActorId;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    mutedActorId: ActorId;
+  }>;
 
 type Ok = void;
 
@@ -48,15 +48,13 @@ const create = ({
   muteResolver,
 }: Deps): CreateMuteUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Check if trying to mute self
       RA.andThrough(({ actor, mutedActorId }) => {

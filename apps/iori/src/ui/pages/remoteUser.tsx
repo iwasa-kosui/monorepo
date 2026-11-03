@@ -1,22 +1,24 @@
-import { hc } from 'hono/client';
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import {
+  failureMessage,
+  favourite,
   fetchAccount,
   fetchAccountStatuses,
   fetchRelationshipOrSignedOut,
+  follow,
   isNotFoundError,
+  mute,
+  unfollow,
+  unmute,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId, withFavourited } from '../api/status.ts';
+import { isLocalAccount, updateStatusesByPostId, withUpdatedStatus } from '../api/status.ts';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
-
-const client = hc<APIRouterType>('/api');
 
 type Props = Readonly<{
   account: Account;
@@ -25,10 +27,13 @@ type Props = Readonly<{
   isMuted: boolean;
   isLoggedIn: boolean;
   onLike: (postId: string) => Promise<void>;
+  onFollow: () => Promise<void>;
+  onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
   onUnmute: () => Promise<void>;
   likingPostId: string | null;
   isMuting: boolean;
+  isTogglingFollow: boolean;
 }>;
 
 export const RemoteUserPage = ({
@@ -38,10 +43,13 @@ export const RemoteUserPage = ({
   isMuted,
   isLoggedIn,
   onLike,
+  onFollow,
+  onUnfollow,
   onMute,
   onUnmute,
   likingPostId,
   isMuting,
+  isTogglingFollow,
 }: Props) => {
   const handle = account.acct;
   const displayName = account.username;
@@ -81,70 +89,62 @@ export const RemoteUserPage = ({
                 <>
                   {isFollowing
                     ? (
-                      <form
-                        method='post'
-                        action={`/remote-users/${account.id}/unfollow`}
-                        class='m-0'
+                      <button
+                        type='button'
+                        onClick={onUnfollow}
+                        disabled={isTogglingFollow}
+                        class='flex items-center justify-center p-2 rounded-xl text-sage-dark dark:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='フォロー解除'
                       >
-                        <button
-                          type='submit'
-                          class='flex items-center justify-center p-2 rounded-xl text-sage-dark dark:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
-                          title='フォロー解除'
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
                         >
-                          <svg
-                            xmlns='http://www.w3.org/2000/svg'
-                            class='h-5 w-5'
-                            fill='none'
-                            viewBox='0 0 24 24'
-                            stroke='currentColor'
-                            stroke-width='2'
-                          >
-                            <path
-                              stroke-linecap='round'
-                              stroke-linejoin='round'
-                              d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                            />
-                            <path
-                              stroke-linecap='round'
-                              stroke-linejoin='round'
-                              d='M15 11l2 2 4-4'
-                            />
-                          </svg>
-                        </button>
-                      </form>
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+                          />
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M15 11l2 2 4-4'
+                          />
+                        </svg>
+                      </button>
                     )
                     : (
-                      <form
-                        method='post'
-                        action={`/remote-users/${account.id}/follow`}
-                        class='m-0'
+                      <button
+                        type='button'
+                        onClick={onFollow}
+                        disabled={isTogglingFollow}
+                        class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-sage-dark dark:hover:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='フォロー'
                       >
-                        <button
-                          type='submit'
-                          class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-sage-dark dark:hover:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
-                          title='フォロー'
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
                         >
-                          <svg
-                            xmlns='http://www.w3.org/2000/svg'
-                            class='h-5 w-5'
-                            fill='none'
-                            viewBox='0 0 24 24'
-                            stroke='currentColor'
-                            stroke-width='2'
-                          >
-                            <path
-                              stroke-linecap='round'
-                              stroke-linejoin='round'
-                              d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                            />
-                            <path
-                              stroke-linecap='round'
-                              stroke-linejoin='round'
-                              d='M19 10h-2m-2 0h2m0 0V8m0 2v2'
-                            />
-                          </svg>
-                        </button>
-                      </form>
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+                          />
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M19 10h-2m-2 0h2m0 0V8m0 2v2'
+                          />
+                        </svg>
+                      </button>
                     )}
                   {isMuted
                     ? (
@@ -284,6 +284,7 @@ const App = () => {
   const isFetchingMoreRef = useRef(false);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
 
   useEffect(() => {
@@ -340,22 +341,15 @@ const App = () => {
   const handleLike = async (postId: string) => {
     setLikingPostId(postId);
     try {
-      const res = await client.v1.like.$post({
-        json: { postId },
-      });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setData((prev) =>
-          prev === null || 'error' in prev
-            ? prev
-            : {
-              ...prev,
-              statuses: updateStatusesByPostId(prev.statuses, postId, (status) => withFavourited(status, true)),
-            }
-        );
-      } else if ('error' in result) {
-        console.error('Failed to like:', result.error);
-      }
+      const updated = await favourite(postId);
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : {
+            ...prev,
+            statuses: updateStatusesByPostId(prev.statuses, postId, (status) => withUpdatedStatus(status, updated)),
+          }
+      );
     } catch (error) {
       console.error('Failed to like:', error);
     } finally {
@@ -363,21 +357,43 @@ const App = () => {
     }
   };
 
+  const handleFollow = async () => {
+    if (!data || 'error' in data) return;
+    setIsTogglingFollow(true);
+    try {
+      const relationship = await follow(data.account.id);
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: relationship.following });
+    } catch (error) {
+      console.error('Failed to follow:', error);
+      alert(failureMessage('follow', error));
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
+
+  const handleUnfollow = async () => {
+    if (!data || 'error' in data) return;
+    setIsTogglingFollow(true);
+    try {
+      const relationship = await unfollow(data.account.id);
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: relationship.following });
+    } catch (error) {
+      console.error('Failed to unfollow:', error);
+      alert(failureMessage('unfollow', error));
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
+
   const handleMute = async () => {
     if (!data || 'error' in data) return;
     setIsMuting(true);
     try {
-      const res = await client.v1.mute.$post({
-        json: { actorId: data.account.id },
-      });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setData({ ...data, isMuted: true });
-      } else if ('error' in result) {
-        console.error('Failed to mute:', result.error);
-      }
+      const relationship = await mute(data.account.id);
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isMuted: relationship.muting });
     } catch (error) {
       console.error('Failed to mute:', error);
+      alert(failureMessage('mute', error));
     } finally {
       setIsMuting(false);
     }
@@ -387,17 +403,11 @@ const App = () => {
     if (!data || 'error' in data) return;
     setIsMuting(true);
     try {
-      const res = await client.v1.mute.$delete({
-        json: { actorId: data.account.id },
-      });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setData({ ...data, isMuted: false });
-      } else if ('error' in result) {
-        console.error('Failed to unmute:', result.error);
-      }
+      const relationship = await unmute(data.account.id);
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isMuted: relationship.muting });
     } catch (error) {
       console.error('Failed to unmute:', error);
+      alert(failureMessage('unmute', error));
     } finally {
       setIsMuting(false);
     }
@@ -419,10 +429,13 @@ const App = () => {
       isMuted={data.isMuted}
       isLoggedIn={data.isLoggedIn}
       onLike={handleLike}
+      onFollow={handleFollow}
+      onUnfollow={handleUnfollow}
       onMute={handleMute}
       onUnmute={handleUnmute}
       likingPostId={likingPostId}
       isMuting={isMuting}
+      isTogglingFollow={isTogglingFollow}
     />
   );
 };

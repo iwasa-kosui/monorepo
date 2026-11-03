@@ -44,6 +44,7 @@ import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { FedifyRemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import { createOgpFetcher } from '../ogp/ogpFetcher.ts';
+import { PgActorResolverById } from '../pg/actor/actorResolverById.ts';
 import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -251,6 +252,7 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        actorResolverById: PgActorResolverById.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
         localLikeDeletedStore: PgLocalLikeDeletedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
@@ -342,6 +344,7 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        actorResolverById: PgActorResolverById.getInstance(),
         repostResolver: PgRepostResolver.getInstance(),
         repostDeletedStore: PgRepostDeletedStore.getInstance(),
         timelineItemResolverByRepostId: PgTimelineItemResolverByRepostId.getInstance(),

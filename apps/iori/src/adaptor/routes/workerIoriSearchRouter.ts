@@ -1,4 +1,5 @@
 import { Result } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 import { type Context, Hono } from 'hono';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
@@ -9,10 +10,12 @@ import {
   MAX_QUERY_LIMIT,
   TimelineSearchQuery,
 } from '../../domain/timelineSearch/timelineSearchQuery.ts';
+import type { ResolveRemoteAccountUseCase } from '../../useCase/resolveRemoteAccount.ts';
 import type { SearchTimelineUseCase, TimelineSearchExpansion } from '../../useCase/searchTimeline.ts';
-import type { Status } from '../mastodon/entities.ts';
+import type { Account, Status } from '../mastodon/entities.ts';
 import type { StatusAssembler, StatusSource } from '../mastodon/statusAssembler.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
+import { isTrue } from './helper/mastodonPage.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerIoriSearchRouterDeps = Readonly<{
@@ -20,6 +23,7 @@ export type WorkerIoriSearchRouterDeps = Readonly<{
   searchTimeline: SearchTimelineUseCase;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   statusAssembler: StatusAssembler;
+  resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
 }>;
 
 export type IoriSearchStatusesResponse = Readonly<{
@@ -30,7 +34,7 @@ export type IoriSearchStatusesResponse = Readonly<{
 }>;
 
 export type MastodonSearchResponse = Readonly<{
-  accounts: [];
+  accounts: Account[];
   statuses: Status[];
   hashtags: [];
 }>;
@@ -47,6 +51,8 @@ const invalidToken = { error: 'The access token is invalid' } as const;
 const readSearch = Scope.orThrow('read:search');
 const searchTypes: ReadonlyArray<string> = ['accounts', 'hashtags', 'statuses'];
 const integerPattern = /^-?\d+$/;
+const httpsUrlPattern = /^https:\/\/\S+$/i;
+const acctPattern = /^@?([A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?)@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)$/;
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
 
@@ -72,6 +78,26 @@ const parseQuery = (
   return Result.err(TimelineSearchQuery.of({ text }).ok ? 'limit' : 'q');
 };
 
+const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
+  const acct = acctPattern.exec(q.replace(/^acct:/i, ''));
+  if (acct !== null) {
+    const [, username, host] = acct;
+    return host!.toLowerCase() === ownHost.toLowerCase() ? undefined : `${username}@${host}`;
+  }
+  if (!httpsUrlPattern.test(q)) {
+    return undefined;
+  }
+  try {
+    const url = new URL(q);
+    if (url.username !== '' || url.password !== '') {
+      return undefined;
+    }
+    return url.host.toLowerCase() === ownHost.toLowerCase() ? undefined : q;
+  } catch {
+    return undefined;
+  }
+};
+
 const formatTiming = (searchMs: number, assembleMs: number, totalMs: number): string =>
   `search;dur=${searchMs}, assemble;dur=${assembleMs}, total;dur=${totalMs}`;
 
@@ -80,7 +106,33 @@ export const createWorkerIoriSearchRouter = ({
   searchTimeline,
   postsWithAuthorResolverByPostIds,
   statusAssembler,
+  resolveRemoteAccountUseCase,
 }: WorkerIoriSearchRouterDeps): Hono<MastodonAuthEnv> => {
+  const resolveAccounts = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
+    const userId = getMastodonPrincipal(c)?.userId;
+    if (userId === null || userId === undefined) {
+      return Result.err(c.json(invalidToken, 401));
+    }
+    const handle = remoteHandleOf((c.req.query('q') ?? '').trim(), new URL(c.req.url).host);
+    if (!isTrue(c.req.query('resolve')) || handle === undefined) {
+      return Result.ok([]);
+    }
+    const resolved = await resolveRemoteAccountUseCase.run({ userId, handle, request: c.req.raw });
+    if (!resolved.ok) {
+      return resolved.err.type === 'UserNotFoundError' ? Result.err(c.json(actorNotFound, 422)) : Result.ok([]);
+    }
+    return Result.ok(await statusAssembler.assembleAccounts({ actorIds: [resolved.val], requestUrl: c.req.url }));
+  };
+
+  const resolveAccountsOrEmpty = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
+    try {
+      return await resolveAccounts(c);
+    } catch (error) {
+      getLogger().warn(`Failed to resolve remote accounts for search: ${String(error)}`);
+      return Result.ok([]);
+    }
+  };
+
   const searchStatuses = async (
     c: Context<MastodonAuthEnv>,
     options: Readonly<{
@@ -162,8 +214,15 @@ export const createWorkerIoriSearchRouter = ({
       const isPaging = (offset !== undefined && Number(offset) >= 1)
         || c.req.query('max_id') !== undefined
         || c.req.query('min_id') !== undefined;
-      if (type === 'accounts' || type === 'hashtags' || isPaging) {
+      if (type === 'hashtags' || isPaging) {
         return c.json(empty);
+      }
+      const accounts = type === 'statuses' ? Result.ok<Account[]>([]) : await resolveAccountsOrEmpty(c);
+      if (!accounts.ok) {
+        return accounts.err;
+      }
+      if (type === 'accounts') {
+        return c.json({ ...empty, accounts: accounts.val });
       }
       if ((c.req.query('q') ?? '').trim() === '') {
         return c.json(validationFailed('q'), 400);
@@ -171,7 +230,7 @@ export const createWorkerIoriSearchRouter = ({
       const accountId = c.req.query('account_id');
       const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
       if (onlyActorId !== undefined && !onlyActorId.ok) {
-        return c.json(empty);
+        return c.json({ ...empty, accounts: accounts.val });
       }
       const searched = await searchStatuses(c, { limitOf: clampedLimit, onlyActorId: onlyActorId?.val });
       if (!searched.ok) {
@@ -179,7 +238,7 @@ export const createWorkerIoriSearchRouter = ({
       }
       // 配備後に検索1回の遅延を測るために付ける
       c.header('Server-Timing', searched.val.serverTiming);
-      const body: MastodonSearchResponse = { accounts: [], statuses: searched.val.statuses, hashtags: [] };
+      const body: MastodonSearchResponse = { accounts: accounts.val, statuses: searched.val.statuses, hashtags: [] };
       return c.json(body);
     });
 };

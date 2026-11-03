@@ -6,6 +6,8 @@ import type {
   Relationship,
   Status,
 } from '../../adaptor/mastodon/entities.ts';
+import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
+import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -25,7 +27,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -35,6 +37,9 @@ export const isUnauthorizedError = (error: unknown): boolean => isMastodonApiErr
 export const isNotFoundError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 404;
 
 export const isUnprocessableError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 422;
+
+export const failureMessage = (action: string, error: unknown): string =>
+  isMastodonApiError(error) ? `Failed to ${action}: ${error.message}` : `Failed to ${action}. Please try again.`;
 
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
@@ -59,12 +64,26 @@ export const parseLinkHeader = (header: string | null): PageCursors => {
   return { nextMaxId, prevMinId };
 };
 
+export const parseRetryAfter = (header: string | null, now: Date): number | undefined => {
+  if (header === null) return undefined;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value);
+  if (!/^[A-Za-z]/.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : Math.max(0, Math.ceil((time - now.getTime()) / 1000));
+};
+
 const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const body: unknown = await res.json().catch(() => undefined);
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
-  return Object.assign(new Error(message), { status: res.status });
+  const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
+  return Object.assign(
+    new Error(message),
+    { status: res.status },
+    retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+  );
 };
 
 type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
@@ -171,6 +190,44 @@ export const fetchNotifications = (
 ): Promise<Page<Notification>> =>
   getPage<Notification>('/api/v1/notifications', { ...pageQuery(params), 'types[]': types });
 
+const post = async <T>(path: string): Promise<T> => {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as T;
+};
+
+const statusActionPath = (id: string, action: string) => `/api/v1/statuses/${encodeURIComponent(id)}/${action}`;
+
+const accountActionPath = (id: string, action: string) => `/api/v1/accounts/${encodeURIComponent(id)}/${action}`;
+
+export const favourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'favourite'));
+
+export const unfavourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unfavourite'));
+
+export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
+
+export const unreblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unreblog'));
+
+export const follow = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'follow'));
+
+export const unfollow = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unfollow'));
+
+export const mute = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'mute'));
+
+export const unmute = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export const searchAccount = async (acct: string): Promise<Account | undefined> =>
+  (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))
+    .body.accounts[0];
+
 export const saveNotificationsMarker = async (lastReadId: string): Promise<void> => {
   const res = await fetch('/api/v1/markers', {
     method: 'POST',
@@ -210,4 +267,24 @@ export const updateAvatar = (file: File): Promise<CredentialAccount> => {
   const body = new FormData();
   body.append('avatar', file);
   return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
+};
+
+export type SearchStatusesResult = IoriSearchStatusesResponse;
+
+export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
+  (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
+
+export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
+
+export type TimelineSummary = IoriTimelineSummaryResponse;
+
+export const summarizeTimeline = async (body: SummarizeTimelineBody): Promise<TimelineSummary> => {
+  const res = await fetch('/api/iori/v1/timeline/summaries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as TimelineSummary;
 };
