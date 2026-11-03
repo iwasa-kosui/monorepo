@@ -30,6 +30,13 @@ describe('createWorkersAiTextGenerator summarize', () => {
     expect(result).toEqual({ ok: true, val: 'from choices' });
   });
 
+  it('returns a JSON string when response is an already parsed array', async () => {
+    const run = vi.fn(async () => ({ response: ['a', 'b'] }));
+    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
+    expect(result).toEqual({ ok: true, val: '["a","b"]' });
+    if (result.ok) expect(JSON.parse(result.val)).toEqual(['a', 'b']);
+  });
+
   it.each([{}, { response: '' }, { response: 1 }, { choices: [] }, { choices: [{ message: { content: '' } }] }, null])(
     'returns AiError for an empty or malformed response %j',
     async (raw) => {

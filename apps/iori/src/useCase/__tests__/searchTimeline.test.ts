@@ -201,6 +201,21 @@ describe('SearchTimelineUseCase', () => {
     warn.mockRestore();
   });
 
+  it('AiError の message に検索語が含まれるときは、[query] に置き換えてログに出す', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const generator: TextGenerator = {
+      summarize: () => RA.err({ type: 'AiError', message: 'bad request for 旅行 and 旅行' }),
+      generate: () => RA.err({ type: 'AiError', message: 'bad request for 旅行 and 旅行' }),
+    };
+    const { me, addPost, search } = setup({ textGenerator: generator });
+    addPost(me, '旅行の写真', 1000);
+
+    await expectOk(search('旅行'));
+
+    expect(warn).toHaveBeenCalledWith('timeline search expansion failed: AiError: bad request for [query] and [query]');
+    warn.mockRestore();
+  });
+
   it.each([
     ['1 文字', '旅'],
     ['http:// で始まる', 'http://example.com/旅行'],
