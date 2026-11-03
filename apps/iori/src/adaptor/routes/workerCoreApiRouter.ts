@@ -4,13 +4,11 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
-import { ImageId } from '../../domain/image/imageId.ts';
 import { Password } from '../../domain/password/password.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
-import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { createSignUpUseCase } from '../../useCase/signUp.ts';
@@ -23,7 +21,6 @@ export type WorkerCoreApiRouterDeps = Readonly<{
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
-  uploads: PostImageObjectStore;
   vapidPublicKey: string | undefined;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
@@ -77,25 +74,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
         : c.json({ error: `Failed to reply: ${JSON.stringify(result.err)}` }, 400);
     },
   );
-
-  app.post('/v1/upload', async (c) => {
-    const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-    if (sessionId === undefined) return c.json({ error: 'Unauthorized' }, 401);
-    const file = (await c.req.parseBody())['file'];
-    if (!(file instanceof File)) return c.json({ error: 'No file provided' }, 400);
-    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
-      return c.json({ error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP' }, 400);
-    }
-    if (file.size > 5 * 1024 * 1024) return c.json({ error: 'File too large. Max size: 5MB' }, 400);
-    const imageId = ImageId.generate();
-    const stored = await deps.uploads.put({
-      imageId,
-      body: await file.arrayBuffer(),
-      contentType: file.type,
-      contentLength: file.size,
-    });
-    return c.json({ imageId, url: stored.url, filename: stored.url.split('/').at(-1) });
-  });
 
   app.delete('/v1/posts/:postId', async (c) => {
     const postId = PostId.parse(c.req.param('postId'));

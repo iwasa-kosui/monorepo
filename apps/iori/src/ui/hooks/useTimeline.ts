@@ -41,6 +41,7 @@ export type UseTimelineReturn = Readonly<{
   isRefreshing: boolean;
   updateTimelineItem: StatusUpdater;
   removePost: (postId: string) => void;
+  updateMe: (me: CredentialAccount) => void;
 }>;
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -161,6 +162,10 @@ export const useTimeline = (): UseTimelineReturn => {
     });
   }, []);
 
+  const updateMe = useCallback((me: CredentialAccount) => {
+    setState((prev) => prev.status === 'success' ? { status: 'success', data: { ...prev.data, me } } : prev);
+  }, []);
+
   useEffect(() => {
     reload();
   }, [reload]);
@@ -173,5 +178,6 @@ export const useTimeline = (): UseTimelineReturn => {
     isRefreshing,
     updateTimelineItem,
     removePost,
+    updateMe,
   } as const;
 };

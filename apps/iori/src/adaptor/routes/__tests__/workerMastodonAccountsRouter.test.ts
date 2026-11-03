@@ -775,6 +775,7 @@ describe('アカウントのルーターの登録順', () => {
             userResolverByUsername: {} as never,
             actorResolverByUserId: {} as never,
             accountStatsResolver: {} as never,
+            updateAvatarUseCase: {} as never,
             instance: {
               domain: 'iori.test',
               title: 'iori.test',

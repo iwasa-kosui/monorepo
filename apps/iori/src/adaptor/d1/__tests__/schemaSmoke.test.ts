@@ -27,6 +27,7 @@ describe('D1 schema', () => {
       'localLikesTable',
       'localPostsTable',
       'mastodonMarkersTable',
+      'mediaUploadsTable',
       'mutesTable',
       'notificationEmojiReactsTable',
       'notificationFollowsTable',
