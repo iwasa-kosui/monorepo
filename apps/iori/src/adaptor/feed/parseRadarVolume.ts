@@ -14,7 +14,7 @@ export type RadarParseError = Readonly<{ type: 'RadarParseError'; message: strin
 const radarParseError = (message: string): RadarParseError => ({ type: 'RadarParseError', message });
 
 const PDF_PATH =
-  /\/content\/dam\/thoughtworks\/documents\/radar\/(\d{4})\/(\d{2})\/tr_technology_radar_vol_(\d+)_en\d*\.pdf/g;
+  /\/content\/dam\/thoughtworks\/documents\/radar\/(\d{4})\/(\d{2})\/tr_technology_radar_vol_(\d{1,4})_en\d*\.pdf/g;
 
 export const parseRadarVolume = (html: string): Result<RadarVolume, RadarParseError> => {
   let latest: RadarVolume | undefined;

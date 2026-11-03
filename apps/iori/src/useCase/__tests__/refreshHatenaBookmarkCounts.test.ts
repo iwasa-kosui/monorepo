@@ -74,6 +74,11 @@ const setup = (fetchText: SafeFetcher['fetchText']) => {
   return { db, sleep, useCase, addSource, addEntry, counts };
 };
 
+const urlWithEncodedLength = (name: string, length: number): string => {
+  const base = `https://e.test/${name}-`;
+  return `${base}${'a'.repeat(length - encodeURIComponent(base).length)}`;
+};
+
 const urlsOf = (requested: string): string[] => [...new URL(requested).searchParams.getAll('url')];
 
 describe('RefreshHatenaBookmarkCountsUseCase', () => {
@@ -90,7 +95,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     await addEntry(hotentry, 'hot');
     await addEntry(entrylist, 'list');
     await addEntry(radar, 'radar');
-    expect((await useCase.run()).val).toEqual({ requested: 2, updated: 0, failedRequests: 0 });
+    expect((await useCase.run()).val).toEqual({ requested: 2, updated: 0, failedRequests: 0, skipped: 0 });
     const requested = (fetchText.mock.calls[0] as unknown as [string])[0];
     expect(urlsOf(requested).sort()).toEqual(['https://e.test/edge', 'https://e.test/recent']);
   });
@@ -100,13 +105,63 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     const { useCase, addSource, addEntry, sleep } = setup(fetchText);
     const rss = await addSource('rss');
     for (let i = 0; i < 160; i += 1) await addEntry(rss, `e${String(i).padStart(3, '0')}`, { ageDays: 0.5 + i / 1000 });
-    expect((await useCase.run()).val).toEqual({ requested: 150, updated: 0, failedRequests: 0 });
+    expect((await useCase.run()).val).toEqual({ requested: 150, updated: 0, failedRequests: 0, skipped: 0 });
     expect(fetchText).toHaveBeenCalledTimes(3);
     const calls = fetchText.mock.calls as unknown as Array<[string, unknown]>;
     expect(calls.map(([requested]) => urlsOf(requested).length)).toEqual([50, 50, 50]);
     expect(calls.flatMap(([requested]) => urlsOf(requested))).not.toContain('https://e.test/e159');
     expect(sleep.mock.calls).toEqual([[3_000], [3_000]]);
     expect(calls[0]![1]).toEqual({ timeoutMs: 10_000, maxBytes: 256 * 1024, maxRedirects: 3 });
+  });
+
+  it('puts URLs into one request when the whole request URL is exactly 8000 characters', async () => {
+    const fetchText = vi.fn(async () => ok({}));
+    const { useCase, addSource, addEntry } = setup(fetchText);
+    const rss = await addSource('rss');
+    for (let i = 0; i < 5; i += 1) {
+      await addEntry(rss, `e${i}`, { url: urlWithEncodedLength(`e${i}`, 1586), ageDays: i / 1000 });
+    }
+    expect((await useCase.run()).val).toEqual({ requested: 5, updated: 0, failedRequests: 0, skipped: 0 });
+    expect(fetchText).toHaveBeenCalledTimes(1);
+    expect((fetchText.mock.calls[0] as unknown as [string])[0]).toHaveLength(8_000);
+  });
+
+  it('starts a new request when adding a URL would push the request URL over 8000 characters', async () => {
+    const fetchText = vi.fn(async () => ok({}));
+    const { useCase, addSource, addEntry } = setup(fetchText);
+    const rss = await addSource('rss');
+    for (let i = 0; i < 5; i += 1) {
+      const length = i === 4 ? 1587 : 1586;
+      await addEntry(rss, `e${i}`, { url: urlWithEncodedLength(`e${i}`, length), ageDays: i / 1000 });
+    }
+    expect((await useCase.run()).val).toEqual({ requested: 5, updated: 0, failedRequests: 0, skipped: 0 });
+    const calls = fetchText.mock.calls as unknown as Array<[string]>;
+    expect(calls.map(([requested]) => urlsOf(requested).length)).toEqual([4, 1]);
+    expect(calls.every(([requested]) => requested.length <= 8_000)).toBe(true);
+  });
+
+  it('does not request a URL whose encoded length is over 2000 characters', async () => {
+    const fetchText = vi.fn(async () => ok({}));
+    const { useCase, addSource, addEntry } = setup(fetchText);
+    const rss = await addSource('rss');
+    const justFits = urlWithEncodedLength('fits', 2_000);
+    await addEntry(rss, 'fits', { url: justFits, ageDays: 0 });
+    await addEntry(rss, 'long', { url: urlWithEncodedLength('long', 2_001), ageDays: 0.001 });
+    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 0, failedRequests: 0, skipped: 1 });
+    expect(fetchText).toHaveBeenCalledTimes(1);
+    expect(urlsOf((fetchText.mock.calls[0] as unknown as [string])[0])).toEqual([justFits]);
+  });
+
+  it('stops at three requests when splitting by length needs more and does not count the cut URLs', async () => {
+    const fetchText = vi.fn(async () => ok({}));
+    const { useCase, addSource, addEntry } = setup(fetchText);
+    const rss = await addSource('rss');
+    for (let i = 0; i < 10; i += 1) {
+      await addEntry(rss, `e${i}`, { url: urlWithEncodedLength(`e${i}`, 2_000), ageDays: i / 1000 });
+    }
+    expect((await useCase.run()).val).toEqual({ requested: 9, updated: 0, failedRequests: 0, skipped: 1 });
+    const calls = fetchText.mock.calls as unknown as Array<[string]>;
+    expect(calls.map(([requested]) => urlsOf(requested).length)).toEqual([3, 3, 3]);
   });
 
   it('builds the request URL with each URL encoded as a url parameter', async () => {
@@ -129,7 +184,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     await addEntry(rss, 'b', { count: 2 });
     await addEntry(rss, 'c', { count: 7 });
     await addEntry(rss, 'd');
-    expect((await useCase.run()).val).toEqual({ requested: 4, updated: 2, failedRequests: 0 });
+    expect((await useCase.run()).val).toEqual({ requested: 4, updated: 2, failedRequests: 0, skipped: 0 });
     expect(await counts()).toEqual({ a: 5, b: 2, c: 7, d: 0 });
     const events = await db.select({ name: domainEventsTable.eventName }).from(domainEventsTable);
     expect(events.filter((event) => event.name === 'feedEntry.bookmarkCountUpdated')).toHaveLength(2);
@@ -142,7 +197,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     const other = await addSource('rss', 'other');
     await addEntry(rss, 'one', { url: 'https://e.test/shared' });
     await addEntry(other, 'two', { url: 'https://e.test/shared', count: 1 });
-    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 2, failedRequests: 0 });
+    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 2, failedRequests: 0, skipped: 0 });
     expect(fetchText).toHaveBeenCalledTimes(1);
     expect(await counts()).toEqual({ one: 4, two: 4 });
   });
@@ -156,7 +211,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     for (let i = 0; i < 150; i += 1) await addEntry(rss, `e${String(i).padStart(3, '0')}`, { ageDays: i / 1000 });
     const result = await useCase.run();
     expect(fetchText).toHaveBeenCalledTimes(3);
-    expect(result.val).toEqual({ requested: 150, updated: 0, failedRequests: 3 });
+    expect(result.val).toEqual({ requested: 150, updated: 0, failedRequests: 3, skipped: 0 });
     expect(error).toHaveBeenCalledTimes(3);
     expect(Object.values(await counts()).every((value) => value === null)).toBe(true);
     error.mockRestore();
@@ -170,7 +225,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     const { useCase, addSource, addEntry, counts } = setup(fetchText);
     const rss = await addSource('rss');
     for (let i = 0; i < 100; i += 1) await addEntry(rss, `e${String(i).padStart(3, '0')}`, { ageDays: i / 1000 });
-    expect((await useCase.run()).val).toEqual({ requested: 100, updated: 1, failedRequests: 1 });
+    expect((await useCase.run()).val).toEqual({ requested: 100, updated: 1, failedRequests: 1, skipped: 0 });
     expect((await counts()).e099).toBe(3);
     error.mockRestore();
   });
@@ -180,7 +235,7 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     const { db, useCase, addSource, addEntry } = setup(fetchText);
     const rss = await addSource('rss');
     await addEntry(rss, 'a', { count: 1 });
-    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 0, failedRequests: 0 });
+    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 0, failedRequests: 0, skipped: 0 });
     expect(await db.select().from(domainEventsTable)).toEqual([]);
     expect(await db.select().from(feedEntriesTable).where(eq(feedEntriesTable.guid, 'a'))).toHaveLength(1);
   });

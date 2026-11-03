@@ -63,17 +63,14 @@ export const collectFeedsTask: ScheduledTask = {
   name: 'collectFeeds',
   run: async ({ env }) => {
     const useCases = createFeedUseCases(env);
-    await useCases.ensureDefaultFeedSources.run();
-    const summary = await useCases.collectFeedEntries.run();
-    console.info('iori feeds collected.', summary.val);
-  },
-};
-
-export const refreshHatenaBookmarkCountsTask: ScheduledTask = {
-  name: 'refreshHatenaBookmarkCounts',
-  run: async ({ env }) => {
-    const summary = await createFeedUseCases(env).refreshHatenaBookmarkCounts.run();
-    console.info('iori hatena bookmark counts refreshed.', summary.val);
+    try {
+      await useCases.ensureDefaultFeedSources.run();
+      const summary = await useCases.collectFeedEntries.run();
+      console.info('iori feeds collected.', summary.val);
+    } finally {
+      const refreshed = await useCases.refreshHatenaBookmarkCounts.run();
+      console.info('iori hatena bookmark counts refreshed.', refreshed.val);
+    }
   },
 };
 

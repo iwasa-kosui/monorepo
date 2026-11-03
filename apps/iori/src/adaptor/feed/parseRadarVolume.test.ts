@@ -47,6 +47,13 @@ describe('parseRadarVolume', () => {
     expect(parseRadarVolume(html).ok).toBe(false);
   });
 
+  it('does not pick up a PDF whose volume has five or more digits', () => {
+    const html = `<a href="${PDF_DIR}/2026/04/tr_technology_radar_vol_12345_en.pdf">x</a>`
+      + `<a href="${PDF_DIR}/2025/11/tr_technology_radar_vol_33_en.pdf">Vol 33</a>`;
+    expect(parseRadarVolume(html)).toMatchObject({ ok: true, val: { volume: 33 } });
+    expect(parseRadarVolume(`<a href="${PDF_DIR}/2026/04/tr_technology_radar_vol_12345_en.pdf">x</a>`).ok).toBe(false);
+  });
+
   it('fails with a reason about the page structure when no link is found', () => {
     const result = parseRadarVolume('<html><body>nothing here</body></html>');
     expect(result.ok).toBe(false);
