@@ -315,7 +315,7 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     }
   });
 
-  it('keeps federated resolver posts identical to the thread resolver result', async () => {
+  it('keeps the federated timeline resolver posts identical to the thread resolver result', async () => {
     const { db } = setup();
     const result = unwrap(
       await createD1FederatedTimelineItemsResolver(db).resolve({
@@ -334,6 +334,57 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     expect(result[0].post.images).toHaveLength(2);
     expect(result[0].post.reactions).toHaveLength(3);
     expect(result[0].post.linkPreviews).toHaveLength(2);
+  });
+
+  it('reads the recorded visibility of a remote post in every batched path and keeps null when unrecorded', async () => {
+    const { db, sqlite } = setup();
+    sqlite.prepare('UPDATE remote_posts SET visibility=? WHERE postId=?').run('unlisted', id(3001));
+    sqlite.prepare('UPDATE remote_posts SET visibility=? WHERE postId=?').run('direct', id(3002));
+    const expected = new Map<string, string | null>([[id(3001), 'unlisted'], [id(3002), 'direct'], [id(3003), null]]);
+    const expectVisibilities = (posts: ReadonlyArray<PostWithAuthor>, postIds: ReadonlyArray<string>) => {
+      const visibilities = posts.flatMap((post) =>
+        post.type === 'remote' && postIds.includes(post.postId) ? [[post.postId, post.visibility] as const] : []
+      );
+      expect(new Map(visibilities)).toEqual(new Map(postIds.map((postId) => [postId, expected.get(postId)])));
+    };
+    const allIds = [id(3001), id(3002), id(3003)];
+    expectVisibilities(
+      unwrap(
+        await createD1PostsResolverByActorIdWithPagination(db, ORIGIN).resolve({
+          actorId: remoteActorId,
+          currentActorId: undefined,
+          createdAt: undefined,
+        }),
+      ),
+      allIds,
+    );
+    expectVisibilities(
+      unwrap(
+        await createD1PostsResolverByActorIds(db, ORIGIN).resolve({
+          actorIds: [remoteActorId],
+          currentActorId: undefined,
+          createdAt: undefined,
+        }),
+      ),
+      allIds,
+    );
+    expectVisibilities(
+      unwrap(
+        await createD1FederatedTimelineItemsResolver(db).resolve({
+          page: { limit: 20, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
+          mutedActorIds: [],
+          currentActorId: undefined,
+        }),
+      ).map((item) => item.post),
+      [id(3002), id(3003)],
+    );
+    const threadResolver = createD1ThreadResolver(db, ORIGIN);
+    const threads = await Promise.all(
+      [id(3001), id(3002), id(3003)].map(async (postId) =>
+        unwrap(await threadResolver.resolve({ postId: postId as never })).currentPost
+      ),
+    );
+    expectVisibilities(threads.flatMap((post) => post === null ? [] : [post]), allIds);
   });
 
   it('returns an empty page with one query when no post matches', async () => {

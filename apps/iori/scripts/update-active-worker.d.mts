@@ -1,8 +1,8 @@
-import type { ActiveExpectedTarget } from './migration-target-contract.mjs';
+import type { ExpectedTarget } from './migration-target-contract.mjs';
 import type { InfrastructureCommand } from './infrastructure-command.mjs';
 export function updateActiveWorker(
   input: {
-    expectedTarget: ActiveExpectedTarget;
+    expectedTarget: ExpectedTarget;
     currentCodeSha: string;
     token: string;
     zoneId: string;

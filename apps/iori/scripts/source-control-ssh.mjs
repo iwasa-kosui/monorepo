@@ -1,16 +1,12 @@
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { lstat, mkdir, open, rename, statfs, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { lstat } from 'node:fs/promises';
 
-import { assertExternalMigrationPath, assertExternalMigrationRoot } from './migration-path-safety.mjs';
+import { assertExternalMigrationPath } from './migration-path-safety.mjs';
 import { sourceCommandArguments } from './source-control-client.mjs';
 import {
   SOURCE_LIMITS,
   SOURCE_REJECTION_DETAILS,
   sourceIdentitySchema,
-  validateSourceEstimate,
-  validateSourceInventory,
   validateSourceState,
 } from './source-transfer-protocol.mjs';
 
@@ -37,7 +33,7 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
   try {
     const { host, user, mainSha, runId } = options;
     assertSourceSshTarget({ host, user });
-    const identity = sourceIdentitySchema.parse({ main_sha: mainSha, run_id: runId });
+    sourceIdentitySchema.parse({ main_sha: mainSha, run_id: runId });
     const identityFile = await privateInput(options.identityFile);
     const knownHostsFile = await privateInput(options.knownHostsFile);
     const execute = async (op, argument, consume, signal) => {
@@ -109,17 +105,10 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
           }, 3000);
         }
       };
-      const milliseconds = op === 'export'
-        ? SOURCE_LIMITS.socketMs
-        : op === 'transfer'
-        ? SOURCE_LIMITS.transferMs
-        : op === 'drain'
-        ? 310_000
-        : SOURCE_LIMITS.estimateMs + 10_000;
       const timer = setTimeout(() => {
         timedOut = true;
         cancel();
-      }, milliseconds);
+      }, SOURCE_LIMITS.estimateMs + 10_000);
       signal?.addEventListener('abort', cancel, { once: true });
       try {
         const result = await consume(child.stdout);
@@ -176,133 +165,11 @@ export const createSourceSshAdapter = async (options, { spawnProcess = spawn } =
           state.source_revision !== mainSha
           || (state.identity && (state.identity.main_sha !== mainSha || state.identity.run_id !== runId))
         ) throw new Error();
-        if (op === 'freeze' && (!state.ingress_frozen || !state.identity)) throw new Error();
-        if (op === 'drain' && !state.drained) throw new Error();
         return state;
       }, signal);
     return {
-      estimate: async (signal) => {
-        try {
-          const state = await metadata('estimate', undefined, signal);
-          try {
-            return { ...validateSourceEstimate(state.estimate), source_revision: state.source_revision };
-          } catch {
-            throw Object.assign(new Error(), { diagnostic: { reason: 'invalid-response', exit: 0 } });
-          }
-        } catch (error) {
-          throw Object.assign(new Error('Source operation failed.'), { diagnostic: error?.diagnostic });
-        }
-      },
-      freeze: (signal) => metadata('freeze', undefined, signal),
       status: (signal) => metadata('status', undefined, signal),
-      drain: (timeoutMs = 300_000, signal) => metadata('drain', timeoutMs, signal),
       resume: (recovery, signal) => metadata('resume', recovery, signal),
-      export: async (signal) => {
-        try {
-          const state = await metadata('export', undefined, signal);
-          const inventory = validateSourceInventory(state.inventory);
-          if (!state.drained || inventory.identity.main_sha !== mainSha || inventory.identity.run_id !== runId) {
-            throw new Error();
-          }
-          return inventory;
-        } catch {
-          throw new Error('Source operation failed.');
-        }
-      },
-      restore: async (outputDir, signal) => {
-        let publishedPath;
-        try {
-          const root = await assertExternalMigrationPath(outputDir);
-          await mkdir(root, { mode: 0o700 });
-          await assertExternalMigrationRoot(root);
-          const state = await metadata('inventory', undefined, signal);
-          const inventory = validateSourceInventory(state.inventory);
-          if (!state.drained) throw new Error();
-          if (inventory.identity.main_sha !== identity.main_sha || inventory.identity.run_id !== identity.run_id) {
-            throw new Error();
-          }
-          const fs = await statfs(root);
-          if (fs.bavail * fs.bsize < inventory.totalBytes + SOURCE_LIMITS.inventoryBytes) throw new Error();
-          await mkdir(join(root, 'export'), { mode: 0o700 });
-          await mkdir(join(root, 'uploads'), { mode: 0o700 });
-          for (const file of inventory.files) {
-            signal?.throwIfAborted();
-            const output = await open(join(root, file.path), 'wx', 0o600);
-            try {
-              await execute('transfer', file.id, async (stream) => {
-                let header = Buffer.alloc(0);
-                let started = false;
-                let bytes = 0;
-                const hash = createHash('sha256');
-                for await (let chunk of stream) {
-                  if (!started) {
-                    const newline = chunk.indexOf(10);
-                    if (newline < 0) {
-                      if (header.length + chunk.length > 2048) throw new Error();
-                      header = Buffer.concat([header, chunk]);
-                      continue;
-                    }
-                    if (header.length + newline > 2048) throw new Error();
-                    header = Buffer.concat([header, chunk.subarray(0, newline)]);
-                    const response = JSON.parse(header.toString('utf8'));
-                    if (
-                      response.ok !== true || response.file?.id !== file.id || response.file?.bytes !== file.bytes
-                      || response.file?.checksum !== file.checksum || response.file?.path !== file.path
-                    ) throw new Error();
-                    started = true;
-                    chunk = chunk.subarray(newline + 1);
-                  }
-                  bytes += chunk.length;
-                  if (bytes > file.bytes) throw new Error();
-                  hash.update(chunk);
-                  await output.writeFile(chunk);
-                }
-                if (!started || bytes !== file.bytes || hash.digest('hex') !== file.checksum) throw new Error();
-              }, signal);
-              await output.sync();
-            } finally {
-              await output.close();
-            }
-          }
-          signal?.throwIfAborted();
-          const inventoryPath = join(root, 'source-inventory.json');
-          const pendingPath = join(root, 'source-inventory.pending');
-          const receipt = await open(pendingPath, 'wx', 0o600);
-          try {
-            signal?.throwIfAborted();
-            await receipt.writeFile(JSON.stringify(inventory));
-            await receipt.sync();
-          } finally {
-            await receipt.close();
-          }
-          signal?.throwIfAborted();
-          await rename(pendingPath, inventoryPath);
-          publishedPath = inventoryPath;
-          signal?.throwIfAborted();
-          const directory = await open(root, 'r');
-          try {
-            await directory.sync();
-          } finally {
-            await directory.close();
-          }
-          signal?.throwIfAborted();
-          return {
-            root,
-            manifestPath: join(root, 'export/export-manifest.json'),
-            uploadDir: join(root, 'uploads'),
-            inventoryPath,
-          };
-        } catch {
-          if (publishedPath) {
-            try {
-              await unlink(publishedPath);
-            } catch {
-              throw new Error('Source restore failed.');
-            }
-          }
-          throw new Error('Source restore failed.');
-        }
-      },
     };
   } catch {
     throw new Error('Invalid source inputs.');

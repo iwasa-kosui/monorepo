@@ -284,6 +284,7 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: null,
           type: 'remote',
         });
         post = {

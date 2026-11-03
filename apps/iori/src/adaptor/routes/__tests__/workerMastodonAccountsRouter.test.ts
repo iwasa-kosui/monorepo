@@ -208,14 +208,43 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await statusIds(response)).toEqual(t.newestFirst.slice(1));
   });
 
-  it('未認証ではリモートのアカウントの投稿を返さず、Link も付けない', async () => {
+  it('未認証では公開範囲の記録がないリモートのアカウントの投稿を返さない', async () => {
     const t = await seedAccounts();
 
     const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`);
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
+  });
+
+  it('未認証ではリモートのアカウントの public と unlisted の投稿だけを返し、ログインすると全部返す', async () => {
+    const t = await seedAccounts();
+    const publicNote = t.seed.addRemotePost(t.alice, 5_000, { visibility: 'public' });
+    t.seed.addRemotePost(t.alice, 5_100, { visibility: 'private' });
+    const unlistedNote = t.seed.addRemotePost(t.alice, 5_200, { visibility: 'unlisted' });
+    t.seed.addRemotePost(t.alice, 5_300, { visibility: 'direct' });
+
+    const anonymous = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`);
+    const loggedIn = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers: t.me.bearer });
+
+    const anonymousStatuses = parseStatuses(await anonymous.json());
+    expect(anonymousStatuses.map((status) => [status.id, status.visibility])).toEqual([
+      [unlistedNote.postId, 'unlisted'],
+      [publicNote.postId, 'public'],
+    ]);
+    expect(await statusIds(loggedIn)).toHaveLength(8);
+  });
+
+  it('未認証では public のリモートの投稿のブーストを返す', async () => {
+    const t = await seedAccounts();
+    const publicNote = t.seed.addRemotePost(t.alice, 5_000, { visibility: 'public' });
+    const publicBoost = t.seed.addRepost(t.me.actorId, publicNote.postId, 6_000);
+    const privateNote = t.seed.addRemotePost(t.alice, 5_100, { visibility: 'private' });
+    t.seed.addRepost(t.me.actorId, privateNote.postId, 6_100);
+
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`);
+
+    expect(await statusIds(response)).toEqual([publicBoost.repostId, ...t.newestFirst.slice(1)]);
   });
 
   it('userId のないアプリトークンは未認証として扱う', async () => {

@@ -1,21 +1,11 @@
-import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
-import {
-  admissionEnvironment,
-  assertTargetSummary,
-  parseExpectedTarget,
-  parsePreparationRecord,
-  serializePreparationRecord,
-} from '../migration-target-contract.mjs';
+import { admissionEnvironment, parseExpectedTarget } from '../migration-target-contract.mjs';
 import { targetSetupConfiguration } from '../migration-target-setup.mjs';
-import { expectedTargetFixture, preparationFixture, targetSummaryFixture } from './migrationTargetFixture.js';
+import { expectedTargetFixture } from './migrationTargetFixture.js';
 
-it('accepts an independent expected target and canonical prepared evidence', () => {
+it('accepts an independent expected target', () => {
   const expected = expectedTargetFixture();
   expect(parseExpectedTarget(expected)).toEqual(expected);
-  const body = serializePreparationRecord(preparationFixture());
-  expect(parsePreparationRecord(body, expected).sha256).toBe(createHash('sha256').update(body).digest('hex'));
-  expect(assertTargetSummary(targetSummaryFixture(), expected)).toBeTruthy();
 });
 it.each([
   'environment',
@@ -23,30 +13,23 @@ it.each([
   'main_sha',
   'run_id',
   'account_id',
-  'backend_bucket',
   'backend_key',
   'worker_name',
 ])('rejects changed identity %s', (key) => {
-  const summary = targetSummaryFixture();
-  Reflect.set(summary.identity, key, 'wrong');
-  expect(() => assertTargetSummary(summary, expectedTargetFixture())).toThrow();
+  const target = expectedTargetFixture();
+  Reflect.set(target.identity, key, 'wrong');
+  expect(() => parseExpectedTarget(target)).toThrow();
 });
 it.each(['d1', 'kv', 'uploads', 'transfer', 'queue', 'dlq', 'consumer'])('rejects changed resource %s', (key) => {
-  const summary = targetSummaryFixture();
-  Reflect.set(summary.resources, key, { id: 'wrong' });
-  expect(() => assertTargetSummary(summary, expectedTargetFixture())).toThrow();
+  const target = expectedTargetFixture();
+  Reflect.set(target.resources, key, { id: 'wrong' });
+  expect(() => parseExpectedTarget(target)).toThrow();
 });
-it('rejects extra keys, noncanonical bytes, oversized records and version/hash contradictions', () => {
+it('rejects extra keys and a backend bucket in the identity', () => {
   expect(() => parseExpectedTarget({ ...expectedTargetFixture(), bypass: true })).toThrow();
-  const body = serializePreparationRecord(preparationFixture());
-  expect(() => parsePreparationRecord(Buffer.concat([body, Buffer.from(' ')]), expectedTargetFixture())).toThrow();
-  expect(() => parsePreparationRecord(Buffer.alloc(65537), expectedTargetFixture())).toThrow();
-  const summary = targetSummaryFixture();
-  summary.observed.worker_version_id = 'wrong';
-  expect(() => assertTargetSummary(summary, expectedTargetFixture())).toThrow();
-  const hash = targetSummaryFixture();
-  hash.preparation.record_sha256 = '0'.repeat(64);
-  expect(() => assertTargetSummary(hash, expectedTargetFixture())).toThrow();
+  const target = expectedTargetFixture();
+  expect(() => parseExpectedTarget({ ...target, identity: { ...target.identity, backend_bucket: 'tf-state' } }))
+    .toThrow();
 });
 it.each(['_run', 'a'.repeat(80)])('shares source safe run policy %s', (run) => {
   const target = expectedTargetFixture();
@@ -74,17 +57,14 @@ const setupEnvironment = (target: ReturnType<typeof expectedTargetFixture>, admi
 it('normalizes pretty or reordered admission identity', () => {
   const target = expectedTargetFixture();
   const reordered = Object.fromEntries(Object.entries(target.admission).reverse());
-  const config = targetSetupConfiguration(setupEnvironment(target, JSON.stringify(reordered, null, 2)), {
-    backend: false,
-  });
+  const config = targetSetupConfiguration(setupEnvironment(target, JSON.stringify(reordered, null, 2)));
   expect(config.admissionEnvironment).toEqual(admissionEnvironment(target));
   expect(config.admission).toEqual(target.admission);
 });
 it('rejects an unknown key in the admission identity', () => {
   const target = expectedTargetFixture();
   expect(() =>
-    targetSetupConfiguration(setupEnvironment(target, JSON.stringify({ ...target.admission, unknown: true })), {
-      backend: false,
-    })
-  ).toThrow();
+    targetSetupConfiguration(setupEnvironment(target, JSON.stringify({ ...target.admission, unknown: true })))
+  )
+    .toThrow();
 });
