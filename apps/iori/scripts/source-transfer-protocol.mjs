@@ -69,53 +69,6 @@ export const validateSourceState = (value) => {
   ) throw new Error('Invalid source state.');
   return state;
 };
-export const validateSourceEstimate = (value) => {
-  const estimate = z.object({
-    table_bytes: count,
-    upload_bytes: count,
-    rows: count,
-    upload_count: count,
-    upload_duplicate_count: count,
-    upload_missing_count: count,
-    upload_owner_count: count,
-    upload_not_regular_count: count,
-    upload_too_large_count: count,
-    upload_access_count: count,
-    upload_other_count: count,
-    upload_ext_webp_count: count,
-    upload_ext_png_count: count,
-    upload_ext_jpeg_count: count,
-    upload_ext_gif_count: count,
-    upload_failed_ext_webp_count: count,
-    upload_failed_ext_png_count: count,
-    upload_failed_ext_jpeg_count: count,
-    upload_failed_ext_gif_count: count,
-    article_count: count,
-    source_free_bytes: count,
-    source_required_bytes: count,
-    runner_required_bytes: count,
-    source_sufficient: z.boolean(),
-    limits: z.record(z.string(), count),
-  }).strict().parse(value);
-  if (
-    estimate.source_sufficient !== (estimate.source_free_bytes >= estimate.source_required_bytes)
-    || Object.keys(estimate.limits).length !== Object.keys(SOURCE_LIMITS).length
-    || Object.entries(SOURCE_LIMITS).some(([key, expected]) => estimate.limits[key] !== expected)
-  ) throw new Error('Invalid source estimate.');
-  return estimate;
-};
-const UPLOAD_FAILURE_COUNTS = Object.freeze([
-  ['estimate-upload-missing', 'upload_missing_count'],
-  ['estimate-upload-owner', 'upload_owner_count'],
-  ['estimate-upload-not-regular', 'upload_not_regular_count'],
-  ['estimate-upload-too-large', 'upload_too_large_count'],
-  ['estimate-upload-access', 'upload_access_count'],
-  ['estimate-upload-other', 'upload_other_count'],
-]);
-export const ESTIMATE_UPLOAD_FAILURE_REASONS = Object.freeze(UPLOAD_FAILURE_COUNTS.map(([reason]) => reason));
-export const estimateUploadFailureReason = (estimate, allowedMissingUploads = 0) =>
-  UPLOAD_FAILURE_COUNTS.find(([reason, field]) => reason !== 'estimate-upload-missing' && estimate[field] > 0)?.[0]
-    ?? (estimate.upload_missing_count !== allowedMissingUploads ? 'estimate-upload-missing' : null);
 const fileSchema = z.object({
   id: z.string().max(100),
   path: z.string().max(120),

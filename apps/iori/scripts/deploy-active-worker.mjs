@@ -16,7 +16,7 @@ const main = async (cliSignal, onStage) => {
   const { remainingMs } = workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT));
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(remainingMs)]);
   const env = { ...process.env, MAIN_SHA: invocation.migrationSha };
-  const config = targetSetupConfiguration(env, { backend: false });
+  const config = targetSetupConfiguration(env);
   await assertReviewedMain(invocation.codeSha, { signal });
   onStage('deploy-worker-resolve');
   const resolved = await createTargetControlPlane({ identity: config.identity, token: config.token, signal })

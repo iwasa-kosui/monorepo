@@ -12,5 +12,5 @@ export function parseWorkflowInvocation(
 export function workflowTimeBudget(startedAt: number, now?: number): { remainingMs: number; verificationMs: number };
 export function createWorkflowDirectory(
   runnerTemp: string,
-): Promise<Record<'base' | 'keys' | 'config' | 'logs' | 'state' | 'tmp' | 'root', string>>;
+): Promise<Record<'base' | 'keys' | 'config' | 'logs' | 'tmp', string>>;
 export function writePrivateValue(directory: string, name: string, value: string): Promise<string>;

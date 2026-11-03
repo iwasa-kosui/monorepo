@@ -194,6 +194,42 @@ it.each(['deploy-worker', 'put-worker-secrets'])(
     }
   },
 );
+const rehearsalDelete = {
+  ...env,
+  IORI_ENVIRONMENT: 'production',
+  IORI_OPERATION: 'delete-rehearsal-d1',
+  IORI_GENERATION: '',
+  IORI_MIGRATION_RUN_ID: '',
+};
+it('accepts delete-rehearsal-d1 only for production without generation and run ID', () => {
+  expect(parseWorkflowInvocation(rehearsalDelete)).toMatchObject({
+    operation: 'delete-rehearsal-d1',
+    codeSha: env.MAIN_SHA,
+    migrationSha: env.MAIN_SHA,
+    environment: 'production',
+  });
+  expect(parseWorkflowInvocation({ ...rehearsalDelete, IORI_MIGRATION_MAIN_SHA: '' })).toMatchObject({
+    migrationSha: env.MAIN_SHA,
+  });
+  expect(parseWorkflowInvocation({ ...rehearsalDelete, IORI_GENERATION: undefined, IORI_MIGRATION_RUN_ID: undefined }))
+    .toMatchObject({ operation: 'delete-rehearsal-d1' });
+  const invalid = [
+    { IORI_ENVIRONMENT: 'staging' },
+    { IORI_ENVIRONMENT: 'development' },
+    { IORI_GENERATION: env.IORI_GENERATION },
+    { IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID },
+    { IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) },
+    { IORI_RECOVERY: 'destination_writes_reconciled' },
+    { GITHUB_REF: 'refs/heads/feature' },
+    { GITHUB_SHA: 'b'.repeat(40) },
+    { GITHUB_EVENT_NAME: 'push' },
+  ];
+  for (const given of invalid) {
+    expect(() => parseWorkflowInvocation({ ...rehearsalDelete, ...given })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',
@@ -240,7 +276,7 @@ it('checks only the event, ref, SHA and operation of a push while the identity i
   )
     .toThrow('Protected workflow invocation is invalid.');
 });
-it.each(['put-worker-secrets', 'resume-source', 'source', ''])(
+it.each(['put-worker-secrets', 'delete-rehearsal-d1', 'resume-source', 'source', ''])(
   'rejects a main push for the operation %j',
   operation => {
     expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: operation })).toThrow(

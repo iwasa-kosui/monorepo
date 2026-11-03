@@ -62,6 +62,7 @@ it('maps the operations to their fixed scripts', async () => {
       ],
       ['restart-failed-source', 'restart-failed-source.mjs'],
       ['diagnose-source', 'diagnose-source.mjs'],
+      ['delete-rehearsal-d1', 'delete-rehearsal-d1.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -179,6 +180,25 @@ it('relays only the exact configuration owner notice to the public log', async (
     'IORI_NOTICE stage=remote-install previous_uid=1 previous_gid=1',
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
+});
+it('relays only the fixed rehearsal D1 notice for the five rehearsal names to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [1, 2, 3, 4, 5].flatMap(number =>
+    ['present', 'absent', 'empty', 'not-empty', 'ambiguous', 'check-failed', 'deleted', 'delete-failed', 'remaining']
+      .map(state => `IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse${number} state=${state}`)
+  );
+  const rejected = [
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse6 state=present',
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse0 state=present',
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1-x state=present',
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prd20261102a state=present',
+    'IORI_NOTICE rehearsal-d1 name=iori state=present',
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=unknown',
+    'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=present uuid=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=present',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
 });
 it('relays only the exact configuration mode notice to the public log', async () => {
   const writes = captureStderr();
