@@ -53,6 +53,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
         privateKey: env.VAPID_PRIVATE_KEY,
       }),
       now,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     }),
     expireDigests: ExpireDigestsUseCase.create({
       digestHeadersResolverByDigestDateBefore: createD1DigestHeadersResolverByDigestDateBefore(db),

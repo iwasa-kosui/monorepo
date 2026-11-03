@@ -32,6 +32,7 @@ export const DIGEST_SUMMARY_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
 const SUMMARY_INSTRUCTION = '日本語で3行以内に要約する。英語の記事も日本語で書く。前置きを書かない。';
 const SUMMARY_MAX_OUTPUT_TOKENS = 512;
+const SUMMARY_TIMEOUT_MS = 30_000;
 const SUMMARY_INPUT_MAX_CHARS = 1000;
 const NEW_ENTRIES_LIMIT = 10;
 const TRENDS_LIMIT = 10;
@@ -51,7 +52,23 @@ type Ok = Readonly<{
   pushed: number;
 }>;
 
-type Err = UserNotFoundError | DigestParseError;
+type DigestStoreFailedError = Readonly<{
+  type: 'DigestStoreFailedError';
+  message: string;
+  detail: { articleId: ArticleId };
+}>;
+
+const DigestStoreFailedError = {
+  create: (articleId: ArticleId, cause: unknown): DigestStoreFailedError => ({
+    type: 'DigestStoreFailedError',
+    message: `Storing the digest failed after the article "${articleId}" was created: ${
+      cause instanceof Error ? cause.message : String(cause)
+    }`,
+    detail: { articleId },
+  }),
+} as const;
+
+type Err = UserNotFoundError | DigestParseError | DigestStoreFailedError;
 
 export type CreateDailyDigestUseCase = UseCase<Input, Ok, Err>;
 
@@ -69,6 +86,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolverByUserId: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   now: () => Instant;
+  sleep: (ms: number) => Promise<void>;
 }>;
 
 const skipped: Ok = { status: 'skipped', items: 0, trends: 0, summarized: 0, pushed: 0 };
@@ -102,15 +120,26 @@ const create = ({
   pushSubscriptionsResolverByUserId,
   webPushSender,
   now,
+  sleep,
 }: Deps): CreateDailyDigestUseCase => {
   const summarize = async (entry: FeedEntry): Promise<string | null> => {
     if (textGenerator === undefined) return null;
-    const generated = await textGenerator.generate({
-      model: DIGEST_SUMMARY_MODEL,
-      instruction: SUMMARY_INSTRUCTION,
-      input: toSummaryInput(entry),
-      maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
-    });
+    const generated = await Promise.race([
+      textGenerator.generate({
+        model: DIGEST_SUMMARY_MODEL,
+        instruction: SUMMARY_INSTRUCTION,
+        input: toSummaryInput(entry),
+        maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
+      }),
+      sleep(SUMMARY_TIMEOUT_MS).then(() => 'timedOut' as const),
+    ]);
+    if (generated === 'timedOut') {
+      console.error('iori digest: summarizing an entry timed out.', {
+        feedEntryId: entry.feedEntryId,
+        timeoutMs: SUMMARY_TIMEOUT_MS,
+      });
+      return null;
+    }
     if (!generated.ok) {
       console.error('iori digest: summarizing an entry failed.', {
         feedEntryId: entry.feedEntryId,
@@ -196,7 +225,16 @@ const create = ({
       ],
     }, now());
     if (!created.ok) return created;
-    await digestCreatedStore.store(created.val);
+    try {
+      await digestCreatedStore.store(created.val);
+    } catch (error) {
+      const storeFailed = DigestStoreFailedError.create(articleId, error);
+      console.error('iori digest: storing the digest failed after the article was created.', {
+        articleId,
+        message: storeFailed.message,
+      });
+      return RA.err(storeFailed);
+    }
     const digest = created.val.aggregateState;
 
     const pushSubscriptions = await pushSubscriptionsResolverByUserId.resolve(userId);

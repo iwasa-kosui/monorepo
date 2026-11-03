@@ -5,6 +5,7 @@ import { createMastodonSeed } from '../../adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1ActorResolverByUserId } from '../../adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ArticleWithBodyCreatedStore } from '../../adaptor/d1/article/articleWithBodyCreatedStore.ts';
+import type { IoriD1Db } from '../../adaptor/d1/client.ts';
 import { createD1DigestCreatedStore } from '../../adaptor/d1/digest/digestCreatedStore.ts';
 import { createD1DigestHeaderResolverByUserIdAndDigestDate } from '../../adaptor/d1/digest/digestHeaderResolverByUserIdAndDigestDate.ts';
 import { createD1DigestPushSentStore } from '../../adaptor/d1/digest/digestPushSentStore.ts';
@@ -15,6 +16,7 @@ import { createD1RadarFeedEntriesResolverByFetchedSince } from '../../adaptor/d1
 import { createD1TimelineLinkTrendsResolverByUserId } from '../../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
+import type { DigestCreatedStore } from '../../domain/digest/digest.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
@@ -34,7 +36,14 @@ type EntryOptions = Readonly<{
   description?: string;
 }>;
 
-const setup = (options: { textGenerator?: TextGenerator; send?: WebPushSender['send'] } = {}) => {
+const setup = (
+  options: {
+    textGenerator?: TextGenerator;
+    send?: WebPushSender['send'];
+    sleep?: (ms: number) => Promise<void>;
+    digestCreatedStore?: (db: IoriD1Db) => DigestCreatedStore;
+  } = {},
+) => {
   const fixture = createSqliteD1Fixture();
   const { sqlite, db } = fixture;
   const seed = createMastodonSeed(fixture);
@@ -54,11 +63,12 @@ const setup = (options: { textGenerator?: TextGenerator; send?: WebPushSender['s
       actorResolverByUserId: createD1ActorResolverByUserId(db),
       articleWithBodyCreatedStore: createD1ArticleWithBodyCreatedStore(db),
     }),
-    digestCreatedStore: createD1DigestCreatedStore(db),
+    digestCreatedStore: (options.digestCreatedStore ?? createD1DigestCreatedStore)(db),
     digestPushSentStore: createD1DigestPushSentStore(db),
     pushSubscriptionsResolverByUserId: createD1PushSubscriptionsResolverByUserId(db),
     webPushSender: { send },
     now: () => Instant.orThrow(clock.value),
+    sleep: options.sleep ?? (() => new Promise(() => undefined)),
   });
 
   const addSource = (kind: string) => {
@@ -122,6 +132,7 @@ const setup = (options: { textGenerator?: TextGenerator; send?: WebPushSender['s
     send,
     useCase,
     sources,
+    addSource,
     addEntry,
     addLink,
     addPushSubscription,
@@ -287,6 +298,25 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
   });
 });
 
+describe('CreateDailyDigestUseCase: 新着の重複', () => {
+  it('同じ url の記事が複数の RSS から来ても 1 件だけ載せ、重複を除いて 10 件にする', async () => {
+    const t = setup();
+    const otherRss = t.addSource('rss');
+    for (let index = 1; index <= 12; index += 1) {
+      const url = `https://example.com/same-${index}`;
+      t.addEntry(t.sources.rss, `Entry ${index}`, { url, count: index });
+      t.addEntry(otherRss, `Entry ${index} copy`, { url, count: index });
+    }
+
+    const result = await t.run();
+
+    expect(result.items).toBe(10);
+    const urls = t.all('SELECT url FROM digest_items ORDER BY rank').map((row) => row.url);
+    expect(new Set(urls).size).toBe(10);
+    expect(urls).toEqual(Array.from({ length: 10 }, (_, index) => `https://example.com/same-${12 - index}`));
+  });
+});
+
 describe('CreateDailyDigestUseCase: 要約', () => {
   it('新着の各項目を、モデル、指示、1,000 文字までの平文の入力で要約し、<think> を除いて保存する', async () => {
     const { generator, calls } = createStubTextGenerator(() => '<think>考え中</think>\n  これは要約です  ');
@@ -341,6 +371,36 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     expect(error).toHaveBeenCalledWith(
       'iori digest: summarizing an entry failed.',
       expect.objectContaining({ message: 'boom' }),
+    );
+  });
+
+  it('1 件の要約が 30 秒を超えたら、その項目の summary を null にして続け、console.error に出す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const generate: TextGenerator['generate'] = (request) =>
+      request.input.startsWith('Hang') ? new Promise(() => undefined) : RA.ok('good summary');
+    const timers: Array<{ ms: number; fire: () => void }> = [];
+    const sleep = (ms: number) => new Promise<void>((resolve) => timers.push({ ms, fire: resolve }));
+    const t = setup({
+      textGenerator: { generate, summarize: () => RA.err({ type: 'AiError', message: 'unused' }) },
+      sleep,
+    });
+    t.addEntry(t.sources.rss, 'Hang one', { count: 2 });
+    t.addEntry(t.sources.rss, 'Good one', { count: 1 });
+
+    const running = t.run();
+    await vi.waitFor(() => expect(timers).toHaveLength(2));
+    timers.forEach((timer) => timer.fire());
+    const result = await running;
+
+    expect(timers.map((timer) => timer.ms)).toEqual([30_000, 30_000]);
+    expect(result).toMatchObject({ status: 'created', items: 2, summarized: 1 });
+    expect(t.all('SELECT title, summary FROM digest_items ORDER BY rank')).toEqual([
+      { title: 'Hang one', summary: null },
+      { title: 'Good one', summary: 'good summary' },
+    ]);
+    expect(error).toHaveBeenCalledWith(
+      'iori digest: summarizing an entry timed out.',
+      expect.objectContaining({ timeoutMs: 30_000 }),
     );
   });
 
@@ -468,6 +528,30 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(result).toMatchObject({ status: 'created', items: 0, trends: 0, summarized: 0 });
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 1 }]);
     expect(t.bodies().privateHtml).toContain('載せる記事はありません');
+  });
+
+  it('article を作った後に digest の保存が失敗したら、articleId を console.error に出してエラーを返し、article は消さない', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const t = setup({
+      digestCreatedStore: () => ({
+        store: () => Promise.reject(new Error('d1 down')),
+      }),
+    });
+
+    const result = await t.useCase.run({ userId: UserId.orThrow(t.me.userId) });
+
+    const [article] = t.all('SELECT articleId FROM articles') as Array<{ articleId: string }>;
+    expect(article).toBeDefined();
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'DigestStoreFailedError', detail: { articleId: article!.articleId } },
+    });
+    expect(error).toHaveBeenCalledWith(
+      'iori digest: storing the digest failed after the article was created.',
+      expect.objectContaining({ articleId: article!.articleId }),
+    );
+    expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
+    expect(t.send).not.toHaveBeenCalled();
   });
 
   it('ユーザーが存在しなければ、何も保存せずに UserNotFoundError を返す', async () => {

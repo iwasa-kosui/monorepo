@@ -23,7 +23,7 @@ const setup = () => {
   return { fixture, author, insertDigest, insertItem, insertTrend };
 };
 
-describe('0007 digests migration', () => {
+describe('digests migration', () => {
   it('4 つのテーブルに insert できる', () => {
     const { fixture, author, insertDigest, insertItem, insertTrend } = setup();
 
