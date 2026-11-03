@@ -26,10 +26,7 @@ import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMast
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
-import {
-  createWorkerPageActionsRouter,
-  createWorkerRemoteFollowRedirectRouter,
-} from './adaptor/routes/workerPageActionsRouter.ts';
+import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerPageActionsRouter.ts';
 import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
 import { createWorkerSocialActionsApiRouter } from './adaptor/routes/workerSocialActionsApiRouter.ts';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
@@ -186,14 +183,6 @@ export default {
           }),
         );
         app.route(
-          '/remote-users',
-          createWorkerPageActionsRouter({
-            followRemoteActor: runtime.core.followRemoteActor,
-            unfollowRemoteActor: runtime.core.unfollowRemoteActor,
-            createContext: (actionRequest) => runtime.federation.createContext(actionRequest, undefined),
-          }),
-        );
-        app.route(
           '/posts',
           createWorkerPostsRouter({
             createPostUseCase: runtime.posting.createPostUseCase,
@@ -265,8 +254,24 @@ export default {
           }),
         );
         app.route('/api', createWorkerMastodonTimelinesRouter({ ...runtime.mastodon, authn }));
-        app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
-        app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
+        const createContext = (mastodonRequest: Request) =>
+          runtime.federation.createContext(mastodonRequest, undefined);
+        app.route(
+          '/api',
+          createWorkerMastodonStatusesRouter({ ...runtime.mastodon, ...runtime.socialActions, authn, createContext }),
+        );
+        app.route(
+          '/api',
+          createWorkerMastodonAccountsRouter({
+            ...runtime.mastodon,
+            createMuteUseCase: runtime.mutesRelays.createMuteUseCase,
+            deleteMuteUseCase: runtime.mutesRelays.deleteMuteUseCase,
+            followRemoteActor: runtime.core.followRemoteActor,
+            unfollowRemoteActor: runtime.core.unfollowRemoteActor,
+            authn,
+            createContext,
+          }),
+        );
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));

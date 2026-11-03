@@ -10,21 +10,15 @@ import {
   type UndoFollowingProcessedStore,
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { SessionResolver, SessionWithUserAndActorResolver } from '../domain/session/session.ts';
 import type { UserResolver } from '../domain/user/user.ts';
-import {
-  composeSessionWithUserAndActorResolver,
-  resolveSessionWithUserAndActorWith,
-} from '../useCase/helper/resolve.ts';
+import { resolveLocalActorWith, resolveUserWith } from '../useCase/helper/resolve.ts';
 import type { WorkerRemoteActorAction } from './ports.ts';
 
 export type WorkerRemoteActorActionInput = Parameters<WorkerRemoteActorAction>[0];
 
 type WorkerRemoteActorActionsDeps = Readonly<{
-  sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
-  sessionWithUserAndActorResolver?: SessionWithUserAndActorResolver;
   actorResolverById: ActorResolverById;
   followResolver: FollowResolver;
   followRequestedStore: FollowRequestedStore;
@@ -32,27 +26,18 @@ type WorkerRemoteActorActionsDeps = Readonly<{
 }>;
 
 const actionActors = async (
-  deps: Pick<
-    WorkerRemoteActorActionsDeps,
-    | 'actorResolverById'
-    | 'actorResolverByUserId'
-    | 'sessionResolver'
-    | 'sessionWithUserAndActorResolver'
-    | 'userResolver'
-  >,
+  deps: Pick<WorkerRemoteActorActionsDeps, 'actorResolverById' | 'actorResolverByUserId' | 'userResolver'>,
   input: WorkerRemoteActorActionInput,
 ) => {
-  const authenticated = await resolveSessionWithUserAndActorWith(
-    deps.sessionWithUserAndActorResolver
-      ?? composeSessionWithUserAndActorResolver(deps.sessionResolver, deps.userResolver, deps.actorResolverByUserId),
-    Instant.now(),
-  )(input.sessionId);
-  if (!authenticated.ok) return RA.err({ message: authenticated.err.message });
+  const user = await resolveUserWith(deps.userResolver)(input.userId);
+  if (!user.ok) return RA.err({ message: user.err.message });
+  const follower = await resolveLocalActorWith(deps.actorResolverByUserId)(input.userId);
+  if (!follower.ok) return RA.err({ message: follower.err.message });
   const following = await deps.actorResolverById.resolve(input.actorId);
   if (!following.ok || following.val === undefined || following.val.type !== 'remote') {
     return RA.err({ message: `Remote actor not found: ${input.actorId}` });
   }
-  return RA.ok({ user: authenticated.val.user, follower: authenticated.val.actor, following: following.val });
+  return RA.ok({ user: user.val, follower: follower.val, following: following.val });
 };
 
 export const createWorkerRemoteActorActions = (

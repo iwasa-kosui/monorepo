@@ -35,13 +35,14 @@ import type {
   ThreadResolver,
 } from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
-import type { RepostResolverById } from '../domain/repost/repost.ts';
+import type { RepostResolver, RepostResolverById } from '../domain/repost/repost.ts';
 import type { SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import type { TimelineItemsResolverByActorIds } from '../domain/timeline/timelineItem.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
+import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
@@ -49,6 +50,7 @@ import type { createCreatePostUseCase } from '../useCase/createPost.ts';
 import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
+import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -56,11 +58,11 @@ import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
+import type { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import type { SearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
-import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
 import type { SendReplyUseCase } from '../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../useCase/sendRepost.ts';
@@ -79,7 +81,7 @@ import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
-    sessionId: SessionId;
+    userId: UserId;
     actorId: ActorId;
     ctx: Context<unknown>;
   }>,
@@ -113,6 +115,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   federatedTimelineItemsResolver: FederatedTimelineItemsResolver;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   repostResolverById: RepostResolverById;
+  repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
@@ -127,6 +130,9 @@ export type IoriMastodonRuntimePorts = Readonly<{
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
+  dismissNotificationUseCase: DismissNotificationUseCase;
+  clearNotificationsUseCase: ClearNotificationsUseCase;
+  resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -166,7 +172,6 @@ export type IoriCoreRuntimePorts = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
-  sendFollowRequestUseCase: SendFollowRequestUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;

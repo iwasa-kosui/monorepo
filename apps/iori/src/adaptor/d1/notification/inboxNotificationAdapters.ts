@@ -14,6 +14,8 @@ import type {
   LikeNotificationDeletedStore,
   LikeNotificationResolverByActorIdAndPostId,
   LikeNotificationsResolverByPostId,
+  NotificationDismissedStore,
+  NotificationsClearedStore,
   ReplyNotification,
   ReplyNotificationCreatedStore,
   ReplyNotificationDeletedStore,
@@ -24,6 +26,7 @@ import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
+import { runBatch } from '../runBatch.ts';
 import {
   domainEventsTable,
   notificationEmojiReactsTable,
@@ -157,6 +160,41 @@ export const createD1EmojiReactNotificationDeletedStore = (db: IoriD1Db): EmojiR
 });
 export const createD1ReplyNotificationDeletedStore = (db: IoriD1Db): ReplyNotificationDeletedStore => ({
   store: createDeletedStore(db, notificationRepliesTable),
+});
+
+const subtypeTables = [
+  notificationLikesTable,
+  notificationFollowsTable,
+  notificationEmojiReactsTable,
+  notificationRepliesTable,
+] as const;
+
+export const createD1NotificationDismissedStore = (db: IoriD1Db): NotificationDismissedStore => ({
+  store: async (...events) => {
+    if (events.length === 0) return RA.ok(undefined);
+    const ids = events.map((event) => event.eventPayload.notificationId);
+    await runBatch(db, [
+      ...subtypeTables.map((table) => db.delete(table).where(inArray(table.notificationId, ids))),
+      db.delete(notificationsTable).where(inArray(notificationsTable.notificationId, ids)),
+      ...events.map((event) => db.insert(domainEventsTable).values(eventRow(event))),
+    ]);
+    return RA.ok(undefined);
+  },
+});
+
+export const createD1NotificationsClearedStore = (db: IoriD1Db): NotificationsClearedStore => ({
+  store: async (...events) => {
+    if (events.length === 0) return RA.ok(undefined);
+    const userIds = events.map((event) => event.eventPayload.userId);
+    const ownedIds = db.select({ id: notificationsTable.notificationId }).from(notificationsTable)
+      .where(inArray(notificationsTable.recipientUserId, userIds));
+    await runBatch(db, [
+      ...subtypeTables.map((table) => db.delete(table).where(inArray(table.notificationId, ownedIds))),
+      db.delete(notificationsTable).where(inArray(notificationsTable.recipientUserId, userIds)),
+      ...events.map((event) => db.insert(domainEventsTable).values(eventRow(event))),
+    ]);
+    return RA.ok(undefined);
+  },
 });
 
 type LikeRow = {

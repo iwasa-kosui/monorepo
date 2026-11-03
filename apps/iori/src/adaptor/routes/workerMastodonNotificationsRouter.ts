@@ -13,6 +13,8 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import type { ClearNotificationsUseCase } from '../../useCase/clearNotifications.ts';
+import type { DismissNotificationUseCase } from '../../useCase/dismissNotification.ts';
 import type {
   Account,
   GroupedNotificationsResults,
@@ -44,11 +46,15 @@ export type WorkerMastodonNotificationsRouterDeps = Readonly<{
   notificationsResolverByPage: NotificationsResolverByPage;
   notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
+  dismissNotificationUseCase: DismissNotificationUseCase;
+  clearNotificationsUseCase: ClearNotificationsUseCase;
 }>;
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
 const readNotifications = Scope.orThrow('read:notifications');
+const writeNotifications = Scope.orThrow('write:notifications');
+const ungroupedKeyPattern = /^ungrouped-(.+)$/;
 
 const notificationPolicy: NotificationPolicy = {
   for_not_following: 'accept',
@@ -89,6 +95,8 @@ export const createWorkerMastodonNotificationsRouter = ({
   notificationsResolverByPage,
   notificationResolverByUserIdAndId,
   notificationCountResolverSinceMarker,
+  dismissNotificationUseCase,
+  clearNotificationsUseCase,
 }: WorkerMastodonNotificationsRouterDeps): Hono<MastodonAuthEnv> => {
   const toNotifications = async (
     items: ReadonlyArray<NotificationItem>,
@@ -158,8 +166,35 @@ export const createWorkerMastodonNotificationsRouter = ({
     return count.ok ? c.json({ count: count.val }) : c.json(internalServerError, 500);
   };
 
+  const dismiss = async (c: Context<MastodonAuthEnv>, rawId: string | undefined) => {
+    const userId = getMastodonPrincipal(c)?.userId;
+    if (userId === null || userId === undefined) {
+      return c.json(invalidToken, 401);
+    }
+    const notificationId = NotificationId.parse(rawId);
+    if (!notificationId.ok) {
+      return c.json(recordNotFound, 404);
+    }
+    const dismissed = await dismissNotificationUseCase.run({ userId, notificationId: notificationId.val });
+    return dismissed.ok ? c.json({}) : c.json(recordNotFound, 404);
+  };
+
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
+    .post('/v1/notifications/clear', authn.requireUser(writeNotifications), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      await clearNotificationsUseCase.run({ userId });
+      return c.json({});
+    })
+    .post('/v1/notifications/:id/dismiss', authn.requireUser(writeNotifications), (c) => dismiss(c, c.req.param('id')))
+    .post(
+      '/v2/notifications/:group_key/dismiss',
+      authn.requireUser(writeNotifications),
+      (c) => dismiss(c, ungroupedKeyPattern.exec(c.req.param('group_key'))?.[1]),
+    )
     .get('/v1/notifications', authn.requireUser(readNotifications), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {

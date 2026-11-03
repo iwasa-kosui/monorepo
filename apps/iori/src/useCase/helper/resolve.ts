@@ -40,6 +40,18 @@ export const resolveUserWith = (userResolver: UserResolver) => (userId: UserId):
     RA.andThen((user) => user ? RA.ok(user) : RA.err(UserNotFoundError.create({ userId }))),
   );
 
+export type Requester = Readonly<{ sessionId: SessionId }> | Readonly<{ userId: UserId }>;
+
+export const resolveRequesterUserWith =
+  (sessionResolver: SessionResolver, userResolver: UserResolver, now: Instant) =>
+  (requester: Requester): RA<User, SessionExpiredError | UserNotFoundError> =>
+    'sessionId' in requester
+      ? RA.flow(
+        resolveSessionWith(sessionResolver, now)(requester.sessionId),
+        RA.andThen((session) => resolveUserWith(userResolver)(session.userId)),
+      )
+      : resolveUserWith(userResolver)(requester.userId);
+
 export const resolveUserByUsernameWith =
   (userResolverByUsername: UserResolverByUsername) => (username: Username): RA<User, UserNotFoundError> =>
     RA.flow(

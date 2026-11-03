@@ -47,7 +47,11 @@ import { createD1MutedActorIdsResolverByUserId } from '../adaptor/d1/mute/mutedA
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../adaptor/d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../adaptor/d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../adaptor/d1/mute/muteResolver.ts';
-import { createD1ReplyNotificationCreatedStore } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
+import {
+  createD1NotificationDismissedStore,
+  createD1NotificationsClearedStore,
+  createD1ReplyNotificationCreatedStore,
+} from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../adaptor/d1/notification/notificationsResolverByPage.ts';
@@ -114,6 +118,7 @@ import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
+import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
@@ -121,6 +126,7 @@ import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
+import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -128,11 +134,11 @@ import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
+import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
-import { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import { SendLikeUseCase } from '../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../useCase/sendRepost.ts';
@@ -201,10 +207,8 @@ export const createWorkerRuntimePorts = async (
   const accessTokenRevokedStore = createD1AccessTokenRevokedStore(db);
   const authorizationCodeResolverByCodeHash = createD1AuthorizationCodeResolverByCodeHash(db);
   const remoteActorActions = createWorkerRemoteActorActions({
-    sessionResolver,
     userResolver,
     actorResolverByUserId,
-    sessionWithUserAndActorResolver,
     actorResolverById: createD1ActorResolverById(db),
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
@@ -267,6 +271,7 @@ export const createWorkerRuntimePorts = async (
       federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db),
       postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
       repostResolverById: createD1RepostResolverById(db),
+      repostResolver,
       threadResolver,
       actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
       actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
@@ -289,6 +294,21 @@ export const createWorkerRuntimePorts = async (
       notificationsResolverByPage: createD1NotificationsResolverByPage(db),
       notificationResolverByUserIdAndId: createD1NotificationResolverByUserIdAndId(db),
       notificationCountResolverSinceMarker: createD1NotificationCountResolverSinceMarker(db),
+      dismissNotificationUseCase: DismissNotificationUseCase.create({
+        notificationResolverByUserIdAndId: createD1NotificationResolverByUserIdAndId(db),
+        notificationDismissedStore: createD1NotificationDismissedStore(db),
+      }),
+      clearNotificationsUseCase: ClearNotificationsUseCase.create({
+        notificationsResolverByPage: createD1NotificationsResolverByPage(db),
+        notificationsClearedStore: createD1NotificationsClearedStore(db),
+      }),
+      resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase.create({
+        userResolver,
+        remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
+        remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
+        logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+        actorResolverByUri: createD1ActorResolverByUri(db),
+      }),
       markersResolverByUserId,
       saveMarkersUseCase: SaveMarkersUseCase.create({
         markersResolverByUserId,
@@ -483,16 +503,6 @@ export const createWorkerRuntimePorts = async (
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
-      }),
-      sendFollowRequestUseCase: SendFollowRequestUseCase.create({
-        sessionResolver,
-        userResolver,
-        actorResolverByUserId,
-        remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
-        followRequestedStore: createD1FollowRequestedStore(db),
-        remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
-        logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
-        actorResolverByUri: createD1ActorResolverByUri(db),
       }),
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,

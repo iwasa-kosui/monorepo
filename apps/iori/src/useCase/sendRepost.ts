@@ -9,21 +9,21 @@ import type { PostId } from '../domain/post/postId.ts';
 import { AlreadyRepostedError, Repost, type RepostCreatedStore, type RepostResolver } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  request: Request;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    postId: PostId;
+    request: Request;
+    ctx: RequestContext<unknown>;
+  }>;
 
-type Ok = void;
+type Ok = Readonly<{ repostId: RepostId }>;
 
 export type RemoteNoteLookupError = Readonly<{
   type: 'RemoteNoteLookupError';
@@ -73,8 +73,7 @@ const create = ({
   postResolver,
 }: Deps): SendRepostUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
@@ -96,8 +95,7 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the post
       RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
@@ -119,7 +117,7 @@ const create = ({
         );
       }),
       // Create, store Repost and TimelineItem
-      RA.andThrough(async ({ actor, postId, post, ctx, user }) => {
+      RA.andBind('createdRepostId', async ({ actor, postId, post, ctx, user }) => {
         const repostId = RepostId.generate();
 
         // For local posts, no ActivityPub needed
@@ -146,7 +144,7 @@ const create = ({
           }, now);
           await timelineItemCreatedStore.store(timelineItemEvent);
 
-          return RA.ok(undefined);
+          return RA.ok(repostId);
         }
 
         // For remote posts, we need to lookup and send ActivityPub
@@ -252,9 +250,9 @@ const create = ({
             cc: followersUri,
           }),
         );
-        return RA.ok(undefined);
+        return RA.ok(repostId);
       }),
-      RA.map(() => undefined),
+      RA.map(({ createdRepostId }) => ({ repostId: createdRepostId })),
     );
 
   return { run };
