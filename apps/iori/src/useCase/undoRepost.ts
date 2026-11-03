@@ -131,27 +131,7 @@ const create = ({
           }),
         );
       }),
-      // Delete the timeline item if it exists
-      RA.andThrough(async ({ repost }) => {
-        const timelineItemResult = await timelineItemResolverByRepostId.resolve({
-          repostId: repost.repostId,
-        });
-        if (timelineItemResult.ok && timelineItemResult.val) {
-          const deletedEvent = TimelineItem.deleteTimelineItem(
-            timelineItemResult.val.timelineItemId,
-            now,
-          );
-          await timelineItemDeletedStore.store(deletedEvent);
-        }
-        return RA.ok(undefined);
-      }),
-      // Delete the repost
-      RA.andThrough(async ({ repost }) => {
-        const deletedEvent = Repost.deleteRepost(repost, now);
-        return repostDeletedStore.store(deletedEvent);
-      }),
-      // Send Undo Announce activity for remote posts
-      RA.andThrough(async ({ ctx, user, repost, post }) => {
+      RA.andBind('remote', async ({ ctx, user, post }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -189,6 +169,33 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Delete the timeline item if it exists
+      RA.andThrough(async ({ repost }) => {
+        const timelineItemResult = await timelineItemResolverByRepostId.resolve({
+          repostId: repost.repostId,
+        });
+        if (timelineItemResult.ok && timelineItemResult.val) {
+          const deletedEvent = TimelineItem.deleteTimelineItem(
+            timelineItemResult.val.timelineItemId,
+            now,
+          );
+          await timelineItemDeletedStore.store(deletedEvent);
+        }
+        return RA.ok(undefined);
+      }),
+      // Delete the repost
+      RA.andThrough(async ({ repost }) => {
+        const deletedEvent = Repost.deleteRepost(repost, now);
+        return repostDeletedStore.store(deletedEvent);
+      }),
+      // Send Undo Announce activity for remote posts
+      RA.andThrough(async ({ ctx, user, repost, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         const actorUri = ctx.getActorUri(user.username);
         const followersUri = new URL(`${actorUri.href}/followers`);
 
@@ -198,14 +205,14 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new Undo({
             id: new URL(`#undo-announces/${repost.repostId}`, actorUri),
             actor: actorUri,
             object: new Announce({
               id: announceId,
               actor: actorUri,
-              object: result.id,
+              object: remote.noteId,
             }),
             to: new URL('https://www.w3.org/ns/activitystreams#Public'),
             cc: followersUri,

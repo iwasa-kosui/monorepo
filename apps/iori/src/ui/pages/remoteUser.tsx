@@ -362,7 +362,7 @@ const App = () => {
     setIsTogglingFollow(true);
     try {
       const relationship = await follow(data.account.id);
-      setData({ ...data, isFollowing: relationship.following });
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: relationship.following });
     } catch (error) {
       console.error('Failed to follow:', error);
       alert(failureMessage('follow', error));
@@ -376,7 +376,7 @@ const App = () => {
     setIsTogglingFollow(true);
     try {
       const relationship = await unfollow(data.account.id);
-      setData({ ...data, isFollowing: relationship.following });
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: relationship.following });
     } catch (error) {
       console.error('Failed to unfollow:', error);
       alert(failureMessage('unfollow', error));
@@ -390,7 +390,7 @@ const App = () => {
     setIsMuting(true);
     try {
       const relationship = await mute(data.account.id);
-      setData({ ...data, isMuted: relationship.muting });
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isMuted: relationship.muting });
     } catch (error) {
       console.error('Failed to mute:', error);
       alert(failureMessage('mute', error));
@@ -404,7 +404,7 @@ const App = () => {
     setIsMuting(true);
     try {
       const relationship = await unmute(data.account.id);
-      setData({ ...data, isMuted: relationship.muting });
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isMuted: relationship.muting });
     } catch (error) {
       console.error('Failed to unmute:', error);
       alert(failureMessage('unmute', error));

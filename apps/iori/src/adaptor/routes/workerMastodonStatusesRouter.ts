@@ -54,6 +54,7 @@ type ActingOnPost = Readonly<{ userId: UserId; viewerActorId: ActorId; post: Pos
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
+const cannotReblog = { error: 'Validation failed: Private and direct statuses cannot be reblogged' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
@@ -230,7 +231,7 @@ export const createWorkerMastodonStatusesRouter = ({
       }
       const { userId, viewerActorId, post } = acting.val;
       if (!Post.isVisibleToAnonymous(post)) {
-        return c.json({ error: 'Validation failed: Private and direct statuses cannot be reblogged' }, 422);
+        return c.json(cannotReblog, 422);
       }
       const sent = await sendRepostUseCase.run({
         userId,
@@ -240,6 +241,9 @@ export const createWorkerMastodonStatusesRouter = ({
       });
       if (sent.ok) {
         return respondWithStatus(c, acting.val, sent.val);
+      }
+      if (sent.err.type === 'RepostNotAllowedError') {
+        return c.json(cannotReblog, 422);
       }
       if (sent.err.type !== 'AlreadyRepostedError') {
         return failed(c, sent.err);

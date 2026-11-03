@@ -78,6 +78,8 @@ const writeFollows = Scope.orThrow('write:follows');
 const writeMutes = Scope.orThrow('write:mutes');
 const ownAccount = { error: 'Validation failed: The action cannot target your own account' } as const;
 const localTargetError = 'Validation failed: The action is not supported for local accounts';
+const actionFailed = (action: 'followed' | 'unfollowed' | 'muted' | 'unmuted'): string =>
+  `Validation failed: The account could not be ${action}`;
 
 const relationshipOf = (relationship: AccountRelationship) =>
   toRelationship({
@@ -200,7 +202,7 @@ export const createWorkerMastodonAccountsRouter = ({
       return undefined;
     }
     const followed = await followRemoteActor({ userId, actorId: target.id, ctx: createContext(request) });
-    return followed.ok ? undefined : followed.err.message;
+    return followed.ok ? undefined : actionFailed('followed');
   };
 
   const unfollow: AccountAction = async ({ userId, viewerActorId, target, request }) => {
@@ -211,17 +213,17 @@ export const createWorkerMastodonAccountsRouter = ({
       return undefined;
     }
     const unfollowed = await unfollowRemoteActor({ userId, actorId: target.id, ctx: createContext(request) });
-    return unfollowed.ok ? undefined : unfollowed.err.message;
+    return unfollowed.ok ? undefined : actionFailed('unfollowed');
   };
 
   const mute: AccountAction = async ({ userId, target }) => {
     const muted = await createMuteUseCase.run({ userId, mutedActorId: target.id });
-    return !muted.ok && muted.err.type !== 'AlreadyMutedError' ? muted.err.message : undefined;
+    return !muted.ok && muted.err.type !== 'AlreadyMutedError' ? actionFailed('muted') : undefined;
   };
 
   const unmute: AccountAction = async ({ userId, target }) => {
     const unmuted = await deleteMuteUseCase.run({ userId, mutedActorId: target.id });
-    return !unmuted.ok && unmuted.err.type !== 'NotMutedError' ? unmuted.err.message : undefined;
+    return !unmuted.ok && unmuted.err.type !== 'NotMutedError' ? actionFailed('unmuted') : undefined;
   };
 
   return new Hono<MastodonAuthEnv>()

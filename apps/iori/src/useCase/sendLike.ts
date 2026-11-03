@@ -114,25 +114,12 @@ const create = ({
           }),
         );
       }),
-      // Create and store like
-      RA.bind('likeCreated', ({ actor, postId }) =>
-        AppLike.createLocalLike(
-          {
-            likeId: LikeId.generate(),
-            actorId: actor.id,
-            postId,
-          },
-          now,
-        )),
-      RA.andThrough(async ({ likeCreated }) => localLikeCreatedStore.store(likeCreated)),
-      // Send ActivityPub Like if remote post
-      RA.andThrough(async ({ user, post, ctx, likeCreated }) => {
+      RA.andBind('remote', async ({ user, post, ctx }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
         }
 
-        // For remote posts, lookup and send ActivityPub Like
         const objectUri = post.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
@@ -165,17 +152,36 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Create and store like
+      RA.bind('likeCreated', ({ actor, postId }) =>
+        AppLike.createLocalLike(
+          {
+            likeId: LikeId.generate(),
+            actorId: actor.id,
+            postId,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ likeCreated }) => localLikeCreatedStore.store(likeCreated)),
+      // Send ActivityPub Like if remote post
+      RA.andThrough(async ({ user, ctx, likeCreated, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new Like({
             id: new URL(
               `#likes/${likeCreated.aggregateId.likeId}`,
               ctx.getActorUri(user.username),
             ),
             actor: ctx.getActorUri(user.username),
-            object: result.id,
-            to: author.id,
+            object: remote.noteId,
+            to: remote.authorId,
           }),
         );
         return RA.ok(undefined);

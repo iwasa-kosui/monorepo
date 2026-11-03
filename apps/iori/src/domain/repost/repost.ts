@@ -106,6 +106,22 @@ export const AlreadyRepostedError = {
   }),
 } as const;
 
+export type RepostNotAllowedError = Readonly<{
+  type: 'RepostNotAllowedError';
+  message: string;
+  detail: {
+    postId: PostId;
+  };
+}>;
+
+export const RepostNotAllowedError = {
+  create: ({ postId }: { postId: PostId }): RepostNotAllowedError => ({
+    type: 'RepostNotAllowedError',
+    message: `The post "${postId}" is private or direct and cannot be reposted.`,
+    detail: { postId },
+  }),
+} as const;
+
 export type RepostNotFoundError = Readonly<{
   type: 'RepostNotFoundError';
   message: string;

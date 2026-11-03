@@ -1,4 +1,5 @@
 import { Result } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 import { type Context, Hono } from 'hono';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
@@ -50,6 +51,7 @@ const invalidToken = { error: 'The access token is invalid' } as const;
 const readSearch = Scope.orThrow('read:search');
 const searchTypes: ReadonlyArray<string> = ['accounts', 'hashtags', 'statuses'];
 const integerPattern = /^-?\d+$/;
+const httpsUrlPattern = /^https:\/\/\S+$/i;
 const acctPattern = /^@?([A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?)@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)$/;
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
@@ -76,6 +78,22 @@ const parseQuery = (
   return Result.err(TimelineSearchQuery.of({ text }).ok ? 'limit' : 'q');
 };
 
+const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
+  const acct = acctPattern.exec(q.replace(/^acct:/i, ''));
+  if (acct !== null) {
+    const [, username, host] = acct;
+    return host!.toLowerCase() === ownHost.toLowerCase() ? undefined : `${username}@${host}`;
+  }
+  if (!httpsUrlPattern.test(q)) {
+    return undefined;
+  }
+  try {
+    return new URL(q).host.toLowerCase() === ownHost.toLowerCase() ? undefined : q;
+  } catch {
+    return undefined;
+  }
+};
+
 const formatTiming = (searchMs: number, assembleMs: number, totalMs: number): string =>
   `search;dur=${searchMs}, assemble;dur=${assembleMs}, total;dur=${totalMs}`;
 
@@ -91,23 +109,24 @@ export const createWorkerIoriSearchRouter = ({
     if (userId === null || userId === undefined) {
       return Result.err(c.json(invalidToken, 401));
     }
-    const acct = acctPattern.exec((c.req.query('q') ?? '').trim());
-    if (!isTrue(c.req.query('resolve')) || acct === null) {
+    const handle = remoteHandleOf((c.req.query('q') ?? '').trim(), new URL(c.req.url).host);
+    if (!isTrue(c.req.query('resolve')) || handle === undefined) {
       return Result.ok([]);
     }
-    const [, username, host] = acct;
-    if (host!.toLowerCase() === new URL(c.req.url).host.toLowerCase()) {
-      return Result.ok([]);
-    }
-    const resolved = await resolveRemoteAccountUseCase.run({
-      userId,
-      handle: `${username}@${host}`,
-      request: c.req.raw,
-    });
+    const resolved = await resolveRemoteAccountUseCase.run({ userId, handle, request: c.req.raw });
     if (!resolved.ok) {
       return resolved.err.type === 'UserNotFoundError' ? Result.err(c.json(actorNotFound, 422)) : Result.ok([]);
     }
     return Result.ok(await statusAssembler.assembleAccounts({ actorIds: [resolved.val], requestUrl: c.req.url }));
+  };
+
+  const resolveAccountsOrEmpty = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
+    try {
+      return await resolveAccounts(c);
+    } catch (error) {
+      getLogger().warn(`Failed to resolve remote accounts for search: ${String(error)}`);
+      return Result.ok([]);
+    }
   };
 
   const searchStatuses = async (
@@ -194,7 +213,7 @@ export const createWorkerIoriSearchRouter = ({
       if (type === 'hashtags' || isPaging) {
         return c.json(empty);
       }
-      const accounts = type === 'statuses' ? Result.ok<Account[]>([]) : await resolveAccounts(c);
+      const accounts = type === 'statuses' ? Result.ok<Account[]>([]) : await resolveAccountsOrEmpty(c);
       if (!accounts.ok) {
         return accounts.err;
       }

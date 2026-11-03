@@ -112,13 +112,7 @@ const create = ({
           }),
         );
       }),
-      // Delete the like
-      RA.andThrough(async ({ like }) => {
-        const deletedEvent = AppLike.deleteLocalLike(like, now);
-        return localLikeDeletedStore.store(deletedEvent);
-      }),
-      // Send Undo Like activity for remote posts
-      RA.andThrough(async ({ ctx, user, like, post }) => {
+      RA.andBind('remote', async ({ ctx, user, post }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -156,20 +150,33 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Delete the like
+      RA.andThrough(async ({ like }) => {
+        const deletedEvent = AppLike.deleteLocalLike(like, now);
+        return localLikeDeletedStore.store(deletedEvent);
+      }),
+      // Send Undo Like activity for remote posts
+      RA.andThrough(async ({ ctx, user, like, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         const actorUri = ctx.getActorUri(user.username);
 
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new Undo({
             id: new URL(`#undo-likes/${like.likeId}`, actorUri),
             actor: actorUri,
             object: new Like({
               id: new URL(`#likes/${like.likeId}`, actorUri),
               actor: actorUri,
-              object: result.id,
+              object: remote.noteId,
             }),
-            to: author.id,
+            to: remote.authorId,
           }),
         );
         return RA.ok(undefined);
