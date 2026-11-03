@@ -12,6 +12,7 @@ import {
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../../../d1/follow/actorIdsResolverByFollowsWithPagination.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
+import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
@@ -77,6 +78,8 @@ export const setupReadApi = () => {
         '/api',
         createWorkerMastodonAccountsRouter({
           authn,
+          actorResolverByUserId,
+          accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
           actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
           actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
           statusAssembler,

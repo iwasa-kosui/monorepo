@@ -9,7 +9,7 @@ import type { LocalPostsResolverByPage } from '../../domain/post/post.ts';
 import type { TimelineItemsResolverByActorIds } from '../../domain/timeline/timelineItem.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { type StatusAssembler, type StatusSource, statusSourceOfTimelineItem } from '../mastodon/statusAssembler.ts';
-import { parsePageRequest, respondWithPage, timelineLimits, toNewestFirst } from './helper/mastodonPage.ts';
+import { isTrue, parsePageRequest, respondWithPage, timelineLimits, toNewestFirst } from './helper/mastodonPage.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn, rejectUnlessUser } from './mastodonAuthn.ts';
 
 export type WorkerMastodonTimelinesRouterDeps = Readonly<{
@@ -25,8 +25,6 @@ export type WorkerMastodonTimelinesRouterDeps = Readonly<{
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
-
-const isTrue = (value: string | undefined): boolean => value === 'true' || value === '1';
 
 export const createWorkerMastodonTimelinesRouter = ({
   authn,

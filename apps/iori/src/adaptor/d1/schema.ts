@@ -96,6 +96,7 @@ export const postsTable = sqliteTable('posts', {
 }, (table) => [
   index('posts_actor_id_idx').on(table.actorId),
   index('posts_created_at_post_id_idx').on(table.createdAt, table.postId),
+  index('posts_actor_id_created_at_post_id_idx').on(table.actorId, table.createdAt, table.postId),
 ]);
 
 export const remotePostsTable = sqliteTable('remote_posts', {
@@ -183,6 +184,7 @@ export const repostsTable = sqliteTable('reposts', {
 }, (table) => [
   uniqueIndex('repost_actor_post_unique').on(table.actorId, table.postId),
   uniqueIndex('reposts_announceActivityUri_unique').on(table.announceActivityUri),
+  index('reposts_actor_id_created_at_repost_id_idx').on(table.actorId, table.createdAt, table.repostId),
 ]);
 
 export const timelineItemsTable = sqliteTable('timeline_items', {

@@ -7,6 +7,8 @@ export type PageLimits = Readonly<{ defaultLimit: number; maxLimit: number }>;
 export const timelineLimits: PageLimits = { defaultLimit: 20, maxLimit: 40 };
 export const accountListLimits: PageLimits = { defaultLimit: 40, maxLimit: 80 };
 
+export const isTrue = (value: string | undefined): boolean => value === 'true' || value === '1';
+
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value.length === 0 ? undefined : value;
 

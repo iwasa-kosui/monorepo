@@ -2,7 +2,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createSqliteD1Fixture } from './adaptor/d1/__tests__/sqliteFixture.ts';
-import { CredentialAccountSchema, InstanceV2Schema, StatusSchema } from './adaptor/mastodon/entities.ts';
+import { AccountSchema, CredentialAccountSchema, InstanceV2Schema, StatusSchema } from './adaptor/mastodon/entities.ts';
 import { admissionFixture } from './testing/admissionFixture.ts';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
@@ -247,6 +247,41 @@ describe('Worker の Mastodon 互換 API', () => {
       expect(remote.status).toBe(401);
       expect(missing.status).toBe(404);
       expect(await missing.json()).toEqual({ error: 'Record not found' });
+    });
+
+    it('accounts/:id と accounts/:id/statuses を未認証で返し、Link ヘッダーを付ける', async () => {
+      const { request, sqlite } = setup();
+      const older = seedPost(sqlite, Date.UTC(2025, 0, 3));
+      const newer = seedPost(sqlite, Date.UTC(2025, 0, 4));
+
+      const account = await request(`/api/v1/accounts/${actorId}`);
+      const statuses = await request(`/api/v1/accounts/${actorId}/statuses?limit=1`);
+      const next = await request(`/api/v1/accounts/${actorId}/statuses?limit=1&max_id=${newer}`);
+      const missing = await request(`/api/v1/accounts/${crypto.randomUUID()}`);
+
+      expect(account.status).toBe(200);
+      expect(AccountSchema.parse(await account.json())).toMatchObject({ id: actorId, username: 'kosui' });
+      expect(statuses.status).toBe(200);
+      const [first] = await statuses.json() as unknown[];
+      expect(StatusSchema.parse(first)).toMatchObject({ id: newer, account: { id: actorId } });
+      expect(statuses.headers.get('Link')).toContain(`max_id=${newer}`);
+      expect((await next.json() as Array<{ id: string }>).map((status) => status.id)).toEqual([older]);
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({ error: 'Record not found' });
+    });
+
+    it('accounts/familiar_followers を :id に取らせず、認証がなければ 401 にする', async () => {
+      const { request } = setup();
+      const headers = { Cookie: `sessionId=${sessionId}` };
+
+      const [familiar, anonymous] = await Promise.all([
+        request('/api/v1/accounts/familiar_followers?id[]=a', { headers }),
+        request('/api/v1/accounts/familiar_followers?id[]=a'),
+      ]);
+
+      expect(familiar.status).toBe(200);
+      expect(await familiar.json()).toEqual([{ id: 'a', accounts: [] }]);
+      expect(anonymous.status).toBe(401);
     });
 
     it('timelines/home は認証がなければ 401 にする', async () => {

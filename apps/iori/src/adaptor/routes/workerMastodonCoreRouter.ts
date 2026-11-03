@@ -55,6 +55,8 @@ const preferences: Preferences = {
   'reading:expand:spoilers': false,
 };
 
+const languages = [{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }] as const;
+
 const markerKeys = ['home', 'notifications'] as const;
 
 const readLastReadId = (body: RequestBody, key: string): string | undefined => {
@@ -137,6 +139,16 @@ export const createWorkerMastodonCoreRouter = ({
     .get('/v2/instance', async (c) => c.json(buildInstanceV2(await instanceProps(c.req.url))))
     .get('/v1/custom_emojis', (c) => c.json([]))
     .get('/v1/accounts/:id/featured_tags', (c) => c.json([]))
+    .get('/v1/accounts/:id/endorsements', authn.optionalAuth, (c) => c.json([]))
+    .get('/v1/accounts/familiar_followers', authn.requireUser(readFollows), (c) => {
+      const ids = [...(c.req.queries('id[]') ?? []), ...(c.req.queries('id') ?? [])];
+      return c.json(ids.map((id) => ({ id, accounts: [] })));
+    })
+    .get('/v1/instance/translation_languages', (c) => c.json({}))
+    .get('/v1/instance/languages', (c) => c.json(languages))
+    .get('/v1/trends/statuses', (c) => c.json([]))
+    .get('/v1/trends/tags', (c) => c.json([]))
+    .get('/v1/trends/links', (c) => c.json([]))
     .get('/v1/preferences', authn.requireUser(readAccounts), (c) => c.json(preferences))
     .get('/v1/markers', authn.requireUser(readStatuses), (c) => c.json({}))
     .post('/v1/markers', authn.requireUser(writeStatuses), async (c) => {

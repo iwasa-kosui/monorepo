@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "be0e3f12-8b8e-47c0-80d2-174271273287",
+  "id": "aadd1b38-9a3e-489c-a043-d7ccfd8080d9",
   "prevId": "2982b7f3-9ac5-495f-aa72-852759581047",
   "tables": {
     "actors": {
@@ -1795,6 +1795,15 @@
             "postId"
           ],
           "isUnique": false
+        },
+        "posts_actor_id_created_at_post_id_idx": {
+          "name": "posts_actor_id_created_at_post_id_idx",
+          "columns": [
+            "actorId",
+            "createdAt",
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2162,6 +2171,15 @@
             "announceActivityUri"
           ],
           "isUnique": true
+        },
+        "reposts_actor_id_created_at_repost_id_idx": {
+          "name": "reposts_actor_id_created_at_repost_id_idx",
+          "columns": [
+            "actorId",
+            "createdAt",
+            "repostId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {

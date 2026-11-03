@@ -58,6 +58,7 @@ import {
   createD1OAuthApplicationResolver,
   createD1OAuthApplicationResolverByClientId,
 } from '../adaptor/d1/oauth/oauthApplicationResolvers.ts';
+import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../adaptor/d1/post/localPostsResolverByPage.ts';
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
@@ -249,6 +250,7 @@ export const createWorkerRuntimePorts = async (
       mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
       timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
       localPostsResolverByPage: createD1LocalPostsResolverByPage(db),
+      accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
       federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db),
       postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
       repostResolverById: createD1RepostResolverById(db),

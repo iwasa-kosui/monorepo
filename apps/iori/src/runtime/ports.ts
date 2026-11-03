@@ -17,6 +17,7 @@ import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline
 import type { Instant } from '../domain/instant/instant.ts';
 import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
 import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
+import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
   LocalPostsResolverByPage,
   PostsWithAuthorResolverByPostIds,
@@ -96,6 +97,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
   timelineItemsResolverByActorIds: TimelineItemsResolverByActorIds;
   localPostsResolverByPage: LocalPostsResolverByPage;
+  accountStatusItemsResolverByActorId: AccountStatusItemsResolverByActorId;
   federatedTimelineItemsResolver: FederatedTimelineItemsResolver;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   repostResolverById: RepostResolverById;
