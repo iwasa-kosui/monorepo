@@ -135,11 +135,11 @@ const setup = (options: { textGenerator?: TextGenerator; send?: WebPushSender['s
 afterEach(() => vi.restoreAllMocks());
 
 describe('CreateDailyDigestUseCase: 材料の選び方', () => {
-  it('Radar は直近 7 日に取得したものから、publishedAt が最も新しい 1 件だけを選ぶ', async () => {
+  it('Radar は直近 24 時間に取得したものから、publishedAt が最も新しい 1 件だけを選ぶ', async () => {
     const t = setup();
-    t.addEntry(t.sources.radar, 'Radar Vol. 33', { publishedAt: NOW - 100 * DAY, fetchedAt: NOW - 2 * DAY });
-    t.addEntry(t.sources.radar, 'Radar Vol. 34', { publishedAt: NOW - 3 * DAY, fetchedAt: NOW - 6 * DAY });
-    t.addEntry(t.sources.radar, 'Radar Vol. 35', { publishedAt: NOW - HOUR, fetchedAt: NOW - 8 * DAY });
+    t.addEntry(t.sources.radar, 'Radar Vol. 33', { publishedAt: NOW - 100 * DAY, fetchedAt: NOW - 2 * HOUR });
+    t.addEntry(t.sources.radar, 'Radar Vol. 34', { publishedAt: NOW - 3 * HOUR, fetchedAt: NOW - 20 * HOUR });
+    t.addEntry(t.sources.radar, 'Radar Vol. 35', { publishedAt: NOW - HOUR, fetchedAt: NOW - 25 * HOUR });
 
     await t.run();
 
@@ -153,7 +153,7 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
 
   it('Radar の新しい版が無ければ Radar の節を出さない', async () => {
     const t = setup();
-    t.addEntry(t.sources.radar, 'Radar Vol. 35', { publishedAt: NOW - 8 * DAY, fetchedAt: NOW - 8 * DAY });
+    t.addEntry(t.sources.radar, 'Radar Vol. 35', { publishedAt: NOW - 2 * DAY, fetchedAt: NOW - 2 * DAY });
 
     await t.run();
 

@@ -37,7 +37,6 @@ const NEW_ENTRIES_LIMIT = 10;
 const TRENDS_LIMIT = 10;
 const RADAR_LIMIT = 1;
 const HOUR_MS = 60 * 60 * 1000;
-const RADAR_WINDOW_MS = 7 * 24 * HOUR_MS;
 const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
 type Input = Readonly<{ userId: UserId }>;
@@ -135,7 +134,7 @@ const create = ({
 
     const [radarEntries, newEntries, hatenaTrends, timelineTrends] = await Promise.all([
       radarFeedEntriesResolverByFetchedSince.resolve({
-        fetchedSince: Instant.addDuration(startedAt, -RADAR_WINDOW_MS),
+        fetchedSince: Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS),
         limit: RADAR_LIMIT,
       }),
       newFeedEntriesResolverByFetchedSince.resolve({
