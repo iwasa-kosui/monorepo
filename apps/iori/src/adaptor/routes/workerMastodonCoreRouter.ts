@@ -14,7 +14,7 @@ import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { readRequestBody } from './helper/requestBody.ts';
+import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerMastodonCoreRouterDeps = Readonly<{
@@ -156,8 +156,38 @@ export const createWorkerMastodonCoreRouter = ({
       if (userId === undefined) {
         return c.json(invalidToken, 401);
       }
-      // Ivory などが display_name や header を常に送るので、読まずに捨てる
-      const avatar = (await readRequestBody(c))['avatar'];
+      const body = await readRequestBody(c);
+      const avatar = body['avatar'];
+      if (body['header'] instanceof File) {
+        return c.json({ error: 'Validation failed: header is not supported' }, 422);
+      }
+      if ('avatar' in body && !(avatar instanceof File)) {
+        return c.json({ error: 'Validation failed: avatar must be a file' }, 422);
+      }
+      const displayName = bodyString(body, 'display_name');
+      const note = bodyString(body, 'note');
+      if (displayName !== undefined || note !== undefined) {
+        const user = await userResolver.resolve(userId);
+        if (!user.ok) {
+          return c.json(internalServerError, 500);
+        }
+        if (user.val === undefined) {
+          return c.json(invalidToken, 401);
+        }
+        const lookup = await resolveAccount(user.val, c.req.url);
+        if (lookup.kind === 'failed') {
+          return c.json(internalServerError, 500);
+        }
+        if (lookup.kind === 'noActor') {
+          return c.json(actorNotFound, 422);
+        }
+        if (
+          (displayName !== undefined && displayName !== lookup.account.display_name)
+          || (note !== undefined && note !== lookup.account.source.note)
+        ) {
+          return c.json({ error: 'Validation failed: display_name and note cannot be changed' }, 422);
+        }
+      }
       if (avatar instanceof File) {
         const updated = await updateAvatarUseCase.run({ userId, bytes: new Uint8Array(await avatar.arrayBuffer()) });
         if (!updated.ok) {

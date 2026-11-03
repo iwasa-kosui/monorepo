@@ -408,6 +408,7 @@ describe('Worker fixture', () => {
 
     expect([health.status, healthz.status, readyz.status, upload.status]).toEqual([200, 200, 200, 200]);
     expect(upload.headers.get('Content-Type')).toBe('image/webp');
+    expect(upload.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(actor.status).toBe(200);
     expect(actor.headers.get('Content-Type')).toContain('application/activity+json');
     await expect(actor.json()).resolves.toMatchObject({ type: 'Person', id: `${origin}/users/fixture` });

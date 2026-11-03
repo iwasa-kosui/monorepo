@@ -455,6 +455,7 @@ describe('Worker の Mastodon 互換 API', () => {
       const served = await request(`/uploads/${media.id}.png`);
       expect(served.status).toBe(200);
       expect(served.headers.get('Content-Type')).toBe('image/png');
+      expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff');
     });
 
     it('PUT で説明を更新して GET に反映し、他人には見せない', async () => {
@@ -496,7 +497,7 @@ describe('Worker の Mastodon 互換 API', () => {
       const response = await request('/api/v1/accounts/update_credentials', {
         method: 'PATCH',
         headers,
-        body: form({ avatar: new File([png()], 'a.png', { type: 'image/png' }), display_name: '別名' }),
+        body: form({ avatar: new File([png()], 'a.png', { type: 'image/png' }) }),
       });
 
       expect(response.status).toBe(200);

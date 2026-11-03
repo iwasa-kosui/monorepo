@@ -283,13 +283,12 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.actors.get(userId)?.logoUri).toBeUndefined();
     });
 
-    it('iori にない項目は受け付けて無視する', async () => {
+    it('iori にない項目は受け付けて無視し、現在と同じ display_name と note も通す', async () => {
       const { h, token } = await setupUser();
 
       const response = await patch(h, token, {
-        display_name: '別名',
-        note: '自己紹介',
-        header: new File([png()], 'h.png', { type: 'image/png' }),
+        display_name: 'kosui',
+        note: '',
         locked: 'true',
         bot: 'true',
         discoverable: 'true',
@@ -311,13 +310,36 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.logoUriStored).not.toHaveBeenCalled();
     });
 
-    it('avatar がなければ何も変えずに現在の値を返す', async () => {
+    it('header が File なら 422 にして、何も保存しない', async () => {
+      const { h, token } = await setupUser();
+
+      const response = await patch(h, token, { header: new File([png()], 'h.png', { type: 'image/png' }) });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.logoUriStored).not.toHaveBeenCalled();
+    });
+
+    it('display_name か note が現在の値と違えば 422 にして、何も保存しない', async () => {
+      const { h, token } = await setupUser();
+
+      const changedName = await patch(h, token, { display_name: '別名' });
+      const changedNote = await patch(h, token, { note: '自己紹介' });
+
+      expect([changedName.status, changedNote.status]).toEqual([422, 422]);
+      expect(await changedName.json()).toEqual({ error: expect.stringContaining('Validation failed') });
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.logoUriStored).not.toHaveBeenCalled();
+    });
+
+    it('avatar のキーがあるのに File でなければ 422 にして、何も保存しない', async () => {
       const { h, token } = await setupUser();
 
       const response = await patch(h, token, { avatar: 'not a file' });
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ avatar: `${ORIGIN}/default-avatar.png` });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
       expect(h.bucket.put).not.toHaveBeenCalled();
       expect(h.logoUriStored).not.toHaveBeenCalled();
     });

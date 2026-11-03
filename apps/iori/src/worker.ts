@@ -271,6 +271,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': object.contentType,
+            'X-Content-Type-Options': 'nosniff',
             ...(object.cacheControl === undefined
               ? {}
               : { 'Cache-Control': object.cacheControl }),

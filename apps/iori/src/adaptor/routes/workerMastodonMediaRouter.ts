@@ -78,7 +78,8 @@ export const createWorkerMastodonMediaRouter = ({
       if (!mediaId.ok) {
         return c.json(recordNotFound, 404);
       }
-      const description = bodyString(await readRequestBody(c), 'description');
+      const body = await readRequestBody(c);
+      const description = body['description'] === null ? null : bodyString(body, 'description');
       const result = description === undefined
         ? await getMediaUploadUseCase.run({ userId, mediaId: mediaId.val })
         : await updateMediaDescriptionUseCase.run({ userId, mediaId: mediaId.val, description });
