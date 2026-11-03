@@ -128,6 +128,8 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 
 各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
 
+上の表は R2 の S3 credential だけを並べています。`deploy-worker` が使う Cloudflare API token の `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` には、D1 の書き込み権限が必要です。Dashboard の表示は `D1 Write` で、API の権限名は `D1 Edit` です。`deploy-worker` が、`wrangler deploy` の前に D1 のマイグレーションを適用するためです。
+
 `EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
 
 **計測用の generation での扱い**
@@ -1151,7 +1153,7 @@ gh run view "$iori_actions_run_id" --repo "$iori_repo" \
 
 HTTP body や raw log を取得・公開せず、各 job の sanitized status を確認します。dispatch が成功しただけでは移行成功ではありません。失敗・timeout・結果不明なら、新しい操作や再実行を始める前に第7節へ進みます。
 
-staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。`deploy-worker` は `main` への push でも `Deploy iori Worker (main)` として起動します。この起動では、generation、`migration_run_id`、`migration_main_sha` を入力で受け取らず、Environment secret の `IORI_ADMISSION_IDENTITY` から Node の処理が取り出します。取り出した値は公開ログに出しません。この workflow に `workflow_dispatch` はありません。手動で Worker を配備するときは、従来どおり `deploy-iori-worker.yml` の `deploy-worker` を dispatch します。dispatch 版と同じく、`deploy-worker` は smoke を実行しません。push 版では、この workflow が generation、`migration_run_id`、`migration_main_sha` を同じ secret `IORI_ADMISSION_IDENTITY` から取り出します。このため、admission の照合は自己比較になり、dispatch 版にある「操作者の入力と secret の突き合わせ」は働きません。安全性は、identity の中身の検査と、active な Worker と準備記録の照合に頼ります。
+staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。`deploy-worker` は、`wrangler deploy` の前に、D1 のマイグレーションを本番の D1 に適用します。手動用の `d1:migrate:remote` は、基準の記録の判定を通らず、本番の D1 で 0000 を再実行して失敗するので、本番では使いません。`deploy-worker` は `main` への push でも `Deploy iori Worker (main)` として起動します。この起動では、generation、`migration_run_id`、`migration_main_sha` を入力で受け取らず、Environment secret の `IORI_ADMISSION_IDENTITY` から Node の処理が取り出します。取り出した値は公開ログに出しません。この workflow に `workflow_dispatch` はありません。手動で Worker を配備するときは、従来どおり `deploy-iori-worker.yml` の `deploy-worker` を dispatch します。dispatch 版と同じく、`deploy-worker` は smoke を実行しません。push 版では、この workflow が generation、`migration_run_id`、`migration_main_sha` を同じ secret `IORI_ADMISSION_IDENTITY` から取り出します。このため、admission の照合は自己比較になり、dispatch 版にある「操作者の入力と secret の突き合わせ」は働きません。安全性は、identity の中身の検査と、active な Worker と準備記録の照合に頼ります。
 
 **OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への要求で生成します。Worker はこの要求で R2 の `og/<article-id>.png` を探し、あれば返します。無ければ、公開済みの記事に限り Worker が PNG を生成し、R2 の `og/<article-id>.png` に保存して返します。記事の公開時には生成しません。次の点に注意してください。
 
@@ -1306,17 +1308,22 @@ smoke token の値が Worker に登録した値と食い違っている場合も
 
 次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。`main` への push で起動する `Deploy iori Worker (main)` も同じ `deploy-worker` の処理を実行するので、失敗したときに同じ `deploy-worker-*` の行を出します。この起動では generation、`migration_run_id`、`migration_main_sha` を `IORI_ADMISSION_IDENTITY` から取り出し、行にも出しません。
 
-| `stage`                | operation と時点                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `verify-import`        | verify-import                                                                                                             |
-| `rehearse-migration`   | rehearse-migration                                                                                                        |
-| `migrate-data`         | migrate-data                                                                                                              |
-| `deploy-worker-before` | deploy-worker で、レビュー済みの Worker の version の deploy を始める前                                                   |
-| `deploy-worker-deploy` | deploy-worker で、レビュー済みの Worker の version を deploy している途中                                                 |
-| `deploy-worker-after`  | deploy-worker で、レビュー済みの Worker の version を deploy した後。deploy の後の Worker と backend の読み直しを含みます |
-| `unclassified`         | 上のどれにも当たらない段                                                                                                  |
+| `stage`                 | operation と時点                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `verify-import`         | verify-import                                                                                                             |
+| `rehearse-migration`    | rehearse-migration                                                                                                        |
+| `migrate-data`          | migrate-data                                                                                                              |
+| `deploy-worker-before`  | deploy-worker で、レビュー済みの Worker の version の deploy を始める前                                                   |
+| `deploy-worker-migrate` | deploy-worker で、`wrangler deploy` の前に、D1 の基準の記録とマイグレーションを適用している途中                           |
+| `deploy-worker-deploy`  | deploy-worker で、レビュー済みの Worker の version を deploy している途中                                                 |
+| `deploy-worker-after`   | deploy-worker で、レビュー済みの Worker の version を deploy した後。deploy の後の Worker と backend の読み直しを含みます |
+| `unclassified`          | 上のどれにも当たらない段                                                                                                  |
 
 分類の行の `reason` には、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の節と同じ語が出ます。この語には、prepare-target の節の語と、source の接続の失敗を表す語が含まれます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
+
+`reason` に `d1-baseline-mismatch` が出た場合、`deploy-worker-migrate` は D1 の読み取りと判定で止まっています。この語は、0000 の表が D1 に一部だけある場合か、読み取りの結果が想定と違う場合に出ます。この時点で、`deploy-worker-migrate` は D1 に書き込んでいません。
+
+`deploy-worker-migrate` で止まった場合は、基準の記録かマイグレーションの一部が、本番の D1 に適用済みの可能性があります。Worker は deploy されていません。作業者は、`d1_migrations` の行と表の状態を読み取って記録し、レビューに戻します。
 
 #### 移行先の読み取りの失敗
 

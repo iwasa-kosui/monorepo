@@ -52,6 +52,7 @@ const FIXED_REASONS = new Set([
   'worker-binding-extra',
   'worker-secret-missing',
   'command-failed',
+  'd1-baseline-mismatch',
   'aborted',
   'state-present',
   'plan-rejected',

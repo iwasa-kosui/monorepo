@@ -177,7 +177,9 @@ describe('temporary Worker config command paths', () => {
       env: fixtureEnvironment(fakePnpmDirectory),
     });
     const configPath = (await readFile(join(fakePnpmDirectory, 'pnpm.log'), 'utf8')).trim();
+    const commands = (await readFile(join(fakePnpmDirectory, 'pnpm-command.log'), 'utf8')).trim();
 
+    expect(commands).toBe(`exec wrangler d1 migrations apply DB --remote --config ${configPath}`);
     await expect(access(configPath)).rejects.toThrow();
   });
 });

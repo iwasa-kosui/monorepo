@@ -8,5 +8,11 @@ export function deployReviewedWorkerVersion(
     mode: 'sealed' | 'smoke' | 'active';
     signal: AbortSignal;
     runCommand?: InfrastructureCommand;
+    migrateD1?: boolean;
+    onStage?: (stage: string) => void;
   },
 ): Promise<string>;
+export function parseInitialMigrationTables(sql: string): string[];
+export function decideD1Baseline(
+  input: { initialTables: string[]; presentTables: string[]; migrationRows: number | undefined },
+): 'apply' | 'baseline' | 'mismatch';

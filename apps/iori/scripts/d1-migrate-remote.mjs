@@ -9,7 +9,7 @@ try {
     'd1',
     'migrations',
     'apply',
-    'iori',
+    'DB',
     '--remote',
     '--config',
     config.path,
