@@ -246,6 +246,26 @@ describe('TranslatePostUseCase', () => {
     expect(t.calls).toEqual([]);
   });
 
+  it('投稿を引けないときは store に訳文があっても PostNotFoundError にし、store を引かない', async () => {
+    const t = setup();
+    const postId = crypto.randomUUID() as PostId;
+    t.translations.saved.set(
+      t.translations.key(postId, 'ja'),
+      PostTranslation.orThrow({
+        postId,
+        targetLanguage: 'ja',
+        sourceHash: await hashTranslationSource('<p>Hello</p>'),
+        content: '<p>保存済み</p>',
+        detectedSourceLanguage: 'en',
+        model: TRANSLATION_MODEL,
+        createdAt: NOW - 1000,
+      }),
+    );
+
+    expect(await expectErr(t.translate(postId))).toMatchObject({ type: 'PostNotFoundError' });
+    expect(t.translations.store.find).not.toHaveBeenCalled();
+  });
+
   it.each<[string, PostOptions]>([
     ['direct のリモート投稿', { visibility: 'direct' }],
     ['公開範囲が不明のリモート投稿', { visibility: null }],

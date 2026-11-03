@@ -132,6 +132,16 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(form.status).toBe(200);
   });
 
+  it('lang が \'ja-JP\' や \'JA\' のように地域や大文字を含んでいても ja として 200 にする', async () => {
+    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
+
+    const region = await t.request(pathOf(t.english.postId), postJson({ lang: 'ja-JP' }, t.me.bearer));
+    const upper = await t.request(pathOf(t.english.postId), postForm({ lang: 'JA' }, t.me.bearer));
+
+    expect(region.status).toBe(200);
+    expect(upper.status).toBe(200);
+  });
+
   it('lang が ja 以外なら 403 にする', async () => {
     const { generator, calls } = createStubTextGenerator(reply);
     const t = await seedPosts({ textGenerator: generator });

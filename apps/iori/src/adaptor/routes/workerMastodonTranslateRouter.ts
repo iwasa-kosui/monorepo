@@ -49,7 +49,7 @@ export const createWorkerMastodonTranslateRouter = ({
       const translated = await translatePost.run({
         postId: postId.val,
         viewer: { userId, actorId: viewer.val.id },
-        targetLanguage: lang === undefined || lang === '' ? undefined : lang,
+        targetLanguage: lang === undefined || lang === '' ? undefined : lang.split(/[-_]/)[0]!.toLowerCase(),
       });
       if (!translated.ok) {
         switch (translated.err.type) {
