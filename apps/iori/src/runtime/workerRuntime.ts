@@ -245,6 +245,7 @@ export const createWorkerRuntimePorts = async (
       userResolver,
       userResolverByUsername: createD1UserResolverByUsername(db),
       actorResolverByUserId,
+      actorResolverById: createD1ActorResolverById(db),
       accountStatsResolver: createD1AccountStatsResolverByActorId(db),
       actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
       mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),

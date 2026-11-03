@@ -12,6 +12,7 @@ import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
+import { actorNotFound, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -32,6 +33,11 @@ export type WorkerMastodonCoreRouterDeps = Readonly<{
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
+
+type AccountLookup =
+  | Readonly<{ kind: 'ok'; account: CredentialAccount }>
+  | Readonly<{ kind: 'noActor' }>
+  | Readonly<{ kind: 'failed' }>;
 
 const scope = (value: string): Scope => Scope.orThrow(value);
 const readScope = scope('read');
@@ -77,30 +83,37 @@ export const createWorkerMastodonCoreRouter = ({
   accountStatsResolver,
   instance,
 }: WorkerMastodonCoreRouterDeps): Hono<MastodonAuthEnv> => {
-  const resolveAccount = async (user: User, requestUrl: string): Promise<CredentialAccount | undefined> => {
+  const resolveAccount = async (user: User, requestUrl: string): Promise<AccountLookup> => {
     const actor = await actorResolverByUserId.resolve(user.id);
-    if (!actor.ok || actor.val === undefined) {
-      return undefined;
+    if (!actor.ok) {
+      return { kind: 'failed' };
+    }
+    if (actor.val === undefined) {
+      return { kind: 'noActor' };
     }
     const stats = await accountStatsResolver.resolve(actor.val.id);
     if (!stats.ok) {
-      return undefined;
+      return { kind: 'failed' };
     }
     const account: Account = toAccount({ type: 'local', user, actor: actor.val }, {
       ...defaultImageUrls(requestUrl),
+      baseUrl: requestUrl,
       ...stats.val,
     });
     return {
-      ...account,
-      source: {
-        privacy: 'public',
-        sensitive: false,
-        language: null,
-        note: '',
-        fields: [],
-        discoverable: null,
-        indexable: false,
-        follow_requests_count: 0,
+      kind: 'ok',
+      account: {
+        ...account,
+        source: {
+          privacy: 'public',
+          sensitive: false,
+          language: null,
+          note: '',
+          fields: [],
+          discoverable: null,
+          indexable: false,
+          follow_requests_count: 0,
+        },
       },
     };
   };
@@ -110,7 +123,8 @@ export const createWorkerMastodonCoreRouter = ({
     if (!user.ok || user.val === undefined) {
       return null;
     }
-    return await resolveAccount(user.val, requestUrl) ?? null;
+    const lookup = await resolveAccount(user.val, requestUrl);
+    return lookup.kind === 'ok' ? lookup.account : null;
   };
 
   const instanceProps = async (requestUrl: string) => ({
@@ -129,11 +143,17 @@ export const createWorkerMastodonCoreRouter = ({
         return c.json(invalidToken, 401);
       }
       const user = await userResolver.resolve(userId);
-      if (!user.ok || user.val === undefined) {
+      if (!user.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (user.val === undefined) {
         return c.json(invalidToken, 401);
       }
-      const account = await resolveAccount(user.val, c.req.url);
-      return account === undefined ? c.json(invalidToken, 401) : c.json(account);
+      const lookup = await resolveAccount(user.val, c.req.url);
+      if (lookup.kind === 'failed') {
+        return c.json(internalServerError, 500);
+      }
+      return lookup.kind === 'noActor' ? c.json(actorNotFound, 422) : c.json(lookup.account);
     })
     .get('/v1/instance', async (c) => c.json(buildInstanceV1(await instanceProps(c.req.url))))
     .get('/v2/instance', async (c) => c.json(buildInstanceV2(await instanceProps(c.req.url))))

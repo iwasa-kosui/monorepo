@@ -4,6 +4,7 @@ import { createIoriApp } from '../../../../appFactory.tsx';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
+import { createD1ActorResolverById } from '../../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
@@ -79,6 +80,7 @@ export const setupReadApi = () => {
         createWorkerMastodonAccountsRouter({
           authn,
           actorResolverByUserId,
+          actorResolverById: createD1ActorResolverById(db),
           accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
           actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
           actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),

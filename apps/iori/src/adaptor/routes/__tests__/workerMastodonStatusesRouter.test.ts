@@ -16,20 +16,59 @@ describe('GET /api/v1/statuses/:id', () => {
     return { ...t, me, alice, note, boost };
   };
 
-  it('未認証でも投稿を返し、状態は false にする', async () => {
+  it('未認証でもローカルの投稿を返し、状態は false にする', async () => {
     const t = await seedStatuses();
+    const local = t.seed.addLocalPost(t.me, 3_000);
+    t.seed.addLike(t.me.actorId, local.postId);
 
-    const response = await t.request(`/api/v1/statuses/${t.note.postId}`);
+    const response = await t.request(`/api/v1/statuses/${local.postId}`);
 
     expect(response.status).toBe(200);
     expect(StatusSchema.parse(await response.json())).toMatchObject({
-      id: t.note.postId,
-      uri: t.note.uri,
-      account: { id: t.alice.actorId },
+      id: local.postId,
+      account: { id: t.me.actorId },
       favourited: false,
       reblogged: false,
       reblog: null,
     });
+  });
+
+  it('未認証ではリモートの投稿と、リモートの投稿のブーストを 404 にする', async () => {
+    const t = await seedStatuses();
+
+    const [note, boost] = await Promise.all([
+      t.request(`/api/v1/statuses/${t.note.postId}`),
+      t.request(`/api/v1/statuses/${t.boost.repostId}`),
+    ]);
+
+    expect([note.status, boost.status]).toEqual([404, 404]);
+    expect(await note.json()).toEqual(notFound);
+    expect(await boost.json()).toEqual(notFound);
+  });
+
+  it('userId のないアプリトークンは未認証として扱い、リモートの投稿を 404 にする', async () => {
+    const t = await seedStatuses();
+    const { token } = await t.issueAppToken('read');
+
+    const response = await t.request(`/api/v1/statuses/${t.note.postId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('ログインするとリモートの投稿を返し、スコープが足りないトークンは 403 にする', async () => {
+    const t = await seedStatuses();
+    const writeOnly = await t.bearerFor('write');
+
+    const [logged, forbidden] = await Promise.all([
+      t.request(`/api/v1/statuses/${t.note.postId}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/statuses/${t.note.postId}`, { headers: writeOnly }),
+    ]);
+
+    expect(logged.status).toBe(200);
+    expect(StatusSchema.parse(await logged.json())).toMatchObject({ id: t.note.postId, uri: t.note.uri });
+    expect(forbidden.status).toBe(403);
   });
 
   it('Bearer と Cookie の利用者の状態を入れる', async () => {

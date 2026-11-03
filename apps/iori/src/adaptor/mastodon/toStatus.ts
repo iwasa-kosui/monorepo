@@ -2,9 +2,12 @@ import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import type { Account, MediaAttachment, PreviewCard, Status } from './entities.ts';
+import { toSafeApiUrl } from './safeApiUrl.ts';
+import { sanitizeStatusContent } from './sanitizeContent.ts';
 import { toIsoString } from './time.ts';
 
 export type ToStatusOptions = Readonly<{
+  baseUrl: string;
   account: Account;
   mediaAttachmentIds: ReadonlyArray<string>;
   repliesCount: number;
@@ -18,15 +21,17 @@ type LinkPreviews = PostWithAuthor['linkPreviews'];
 const toMediaAttachments = (
   post: PostWithAuthor,
   mediaAttachmentIds: ReadonlyArray<string>,
+  baseUrl: string,
 ): MediaAttachment[] =>
   post.images.flatMap((image, index): MediaAttachment[] => {
     const id = mediaAttachmentIds[index];
-    if (id === undefined) return [];
+    const url = toSafeApiUrl(image.url, baseUrl);
+    if (id === undefined || url === undefined) return [];
     return [{
       id,
       type: 'image',
-      url: image.url,
-      preview_url: image.url,
+      url,
+      preview_url: url,
       remote_url: null,
       meta: null,
       description: image.altText,
@@ -34,11 +39,13 @@ const toMediaAttachments = (
     }];
   });
 
-const toCard = (linkPreviews: LinkPreviews): PreviewCard | null => {
+const toCard = (linkPreviews: LinkPreviews, baseUrl: string): PreviewCard | null => {
   const first = linkPreviews[0];
   if (first === undefined) return null;
+  const url = toSafeApiUrl(first.url, baseUrl);
+  if (url === undefined) return null;
   return {
-    url: first.url,
+    url,
     title: first.title ?? '',
     description: first.description ?? '',
     type: 'link',
@@ -50,40 +57,52 @@ const toCard = (linkPreviews: LinkPreviews): PreviewCard | null => {
     html: '',
     width: 0,
     height: 0,
-    image: first.imageUrl,
+    image: toSafeApiUrl(first.imageUrl, baseUrl) ?? null,
     image_description: '',
     embed_url: '',
     blurhash: null,
   };
 };
 
-const toPostUri = (post: PostWithAuthor, account: Account): string =>
-  post.type === 'remote' ? post.uri : `${account.uri}/posts/${post.postId}`;
+const toPostUrls = (
+  post: PostWithAuthor,
+  options: ToStatusOptions,
+): Readonly<{ uri: string; url: string | null }> => {
+  if (post.type === 'local') {
+    const uri = `${options.account.uri}/posts/${post.postId}`;
+    return { uri, url: uri };
+  }
+  const safe = toSafeApiUrl(post.uri, options.baseUrl);
+  return {
+    uri: safe ?? new URL(`/api/v1/statuses/${post.postId}`, options.baseUrl).href,
+    url: safe ?? null,
+  };
+};
 
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
-  const uri = toPostUri(post, options.account);
+  const { uri, url } = toPostUrls(post, options);
   return {
     id: post.postId,
     uri,
     created_at: toIsoString(post.createdAt),
     account: options.account,
-    content: post.content,
+    content: sanitizeStatusContent(post.content),
     visibility: 'public',
     sensitive: false,
     spoiler_text: '',
-    media_attachments: toMediaAttachments(post, options.mediaAttachmentIds),
+    media_attachments: toMediaAttachments(post, options.mediaAttachmentIds, options.baseUrl),
     mentions: [],
     tags: [],
     emojis: [],
     reblogs_count: post.repostCount,
     favourites_count: post.likeCount,
     replies_count: options.repliesCount,
-    url: uri,
+    url,
     in_reply_to_id: options.inReplyToId,
     in_reply_to_account_id: options.inReplyToAccountId,
     reblog: null,
     poll: null,
-    card: toCard(post.linkPreviews),
+    card: toCard(post.linkPreviews, options.baseUrl),
     language: null,
     edited_at: null,
     favourited: post.liked,
@@ -95,17 +114,20 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
       reactions: post.reactions.map((reaction) => ({
         emoji: reaction.emoji,
         count: reaction.count,
-        url: reaction.emojiImageUrl,
+        url: toSafeApiUrl(reaction.emojiImageUrl, options.baseUrl) ?? null,
         me: options.myReactionEmojis.has(reaction.emoji),
       })),
-      link_previews: post.linkPreviews.map((preview) => ({
-        url: preview.url,
-        title: preview.title,
-        description: preview.description,
-        image: preview.imageUrl,
-        site_name: preview.siteName,
-        favicon: preview.faviconUrl,
-      })),
+      link_previews: post.linkPreviews.flatMap((preview) => {
+        const url = toSafeApiUrl(preview.url, options.baseUrl);
+        return url === undefined ? [] : [{
+          url,
+          title: preview.title,
+          description: preview.description,
+          image: toSafeApiUrl(preview.imageUrl, options.baseUrl) ?? null,
+          site_name: preview.siteName,
+          favicon: toSafeApiUrl(preview.faviconUrl, options.baseUrl) ?? null,
+        }];
+      }),
     },
   };
 };

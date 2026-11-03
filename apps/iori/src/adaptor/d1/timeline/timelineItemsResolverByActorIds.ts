@@ -1,8 +1,9 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
@@ -42,6 +43,7 @@ const cursorOf = (id: string) =>
   sql`select ${cursorItem.createdAt}, ${cursorItem.timelineItemId} from ${timelineItemsTable} ${cursorItem}
     where (${cursorItem.type} = 'post' and ${cursorItem.postId} = ${id})
       or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} = ${id})
+    order by ${cursorItem.createdAt} desc, ${cursorItem.timelineItemId} desc
     limit 1`;
 
 export const createD1TimelineItemsResolverByActorIds = (
@@ -99,7 +101,8 @@ export const createD1TimelineItemsResolverByActorIds = (
         ? Promise.resolve([])
         : db.select()
           .from(postImagesTable)
-          .where(inArray(postImagesTable.postId, postIds)),
+          .where(inArray(postImagesTable.postId, postIds))
+          .orderBy(asc(postImagesTable.createdAt), asc(postImagesTable.imageId)),
       currentActorId !== undefined && postIds.length > 0
         ? db.select({ postId: repostsTable.postId })
           .from(repostsTable)
@@ -138,10 +141,10 @@ export const createD1TimelineItemsResolverByActorIds = (
         : Promise.resolve([]),
     ]);
 
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const image of imageRows) {
       const images = imagesByPostId.get(image.postId) ?? [];
-      images.push({ url: image.url, altText: image.altText });
+      images.push({ imageId: ImageId.orThrow(image.imageId), url: image.url, altText: image.altText });
       imagesByPostId.set(image.postId, images);
     }
 

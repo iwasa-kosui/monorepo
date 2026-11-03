@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { createIoriApp } from '../../../appFactory.tsx';
 import { StatusSchema } from '../../mastodon/entities.ts';
+import { createMastodonAuthn } from '../mastodonAuthn.ts';
+import { createWorkerMastodonTimelinesRouter } from '../workerMastodonTimelinesRouter.ts';
 import { idsOf, linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
+import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
 const parseStatuses = (body: unknown) => (body as unknown[]).map((item) => StatusSchema.parse(item));
 
@@ -45,7 +49,7 @@ describe('GET /api/v1/timelines/home', () => {
     expect(note?.iori?.reactions.find((reaction) => reaction.emoji === '👍')?.me).toBe(false);
     expect(mine).toMatchObject({
       replies_count: 1,
-      media_attachments: [{ id: imageId, type: 'image', url: '/uploads/a.png', description: 'alt' }],
+      media_attachments: [{ id: imageId, type: 'image', url: 'https://iori.test/uploads/a.png', description: 'alt' }],
       iori: {
         link_previews: [{
           url: 'https://example.com',
@@ -75,6 +79,16 @@ describe('GET /api/v1/timelines/home', () => {
 
     expect(anonymous.status).toBe(401);
     expect(forbidden.status).toBe(403);
+  });
+
+  it('actor のない利用者は 422 にする', async () => {
+    const t = await seedHome();
+    const withoutActor = await t.bearerFor('read');
+
+    const response = await t.request('/api/v1/timelines/home', { headers: withoutActor });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 
   it('ミュートした相手の投稿を除く', async () => {
@@ -190,6 +204,35 @@ describe('GET /api/v1/timelines/public', () => {
     expect(parseStatuses(await signedIn.json())[0]?.favourited).toBe(true);
   });
 
+  it('ローカルの経路でも、トークンのスコープが足りなければ 403、Cookie とアプリトークンは通す', async () => {
+    const t = await seedPublic();
+    const writeOnly = await t.bearerFor('write');
+    const app = await t.issueAppToken('read');
+
+    const responses = await Promise.all([
+      t.request('/api/v1/timelines/public', { headers: writeOnly }),
+      t.request('/api/v1/timelines/public', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
+      t.request('/api/v1/timelines/public', { headers: { Authorization: `Bearer ${app.token}` } }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([403, 200, 200]);
+  });
+
+  it('ログイン中はミュートしたローカルのアクターの投稿を除く', async () => {
+    const t = await seedPublic();
+    const other = t.seed.addLocalActor('other');
+    const otherPost = t.seed.addLocalPost(other, 4_000);
+    t.seed.addMute(t.me.userId, other.actorId);
+
+    const [muted, anonymous] = await Promise.all([
+      t.request('/api/v1/timelines/public?local=true', { headers: t.me.bearer }),
+      t.request('/api/v1/timelines/public?local=true'),
+    ]);
+
+    expect(idsOf(await muted.json())).toEqual([t.local.postId]);
+    expect(idsOf(await anonymous.json())).toEqual([otherPost.postId, t.local.postId]);
+  });
+
   it('remote=true は未認証なら 401、スコープ不足なら 403、認証済みならリレーの投稿を返す', async () => {
     const t = await seedPublic();
     const writeOnly = await t.bearerFor('write');
@@ -222,5 +265,79 @@ describe('GET /api/v1/timelines/public', () => {
     expect(idsOf(await first.json())).toEqual([t.remote.postId]);
     expect(idsOf(await rest.json())).toEqual([second.postId]);
     expect(idsOf(await muted.json())).toEqual([t.remote.postId]);
+  });
+});
+
+describe('タイムラインの内部エラー', () => {
+  const setupFailing = (overrides: Record<string, unknown>) => {
+    const harness = createOAuthHarness();
+    const authn = createMastodonAuthn({
+      verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
+      sessionResolver: harness.memory.sessionResolver as never,
+    });
+    const ok = (val: unknown) => ({ resolve: async () => ({ ok: true, val }) });
+    const app = createIoriApp({
+      federationMiddleware: undefined,
+      registerRoutes: (root) => {
+        root.route(
+          '/api',
+          createWorkerMastodonTimelinesRouter({
+            authn,
+            actorResolverByUserId: ok({ id: '00000000-0000-4000-8000-000000000001' }),
+            actorsResolverByFollowerId: ok([]),
+            mutedActorIdsResolverByUserId: ok([]),
+            timelineItemsResolverByActorIds: ok([]),
+            localPostsResolverByPage: ok([]),
+            federatedTimelineItemsResolver: ok([]),
+            statusAssembler: { assemble: async () => [], assembleAccounts: async () => [] },
+            ...overrides,
+          } as never),
+        );
+      },
+      serveAsset: async () => undefined,
+      serveUpload: async () => undefined,
+      serveOgImage: async () => new Response('og', { status: 200 }),
+    });
+    return { harness, app };
+  };
+
+  const internalError = { error: 'Internal server error' };
+
+  it('Resolver の失敗は 401 ではなく 500 にする', async () => {
+    const failure = { resolve: async () => ({ ok: false }) };
+    const cases = [
+      { actorResolverByUserId: failure },
+      { actorsResolverByFollowerId: failure },
+      { timelineItemsResolverByActorIds: failure },
+    ];
+    for (const override of cases) {
+      const { harness, app } = setupFailing(override);
+      const { token } = await harness.issueUserToken('read');
+
+      const response = await app.request(`${ORIGIN}/api/v1/timelines/home`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual(internalError);
+    }
+  });
+
+  it('public の Resolver の失敗と、組み立ての例外も 500 にする', async () => {
+    const failure = { resolve: async () => ({ ok: false }) };
+    const throwing = {
+      assemble: async () => {
+        throw new Error('boom');
+      },
+      assembleAccounts: async () => [],
+    };
+    for (const override of [{ localPostsResolverByPage: failure }, { statusAssembler: throwing }]) {
+      const { app } = setupFailing(override);
+
+      const response = await app.request(`${ORIGIN}/api/v1/timelines/public`);
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual(internalError);
+    }
   });
 });

@@ -50,14 +50,17 @@ export type StatusAssembler = Readonly<{
   ) => Promise<Account[]>;
 }>;
 
-const mediaAttachmentIdsOf = (post: PostWithAuthor, extras: PostExtras | undefined): string[] => {
-  const unused = [...(extras?.images ?? [])];
-  return post.images.flatMap((image) => {
-    const index = unused.findIndex((candidate) => candidate.url === image.url);
-    if (index < 0) return [];
-    return [unused.splice(index, 1)[0]!.imageId];
-  });
-};
+export const statusSourceId = (source: StatusSource): string =>
+  source.type === 'repost' ? source.repostId : source.post.postId;
+
+export const isRemoteSource = (source: StatusSource): boolean => source.post.type === 'remote';
+
+export class StatusAssemblyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StatusAssemblyError';
+  }
+}
 
 export const createStatusAssembler = (
   { accountProfilesResolver, postExtrasResolver }: StatusAssemblerDeps,
@@ -67,13 +70,13 @@ export const createStatusAssembler = (
     requestUrl: string,
   ): Promise<ReadonlyMap<ActorId, Account>> => {
     const profiles = await accountProfilesResolver.resolve(actorIds);
-    if (!profiles.ok) return new Map();
+    if (!profiles.ok) throw new StatusAssemblyError('Failed to resolve account profiles');
     const options = defaultImageUrls(requestUrl);
     return new Map([...profiles.val].map(([actorId, profile]) => {
       const source: AccountSource = profile.type === 'local'
         ? { type: 'local', user: profile.user, actor: profile.actor }
         : { type: 'remote', actor: profile.actor };
-      return [actorId, toAccount(source, { ...options, ...profile.stats })];
+      return [actorId, toAccount(source, { ...options, baseUrl: requestUrl, ...profile.stats })];
     }));
   };
 
@@ -90,7 +93,8 @@ export const createStatusAssembler = (
       postExtrasResolver.resolve({ posts, currentActorId: viewerActorId }),
       resolveAccounts(actorIds, requestUrl),
     ]);
-    const extrasByPostId: ReadonlyMap<PostId, PostExtras> = extras.ok ? extras.val : new Map();
+    if (!extras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
+    const extrasByPostId: ReadonlyMap<PostId, PostExtras> = extras.val;
 
     const statusByPostId = new Map<PostId, Status>();
     for (const post of posts) {
@@ -100,8 +104,9 @@ export const createStatusAssembler = (
       statusByPostId.set(
         post.postId,
         toStatus(post, {
+          baseUrl: requestUrl,
           account,
-          mediaAttachmentIds: mediaAttachmentIdsOf(post, postExtras),
+          mediaAttachmentIds: post.images.map((image) => image.imageId),
           repliesCount: postExtras?.repliesCount ?? 0,
           inReplyToId: postExtras?.inReplyTo?.postId ?? null,
           inReplyToAccountId: postExtras?.inReplyTo?.actorId ?? null,

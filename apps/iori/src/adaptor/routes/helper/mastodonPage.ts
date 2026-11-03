@@ -50,13 +50,13 @@ export const linkHeaderOf = (
 export const respondWithPage = <T>(
   c: Context,
   items: ReadonlyArray<T>,
-  idOf: (item: T) => string,
+  rowIds: ReadonlyArray<string>,
 ): Response => {
-  const first = items[0];
-  const last = items[items.length - 1];
+  const first = rowIds[0];
+  const last = rowIds[rowIds.length - 1];
   const link = first === undefined || last === undefined
     ? undefined
-    : linkHeaderOf(c.req.url, { first: idOf(first), last: idOf(last) });
+    : linkHeaderOf(c.req.url, { first, last });
   if (link !== undefined) c.header('Link', link);
   return c.json(items);
 };

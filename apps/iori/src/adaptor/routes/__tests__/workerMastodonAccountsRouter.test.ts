@@ -64,6 +64,19 @@ describe('GET /api/v1/accounts/:id/followers と /following', () => {
     expect(response.headers.get('Link')).toBeNull();
   });
 
+  it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
+    const t = await seedFollows();
+    const statusesOnly = await t.bearerFor('read:statuses');
+
+    const [forbidden, cookie, account] = await Promise.all([
+      t.request(`/api/v1/accounts/${t.me.actorId}/followers`, { headers: statusesOnly }),
+      t.request(`/api/v1/accounts/${t.me.actorId}/followers`, { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
+      t.request(`/api/v1/accounts/${t.me.actorId}`, { headers: statusesOnly }),
+    ]);
+
+    expect([forbidden.status, cookie.status, account.status]).toEqual([403, 200, 403]);
+  });
+
   it('存在しないアカウントと不正な ID は 404 にする', async () => {
     const t = await seedFollows();
 
@@ -174,7 +187,7 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('ローカルのアカウントの投稿とブーストを新しい順に返し、削除済みを除く', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers: t.me.bearer });
 
     expect(response.status).toBe(200);
     const statuses = parseStatuses(await response.json());
@@ -185,6 +198,57 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
       content: '',
     });
     expect(statuses[1]).toMatchObject({ id: t.reply.postId, account: { id: t.me.actorId } });
+  });
+
+  it('未認証ではリモートの投稿のブーストを除き、ローカルの投稿は返す', async () => {
+    const t = await seedAccounts();
+
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`);
+
+    expect(await statusIds(response)).toEqual(t.newestFirst.slice(1));
+  });
+
+  it('未認証ではリモートのアカウントの投稿を返さず、Link も付けない', async () => {
+    const t = await seedAccounts();
+
+    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+    expect(response.headers.get('Link')).toBeNull();
+  });
+
+  it('userId のないアプリトークンは未認証として扱う', async () => {
+    const t = await seedAccounts();
+    const { token } = await t.issueAppToken('read');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const [mine, alices] = await Promise.all([
+      t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers }),
+      t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers }),
+    ]);
+
+    expect(await statusIds(mine)).toEqual(t.newestFirst.slice(1));
+    expect(await alices.json()).toEqual([]);
+  });
+
+  it('Link は絞り込む前の行から作る', async () => {
+    const t = await seedAccounts();
+
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?limit=1`);
+
+    expect(await response.json()).toEqual([]);
+    expect(linkOf(response, 'next')?.searchParams.get('max_id')).toBe(t.boost.repostId);
+    expect(linkOf(response, 'prev')?.searchParams.get('min_id')).toBe(t.boost.repostId);
+  });
+
+  it('ユーザーのトークンは read:statuses を求め、足りなければ 403 にする', async () => {
+    const t = await seedAccounts();
+    const accountsOnly = await t.bearerFor('read:accounts');
+
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers: accountsOnly });
+
+    expect(response.status).toBe(403);
   });
 
   it('Bearer の利用者に自分の操作の状態を付ける', async () => {
@@ -200,7 +264,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('exclude_reblogs=true はブーストを除く', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?exclude_reblogs=true`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?exclude_reblogs=true`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual(t.newestFirst.slice(1));
   });
@@ -209,8 +275,8 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     const t = await seedAccounts();
 
     const [mine, alices] = await Promise.all([
-      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?exclude_replies=true`),
-      t.request(`/api/v1/accounts/${t.alice.actorId}/statuses?exclude_replies=true`),
+      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?exclude_replies=true`, { headers: t.me.bearer }),
+      t.request(`/api/v1/accounts/${t.alice.actorId}/statuses?exclude_replies=true`, { headers: t.me.bearer }),
     ]);
 
     expect(await statusIds(mine)).toEqual(t.newestFirst.filter((id) => id !== t.reply.postId));
@@ -220,7 +286,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('only_media=true は画像のある投稿だけを返す', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?only_media=true`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?only_media=true`, {
+      headers: t.me.bearer,
+    });
 
     const statuses = parseStatuses(await response.json());
     expect(statuses.map((status) => status.id)).toEqual([t.media.postId]);
@@ -230,7 +298,7 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('リモートのアカウントは保存している投稿だけを返し、ブーストを含めない', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`);
+    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers: t.me.bearer });
 
     expect(await statusIds(response)).toEqual([
       t.note.postId,
@@ -244,8 +312,8 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     const t = await seedAccounts();
 
     const responses = await Promise.all([
-      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?pinned=true`),
-      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?tagged=iori`),
+      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?pinned=true`, { headers: t.me.bearer }),
+      t.request(`/api/v1/accounts/${t.me.actorId}/statuses?tagged=iori`, { headers: t.me.bearer }),
     ]);
 
     for (const response of responses) {
@@ -258,7 +326,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('pinned=false と空の tagged は絞り込まない', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?pinned=false&tagged=`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?pinned=false&tagged=`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual(t.newestFirst);
   });
@@ -266,11 +336,11 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('limit と max_id と Link ヘッダーでページを送る', async () => {
     const t = await seedAccounts();
 
-    const first = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?limit=2`);
+    const first = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?limit=2`, { headers: t.me.bearer });
     const next = linkOf(first, 'next');
-    const second = await t.request(`${next?.pathname}${next?.search}`);
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
     const secondNext = linkOf(second, 'next');
-    const third = await t.request(`${secondNext?.pathname}${secondNext?.search}`);
+    const third = await t.request(`${secondNext?.pathname}${secondNext?.search}`, { headers: t.me.bearer });
 
     expect(await statusIds(first)).toEqual(t.newestFirst.slice(0, 2));
     expect(next?.searchParams.get('max_id')).toBe(t.reply.postId);
@@ -282,7 +352,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('同じ時刻の投稿を (createdAt, id) の順で区切る', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?max_id=${t.tieB.postId}`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?max_id=${t.tieB.postId}`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual(t.newestFirst.slice(3));
   });
@@ -290,7 +362,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('ブーストの id も max_id に使える', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?max_id=${t.boost.repostId}`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?max_id=${t.boost.repostId}`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual(t.newestFirst.slice(1));
   });
@@ -298,7 +372,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('min_id は直後の投稿を取り、新しい順に返す', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?min_id=${t.first.postId}&limit=2`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?min_id=${t.first.postId}&limit=2`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual([t.tieA.postId, t.media.postId]);
     expect(linkOf(response, 'prev')?.searchParams.get('min_id')).toBe(t.tieA.postId);
@@ -308,7 +384,9 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
   it('since_id は新しい側から返す', async () => {
     const t = await seedAccounts();
 
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?since_id=${t.media.postId}&limit=2`);
+    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?since_id=${t.media.postId}&limit=2`, {
+      headers: t.me.bearer,
+    });
 
     expect(await statusIds(response)).toEqual(t.newestFirst.slice(0, 2));
   });
@@ -359,6 +437,7 @@ describe('アカウントのルーターの登録順', () => {
           createWorkerMastodonAccountsRouter({
             authn,
             actorResolverByUserId: {} as never,
+            actorResolverById: {} as never,
             accountStatusItemsResolverByActorId: {} as never,
             actorIdsResolverByFollowerId: {} as never,
             actorIdsResolverByFollowingId: {} as never,

@@ -48,6 +48,9 @@ export const LinkPreviewCard = ({ preview }: Props) => {
                 alt=''
                 class='w-4 h-4 flex-shrink-0'
                 loading='lazy'
+                onError={(e: Event) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
               />
             )}
             <span class='truncate'>{preview.site_name ?? displayUrl}</span>

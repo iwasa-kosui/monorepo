@@ -1,6 +1,7 @@
 import type { Context, Federation } from '@fedify/fedify';
 import type { RA, ResultAsync } from '@iwasa-kosui/result';
 
+import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import type { StatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
@@ -92,6 +93,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   userResolver: UserResolver;
   userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
+  actorResolverById: ActorResolverById;
   accountStatsResolver: AccountStatsResolverByActorId;
   actorsResolverByFollowerId: ActorsResolverByFollowerId;
   mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;

@@ -2,6 +2,7 @@ import type { LocalActor, RemoteActor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Account } from './entities.ts';
+import { toSafeApiUrl } from './safeApiUrl.ts';
 import { toDateString, toIsoString } from './time.ts';
 
 export type AccountSource =
@@ -9,6 +10,7 @@ export type AccountSource =
   | Readonly<{ type: 'remote'; actor: RemoteActor }>;
 
 export type ToAccountOptions = Readonly<{
+  baseUrl: string;
   defaultAvatarUrl: string;
   defaultHeaderUrl: string;
   followersCount: number;
@@ -40,17 +42,27 @@ const resolveRemoteIdentity = (actor: RemoteActor): Readonly<{ username: string;
 
 const toAccountOf = (
   props: Readonly<
-    { id: string; username: string; acct: string; uri: string; url: string; logoUri: string | undefined }
+    {
+      id: string;
+      username: string;
+      acct: string;
+      uri: string;
+      url: string;
+      fallbackPath: string;
+      logoUri: string | undefined;
+    }
   >,
   options: ToAccountOptions,
 ): Account => {
-  const avatar = props.logoUri ?? options.defaultAvatarUrl;
+  const avatar = toSafeApiUrl(props.logoUri, options.baseUrl) ?? options.defaultAvatarUrl;
+  const fallbackUrl = new URL(props.fallbackPath, options.baseUrl).href;
+  const uri = toSafeApiUrl(props.uri, options.baseUrl) ?? fallbackUrl;
   return {
     id: props.id,
     username: props.username,
     acct: props.acct,
-    url: props.url,
-    uri: props.uri,
+    url: toSafeApiUrl(props.url, options.baseUrl) ?? uri,
+    uri,
     display_name: props.username,
     note: '',
     avatar,
@@ -82,6 +94,7 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
       acct: user.username,
       uri: actor.uri,
       url: actor.uri,
+      fallbackPath: `/users/${user.username}`,
       logoUri: actor.logoUri,
     }, options);
   }
@@ -93,6 +106,7 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
     acct,
     uri: actor.uri,
     url: actor.url ?? actor.uri,
+    fallbackPath: `/remote-users/${actor.id}`,
     logoUri: actor.logoUri,
   }, options);
 };

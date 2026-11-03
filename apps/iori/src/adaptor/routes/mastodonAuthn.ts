@@ -65,6 +65,13 @@ export const rejectUnlessUser = (
   return Scope.includesAny(principal.scopes, scopes) ? undefined : outsideScopes(c);
 };
 
+export const rejectUnlessTokenScope = (
+  c: Context,
+  principal: MastodonPrincipal | undefined,
+  scopes: ReadonlyArray<Scope>,
+): Response | undefined =>
+  principal?.source === 'token' && principal.userId !== null ? rejectUnlessUser(c, principal, scopes) : undefined;
+
 export const createMastodonAuthn = (
   { verifyAccessTokenUseCase, sessionResolver }: MastodonAuthnDeps,
 ): MastodonAuthn => {

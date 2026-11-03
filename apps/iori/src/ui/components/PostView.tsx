@@ -306,7 +306,9 @@ export const PostView = (
           {/* Link previews */}
           {linkPreviews.length > 0 && (
             <div class='mt-3 space-y-2'>
-              {linkPreviews.map((preview) => <LinkPreviewCard key={preview.url} preview={preview} />)}
+              {linkPreviews.map((preview, index) => (
+                <LinkPreviewCard key={`${preview.url}#${index}`} preview={preview} />
+              ))}
             </div>
           )}
           {/* Show thread link */}

@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import {
@@ -108,7 +109,11 @@ export const enrichPostRows = async (
       logoUri: row.actors.logoUri ?? undefined,
       liked: likedPostIds.has(postId),
       reposted: repostedPostIds.has(postId),
-      images: (imagesByPostId.get(postId) ?? []).map(({ url, altText }) => ({ url, altText })),
+      images: (imagesByPostId.get(postId) ?? []).map(({ imageId, url, altText }) => ({
+        imageId: ImageId.orThrow(imageId),
+        url,
+        altText,
+      })),
       likeCount: likeCountByPostId.get(postId) ?? 0,
       repostCount: repostCountByPostId.get(postId) ?? 0,
       reactions: (reactionsByPostId.get(postId) ?? []).map(({ emoji, emojiImageUrl, count }) => ({

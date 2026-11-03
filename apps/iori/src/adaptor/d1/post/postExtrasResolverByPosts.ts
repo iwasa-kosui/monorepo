@@ -1,14 +1,13 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
-import { ImageId } from '../../../domain/image/imageId.ts';
 import type { PostWithAuthor } from '../../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../../domain/post/postExtras.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
-import { emojiReactsTable, localPostsTable, postImagesTable, postsTable, remotePostsTable } from '../schema.ts';
+import { emojiReactsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 type ReplyTarget = Readonly<{ postId: PostId; actorId: ActorId }>;
 
@@ -47,11 +46,7 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
       const remoteParentUris = parentUris.filter((uri) => localPostIdOf(uri) === undefined);
       const none = Promise.resolve([]);
 
-      const [images, localReplies, remoteReplies, localParents, remoteParents, myReactions] = await Promise.all([
-        db.select({ postId: postImagesTable.postId, imageId: postImagesTable.imageId, url: postImagesTable.url })
-          .from(postImagesTable)
-          .where(inArray(postImagesTable.postId, jsonEach(postIds)))
-          .orderBy(asc(postImagesTable.createdAt), asc(postImagesTable.imageId)),
+      const [localReplies, remoteReplies, localParents, remoteParents, myReactions] = await Promise.all([
         db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
           .from(localPostsTable)
           .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
@@ -80,10 +75,6 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
             ),
       ]);
 
-      const imagesByPostId = new Map<string, { imageId: ImageId; url: string }[]>();
-      for (const image of images) {
-        addTo(imagesByPostId, image.postId, { imageId: ImageId.orThrow(image.imageId), url: image.url });
-      }
       const reactionsByPostId = new Map<string, string[]>();
       for (const reaction of myReactions) {
         addTo(reactionsByPostId, reaction.postId, reaction.emoji);
@@ -117,7 +108,6 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
           ? parentByRemoteUri.get(parentUri)
           : parentByLocalPostId.get(localParentId);
         extras.set(post.postId, {
-          images: imagesByPostId.get(post.postId) ?? [],
           repliesCount: repliesByUri.get(ownUris[index]!) ?? 0,
           inReplyTo: inReplyTo ?? null,
           myReactionEmojis: reactionsByPostId.get(post.postId) ?? [],

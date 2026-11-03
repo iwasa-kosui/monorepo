@@ -2,14 +2,26 @@ import { Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
-import type { PostsWithAuthorResolverByPostIds, ThreadResolver } from '../../domain/post/post.ts';
+import { Scope } from '../../domain/oauth/scope.ts';
+import type { PostsWithAuthorResolverByPostIds, PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
-import type { UserId } from '../../domain/user/userId.ts';
 import type { Status } from '../mastodon/entities.ts';
-import type { StatusAssembler, StatusSource } from '../mastodon/statusAssembler.ts';
-import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+import {
+  isRemoteSource,
+  type StatusAssembler,
+  StatusAssemblyError,
+  type StatusSource,
+} from '../mastodon/statusAssembler.ts';
+import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
+import { resolveViewer } from './helper/mastodonViewer.ts';
+import {
+  getMastodonPrincipal,
+  type MastodonAuthEnv,
+  type MastodonAuthn,
+  rejectUnlessTokenScope,
+} from './mastodonAuthn.ts';
 
 export type WorkerMastodonStatusesRouterDeps = Readonly<{
   authn: MastodonAuthn;
@@ -21,6 +33,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
 }>;
 
 const recordNotFound = { error: 'Record not found' } as const;
+const readStatuses = Scope.orThrow('read:statuses');
 
 export const createWorkerMastodonStatusesRouter = ({
   authn,
@@ -30,14 +43,6 @@ export const createWorkerMastodonStatusesRouter = ({
   threadResolver,
   statusAssembler,
 }: WorkerMastodonStatusesRouterDeps): Hono<MastodonAuthEnv> => {
-  const resolveViewerActorId = async (userId: UserId | null | undefined): Promise<ActorId | undefined> => {
-    if (userId === null || userId === undefined) {
-      return undefined;
-    }
-    const actor = await actorResolverByUserId.resolve(userId);
-    return actor.ok ? actor.val?.id : undefined;
-  };
-
   const resolveSource = async (
     id: PostId,
     viewerActorId: ActorId | undefined,
@@ -46,18 +51,24 @@ export const createWorkerMastodonStatusesRouter = ({
       postsWithAuthorResolverByPostIds.resolve({ postIds: [id], currentActorId: viewerActorId }),
       repostResolverById.resolve(RepostId.orThrow(id)),
     ]);
-    const post = posts.ok ? posts.val.get(id) : undefined;
+    if (!posts.ok || !repost.ok) {
+      throw new StatusAssemblyError('Failed to resolve the status');
+    }
+    const post = posts.val.get(id);
     if (post !== undefined) {
       return { type: 'post', post };
     }
-    if (!repost.ok || repost.val === undefined) {
+    if (repost.val === undefined) {
       return undefined;
     }
     const original = await postsWithAuthorResolverByPostIds.resolve({
       postIds: [repost.val.postId],
       currentActorId: viewerActorId,
     });
-    const originalPost = original.ok ? original.val.get(repost.val.postId) : undefined;
+    if (!original.ok) {
+      throw new StatusAssemblyError('Failed to resolve the reposted status');
+    }
+    const originalPost = original.val.get(repost.val.postId);
     return originalPost === undefined ? undefined : {
       type: 'repost',
       repostId: repost.val.repostId,
@@ -68,38 +79,67 @@ export const createWorkerMastodonStatusesRouter = ({
   };
 
   return new Hono<MastodonAuthEnv>()
+    .onError(handleInternalError)
     .get('/v1/statuses/:id', authn.optionalAuth, async (c) => {
+      const principal = getMastodonPrincipal(c);
+      const rejection = rejectUnlessTokenScope(c, principal, [readStatuses]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
       const id = PostId.parse(c.req.param('id'));
       if (!id.ok) {
         return c.json(recordNotFound, 404);
       }
-      const viewerActorId = await resolveViewerActorId(getMastodonPrincipal(c)?.userId);
-      const source = await resolveSource(id.val, viewerActorId);
-      const [status] = source === undefined
-        ? []
-        : await statusAssembler.assemble({ sources: [source], viewerActorId, requestUrl: c.req.url });
+      const viewer = await resolveViewer(actorResolverByUserId, principal);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const source = await resolveSource(id.val, viewer.viewerActorId);
+      if (source === undefined || (viewer.viewerActorId === undefined && isRemoteSource(source))) {
+        return c.json(recordNotFound, 404);
+      }
+      const [status] = await statusAssembler.assemble({
+        sources: [source],
+        viewerActorId: viewer.viewerActorId,
+        requestUrl: c.req.url,
+      });
       return status === undefined ? c.json(recordNotFound, 404) : c.json(status);
     })
     .get('/v1/statuses/:id/context', authn.optionalAuth, async (c) => {
+      const principal = getMastodonPrincipal(c);
+      const rejection = rejectUnlessTokenScope(c, principal, [readStatuses]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
       const id = PostId.parse(c.req.param('id'));
       if (!id.ok) {
         return c.json(recordNotFound, 404);
       }
-      const viewerActorId = await resolveViewerActorId(getMastodonPrincipal(c)?.userId);
+      const viewer = await resolveViewer(actorResolverByUserId, principal);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const { viewerActorId } = viewer;
       const thread = await threadResolver.resolve({ postId: id.val, currentActorId: viewerActorId });
-      if (!thread.ok || thread.val.currentPost === null) {
+      if (!thread.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const { currentPost } = thread.val;
+      if (currentPost === null || (viewerActorId === undefined && currentPost.type === 'remote')) {
         return c.json(recordNotFound, 404);
       }
-      const descendants = [...thread.val.descendants]
-        .sort((a, b) => a.createdAt - b.createdAt || (a.postId < b.postId ? -1 : 1));
+      const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
+        viewerActorId === undefined ? posts.filter((post) => post.type !== 'remote') : [...posts];
+      const ancestors = visible(thread.val.ancestors);
+      const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({
-        sources: [...thread.val.ancestors, ...descendants].map((post): StatusSource => ({ type: 'post', post })),
+        sources: [...ancestors, ...descendants].map((post): StatusSource => ({ type: 'post', post })),
         viewerActorId,
         requestUrl: c.req.url,
       });
       const statusById = new Map<string, Status>(statuses.map((status) => [status.id, status]));
       const pick = (posts: ReadonlyArray<{ postId: string }>): Status[] =>
         posts.flatMap((post) => statusById.get(post.postId) ?? []);
-      return c.json({ ancestors: pick(thread.val.ancestors), descendants: pick(descendants) });
+      return c.json({ ancestors: pick(ancestors), descendants: pick(descendants) });
     });
 };

@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
@@ -74,10 +75,10 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
         .execute()
       : [];
 
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const imageRow of imageRows) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
 
