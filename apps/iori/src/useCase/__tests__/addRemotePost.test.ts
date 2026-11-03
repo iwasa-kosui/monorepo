@@ -109,6 +109,30 @@ describe('AddRemotePostUseCase', () => {
       }
     });
 
+    it('受信した宛先を投稿の作成イベントに渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Direct',
+        uri: 'https://remote.example.com/posts/direct',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'direct',
+        recipientActorUris: ['https://iori.test/users/kosui'],
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventPayload: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
+        }),
+      );
+    });
+
     it('画像付きリモート投稿を追加できる', async () => {
       const deps = createDeps();
 

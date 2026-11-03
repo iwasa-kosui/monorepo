@@ -30,6 +30,13 @@ describe('createWorkersAiTextGenerator summarize', () => {
     expect(result).toEqual({ ok: true, val: 'from choices' });
   });
 
+  it('returns a JSON string when response is an already parsed array', async () => {
+    const run = vi.fn(async () => ({ response: ['a', 'b'] }));
+    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
+    expect(result).toEqual({ ok: true, val: '["a","b"]' });
+    if (result.ok) expect(JSON.parse(result.val)).toEqual(['a', 'b']);
+  });
+
   it.each([{}, { response: '' }, { response: 1 }, { choices: [] }, { choices: [{ message: { content: '' } }] }, null])(
     'returns AiError for an empty or malformed response %j',
     async (raw) => {
@@ -81,6 +88,24 @@ describe('createWorkersAiTextGenerator generate', () => {
     const run = vi.fn(async () => ({ response: '' }));
     const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
     expect(result).toMatchObject({ ok: false, err: { type: 'AiError' } });
+  });
+
+  it.each([
+    { choices: [{ message: { content: '', reasoning_content: '考え中' } }] },
+    { choices: [{ message: { content: null, reasoning_content: '考え中' } }] },
+  ])('reports only reasoning content when the body is empty for %j', async (raw) => {
+    const run = vi.fn(async () => raw);
+    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
+    expect(result).toEqual({
+      ok: false,
+      err: { type: 'AiError', message: 'Workers AI returned only reasoning content.' },
+    });
+  });
+
+  it('keeps the no text message when reasoning content is empty', async () => {
+    const run = vi.fn(async () => ({ choices: [{ message: { content: '', reasoning_content: '' } }] }));
+    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
+    expect(result).toEqual({ ok: false, err: { type: 'AiError', message: 'Workers AI returned no text.' } });
   });
 
   it('does not call run when input is empty', async () => {

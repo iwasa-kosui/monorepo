@@ -6,6 +6,9 @@ import { createOnCreate } from './onCreate.ts';
 
 const followersId = new URL('https://remote.example/users/alice/followers');
 const publicUri = new URL('https://www.w3.org/ns/activitystreams#Public');
+const origin = 'https://iori.test';
+const kosuiId = new URL('https://iori.test/users/kosui');
+const noRecipients = { toIds: [], ccIds: [], btoIds: [], bccIds: [], audienceIds: [] };
 
 describe('createOnCreate', () => {
   it('awaits recursive reply fetching before resolving', async () => {
@@ -24,10 +27,10 @@ describe('createOnCreate', () => {
     });
     const activity = {
       getObject: vi.fn(async () => note),
-      toIds: [],
-      ccIds: [],
+      ...noRecipients,
     } as unknown as Create;
     const listener = createOnCreate({
+      origin,
       inboxActorResolver: {
         resolve: async () =>
           RA.ok({
@@ -59,6 +62,7 @@ describe('createOnCreate', () => {
       run: vi.fn(async () => RA.ok({ actor: { uri: 'https://remote.example/users/alice' } } as never)),
     };
     const listener = createOnCreate({
+      origin,
       inboxActorResolver: {
         resolve: async () =>
           RA.ok({
@@ -72,8 +76,7 @@ describe('createOnCreate', () => {
     });
     const create = {
       getObject: vi.fn(async () => note),
-      toIds: [],
-      ccIds: [],
+      ...noRecipients,
       ...activity,
     } as unknown as Create;
     await listener({ lookupObject: vi.fn() } as never, create);
@@ -107,5 +110,35 @@ describe('createOnCreate', () => {
     const addRemotePost = await run(note);
 
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
+  });
+
+  it('records only the local actors addressed by the Note and the Create', async () => {
+    const note = new Note({
+      id: new URL('https://remote.example/posts/1'),
+      content: 'hi',
+      tos: [kosuiId, followersId],
+      ccs: [publicUri],
+      bccs: [new URL('https://iori.test/users/hanako')],
+    });
+
+    const addRemotePost = await run(note, { btoIds: [new URL('https://iori.test/users/taro')] });
+
+    expect(addRemotePost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientActorUris: [
+          'https://iori.test/users/kosui',
+          'https://iori.test/users/hanako',
+          'https://iori.test/users/taro',
+        ],
+      }),
+    );
+  });
+
+  it('records no recipients when no local actor is addressed', async () => {
+    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', tos: [publicUri] });
+
+    const addRemotePost = await run(note);
+
+    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ recipientActorUris: [] }));
   });
 });

@@ -11,6 +11,7 @@ import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
 import { resolvePostsWithAuthorByIds } from '../post/postWithAuthorBatch.ts';
+import { visibleToViewer } from '../post/visibleToViewer.ts';
 import { federatedTimelineItemsTable, postsTable } from '../schema.ts';
 
 const cursorItem = alias(federatedTimelineItemsTable, 'cursor_item');
@@ -23,7 +24,7 @@ const cursorOf = (postId: string) =>
     limit 1`;
 
 export const createD1FederatedTimelineItemsResolver = (db: IoriD1Db): FederatedTimelineItemsResolver => ({
-  resolve: async ({ page, mutedActorIds, currentActorId }) => {
+  resolve: async ({ page, mutedActorIds, currentActorId, onlyVisibleToViewer }) => {
     const columns = {
       createdAt: federatedTimelineItemsTable.receivedAt,
       id: federatedTimelineItemsTable.federatedTimelineItemId,
@@ -38,6 +39,7 @@ export const createD1FederatedTimelineItemsResolver = (db: IoriD1Db): FederatedT
       .innerJoin(postsTable, eq(federatedTimelineItemsTable.postId, postsTable.postId))
       .where(and(
         isNull(postsTable.deletedAt),
+        visibleToViewer({ currentActorId, onlyVisibleToViewer }),
         mutedActorIds.length === 0
           ? undefined
           : notInArray(postsTable.actorId, sql`(select value from json_each(${idsJson(mutedActorIds)}))`),

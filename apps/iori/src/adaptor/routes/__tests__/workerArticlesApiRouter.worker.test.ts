@@ -468,4 +468,120 @@ describe('createWorkerArticlesApiRouter', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('GET /v1/articles/:articleId のスレッドの絞り込み', () => {
+    const authorUserId = UserId.generate();
+    const viewerActorId = ActorId.generate();
+    const sessionId = SessionId.generate();
+    const createdAt = Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z'));
+    const article: Article = {
+      articleId: ArticleId.generate(),
+      authorActorId: ActorId.generate(),
+      authorUserId,
+      rootPostId: PostId.generate(),
+      title: 'Thread article',
+      status: 'published',
+      createdAt,
+      publishedAt: createdAt,
+      unpublishedAt: null,
+    };
+    const post = (content: string, visibility: 'public' | 'private' | 'direct' | null) => ({
+      type: 'remote' as const,
+      postId: PostId.generate(),
+      actorId: ActorId.generate(),
+      uri: `https://remote.example/notes/${content}`,
+      content,
+      createdAt,
+      inReplyToUri: null,
+      visibility,
+      username: Username.orThrow('alice'),
+      logoUri: undefined,
+      liked: false,
+      reposted: false,
+      images: [],
+      likeCount: 0,
+      repostCount: 0,
+      reactions: [],
+      linkPreviews: [],
+    });
+
+    const createApp = () => {
+      const sessionResolver = createMockSessionResolver();
+      sessionResolver.setSession({ sessionId, userId: authorUserId, expires: Instant.orThrow(Date.now() + 60_000) });
+      const resolveThread = vi.fn(async (input: { onlyVisibleToViewer?: boolean }) =>
+        RA.ok({
+          currentPost: null,
+          ancestors: [],
+          descendants: input.onlyVisibleToViewer === true
+            ? [post('public', 'public'), post('direct-to-viewer', 'direct')]
+            : [post('public', 'public'), post('direct', 'direct'), post('private', 'private'), post('unknown', null)],
+        })
+      );
+      const unused = { run: async () => RA.err({}) } as never;
+      const app = createIoriApp({
+        federationMiddleware: undefined,
+        registerRoutes: (router) => {
+          router.route(
+            '/api',
+            createWorkerArticlesApiRouter({
+              getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
+                articleResolver: { resolve: async () => RA.ok(article) },
+                threadResolver: { resolve: resolveThread as never },
+                articleBodyResolver: { resolve: async () => RA.ok(undefined) },
+              }),
+              getArticlesUseCase: unused,
+              createArticleUseCase: unused,
+              publishArticleUseCase: unused,
+              unpublishArticleUseCase: unused,
+              deleteArticleUseCase: unused,
+              publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
+              sessionResolver,
+              actorResolverByUserId: {
+                resolve: async () =>
+                  RA.ok({
+                    id: viewerActorId,
+                    userId: authorUserId,
+                    uri: 'https://worker.test/users/kosui',
+                    inboxUrl: 'https://worker.test/users/kosui/inbox',
+                    type: 'local' as const,
+                    logoUri: undefined,
+                  }),
+              },
+              createContext: () => createMockRequestContext(),
+            }),
+          );
+        },
+        serveAsset: async () => undefined,
+        serveUpload: async () => undefined,
+        serveOgImage: async () => new Response('not implemented', { status: 501 }),
+      });
+      return { app, resolveThread };
+    };
+
+    const contentsOf = async (response: Response) =>
+      ((await response.json()) as { thread: Array<{ content: string }> }).thread.map((item) => item.content);
+
+    it('匿名には宛先外の direct と private と記録のない返信を返さない', async () => {
+      const { app } = createApp();
+
+      const response = await app.request(`https://worker.test/api/v1/articles/${article.articleId}`);
+
+      expect(await contentsOf(response)).toEqual(['public']);
+    });
+
+    it('ログイン中は閲覧者の actor を渡し、宛先の direct を返す', async () => {
+      const { app, resolveThread } = createApp();
+
+      const response = await app.request(`https://worker.test/api/v1/articles/${article.articleId}`, {
+        headers: { Cookie: `sessionId=${sessionId}` },
+      });
+
+      expect(resolveThread).toHaveBeenCalledWith({
+        postId: article.rootPostId,
+        currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
+      });
+      expect(await contentsOf(response)).toEqual(['public', 'direct-to-viewer']);
+    });
+  });
 });

@@ -340,6 +340,7 @@ export const createWorkerRuntimePorts = async (
         postResolver,
       }),
       sendRepostUseCase: SendRepostUseCase.create({
+        origin: env.ORIGIN,
         sessionResolver,
         userResolver,
         actorResolverByUserId,
@@ -430,6 +431,7 @@ export const createWorkerRuntimePorts = async (
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
       sessionResolver,
+      actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,
       deleteOgImage: (articleId) => ogImageStore.delete(articleId),

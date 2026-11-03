@@ -30,6 +30,7 @@ import {
   usersTable,
 } from '../schema.ts';
 import { toVisibility } from './toVisibility.ts';
+import { visibleToViewer } from './visibleToViewer.ts';
 
 export type PostRow = {
   posts: typeof postsTable.$inferSelect;
@@ -162,16 +163,19 @@ export const resolvePostsWithAuthorByIds = async (
   db: IoriD1Db,
   postIds: ReadonlyArray<PostId>,
   currentActorId: ActorId | undefined,
+  onlyVisibleToViewer?: boolean,
 ): Promise<ReadonlyMap<PostId, PostWithAuthor>> => {
   if (postIds.length === 0) return new Map();
   const rows = await postRowsQuery(db).where(and(
     isNull(postsTable.deletedAt),
     inArray(postsTable.postId, sql`(select value from json_each(${idsJson(postIds)}))`),
+    visibleToViewer({ currentActorId, onlyVisibleToViewer }),
   ));
   const posts = await enrichPostRows(db, rows, currentActorId);
   return new Map(posts.map((post) => [post.postId, post]));
 };
 
 export const createD1PostsWithAuthorResolverByPostIds = (db: IoriD1Db): PostsWithAuthorResolverByPostIds => ({
-  resolve: async ({ postIds, currentActorId }) => RA.ok(await resolvePostsWithAuthorByIds(db, postIds, currentActorId)),
+  resolve: async ({ postIds, currentActorId, onlyVisibleToViewer }) =>
+    RA.ok(await resolvePostsWithAuthorByIds(db, postIds, currentActorId, onlyVisibleToViewer)),
 });

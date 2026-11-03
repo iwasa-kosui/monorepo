@@ -89,6 +89,7 @@ export type FederatedTimelineItemsResolver = Agg.Resolver<
     page: PageRequest;
     mutedActorIds: ReadonlyArray<ActorId>;
     currentActorId: ActorId | undefined;
+    onlyVisibleToViewer?: boolean;
   },
   FederatedTimelineItemWithPost[]
 >;

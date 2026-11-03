@@ -6,9 +6,10 @@ import type { Article, ArticleResolver, ArticleStatus } from '../../domain/artic
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBody, ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { ThreadResolver } from '../../domain/post/post.ts';
+import type { PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../getArticleWithThread.ts';
 
 const createArticle = (status: ArticleStatus, authorUserId: UserId): Article => ({
@@ -214,6 +215,92 @@ describe('GetArticleWithThreadUseCase', () => {
       if (result.ok) expect(result.val.body).toBeUndefined();
       expect(deps.resolveThread).toHaveBeenCalledTimes(1);
       expect(deps.resolveBody).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('スレッドの閲覧者による絞り込み', () => {
+    const postBase = {
+      createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+      inReplyToUri: null,
+      username: Username.orThrow('alice'),
+      logoUri: undefined,
+      liked: false,
+      reposted: false,
+      images: [],
+      likeCount: 0,
+      repostCount: 0,
+      reactions: [],
+      linkPreviews: [],
+    };
+    const remotePost = (content: string, visibility: 'public' | 'unlisted' | 'private' | 'direct' | null) =>
+      ({
+        ...postBase,
+        type: 'remote',
+        postId: PostId.generate(),
+        actorId: ActorId.generate(),
+        uri: `https://remote.example/notes/${content}`,
+        content,
+        visibility,
+      }) satisfies PostWithAuthor;
+    const localPost = (content: string) =>
+      ({
+        ...postBase,
+        type: 'local',
+        postId: PostId.generate(),
+        actorId: ActorId.generate(),
+        userId: authorUserId,
+        content,
+      }) satisfies PostWithAuthor;
+
+    const setup = () => {
+      const article = createArticle('published', authorUserId);
+      const root = localPost('root');
+      const publicReply = remotePost('public', 'public');
+      const unlistedReply = remotePost('unlisted', 'unlisted');
+      const directReply = remotePost('direct', 'direct');
+      const privateReply = remotePost('private', 'private');
+      const unknownReply = remotePost('unknown', null);
+      const resolveThread = vi.fn(async (input: { onlyVisibleToViewer?: boolean }) =>
+        RA.ok({
+          currentPost: root,
+          ancestors: [],
+          descendants: input.onlyVisibleToViewer === true
+            ? [publicReply, directReply, unlistedReply]
+            : [publicReply, directReply, privateReply, unknownReply, unlistedReply],
+        })
+      );
+      const deps = {
+        ...createDeps(article),
+        resolveThread,
+        threadResolver: { resolve: resolveThread as unknown as ThreadResolver['resolve'] },
+      };
+      return { article, deps, root, publicReply, unlistedReply, directReply, privateReply, unknownReply };
+    };
+
+    it('匿名にはローカルの投稿と public と unlisted の投稿だけを返す', async () => {
+      const { article, deps, root, publicReply, unlistedReply } = setup();
+
+      const result = await GetArticleWithThreadUseCase.create(deps).run({ articleId: article.articleId });
+
+      expect(result.ok && result.val.thread).toEqual([root, publicReply, unlistedReply]);
+      expect(deps.resolveThread).toHaveBeenCalledWith({ postId: article.rootPostId });
+    });
+
+    it('ログイン中の閲覧者には currentActorId と onlyVisibleToViewer をリゾルバーに渡し、宛先の direct を返す', async () => {
+      const { article, deps, root, publicReply, directReply, unlistedReply } = setup();
+      const currentActorId = ActorId.generate();
+
+      const result = await GetArticleWithThreadUseCase.create(deps).run({
+        articleId: article.articleId,
+        currentActorId,
+      });
+
+      expect(deps.resolveThread).toHaveBeenCalledWith({
+        postId: article.rootPostId,
+        currentActorId,
+        onlyVisibleToViewer: true,
+      });
+      expect(result.ok && result.val.thread).toEqual([root, publicReply, directReply, unlistedReply]);
     });
   });
 });
