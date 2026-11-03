@@ -74,8 +74,7 @@ const setup = (fetchText: SafeFetcher['fetchText']) => {
   return { db, sleep, useCase, addSource, addEntry, counts };
 };
 
-const urlsOf = (requested: string): string[] =>
-  [...new URL(requested).searchParams.getAll('url')];
+const urlsOf = (requested: string): string[] => [...new URL(requested).searchParams.getAll('url')];
 
 describe('RefreshHatenaBookmarkCountsUseCase', () => {
   it('targets only rss entries fetched within three days, excluding hatena and radar sources', async () => {

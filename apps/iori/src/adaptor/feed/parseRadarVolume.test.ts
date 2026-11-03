@@ -37,7 +37,8 @@ describe('parseRadarVolume', () => {
   });
 
   it('compares volumes as numbers, not strings', () => {
-    const html = `${PDF_DIR}/2020/01/tr_technology_radar_vol_9_en.pdf ${PDF_DIR}/2020/10/tr_technology_radar_vol_10_en.pdf`;
+    const html =
+      `${PDF_DIR}/2020/01/tr_technology_radar_vol_9_en.pdf ${PDF_DIR}/2020/10/tr_technology_radar_vol_10_en.pdf`;
     expect(parseRadarVolume(html)).toMatchObject({ ok: true, val: { volume: 10 } });
   });
 
