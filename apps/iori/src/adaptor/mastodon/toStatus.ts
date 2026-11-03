@@ -80,7 +80,8 @@ const toPostUrls = (
   };
 };
 
-const toVisibility = (post: PostWithAuthor): Visibility => post.type === 'local' ? 'public' : post.visibility ?? 'private';
+const toVisibility = (post: PostWithAuthor): Visibility =>
+  post.type === 'local' ? 'public' : post.visibility ?? 'private';
 
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
   const { uri, url } = toPostUrls(post, options);

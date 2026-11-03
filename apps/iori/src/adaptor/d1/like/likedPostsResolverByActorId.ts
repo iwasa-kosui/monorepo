@@ -8,6 +8,7 @@ import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../.
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -22,7 +23,6 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
-import { toVisibility } from '../post/toVisibility.ts';
 
 export const createD1LikedPostsResolverByActorId = (
   db: IoriD1Db,

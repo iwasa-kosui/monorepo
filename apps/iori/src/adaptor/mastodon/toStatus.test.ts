@@ -153,6 +153,21 @@ describe('toStatus', () => {
     expect(status.uri).toBe('https://remote.example/users/alice/statuses/1');
   });
 
+  it('uses public for a local post', () => {
+    expect(toStatus(localPost, options).visibility).toBe('public');
+  });
+
+  it.each(['public', 'unlisted', 'private', 'direct'] as const)(
+    'uses the recorded visibility %s of a remote post',
+    (visibility) => {
+      expect(toStatus({ ...remotePost, visibility } as PostWithAuthor, options).visibility).toBe(visibility);
+    },
+  );
+
+  it('uses private for a remote post without a recorded visibility', () => {
+    expect(toStatus({ ...remotePost, visibility: null } as PostWithAuthor, options).visibility).toBe('private');
+  });
+
   it('converts images into media attachments with the given ids', () => {
     const status = toStatus(localPost, options);
 

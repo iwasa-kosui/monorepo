@@ -3,7 +3,12 @@ import { Hono } from 'hono';
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
-import { Post, type PostsWithAuthorResolverByPostIds, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
+import {
+  Post,
+  type PostsWithAuthorResolverByPostIds,
+  type PostWithAuthor,
+  type ThreadResolver,
+} from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';

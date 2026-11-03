@@ -21,6 +21,7 @@ import { Username } from '../../../domain/user/username.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -36,7 +37,6 @@ import {
   timelineItemsTable,
   usersTable,
 } from '../schema.ts';
-import { toVisibility } from '../post/toVisibility.ts';
 
 const cursorItem = alias(timelineItemsTable, 'cursor_item');
 

@@ -23,6 +23,7 @@ import { LocalPost, type Post, RemotePost } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   localActorsTable,
@@ -37,7 +38,6 @@ import {
   remotePostsTable,
   usersTable,
 } from '../schema.ts';
-import { toVisibility } from '../post/toVisibility.ts';
 
 type ActorRow = Readonly<{
   actors: typeof actorsTable.$inferSelect;
