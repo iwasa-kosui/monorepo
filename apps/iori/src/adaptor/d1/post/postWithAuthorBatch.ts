@@ -29,6 +29,7 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
+import { toVisibility } from './toVisibility.ts';
 
 export type PostRow = {
   posts: typeof postsTable.$inferSelect;
@@ -146,6 +147,7 @@ export const enrichPostRows = async (
         ...RemotePost.orThrow({
           ...row.posts,
           ...row.remote_posts,
+          visibility: toVisibility(row.remote_posts.visibility),
           type: 'remote',
           createdAt: row.posts.createdAt.getTime(),
         }),

@@ -11,6 +11,7 @@ import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
 import { PostId } from './postId.ts';
+import { Visibility } from './visibility.ts';
 
 const localPostZodType = z.object({
   type: z.literal('local'),
@@ -29,6 +30,7 @@ const remotePostZodType = z.object({
   createdAt: Instant.zodType,
   uri: z.string(),
   inReplyToUri: z.nullable(z.string()),
+  visibility: z.nullable(Visibility.zodType),
 });
 
 export type LocalPost = z.infer<typeof localPostZodType>;
@@ -118,11 +120,15 @@ const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   );
 };
 
+const isVisibleToAnonymous = (post: Post): boolean =>
+  post.type === 'local' || Visibility.isVisibleToAnonymous(post.visibility);
+
 export const Post = {
   ...schema,
   createPost,
   createRemotePost,
   deletePost,
+  isVisibleToAnonymous,
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
@@ -142,6 +148,7 @@ export type RemotePostIdentity = Readonly<{
     logoUri?: string;
   }>;
   inReplyToUri?: string | null;
+  visibility: Visibility | null;
   attachments?: readonly RemotePostAttachment[];
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;

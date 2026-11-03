@@ -33,7 +33,7 @@ describe('GET /api/v1/statuses/:id', () => {
     });
   });
 
-  it('未認証ではリモートの投稿と、リモートの投稿のブーストを 404 にする', async () => {
+  it('未認証では公開範囲の記録がないリモートの投稿と、そのブーストを 404 にする', async () => {
     const t = await seedStatuses();
 
     const [note, boost] = await Promise.all([
@@ -44,6 +44,49 @@ describe('GET /api/v1/statuses/:id', () => {
     expect([note.status, boost.status]).toEqual([404, 404]);
     expect(await note.json()).toEqual(notFound);
     expect(await boost.json()).toEqual(notFound);
+  });
+
+  it('未認証では public と unlisted のリモートの投稿とそのブーストだけを返し、private と direct は 404 にする', async () => {
+    const t = await seedStatuses();
+    const posts = {
+      public: t.seed.addRemotePost(t.alice, 3_000, { visibility: 'public' }),
+      unlisted: t.seed.addRemotePost(t.alice, 3_100, { visibility: 'unlisted' }),
+      private: t.seed.addRemotePost(t.alice, 3_200, { visibility: 'private' }),
+      direct: t.seed.addRemotePost(t.alice, 3_300, { visibility: 'direct' }),
+    };
+    const boosts = {
+      public: t.seed.addRepost(t.me.actorId, posts.public.postId, 4_000),
+      private: t.seed.addRepost(t.me.actorId, posts.private.postId, 4_100),
+    };
+
+    const responses = await Promise.all([
+      t.request(`/api/v1/statuses/${posts.public.postId}`),
+      t.request(`/api/v1/statuses/${posts.unlisted.postId}`),
+      t.request(`/api/v1/statuses/${posts.private.postId}`),
+      t.request(`/api/v1/statuses/${posts.direct.postId}`),
+      t.request(`/api/v1/statuses/${boosts.public.repostId}`),
+      t.request(`/api/v1/statuses/${boosts.private.repostId}`),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 404, 404, 200, 404]);
+    expect(StatusSchema.parse(await responses[0]!.json())).toMatchObject({ visibility: 'public' });
+    expect(StatusSchema.parse(await responses[1]!.json())).toMatchObject({ visibility: 'unlisted' });
+  });
+
+  it('ログインすると private と direct と記録のないリモートの投稿も返し、visibility を記録の値にする', async () => {
+    const t = await seedStatuses();
+    const privateNote = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private' });
+    const directNote = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'direct' });
+
+    const responses = await Promise.all([
+      t.request(`/api/v1/statuses/${privateNote.postId}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/statuses/${directNote.postId}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/statuses/${t.note.postId}`, { headers: t.me.bearer }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    const statuses = await Promise.all(responses.map(async (response) => StatusSchema.parse(await response.json())));
+    expect(statuses.map((status) => status.visibility)).toEqual(['private', 'direct', 'private']);
   });
 
   it('userId のないアプリトークンは未認証として扱い、リモートの投稿を 404 にする', async () => {
@@ -143,6 +186,36 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(ancestors.map((status) => status.id)).toEqual([root.postId]);
     expect(descendants.map((status) => status.id)).toEqual([early.postId, late.postId]);
     expect(descendants[1]).toMatchObject({ favourited: true, in_reply_to_id: mid.postId });
+  });
+
+  it('未認証では public と unlisted のリモートの投稿だけを祖先と子孫に含め、起点が private なら 404 にする', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const root = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+    const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
+    const unlisted = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri, visibility: 'unlisted' });
+    t.seed.addRemotePost(alice, 3_100, { inReplyToUri: mid.uri, visibility: 'private' });
+    t.seed.addRemotePost(alice, 3_200, { inReplyToUri: mid.uri, visibility: 'direct' });
+    t.seed.addRemotePost(alice, 3_300, { inReplyToUri: mid.uri });
+    const hiddenRoot = t.seed.addRemotePost(alice, 4_000, { visibility: 'private' });
+
+    const [anonymous, loggedIn, hidden] = await Promise.all([
+      t.request(`/api/v1/statuses/${mid.postId}/context`),
+      t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: me.bearer }),
+      t.request(`/api/v1/statuses/${hiddenRoot.postId}/context`),
+    ]);
+
+    const idsIn = async (response: Response) => {
+      const body = await response.json() as { ancestors: unknown[]; descendants: unknown[] };
+      return [
+        body.ancestors.map((item) => StatusSchema.parse(item).id),
+        body.descendants.map((item) => StatusSchema.parse(item).id),
+      ];
+    };
+    expect(await idsIn(anonymous)).toEqual([[root.postId], [unlisted.postId]]);
+    expect((await idsIn(loggedIn))[1]).toHaveLength(4);
+    expect(hidden.status).toBe(404);
   });
 
   it('未認証でも返し、見つからなければ 404 にする', async () => {

@@ -231,6 +231,7 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: null,
           type: 'remote',
         });
         if (row.remote_actors === null) {

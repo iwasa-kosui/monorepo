@@ -3,7 +3,9 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
+import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 
 const MAX_DEPTH = 10;
 
@@ -40,7 +42,7 @@ const create = ({
     uri: string,
     documentLoader: DocumentLoader,
     lookupObject: LookupObject,
-  ): Promise<{ note: Note; authorIdentity: ActorIdentity } | undefined> => {
+  ): Promise<{ note: Note; authorIdentity: ActorIdentity; visibility: Visibility | null } | undefined> => {
     try {
       const result = await lookupObject(uri, { documentLoader });
       if (!(result instanceof Note)) {
@@ -67,6 +69,7 @@ const create = ({
       return {
         note: result,
         authorIdentity: actorIdentityResult.val,
+        visibility: extractVisibility(result, author.followersId),
       };
     } catch (error) {
       getLogger().debug(`Failed to fetch note: ${uri} - ${error}`);
@@ -116,7 +119,7 @@ const create = ({
         break;
       }
 
-      const { note, authorIdentity } = fetchResult;
+      const { note, authorIdentity, visibility } = fetchResult;
       const noteUri = note.id?.href;
       if (!noteUri) {
         break;
@@ -130,6 +133,7 @@ const create = ({
         content: String(note.content ?? ''),
         authorIdentity,
         inReplyToUri: noteInReplyToUri,
+        visibility,
       });
 
       if (upsertResult.ok) {

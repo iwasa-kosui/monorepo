@@ -4,6 +4,7 @@ import { getLogger } from '@logtape/logtape';
 
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
 
@@ -19,7 +20,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
-  const { actorIdentity, documentLoaderOptions } = actorResult.val;
+  const { actor, actorIdentity, documentLoaderOptions } = actorResult.val;
   const documentLoader = documentLoaderOptions.documentLoader;
   if (!documentLoader) {
     getLogger().warn('documentLoader is undefined');
@@ -37,6 +38,8 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
+  const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
+  const visibility = extractVisibility(addressed, actor.followersId);
 
   return RA.flow(
     deps.addRemotePostUseCase.run({
@@ -45,6 +48,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       actorIdentity,
       attachments,
       inReplyToUri,
+      visibility,
     }),
     RA.match({
       ok: async ({ actor: createdActor }) => {

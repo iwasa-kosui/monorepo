@@ -42,7 +42,7 @@ describe('D1 notification query adapters', () => {
     };
     const remoteActor = { actorId, url: null, username: 'alice' };
     const post = { postId, actorId, content: '<p>post</p>', createdAt: new Date(100), type: 'remote', deletedAt: null };
-    const remotePost = { postId, uri: 'https://remote.test/posts/1', inReplyToUri: null };
+    const remotePost = { postId, uri: 'https://remote.test/posts/1', inReplyToUri: null, visibility: null };
     const notification = (type: string, createdAt: number) => ({
       notificationId: NotificationId.generate(),
       recipientUserId: userId,
