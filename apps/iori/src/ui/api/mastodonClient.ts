@@ -1,4 +1,4 @@
-import type { Account, CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
+import type { Account, CredentialAccount, Notification, Status } from '../../adaptor/mastodon/entities.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -58,7 +58,7 @@ const toApiError = async (res: Response): Promise<MastodonApiError> => {
   return Object.assign(new Error(message), { status: res.status });
 };
 
-type Query = Readonly<Record<string, string | number | boolean | undefined>>;
+type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
 
 const request = async <T>(
   path: string,
@@ -66,7 +66,11 @@ const request = async <T>(
 ): Promise<Readonly<{ body: T; cursors: PageCursors }>> => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) search.set(key, String(value));
+    if (typeof value === 'object') {
+      for (const item of value) search.append(key, item);
+    } else if (value !== undefined) {
+      search.set(key, String(value));
+    }
   }
   const queryString = search.toString();
   const res = await fetch(queryString.length > 0 ? `${path}?${queryString}` : path, {
@@ -118,3 +122,19 @@ export const fetchFollowers = (accountId: string, params: PageParams = {}): Prom
 
 export const fetchFollowing = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/following`, pageQuery(params));
+
+export const fetchNotifications = (
+  types: readonly string[],
+  params: PageParams = {},
+): Promise<Page<Notification>> =>
+  getPage<Notification>('/api/v1/notifications', { ...pageQuery(params), 'types[]': types });
+
+export const saveNotificationsMarker = async (lastReadId: string): Promise<void> => {
+  const res = await fetch('/api/v1/markers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
+  });
+  if (!res.ok) throw await toApiError(res);
+};

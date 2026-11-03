@@ -20,6 +20,7 @@ const readDeployedConfig = async () => {
     return JSON.parse(await readFile(config.path, 'utf8')) as {
       assets: { run_worker_first: unknown };
       placement: unknown;
+      ai: unknown;
     };
   } finally {
     await config.cleanup();
@@ -105,6 +106,12 @@ describe('assets.run_worker_first', () => {
 describe('placement', () => {
   it('enables smart placement in the deployment config built from the template', async () => {
     expect((await readDeployedConfig()).placement).toEqual({ mode: 'smart' });
+  });
+});
+
+describe('ai', () => {
+  it('declares the AI binding in the deployment config built from the template', async () => {
+    expect((await readDeployedConfig()).ai).toEqual({ binding: 'AI' });
   });
 });
 
