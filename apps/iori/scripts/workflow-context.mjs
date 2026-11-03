@@ -11,11 +11,49 @@ export const allowedMissingUploads = (env) => {
   if (!allowedMissingPattern.test(value)) throw new Error('Protected workflow invocation is invalid.');
   return Number(value);
 };
-export const parseWorkflowInvocation = (env) => {
+const shaPattern = /^[a-f0-9]{40}$/;
+const generationPattern = /^[a-z][a-z0-9]{7,19}$/;
+const runIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
+const admissionInputs = (text) => {
+  try {
+    const value = JSON.parse(text ?? 'null');
+    if (
+      value && typeof value === 'object' && value.environment === 'production'
+      && generationPattern.test(value.generation ?? '') && runIdPattern.test(value.runId ?? '')
+      && shaPattern.test(value.mainSha ?? '')
+    ) return { generation: value.generation, runId: value.runId, migrationSha: value.mainSha };
+  } catch {}
+  return undefined;
+};
+const pushInvocation = (env, deferIdentity) => {
+  const codeSha = env.MAIN_SHA;
+  const derived = deferIdentity ? undefined : admissionInputs(env.IORI_ADMISSION_IDENTITY);
+  if (
+    env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_SHA !== codeSha || !shaPattern.test(codeSha ?? '')
+    || env.IORI_OPERATION !== 'deploy-worker' || env.IORI_ENVIRONMENT !== 'production'
+    || Boolean(env.IORI_RECOVERY) || Boolean(env.IORI_ALLOWED_MISSING_UPLOADS)
+    || (!deferIdentity && !derived)
+    || (derived && [
+      [env.IORI_GENERATION, derived.generation],
+      [env.IORI_MIGRATION_RUN_ID, derived.runId],
+      [env.IORI_MIGRATION_MAIN_SHA, derived.migrationSha],
+    ].some(([given, expected]) => given && given !== expected))
+  ) throw new Error('Protected workflow invocation is invalid.');
+  return Object.freeze({
+    operation: 'deploy-worker',
+    codeSha,
+    migrationSha: derived?.migrationSha ?? codeSha,
+    environment: 'production',
+    generation: derived?.generation ?? '',
+    runId: derived?.runId ?? '',
+  });
+};
+export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => {
   const operation = env.IORI_OPERATION;
   if (['reconcile-resources', 'replace-queue-consumer'].includes(operation)) {
     throw new Error('Maintenance operation requires a separate review.');
   }
+  if (env.GITHUB_EVENT_NAME === 'push') return pushInvocation(env, deferIdentity);
   const codeSha = env.MAIN_SHA;
   const recoveryOperation = recoveryOperations.includes(operation);
   const migrationSha = recoveryOperation ? env.IORI_MIGRATION_MAIN_SHA : env.IORI_MIGRATION_MAIN_SHA || codeSha;

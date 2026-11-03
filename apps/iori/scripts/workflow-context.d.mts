@@ -1,4 +1,7 @@
-export function parseWorkflowInvocation(env: Record<string, string | undefined>): Readonly<{
+export function parseWorkflowInvocation(
+  env: Record<string, string | undefined>,
+  options?: { deferIdentity?: boolean },
+): Readonly<{
   operation: string;
   codeSha: string;
   migrationSha: string;

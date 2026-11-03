@@ -1,8 +1,5 @@
 name: Deploy iori
 on:
-  push:
-    branches: [main]
-    paths: ["apps/iori/**", "packages/**", ".github/workflows/deploy-iori.yml"]
   workflow_dispatch:
 concurrency:
   group: deploy-iori-worker-production
@@ -24,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
-          [[ "$GITHUB_EVENT_NAME" = push || "$GITHUB_EVENT_NAME" = workflow_dispatch ]]
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$MAIN_SHA" = "$GITHUB_SHA"

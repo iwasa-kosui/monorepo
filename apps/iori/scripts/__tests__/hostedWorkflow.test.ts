@@ -163,6 +163,42 @@ it('hands purge-rehearsal-target the migration SHA as MAIN_SHA while the invocat
     await rm(runnerTemp, { recursive: true, force: true });
   }
 });
+it('hands a main push deploy-worker the generation, run ID and migration SHA taken from the admission identity', async () => {
+  const runnerTemp = await createFixtureDirectory('iori-hosted-');
+  try {
+    const paths = await createWorkflowDirectory(runnerTemp);
+    const identity = JSON.stringify({
+      environment: 'production',
+      generation: 'prd20261102a',
+      mainSha: 'c'.repeat(40),
+      runId: 'run-1',
+    });
+    const env = {
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_SHA: 'a'.repeat(40),
+      MAIN_SHA: 'a'.repeat(40),
+      IORI_ENVIRONMENT: 'production',
+      IORI_OPERATION: 'deploy-worker',
+      IORI_ADMISSION_IDENTITY: identity,
+      RUNNER_TEMP: runnerTemp,
+      IORI_PRIVATE_DIRECTORY: paths.base,
+    };
+    const mapped = await materializeHostedValues(env);
+    expect(mapped.IORI_GENERATION).toBe('prd20261102a');
+    expect(mapped.IORI_MIGRATION_RUN_ID).toBe('run-1');
+    expect(mapped.IORI_MIGRATION_MAIN_SHA).toBe('c'.repeat(40));
+    expect(mapped.MAIN_SHA).toBe('a'.repeat(40));
+    await expect(materializeHostedValues({ ...env, IORI_ADMISSION_IDENTITY: '{}' })).rejects.toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+    await expect(materializeHostedValues({ ...env, IORI_OPERATION: 'migrate-data' })).rejects.toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  } finally {
+    await rm(runnerTemp, { recursive: true, force: true });
+  }
+});
 it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'])(
   'rejects %s when the migration SHA differs from the code SHA',
   async operation => {
