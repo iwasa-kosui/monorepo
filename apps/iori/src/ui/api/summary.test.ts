@@ -100,6 +100,11 @@ describe('normalizeSummaryMarkdown', () => {
     expect(normalizeSummaryMarkdown('###### 六つ')).toBe('【六つ】');
   });
 
+  it('returns an empty line for a heading with no text after the # marks', () => {
+    expect(normalizeSummaryMarkdown('# ')).toBe('');
+    expect(normalizeSummaryMarkdown('### ')).toBe('');
+  });
+
   it('keeps a heading that already starts with a bracket without wrapping it again', () => {
     expect(normalizeSummaryMarkdown('## 【猫】')).toBe('【猫】');
     expect(normalizeSummaryMarkdown('【猫】')).toBe('【猫】');

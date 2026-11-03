@@ -11,10 +11,9 @@ const bulletMarker = /^[ \t]*[*+-][ \t]/;
 
 const normalizeSummaryLine = (line: string): string => {
   const heading = headingMarker.exec(line);
+  const headingText = heading === null ? '' : line.slice(heading[0].length);
   const converted = heading !== null
-    ? (line.slice(heading[0].length).startsWith('【')
-      ? line.slice(heading[0].length)
-      : `【${line.slice(heading[0].length)}】`)
+    ? (headingText.trim() === '' ? '' : headingText.startsWith('【') ? headingText : `【${headingText}】`)
     : line.replace(bulletMarker, '・');
   return converted.replaceAll('**', '');
 };
