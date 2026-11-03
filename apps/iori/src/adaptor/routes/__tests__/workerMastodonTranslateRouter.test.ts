@@ -199,7 +199,7 @@ describe('POST /api/v1/statuses/:id/translate', () => {
   });
 
   it('公開範囲が不明の旧データのリモート投稿は、フォロー中なら訳せる', async () => {
-    const { generator } = createStubTextGenerator(reply);
+    const { generator, calls } = createStubTextGenerator(reply);
     const t = await seedPosts({ textGenerator: generator });
     const legacy = t.seed.addRemotePost(t.alice, Date.UTC(2020, 0, 7), {
       content: '<p>Legacy post</p>',
@@ -210,6 +210,22 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     const response = await t.request(pathOf(legacy.postId), postJson({}, t.me.bearer));
 
     expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('フォローしていない相手の公開範囲が不明の投稿は 404 にし、AI を呼ばない', async () => {
+    const { generator, calls } = createStubTextGenerator(reply);
+    const t = await seedPosts({ textGenerator: generator });
+    const legacy = t.seed.addRemotePost(t.alice, Date.UTC(2020, 0, 7), {
+      content: '<p>Legacy post</p>',
+      visibility: null,
+    });
+
+    const response = await t.request(pathOf(legacy.postId), postJson({}, t.me.bearer));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Record not found' });
+    expect(calls).toEqual([]);
   });
 
   it('日本語の投稿は 403 にする', async () => {
