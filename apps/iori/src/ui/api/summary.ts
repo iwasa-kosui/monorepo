@@ -59,7 +59,7 @@ export type SummaryRequestResult =
   | Readonly<{ ok: false; message: string }>;
 
 const toIso = (value: string): string | undefined => {
-  const time = new Date(value).getTime();
+  const time = new Date(`${value}+09:00`).getTime();
   return Number.isNaN(time) ? undefined : new Date(time).toISOString();
 };
 
@@ -88,8 +88,13 @@ export const buildSummaryRequest = ({ query, since, until }: SummaryRequestInput
 
 export const SUMMARY_DAILY_LIMIT = 20;
 
-const clockOf = (date: Date): string =>
-  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+const jstDateTime = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 export const summaryErrorMessage = (
   status: number | undefined,
@@ -98,12 +103,14 @@ export const summaryErrorMessage = (
 ): string => {
   switch (status) {
     case 422:
-      return '入力を確かめてください（期間は 7 日以内、終了は現在より前）';
+      return '入力を確かめてください（検索語は 200 文字まで、期間は 7 日以内、終了は現在より前）';
     case 429: {
       const limit = `今日の要約の回数（${SUMMARY_DAILY_LIMIT} 回）を使い切りました。`;
-      return retryAfterSeconds === undefined
-        ? limit
-        : `${limit}${clockOf(new Date(now.getTime() + retryAfterSeconds * 1000))} から使えます。`;
+      if (retryAfterSeconds === undefined) return limit;
+      const availableAt = new Date(now.getTime() + retryAfterSeconds * 1000);
+      return Number.isFinite(availableAt.getTime())
+        ? `${limit}${jstDateTime.format(availableAt)} から使えます。`
+        : limit;
     }
     case 502:
       return '要約を作れませんでした。時間をおいて試してください。';

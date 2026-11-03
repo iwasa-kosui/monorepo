@@ -1,4 +1,4 @@
-import { useState } from 'hono/jsx';
+import { useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import {
@@ -28,6 +28,9 @@ const SearchPage = () => {
   const [since, setSince] = useState('');
   const [until, setUntil] = useState('');
   const [searched, setSearched] = useState<SearchStatusesResult | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState('');
+  const isSearchingRef = useRef(false);
+  const isSummarizingRef = useRef(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [summary, setSummary] = useState<TimelineSummary | null>(null);
@@ -36,36 +39,43 @@ const SearchPage = () => {
 
   const handleSearch = async (event: Event) => {
     event.preventDefault();
+    if (isSearchingRef.current) return;
     const q = query.trim();
     if (q === '') {
       setSearchError('検索語を入力してください。');
       return;
     }
+    isSearchingRef.current = true;
     setIsSearching(true);
     setSearchError('');
     try {
       setSearched(await searchStatuses(q));
+      setSearchedQuery(q);
     } catch (error) {
       if (isUnauthorizedError(error)) {
         redirectToSignIn();
         return;
       }
       setSearched(null);
+      setSearchedQuery('');
       setSearchError(
         error instanceof TypeError ? '通信に失敗しました。もう一度試してください。' : '検索に失敗しました。',
       );
     } finally {
+      isSearchingRef.current = false;
       setIsSearching(false);
     }
   };
 
   const handleSummarize = async () => {
-    const request = buildSummaryRequest({ query, since, until });
+    if (isSummarizingRef.current) return;
+    const request = buildSummaryRequest({ query: searchedQuery, since, until });
     if (!request.ok) {
       setSummary(null);
       setSummaryError(request.message);
       return;
     }
+    isSummarizingRef.current = true;
     setIsSummarizing(true);
     setSummaryError('');
     try {
@@ -82,6 +92,7 @@ const SearchPage = () => {
           : summaryErrorMessage(undefined, undefined, new Date()),
       );
     } finally {
+      isSummarizingRef.current = false;
       setIsSummarizing(false);
     }
   };
@@ -105,7 +116,7 @@ const SearchPage = () => {
         <h2 class='font-bold text-charcoal dark:text-white'>要約</h2>
         <div class='grid grid-cols-1 sm:grid-cols-2 gap-3'>
           <label class='text-sm text-charcoal-light dark:text-gray-400'>
-            開始
+            開始（日本時間）
             <input
               type='datetime-local'
               class={inputClass}
@@ -114,7 +125,7 @@ const SearchPage = () => {
             />
           </label>
           <label class='text-sm text-charcoal-light dark:text-gray-400'>
-            終了
+            終了（日本時間）
             <input
               type='datetime-local'
               class={inputClass}
@@ -124,7 +135,8 @@ const SearchPage = () => {
           </label>
         </div>
         <p class={noticeClass}>
-          検索語を入れると検索結果を、空にすると開始から終了までの期間を要約します。期間は 7 日以内です。
+          検索したあとに押すと、その検索の結果を要約します。検索していないときは、開始から終了までの期間を要約します。期間は
+          7 日以内です。
         </p>
         <button type='button' class={buttonClass} disabled={isSummarizing} onClick={handleSummarize}>
           {isSummarizing ? '要約しています' : '要約する'}
@@ -138,7 +150,9 @@ const SearchPage = () => {
             <p class={noticeClass}>今日の残り回数: {summary.remaining_today} 回</p>
             {summary.truncated && <p class={noticeClass}>投稿が多いため一部だけを要約しました</p>}
             {summary.excluded_non_public_count >= 1 && (
-              <p class={noticeClass}>非公開の投稿 {summary.excluded_non_public_count} 件は要約に含めていません</p>
+              <p class={noticeClass}>
+                ダイレクトメッセージと公開範囲が不明な投稿 {summary.excluded_non_public_count} 件は要約に含めていません
+              </p>
             )}
             {summary.citations.length > 0 && (
               <ol class='space-y-4'>

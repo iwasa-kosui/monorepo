@@ -17,6 +17,7 @@ import {
   isUnauthorizedError,
   lookupAccount,
   parseLinkHeader,
+  parseRetryAfter,
   saveNotificationsMarker,
   searchStatuses,
   summarizeTimeline,
@@ -77,6 +78,33 @@ describe('parseLinkHeader', () => {
       nextMaxId: undefined,
       prevMinId: undefined,
     });
+  });
+});
+
+describe('parseRetryAfter', () => {
+  const now = new Date('2026-01-01T00:00:00Z');
+
+  it('reads digits as seconds', () => {
+    expect(parseRetryAfter('3600', now)).toBe(3600);
+    expect(parseRetryAfter('0', now)).toBe(0);
+  });
+
+  it('reads an HTTP date as the seconds from now', () => {
+    expect(parseRetryAfter('Thu, 01 Jan 2026 01:00:00 GMT', now)).toBe(3600);
+  });
+
+  it('turns an HTTP date in the past into 0', () => {
+    expect(parseRetryAfter('Wed, 31 Dec 2025 23:00:00 GMT', now)).toBe(0);
+  });
+
+  it('returns undefined for a value that is neither seconds nor an HTTP date', () => {
+    for (const value of [null, '', 'abc', '-5', '120abc', '1.5']) {
+      expect(parseRetryAfter(value, now)).toBeUndefined();
+    }
+  });
+
+  it('keeps a huge number of seconds as it is', () => {
+    expect(parseRetryAfter('99999999999999999999', now)).toBe(1e20);
   });
 });
 
@@ -322,6 +350,24 @@ describe('mastodon client requests', () => {
 
     expect(isMastodonApiError(error) && error.status).toBe(429);
     expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(3600);
+  });
+
+  it('leaves retryAfterSeconds unset when Retry-After is not readable', async () => {
+    for (const retryAfter of ['abc', '-5', '120abc', '']) {
+      stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter }));
+
+      const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+      expect(isMastodonApiError(error) && error.retryAfterSeconds).toBeUndefined();
+    }
+  });
+
+  it('carries a huge Retry-After as it is', async () => {
+    stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter: '99999999999999999999' }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(1e20);
   });
 
   it('leaves retryAfterSeconds unset when Retry-After is absent', async () => {

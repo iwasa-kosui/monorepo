@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { buildSummaryRequest, splitSummaryCitations, summaryErrorMessage } from './summary.ts';
@@ -49,6 +49,35 @@ describe('splitSummaryCitations', () => {
     expect(splitSummaryCitations('', citations)).toEqual([]);
   });
 
+  it('keeps [0] and a number too large to match as text', () => {
+    expect(splitSummaryCitations('a[0]b', citations)).toEqual([{ type: 'text', text: 'a[0]b' }]);
+    expect(splitSummaryCitations('a[99999999999999999999]b', citations)).toEqual([
+      { type: 'text', text: 'a[99999999999999999999]b' },
+    ]);
+  });
+
+  it('turns consecutive brackets into separate links', () => {
+    expect(splitSummaryCitations('a[1][3]b', citations)).toEqual([
+      { type: 'text', text: 'a[' },
+      { type: 'link', n: 1, status: s1 },
+      { type: 'text', text: '][' },
+      { type: 'link', n: 3, status: s3 },
+      { type: 'text', text: ']b' },
+    ]);
+  });
+
+  it('links the inner bracket of a nested form and keeps the outer brackets as text', () => {
+    expect(splitSummaryCitations('a[[1]]b', citations)).toEqual([
+      { type: 'text', text: 'a[[' },
+      { type: 'link', n: 1, status: s1 },
+      { type: 'text', text: ']]b' },
+    ]);
+  });
+
+  it('keeps an unclosed bracket as text', () => {
+    expect(splitSummaryCitations('a[1,3', citations)).toEqual([{ type: 'text', text: 'a[1,3' }]);
+  });
+
   it('keeps line breaks in the text', () => {
     expect(splitSummaryCitations('一行目\n二行目[1]', citations)[0]).toEqual({
       type: 'text',
@@ -60,7 +89,14 @@ describe('splitSummaryCitations', () => {
 describe('buildSummaryRequest', () => {
   const since = '2026-01-01T09:00';
   const until = '2026-01-02T09:00';
-  const iso = (value: string) => new Date(value).toISOString();
+  const sinceIso = '2026-01-01T00:00:00.000Z';
+  const untilIso = '2026-01-02T00:00:00.000Z';
+  const originalTz = process.env.TZ;
+
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
 
   it('builds a search summary with q only', () => {
     expect(buildSummaryRequest({ query: ' 猫 ', since: '', until: '' })).toEqual({ ok: true, body: { q: '猫' } });
@@ -69,14 +105,14 @@ describe('buildSummaryRequest', () => {
   it('builds a search summary with q and the period', () => {
     expect(buildSummaryRequest({ query: '猫', since, until })).toEqual({
       ok: true,
-      body: { q: '猫', since: iso(since), until: iso(until) },
+      body: { q: '猫', since: sinceIso, until: untilIso },
     });
   });
 
   it('builds a period summary without q', () => {
     expect(buildSummaryRequest({ query: '  ', since, until })).toEqual({
       ok: true,
-      body: { since: iso(since), until: iso(until) },
+      body: { since: sinceIso, until: untilIso },
     });
   });
 
@@ -88,29 +124,64 @@ describe('buildSummaryRequest', () => {
     }
   });
 
+  it('reads the period as Japan time whatever the time zone of the browser', () => {
+    for (const tz of ['America/Los_Angeles', 'UTC', 'Asia/Tokyo']) {
+      process.env.TZ = tz;
+      expect(buildSummaryRequest({ query: '猫', since, until })).toEqual({
+        ok: true,
+        body: { q: '猫', since: sinceIso, until: untilIso },
+      });
+    }
+  });
+
+  it('reads a value with seconds as Japan time', () => {
+    expect(buildSummaryRequest({ query: '猫', since: '2026-01-01T09:00:30', until: '' })).toEqual({
+      ok: true,
+      body: { q: '猫', since: '2026-01-01T00:00:30.000Z' },
+    });
+  });
+
   it('rejects a date that cannot be read', () => {
     expect(buildSummaryRequest({ query: '猫', since: 'not a date', until: '' }).ok).toBe(false);
   });
 });
 
 describe('summaryErrorMessage', () => {
-  const now = new Date(2026, 0, 1, 10, 30, 0);
+  const now = new Date('2026-01-01T01:30:00Z');
+  const limit = '今日の要約の回数（20 回）を使い切りました。';
+  const originalTz = process.env.TZ;
+
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
 
   it('explains a 422', () => {
     expect(summaryErrorMessage(422, undefined, now)).toBe(
-      '入力を確かめてください（期間は 7 日以内、終了は現在より前）',
+      '入力を確かめてください（検索語は 200 文字まで、期間は 7 日以内、終了は現在より前）',
     );
   });
 
-  it('shows the time the quota comes back on a 429', () => {
-    expect(summaryErrorMessage(429, 3600, now)).toBe('今日の要約の回数（20 回）を使い切りました。11:30 から使えます。');
-    expect(summaryErrorMessage(429, 9 * 3600 + 30 * 60, now)).toBe(
-      '今日の要約の回数（20 回）を使い切りました。20:00 から使えます。',
-    );
+  it('shows the date and time the quota comes back on a 429 in Japan time', () => {
+    expect(summaryErrorMessage(429, 3600, now)).toBe(`${limit}1/1 11:30 から使えます。`);
+    expect(summaryErrorMessage(429, 9 * 3600 + 30 * 60, now)).toBe(`${limit}1/1 20:00 から使えます。`);
+    expect(summaryErrorMessage(429, 14 * 3600, now)).toBe(`${limit}1/2 00:30 から使えます。`);
+  });
+
+  it('shows Japan time whatever the time zone of the browser', () => {
+    for (const tz of ['America/Los_Angeles', 'UTC', 'Asia/Tokyo']) {
+      process.env.TZ = tz;
+      expect(summaryErrorMessage(429, 3600, now)).toBe(`${limit}1/1 11:30 から使えます。`);
+    }
   });
 
   it('omits the time on a 429 without Retry-After', () => {
-    expect(summaryErrorMessage(429, undefined, now)).toBe('今日の要約の回数（20 回）を使い切りました。');
+    expect(summaryErrorMessage(429, undefined, now)).toBe(limit);
+  });
+
+  it('omits the time on a 429 when the time is out of the range of a date', () => {
+    expect(summaryErrorMessage(429, 1e20, now)).toBe(limit);
+    expect(summaryErrorMessage(429, Number.POSITIVE_INFINITY, now)).toBe(limit);
   });
 
   it('explains a 502', () => {

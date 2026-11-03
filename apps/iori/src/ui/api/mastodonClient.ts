@@ -60,16 +60,25 @@ export const parseLinkHeader = (header: string | null): PageCursors => {
   return { nextMaxId, prevMinId };
 };
 
+export const parseRetryAfter = (header: string | null, now: Date): number | undefined => {
+  if (header === null) return undefined;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value);
+  if (!/^[A-Za-z]/.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : Math.max(0, Math.ceil((time - now.getTime()) / 1000));
+};
+
 const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const body: unknown = await res.json().catch(() => undefined);
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
-  const retryAfter = Number.parseInt(res.headers.get('Retry-After') ?? '', 10);
+  const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
   return Object.assign(
     new Error(message),
     { status: res.status },
-    Number.isFinite(retryAfter) && retryAfter >= 0 ? { retryAfterSeconds: retryAfter } : {},
+    retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
   );
 };
 
