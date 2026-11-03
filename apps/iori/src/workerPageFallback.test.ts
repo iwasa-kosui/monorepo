@@ -29,6 +29,15 @@ describe('createWorkerPageFallback', () => {
     expect(await response?.text()).toContain('/static/signIn.js');
   });
 
+  it('renders the search entry with a Japanese title', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/search'));
+
+    expect(response?.status).toBe(200);
+    const html = await response?.text();
+    expect(html).toContain('/static/search.js');
+    expect(html).toContain('<title>検索 | blog.kosui.me</title>');
+  });
+
   it('embeds the tailwind config and the style block shared with LayoutClient', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
     const html = await response?.text();

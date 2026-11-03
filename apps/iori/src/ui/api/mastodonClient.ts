@@ -5,6 +5,8 @@ import type {
   Relationship,
   Status,
 } from '../../adaptor/mastodon/entities.ts';
+import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
+import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -24,7 +26,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -63,7 +65,12 @@ const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
-  return Object.assign(new Error(message), { status: res.status });
+  const retryAfter = Number.parseInt(res.headers.get('Retry-After') ?? '', 10);
+  return Object.assign(
+    new Error(message),
+    { status: res.status },
+    Number.isFinite(retryAfter) && retryAfter >= 0 ? { retryAfterSeconds: retryAfter } : {},
+  );
 };
 
 type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
@@ -178,4 +185,24 @@ export const saveNotificationsMarker = async (lastReadId: string): Promise<void>
     body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
   });
   if (!res.ok) throw await toApiError(res);
+};
+
+export type SearchStatusesResult = IoriSearchStatusesResponse;
+
+export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
+  (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
+
+export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
+
+export type TimelineSummary = IoriTimelineSummaryResponse;
+
+export const summarizeTimeline = async (body: SummarizeTimelineBody): Promise<TimelineSummary> => {
+  const res = await fetch('/api/iori/v1/timeline/summaries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as TimelineSummary;
 };

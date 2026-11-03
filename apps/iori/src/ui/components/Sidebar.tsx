@@ -71,6 +71,21 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
           </svg>
         </a>
       )}
+      {isLoggedIn && (
+        <a
+          href='/search'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
+            />
+          </svg>
+        </a>
+      )}
     </nav>
   </aside>
 );

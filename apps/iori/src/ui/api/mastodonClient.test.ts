@@ -12,11 +12,14 @@ import {
   fetchRelationships,
   fetchStatus,
   fetchStatusContext,
+  isMastodonApiError,
   isNotFoundError,
   isUnauthorizedError,
   lookupAccount,
   parseLinkHeader,
   saveNotificationsMarker,
+  searchStatuses,
+  summarizeTimeline,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -77,12 +80,13 @@ describe('parseLinkHeader', () => {
   });
 });
 
-const jsonResponse = (body: unknown, init: { status?: number; link?: string } = {}) =>
+const jsonResponse = (body: unknown, init: { status?: number; link?: string; retryAfter?: string } = {}) =>
   new Response(JSON.stringify(body), {
     status: init.status ?? 200,
     headers: {
       'Content-Type': 'application/json',
       ...(init.link === undefined ? {} : { Link: init.link }),
+      ...(init.retryAfter === undefined ? {} : { 'Retry-After': init.retryAfter }),
     },
   });
 
@@ -274,5 +278,65 @@ describe('mastodon client requests', () => {
 
   it('does not treat a network failure as an unauthorized error', () => {
     expect(isUnauthorizedError(new TypeError('Failed to fetch'))).toBe(false);
+  });
+
+  it('searches statuses with the query and limit through a same-origin GET', async () => {
+    const payload = {
+      statuses: [],
+      terms: { original: ['a'], expanded: [] },
+      dropped_original: [],
+      expansion: 'skipped',
+    };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await searchStatuses('猫 犬', 20);
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    const parsed = new URL(String(url), 'http://localhost');
+    expect(parsed.pathname).toBe('/api/iori/v1/search/statuses');
+    expect(parsed.searchParams.get('q')).toBe('猫 犬');
+    expect(parsed.searchParams.get('limit')).toBe('20');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('posts the summary request as JSON without authorization headers', async () => {
+    const payload = { summary: 'text [1]', citations: [], remaining_today: 19 };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await summarizeTimeline({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/timeline/summaries');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
+    expect(result).toEqual(payload);
+  });
+
+  it('carries Retry-After on a 429 from the summary request', async () => {
+    stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter: '3600' }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(429);
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(3600);
+  });
+
+  it('leaves retryAfterSeconds unset when Retry-After is absent', async () => {
+    stubFetch(jsonResponse({ error: 'bad gateway' }, { status: 502 }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('rejects the summary request with an unauthorized error on 401', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
   });
 });
