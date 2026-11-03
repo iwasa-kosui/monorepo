@@ -4,7 +4,8 @@ const fail = () => {
 export const createTargetIdentity = ({ environment, generation, accountId, backendBucket }) => {
   if (
     !['production', 'staging'].includes(environment) || !/^[a-z][a-z0-9]{7,19}$/.test(generation ?? '')
-    || !/^[a-f0-9]{32}$/.test(accountId ?? '') || !/^[a-z0-9][a-z0-9-]{2,62}$/.test(backendBucket ?? '')
+    || !/^[a-f0-9]{32}$/.test(accountId ?? '')
+    || (backendBucket !== undefined && !/^[a-z0-9][a-z0-9-]{2,62}$/.test(backendBucket ?? ''))
   ) fail();
   const prefix = `iori-${environment}-${generation}`;
   const names = {
@@ -15,7 +16,7 @@ export const createTargetIdentity = ({ environment, generation, accountId, backe
     dlq: `${prefix}-dlq`,
     transfer: `${prefix}-transfer`,
   };
-  if (Object.values(names).includes(backendBucket)) fail();
+  if (backendBucket !== undefined && Object.values(names).includes(backendBucket)) fail();
   return Object.freeze({
     environment,
     generation,

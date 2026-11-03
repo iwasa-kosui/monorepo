@@ -2,7 +2,7 @@ import { createTargetIdentity } from './fresh-target.mjs';
 import { parseAdmission } from '../src/workerAdmission.ts';
 import { createMigrationR2Storage } from './migration-r2-storage.mjs';
 import { migrationRunIdPattern } from './migration-target-contract.mjs';
-export const targetSetupConfiguration = (env) => {
+export const targetSetupConfiguration = (env, { backend = true } = {}) => {
   const required = (key) => {
     const value = env[key];
     if (typeof value !== 'string' || !value) throw new Error('Target setup configuration is required.');
@@ -12,7 +12,7 @@ export const targetSetupConfiguration = (env) => {
     environment: required('IORI_ENVIRONMENT'),
     generation: required('IORI_GENERATION'),
     accountId: required('CLOUDFLARE_ACCOUNT_ID'),
-    backendBucket: required('IORI_TERRAFORM_BACKEND_BUCKET'),
+    backendBucket: backend ? required('IORI_TERRAFORM_BACKEND_BUCKET') : undefined,
   });
   const mainSha = required('MAIN_SHA');
   const runId = required('IORI_MIGRATION_RUN_ID');

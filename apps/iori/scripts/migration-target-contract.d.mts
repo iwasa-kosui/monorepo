@@ -30,6 +30,16 @@ export type ExpectedTarget = {
     smoke: { username: string; uploadFilename: string; articleId: string };
   };
 };
+export type ActiveExpectedTarget = Omit<ExpectedTarget, 'identity'> & {
+  identity: Omit<ExpectedTarget['identity'], 'backend_bucket'>;
+};
+export type ResolvedActiveIds = {
+  d1Id: string;
+  kvId: string;
+  queueId: string;
+  dlqId: string;
+  consumerId: string;
+};
 export type PreparedObservation = {
   worker_version_id: string;
   admission_mode: 'sealed';
@@ -51,11 +61,21 @@ export type TargetSummary = Omit<PreparationRecord, 'schema'> & {
 export const TARGET_BYTES: number;
 export const migrationRunIdPattern: RegExp;
 export function targetHash(body: string | Buffer): string;
-export function targetIdentity(target: ExpectedTarget): TargetIdentity;
+export function targetIdentity(target: ExpectedTarget | ActiveExpectedTarget): TargetIdentity;
 export function admissionEnvironment(
-  target: ExpectedTarget,
+  target: ExpectedTarget | ActiveExpectedTarget,
 ): { IORI_ADMISSION_MODE: string; IORI_ADMISSION_IDENTITY: string; ORIGIN: string };
-export function parseExpectedTarget(input: unknown): ExpectedTarget;
+export function parseExpectedTarget(input: unknown, options: { backend: false }): ActiveExpectedTarget;
+export function parseExpectedTarget(input: unknown, options?: { backend?: true }): ExpectedTarget;
+export function activeTargetFromResolvedIds(
+  input: {
+    identity: TargetIdentity;
+    mainSha: string;
+    runId: string;
+    admission: ExpectedTarget['admission'];
+    resolved: ResolvedActiveIds;
+  },
+): ActiveExpectedTarget;
 export function preparationRecordKey(target: ExpectedTarget): string;
 export function rehearsalTargetKey(target: ExpectedTarget): string;
 export function rehearsalProfileKey(target: ExpectedTarget): string;

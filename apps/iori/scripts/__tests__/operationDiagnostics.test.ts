@@ -40,6 +40,7 @@ it('pins the operation stage vocabulary', () => {
     'rehearse-migration',
     'migrate-data',
     'deploy-worker-before',
+    'deploy-worker-resolve',
     'deploy-worker-migrate',
     'deploy-worker-deploy',
     'deploy-worker-after',

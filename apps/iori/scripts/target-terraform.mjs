@@ -41,7 +41,7 @@ export const createTargetTerraform = (
   if (
     !/^https:\/\/[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(backendEndpoint ?? '')
     || !/^[a-f0-9]{32}$/.test(zoneId ?? '') || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(hostname ?? '')
-    || !privateDirectory || resolve(privateDirectory) !== privateDirectory
+    || !privateDirectory || resolve(privateDirectory) !== privateDirectory || !identity.backendBucket
   ) fail('config-invalid');
   const runWithStatus = async (args, acceptedStatuses = []) => {
     signal.throwIfAborted();
@@ -228,7 +228,6 @@ export const createTargetTerraform = (
     return { applied: true }; // Actual Queue API readback is required before an execution receipt.
   };
   const initializeEstablished = () => initializeExisting(true);
-  const initializeActive = () => initializeExisting(false);
   const changeRoute = async ({ establishedBindings }) => {
     onStage('route-plan');
     if (!establishedBindings) fail('plan-rejected');
@@ -302,7 +301,6 @@ export const createTargetTerraform = (
   return Object.freeze({
     initializeFresh,
     initializeEstablished,
-    initializeActive,
     initializeAdoptable,
     prepare,
     changeQueuePause,

@@ -26,13 +26,6 @@ export function createTargetTerraform(
     }
   >;
   changeRoute(input: { establishedBindings: Record<string, string> }): Promise<{ applied: true }>;
-  initializeActive(): Promise<
-    {
-      workerBindings: Record<string, string>;
-      targetIdentity: Record<string, unknown>;
-      migrationStorage: Record<string, string>;
-    }
-  >;
   changeQueuePause(
     input: { paused: boolean; establishedBindings: Record<string, string>; routeEnabled: boolean },
   ): Promise<{ applied: true }>;

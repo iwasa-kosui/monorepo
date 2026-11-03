@@ -119,16 +119,18 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - ユーザーは、zsh が親 token を読み込んだ後に、親 token の値が表示されたタブを閉じます。ユーザーは、タブを閉じてから作業者に操作を戻します。作業者は、そのタブを再利用しません。
 - 子 token は Dashboard で作りません。子 token は、ユーザーの端末の zsh が API で作ります。子 token の値は、Dashboard にも作業者の画面にも表示されません。
 
-| Secret prefix                   | bucket             | permission group                     | 使う operation                                                              | 作る時期              | 期限         |
-| ------------------------------- | ------------------ | ------------------------------------ | --------------------------------------------------------------------------- | --------------------- | ------------ |
-| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`rehearse-migration`、`migrate-data`                      | `prepare-target` の前 | `EXPIRES_ON` |
-| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`deploy-worker`、`purge-rehearsal-target` | `prepare-target` の後 | なし         |
-| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`、`purge-rehearsal-target`              | `prepare-target` の後 | `EXPIRES_ON` |
-| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                                            | `prepare-target` の後 | `EXPIRES_ON` |
+| Secret prefix                   | bucket             | permission group                     | 使う operation                                                 | 作る時期              | 期限         |
+| ------------------------------- | ------------------ | ------------------------------------ | -------------------------------------------------------------- | --------------------- | ------------ |
+| `IORI_TRANSFER_R2_WRITE`        | transfer bucket    | Workers R2 Storage Bucket Item Write | `prepare-target`、`rehearse-migration`、`migrate-data`         | `prepare-target` の前 | `EXPIRES_ON` |
+| `IORI_TRANSFER_R2_READ_ONLY`    | transfer bucket    | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`、`purge-rehearsal-target`     | `prepare-target` の後 | なし         |
+| `IORI_APPLICATION_R2_WRITE`     | application bucket | Workers R2 Storage Bucket Item Write | `rehearse-migration`、`migrate-data`、`purge-rehearsal-target` | `prepare-target` の後 | `EXPIRES_ON` |
+| `IORI_APPLICATION_R2_READ_ONLY` | application bucket | Workers R2 Storage Bucket Item Read  | `verify-import`、`cutover-route`                               | `prepare-target` の後 | `EXPIRES_ON` |
 
-各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は移行後も毎回、`IORI_TRANSFER_R2_READ_ONLY` で準備記録を読みます。このため、`IORI_TRANSFER_R2_READ_ONLY` には期限を付けません。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
+各 prefix には、末尾に `_ACCESS_KEY_ID` と `_SECRET_ACCESS_KEY` を付けた 2 つの secret があります。`deploy-worker` は、`IORI_TRANSFER_R2_READ_ONLY` を使いません。`deploy-worker` は、transfer bucket の準備記録を読まないからです。この表の `IORI_TRANSFER_R2_READ_ONLY` には、期限を付けません。`verify-import`、`cutover-route`、`purge-rehearsal-target` が、この credential をまだ使うからです。期限の扱いは、移行用の operation を削除するときに見直します。Bucket Item Read は bucket 全体の読み取りと一覧を許すので、この credential は transfer bucket の移行 bundle も読めます。移行 bundle をいつ、どう削除するかは、[#498](https://github.com/iwasa-kosui/monorepo/issues/498) で決めます。
 
 上の表は R2 の S3 credential だけを並べています。`deploy-worker` が使う Cloudflare API token の `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` には、D1 の書き込み権限が必要です。Dashboard の表示は `D1 Write` で、API の権限名は `D1 Edit` です。`deploy-worker` が、`wrangler deploy` の前に D1 のマイグレーションを適用するためです。
+
+`deploy-worker` は、Terraform の state も読みません。このため、`deploy-worker` の job は、`IORI_TERRAFORM_BACKEND_BUCKET`、`IORI_TERRAFORM_READ_ONLY_*`、`IORI_TRANSFER_R2_READ_ONLY_*` を受け取らず、Terraform を準備する step も持ちません。`deploy-worker` の job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の6つです。`deploy-worker` は、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` で Cloudflare API に D1、KV、Queue の一覧を問い合わせ、generation の名前と一致する id を引きます。Queue の consumer の id は、Queue の応答に含まれる consumer の一覧から、Worker 名と一致する1件を引きます。名前に一致するリソースが0件か2件以上のとき、または Cloudflare API が失敗したとき（401 と 403 を含む）は、`deploy-worker` が [6.4 節](#64-verify-importrehearse-migrationmigrate-datadeploy-worker-の失敗の行)の `deploy-worker-resolve` で止まります。
 
 `EXPIRES_ON` は、`cutover-route` の完了予定日に 14 日を足した日時にします。14 日は、`migrate-data` の遅延や再実行に備えた余裕です。
 
@@ -1153,7 +1155,7 @@ gh run view "$iori_actions_run_id" --repo "$iori_repo" \
 
 HTTP body や raw log を取得・公開せず、各 job の sanitized status を確認します。dispatch が成功しただけでは移行成功ではありません。失敗・timeout・結果不明なら、新しい操作や再実行を始める前に第7節へ進みます。
 
-staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。`deploy-worker` は、`wrangler deploy` の前に、D1 のマイグレーションを本番の D1 に適用します。手動用の `d1:migrate:remote` は、基準の記録の判定を通らず、本番の D1 で 0000 を再実行して失敗するので、本番では使いません。`deploy-worker` は `main` への push でも `Deploy iori Worker (main)` として起動します。この起動では、generation、`migration_run_id`、`migration_main_sha` を入力で受け取らず、Environment secret の `IORI_ADMISSION_IDENTITY` から Node の処理が取り出します。取り出した値は公開ログに出しません。この workflow に `workflow_dispatch` はありません。手動で Worker を配備するときは、従来どおり `deploy-iori-worker.yml` の `deploy-worker` を dispatch します。dispatch 版と同じく、`deploy-worker` は smoke を実行しません。push 版では、この workflow が generation、`migration_run_id`、`migration_main_sha` を同じ secret `IORI_ADMISSION_IDENTITY` から取り出します。このため、admission の照合は自己比較になり、dispatch 版にある「操作者の入力と secret の突き合わせ」は働きません。安全性は、identity の中身の検査と、active な Worker と準備記録の照合に頼ります。
+staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。`deploy-worker` は、`wrangler deploy` の前に、D1 のマイグレーションを本番の D1 に適用します。手動用の `d1:migrate:remote` は、基準の記録の判定を通らず、本番の D1 で 0000 を再実行して失敗するので、本番では使いません。`deploy-worker` は `main` への push でも `Deploy iori Worker (main)` として起動します。この起動では、generation、`migration_run_id`、`migration_main_sha` を入力で受け取らず、Environment secret の `IORI_ADMISSION_IDENTITY` から Node の処理が取り出します。取り出した値は公開ログに出しません。この workflow に `workflow_dispatch` はありません。手動で Worker を配備するときは、従来どおり `deploy-iori-worker.yml` の `deploy-worker` を dispatch します。dispatch 版と同じく、`deploy-worker` は smoke を実行しません。push 版では、この workflow が generation、`migration_run_id`、`migration_main_sha` を同じ secret `IORI_ADMISSION_IDENTITY` から取り出します。このため、admission の照合は自己比較になり、dispatch 版にある「操作者の入力と secret の突き合わせ」は働きません。`deploy-worker` は、Terraform の state と準備記録を読みません。`deploy-worker` は、D1、KV、Queue、DLQ、Queue の consumer の id を、`wrangler deploy` の前に Cloudflare API で名前から引きます。名前は generation から決まります。一致が0件か2件以上の場合、`deploy-worker` は `wrangler deploy` の前に止まります。安全性は、identity の中身の検査と、名前から引いた id による active な Worker とリソースの読み戻しの照合に頼ります。
 
 **OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への要求で生成します。Worker はこの要求で R2 の `og/<article-id>.png` を探し、あれば返します。無ければ、公開済みの記事に限り Worker が PNG を生成し、R2 の `og/<article-id>.png` に保存して返します。記事の公開時には生成しません。次の点に注意してください。
 
@@ -1314,12 +1316,39 @@ smoke token の値が Worker に登録した値と食い違っている場合も
 | `rehearse-migration`    | rehearse-migration                                                                                                        |
 | `migrate-data`          | migrate-data                                                                                                              |
 | `deploy-worker-before`  | deploy-worker で、レビュー済みの Worker の version の deploy を始める前                                                   |
+| `deploy-worker-resolve` | deploy-worker で、`wrangler deploy` の前に、D1、KV、Queue、DLQ、consumer の id を Cloudflare API で名前から引いている途中 |
 | `deploy-worker-migrate` | deploy-worker で、`wrangler deploy` の前に、D1 の基準の記録とマイグレーションを適用している途中                           |
 | `deploy-worker-deploy`  | deploy-worker で、レビュー済みの Worker の version を deploy している途中                                                 |
-| `deploy-worker-after`   | deploy-worker で、レビュー済みの Worker の version を deploy した後。deploy の後の Worker と backend の読み直しを含みます |
+| `deploy-worker-after`   | deploy-worker で、レビュー済みの Worker の version を deploy した後。deploy の後の Worker とリソースの読み直しを含みます  |
 | `unclassified`          | 上のどれにも当たらない段                                                                                                  |
 
 分類の行の `reason` には、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の節と同じ語が出ます。この語には、prepare-target の節の語と、source の接続の失敗を表す語が含まれます。固定の語に当たらない失敗では `unclassified` が出ます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
+
+`deploy-worker-resolve` で止まると、`wrangler deploy` は実行されていません。この段は、Cloudflare に何も書き込みません。この段の失敗では、`IORI_DIAG` の行が2行出ます。1行目の `reason` は、どのリソースの id を引いている途中かを示す語です。2行目の `reason` は、止まった原因を示す語です。
+
+| 1行目の `reason`   | 引いている途中のリソース |
+| ------------------ | ------------------------ |
+| `resolve-d1`       | D1 database              |
+| `resolve-kv`       | KV namespace             |
+| `resolve-queue`    | Queue                    |
+| `resolve-dlq`      | dead letter queue        |
+| `resolve-consumer` | Queue の consumer        |
+
+| 2行目の `reason`     | 意味と作業者の判断                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resource-missing`   | generation の名前と一致するリソースが0件です。作業者は、`IORI_ADMISSION_IDENTITY` の generation が active な generation か、Dashboard で確かめます |
+| `resource-ambiguous` | 一致するリソースが2件以上です。作業者は、名前の重複を Dashboard で確かめ、レビューに戻します                                                       |
+| `api-forbidden`      | Cloudflare API が 401 か 403 を返しました。作業者は、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の権限と有効期限を確かめます                               |
+| `api-failed`         | 401 と 403 以外の API の失敗か、応答の形が想定と違います。一覧が20ページを超えた場合も、この語が出ます。作業者は、同じ commit で再実行してよいです |
+
+出力の例は、次のとおりです。
+
+```
+IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=resolve-d1
+IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=resource-missing
+```
+
+この行には、リソースの名前、id、応答の本文を出しません。
 
 `reason` に `d1-baseline-mismatch` が出た場合、`deploy-worker-migrate` は D1 の読み取りと判定で止まっています。この語は、0000 の表が D1 に一部だけある場合か、読み取りの結果が想定と違う場合に出ます。この時点で、`deploy-worker-migrate` は D1 に書き込んでいません。
 

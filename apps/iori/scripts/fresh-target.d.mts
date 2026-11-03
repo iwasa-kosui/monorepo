@@ -1,5 +1,5 @@
 export type TargetInput = Readonly<
-  { environment: string; generation: string; accountId: string; backendBucket: string }
+  { environment: string; generation: string; accountId: string; backendBucket?: string }
 >;
 export type TargetIdentity =
   & TargetInput

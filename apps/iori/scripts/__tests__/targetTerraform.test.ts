@@ -248,6 +248,20 @@ it('classifies a nonzero command status and a command launch failure as command-
     diagnostic: { reason: 'command-failed' },
   });
 });
+it('fails with config-invalid before terraform init when the identity has no backend bucket', () => {
+  const runCommand = vi.fn();
+  expect(() =>
+    createTargetTerraform({
+      identity: { ...identity, backendBucket: undefined },
+      backendEndpoint: `https://${'b'.repeat(32)}.r2.cloudflarestorage.com`,
+      privateDirectory: '/tmp/target-no-bucket',
+      zoneId: 'c'.repeat(32),
+      hostname: 'staging.test',
+      runCommand: runCommand as never,
+    })
+  ).toThrow(expect.objectContaining(terraformFailure('config-invalid')));
+  expect(runCommand).not.toHaveBeenCalled();
+});
 it('leaves an abort to the caller instead of labelling it command-failed', async () => {
   const controller = new AbortController();
   const api = createTargetTerraform({

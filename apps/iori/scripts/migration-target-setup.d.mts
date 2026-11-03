@@ -3,6 +3,7 @@ import type { ExpectedTarget } from './migration-target-contract.mjs';
 import type { MigrationStorage } from './migration-bundle.mjs';
 export function targetSetupConfiguration(
   env: Record<string, string | undefined>,
+  options?: { backend?: boolean },
 ): {
   identity: TargetIdentity;
   mainSha: string;

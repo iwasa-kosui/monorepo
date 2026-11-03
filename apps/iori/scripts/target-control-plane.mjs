@@ -9,6 +9,12 @@ const fail = (reason, details) => {
 };
 const failApi = (path, kind) => fail(`${controlPlaneApi(path)}-${kind}`);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const RESOLVE_PAGE_SIZE = 100;
+const RESOLVE_MAX_PAGES = 20;
+const resolveFailure = (reason, word) =>
+  Object.assign(new Error('Active resource resolution failed.'), {
+    diagnostic: { reason, details: [`resolve-${word}`] },
+  });
 const safeId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id);
 /** REST is used here only by the protected operator, never in the Worker graph. All responses stay private. */
 export const createTargetControlPlane = ({ identity: supplied, token, fetchRequest = fetch, signal }) => {
@@ -94,6 +100,64 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       }
     }
     return items;
+  };
+  const pagedItems = async (path) => {
+    const items = [];
+    let cursor;
+    for (let page = 1; page <= RESOLVE_MAX_PAGES; page += 1) {
+      const query = cursor === undefined
+        ? `per_page=${RESOLVE_PAGE_SIZE}&page=${page}`
+        : `per_page=${RESOLVE_PAGE_SIZE}&cursor=${encodeURIComponent(cursor)}`;
+      const body = await get(`${path}?${query}`);
+      const info = body.result_info;
+      if (!Array.isArray(body.result) || (info !== undefined && (info === null || typeof info !== 'object'))) {
+        failApi(path, 'shape');
+      }
+      items.push(...body.result);
+      if (body.result.length === 0) return items;
+      if (typeof info?.cursor === 'string' && info.cursor !== '') cursor = info.cursor;
+      else if (Number.isInteger(info?.total_pages)) {
+        if (page >= info.total_pages) return items;
+      } else if (Number.isInteger(info?.total_count)) {
+        if (items.length >= info.total_count) return items;
+      } else if (body.result.length < (info?.per_page ?? RESOLVE_PAGE_SIZE)) return items;
+    }
+    return failApi(path, 'limit');
+  };
+  const guardedResolve = async (word, read) => {
+    try {
+      return await read();
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const status = /-http-(\d{3})$/.exec(error?.diagnostic?.reason ?? '')?.[1];
+      throw resolveFailure(status === '401' || status === '403' ? 'api-forbidden' : 'api-failed', word);
+    }
+  };
+  const pickOne = (items, matches, idKey, word) => {
+    if (items.some((item) => item === null || typeof item !== 'object')) throw resolveFailure('api-failed', word);
+    const found = items.filter(matches);
+    if (found.length === 0) throw resolveFailure('resource-missing', word);
+    if (found.length > 1) throw resolveFailure('resource-ambiguous', word);
+    if (!safeId(found[0][idKey])) throw resolveFailure('api-failed', word);
+    return found[0][idKey];
+  };
+  const resolveActiveResources = async () => {
+    const d1Items = await guardedResolve('d1', () => pagedItems(`${root}/d1/database`));
+    const d1Id = pickOne(d1Items, (item) => item.name === identity.names.d1, 'uuid', 'd1');
+    const kvItems = await guardedResolve('kv', () => pagedItems(`${root}/storage/kv/namespaces`));
+    const kvId = pickOne(kvItems, (item) => item.title === identity.names.kv, 'id', 'kv');
+    const queueItems = await guardedResolve('queue', () => pagedItems(`${root}/queues`));
+    const queueId = pickOne(queueItems, (item) => item.queue_name === identity.names.queue, 'queue_id', 'queue');
+    const dlqId = pickOne(queueItems, (item) => item.queue_name === identity.names.dlq, 'queue_id', 'dlq');
+    const queue = await guardedResolve('consumer', async () => (await get(`${root}/queues/${queueId}`)).result);
+    if (!Array.isArray(queue?.consumers)) throw resolveFailure('api-failed', 'consumer');
+    const consumerId = pickOne(
+      queue.consumers,
+      (consumer) => (consumer.script === undefined ? consumer.script_name : consumer.script) === identity.workerName,
+      'consumer_id',
+      'consumer',
+    );
+    return { d1Id, kvId, queueId, dlqId, consumerId };
   };
   const assertFresh = async () => {
     const specs = [
@@ -300,6 +364,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
   };
   return Object.freeze({
     assertFresh,
+    resolveActiveResources,
     readResources,
     readSealedWorker,
     readWorkerAdmission,
