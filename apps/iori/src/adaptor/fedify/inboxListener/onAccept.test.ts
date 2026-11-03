@@ -2,6 +2,7 @@ import { Accept, Follow } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Relay } from '../../../domain/relay/relay.ts';
 import { createOnAccept } from './onAccept.ts';
 
 const ORIGIN = 'https://iori.test';
@@ -31,7 +32,7 @@ const createDeps = (relay: unknown) => {
   return { deps: deps as never, acceptRelaySubscriptionUseCase, followAcceptedStore };
 };
 
-const pendingRelay = { actorUri: RELAY_ACTOR_URI, status: 'pending' };
+const pendingRelay = { actorUri: RELAY_ACTOR_URI, status: Relay.Status.Pending };
 
 const createAcceptWithObjectId = (objectId: string) => {
   const accept = new Accept({
@@ -64,6 +65,16 @@ describe('createOnAccept', () => {
     expect(getObject).toHaveBeenCalledOnce();
   });
 
+  it('does not treat an Accept as a relay Accept when the object id is a user Follow id on the iori origin', async () => {
+    const { deps, acceptRelaySubscriptionUseCase } = createDeps(pendingRelay);
+    const { accept, getObject } = createAcceptWithObjectId(`${ORIGIN}/#Follow/0b0a3d2e`);
+
+    await expect(createOnAccept(deps)(createCtx(), accept)).rejects.toThrow();
+
+    expect(acceptRelaySubscriptionUseCase.run).not.toHaveBeenCalled();
+    expect(getObject).toHaveBeenCalledOnce();
+  });
+
   it('falls through to the existing branch when the actor is not in relays', async () => {
     const { deps, acceptRelaySubscriptionUseCase } = createDeps(undefined);
     const { accept, getObject } = createAcceptWithObjectId(`${ORIGIN}/#RelayFollow/0b0a3d2e`);
@@ -75,7 +86,7 @@ describe('createOnAccept', () => {
   });
 
   it('does nothing without fetching the object when the relay is already accepted', async () => {
-    const { deps, acceptRelaySubscriptionUseCase } = createDeps({ ...pendingRelay, status: 'accepted' });
+    const { deps, acceptRelaySubscriptionUseCase } = createDeps({ ...pendingRelay, status: Relay.Status.Accepted });
     const { accept, getObject } = createAcceptWithObjectId(`${ORIGIN}/#RelayFollow/0b0a3d2e`);
 
     await expect(createOnAccept(deps)(createCtx(), accept)).resolves.toBeUndefined();
@@ -85,7 +96,7 @@ describe('createOnAccept', () => {
   });
 
   it('falls through to the existing branch when the relay is rejected', async () => {
-    const { deps, acceptRelaySubscriptionUseCase } = createDeps({ ...pendingRelay, status: 'rejected' });
+    const { deps, acceptRelaySubscriptionUseCase } = createDeps({ ...pendingRelay, status: Relay.Status.Rejected });
     const { accept, getObject } = createAcceptWithObjectId(`${ORIGIN}/#RelayFollow/0b0a3d2e`);
 
     await expect(createOnAccept(deps)(createCtx(), accept)).rejects.toThrow();

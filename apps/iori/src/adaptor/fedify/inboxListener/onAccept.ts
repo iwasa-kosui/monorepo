@@ -9,6 +9,7 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import { Relay, type RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { RELAY_FOLLOW_ID_HASH_PREFIX } from '../relayFollow.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
 export type OnAcceptDeps = Readonly<{
@@ -45,7 +46,10 @@ export const createOnAccept = (deps: OnAcceptDeps) => async (ctx: InboxContext<u
     );
 
   const objectId = activity.objectId;
-  if (objectId && objectId.origin === new URL(deps.origin).origin) {
+  if (
+    objectId && objectId.origin === new URL(deps.origin).origin
+    && objectId.hash.startsWith(RELAY_FOLLOW_ID_HASH_PREFIX)
+  ) {
     const relayResult = await deps.relayResolverByActorUri.resolve({ actorUri });
     if (relayResult.ok && relayResult.val?.status === Relay.Status.Pending) {
       getLogger().info(`Processing relay subscription Accept from: ${actorUri}`);

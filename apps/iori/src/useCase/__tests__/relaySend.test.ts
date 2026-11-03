@@ -128,6 +128,7 @@ describe('relay への送信', () => {
       object: PUBLIC_IRI,
       to: PUBLIC_IRI,
     });
+    expect(sent.json.id).toMatch(new RegExp(`^${ORIGIN}/#RelayFollow/[0-9a-f-]{36}$`));
     expect({ ...sent.json, proof: undefined, signature: undefined, id: undefined }).toEqual({
       '@context': sent.json['@context'],
       type: 'Follow',
