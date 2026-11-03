@@ -546,6 +546,20 @@ describe('GET /api/v2/search の resolve=true', () => {
     expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
   });
 
+  it('ユーザー情報付きの URL は解決せず、accounts を空にして 200 を返す', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({
+      q: 'https://user:pw@remote.example/users/erin',
+      resolve: 'true',
+      type: 'accounts',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
   it('外部の取得が例外を投げても、検索全体を 500 にせず accounts を空にして投稿の検索を返す', async () => {
     const t = await seedResolve();
     t.remoteActorLookup.lookup.mockImplementation(() => {

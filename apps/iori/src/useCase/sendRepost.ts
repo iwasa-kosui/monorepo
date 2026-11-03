@@ -194,7 +194,7 @@ const create = ({
           }
 
           const fetchedVisibility = extractVisibility(result, author.followersId);
-          if (fetchedVisibility !== null && !Visibility.isVisibleToAnonymous(fetchedVisibility)) {
+          if (fetchedVisibility === null || !Visibility.isVisibleToAnonymous(fetchedVisibility)) {
             return RA.err(RepostNotAllowedError.create({ postId }));
           }
 

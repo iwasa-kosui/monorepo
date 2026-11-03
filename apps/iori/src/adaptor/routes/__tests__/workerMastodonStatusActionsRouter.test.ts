@@ -22,13 +22,15 @@ const seedActions = async () => {
       new Note({
         id: new URL(note.uri),
         content: 'remote',
+        to: new URL('https://www.w3.org/ns/activitystreams#Public'),
         attribution: new Person({
           id: new URL(`https://remote.example/users/${alice.username}`),
           inbox: new URL(`https://remote.example/users/${alice.username}/inbox`),
         }),
       }),
     );
-  return { ...t, me, alice, local, publicNote, post, count, serveRemoteNote };
+  const aliceInbox = new URL(`https://remote.example/users/${alice.username}/inbox`);
+  return { ...t, aliceInbox, me, alice, local, publicNote, post, count, serveRemoteNote };
 };
 
 describe('POST /api/v1/statuses/:id/favourite と /unfavourite', () => {
@@ -103,24 +105,40 @@ describe('POST /api/v1/statuses/:id/favourite と /unfavourite', () => {
     expect(t.count('likes')).toBe(0);
   });
 
-  it('リモートの投稿を取得できずに取り消しが 502 になっても likes を消さず、再試行で Undo を送れる', async () => {
+  it('リモートの投稿を取得できずに 502 になった後の再試行で Like を送る', async () => {
+    const t = await seedActions();
+
+    const failed = await t.post(`/api/v1/statuses/${t.publicNote.postId}/favourite`);
+    t.serveRemoteNote(t.publicNote);
+    const retried = await t.post(`/api/v1/statuses/${t.publicNote.postId}/favourite`);
+
+    expect(failed.status).toBe(502);
+    expect(retried.status).toBe(200);
+    expect(t.count('likes')).toBe(1);
+    const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toBeInstanceOf(Like);
+  });
+
+  it('相手が投稿を消していて取得できなくても、いいねを取り消し、DB の投稿者の inbox へ Undo を送る', async () => {
     const t = await seedActions();
     t.serveRemoteNote(t.publicNote);
     await t.post(`/api/v1/statuses/${t.publicNote.postId}/favourite`);
     t.federation.lookupObject.mockResolvedValue(null);
 
-    const failed = await t.post(`/api/v1/statuses/${t.publicNote.postId}/unfavourite`);
+    const response = await t.post(`/api/v1/statuses/${t.publicNote.postId}/unfavourite`);
 
-    expect(failed.status).toBe(502);
-    expect(t.count('likes')).toBe(1);
-    t.serveRemoteNote(t.publicNote);
-    const retried = await t.post(`/api/v1/statuses/${t.publicNote.postId}/unfavourite`);
-    expect(retried.status).toBe(200);
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({ favourited: false, favourites_count: 0 });
     expect(t.count('likes')).toBe(0);
-    const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
-    expect(sent).toHaveLength(2);
-    expect(sent[0]).toBeInstanceOf(Like);
-    expect(sent[1]).toBeInstanceOf(Undo);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
+    const [, recipient, undo] = t.federation.sendActivity.mock.calls[1] as unknown as [unknown, unknown, unknown];
+    expect(recipient).toEqual({
+      id: new URL(`https://remote.example/users/${t.alice.username}`),
+      inboxId: t.aliceInbox,
+    });
+    expect(undo).toBeInstanceOf(Undo);
+    expect(await (undo as Undo).getObject()).toBeInstanceOf(Like);
   });
 
   it('閲覧者に見えないリモートの投稿は 404 にして likes を増やさない', async () => {
@@ -303,6 +321,30 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
+  it('DB では public でも取得し直した Note に宛先がないと 422 にして Announce を送らず何も作らない', async () => {
+    const t = await seedActions();
+    t.federation.lookupObject.mockResolvedValue(
+      new Note({
+        id: new URL(t.publicNote.uri),
+        content: 'remote',
+        attribution: new Person({
+          id: new URL(`https://remote.example/users/${t.alice.username}`),
+          inbox: t.aliceInbox,
+        }),
+      }),
+    );
+
+    const response = await t.post(`/api/v1/statuses/${t.publicNote.postId}/reblog`);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: 'Validation failed: Private and direct statuses cannot be reblogged',
+    });
+    expect(t.count('reposts')).toBe(0);
+    expect(t.count('timeline_items', 'type=\'repost\'')).toBe(0);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
   it('リモートの投稿を取得できないときは 502 にして何も作らない', async () => {
     const t = await seedActions();
 
@@ -312,7 +354,7 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(t.count('reposts')).toBe(0);
   });
 
-  it('リモートの投稿を取得できずに取り消しが 502 になっても reposts と timeline_items を消さない', async () => {
+  it('相手が投稿を消していて取得できなくても、ブーストを取り消し、DB の投稿者の inbox へ Undo Announce を送る', async () => {
     const t = await seedActions();
     t.serveRemoteNote(t.publicNote);
     await t.post(`/api/v1/statuses/${t.publicNote.postId}/reblog`);
@@ -320,10 +362,17 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
 
     const response = await t.post(`/api/v1/statuses/${t.publicNote.postId}/unreblog`);
 
-    expect(response.status).toBe(502);
-    expect(t.count('reposts')).toBe(1);
-    expect(t.count('timeline_items', 'type=\'repost\' AND deletedAt IS NULL')).toBe(1);
-    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(t.count('reposts')).toBe(0);
+    expect(t.count('timeline_items', 'type=\'repost\' AND deletedAt IS NULL')).toBe(0);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
+    const [, recipient, undo] = t.federation.sendActivity.mock.calls[1] as unknown as [unknown, unknown, unknown];
+    expect(recipient).toEqual({
+      id: new URL(`https://remote.example/users/${t.alice.username}`),
+      inboxId: t.aliceInbox,
+    });
+    expect(undo).toBeInstanceOf(Undo);
+    expect(await (undo as Undo).getObject()).toBeInstanceOf(Announce);
   });
 
   it('ブーストを取り消し、元の Status を返して reposts と timeline_items を消す', async () => {

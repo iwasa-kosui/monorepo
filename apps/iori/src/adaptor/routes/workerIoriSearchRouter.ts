@@ -88,7 +88,11 @@ const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
     return undefined;
   }
   try {
-    return new URL(q).host.toLowerCase() === ownHost.toLowerCase() ? undefined : q;
+    const url = new URL(q);
+    if (url.username !== '' || url.password !== '') {
+      return undefined;
+    }
+    return url.host.toLowerCase() === ownHost.toLowerCase() ? undefined : q;
   } catch {
     return undefined;
   }
