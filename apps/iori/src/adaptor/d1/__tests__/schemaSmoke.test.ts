@@ -6,6 +6,7 @@ describe('D1 schema', () => {
   it('exports all application tables required by migration', () => {
     expect(Object.keys(schema).sort()).toEqual([
       'actorsTable',
+      'aiSummaryUsagesTable',
       'articleBodiesTable',
       'articlesTable',
       'digestItemsTable',

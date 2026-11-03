@@ -137,6 +137,12 @@ export type DigestHeaderResolverByUserIdAndDigestDate = Agg.Resolver<
   DigestHeader | undefined
 >;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
+export type DigestHeadersResolverByArticleIds = Agg.Resolver<ReadonlyArray<ArticleId>, ReadonlyArray<DigestHeader>>;
+export type DigestResolverByUserIdAndDigestDate = Agg.Resolver<
+  { userId: UserId; digestDate: string },
+  Digest | undefined
+>;
+export type DigestResolverByUserId = Agg.Resolver<UserId, Digest | undefined>;
 export type DigestHeadersResolverByDigestDateBefore = Agg.Resolver<
   { digestDateBefore: string; limit: number },
   ReadonlyArray<DigestHeader>

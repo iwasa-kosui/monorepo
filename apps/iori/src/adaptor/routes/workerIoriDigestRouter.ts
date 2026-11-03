@@ -1,0 +1,159 @@
+import { type Context, Hono } from 'hono';
+
+import type {
+  Digest,
+  DigestResolverByUserId,
+  DigestResolverByUserIdAndDigestDate,
+  DigestTrend,
+} from '../../domain/digest/digest.ts';
+import type {
+  HatenaTrendsResolverByFetchedSince,
+  TimelineLinkTrendsResolverByUserId,
+} from '../../domain/digest/digestMaterial.ts';
+import type {
+  DigestSubscription,
+  DigestSubscriptionResolverByUserId,
+} from '../../domain/digestSubscription/digestSubscription.ts';
+import { Instant } from '../../domain/instant/instant.ts';
+import { Scope } from '../../domain/oauth/scope.ts';
+import type { UserId } from '../../domain/user/userId.ts';
+import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
+import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
+import { toIsoString } from '../mastodon/time.ts';
+import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
+import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
+import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+
+export type WorkerIoriDigestRouterDeps = Readonly<{
+  authn: MastodonAuthn;
+  digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
+  digestResolverByUserId: DigestResolverByUserId;
+  timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
+  hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
+  digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
+  saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
+}>;
+
+type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
+
+export type IoriDigestResponse = Readonly<{
+  digest: Readonly<{
+    digestId: string;
+    digestDate: string;
+    articleId: string;
+    createdAt: string;
+    pushSentAt: string | null;
+    items: ReadonlyArray<
+      Readonly<{ rank: number; url: string; title: string; summary: string | null; feedEntryId: string }>
+    >;
+    trends: Readonly<{
+      timelineLinks: ReadonlyArray<DigestTrendBody>;
+      hatena: ReadonlyArray<DigestTrendBody>;
+    }>;
+  }>;
+}>;
+
+export type IoriDigestSubscriptionResponse = Readonly<{ subscription: Readonly<{ enabled: boolean }> }>;
+
+const invalidToken = { error: 'The access token is invalid' } as const;
+const digestNotFound = { error: 'Digest not found' } as const;
+const readStatuses = Scope.orThrow('read:statuses');
+const writeAccounts = Scope.orThrow('write:accounts');
+const digestDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const toTrendBody = ({ rank, url, title, count }: DigestTrend): DigestTrendBody => ({ rank, url, title, count });
+
+const toDigestBody = (digest: Digest): IoriDigestResponse => ({
+  digest: {
+    digestId: digest.digestId,
+    digestDate: digest.digestDate,
+    articleId: digest.articleId,
+    createdAt: toIsoString(digest.createdAt),
+    pushSentAt: digest.pushSentAt === null ? null : toIsoString(digest.pushSentAt),
+    items: digest.items.map(({ rank, url, title, summary, feedEntryId }) => ({
+      rank,
+      url,
+      title,
+      summary,
+      feedEntryId,
+    })),
+    trends: {
+      timelineLinks: digest.trends.filter((trend) => trend.kind === 'timeline_link').map(toTrendBody),
+      hatena: digest.trends.filter((trend) => trend.kind === 'hatena').map(toTrendBody),
+    },
+  },
+});
+
+const toSubscriptionBody = (subscription: Pick<DigestSubscription, 'enabled'> | undefined) =>
+  ({
+    subscription: { enabled: subscription?.enabled ?? true },
+  }) satisfies IoriDigestSubscriptionResponse;
+
+const readEnabled = (body: RequestBody): boolean | undefined => {
+  const enabled = body.enabled;
+  if (typeof enabled === 'boolean') return enabled;
+  if (enabled === 'true') return true;
+  if (enabled === 'false') return false;
+  return undefined;
+};
+
+const userIdOf = (c: Context<MastodonAuthEnv>): UserId | undefined => getMastodonPrincipal(c)?.userId ?? undefined;
+
+export const createWorkerIoriDigestRouter = ({
+  authn,
+  digestResolverByUserIdAndDigestDate,
+  digestResolverByUserId,
+  timelineLinkTrendsResolverByUserId,
+  hatenaTrendsResolverByFetchedSince,
+  digestSubscriptionResolverByUserId,
+  saveDigestSubscriptionUseCase,
+}: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
+  new Hono<MastodonAuthEnv>()
+    .onError(handleInternalError)
+    .get('/iori/v1/digests/latest', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const digest = await digestResolverByUserId.resolve(userId);
+      if (!digest.ok) return c.json(internalServerError, 500);
+      return digest.val === undefined ? c.json(digestNotFound, 404) : c.json(toDigestBody(digest.val));
+    })
+    .get('/iori/v1/digests/:date', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const digestDate = c.req.param('date');
+      if (!digestDatePattern.test(digestDate)) return c.json({ error: 'Validation failed: date' }, 400);
+      const digest = await digestResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
+      if (!digest.ok) return c.json(internalServerError, 500);
+      return digest.val === undefined ? c.json(digestNotFound, 404) : c.json(toDigestBody(digest.val));
+    })
+    .get('/iori/v1/trends/links', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const links = await timelineLinkTrendsResolverByUserId.resolve({
+        userId,
+        createdSince: Instant.addDuration(Instant.now(), -MATERIAL_WINDOW_MS),
+        limit: TRENDS_LIMIT,
+      });
+      return links.ok ? c.json({ links: links.val }) : c.json(internalServerError, 500);
+    })
+    .get('/iori/v1/trends/hatena', authn.requireUser(readStatuses), async (c) => {
+      const entries = await hatenaTrendsResolverByFetchedSince.resolve({
+        fetchedSince: Instant.addDuration(Instant.now(), -MATERIAL_WINDOW_MS),
+        limit: TRENDS_LIMIT,
+      });
+      return entries.ok ? c.json({ entries: entries.val }) : c.json(internalServerError, 500);
+    })
+    .get('/iori/v1/digest/subscription', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const subscription = await digestSubscriptionResolverByUserId.resolve(userId);
+      return subscription.ok ? c.json(toSubscriptionBody(subscription.val)) : c.json(internalServerError, 500);
+    })
+    .put('/iori/v1/digest/subscription', authn.requireUser(writeAccounts), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const enabled = readEnabled(await readRequestBody(c));
+      if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
+      const saved = await saveDigestSubscriptionUseCase.run({ userId, enabled });
+      return saved.ok ? c.json(toSubscriptionBody(saved.val)) : c.json(internalServerError, 500);
+    });

@@ -9,6 +9,7 @@ import { createD1ActorsResolverByFollowingId } from '../adaptor/d1/actor/actorsR
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../adaptor/d1/actor/remoteActorCreatedStore.ts';
+import { createD1AiSummaryUsageRecorder } from '../adaptor/d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1ArticleCreatedStore } from '../adaptor/d1/article/articleCreatedStore.ts';
 import { createD1ArticleDeletedStore } from '../adaptor/d1/article/articleDeletedStore.ts';
 import { createD1ArticlePublishedStore } from '../adaptor/d1/article/articlePublishedStore.ts';
@@ -23,10 +24,16 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
+import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
+import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
+import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
+import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -41,6 +48,7 @@ import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../adaptor/d1/like/localLikeDeletedStore.ts';
 import { createD1LinkPreviewCreatedStore } from '../adaptor/d1/linkPreview/linkPreviewCreatedStore.ts';
+import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../adaptor/d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../adaptor/d1/marker/markersResolverByUserId.ts';
 import { createD1MediaUploadCreatedStore } from '../adaptor/d1/mediaUpload/mediaUploadCreatedStore.ts';
@@ -96,6 +104,7 @@ import { createD1RepostResolverById } from '../adaptor/d1/repost/repostResolverB
 import { createD1SessionResolver } from '../adaptor/d1/session/sessionResolver.ts';
 import { createD1SessionStartedStore } from '../adaptor/d1/session/sessionStartedStore.ts';
 import { createD1SessionWithUserAndActorResolver } from '../adaptor/d1/session/sessionWithUserAndActorResolver.ts';
+import { createD1HomePostsResolverByPeriod } from '../adaptor/d1/timeline/homePostsResolverByPeriod.ts';
 import { createD1TimelineItemCreatedStore } from '../adaptor/d1/timeline/timelineItemCreatedStore.ts';
 import { createD1TimelineItemDeletedStore } from '../adaptor/d1/timeline/timelineItemDeletedStore.ts';
 import { createD1TimelineItemResolverByRepostId } from '../adaptor/d1/timeline/timelineItemResolverByRepostId.ts';
@@ -134,6 +143,7 @@ import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
@@ -145,6 +155,7 @@ import { createSignInUseCase } from '../useCase/signIn.ts';
 import { createSignUpUseCase } from '../useCase/signUp.ts';
 import { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
+import { createSummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
 import { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
@@ -178,6 +189,16 @@ export const createWorkerRuntimePorts = async (
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const searchTimeline = createSearchTimelineUseCase({
+    actorResolverByUserId,
+    actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    textGenerator,
+    timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+    htmlToPlainText,
+  });
+  const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
+  const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -287,12 +308,16 @@ export const createWorkerRuntimePorts = async (
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
       }),
-      searchTimeline: createSearchTimelineUseCase({
+      searchTimeline,
+      summarizeTimeline: createSummarizeTimelineUseCase({
         actorResolverByUserId,
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
         mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+        searchTimeline,
+        homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
+        postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+        aiSummaryUsageRecorder: createD1AiSummaryUsageRecorder(db),
         textGenerator,
-        timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
         htmlToPlainText,
       }),
       notificationsResolverByPage: createD1NotificationsResolverByPage(db),
@@ -319,6 +344,17 @@ export const createWorkerRuntimePorts = async (
         uploads,
         logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
         origin: env.ORIGIN,
+      }),
+    },
+    digest: {
+      digestResolverByUserIdAndDigestDate,
+      digestResolverByUserId: createD1DigestResolverByUserId(db),
+      timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+      hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
+      digestSubscriptionResolverByUserId,
+      saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
+        digestSubscriptionResolverByUserId,
+        digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
       }),
     },
     timeline: {
@@ -455,6 +491,9 @@ export const createWorkerRuntimePorts = async (
         articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
+      digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
+      digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
+      digestResolverByUserIdAndDigestDate,
       sessionResolver,
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
