@@ -3,7 +3,13 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import { fileURLToPath } from 'node:url';
 import { remarkMermaid } from './src/plugins/remark-mermaid.mjs';
+import { listPrivatePostPaths } from './src/utils/privatePostPaths.ts';
+
+const privatePostPaths = listPrivatePostPaths(
+  fileURLToPath(new URL('./src/content/posts', import.meta.url)),
+);
 
 const integrations = [
   mdx({
@@ -14,7 +20,11 @@ const integrations = [
   }),
   react(),
   sitemap({
-    filter: (page) => !page.includes('/reports') && !page.endsWith('.md'),
+    // private は URL を知る人だけが読む限定公開なので、検索エンジンに URL を渡さない
+    filter: (page) =>
+      !page.includes('/reports')
+      && !page.endsWith('.md')
+      && !privatePostPaths.has(new URL(page).pathname),
   }),
 ];
 
