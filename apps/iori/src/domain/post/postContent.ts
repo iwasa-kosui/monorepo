@@ -1,6 +1,8 @@
 import { Marked, Renderer } from 'marked';
 import type { HighlighterCore } from 'shiki/core';
 
+import { sanitizePostContent } from './sanitizePostContent.ts';
+
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 
 const getHighlighter = async (): Promise<HighlighterCore> => {
@@ -61,6 +63,6 @@ export const PostContent = {
   fromMarkdown: async (markdown: string): Promise<string> => {
     const highlighter = await getHighlighter();
     const marked = new Marked({ renderer: createRenderer(highlighter) });
-    return marked.parse(markdown, { async: false }) as string;
+    return sanitizePostContent(marked.parse(markdown, { async: false }) as string);
   },
 } as const;
