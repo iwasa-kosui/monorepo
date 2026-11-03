@@ -1,46 +1,40 @@
 import { useRef, useState } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { PostId } from '../../domain/post/postId.ts';
-import type { UserId } from '../../domain/user/userId.ts';
 import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
+import { accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
 type Props = Readonly<{
-  post: PostWithAuthor;
-  repostedBy?: {
-    username: string;
-    logoUri?: string;
-  };
-  onLike?: (postId: PostId) => void;
+  status: Status;
+  onLike?: (postId: string) => void;
   isLiking?: boolean;
-  onUndoLike?: (postId: PostId) => void;
+  onUndoLike?: (postId: string) => void;
   isUndoingLike?: boolean;
-  onRepost?: (postId: PostId) => void;
+  onRepost?: (postId: string) => void;
   isReposting?: boolean;
-  onUndoRepost?: (postId: PostId) => void;
+  onUndoRepost?: (postId: string) => void;
   isUndoingRepost?: boolean;
-  onDelete?: (postId: PostId) => void;
+  onDelete?: (postId: string) => void;
   isDeleting?: boolean;
-  onEmojiReact?: (postId: PostId, emoji: string) => void;
-  onUndoEmojiReact?: (postId: PostId, emoji: string) => void;
+  onEmojiReact?: (postId: string, emoji: string) => void;
+  onUndoEmojiReact?: (postId: string, emoji: string) => void;
   isEmojiReacting?: boolean;
   myReactions?: readonly string[];
-  currentUserId?: UserId;
+  currentAccountId?: string;
   isSelected?: boolean;
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
-  onReply?: (postId: PostId) => void;
-  onShowThread?: (postId: PostId) => void;
+  onReply?: (postId: string) => void;
+  onShowThread?: (postId: string) => void;
 }>;
 
 export const PostView = (
   {
-    post,
-    repostedBy,
+    status,
     onLike,
     isLiking,
     onUndoLike,
@@ -54,8 +48,8 @@ export const PostView = (
     onEmojiReact,
     onUndoEmojiReact,
     isEmojiReacting,
-    myReactions = [],
-    currentUserId,
+    myReactions,
+    currentAccountId,
     isSelected,
     dataIndex,
     isEmojiPickerOpen,
@@ -64,10 +58,15 @@ export const PostView = (
     onShowThread,
   }: Props,
 ) => {
-  const isRemotePost = post.type === 'remote' && 'uri' in post;
-  const isLocalPost = post.type === 'local';
-  const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
-  const inReplyToUri = 'inReplyToUri' in post ? post.inReplyToUri : null;
+  const post = displayStatus(status);
+  const repostedBy = status.reblog === null ? undefined : status.account;
+  const isLocalPost = isLocalAccount(post.account);
+  const isRemotePost = !isLocalPost;
+  const isOwner = isLocalPost && currentAccountId !== undefined && post.account.id === currentAccountId;
+  const isReplyPost = post.in_reply_to_id !== null;
+  const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
+  const linkPreviews = post.iori?.link_previews ?? [];
+  const reactions = post.iori?.reactions ?? [];
 
   // Gesture states for like
   const [isFloating, setIsFloating] = useState(false);
@@ -77,17 +76,13 @@ export const PostView = (
   const lastTapTime = useRef<number>(0);
 
   // Generate link to post detail page
-  const postDetailLink = isLocalPost
-    ? `/users/${post.username}/posts/${post.postId}`
-    : isRemotePost
-    ? safeAbsoluteUrl(post.uri)
-    : undefined;
+  const postDetailLink = isLocalPost ? statusHref(post) : safeAbsoluteUrl(post.uri);
 
   const triggerLike = () => {
-    if (onLike && !post.liked && !isLiking) {
+    if (onLike && !post.favourited && !isLiking) {
       setShowHeartAnimation(true);
       setIsFloating(true);
-      onLike(post.postId);
+      onLike(post.id);
       setTimeout(() => {
         setShowHeartAnimation(false);
         setIsFloating(false);
@@ -98,17 +93,17 @@ export const PostView = (
   const handleLikeClick = () => {
     if (isLiking || isUndoingLike) return;
 
-    if (post.liked) {
+    if (post.favourited) {
       // Undo like
       if (onUndoLike) {
         if (confirm('いいねを取り消しますか？')) {
-          onUndoLike(post.postId);
+          onUndoLike(post.id);
         }
       }
     } else {
       // Like
       if (onLike) {
-        onLike(post.postId);
+        onLike(post.id);
       }
     }
   };
@@ -116,7 +111,7 @@ export const PostView = (
   const handleDeleteClick = () => {
     if (isOwner && onDelete && !isDeleting) {
       if (confirm('Are you sure you want to delete this post?')) {
-        onDelete(post.postId);
+        onDelete(post.id);
       }
     }
   };
@@ -124,18 +119,18 @@ export const PostView = (
   const handleRepostClick = () => {
     if (isReposting || isUndoingRepost) return;
 
-    if (post.reposted) {
+    if (post.reblogged) {
       // Undo repost
       if (onUndoRepost) {
         if (confirm('リポストを取り消しますか？')) {
-          onUndoRepost(post.postId);
+          onUndoRepost(post.id);
         }
       }
     } else {
       // Repost
       if (onRepost) {
         if (confirm('リポストしますか？')) {
-          onRepost(post.postId);
+          onRepost(post.id);
         }
       }
     }
@@ -148,7 +143,7 @@ export const PostView = (
   };
 
   const handleTouchEnd = (e: TouchEvent) => {
-    if (post.liked || isLiking) return;
+    if (post.favourited || isLiking) return;
     if (touchStartX.current === null || touchStartY.current === null) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -164,7 +159,7 @@ export const PostView = (
 
   // Double tap detection for like
   const handleClick = (e: MouseEvent) => {
-    if (post.liked || isLiking) return;
+    if (post.favourited || isLiking) return;
     if (lastTapTime.current === null) return;
 
     const now = Date.now();
@@ -178,9 +173,9 @@ export const PostView = (
     lastTapTime.current = now;
   };
 
-  const canLike = onLike && !post.liked && !isLiking;
+  const canLike = onLike && !post.favourited && !isLiking;
 
-  const logoUrl = safeUrl(post.logoUri);
+  const logoUrl = safeUrl(post.account.avatar);
 
   return (
     <article
@@ -236,11 +231,7 @@ export const PostView = (
         <div class='flex-1 min-w-0'>
           <div class='flex items-center gap-2'>
             <a
-              href={isLocalPost
-                ? `/users/${post.username}`
-                : isRemotePost
-                ? `/remote-users/${post.actorId}`
-                : undefined}
+              href={accountHref(post.account)}
               class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm'
             >
               {logoUrl
@@ -252,18 +243,14 @@ export const PostView = (
                   />
                 )
                 : (
-                  String(post.username).charAt(0).toUpperCase()
+                  post.account.username.charAt(0).toUpperCase()
                 )}
             </a>
             <a
-              href={isLocalPost
-                ? `/users/${post.username}`
-                : isRemotePost
-                ? `/remote-users/${post.actorId}`
-                : undefined}
+              href={accountHref(post.account)}
               class='font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
-              @{post.username}
+              @{post.account.username}
             </a>
             <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
@@ -271,10 +258,10 @@ export const PostView = (
               target={isRemotePost && postDetailLink ? '_blank' : undefined}
               rel={isRemotePost && postDetailLink ? 'noopener noreferrer' : undefined}
               class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-              title={new Date(post.createdAt).toLocaleString()}
+              title={new Date(post.created_at).toLocaleString()}
             >
-              <time dateTime={new Date(post.createdAt).toISOString()}>
-                {Instant.formatRelative(post.createdAt)}
+              <time dateTime={new Date(post.created_at).toISOString()}>
+                {Instant.formatRelative(Date.parse(post.created_at) as Instant)}
               </time>
             </a>
           </div>
@@ -284,17 +271,17 @@ export const PostView = (
             class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
-          {post.images && post.images.length > 0 && (
+          {images.length > 0 && (
             <div
               class={`mt-3 grid gap-2 ${
-                post.images.length === 1
+                images.length === 1
                   ? 'grid-cols-1'
-                  : post.images.length === 2
+                  : images.length === 2
                   ? 'grid-cols-2'
                   : 'grid-cols-2 md:grid-cols-3'
               }`}
             >
-              {post.images.map((image, index) => {
+              {images.map((image, index) => {
                 const imageUrl = safeUrl(image.url);
                 if (!imageUrl) return null;
                 return (
@@ -307,7 +294,7 @@ export const PostView = (
                   >
                     <img
                       src={imageUrl}
-                      alt={image.altText || 'Post image'}
+                      alt={image.description || 'Post image'}
                       class='w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity'
                       loading='lazy'
                     />
@@ -317,19 +304,19 @@ export const PostView = (
             </div>
           )}
           {/* Link previews */}
-          {post.linkPreviews && post.linkPreviews.length > 0 && (
+          {linkPreviews.length > 0 && (
             <div class='mt-3 space-y-2'>
-              {post.linkPreviews.map((preview) => <LinkPreviewCard key={preview.linkPreviewId} preview={preview} />)}
+              {linkPreviews.map((preview) => <LinkPreviewCard key={preview.url} preview={preview} />)}
             </div>
           )}
           {/* Show thread link */}
-          {onShowThread && inReplyToUri && (
+          {onShowThread && isReplyPost && (
             <div class='mt-2'>
               <button
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation();
-                  onShowThread(post.postId);
+                  onShowThread(post.id);
                 }}
                 class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
               >
@@ -356,7 +343,7 @@ export const PostView = (
             {onReply && (
               <button
                 type='button'
-                onClick={() => onReply(post.postId)}
+                onClick={() => onReply(post.id)}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='Reply (p)'
               >
@@ -381,7 +368,7 @@ export const PostView = (
                 type='button'
                 onClick={handleRepostClick}
                 class={`flex items-center gap-1 transition-colors ${
-                  post.reposted
+                  post.reblogged
                     ? 'text-sage dark:text-sage'
                     : isReposting || isUndoingRepost
                     ? 'text-sage/50 dark:text-sage-dark cursor-wait'
@@ -391,7 +378,7 @@ export const PostView = (
                   ? 'リポスト中...'
                   : isUndoingRepost
                   ? 'リポスト取り消し中...'
-                  : post.reposted
+                  : post.reblogged
                   ? 'リポストを取り消す'
                   : 'リポスト'}
                 disabled={isReposting || isUndoingRepost}
@@ -399,7 +386,7 @@ export const PostView = (
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   class='h-5 w-5'
-                  fill={post.reposted ? 'currentColor' : 'none'}
+                  fill={post.reblogged ? 'currentColor' : 'none'}
                   viewBox='0 0 24 24'
                   stroke='currentColor'
                   stroke-width='2'
@@ -410,7 +397,7 @@ export const PostView = (
                     d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
                   />
                 </svg>
-                {post.repostCount > 0 && <span class='text-sm'>{post.repostCount}</span>}
+                {post.reblogs_count > 0 && <span class='text-sm'>{post.reblogs_count}</span>}
               </button>
             }
             {
@@ -418,7 +405,7 @@ export const PostView = (
                 type='button'
                 onClick={handleLikeClick}
                 class={`flex items-center gap-1 transition-colors ${
-                  post.liked
+                  post.favourited
                     ? 'text-terracotta dark:text-terracotta-light'
                     : isLiking || isUndoingLike
                     ? 'text-terracotta-light/50 dark:text-terracotta-dark cursor-wait'
@@ -428,7 +415,7 @@ export const PostView = (
                   ? 'いいね中...'
                   : isUndoingLike
                   ? 'いいね取り消し中...'
-                  : post.liked
+                  : post.favourited
                   ? 'いいねを取り消す'
                   : 'いいね'}
                 disabled={isLiking || isUndoingLike}
@@ -436,7 +423,7 @@ export const PostView = (
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   class='h-5 w-5'
-                  fill={post.liked ? 'currentColor' : 'none'}
+                  fill={post.favourited ? 'currentColor' : 'none'}
                   viewBox='0 0 24 24'
                   stroke='currentColor'
                   stroke-width='2'
@@ -447,7 +434,7 @@ export const PostView = (
                     d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
                   />
                 </svg>
-                {post.likeCount > 0 && <span class='text-sm'>{post.likeCount}</span>}
+                {post.favourites_count > 0 && <span class='text-sm'>{post.favourites_count}</span>}
               </button>
             }
             {/* Emoji reaction button */}
@@ -486,7 +473,7 @@ export const PostView = (
                   isOpen={isEmojiPickerOpen ?? false}
                   onClose={() => onToggleEmojiPicker?.()}
                   onSelect={(emoji) => {
-                    onEmojiReact(post.postId, emoji);
+                    onEmojiReact(post.id, emoji);
                     onToggleEmojiPicker?.();
                   }}
                   isLoading={isEmojiReacting}
@@ -523,11 +510,11 @@ export const PostView = (
             )}
           </div>
           {/* Reactions display */}
-          {(post.reactions.length > 0 || myReactions.length > 0) && (
+          {(reactions.length > 0 || (myReactions?.length ?? 0) > 0) && (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
-              {post.reactions.map((reaction) => {
-                const isMyReaction = myReactions.includes(reaction.emoji);
-                const emojiUrl = safeUrl(reaction.emojiImageUrl);
+              {reactions.map((reaction) => {
+                const isMyReaction = myReactions === undefined ? reaction.me : myReactions.includes(reaction.emoji);
+                const emojiUrl = safeUrl(reaction.url);
 
                 return (
                   <button
@@ -536,9 +523,9 @@ export const PostView = (
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isMyReaction && onUndoEmojiReact) {
-                        onUndoEmojiReact(post.postId, reaction.emoji);
+                        onUndoEmojiReact(post.id, reaction.emoji);
                       } else if (!isMyReaction && onEmojiReact) {
-                        onEmojiReact(post.postId, reaction.emoji);
+                        onEmojiReact(post.id, reaction.emoji);
                       }
                     }}
                     class={`inline-flex items-center gap-1 px-2 py-0.5 text-sm rounded-full transition-colors shadow-clay-sm ${

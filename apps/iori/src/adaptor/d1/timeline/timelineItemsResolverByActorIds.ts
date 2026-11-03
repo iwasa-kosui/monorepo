@@ -1,5 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
@@ -7,6 +8,7 @@ import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import { RepostId } from '../../../domain/repost/repostId.ts';
 import type {
   PostTimelineItem,
   RepostTimelineItem,
@@ -17,6 +19,7 @@ import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
+import { pageConditions, pageOrderBy } from '../pageCondition.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -33,10 +36,18 @@ import {
   usersTable,
 } from '../schema.ts';
 
+const cursorItem = alias(timelineItemsTable, 'cursor_item');
+
+const cursorOf = (id: string) =>
+  sql`select ${cursorItem.createdAt}, ${cursorItem.timelineItemId} from ${timelineItemsTable} ${cursorItem}
+    where (${cursorItem.type} = 'post' and ${cursorItem.postId} = ${id})
+      or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} = ${id})
+    limit 1`;
+
 export const createD1TimelineItemsResolverByActorIds = (
   db: IoriD1Db,
 ): TimelineItemsResolverByActorIds => ({
-  resolve: async ({ actorIds, currentActorId, createdAt, mutedActorIds }) => {
+  resolve: async ({ actorIds, currentActorId, createdAt, mutedActorIds, page }) => {
     if (actorIds.length === 0) {
       return RA.ok([]);
     }
@@ -61,10 +72,23 @@ export const createD1TimelineItemsResolverByActorIds = (
       .where(and(
         inArray(timelineItemsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         isNull(timelineItemsTable.deletedAt),
-        createdAt === undefined ? undefined : lt(timelineItemsTable.createdAt, new Date(createdAt)),
+        page === undefined || mutedActorIds.length === 0
+          ? undefined
+          : notInArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson([...mutedActorIds])}))`),
+        ...(page === undefined
+          ? [createdAt === undefined ? undefined : lt(timelineItemsTable.createdAt, new Date(createdAt))]
+          : pageConditions(
+            page,
+            { createdAt: timelineItemsTable.createdAt, id: timelineItemsTable.timelineItemId },
+            cursorOf,
+          )),
       ))
-      .limit(10)
-      .orderBy(desc(timelineItemsTable.createdAt));
+      .limit(page?.limit ?? 10)
+      .orderBy(
+        ...(page === undefined
+          ? [desc(timelineItemsTable.createdAt), desc(timelineItemsTable.timelineItemId)]
+          : pageOrderBy(page, { createdAt: timelineItemsTable.createdAt, id: timelineItemsTable.timelineItemId })),
+      );
 
     const postIds = rows.map((row) => row.posts.postId);
     const reposterActorIds = rows
@@ -214,10 +238,12 @@ export const createD1TimelineItemsResolverByActorIds = (
         const itemCreatedAt = row.timeline_items.createdAt.getTime() as Instant;
         if (row.timeline_items.type === 'repost') {
           const reposter = reposterInfo.get(row.timeline_items.actorId);
-          if (reposter !== undefined) {
+          const repostId = row.timeline_items.repostId;
+          if (reposter !== undefined && repostId !== null) {
             const item: RepostTimelineItem = {
               type: 'repost',
               timelineItemId,
+              repostId: RepostId.orThrow(repostId),
               post: postWithAuthor,
               repostedBy: {
                 actorId: row.timeline_items.actorId as ActorId,

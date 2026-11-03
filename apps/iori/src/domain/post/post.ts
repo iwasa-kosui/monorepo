@@ -6,6 +6,7 @@ import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import type { LinkPreview } from '../linkPreview/linkPreview.ts';
+import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
 import { PostId } from './postId.ts';
@@ -144,8 +145,16 @@ export type RemotePostIdentity = Readonly<{
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<
-  { postId: PostId },
+  { postId: PostId; currentActorId?: ActorId },
   { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
+>;
+export type PostsWithAuthorResolverByPostIds = Agg.Resolver<
+  { postIds: ReadonlyArray<PostId>; currentActorId: ActorId | undefined },
+  ReadonlyMap<PostId, PostWithAuthor>
+>;
+export type LocalPostsResolverByPage = Agg.Resolver<
+  { currentActorId: ActorId | undefined; page: PageRequest },
+  PostWithAuthor[]
 >;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<

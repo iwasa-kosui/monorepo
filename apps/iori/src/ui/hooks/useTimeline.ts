@@ -1,22 +1,26 @@
-import { hc } from 'hono/client';
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { Actor } from '../../domain/actor/actor.ts';
-import type { Instant } from '../../domain/instant/instant.ts';
-import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
-import type { User } from '../../domain/user/user.ts';
+import type { Account, CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
+import {
+  fetchFollowers,
+  fetchFollowing,
+  fetchHomeTimeline,
+  fetchVerifyCredentials,
+  isMastodonApiError,
+} from '../api/mastodonClient.ts';
+import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
+import { appendUniqueById } from './appendUnique.ts';
+import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
 import { stateAfterFetchFailure } from './timelineFailure.ts';
-import { appendUniqueTimelineItems } from './timelineItemsMerge.ts';
 
-const client = hc<APIRouterType>('/api');
+const ACCOUNT_LIST_LIMIT = 80;
 
 export type TimelineData = Readonly<{
-  user: User;
-  actor: Actor;
-  timelineItems: readonly TimelineItemWithPost[];
-  followers: readonly Actor[];
-  following: readonly Actor[];
+  me: CredentialAccount;
+  statuses: readonly Status[];
+  followers: readonly Account[];
+  following: readonly Account[];
+  nextMaxId: string | undefined;
 }>;
 
 export type TimelineState =
@@ -24,102 +28,123 @@ export type TimelineState =
   | { status: 'error'; error: string }
   | { status: 'success'; data: TimelineData };
 
-type PostUpdater = (
+type StatusUpdater = (
   postId: string,
-  updater: (item: TimelineItemWithPost) => TimelineItemWithPost,
+  updater: (status: Status) => Status,
 ) => void;
 
 export type UseTimelineReturn = Readonly<{
   state: TimelineState;
-  fetchMore: (createdAt: Instant | undefined) => Promise<void>;
+  loadMore: (maxId: string) => Promise<void>;
+  reload: () => Promise<void>;
   refresh: () => Promise<void>;
   isRefreshing: boolean;
-  updateTimelineItem: PostUpdater;
+  updateTimelineItem: StatusUpdater;
   removePost: (postId: string) => void;
 }>;
+
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 export const useTimeline = (): UseTimelineReturn => {
   const [state, setState] = useState<TimelineState>({ status: 'loading' });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const isFetchingMoreRef = useRef(false);
+  const isLoadingMoreRef = useRef(false);
+  const generationRef = useRef(0);
 
-  const fetchMore = useCallback(
-    async (createdAt: Instant | undefined) => {
-      if (createdAt !== undefined) {
-        if (isFetchingMoreRef.current) return;
-        isFetchingMoreRef.current = true;
-      }
-      try {
-        const res = await client.v1.home.$get({
-          query: { createdAt: createdAt ? String(createdAt) : undefined },
-        });
-        const latest = await res.json();
-
-        if ('error' in latest) {
-          setState((prev) => stateAfterFetchFailure(prev, createdAt, latest.error));
-          return;
-        }
-
-        if (!res.ok) {
-          setState((prev) => stateAfterFetchFailure(prev, createdAt, `HTTP ${res.status}`));
-          return;
-        }
-
-        setState((prev) => {
-          if (prev.status === 'success' && createdAt !== undefined) {
-            return {
-              status: 'success',
-              data: {
-                ...latest,
-                timelineItems: appendUniqueTimelineItems(prev.data.timelineItems, latest.timelineItems),
-              },
-            };
-          }
-          return { status: 'success', data: latest };
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setState((prev) => stateAfterFetchFailure(prev, createdAt, message));
-      } finally {
-        if (createdAt !== undefined) {
-          isFetchingMoreRef.current = false;
-        }
-      }
-    },
-    [],
-  );
-
-  const refresh = useCallback(async () => {
-    setIsRefreshing(true);
+  const loadAccountLists = useCallback(async (accountId: string, generation: number) => {
     try {
-      const res = await client.v1.home.$get({
-        query: { createdAt: undefined },
+      const [followers, following] = await Promise.all([
+        fetchFollowers(accountId, { limit: ACCOUNT_LIST_LIMIT }),
+        fetchFollowing(accountId, { limit: ACCOUNT_LIST_LIMIT }),
+      ]);
+      if (isStaleGeneration(generationRef, generation)) return;
+      setState((prev) => {
+        if (prev.status !== 'success') return prev;
+        return {
+          status: 'success',
+          data: { ...prev.data, followers: followers.items, following: following.items },
+        };
       });
-      const latest = await res.json();
-
-      if ('error' in latest) {
-        setState({ status: 'error', error: latest.error });
-        return;
-      }
-
-      setState({ status: 'success', data: latest });
     } catch (error) {
-      console.error('Failed to refresh:', error);
-    } finally {
-      setIsRefreshing(false);
+      console.error('Failed to load followers and following:', error);
     }
   }, []);
 
-  const updateTimelineItem: PostUpdater = useCallback(
-    (postId, updater) => {
+  const loadFirstPage = useCallback(
+    async (isManualRefresh: boolean) => {
+      const generation = startGeneration(generationRef);
+      isLoadingMoreRef.current = false;
+      if (isManualRefresh) setIsRefreshing(true);
+      try {
+        const [page, me] = await Promise.all([fetchHomeTimeline(), fetchVerifyCredentials()]);
+        if (isStaleGeneration(generationRef, generation)) return;
+        setState((prev) => ({
+          status: 'success',
+          data: {
+            me,
+            statuses: page.items,
+            nextMaxId: page.nextMaxId,
+            followers: prev.status === 'success' ? prev.data.followers : [],
+            following: prev.status === 'success' ? prev.data.following : [],
+          },
+        }));
+        setIsRefreshing(false);
+        await loadAccountLists(me.id, generation);
+      } catch (error) {
+        if (isStaleGeneration(generationRef, generation)) return;
+        setIsRefreshing(false);
+        if (!isManualRefresh) {
+          setState((prev) => stateAfterFetchFailure(prev, false, errorMessage(error)));
+        } else if (isMastodonApiError(error)) {
+          setState({ status: 'error', error: error.message });
+        } else {
+          console.error('Failed to refresh:', error);
+        }
+      }
+    },
+    [loadAccountLists],
+  );
+
+  const reload = useCallback(() => loadFirstPage(false), [loadFirstPage]);
+
+  const refresh = useCallback(() => loadFirstPage(true), [loadFirstPage]);
+
+  const loadMore = useCallback(async (maxId: string) => {
+    if (isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
+    const generation = currentGeneration(generationRef);
+    try {
+      const page = await fetchHomeTimeline({ maxId });
+      if (isStaleGeneration(generationRef, generation)) return;
+      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
       setState((prev) => {
         if (prev.status !== 'success') return prev;
         return {
           status: 'success',
           data: {
             ...prev.data,
-            timelineItems: prev.data.timelineItems.map((item) => item.post.postId === postId ? updater(item) : item),
+            statuses: appendUniqueById(prev.data.statuses, page.items),
+            nextMaxId,
           },
+        };
+      });
+    } catch (error) {
+      if (isStaleGeneration(generationRef, generation)) return;
+      setState((prev) => stateAfterFetchFailure(prev, true, errorMessage(error)));
+    } finally {
+      if (!isStaleGeneration(generationRef, generation)) {
+        isLoadingMoreRef.current = false;
+      }
+    }
+  }, []);
+
+  const updateTimelineItem: StatusUpdater = useCallback(
+    (postId, updater) => {
+      setState((prev) => {
+        if (prev.status !== 'success') return prev;
+        return {
+          status: 'success',
+          data: { ...prev.data, statuses: updateStatusesByPostId(prev.data.statuses, postId, updater) },
         };
       });
     },
@@ -131,23 +156,19 @@ export const useTimeline = (): UseTimelineReturn => {
       if (prev.status !== 'success') return prev;
       return {
         status: 'success',
-        data: {
-          ...prev.data,
-          timelineItems: prev.data.timelineItems.filter(
-            (item) => item.post.postId !== postId,
-          ),
-        },
+        data: { ...prev.data, statuses: removeStatusesByPostId(prev.data.statuses, postId) },
       };
     });
   }, []);
 
   useEffect(() => {
-    fetchMore(undefined);
-  }, [fetchMore]);
+    reload();
+  }, [reload]);
 
   return {
     state,
-    fetchMore,
+    loadMore,
+    reload,
     refresh,
     isRefreshing,
     updateTimelineItem,

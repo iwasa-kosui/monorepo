@@ -19,9 +19,7 @@ const resolvePosts = async (
   input: Readonly<{
     actorIds?: readonly ActorId[];
     currentActorId?: ActorId;
-    localOnly?: boolean;
     createdAt: Instant | undefined;
-    limit?: number;
   }>,
 ): Promise<PostWithAuthor[]> => {
   if (input.actorIds?.length === 0) return [];
@@ -45,11 +43,10 @@ const resolvePosts = async (
       input.actorIds === undefined
         ? undefined
         : inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(input.actorIds)}))`),
-      input.localOnly === true ? eq(localPostsTable.postId, postsTable.postId) : undefined,
       input.createdAt === undefined ? undefined : lt(postsTable.createdAt, new Date(input.createdAt)),
     ))
     .orderBy(desc(postsTable.createdAt))
-    .limit(input.limit ?? 20);
+    .limit(20);
   const threadResolver = createD1ThreadResolver(db, origin);
   const resolved = await Promise.all(rows.map((row) => threadResolver.resolve({ postId: row.postId as never })));
   return resolved.flatMap((result, index) =>
@@ -73,9 +70,4 @@ export const createD1PostsResolverByActorIdWithPagination = (
 ): PostsResolverByActorIdWithPagination => ({
   resolve: async ({ actorId, currentActorId, createdAt }) =>
     RA.ok(await resolvePosts(db, origin, { actorIds: [actorId], currentActorId, createdAt })),
-});
-
-export const createD1LocalPostsResolver = (db: IoriD1Db, origin: string) => ({
-  resolve: async ({ createdAt, limit }: { createdAt: Instant | undefined; limit?: number }) =>
-    RA.ok(await resolvePosts(db, origin, { createdAt, localOnly: true, limit })),
 });

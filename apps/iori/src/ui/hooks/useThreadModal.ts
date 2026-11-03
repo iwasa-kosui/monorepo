@@ -1,15 +1,12 @@
-import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-
-const client = hc<APIRouterType>('/api');
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { fetchStatus, fetchStatusContext } from '../api/mastodonClient.ts';
 
 export type ThreadData = Readonly<{
-  currentPost: PostWithAuthor | null;
-  ancestors: PostWithAuthor[];
-  descendants: PostWithAuthor[];
+  currentPost: Status | null;
+  ancestors: readonly Status[];
+  descendants: readonly Status[];
 }>;
 
 export type UseThreadModalReturn = Readonly<{
@@ -20,7 +17,7 @@ export type UseThreadModalReturn = Readonly<{
   closeThread: () => void;
   updateThreadPost: (
     postId: string,
-    updater: (post: PostWithAuthor) => PostWithAuthor,
+    updater: (status: Status) => Status,
   ) => void;
   removeFromThread: (postId: string) => void;
 }>;
@@ -35,23 +32,15 @@ export const useThreadModal = (): UseThreadModalReturn => {
     setThreadData(null);
     setIsLoadingThread(true);
     try {
-      const res = await client.v1.thread.$get({ query: { postId } });
-      const result = await res.json();
-      if (
-        'currentPost' in result
-        && 'ancestors' in result
-        && 'descendants' in result
-      ) {
-        setThreadData(
-          result as {
-            currentPost: PostWithAuthor | null;
-            ancestors: PostWithAuthor[];
-            descendants: PostWithAuthor[];
-          },
-        );
-      } else if ('error' in result) {
-        console.error('Failed to load thread:', result.error);
-      }
+      const [currentPost, context] = await Promise.all([
+        fetchStatus(postId),
+        fetchStatusContext(postId),
+      ]);
+      setThreadData({
+        currentPost,
+        ancestors: context.ancestors,
+        descendants: context.descendants,
+      });
     } catch (error) {
       console.error('Failed to load thread:', error);
     } finally {
@@ -65,15 +54,15 @@ export const useThreadModal = (): UseThreadModalReturn => {
   }, []);
 
   const updateThreadPost = useCallback(
-    (postId: string, updater: (post: PostWithAuthor) => PostWithAuthor) => {
+    (postId: string, updater: (status: Status) => Status) => {
       setThreadData((prev) => {
         if (!prev) return prev;
         return {
-          currentPost: prev.currentPost?.postId === postId
+          currentPost: prev.currentPost?.id === postId
             ? updater(prev.currentPost)
             : prev.currentPost,
-          ancestors: prev.ancestors.map((post) => post.postId === postId ? updater(post) : post),
-          descendants: prev.descendants.map((post) => post.postId === postId ? updater(post) : post),
+          ancestors: prev.ancestors.map((post) => post.id === postId ? updater(post) : post),
+          descendants: prev.descendants.map((post) => post.id === postId ? updater(post) : post),
         };
       });
     },
@@ -83,14 +72,14 @@ export const useThreadModal = (): UseThreadModalReturn => {
   const removeFromThread = useCallback((postId: string) => {
     setThreadData((prev) => {
       if (!prev) return prev;
-      if (prev.currentPost?.postId === postId) {
+      if (prev.currentPost?.id === postId) {
         setThreadModalPostId(null);
         return null;
       }
       return {
         currentPost: prev.currentPost,
-        ancestors: prev.ancestors.filter((post) => post.postId !== postId),
-        descendants: prev.descendants.filter((post) => post.postId !== postId),
+        ancestors: prev.ancestors.filter((post) => post.id !== postId),
+        descendants: prev.descendants.filter((post) => post.id !== postId),
       };
     });
   }, []);

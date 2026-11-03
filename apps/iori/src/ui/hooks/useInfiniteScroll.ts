@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef } from 'hono/jsx';
 
-import type { Instant } from '../../domain/instant/instant.ts';
 import { isNearDocumentEnd } from './infiniteScrollPosition.ts';
 
 type UseInfiniteScrollProps = Readonly<{
-  items: readonly { createdAt: Instant }[];
-  onLoadMore: (cursor: Instant) => void;
+  nextCursor: string | undefined;
+  onLoadMore: (cursor: string) => void;
   debounceMs?: number;
 }>;
 
 export const useInfiniteScroll = ({
-  items,
+  nextCursor,
   onLoadMore,
   debounceMs = 300,
 }: UseInfiniteScrollProps): void => {
@@ -18,7 +17,7 @@ export const useInfiniteScroll = ({
   const timeoutRef = useRef<any>(undefined);
 
   const debouncedLoadMore = useCallback(
-    (cursor: Instant) => {
+    (cursor: string) => {
       if (timeoutRef.current !== undefined) {
         clearTimeout(timeoutRef.current);
       }
@@ -31,11 +30,10 @@ export const useInfiniteScroll = ({
 
   useEffect(() => {
     const handleScroll = () => {
-      if (items.length === 0) return;
+      if (nextCursor === undefined) return;
 
       if (isNearDocumentEnd()) {
-        const oldest = items.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
-        debouncedLoadMore(oldest.createdAt);
+        debouncedLoadMore(nextCursor);
       }
     };
 
@@ -46,5 +44,5 @@ export const useInfiniteScroll = ({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [items, debouncedLoadMore]);
+  }, [nextCursor, debouncedLoadMore]);
 };

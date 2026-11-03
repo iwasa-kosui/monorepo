@@ -1,0 +1,340 @@
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import type { PageRequest } from '../../../domain/page/page.ts';
+import { PostId } from '../../../domain/post/postId.ts';
+import { RepostId } from '../../../domain/repost/repostId.ts';
+import { createD1AccountProfilesResolverByActorIds } from '../actor/accountProfilesResolverByActorIds.ts';
+import { createD1FederatedTimelineItemsResolver } from '../federatedTimeline/federatedTimelineItemsResolver.ts';
+import {
+  createD1ActorIdsResolverByFollowerIdWithPagination,
+  createD1ActorIdsResolverByFollowingIdWithPagination,
+} from '../follow/actorIdsResolverByFollowsWithPagination.ts';
+import { createD1LocalPostsResolverByPage } from '../post/localPostsResolverByPage.ts';
+import { createD1PostExtrasResolverByPosts } from '../post/postExtrasResolverByPosts.ts';
+import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
+import { createD1ThreadResolver } from '../post/threadResolver.ts';
+import { createD1RepostResolverById } from '../repost/repostResolverById.ts';
+import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
+import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
+import { createSqliteD1Fixture } from './sqliteFixture.ts';
+
+const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
+afterEach(() => {
+  for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
+});
+
+const setup = () => {
+  const fixture = createSqliteD1Fixture();
+  fixtures.push(fixture);
+  return { ...fixture, seed: createMastodonSeed(fixture) };
+};
+
+const page = (overrides: Partial<PageRequest> = {}): PageRequest => ({
+  limit: 20,
+  olderThanId: undefined,
+  newerThanId: undefined,
+  order: 'newestFirst',
+  ...overrides,
+});
+
+const actorId = (id: string) => ActorId.orThrow(id);
+const postIdOf = (item: { post: { postId: string } }) => item.post.postId;
+
+describe('createD1TimelineItemsResolverByActorIds with page', () => {
+  const seedTimeline = () => {
+    const ctx = setup();
+    const me = ctx.seed.addLocalActor('kosui');
+    const alice = ctx.seed.addRemoteActor('alice');
+    const first = ctx.seed.addLocalPost(me, 1_000);
+    const sameA = ctx.seed.addLocalPost(me, 2_000);
+    const sameB = ctx.seed.addLocalPost(me, 2_000);
+    const aliceNote = ctx.seed.addRemotePost(alice, 3_000, { timeline: true });
+    const repost = ctx.seed.addRepost(me.actorId, aliceNote.postId, 4_000);
+    const resolve = (input: Partial<PageRequest>, mutedActorIds: string[] = []) =>
+      createD1TimelineItemsResolverByActorIds(ctx.db).resolve({
+        actorIds: [actorId(me.actorId), actorId(alice.actorId)],
+        currentActorId: actorId(me.actorId),
+        createdAt: undefined,
+        mutedActorIds: mutedActorIds.map(actorId),
+        page: page(input),
+      });
+    return { ...ctx, me, alice, first, sameA, sameB, aliceNote, repost, resolve };
+  };
+
+  it('新しい順に返し、ブーストの項目に repostId を入れる', async () => {
+    const t = seedTimeline();
+
+    const result = await t.resolve({});
+
+    expect(result.ok && result.val.map((item) => item.type)).toEqual(['repost', 'post', 'post', 'post', 'post']);
+    const boost = result.ok ? result.val[0] : undefined;
+    expect(boost?.type === 'repost' && boost.repostId).toBe(t.repost.repostId);
+    expect(result.ok && result.val.slice(2, 4).map(postIdOf).sort()).toEqual([t.sameA.postId, t.sameB.postId].sort());
+  });
+
+  it('max_id に postId と repostId の両方を使え、同じミリ秒の 2 件を取りこぼさない', async () => {
+    const t = seedTimeline();
+    const all = await t.resolve({});
+    const ids = all.ok ? all.val.map((item) => item.type === 'repost' ? item.repostId : item.post.postId) : [];
+
+    const afterBoost = await t.resolve({ olderThanId: ids[0] });
+    const afterFirstOfPair = await t.resolve({ olderThanId: ids[2] });
+    const limited = await t.resolve({ limit: 2, olderThanId: ids[1] });
+
+    expect(afterBoost.ok && afterBoost.val.map(postIdOf)).toEqual(all.ok ? all.val.slice(1).map(postIdOf) : []);
+    expect(afterFirstOfPair.ok && afterFirstOfPair.val.map(postIdOf)).toEqual(
+      all.ok ? all.val.slice(3).map(postIdOf) : [],
+    );
+    expect(limited.ok && limited.val.map(postIdOf)).toEqual(all.ok ? all.val.slice(2, 4).map(postIdOf) : []);
+  });
+
+  it('min_id は新しい側を古い順に limit 件取り、since_id は新しい側を新しい順に返す', async () => {
+    const t = seedTimeline();
+    const all = await t.resolve({});
+    const ids = all.ok ? all.val.map((item) => item.type === 'repost' ? item.repostId : item.post.postId) : [];
+    const newestFirst = all.ok ? all.val.map(postIdOf) : [];
+
+    const min = await t.resolve({ newerThanId: ids[4], order: 'oldestFirst', limit: 2 });
+    const since = await t.resolve({ newerThanId: ids[4], limit: 2 });
+
+    expect(min.ok && min.val.map(postIdOf)).toEqual([newestFirst[3], newestFirst[2]]);
+    expect(since.ok && since.val.map(postIdOf)).toEqual([newestFirst[0], newestFirst[1]]);
+  });
+
+  it('知らない ID の max_id は空にする', async () => {
+    const t = seedTimeline();
+
+    const result = await t.resolve({ olderThanId: t.seed.uuid() });
+
+    expect(result.ok && result.val).toEqual([]);
+  });
+
+  it('ミュートした投稿者を SQL で除いても件数が limit になる', async () => {
+    const t = seedTimeline();
+
+    const result = await t.resolve({ limit: 2 }, [t.alice.actorId]);
+
+    expect(result.ok && result.val).toHaveLength(2);
+    expect(result.ok && result.val.every((item) => item.post.actorId !== t.alice.actorId)).toBe(true);
+  });
+});
+
+describe('createD1LocalPostsResolverByPage', () => {
+  it('ローカルの投稿だけを新しい順に返し、閲覧者の状態を入れる', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+    const mine = t.seed.addLocalPost(me, 1_000);
+    t.seed.addLocalPost(me, 2_000, { deletedAt: 3_000 });
+    const latest = t.seed.addLocalPost(me, 4_000);
+    t.seed.addRemotePost(alice, 5_000);
+    t.seed.addLike(me.actorId, mine.postId);
+
+    const result = await createD1LocalPostsResolverByPage(t.db).resolve({
+      currentActorId: actorId(me.actorId),
+      page: page(),
+    });
+
+    expect(result.ok && result.val.map((post) => post.postId)).toEqual([latest.postId, mine.postId]);
+    expect(result.ok && result.val.map((post) => post.liked)).toEqual([false, true]);
+  });
+
+  it('max_id と min_id でページを分け、削除済みの ID を境界にしても動く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const a = t.seed.addLocalPost(me, 1_000);
+    const deleted = t.seed.addLocalPost(me, 2_000, { deletedAt: 2_500 });
+    const b = t.seed.addLocalPost(me, 3_000);
+    const c = t.seed.addLocalPost(me, 3_000);
+    const resolver = createD1LocalPostsResolverByPage(t.db);
+
+    const older = await resolver.resolve({
+      currentActorId: undefined,
+      page: page({ olderThanId: deleted.postId }),
+    });
+    const newer = await resolver.resolve({
+      currentActorId: undefined,
+      page: page({ newerThanId: a.postId, order: 'oldestFirst', limit: 2 }),
+    });
+
+    expect(older.ok && older.val.map((post) => post.postId)).toEqual([a.postId]);
+    expect(newer.ok && newer.val.map((post) => post.postId)).toEqual([b.postId, c.postId].sort());
+  });
+});
+
+describe('createD1FederatedTimelineItemsResolver', () => {
+  it('リレーが重複して届けた投稿は 1 件にし、ミュートと削除済みを除く', async () => {
+    const t = setup();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    const relayA = t.seed.addRelay();
+    const relayB = t.seed.addRelay();
+    const note1 = t.seed.addRemotePost(alice, 1_000);
+    const note2 = t.seed.addRemotePost(bob, 1_000);
+    t.seed.addFederatedItem(note1.postId, relayA, 5_000);
+    t.seed.addFederatedItem(note1.postId, relayB, 6_000);
+    t.seed.addFederatedItem(note2.postId, relayA, 7_000);
+    const resolver = createD1FederatedTimelineItemsResolver(t.db);
+
+    const all = await resolver.resolve({ page: page(), mutedActorIds: [], currentActorId: undefined });
+    const muted = await resolver.resolve({
+      page: page(),
+      mutedActorIds: [actorId(bob.actorId)],
+      currentActorId: undefined,
+    });
+    const afterNote2 = await resolver.resolve({
+      page: page({ olderThanId: note2.postId }),
+      mutedActorIds: [],
+      currentActorId: undefined,
+    });
+
+    expect(all.ok && all.val.map(postIdOf)).toEqual([note2.postId, note1.postId]);
+    expect(muted.ok && muted.val.map(postIdOf)).toEqual([note1.postId]);
+    expect(afterNote2.ok && afterNote2.val.map(postIdOf)).toEqual([note1.postId]);
+    expect(afterNote2.ok && afterNote2.val[0]?.receivedAt).toBe(6_000);
+  });
+});
+
+describe('createD1ThreadResolver', () => {
+  it('祖先と子孫をまとめて引き、閲覧者のいいねを入れ、削除済みを除く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+    const root = t.seed.addRemotePost(alice, 1_000);
+    const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
+    const reply = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri });
+    t.seed.addLocalPost(me, 4_000, { inReplyToUri: mid.uri, deletedAt: 4_500 });
+    t.seed.addLike(me.actorId, root.postId);
+    t.queries.length = 0;
+
+    const result = await createD1ThreadResolver(t.db, SEED_ORIGIN).resolve({
+      postId: PostId.orThrow(mid.postId),
+      currentActorId: actorId(me.actorId),
+    });
+
+    expect(result.ok && result.val.currentPost?.postId).toBe(mid.postId);
+    expect(result.ok && result.val.ancestors.map((post) => post.postId)).toEqual([root.postId]);
+    expect(result.ok && result.val.ancestors[0]?.liked).toBe(true);
+    expect(result.ok && result.val.descendants.map((post) => post.postId)).toEqual([reply.postId]);
+    expect(t.queries.length).toBeLessThanOrEqual(14);
+  });
+
+  it('見つからなければ currentPost を null にする', async () => {
+    const t = setup();
+
+    const result = await createD1ThreadResolver(t.db, SEED_ORIGIN).resolve({ postId: PostId.generate() });
+
+    expect(result.ok && result.val).toEqual({ currentPost: null, ancestors: [], descendants: [] });
+  });
+});
+
+describe('createD1PostExtrasResolverByPosts', () => {
+  it('画像 ID、返信数、返信先、自分のリアクションをまとめて引く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+    const parent = t.seed.addRemotePost(alice, 1_000);
+    const post = t.seed.addLocalPost(me, 2_000, { inReplyToUri: parent.uri });
+    t.seed.addLocalPost(me, 3_000, { inReplyToUri: post.uri });
+    t.seed.addRemotePost(alice, 3_500, { inReplyToUri: post.uri });
+    t.seed.addLocalPost(me, 4_000, { inReplyToUri: post.uri, deletedAt: 4_500 });
+    const imageId = t.seed.addImage(post.postId, '/uploads/a.png', 'alt');
+    t.seed.addEmojiReact(me.actorId, post.postId, '🎉');
+    t.seed.addEmojiReact(alice.actorId, post.postId, '👍');
+    const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+      postIds: [PostId.orThrow(post.postId)],
+      currentActorId: actorId(me.actorId),
+    });
+    const loaded = posts.ok ? [...posts.val.values()] : [];
+
+    const extras = await createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN).resolve({
+      posts: loaded,
+      currentActorId: actorId(me.actorId),
+    });
+
+    const value = extras.ok ? extras.val.get(PostId.orThrow(post.postId)) : undefined;
+    expect(value).toEqual({
+      images: [{ imageId, url: '/uploads/a.png' }],
+      repliesCount: 2,
+      inReplyTo: { postId: parent.postId, actorId: alice.actorId },
+      myReactionEmojis: ['🎉'],
+    });
+  });
+});
+
+describe('createD1AccountProfilesResolverByActorIds', () => {
+  it('複数のアクターのプロフィールと件数を 1 回でまとめて引く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(alice.actorId, me.actorId);
+    t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addLocalPost(me, 1_000);
+    t.seed.addLocalPost(me, 3_000);
+    t.seed.addRemotePost(alice, 2_000);
+
+    const result = await createD1AccountProfilesResolverByActorIds(t.db).resolve([
+      actorId(me.actorId),
+      actorId(alice.actorId),
+      actorId(t.seed.uuid()),
+    ]);
+
+    const profiles = result.ok ? result.val : new Map();
+    expect(profiles.size).toBe(2);
+    expect(profiles.get(actorId(me.actorId))).toMatchObject({
+      type: 'local',
+      user: { username: 'kosui' },
+      stats: { followersCount: 1, followingCount: 1, statusesCount: 2, lastStatusAt: 3_000 },
+    });
+    expect(profiles.get(actorId(alice.actorId))).toMatchObject({
+      type: 'remote',
+      actor: { username: 'alice', url: 'https://remote.example/@alice' },
+      stats: { statusesCount: 1 },
+    });
+  });
+});
+
+describe('フォロワーとフォロー中の ID の一覧', () => {
+  it('actorId の降順で max_id と min_id と limit に従う', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const others = [1, 2, 3].map((n) => t.seed.addRemoteActor(`user${n}`));
+    for (const other of others) {
+      t.seed.addFollow(other.actorId, me.actorId);
+      t.seed.addFollow(me.actorId, other.actorId);
+    }
+    const ids = others.map((other) => other.actorId).sort().reverse();
+    const followers = createD1ActorIdsResolverByFollowingIdWithPagination(t.db);
+    const following = createD1ActorIdsResolverByFollowerIdWithPagination(t.db);
+
+    const all = await followers.resolve({ actorId: actorId(me.actorId), page: page({ limit: 2 }) });
+    const older = await following.resolve({
+      actorId: actorId(me.actorId),
+      page: page({ olderThanId: ids[0] }),
+    });
+    const newer = await followers.resolve({
+      actorId: actorId(me.actorId),
+      page: page({ newerThanId: ids[2], order: 'oldestFirst', limit: 1 }),
+    });
+
+    expect(all.ok && all.val).toEqual(ids.slice(0, 2));
+    expect(older.ok && older.val).toEqual(ids.slice(1));
+    expect(newer.ok && newer.val).toEqual([ids[1]]);
+  });
+});
+
+describe('createD1RepostResolverById', () => {
+  it('repostId から投稿 ID と作成時刻を引く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const note = t.seed.addLocalPost(me, 1_000);
+    const repost = t.seed.addRepost(me.actorId, note.postId, 5_000);
+
+    const found = await createD1RepostResolverById(t.db).resolve(RepostId.orThrow(repost.repostId));
+    const missing = await createD1RepostResolverById(t.db).resolve(RepostId.generate());
+
+    expect(found.ok && found.val).toMatchObject({ postId: note.postId, actorId: me.actorId, createdAt: 5_000 });
+    expect(missing.ok && missing.val).toBeUndefined();
+  });
+});

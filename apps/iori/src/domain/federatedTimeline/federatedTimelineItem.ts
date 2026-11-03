@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { PageRequest } from '../page/page.ts';
 import type { PostWithAuthor } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
 import { RelayId } from '../relay/relayId.ts';
@@ -85,9 +86,9 @@ export type FederatedTimelineItemDeletedStore = Agg.Store<FederatedTimelineItemD
 
 export type FederatedTimelineItemsResolver = Agg.Resolver<
   {
-    receivedAt: Instant | undefined;
+    page: PageRequest;
     mutedActorIds: ReadonlyArray<ActorId>;
-    currentActorId?: ActorId;
+    currentActorId: ActorId | undefined;
   },
   FederatedTimelineItemWithPost[]
 >;

@@ -1,5 +1,7 @@
-import type { LinkPreview } from '../../domain/linkPreview/linkPreview.ts';
+import type { IoriStatusExtension } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+
+type LinkPreview = IoriStatusExtension['link_previews'][number];
 
 type Props = Readonly<{
   preview: LinkPreview;
@@ -8,8 +10,8 @@ type Props = Readonly<{
 export const LinkPreviewCard = ({ preview }: Props) => {
   const previewUrl = safeUrl(preview.url);
   if (!previewUrl) return null;
-  const imageUrl = safeUrl(preview.imageUrl);
-  const faviconUrl = safeUrl(preview.faviconUrl);
+  const imageUrl = safeUrl(preview.image);
+  const faviconUrl = safeUrl(preview.favicon);
 
   const displayUrl = (() => {
     try {
@@ -46,12 +48,9 @@ export const LinkPreviewCard = ({ preview }: Props) => {
                 alt=''
                 class='w-4 h-4 flex-shrink-0'
                 loading='lazy'
-                onError={(e: Event) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
               />
             )}
-            <span class='truncate'>{preview.siteName ?? displayUrl}</span>
+            <span class='truncate'>{preview.site_name ?? displayUrl}</span>
           </div>
           {preview.title && (
             <h4 class='text-sm font-medium text-charcoal dark:text-white line-clamp-2 mb-1'>
