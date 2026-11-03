@@ -4,6 +4,7 @@ import {
   GroupedNotificationsResultsSchema,
   NotificationPolicySchema,
   NotificationSchema,
+  V1NotificationPolicySchema,
 } from '../../mastodon/entities.ts';
 import { linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
 
@@ -272,6 +273,44 @@ describe('GET /api/v2/notifications/policy', () => {
     const response = await t.get('/api/v2/notifications/policy', await t.bearerFor('read:statuses'));
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe('GET /api/v1/notifications/requests と /policy', () => {
+  it('requests は空配列を返す', async () => {
+    const t = await seedNotifications();
+
+    const response = await t.get('/api/v1/notifications/requests');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+  });
+
+  it('policy は v1 の形で固定の通知ポリシーを返す', async () => {
+    const t = await seedNotifications();
+
+    const response = await t.get('/api/v1/notifications/policy');
+
+    expect(response.status).toBe(200);
+    expect(V1NotificationPolicySchema.parse(await response.json())).toEqual({
+      filter_not_following: false,
+      filter_not_followers: false,
+      filter_new_accounts: false,
+      filter_private_mentions: true,
+      summary: { pending_requests_count: 0, pending_notifications_count: 0 },
+    });
+  });
+
+  it('read:notifications がないトークンは 403 にする', async () => {
+    const t = await seedNotifications();
+    const bearer = await t.bearerFor('read:statuses');
+
+    const [requests, policy] = await Promise.all([
+      t.get('/api/v1/notifications/requests', bearer),
+      t.get('/api/v1/notifications/policy', bearer),
+    ]);
+
+    expect([requests.status, policy.status]).toEqual([403, 403]);
   });
 });
 
