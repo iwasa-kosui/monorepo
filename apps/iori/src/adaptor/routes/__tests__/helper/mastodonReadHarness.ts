@@ -1,18 +1,26 @@
+import { Note } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, vi } from 'vitest';
 
 import { createIoriApp } from '../../../../appFactory.tsx';
+import { Instant } from '../../../../domain/instant/instant.ts';
+import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
+import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
+import { UserId } from '../../../../domain/user/userId.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
+import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
+import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
+import { SendReplyUseCase } from '../../../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
@@ -28,6 +36,8 @@ import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsReso
 import { createD1LogoUriUpdatedStore } from '../../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../../d1/actor/remoteActorCreatedStore.ts';
 import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
+import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
+import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -47,9 +57,12 @@ import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1
 import { createD1LikeResolver } from '../../../d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../../../d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../../../d1/like/localLikeDeletedStore.ts';
+import { createD1LinkPreviewCreatedStore } from '../../../d1/linkPreview/linkPreviewCreatedStore.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../../../d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../../../d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResolverByUserId.ts';
+import { createD1MediaUploadCreatedStore } from '../../../d1/mediaUpload/mediaUploadCreatedStore.ts';
+import { createD1MediaUploadResolver } from '../../../d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1MuteCreatedStore } from '../../../d1/mute/muteCreatedStore.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../../../d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
@@ -58,19 +71,24 @@ import { createD1MuteResolver } from '../../../d1/mute/muteResolver.ts';
 import {
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
+  createD1ReplyNotificationCreatedStore,
 } from '../../../d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../../../d1/notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../../../d1/notification/notificationsResolverByPage.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
+import { createD1LocalPostResolverByUri } from '../../../d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
 import { createD1PostCreatedStore } from '../../../d1/post/postCreatedStore.ts';
+import { createD1PostDeletedStore } from '../../../d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
 import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
+import { createD1PushSubscriptionsResolverByUserId } from '../../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelaysResolver.ts';
 import { createD1RepostCreatedStore } from '../../../d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../../../d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../../../d1/repost/repostResolver.ts';
@@ -132,6 +150,16 @@ export const setupReadApi = (
   const federation = {
     sendActivity: vi.fn(async () => undefined),
     getActorUri: (username: string) => new URL(`${ORIGIN}/users/${username}`),
+    getFollowersUri: (username: string) => new URL(`${ORIGIN}/users/${username}/followers`),
+    getObjectUri: (_type: unknown, values: { identifier: string; id: string }) =>
+      new URL(`${ORIGIN}/users/${values.identifier}/posts/${values.id}`),
+    getObject: vi.fn(async (_type: unknown, values: { identifier: string; id: string }) =>
+      new Note({
+        id: new URL(`${ORIGIN}/users/${values.identifier}/posts/${values.id}`),
+        attribution: new URL(`${ORIGIN}/users/${values.identifier}`),
+        to: new URL('https://www.w3.org/ns/activitystreams#Public'),
+      })
+    ),
     getDocumentLoader: vi.fn(async () => ({})),
     lookupObject: vi.fn(async (): Promise<unknown> => null),
   };
@@ -153,6 +181,9 @@ export const setupReadApi = (
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
   });
+  const mediaUploadResolver = createD1MediaUploadResolver(db);
+  const postCreatedStore = createD1PostCreatedStore(db);
+  const postImageCreatedStore = createD1PostImageCreatedStore(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
@@ -193,6 +224,44 @@ export const setupReadApi = (
           repostResolver,
           threadResolver: createD1ThreadResolver(db, ORIGIN),
           statusAssembler,
+          mediaUploadResolver,
+          createPostUseCase: CreatePostUseCase.create({
+            sessionResolver,
+            postCreatedStore,
+            userResolver,
+            actorResolverByUserId,
+            postImageCreatedStore,
+            timelineItemCreatedStore,
+            linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
+            ogpFetcher: {
+              fetch: async () => ({ title: null, description: null, imageUrl: null, faviconUrl: null, siteName: null }),
+            },
+            acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            origin: ORIGIN,
+          }),
+          sendReplyUseCase: SendReplyUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            postCreatedStore,
+            postImageCreatedStore,
+            timelineItemCreatedStore,
+            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            replyNotificationCreatedStore: createD1ReplyNotificationCreatedStore(db),
+            pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
+            webPushSender: { send: () => RA.ok(undefined) },
+            postResolver,
+            origin: ORIGIN,
+          }),
+          deletePostUseCase: DeletePostUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            postResolver,
+            postDeletedStore: createD1PostDeletedStore(db),
+            articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
+            articleDeletedStore: createD1ArticleDeletedStore(db),
+          }),
           sendLikeUseCase: SendLikeUseCase.create({
             sessionResolver,
             userResolver,
@@ -383,6 +452,20 @@ export const setupReadApi = (
     };
   };
 
+  const addMedia = async (userId: string, description: string | null = null) => {
+    const mediaId = MediaId.generate();
+    const created = MediaUpload.create({
+      mediaId,
+      userId: UserId.orThrow(userId),
+      url: `${ORIGIN}/uploads/${mediaId}`,
+      mimeType: 'image/png',
+      description,
+    }, Instant.now());
+    if (!created.ok) throw new Error(created.err.message);
+    await createD1MediaUploadCreatedStore(db).store(created.val);
+    return { mediaId, url: `${ORIGIN}/uploads/${mediaId}`, description };
+  };
+
   const bearerFor = async (scope: string) => ({
     Authorization: `Bearer ${(await harness.issueUserToken(scope)).token}`,
   });
@@ -393,6 +476,7 @@ export const setupReadApi = (
     db,
     request,
     signIn,
+    addMedia,
     bearerFor,
     federation,
     remoteActorLookup,

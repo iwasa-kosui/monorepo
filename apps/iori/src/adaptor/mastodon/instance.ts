@@ -88,4 +88,5 @@ export const buildInstanceV1 = (props: BuildInstanceProps): InstanceV1 => ({
   },
   contact_account: props.contactAccount,
   rules: [],
+  pleroma: { metadata: { post_formats: ['text/plain', 'text/markdown'] } },
 });

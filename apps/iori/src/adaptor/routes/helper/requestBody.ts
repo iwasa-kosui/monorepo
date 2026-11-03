@@ -22,3 +22,15 @@ export const bodyString = (body: RequestBody, key: string): string | undefined =
   const value = body[key];
   return typeof value === 'string' ? value : undefined;
 };
+
+export const bodyStringList = (body: RequestBody, ...keys: ReadonlyArray<string>): string[] =>
+  keys.flatMap((key) => {
+    const value = body[key];
+    if (typeof value === 'string') return [value];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  });
+
+export const bodyBoolean = (body: RequestBody, key: string): boolean => {
+  const value = body[key];
+  return value === true || (typeof value === 'string' && ['true', '1', 'on', 't', 'yes'].includes(value.toLowerCase()));
+};

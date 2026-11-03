@@ -32,6 +32,7 @@ import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscri
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
+import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
 import type {
   NotificationCountResolverSinceMarker,
@@ -149,6 +150,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
   uploadMediaUseCase: UploadMediaUseCase;
+  mediaUploadResolver: MediaUploadResolver;
   getMediaUploadUseCase: GetMediaUploadUseCase;
   updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase;
   updateAvatarUseCase: UpdateAvatarUseCase;

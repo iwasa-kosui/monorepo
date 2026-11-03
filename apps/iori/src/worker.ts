@@ -246,7 +246,15 @@ export default {
           runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
-          createWorkerMastodonStatusesRouter({ ...runtime.mastodon, ...runtime.socialActions, authn, createContext }),
+          createWorkerMastodonStatusesRouter({
+            ...runtime.mastodon,
+            ...runtime.socialActions,
+            createPostUseCase: runtime.posting.createPostUseCase,
+            sendReplyUseCase: runtime.core.sendReplyUseCase,
+            deletePostUseCase: runtime.core.deletePostUseCase,
+            authn,
+            createContext,
+          }),
         );
         app.route(
           '/api',
