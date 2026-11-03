@@ -20,17 +20,27 @@ const controller = { cron: '0 * * * *', scheduledTime: Date.UTC(2026, 0, 1) } as
 beforeEach(() => vi.clearAllMocks());
 
 it.each(['sealed', 'smoke', 'invalid'])('does not dispatch scheduled tasks in %s mode', async (mode) => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
   await worker.scheduled(
     controller,
     { ...admissionFixture(), IORI_ADMISSION_MODE: mode } as never,
     {} as ExecutionContext,
   );
   expect(task).not.toHaveBeenCalled();
+  expect(info).toHaveBeenCalledWith(
+    'iori scheduled: skipped because admission is not active.',
+    expect.objectContaining({ cron: '0 * * * *' }),
+  );
 });
 
 it('does not dispatch scheduled tasks without an admission identity', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
   await worker.scheduled(controller, {} as never, {} as ExecutionContext);
   expect(task).not.toHaveBeenCalled();
+  expect(info).toHaveBeenCalledWith('iori scheduled: skipped because admission is not active.', {
+    cron: '0 * * * *',
+    mode: undefined,
+  });
 });
 
 it('runs the tasks registered for the cron in active mode', async () => {

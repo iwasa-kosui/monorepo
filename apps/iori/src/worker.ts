@@ -370,7 +370,13 @@ export default {
     executionCtx: ExecutionContext,
   ): Promise<void> => {
     const identity = parseAdmission(env);
-    if (!identity || identity.mode !== 'active') return;
+    if (!identity || identity.mode !== 'active') {
+      console.info('iori scheduled: skipped because admission is not active.', {
+        cron: controller.cron,
+        mode: identity?.mode,
+      });
+      return;
+    }
     await dispatchScheduled(controller.cron, scheduledTasks, {
       env,
       scheduledTime: new Date(controller.scheduledTime),

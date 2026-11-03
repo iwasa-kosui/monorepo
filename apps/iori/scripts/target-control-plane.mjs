@@ -241,11 +241,13 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
-      'AI',
       ...(identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
     ]);
+    if (bindings.some((binding) => binding.name === 'AI' && binding.type !== 'ai')) fail('worker-binding-mismatch');
     if (
-      bindings.some((binding) => !expected.some((item) => item.name === binding.name) && !extraNames.has(binding.name))
+      bindings.some((binding) =>
+        !expected.some((item) => item.name === binding.name) && binding.name !== 'AI' && !extraNames.has(binding.name)
+      )
     ) fail('worker-binding-extra');
     for (
       const name of [
