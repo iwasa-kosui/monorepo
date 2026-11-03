@@ -2,13 +2,24 @@ import { RA } from '@iwasa-kosui/result';
 
 import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
 import type { WebPushSender } from '../adaptor/webPush/webPush.ts';
+import {
+  Article,
+  ArticleNotFoundError,
+  type ArticleResolver,
+  type ArticleWithDependentsDeletedStore,
+} from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
+import { ArticleBody, type ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import {
   Digest,
+  DigestAlreadyPublishedError,
   type DigestCreatedStore,
+  type DigestHeader,
   type DigestHeaderResolverByUserIdAndDigestDate,
   type DigestParseError,
   type DigestPushSentStore,
+  type DigestTrigger,
+  type LatestDigestHeaderResolverByUserId,
 } from '../domain/digest/digest.ts';
 import { buildDigestBodies } from '../domain/digest/digestBody.ts';
 import type { DigestId } from '../domain/digest/digestId.ts';
@@ -32,7 +43,7 @@ export const DIGEST_SUMMARY_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
 const SUMMARY_INSTRUCTION = '日本語で3行以内に要約する。英語の記事も日本語で書く。前置きを書かない。';
 const SUMMARY_MAX_OUTPUT_TOKENS = 512;
-const SUMMARY_TIMEOUT_MS = 30_000;
+const SUMMARY_TIMEOUT_MS: Readonly<Record<DigestTrigger, number>> = { scheduled: 30_000, requested: 20_000 };
 const SUMMARY_INPUT_MAX_CHARS = 1000;
 const NEW_ENTRIES_LIMIT = 10;
 export const TRENDS_LIMIT = 10;
@@ -40,12 +51,16 @@ const RADAR_LIMIT = 1;
 const HOUR_MS = 60 * 60 * 1000;
 export const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
-type Input = Readonly<{ userId: UserId }>;
+type Input = Readonly<{ userId: UserId; trigger: DigestTrigger }>;
 
 type Ok = Readonly<{
   status: 'created' | 'skipped';
+  trigger: DigestTrigger;
+  digestDate: string;
   digestId?: DigestId;
   articleId?: ArticleId;
+  replaced: boolean;
+  durationMs: number;
   items: number;
   trends: number;
   summarized: number;
@@ -68,13 +83,22 @@ const DigestStoreFailedError = {
   }),
 } as const;
 
-type Err = UserNotFoundError | DigestParseError | DigestStoreFailedError;
+type Err =
+  | UserNotFoundError
+  | DigestParseError
+  | DigestStoreFailedError
+  | DigestAlreadyPublishedError
+  | ArticleNotFoundError;
 
 export type CreateDailyDigestUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
   digestHeaderResolverByUserIdAndDigestDate: DigestHeaderResolverByUserIdAndDigestDate;
+  latestDigestHeaderResolverByUserId: LatestDigestHeaderResolverByUserId;
+  articleResolver: ArticleResolver;
+  articleBodyResolver: ArticleBodyResolver;
+  articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore;
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   newFeedEntriesResolverByFetchedSince: NewFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
@@ -88,8 +112,6 @@ type Deps = Readonly<{
   now: () => Instant;
   sleep: (ms: number) => Promise<void>;
 }>;
-
-const skipped: Ok = { status: 'skipped', items: 0, trends: 0, summarized: 0, pushed: 0 };
 
 export const stripThinkBlocks = (output: string): string => {
   const lastThinkClose = [...output.matchAll(/<\/think>/gi)].at(-1);
@@ -109,6 +131,10 @@ const toSummaryInput = (entry: FeedEntry): string =>
 const create = ({
   digestSubscriptionResolverByUserId,
   digestHeaderResolverByUserIdAndDigestDate,
+  latestDigestHeaderResolverByUserId,
+  articleResolver,
+  articleBodyResolver,
+  articleWithDependentsDeletedStore,
   radarFeedEntriesResolverByFetchedSince,
   newFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
@@ -122,7 +148,7 @@ const create = ({
   now,
   sleep,
 }: Deps): CreateDailyDigestUseCase => {
-  const summarize = async (entry: FeedEntry): Promise<string | null> => {
+  const summarize = async (entry: FeedEntry, timeoutMs: number): Promise<string | null> => {
     if (textGenerator === undefined) return null;
     const generated = await Promise.race([
       textGenerator.generate({
@@ -131,12 +157,12 @@ const create = ({
         input: toSummaryInput(entry),
         maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
       }),
-      sleep(SUMMARY_TIMEOUT_MS).then(() => 'timedOut' as const),
+      sleep(timeoutMs).then(() => 'timedOut' as const),
     ]);
     if (generated === 'timedOut') {
       console.error('iori digest: summarizing an entry timed out.', {
         feedEntryId: entry.feedEntryId,
-        timeoutMs: SUMMARY_TIMEOUT_MS,
+        timeoutMs,
       });
       return null;
     }
@@ -151,38 +177,75 @@ const create = ({
     return summary === '' ? null : summary;
   };
 
-  const run = async ({ userId }: Input) => {
+  const deleteDraftArticle = async (articleId: ArticleId): Promise<void> => {
+    const deletedAt = now();
+    try {
+      await articleWithDependentsDeletedStore.store(
+        Article.deleteArticle(deletedAt)(articleId),
+        ArticleBody.deleteArticleBody(deletedAt)(articleId),
+        undefined,
+      );
+    } catch (error) {
+      console.error('iori digest: deleting the article left by the failed digest failed.', {
+        articleId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const run = async ({ userId, trigger }: Input) => {
     const startedAt = now();
     const digestDate = Instant.toJstDate(startedAt);
+    const skipped = (): Ok => ({
+      status: 'skipped',
+      trigger,
+      digestDate,
+      replaced: false,
+      durationMs: now() - startedAt,
+      items: 0,
+      trends: 0,
+      summarized: 0,
+      pushed: 0,
+    });
 
     const existing = await digestHeaderResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
-    if (existing.val !== undefined) return RA.ok(skipped);
+    let replacing: DigestHeader | undefined;
+    if (existing.val !== undefined) {
+      const existingArticle = await articleResolver.resolve(existing.val.articleId);
+      const isDraft = existingArticle.val?.status === 'draft';
+      if (trigger === 'scheduled') {
+        if (existing.val.trigger !== 'requested' || !isDraft) return RA.ok(skipped());
+      } else if (existingArticle.val === undefined) {
+        return RA.err(ArticleNotFoundError.create(existing.val.articleId));
+      } else if (!isDraft) {
+        return RA.err(DigestAlreadyPublishedError.create(digestDate));
+      }
+      replacing = existing.val;
+    }
 
-    const subscription = await digestSubscriptionResolverByUserId.resolve(userId);
-    if (subscription.val !== undefined && !subscription.val.enabled) return RA.ok(skipped);
+    if (trigger === 'scheduled') {
+      const subscription = await digestSubscriptionResolverByUserId.resolve(userId);
+      if (subscription.val !== undefined && !subscription.val.enabled) return RA.ok(skipped());
+    }
+
+    const previous = await latestDigestHeaderResolverByUserId.resolve({
+      userId,
+      excludingDigestId: replacing?.digestId,
+    });
+    const windowStart = Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS);
+    const since = previous.val === undefined || previous.val.createdAt < windowStart
+      ? windowStart
+      : previous.val.createdAt;
 
     const [radarEntries, newEntries, hatenaTrends, timelineTrends] = await Promise.all([
-      radarFeedEntriesResolverByFetchedSince.resolve({
-        fetchedSince: Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS),
-        limit: RADAR_LIMIT,
-      }),
-      newFeedEntriesResolverByFetchedSince.resolve({
-        fetchedSince: Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS),
-        limit: NEW_ENTRIES_LIMIT,
-      }),
-      hatenaTrendsResolverByFetchedSince.resolve({
-        fetchedSince: Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS),
-        limit: TRENDS_LIMIT,
-      }),
-      timelineLinkTrendsResolverByUserId.resolve({
-        userId,
-        createdSince: Instant.addDuration(startedAt, -MATERIAL_WINDOW_MS),
-        limit: TRENDS_LIMIT,
-      }),
+      radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
+      newFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: NEW_ENTRIES_LIMIT }),
+      hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
+      timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
     ]);
     const radar = radarEntries.val[0];
 
-    const summaries = await Promise.all(newEntries.val.map(summarize));
+    const summaries = await Promise.all(newEntries.val.map((entry) => summarize(entry, SUMMARY_TIMEOUT_MS[trigger])));
     const summarized = summaries.filter((summary) => summary !== null).length;
 
     const bodies = buildDigestBodies({
@@ -197,6 +260,16 @@ const create = ({
       hatenaTrends: hatenaTrends.val,
     });
 
+    if (replacing !== undefined) {
+      const replacedAt = now();
+      const body = await articleBodyResolver.resolve(replacing.articleId);
+      await articleWithDependentsDeletedStore.store(
+        Article.deleteArticle(replacedAt)(replacing.articleId),
+        body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(replacing.articleId),
+        Digest.expire(replacing, replacedAt),
+      );
+    }
+
     const article = await createArticleWithBodyUseCase.run({
       userId,
       title: `技術ニュースのダイジェスト ${digestDate}`,
@@ -209,6 +282,7 @@ const create = ({
       userId,
       digestDate,
       articleId,
+      trigger,
       items: newEntries.val.map((entry, index) => ({
         feedEntryId: entry.feedEntryId,
         url: entry.url,
@@ -224,7 +298,10 @@ const create = ({
         ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
       ],
     }, now());
-    if (!created.ok) return created;
+    if (!created.ok) {
+      await deleteDraftArticle(articleId);
+      return created;
+    }
     try {
       await digestCreatedStore.store(created.val);
     } catch (error) {
@@ -233,9 +310,27 @@ const create = ({
         articleId,
         message: storeFailed.message,
       });
+      await deleteDraftArticle(articleId);
       return RA.err(storeFailed);
     }
     const digest = created.val.aggregateState;
+    const durationMs = now() - startedAt;
+
+    const createdOk = (pushed: number) =>
+      RA.ok<Ok>({
+        status: 'created',
+        trigger,
+        digestDate,
+        digestId: digest.digestId,
+        articleId,
+        replaced: replacing !== undefined,
+        durationMs,
+        items: digest.items.length,
+        trends: digest.trends.length,
+        summarized,
+        pushed,
+      });
+    if (trigger === 'requested') return createdOk(0);
 
     const pushSubscriptions = await pushSubscriptionsResolverByUserId.resolve(userId);
     const payload = {
@@ -259,15 +354,7 @@ const create = ({
       await digestPushSentStore.store(Digest.recordPushSent(digest, now()));
     }
 
-    return RA.ok<Ok>({
-      status: 'created',
-      digestId: digest.digestId,
-      articleId,
-      items: digest.items.length,
-      trends: digest.trends.length,
-      summarized,
-      pushed,
-    });
+    return createdOk(pushed);
   };
 
   return { run };

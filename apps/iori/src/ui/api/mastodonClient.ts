@@ -6,6 +6,7 @@ import type {
   Relationship,
   Status,
 } from '../../adaptor/mastodon/entities.ts';
+import type { IoriDigestRequestResponse } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 
@@ -287,4 +288,16 @@ export const summarizeTimeline = async (body: SummarizeTimelineBody): Promise<Ti
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as TimelineSummary;
+};
+
+export type DigestRequestResult = IoriDigestRequestResponse;
+
+export const requestDigest = async (): Promise<DigestRequestResult> => {
+  const res = await fetch('/api/iori/v1/digests', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as DigestRequestResult;
 };

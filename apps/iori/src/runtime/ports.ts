@@ -70,6 +70,7 @@ import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
+import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
@@ -163,6 +164,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
+  requestDigestUseCase: RequestDigestUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;

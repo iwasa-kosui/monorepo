@@ -14,6 +14,13 @@ export const digestTrendKinds = ['timeline_link', 'hatena'] as const;
 const trendKindZodType = z.enum(digestTrendKinds);
 export type DigestTrendKind = z.output<typeof trendKindZodType>;
 
+export const digestTriggers = ['scheduled', 'requested'] as const;
+const digestTriggerZodType = z.enum(digestTriggers);
+export type DigestTrigger = z.output<typeof digestTriggerZodType>;
+export const DigestTrigger = {
+  zodType: digestTriggerZodType,
+} as const;
+
 const digestItemZodType = z.object({
   digestItemId: DigestItemId.zodType,
   feedEntryId: z.string().min(1),
@@ -45,6 +52,7 @@ const digestHeaderZodType = z.object({
   articleId: ArticleId.zodType,
   createdAt: Instant.zodType,
   pushSentAt: z.nullable(Instant.zodType),
+  trigger: digestTriggerZodType,
 });
 export type DigestHeader = z.output<typeof digestHeaderZodType>;
 
@@ -89,6 +97,7 @@ export type CreateDigestPayload = Readonly<{
   userId: UserId;
   digestDate: string;
   articleId: ArticleId;
+  trigger: DigestTrigger;
   items: ReadonlyArray<Omit<DigestItem, 'digestItemId'>>;
   trends: ReadonlyArray<DigestTrend>;
 }>;
@@ -137,6 +146,10 @@ export type DigestHeaderResolverByUserIdAndDigestDate = Agg.Resolver<
   DigestHeader | undefined
 >;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
+export type LatestDigestHeaderResolverByUserId = Agg.Resolver<
+  { userId: UserId; excludingDigestId: DigestId | undefined },
+  DigestHeader | undefined
+>;
 export type DigestHeadersResolverByArticleIds = Agg.Resolver<ReadonlyArray<ArticleId>, ReadonlyArray<DigestHeader>>;
 export type DigestResolverByUserIdAndDigestDate = Agg.Resolver<
   { userId: UserId; digestDate: string },
@@ -147,6 +160,20 @@ export type DigestHeadersResolverByDigestDateBefore = Agg.Resolver<
   { digestDateBefore: string; limit: number },
   ReadonlyArray<DigestHeader>
 >;
+
+export type DigestAlreadyPublishedError = Readonly<{
+  type: 'DigestAlreadyPublishedError';
+  message: string;
+  detail: { digestDate: string };
+}>;
+
+export const DigestAlreadyPublishedError = {
+  create: (digestDate: string): DigestAlreadyPublishedError => ({
+    type: 'DigestAlreadyPublishedError',
+    message: `The digest of "${digestDate}" has already been published.`,
+    detail: { digestDate },
+  }),
+} as const;
 
 export const Digest = {
   ...schema,

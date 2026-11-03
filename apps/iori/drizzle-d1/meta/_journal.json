@@ -85,6 +85,13 @@
       "when": 1793746000000,
       "tag": "0011_interest_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793747605040,
+      "tag": "0013_digest_requests",
+      "breakpoints": true
     }
   ]
 }

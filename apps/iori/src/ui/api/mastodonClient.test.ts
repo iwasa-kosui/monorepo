@@ -24,6 +24,7 @@ import {
   parseLinkHeader,
   parseRetryAfter,
   reblog,
+  requestDigest,
   saveNotificationsMarker,
   searchAccount,
   searchStatuses,
@@ -421,6 +422,30 @@ describe('mastodon client requests', () => {
     expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
     expect(JSON.parse(String(init.body))).toEqual({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
     expect(result).toEqual(payload);
+  });
+
+  it('posts the digest request with the session cookie and no body', async () => {
+    const payload = { digestId: 'd1', articleId: 'a1', digestDate: '2026-11-05', replaced: false };
+    const fetchMock = stubFetch(jsonResponse(payload, { status: 201 }));
+
+    const result = await requestDigest();
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/digests');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.body).toBeUndefined();
+    expect(result).toEqual(payload);
+  });
+
+  it('carries the status, the error and Retry-After on a failed digest request', async () => {
+    stubFetch(jsonResponse({ error: 'Digest request too soon' }, { status: 409, retryAfter: '45' }));
+
+    const error = await requestDigest().catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
+    expect(isMastodonApiError(error) && error.message).toBe('Digest request too soon');
+    expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(45);
   });
 
   it('carries Retry-After on a 429 from the summary request', async () => {

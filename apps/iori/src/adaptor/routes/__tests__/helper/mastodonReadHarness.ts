@@ -1,9 +1,11 @@
+import type { ExecutionContext } from '@cloudflare/workers-types';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, vi } from 'vitest';
 
 import { createIoriApp } from '../../../../appFactory.tsx';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
@@ -17,6 +19,7 @@ import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
+import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
@@ -362,6 +365,8 @@ export const setupReadApi = (
             digestSubscriptionResolverByUserId,
             digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
           }),
+          requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
+            .requestDigest,
         }),
       );
       root.route('/api', createWorkerMastodonFallbackRouter());
@@ -370,7 +375,8 @@ export const setupReadApi = (
     serveUpload: async () => undefined,
     serveOgImage: async () => new Response('og', { status: 200 }),
   });
-  const request = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init);
+  const request = (path: string, init?: RequestInit, executionCtx?: ExecutionContext) =>
+    app.request(`${ORIGIN}${path}`, init, undefined, executionCtx);
 
   const signIn = async (scope = 'read') => {
     const issued = await harness.issueUserToken(scope);
