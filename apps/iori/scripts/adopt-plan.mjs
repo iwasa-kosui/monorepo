@@ -124,15 +124,30 @@ const unchangedIssues = (changes, message) =>
     actions: item.change?.actions,
     attributes: attributeWords(item.address, item.change?.before, item.change?.after),
   }));
-const ALLOWED_DRIFT_PATHS = ['settings.delivery_paused', 'modified_on'];
-const allowedQueueDrift = ({ address, change }) => {
-  if (address !== 'cloudflare_queue.fedify' || change?.actions?.length !== 1 || change.actions[0] !== 'update') {
+export const COMPUTED_ONLY_PATHS = Object.freeze({
+  'cloudflare_d1_database.iori': ['file_size', 'num_tables', 'version'],
+  'cloudflare_queue.fedify': [
+    'consumers',
+    'consumers_total_count',
+    'modified_on',
+    'producers',
+    'producers_total_count',
+  ],
+});
+const PAUSE_PATH = 'settings.delivery_paused';
+const computedOnlyPath = (paths, path) => paths.some((allowed) => path === allowed || path.startsWith(`${allowed}.`));
+const allowedDrift = ({ address, change }) => {
+  if (
+    !Object.hasOwn(COMPUTED_ONLY_PATHS, address) || change?.actions?.length !== 1 || change.actions[0] !== 'update'
+  ) {
     return false;
   }
   const paths = changedPaths(change.before, change.after);
-  return paths.every((path) => ALLOWED_DRIFT_PATHS.includes(path))
-    && (!paths.includes('settings.delivery_paused')
-      || (change.before.settings.delivery_paused === true && change.after.settings.delivery_paused === false));
+  return paths.every((path) =>
+    computedOnlyPath(COMPUTED_ONLY_PATHS[address], path)
+    || (address === 'cloudflare_queue.fedify' && path === PAUSE_PATH
+      && change.before.settings.delivery_paused === true && change.after.settings.delivery_paused === false)
+  );
 };
 export const inspectRefreshPlan = (plan) => {
   const changes = plan?.resource_changes ?? [];
@@ -142,7 +157,7 @@ export const inspectRefreshPlan = (plan) => {
   }
   return [
     ...unchangedIssues(changes, 'Refresh plan must not change resources'),
-    ...drift.filter((item) => !allowedQueueDrift(item)).map((item) => ({
+    ...drift.filter((item) => !allowedDrift(item)).map((item) => ({
       message: 'Refresh drift is not allowed',
       address: item.address,
       actions: item.change?.actions,

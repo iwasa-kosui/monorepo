@@ -5,6 +5,7 @@ export interface AdoptPlanIssue {
   attributes?: readonly string[];
 }
 export const ADOPT_ATTRIBUTE_WORDS: Readonly<Record<string, readonly string[]>>;
+export const COMPUTED_ONLY_PATHS: Readonly<Record<string, readonly string[]>>;
 export function isAdoptPlanDetail(detail: unknown): boolean;
 export function adoptPlanDetails(issues: readonly AdoptPlanIssue[], prefix: 'drift' | 'diff'): string[];
 export function inspectRefreshPlan(plan: unknown): AdoptPlanIssue[];
