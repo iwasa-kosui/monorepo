@@ -53,7 +53,11 @@ export const createWorkerMastodonViewerListsRouter = ({
       }
       const viewerActorId = viewer.val.id;
       const page = parsePageRequest(c, timelineLimits);
-      const likes = await likedPostIdsResolverByActorIdWithPagination.resolve({ actorId: viewerActorId, page });
+      const likes = await likedPostIdsResolverByActorIdWithPagination.resolve({
+        actorId: viewerActorId,
+        page,
+        onlyVisibleToViewer: true,
+      });
       if (!likes.ok) {
         return c.json(internalServerError, 500);
       }
@@ -61,6 +65,7 @@ export const createWorkerMastodonViewerListsRouter = ({
       const posts = await postsWithAuthorResolverByPostIds.resolve({
         postIds: rows.map((row) => row.postId),
         currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
       });
       if (!posts.ok) {
         return c.json(internalServerError, 500);

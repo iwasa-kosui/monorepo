@@ -7,6 +7,7 @@ import { LikeId } from '../../../domain/like/likeId.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
+import { visibleToViewer } from '../post/visibleToViewer.ts';
 import { likesTable, postsTable } from '../schema.ts';
 
 const cursorLike = alias(likesTable, 'cursor_like');
@@ -14,7 +15,7 @@ const cursorLike = alias(likesTable, 'cursor_like');
 export const createD1LikedPostIdsResolverByActorIdWithPagination = (
   db: IoriD1Db,
 ): LikedPostIdsResolverByActorIdWithPagination => ({
-  resolve: async ({ actorId, page }) => {
+  resolve: async ({ actorId, page, onlyVisibleToViewer }) => {
     const columns = { createdAt: likesTable.createdAt, id: likesTable.likeId };
     // 他のアクターの like の ID を位置に使っても、その行の時刻を引かない
     const cursorOf = (id: string) =>
@@ -26,6 +27,7 @@ export const createD1LikedPostIdsResolverByActorIdWithPagination = (
       .where(and(
         eq(likesTable.actorId, actorId),
         isNull(postsTable.deletedAt),
+        visibleToViewer({ currentActorId: actorId, onlyVisibleToViewer }),
         ...pageConditions(page, columns, cursorOf),
       ))
       .orderBy(...pageOrderBy(page, columns))

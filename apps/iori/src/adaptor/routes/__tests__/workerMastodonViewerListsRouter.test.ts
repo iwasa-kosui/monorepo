@@ -8,11 +8,11 @@ describe('GET /api/v1/favourites', () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
-    const oldest = t.seed.addRemotePost(alice, 1_000);
+    const oldest = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
     const middle = t.seed.addLocalPost(me, 2_000);
     const newest = t.seed.addRemotePost(alice, 3_000, { visibility: 'public' });
     const deleted = t.seed.addLocalPost(me, 4_000, { deletedAt: 5_000 });
-    const notLiked = t.seed.addRemotePost(alice, 6_000);
+    const notLiked = t.seed.addRemotePost(alice, 6_000, { visibility: 'public' });
     const likeOldest = t.seed.addLike(me.actorId, oldest.postId, 10_000);
     const likeMiddle = t.seed.addLike(me.actorId, middle.postId, 20_000);
     const likeNewest = t.seed.addLike(me.actorId, newest.postId, 30_000);
@@ -110,6 +110,43 @@ describe('GET /api/v1/favourites', () => {
 
     expect(idsOf(await response.json())).toEqual(t.postIds);
     expect(response.headers.get('Link')).not.toBeNull();
+  });
+
+  it('いいねしても宛先外の direct とフォローしていない private は返さず、フォロー中の private と宛先の direct は返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    t.seed.addFollow(me.actorId, bob.actorId);
+    const direct = t.seed.addRemotePost(alice, 1_000, { visibility: 'direct' });
+    const unfollowedPrivate = t.seed.addRemotePost(alice, 2_000, { visibility: 'private' });
+    const toMe = t.seed.addRemotePost(alice, 3_000, {
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+    const followedPrivate = t.seed.addRemotePost(bob, 4_000, { visibility: 'private' });
+    [direct, unfollowedPrivate, toMe, followedPrivate].forEach((post, index) =>
+      t.seed.addLike(me.actorId, post.postId, 10_000 + index)
+    );
+
+    const response = await t.request('/api/v1/favourites', { headers: me.bearer });
+
+    expect(idsOf(await response.json())).toEqual([followedPrivate.postId, toMe.postId]);
+  });
+
+  it('見えない投稿を除いても、limit の件数まで埋める', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const visible = [1_000, 2_000, 3_000].map((at) => t.seed.addRemotePost(alice, at, { visibility: 'public' }));
+    visible.forEach((post, index) => t.seed.addLike(me.actorId, post.postId, 10_000 + index));
+    for (const at of [4_000, 5_000, 6_000]) {
+      t.seed.addLike(me.actorId, t.seed.addRemotePost(alice, at, { visibility: 'direct' }).postId, 10_000 + at);
+    }
+
+    const response = await t.request('/api/v1/favourites?limit=3', { headers: me.bearer });
+
+    expect(idsOf(await response.json())).toEqual(visible.map((post) => post.postId).reverse());
   });
 
   it('いいねがなければ空配列を返し、Link を付けない', async () => {

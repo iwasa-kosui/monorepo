@@ -6,3 +6,5 @@ CREATE TABLE `remote_post_recipients` (
 );
 --> statement-breakpoint
 CREATE INDEX `remote_post_recipients_actor_uri_idx` ON `remote_post_recipients` (`actorUri`);
+--> statement-breakpoint
+INSERT OR IGNORE INTO `remote_post_recipients` (`postId`, `actorUri`) SELECT `remote_posts`.`postId`, `actors`.`uri` FROM `remote_posts` CROSS JOIN `local_actors` INNER JOIN `actors` ON `actors`.`actorId` = `local_actors`.`actorId` WHERE `remote_posts`.`visibility` IS NULL;
