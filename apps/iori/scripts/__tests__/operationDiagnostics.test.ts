@@ -110,8 +110,8 @@ it('drops details outside the allowed vocabulary', () => {
   ]);
 });
 it('classifies by diagnostic reason, then abort names, then unclassified', () => {
-  expect(operationFailureLines('deploy-worker-resolve', operationFailure('plan-rejected'))).toEqual([
-    operationLine('deploy-worker-resolve', 'plan-rejected'),
+  expect(operationFailureLines('deploy-worker-resolve', operationFailure('state-mismatch'))).toEqual([
+    operationLine('deploy-worker-resolve', 'state-mismatch'),
   ]);
   expect(operationFailureLines('deploy-worker-resolve', operationFailure('https://secret.invalid'))).toEqual([
     operationLine('deploy-worker-resolve', 'unclassified'),
@@ -192,7 +192,7 @@ it.each([
   [1, 'ssh-failed'],
 ])('prints the source word of a real adapter failure that ends with exit code %d', async (code, reason) => {
   const adapter = await createSourceSshAdapter(await sshOptions(), { spawnProcess: exitingSpawn(code) as never });
-  const failure = await adapter.freeze().catch((error: unknown) => error);
+  const failure = await adapter.resume('destination_writes_not_enabled').catch((error: unknown) => error);
   expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
     operationLine('deploy-worker-migrate', reason),
   ]);
@@ -204,7 +204,7 @@ it.each([
   const adapter = await createSourceSshAdapter(await sshOptions(), {
     spawnProcess: exitingSpawn(1, stdout) as never,
   });
-  const failure = await adapter.freeze().catch((error: unknown) => error);
+  const failure = await adapter.resume('destination_writes_not_enabled').catch((error: unknown) => error);
   expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
     operationLine('deploy-worker-migrate', reason),
   ]);
@@ -213,19 +213,18 @@ const identity = createTargetIdentity({
   environment: 'staging',
   generation: 'fixture1',
   accountId: 'a'.repeat(32),
-  backendBucket: 'tf-state',
 });
-const queueResponse = (id: string, name: string, consumers: unknown[]) => ({
+const queueResponse = (id: string, name: string, consumers: unknown[], paused = true) => ({
   queue_id: id,
   queue_name: name,
   created_on: '2026-09-05T00:00:00Z',
-  settings: { delivery_paused: true },
+  settings: { delivery_paused: paused },
   consumers,
   producers: [],
   consumers_total_count: consumers.length,
   producers_total_count: 0,
 });
-it('prints the consumer script detail and state-mismatch of a real readResources failure', async () => {
+it('prints the consumer script detail and state-mismatch of a real readActiveResources failure', async () => {
   const consumer = {
     type: 'worker',
     script: 'old-worker',
@@ -239,7 +238,7 @@ it('prints the consumer script detail and state-mismatch of a real readResources
     [`/r2/buckets/${identity.names.uploads}`]: { name: identity.names.uploads },
     [`/r2/buckets/${identity.names.transfer}`]: { name: identity.names.transfer },
     [`/r2/buckets/${identity.names.transfer}/domains/managed`]: { enabled: false },
-    '/queues/queue-id': queueResponse('queue-id', identity.names.queue, [consumer]),
+    '/queues/queue-id': queueResponse('queue-id', identity.names.queue, [consumer], false),
     '/queues/dlq-id': queueResponse('dlq-id', identity.names.dlq, []),
   };
   const api = createTargetControlPlane({
@@ -250,12 +249,11 @@ it('prints the consumer script detail and state-mismatch of a real readResources
       return Response.json(result === undefined ? { success: false } : { success: true, result });
     },
   });
-  const failure = await api.readResources({
+  const failure = await api.readActiveResources({
     d1Id: 'db-id',
     kvId: 'kv-id',
     queueId: 'queue-id',
     dlqId: 'dlq-id',
-    consumerAttached: true,
   }).catch((error: unknown) => error);
   expect(operationFailureLines('deploy-worker-before', failure)).toEqual([
     operationLine('deploy-worker-before', 'resource-consumer-script'),
@@ -597,10 +595,7 @@ INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
 it('prints config-invalid for the configuration messages of the two operation scripts', () => {
   for (
     const message of [
-      'Independent expected target is required.',
       'Protected workflow invocation is invalid.',
-      'Executor configuration is required.',
-      'Invalid zone.',
     ]
   ) {
     expect(operationFailureLines('deploy-worker-migrate', new Error(message))).toEqual([

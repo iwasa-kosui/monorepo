@@ -1,6 +1,5 @@
 import type { EventEmitter } from 'node:events';
 import type { Readable } from 'node:stream';
-import type { SourceInventory } from './source-transfer-protocol.mjs';
 export type SourceSshOptions = {
   host: string;
   user: string;
@@ -28,48 +27,9 @@ export function createSourceSshAdapter(options: SourceSshOptions, testOptions?: 
     options: { stdio: string[]; shell: boolean },
   ) => Pick<EventEmitter, 'once'> & { kill(signal?: NodeJS.Signals): boolean } & { stdout: Readable; stderr: Readable };
 }): Promise<{
-  estimate(
-    signal?: AbortSignal,
-  ): Promise<
-    {
-      source_revision: string;
-      table_bytes: number;
-      upload_bytes: number;
-      rows: number;
-      upload_count: number;
-      upload_duplicate_count: number;
-      upload_missing_count: number;
-      upload_owner_count: number;
-      upload_not_regular_count: number;
-      upload_too_large_count: number;
-      upload_access_count: number;
-      upload_other_count: number;
-      upload_ext_webp_count: number;
-      upload_ext_png_count: number;
-      upload_ext_jpeg_count: number;
-      upload_ext_gif_count: number;
-      upload_failed_ext_webp_count: number;
-      upload_failed_ext_png_count: number;
-      upload_failed_ext_jpeg_count: number;
-      upload_failed_ext_gif_count: number;
-      article_count: number;
-      source_free_bytes: number;
-      source_required_bytes: number;
-      runner_required_bytes: number;
-      source_sufficient: boolean;
-      limits: typeof import('./source-transfer-protocol.mjs').SOURCE_LIMITS;
-    }
-  >;
-  freeze(signal?: AbortSignal): Promise<SourceState>;
   status(signal?: AbortSignal): Promise<SourceState>;
-  drain(timeoutMs?: number, signal?: AbortSignal): Promise<SourceState>;
   resume(
     recovery: 'destination_writes_not_enabled' | 'destination_writes_reconciled',
     signal?: AbortSignal,
   ): Promise<SourceState>;
-  export(signal?: AbortSignal): Promise<SourceInventory>;
-  restore(
-    outputDir: string,
-    signal?: AbortSignal,
-  ): Promise<{ root: string; manifestPath: string; uploadDir: string; inventoryPath: string }>;
 }>;

@@ -99,7 +99,7 @@ export const createWorkflowDirectory = async (runnerTemp) => {
   const base = await mkdtemp(join(parent, 'iori-private-'));
   const paths = { base };
   try {
-    for (const name of ['keys', 'config', 'logs', 'state', 'tmp', 'root']) {
+    for (const name of ['keys', 'config', 'logs', 'tmp']) {
       paths[name] = join(base, name);
       await mkdir(paths[name], { mode: 0o700 });
     }

@@ -10,17 +10,11 @@ it('accepts the preparation, source and cutover words only', () => {
     const reason of [
       ...SOURCE_SSH_REASONS,
       ...SOURCE_REJECTION_DETAILS,
-      'smoke-failed',
       'smoke-token-empty',
       'smoke-token-space',
       'smoke-token-charset',
       'smoke-token-short',
       'smoke-token-long',
-      'plan-rejected',
-      'terraform-auth',
-      'terraform-unreachable',
-      'terraform-lock',
-      'terraform-other',
     ]
   ) {
     expect(isCutoverReason(reason)).toBe(true);
@@ -30,11 +24,12 @@ it('accepts the preparation, source and cutover words only', () => {
   }
 });
 it('prefers abort, then the diagnostic reason, then the message', () => {
-  expect(classifyFailure(failure('smoke-failed'), true)).toBe('aborted');
-  expect(classifyFailure(Object.assign(failure('smoke-failed'), { name: 'TimeoutError' }))).toBe('aborted');
-  expect(classifyFailure(failure('busy', 'Reviewed smoke failed.'))).toBe('busy');
-  expect(classifyFailure(failure('https://secret.invalid', 'Reviewed smoke failed.'))).toBe('smoke-failed');
-  expect(classifyFailure(failure(undefined, 'Reviewed smoke failed.'))).toBe('smoke-failed');
+  const deployFailed = 'Reviewed Worker deployment failed; retain current state.';
+  expect(classifyFailure(failure('deploy-failed'), true)).toBe('aborted');
+  expect(classifyFailure(Object.assign(failure('deploy-failed'), { name: 'TimeoutError' }))).toBe('aborted');
+  expect(classifyFailure(failure('busy', deployFailed))).toBe('busy');
+  expect(classifyFailure(failure('https://secret.invalid', deployFailed))).toBe('deploy-failed');
+  expect(classifyFailure(failure(undefined, deployFailed))).toBe('deploy-failed');
 });
 it('falls back to unclassified for an unknown message, a non-string message and a non-error', () => {
   expect(classifyFailure(failure())).toBe('unclassified');
@@ -43,11 +38,7 @@ it('falls back to unclassified for an unknown message, a non-string message and 
   expect(classifyFailure('text')).toBe('unclassified');
 });
 it.each([
-  'Independent expected target is required.',
   'Protected workflow invocation is invalid.',
-  'Executor configuration is required.',
-  'Invalid zone.',
-  'Target readback configuration is required.',
 ])('classifies the configuration message "%s" as config-invalid', (message) => {
   expect(classifyFailure(new Error(message))).toBe('config-invalid');
 });

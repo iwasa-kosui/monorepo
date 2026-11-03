@@ -25,11 +25,6 @@ export const SOURCE_LIMITS: Readonly<
 >;
 export const SOURCE_REJECTION_DETAILS: readonly string[];
 export const SOURCE_SSH_REASONS: readonly string[];
-export const ESTIMATE_UPLOAD_FAILURE_REASONS: readonly string[];
-export function estimateUploadFailureReason(
-  estimate: Readonly<Record<string, unknown>>,
-  allowedMissingUploads?: number,
-): string | null;
 export const sourceIdentitySchema: z.ZodType<SourceIdentity>;
 export function logicalFilePath(id: string): string;
 export function validateSourceInventory(value: unknown): SourceInventory;

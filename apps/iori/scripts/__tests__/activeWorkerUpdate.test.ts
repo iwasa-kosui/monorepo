@@ -21,8 +21,7 @@ vi.mock(
 );
 vi.mock('../deploy-reviewed-worker-version.mjs', () => ({ deployReviewedWorkerVersion: mocks.deploy }));
 import { expectedTargetFixture } from './migrationTargetFixture.js';
-const { backend_bucket: _backendBucket, ...identityWithoutBackend } = expectedTargetFixture().identity;
-const target = { ...expectedTargetFixture(), identity: identityWithoutBackend };
+const target = expectedTargetFixture();
 const resource = {
   consumerId: target.resources.consumer.id,
   queuePaused: false,

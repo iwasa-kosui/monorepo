@@ -38,7 +38,7 @@ These commands validate the checked-in module without connecting to the backend 
 
 ```sh
 terraform fmt -check -recursive
-terraform init -backend=false -input=false
+terraform init -backend=false -input=false -lockfile=readonly
 terraform validate
 ```
 

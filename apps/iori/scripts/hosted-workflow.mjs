@@ -53,8 +53,6 @@ export const initializeHostedWorkflow = async env => {
     IORI_PRIVATE_DIRECTORY: paths.base,
     IORI_PRIVATE_LOG_DIRECTORY: paths.logs,
     TMPDIR: paths.tmp,
-    TF_DATA_DIR: join(paths.state, 'terraform-data'),
-    TF_LOG_PATH: join(paths.logs, 'terraform.log'),
     WRANGLER_LOG_PATH: join(paths.logs, 'wrangler.log'),
   };
   // GitHub masks the ephemeral paths in later step environment displays; secret values are never printed.
@@ -107,7 +105,7 @@ export const materializeHostedValues = async env => {
 };
 // Only fixed-vocabulary diagnostics may reach the public Actions log.
 const diagnosticLine =
-  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|terraform|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
+  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const ownerNoticeLine = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
 const modeNoticeLine = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
 const releaseNoticeLine = /^IORI_NOTICE stage=release-pending-freeze renamed=1$/;
@@ -158,7 +156,7 @@ const writeDiagnosticLine = async line => {
 export const publishChildDiagnostics = async stderr => {
   for (const line of String(stderr).split('\n')) await writeDiagnosticLine(line);
 };
-const hostedStage = async (name, operation, program = 'none', classify = () => undefined) => {
+const hostedStage = async (name, operation, program = 'none') => {
   try {
     return await operation();
   } catch (error) {
@@ -168,7 +166,7 @@ const hostedStage = async (name, operation, program = 'none', classify = () => u
     const exitSignal = program === 'node' && typeof error?.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(error.signal)
       ? error.signal
       : 'none';
-    const reason = classify(error) ?? hostedReasons.find(([message]) => error?.message === message)?.[1]
+    const reason = hostedReasons.find(([message]) => error?.message === message)?.[1]
       ?? (error?.spawnFailed === true ? 'spawn-failed' : undefined)
       ?? hostedCodeReasons[error?.code] ?? 'unclassified';
     await writeDiagnosticLine(
