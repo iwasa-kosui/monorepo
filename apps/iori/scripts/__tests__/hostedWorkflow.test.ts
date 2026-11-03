@@ -101,6 +101,7 @@ it('maps the recovery operations to their fixed scripts', async () => {
       ],
       ['restart-failed-source', 'restart-failed-source.mjs'],
       ['diagnose-source', 'diagnose-source.mjs'],
+      ['adopt-cutover-state', 'adopt-cutover-state.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -798,6 +799,7 @@ it.each([
   ['rehearse-protected-migration.mjs', 'rehearse-migration', 'rehearse-migration'],
   ['execute-protected-migration.mjs', 'migrate-data', 'migrate-data'],
   ['deploy-active-worker.mjs', 'deploy-worker-before', 'deploy-worker'],
+  ['adopt-cutover-state.mjs', 'adopt-inputs', 'adopt-cutover-state'],
 ])('publishes the stage line of the real %s CLI that fails without configuration', async (script, stage, operation) => {
   const writes = captureStderr();
   const directory = await createFixtureDirectory('iori-hosted-');

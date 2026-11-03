@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       migration_main_sha:
-        description: Immutable migration SHA (required for resume-source, release-pending-freeze and restart-failed-source; defaults to main_sha when empty otherwise; for purge-rehearsal-target, the SHA used when rehearse-migration ran)
+        description: Immutable migration SHA (required for resume-source, release-pending-freeze and restart-failed-source; defaults to main_sha when empty otherwise; for purge-rehearsal-target, the SHA used when rehearse-migration ran; for adopt-cutover-state, the immutable SHA of the migration, as for deploy-worker)
         required: false
         type: string
       operation:
@@ -24,6 +24,7 @@ on:
           - verify-import
           - cutover-route
           - deploy-worker
+          - adopt-cutover-state
           - resume-source
           - release-pending-freeze
           - restart-failed-source
@@ -628,6 +629,65 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
           IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
           IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  adopt-cutover-state:
+    if: inputs.operation == 'adopt-cutover-state'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Setup Terraform without public wrapper outputs
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          terraform_version: "1.17.1"
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_ADMISSION_MODE: sealed
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_CUTOVER_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_WRITE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_WRITE_SECRET_ACCESS_KEY }}
       - name: Remove this job's private directory
         if: always() && env.IORI_PRIVATE_DIRECTORY != ''
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs

@@ -24,6 +24,7 @@ const representativeReasons = [
   'r2-too-large',
   'zones-request',
   'state-mismatch',
+  'route-id-invalid',
   'queue-not-paused',
   'not-sealed',
   'worker-input',

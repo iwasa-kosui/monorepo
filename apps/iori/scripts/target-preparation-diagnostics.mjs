@@ -20,6 +20,7 @@ export const PREPARATION_STAGES = Object.freeze([
 export const CONTROL_PLANE_APIS = Object.freeze(['workers', 'd1', 'kv', 'queues', 'r2', 'zones', 'other']);
 const FIXED_REASONS = new Set([
   'state-mismatch',
+  'route-id-invalid',
   'resource-input',
   'resource-d1',
   'resource-kv',
@@ -114,7 +115,7 @@ const PLAN_RESOURCE_WORDS = [
 ];
 const PLAN_ACTION_WORDS = ['create', 'update', 'delete', 'no-op', 'replace', 'other'];
 const planReason = new RegExp(`^plan-(?:${PLAN_RESOURCE_WORDS.join('|')})-(?:${PLAN_ACTION_WORDS.join('|')})$`);
-const planResourceWord = (address) =>
+export const planResourceWord = (address) =>
   typeof address === 'string' && Object.hasOwn(PLAN_RESOURCES, address) ? PLAN_RESOURCES[address] : 'other';
 const planActionWord = (actions) => {
   if (!Array.isArray(actions)) return 'other';

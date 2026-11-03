@@ -479,3 +479,417 @@ it('keeps a plan-rejected diagnostic without details for control inputs that pre
   expect(error).toMatchObject({ diagnostic: { reason: 'plan-rejected' } });
   expect((error as { diagnostic: object }).diagnostic).not.toHaveProperty('details');
 });
+const adoptRouteId = 'f'.repeat(32);
+const adoptOutputs = {
+  worker_bindings: { value: consumerBindings },
+  migration_storage: { value: { bucket_name: identity.names.transfer, environment: identity.environment } },
+  target_identity: {
+    value: {
+      account_id: identity.accountId,
+      environment: identity.environment,
+      generation: identity.generation,
+      backend_key: identity.backendKey,
+      worker_name: identity.workerName,
+      d1_database_name: identity.names.d1,
+      queue_id: 'queue',
+      dlq_id: 'dlq',
+      queue_settings: { delivery_paused: true },
+      dlq_settings: { delivery_paused: true },
+      consumer: [{
+        consumer_id: 'consumer',
+        account_id: identity.accountId,
+        queue_id: 'queue',
+        script_name: identity.workerName,
+        type: 'worker',
+        dead_letter_queue: identity.names.dlq,
+        settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
+      }],
+    },
+  },
+};
+const adoptNoop = (address: string, after: unknown) => ({
+  address,
+  change: { actions: ['no-op'], before: after, after },
+});
+const adoptResources = () => [
+  adoptNoop('cloudflare_workers_route.iori[0]', {
+    zone_id: 'c'.repeat(32),
+    pattern: 'staging.test/*',
+    script: identity.workerName,
+  }),
+  adoptNoop('cloudflare_queue.fedify', { settings: { delivery_paused: false } }),
+  adoptNoop('cloudflare_queue.fedify_dlq', { settings: { delivery_paused: true } }),
+  adoptNoop('cloudflare_queue_consumer.fedify[0]', { script_name: identity.workerName }),
+];
+const adoptOutputChanges = (bindings: unknown = consumerBindings) => ({
+  worker_bindings: { actions: ['no-op'], before: bindings, after: bindings },
+  target_identity: { actions: ['no-op'], before: {}, after: {} },
+});
+const cleanRefresh = () => ({ resource_changes: adoptResources(), resource_drift: [] });
+const cleanFinal = () => ({ resource_changes: adoptResources(), output_changes: adoptOutputChanges() });
+const queueDrift = (before: Record<string, unknown>, after: Record<string, unknown>) => ({
+  address: 'cloudflare_queue.fedify',
+  change: { actions: ['update'], before, after },
+});
+const adoptHarness = async (
+  options: {
+    routeInState?: boolean;
+    refresh?: unknown;
+    final?: unknown;
+    finalStatus?: number;
+    finalThrows?: boolean;
+    paused?: boolean;
+  } = {},
+) => {
+  const calls: string[][] = [];
+  const stages: string[] = [];
+  const notices: string[][] = [];
+  const outputs = structuredClone(adoptOutputs);
+  outputs.target_identity.value.queue_settings.delivery_paused = options.paused ?? true;
+  const api = createTargetTerraform({
+    identity,
+    backendEndpoint: `https://${'b'.repeat(32)}.r2.cloudflarestorage.com`,
+    privateDirectory: await mkdtemp(join(tmpdir(), 'target-adopt-')),
+    zoneId: 'c'.repeat(32),
+    hostname: 'staging.test',
+    runCommand: (async (_program: string, args: string[]) => {
+      calls.push(args);
+      const reply = (value: unknown) => ({ status: 0, stdout: JSON.stringify(value), stderr: '' });
+      if (args[1] === 'show' && args.length > 3) {
+        return reply(
+          args[3]!.includes('adopt-refresh') ? options.refresh ?? cleanRefresh() : options.final ?? cleanFinal(),
+        );
+      }
+      if (args[1] === 'show') {
+        return reply({
+          values: {
+            root_module: {
+              resources: [
+                { address: 'cloudflare_queue.fedify' },
+                ...(options.routeInState
+                  ? [{ address: 'cloudflare_workers_route.iori[0]', values: { id: adoptRouteId } }]
+                  : []),
+              ],
+            },
+          },
+        });
+      }
+      if (args[1] === 'output') return reply(outputs);
+      if (args.includes('-detailed-exitcode') && options.finalThrows) {
+        throw Object.assign(new Error('exit'), { exitCode: options.finalStatus });
+      }
+      if (args.includes('-detailed-exitcode')) return { status: options.finalStatus ?? 0, stdout: '', stderr: '' };
+      return { status: 0, stdout: '', stderr: '' };
+    }) as never,
+    onStage: (stage: string) => {
+      stages.push(stage);
+    },
+    onNotice: (stage: string, word: string) => {
+      notices.push([stage, word]);
+    },
+  });
+  const adopt = (
+    input: Partial<Parameters<typeof api.adoptCutoverState>[0]> = {},
+  ): Promise<{ result?: unknown; error?: unknown }> =>
+    api.adoptCutoverState({
+      routeId: adoptRouteId,
+      routeInState: false,
+      establishedBindings: consumerBindings,
+      ...input,
+    })
+      .then(
+        (result: unknown) => ({ result }),
+        (error: unknown) => ({ error }),
+      );
+  return { api, adopt, calls, stages, notices, commands: () => calls.map(args => args[1]) };
+};
+const adoptVariables = [
+  '-var=attach_queue_consumer=true',
+  '-var=queue_delivery_paused=false',
+  '-var=enable_production_worker_route=false',
+  '-var=enable_staging_worker_route=true',
+];
+const expectNoForbiddenTerraform = (calls: string[][]) => {
+  for (const args of calls) {
+    expect(args).not.toContain('-auto-approve');
+    expect(['destroy', 'state', 'taint', 'untaint']).not.toContain(args[1]);
+  }
+};
+it('reads the adoptable state, reports whether the route is in state and skips the pause check without a request', async () => {
+  const absent = await adoptHarness();
+  await expect(absent.api.initializeAdoptable()).resolves.toMatchObject({
+    targetIdentity: adoptOutputs.target_identity.value,
+    routeInState: false,
+    routeId: undefined,
+  });
+  expect(absent.commands()).toEqual(['init', 'show', 'output']);
+  expect(absent.stages).toEqual(['tf-init', 'adopt-state-read']);
+  const present = await adoptHarness({ routeInState: true, paused: false });
+  await expect(present.api.initializeAdoptable()).resolves.toMatchObject({ routeInState: true, routeId: adoptRouteId });
+  await expect(present.api.initializeAdoptable({ paused: false })).resolves.toMatchObject({ routeInState: true });
+  await expect(absent.api.initializeAdoptable({ paused: false })).rejects.toMatchObject(
+    terraformFailure('output-mismatch'),
+  );
+});
+it('imports the route, refreshes into a saved plan file and checks a clean final plan, in that order', async () => {
+  const harness = await adoptHarness();
+  await harness.api.initializeAdoptable();
+  const { result } = await harness.adopt();
+  expect(result).toEqual({ imported: true });
+  expect(harness.commands()).toEqual(['init', 'show', 'output', 'import', 'plan', 'show', 'apply', 'plan', 'show']);
+  const [, , , importArgs, refreshPlan, refreshShow, refreshApply, finalPlan, finalShow] = harness.calls;
+  expect(importArgs).toEqual([
+    expect.stringMatching(/^-chdir=/),
+    'import',
+    '-input=false',
+    '-lock=true',
+    ...adoptVariables,
+    'cloudflare_workers_route.iori[0]',
+    `${'c'.repeat(32)}/${adoptRouteId}`,
+  ]);
+  expect(refreshPlan).toEqual([
+    expect.stringMatching(/^-chdir=/),
+    'plan',
+    '-refresh-only',
+    '-input=false',
+    '-lock=true',
+    expect.stringMatching(/^-out=.*adopt-refresh\.tfplan$/),
+    ...adoptVariables,
+  ]);
+  const refreshPath = refreshPlan![5]!.slice('-out='.length);
+  expect(refreshShow).toEqual([expect.stringMatching(/^-chdir=/), 'show', '-json', refreshPath]);
+  expect(refreshApply).toEqual([expect.stringMatching(/^-chdir=/), 'apply', '-input=false', '-lock=true', refreshPath]);
+  expect(finalPlan).toEqual([
+    expect.stringMatching(/^-chdir=/),
+    'plan',
+    '-detailed-exitcode',
+    '-input=false',
+    '-lock=true',
+    expect.stringMatching(/^-out=.*adopt-final\.tfplan$/),
+    ...adoptVariables,
+  ]);
+  expect(finalShow![3]).toBe(finalPlan![5]!.slice('-out='.length));
+  expect(harness.stages).toEqual([
+    'tf-init',
+    'adopt-state-read',
+    'adopt-route-import',
+    'adopt-refresh-plan',
+    'adopt-refresh-apply',
+    'adopt-final-plan',
+  ]);
+  expect(harness.notices).toEqual([
+    ['adopt-route-import', 'route-imported'],
+    ['adopt-refresh-plan', 'refresh-no-drift'],
+    ['adopt-refresh-apply', 'refresh-applied'],
+    ['adopt-final-plan', 'plan-clean'],
+  ]);
+  expectNoForbiddenTerraform(harness.calls);
+});
+it('does not import a route that is already in state', async () => {
+  const harness = await adoptHarness({ routeInState: true });
+  const { routeInState } = await harness.api.initializeAdoptable();
+  const { result } = await harness.adopt({ routeInState });
+  expect(result).toEqual({ imported: false });
+  expect(harness.commands()).toEqual(['init', 'show', 'output', 'plan', 'show', 'apply', 'plan', 'show']);
+  expect(harness.notices[0]).toEqual(['adopt-route-import', 'route-in-state']);
+  expectNoForbiddenTerraform(harness.calls);
+});
+it('applies a refresh whose only drift is the Queue becoming active and reports the allowed drift', async () => {
+  const harness = await adoptHarness({
+    refresh: {
+      ...cleanRefresh(),
+      resource_drift: [
+        queueDrift(
+          { modified_on: 'before', settings: { delivery_paused: true } },
+          { modified_on: 'after', settings: { delivery_paused: false } },
+        ),
+      ],
+    },
+  });
+  const { result } = await harness.adopt();
+  expect(result).toEqual({ imported: true });
+  expect(harness.commands()).toContain('apply');
+  expect(harness.notices[1]).toEqual(['adopt-refresh-plan', 'refresh-drift-allowed']);
+  expectNoForbiddenTerraform(harness.calls);
+});
+it.each([
+  ['a Queue pause drift in the wrong direction', [
+    queueDrift({ settings: { delivery_paused: false } }, { settings: { delivery_paused: true } }),
+  ], ['plan-queue-update', 'drift-queue-delivery-paused']],
+  ['a Queue drift in another attribute', [
+    queueDrift({ settings: { delivery_delay: 0 } }, { settings: { delivery_delay: 5 } }),
+  ], ['plan-queue-update', 'drift-queue-delivery-delay']],
+  ['a Dead Letter Queue drift', [{
+    address: 'cloudflare_queue.fedify_dlq',
+    change: {
+      actions: ['update'],
+      before: { settings: { delivery_paused: true } },
+      after: { settings: { delivery_paused: false } },
+    },
+  }], ['plan-dlq-update', 'drift-dlq-delivery-paused']],
+  ['a consumer script drift', [{
+    address: 'cloudflare_queue_consumer.fedify[0]',
+    change: { actions: ['update'], before: { script_name: 'old' }, after: { script_name: 'new' } },
+  }], ['plan-consumer-update', 'drift-consumer-script-name']],
+  ['a deleted route', [{
+    address: 'cloudflare_workers_route.iori[0]',
+    change: { actions: ['delete'], before: { script: 'old' }, after: null },
+  }], ['plan-route-delete', 'drift-route-other']],
+])('rejects %s without applying the refresh', async (_name, drift, details) => {
+  const harness = await adoptHarness({ refresh: { ...cleanRefresh(), resource_drift: drift } });
+  const { error } = await harness.adopt();
+  expect(error).toMatchObject({ diagnostic: { reason: 'plan-rejected', details } });
+  expect(harness.commands()).toEqual(['import', 'plan', 'show']);
+  expect(harness.stages.at(-1)).toBe('adopt-refresh-plan');
+  expect(harness.notices).toEqual([['adopt-route-import', 'route-imported']]);
+  expectNoForbiddenTerraform(harness.calls);
+});
+it('rejects a refresh plan that changes a resource or imports one, without applying it', async () => {
+  const update = adoptNoop('cloudflare_queue.fedify', { settings: { delivery_paused: false } });
+  Object.assign(update.change, {
+    actions: ['update'],
+    before: { settings: { delivery_paused: true } },
+  });
+  const changed = await adoptHarness({ refresh: { resource_changes: [update], resource_drift: [] } });
+  expect((await changed.adopt()).error).toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: ['plan-queue-update', 'drift-queue-delivery-paused'] },
+  });
+  const imported = adoptNoop('cloudflare_workers_route.iori[0]', { script: identity.workerName });
+  Object.assign(imported.change, { importing: { id: 'route' } });
+  const importing = await adoptHarness({ refresh: { resource_changes: [imported], resource_drift: [] } });
+  expect((await importing.adopt()).error).toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: ['plan-route-no-op'] },
+  });
+  for (const harness of [changed, importing]) {
+    expect(harness.commands()).not.toContain('apply');
+    expectNoForbiddenTerraform(harness.calls);
+  }
+});
+it('reports the attribute of a drift with a fixed word and never prints values', async () => {
+  const secret = 'private-script-name-value';
+  const harness = await adoptHarness({
+    refresh: {
+      ...cleanRefresh(),
+      resource_drift: [
+        {
+          address: 'cloudflare_queue_consumer.fedify[0]',
+          change: {
+            actions: ['update'],
+            before: { script_name: secret, dead_letter_queue: secret, unknown_attribute: secret },
+            after: { script_name: 'other', dead_letter_queue: 'other', unknown_attribute: 'other' },
+          },
+        },
+        {
+          address: 'cloudflare_worker.iori',
+          change: { actions: ['update'], before: { unknown_attribute: secret }, after: { unknown_attribute: 'other' } },
+        },
+      ],
+    },
+  });
+  const { error } = await harness.adopt();
+  const details = (error as { diagnostic: { details: string[] } }).diagnostic.details;
+  expect(details).toEqual([
+    'plan-consumer-update',
+    'plan-other-update',
+    'drift-consumer-dead-letter-queue',
+    'drift-consumer-script-name',
+    'drift-consumer-other',
+    'drift-other-other',
+  ]);
+  expect(JSON.stringify(error)).not.toContain(secret);
+});
+it('rejects a final plan with exit code 2 whether the runner returns or throws it, and names the attribute', async () => {
+  const update = adoptResources();
+  update[1] = {
+    address: 'cloudflare_queue.fedify',
+    change: {
+      actions: ['update'],
+      before: { settings: { delivery_paused: true } },
+      after: { settings: { delivery_paused: false } },
+    },
+  };
+  for (const finalThrows of [false, true]) {
+    const harness = await adoptHarness({
+      finalStatus: 2,
+      finalThrows,
+      final: { resource_changes: update, output_changes: adoptOutputChanges() },
+    });
+    const { error } = await harness.adopt();
+    expect(error).toMatchObject({
+      diagnostic: { reason: 'plan-rejected', details: ['plan-queue-update', 'diff-queue-delivery-paused'] },
+    });
+    expect(harness.commands()).toEqual(['import', 'plan', 'show', 'apply', 'plan', 'show']);
+    expect(harness.stages.at(-1)).toBe('adopt-final-plan');
+    expectNoForbiddenTerraform(harness.calls);
+  }
+  const bare = await adoptHarness({ finalStatus: 2 });
+  expect((await bare.adopt()).error).toMatchObject({
+    diagnostic: { reason: 'plan-rejected', details: ['plan-invalid'] },
+  });
+});
+it('classifies another final plan exit code as command-failed', async () => {
+  const harness = await adoptHarness({ finalStatus: 1, finalThrows: true });
+  expect((await harness.adopt()).error).toMatchObject({ exitCode: 1, diagnostic: { reason: 'command-failed' } });
+});
+const finalFailure = async (mutate: (plan: ReturnType<typeof cleanFinal>) => void) => {
+  const final = cleanFinal();
+  mutate(final);
+  const harness = await adoptHarness({ final });
+  const { error } = await harness.adopt();
+  expect(harness.notices.map(([, word]) => word)).not.toContain('plan-clean');
+  expectNoForbiddenTerraform(harness.calls);
+  return error;
+};
+it.each([
+  ['a change in a resource', (plan: ReturnType<typeof cleanFinal>) => {
+    Object.assign(plan.resource_changes[2]!.change, {
+      actions: ['update'],
+      before: { settings: { delivery_paused: false } },
+    });
+  }, ['plan-dlq-update', 'diff-dlq-delivery-paused']],
+  ['a differing no-op resource', (plan: ReturnType<typeof cleanFinal>) => {
+    Object.assign(plan.resource_changes[3]!.change, { before: { script_name: 'old' } });
+  }, ['plan-consumer-no-op', 'diff-consumer-script-name']],
+  ['an import', (plan: ReturnType<typeof cleanFinal>) => {
+    Object.assign(plan.resource_changes[0]!.change, { importing: { id: 'route' } });
+  }, ['plan-route-no-op']],
+  ['a different route pattern', (plan: ReturnType<typeof cleanFinal>) => {
+    for (const item of plan.resource_changes.slice(0, 1)) {
+      Object.assign(item.change.after as object, { pattern: 'other.test/*' });
+      Object.assign(item.change.before as object, { pattern: 'other.test/*' });
+    }
+  }, ['plan-route-no-op', 'diff-route-pattern']],
+  ['a missing route', (plan: ReturnType<typeof cleanFinal>) => {
+    plan.resource_changes.shift();
+  }, ['plan-invalid']],
+  ['a paused Queue', (plan: ReturnType<typeof cleanFinal>) => {
+    plan.resource_changes[1] = adoptNoop('cloudflare_queue.fedify', { settings: { delivery_paused: true } });
+  }, ['plan-queue-no-op', 'diff-queue-delivery-paused']],
+  ['an active Dead Letter Queue', (plan: ReturnType<typeof cleanFinal>) => {
+    plan.resource_changes[2] = adoptNoop('cloudflare_queue.fedify_dlq', { settings: { delivery_paused: false } });
+  }, ['plan-dlq-no-op', 'diff-dlq-delivery-paused']],
+  ['two consumers', (plan: ReturnType<typeof cleanFinal>) => {
+    plan.resource_changes.push(adoptNoop('cloudflare_queue_consumer.fedify[1]', { script_name: identity.workerName }));
+  }, ['plan-invalid']],
+  ['a changed output', (plan: ReturnType<typeof cleanFinal>) => {
+    Object.assign(plan.output_changes.target_identity, { actions: ['update'] });
+  }, ['plan-invalid']],
+  ['changed Worker bindings', (plan: ReturnType<typeof cleanFinal>) => {
+    plan.output_changes = adoptOutputChanges({ ...consumerBindings, d1_database_id: 'other' });
+  }, ['plan-bindings-changed']],
+])('rejects a final plan with exit code 0 but %s', async (_name, mutate, details) => {
+  const error = await finalFailure(mutate);
+  expect(error).toMatchObject({ diagnostic: { reason: 'plan-rejected', details } });
+});
+it('rejects an invalid route id as route-id-invalid before it runs any command', async () => {
+  const harness = await adoptHarness();
+  for (const routeId of ['', 'short', 'F'.repeat(32), `${'f'.repeat(31)}/`, undefined, 7]) {
+    const { error } = await harness.adopt({ routeId: routeId as never });
+    expect(error).toMatchObject(terraformFailure('route-id-invalid'));
+  }
+  expect(harness.calls).toEqual([]);
+  expect(harness.stages).toEqual([]);
+  const missing = await harness.adopt({ routeInState: undefined as never });
+  expect(missing.error).toMatchObject({ diagnostic: { reason: 'plan-rejected' } });
+  expect(harness.calls).toEqual([]);
+});

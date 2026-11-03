@@ -10,8 +10,21 @@ export function createTargetTerraform(
     runCommand?: InfrastructureCommand;
     signal?: AbortSignal;
     onStage?: (stage: string) => void;
+    onNotice?: (stage: string, word: string) => void;
   },
 ): Readonly<{
+  adoptCutoverState(
+    input: { routeId: string; routeInState: boolean; establishedBindings: Record<string, string> },
+  ): Promise<{ imported: boolean }>;
+  initializeAdoptable(input?: { paused?: boolean }): Promise<
+    {
+      workerBindings: Record<string, string>;
+      targetIdentity: Record<string, unknown>;
+      migrationStorage: Record<string, string>;
+      routeInState: boolean;
+      routeId: string | undefined;
+    }
+  >;
   changeRoute(input: { establishedBindings: Record<string, string> }): Promise<{ applied: true }>;
   initializeActive(): Promise<
     {

@@ -42,7 +42,7 @@ The transfer bucket has no managed public domain, custom domain or application b
 
 Configure the separately protected `production` and `staging` Environments before dispatch. The current workflow reads these common secret references: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_TERRAFORM_BACKEND_BUCKET`, `IORI_ADMISSION_IDENTITY`, `ORIGIN`, and `VAPID_SUBJECT`. These are reference names, not a claim that values or protection rules have been configured.
 
-Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `migration_run_id`. For `estimate-source`, leave `generation` and `migration_run_id` empty; the workflow rejects any value. For `purge-rehearsal-target`, `migration_main_sha` is the `main_sha` used when `rehearse-migration` ran, and `main_sha` selects the current reviewed code. For a later normal Worker update, `migration_main_sha` supplies the original admission SHA while `main_sha` selects current reviewed code. Preserve the original admission JSON, generation and run identity. A new migration generation requires matching newly selected identity inputs.
+Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `migration_run_id`. For `estimate-source`, leave `generation` and `migration_run_id` empty; the workflow rejects any value. For `purge-rehearsal-target`, `migration_main_sha` is the `main_sha` used when `rehearse-migration` ran, and `main_sha` selects the current reviewed code. For a later normal Worker update, `migration_main_sha` supplies the original admission SHA while `main_sha` selects current reviewed code. `adopt-cutover-state` uses `migration_main_sha` in the same way. Preserve the original admission JSON, generation and run identity. A new migration generation requires matching newly selected identity inputs.
 
 Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KEY` pair. The workflow maps the state pair to `AWS_*`, transfer pair to `IORI_MIGRATION_R2_*`, application pair to `IORI_APPLICATION_R2_*`, and the role API token to `CLOUDFLARE_API_TOKEN` only in the operation step.
 
@@ -56,6 +56,7 @@ Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KE
 | `verify-import`          | `IORI_CLOUDFLARE_VERIFY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
 | `cutover-route`          | `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | `IORI_TRANSFER_R2_READ_ONLY` | `IORI_APPLICATION_R2_READ_ONLY` |
 | `deploy-worker`          | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`  | `IORI_TERRAFORM_READ_ONLY` | `IORI_TRANSFER_R2_READ_ONLY` | —                               |
+| `adopt-cutover-state`    | `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | —                            | —                               |
 
 `estimate-source` receives only the four source SSH references listed below and no Cloudflare, state, transfer or application credential. `purge-rehearsal-target` reads the transfer bucket with read-only credentials, writes only to the application bucket, and receives no SSH, receipt key or rehearsal profile.
 
