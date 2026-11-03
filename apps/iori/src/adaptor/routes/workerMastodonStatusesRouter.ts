@@ -28,6 +28,7 @@ import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { Status } from '../mastodon/entities.ts';
+import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
 import {
   isSourceVisibleToAnonymous,
   type StatusAssembler,
@@ -93,6 +94,17 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
   const contentType = body['content_type'];
   if (!isOmitted(contentType) && contentType !== 'text/plain' && contentType !== 'text/markdown') {
     return 'Content type must be text/plain or text/markdown';
+  }
+  const scheduledAt = body['scheduled_at'];
+  if (typeof scheduledAt === 'string' && scheduledAt !== '') {
+    return 'Scheduled statuses are not supported';
+  }
+  if (Object.keys(body).some((key) => key === 'poll' || key.startsWith('poll['))) {
+    return 'Polls are not supported';
+  }
+  const status = bodyString(body, 'status');
+  if (status !== undefined && [...status].length > MAX_STATUS_CHARACTERS) {
+    return `Text character limit of ${MAX_STATUS_CHARACTERS} exceeded`;
   }
   return undefined;
 };

@@ -49,6 +49,54 @@ describe('POST /api/v1/statuses の検証', () => {
     expect(t.count('posts')).toBe(0);
   });
 
+  it('scheduled_at が空でないとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', scheduled_at: '2099-01-01T00:00:00.000Z' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('poll[options][] を含むとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.request('/api/v1/statuses', {
+      method: 'POST',
+      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([
+        ['status', 'hi'],
+        ['poll[options][]', 'a'],
+        ['poll[options][]', 'b'],
+        ['poll[expires_in]', '300'],
+      ]).toString(),
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('status が 10001 文字のとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'あ'.repeat(10001) });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('status が 10000 文字ちょうどのとき投稿できる', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'あ'.repeat(10000) });
+
+    expect(response.status).toBe(200);
+    expect(t.count('posts')).toBe(1);
+  });
+
   it('media_ids が5件以上のとき 422 にする', async () => {
     const t = await setup();
     const medias = [];
