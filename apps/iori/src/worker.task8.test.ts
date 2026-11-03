@@ -40,7 +40,6 @@ const runtime = vi.hoisted(() => ({
   notifications: {
     getUnreadNotificationCountUseCase: {},
     getNotificationsUseCase: {},
-    getLikedPostsUseCase: {},
   },
   articles: {
     getArticleWithThreadUseCase: {},
@@ -58,14 +57,11 @@ const runtime = vi.hoisted(() => ({
     sendReplyUseCase: {},
     deletePostUseCase: {},
     sendFollowRequestUseCase: {},
-    getUserPostsUseCase: {},
-    getRemoteActorPostsUseCase: {},
     subscribePushUseCase: {},
     unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
   },
   mutesRelays: {
-    getMutesUseCase: {},
     createMuteUseCase: {},
     deleteMuteUseCase: {},
     subscribeRelayUseCase: {},

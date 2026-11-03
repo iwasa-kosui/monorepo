@@ -34,7 +34,6 @@ const runtime = vi.hoisted(() => ({
   notifications: {
     getUnreadNotificationCountUseCase: {},
     getNotificationsUseCase: {},
-    getLikedPostsUseCase: {},
   },
   articles: {
     getArticleWithThreadUseCase: {},
@@ -52,14 +51,11 @@ const runtime = vi.hoisted(() => ({
     sendReplyUseCase: {},
     deletePostUseCase: {},
     sendFollowRequestUseCase: {},
-    getUserPostsUseCase: {},
-    getRemoteActorPostsUseCase: {},
     subscribePushUseCase: {},
     unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
   },
   mutesRelays: {
-    getMutesUseCase: {},
     createMuteUseCase: {},
     deleteMuteUseCase: {},
     subscribeRelayUseCase: {},
@@ -94,7 +90,15 @@ describe('Task 7 Worker route mounting', () => {
       ),
       worker.fetch(new Request('https://worker.test/api/v1/notifications'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/articles/not-an-id'), env, executionContext),
-      worker.fetch(new Request('https://worker.test/api/v1/mutes'), env, executionContext),
+      worker.fetch(
+        new Request('https://worker.test/api/v1/mute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actorId: '573c7c51-0e4b-453c-bb9f-5dbd15a319a7' }),
+        }),
+        env,
+        executionContext,
+      ),
       worker.fetch(new Request('https://worker.test/api/v1/relays'), env, executionContext),
     ]);
 

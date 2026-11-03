@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import { MuteId } from './muteId.ts';
 
@@ -71,6 +72,10 @@ export type MutesResolverByUserId = Agg.Resolver<UserId, ReadonlyArray<Mute>>;
 export type MutedActorIdsResolverByUserId = Agg.Resolver<
   UserId,
   ReadonlyArray<ActorId>
+>;
+export type MutedActorsResolverByUserIdWithPagination = Agg.Resolver<
+  Readonly<{ userId: UserId; page: PageRequest }>,
+  ReadonlyArray<Readonly<{ muteId: MuteId; mutedActorId: ActorId }>>
 >;
 export const Mute = {
   ...schema,

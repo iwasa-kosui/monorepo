@@ -4,15 +4,19 @@ import { createIoriApp } from '../../../../appFactory.tsx';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
+import { createD1ActorIdResolverByAcct } from '../../../d1/actor/actorIdResolverByAcct.ts';
 import { createD1ActorResolverById } from '../../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../../../d1/follow/actorIdsResolverByFollowsWithPagination.ts';
+import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
+import { createD1MutedActorsResolverByUserIdWithPagination } from '../../../d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
@@ -26,6 +30,7 @@ import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccounts
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonStatusesRouter } from '../../workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from '../../workerMastodonTimelinesRouter.ts';
+import { createWorkerMastodonViewerListsRouter } from '../../workerMastodonViewerListsRouter.ts';
 import { createOAuthHarness, ORIGIN } from './oauthHarness.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -84,6 +89,19 @@ export const setupReadApi = () => {
           accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
           actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
           actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
+          actorIdResolverByAcct: createD1ActorIdResolverByAcct(db),
+          accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
+          statusAssembler,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerMastodonViewerListsRouter({
+          authn,
+          actorResolverByUserId,
+          likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
+          mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
         }),
       );
@@ -110,7 +128,7 @@ export const setupReadApi = () => {
     Authorization: `Bearer ${(await harness.issueUserToken(scope)).token}`,
   });
 
-  return { ...harness, seed, request, signIn, bearerFor, queries: fixture.queries };
+  return { ...harness, seed, request, signIn, bearerFor, queries: fixture.queries, sqlite: fixture.sqlite };
 };
 
 export const idsOf = (body: unknown): string[] => (body as ReadonlyArray<{ id: string }>).map((item) => item.id);

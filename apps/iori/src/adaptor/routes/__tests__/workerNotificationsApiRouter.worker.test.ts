@@ -8,7 +8,6 @@ import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { Username } from '../../../domain/user/username.ts';
-import type { GetLikedPostsUseCase } from '../../../useCase/getLikedPosts.ts';
 import type { GetNotificationsUseCase } from '../../../useCase/getNotifications.ts';
 import type { GetUnreadNotificationCountUseCase } from '../../../useCase/getUnreadNotificationCount.ts';
 import { createWorkerNotificationsApiRouter } from '../workerNotificationsApiRouter.ts';
@@ -16,7 +15,7 @@ import { createWorkerNotificationsApiRouter } from '../workerNotificationsApiRou
 const sessionCookie = 'sessionId=4dc530d6-d06c-4b4a-a021-0e1aee0b6d82';
 
 describe('createWorkerNotificationsApiRouter', () => {
-  it('returns unread count, sanitized notifications, and sanitized liked posts', async () => {
+  it('returns unread count and sanitized notifications, and no longer serves liked posts', async () => {
     const user = { id: UserId.generate(), username: Username.orThrow('kosui') };
     const actorId = ActorId.generate();
     const postId = PostId.generate();
@@ -58,24 +57,6 @@ describe('createWorkerNotificationsApiRouter', () => {
           }],
         }),
     };
-    const getLikedPostsUseCase: GetLikedPostsUseCase = {
-      run: async () =>
-        RA.ok({
-          user,
-          posts: [{
-            ...post,
-            username: user.username,
-            logoUri: undefined,
-            liked: true,
-            reposted: false,
-            images: [],
-            likeCount: 1,
-            repostCount: 0,
-            reactions: [],
-            linkPreviews: [],
-          }],
-        }),
-    };
     const app = createIoriApp({
       federationMiddleware: undefined,
       registerRoutes: (router) => {
@@ -84,7 +65,6 @@ describe('createWorkerNotificationsApiRouter', () => {
           createWorkerNotificationsApiRouter({
             getUnreadNotificationCountUseCase,
             getNotificationsUseCase,
-            getLikedPostsUseCase,
           }),
         );
       },
@@ -107,8 +87,6 @@ describe('createWorkerNotificationsApiRouter', () => {
     await expect(notifications.json()).resolves.toMatchObject({
       notifications: [{ sanitizedContent: '<p>safe</p>' }],
     });
-    await expect(likedPosts.json()).resolves.toMatchObject({
-      posts: [{ content: '<p>safe</p>' }],
-    });
+    expect(likedPosts.status).toBe(404);
   });
 });

@@ -1,5 +1,5 @@
 import type { Context, Federation } from '@fedify/fedify';
-import type { RA, ResultAsync } from '@iwasa-kosui/result';
+import type { ResultAsync } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
@@ -9,21 +9,23 @@ import type {
   ActorIdsResolverByFollowerIdWithPagination,
   ActorIdsResolverByFollowingIdWithPagination,
 } from '../domain/actor/accountProfile.ts';
+import type {
+  AccountRelationshipsResolverByActorIds,
+  ActorIdResolverByAcct,
+} from '../domain/actor/accountRelationship.ts';
 import type { AccountStatsResolverByActorId } from '../domain/actor/accountStats.ts';
 import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
-import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
-import type { Instant } from '../domain/instant/instant.ts';
-import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
+import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
+import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
 import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
 import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
   LocalPostsResolverByPage,
   PostsWithAuthorResolverByPostIds,
-  PostWithAuthor,
   ThreadResolver,
 } from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
@@ -41,12 +43,9 @@ import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
-import type { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
-import type { GetMutesUseCase } from '../useCase/getMutes.ts';
 import type { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { GetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
-import type { GetUserPostsUseCase } from '../useCase/getUserPosts.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -107,6 +106,10 @@ export type IoriMastodonRuntimePorts = Readonly<{
   threadResolver: ThreadResolver;
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
+  actorIdResolverByAcct: ActorIdResolverByAcct;
+  accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
+  likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
+  mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   statusAssembler: StatusAssembler;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
@@ -126,7 +129,6 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
 export type IoriNotificationsRuntimePorts = Readonly<{
   getUnreadNotificationCountUseCase: GetUnreadNotificationCountUseCase;
   getNotificationsUseCase: GetNotificationsUseCase;
-  getLikedPostsUseCase: GetLikedPostsUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
@@ -141,7 +143,6 @@ export type IoriArticlesRuntimePorts = Readonly<{
   deleteOgImage: (articleId: ArticleId) => Promise<void>;
 }>;
 export type IoriMutesRelaysRuntimePorts = Readonly<{
-  getMutesUseCase: GetMutesUseCase;
   createMuteUseCase: CreateMuteUseCase;
   deleteMuteUseCase: DeleteMuteUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
@@ -152,24 +153,6 @@ export type IoriCoreRuntimePorts = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   sendFollowRequestUseCase: SendFollowRequestUseCase;
-  getUserPostsUseCase: GetUserPostsUseCase;
-  getRemoteActorPostsUseCase: Readonly<{
-    run: (
-      input: Readonly<{
-        sessionId: SessionId;
-        actorId: ActorId;
-        createdAt: Instant | undefined;
-      }>,
-    ) => RA<
-      Readonly<{
-        remoteActor: RemoteActor;
-        isFollowing: boolean;
-        isMuted: boolean;
-        posts: readonly PostWithAuthor[];
-      }>,
-      { message: string }
-    >;
-  }>;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
