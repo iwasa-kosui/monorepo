@@ -5,7 +5,7 @@ type Props = {
 };
 
 export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
-  <nav class='md:hidden fixed bottom-0 left-0 right-0 z-50 bg-cream dark:bg-gray-900 border-t border-warm-gray-dark dark:border-gray-700 pb-[env(safe-area-inset-bottom)] shadow-clay dark:shadow-clay-dark'>
+  <nav class='md:hidden fixed bottom-0 left-0 right-0 z-40 bg-cream dark:bg-gray-900 border-t border-warm-gray-dark dark:border-gray-700 pb-[env(safe-area-inset-bottom)] shadow-clay dark:shadow-clay-dark'>
     <div class='flex justify-around items-center h-14'>
       <a
         href='/'
