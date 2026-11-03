@@ -5,6 +5,7 @@ import { createIoriApp } from '../../../appFactory.tsx';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { Article, ArticleStatus } from '../../../domain/article/article.ts';
 import { ArticleId } from '../../../domain/article/articleId.ts';
+import { Digest } from '../../../domain/digest/digest.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { SessionId } from '../../../domain/session/sessionId.ts';
@@ -582,6 +583,188 @@ describe('createWorkerArticlesApiRouter', () => {
         onlyVisibleToViewer: true,
       });
       expect(await contentsOf(response)).toEqual(['public', 'direct-to-viewer']);
+    });
+  });
+
+  describe('ダイジェストの article の公開前の確認に使う情報', () => {
+    const authorUserId = UserId.generate();
+    const otherUserId = UserId.generate();
+    const authorSessionId = SessionId.generate();
+    const otherSessionId = SessionId.generate();
+    const createdAt = Instant.orThrow(Date.parse('2026-11-05T00:00:00.000Z'));
+
+    const createArticle = (status: ArticleStatus): Article => ({
+      articleId: ArticleId.generate(),
+      authorActorId: ActorId.generate(),
+      authorUserId,
+      rootPostId: null,
+      title: '技術ニュースのダイジェスト 2026-11-05',
+      status,
+      createdAt,
+      publishedAt: status === 'draft' ? null : createdAt,
+      unpublishedAt: null,
+    });
+
+    const createDigest = (article: Article, itemCount: number) => {
+      const created = Digest.create({
+        userId: authorUserId,
+        digestDate: '2026-11-05',
+        articleId: article.articleId,
+        items: Array.from({ length: itemCount }, (_, index) => ({
+          feedEntryId: `entry-${index + 1}`,
+          url: `https://example.com/${index + 1}`,
+          title: `entry ${index + 1}`,
+          rank: index + 1,
+          score: null,
+          summary: null,
+          reasonInterestSourceId: null,
+          feedback: null,
+        })),
+        trends: [
+          { kind: 'timeline_link', rank: 1, url: 'https://example.com/t1', title: 'T1', count: 3 },
+          { kind: 'timeline_link', rank: 2, url: 'https://example.com/t2', title: 'T2', count: 2 },
+          { kind: 'hatena', rank: 1, url: 'https://example.com/h1', title: 'H1', count: 100 },
+        ],
+      }, createdAt);
+      if (!created.ok) throw new Error('unexpected');
+      return created.val.aggregateState;
+    };
+
+    const createApp = (article: Article, digest: Digest | undefined) => {
+      const sessionResolver = createMockSessionResolver();
+      const future = Instant.orThrow(Date.now() + 60_000);
+      sessionResolver.setSession({ sessionId: authorSessionId, userId: authorUserId, expires: future });
+      sessionResolver.setSession({ sessionId: otherSessionId, userId: otherUserId, expires: future });
+      const unused = { run: async () => RA.err({}) } as never;
+      return createIoriApp({
+        federationMiddleware: undefined,
+        registerRoutes: (router) => {
+          router.route(
+            '/api',
+            createWorkerArticlesApiRouter({
+              getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
+                articleResolver: { resolve: async (id) => RA.ok(id === article.articleId ? article : undefined) },
+                threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
+                articleBodyResolver: {
+                  resolve: async () =>
+                    RA.ok({
+                      articleId: article.articleId,
+                      privateHtml: '<p>private</p>',
+                      publicHtml: '<p>public</p>',
+                      updatedAt: createdAt,
+                    }),
+                },
+              }),
+              getArticlesUseCase: { run: async () => RA.ok({ articles: [article], authorUsername: 'kosui' }) },
+              createArticleUseCase: unused,
+              publishArticleUseCase: unused,
+              unpublishArticleUseCase: unused,
+              deleteArticleUseCase: unused,
+              publishedArticlesResolver: {
+                resolve: async () =>
+                  RA.ok({ articles: [{ ...article, status: 'published' }], authorUsername: Username.orThrow('kosui') }),
+              },
+              digestHeaderResolverByArticleId: {
+                resolve: async (id) => RA.ok(digest?.articleId === id ? digest : undefined),
+              },
+              digestHeadersResolverByArticleIds: {
+                resolve: async (ids) => RA.ok(digest !== undefined && ids.includes(digest.articleId) ? [digest] : []),
+              },
+              digestResolverByUserIdAndDigestDate: {
+                resolve: async ({ userId, digestDate }) =>
+                  RA.ok(digest?.userId === userId && digest.digestDate === digestDate ? digest : undefined),
+              },
+              sessionResolver,
+              createContext: () => createMockRequestContext(),
+            }),
+          );
+        },
+        serveAsset: async () => undefined,
+        serveUpload: async () => undefined,
+        serveOgImage: async () => new Response('not implemented', { status: 501 }),
+      });
+    };
+
+    const getDetail = async (app: ReturnType<typeof createApp>, article: Article, sessionId?: SessionId) =>
+      (await app.request(`https://worker.test/api/v1/articles/${article.articleId}`, {
+        headers: sessionId === undefined ? undefined : { Cookie: `sessionId=${sessionId}` },
+      })).json() as Promise<Record<string, unknown>>;
+
+    it('作者がダイジェストの article を開くと、公開版で除く項目の件数を返す', async () => {
+      const article = createArticle('draft');
+
+      const body = await getDetail(createApp(article, createDigest(article, 2)), article, authorSessionId);
+
+      expect(body.digest).toEqual({
+        digestDate: '2026-11-05',
+        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true },
+      });
+    });
+
+    it('新着の項目がなければ hatenaCounts を false にする', async () => {
+      const article = createArticle('draft');
+
+      const body = await getDetail(createApp(article, createDigest(article, 0)), article, authorSessionId);
+
+      expect(body.digest).toMatchObject({ excluded: { hatenaCounts: false } });
+    });
+
+    it('公開中のダイジェストでも、匿名には digest を付けない', async () => {
+      const article = createArticle('published');
+
+      const body = await getDetail(createApp(article, createDigest(article, 2)), article);
+
+      expect(body).not.toHaveProperty('digest');
+      expect(body).toHaveProperty('article');
+    });
+
+    it('公開中のダイジェストでも、作者以外には digest を付けない', async () => {
+      const article = createArticle('published');
+
+      const body = await getDetail(createApp(article, createDigest(article, 2)), article, otherSessionId);
+
+      expect(body).not.toHaveProperty('digest');
+    });
+
+    it('ダイジェストでない article には、作者でも digest を付けない', async () => {
+      const article = createArticle('draft');
+
+      const body = await getDetail(createApp(article, undefined), article, authorSessionId);
+
+      expect(body).not.toHaveProperty('digest');
+    });
+
+    it('作者の一覧には article ごとの isDigest を付ける', async () => {
+      const article = createArticle('draft');
+      const cookie = { Cookie: `sessionId=${authorSessionId}` };
+
+      const digestList = await createApp(article, createDigest(article, 1)).request(
+        'https://worker.test/api/v1/articles',
+        {
+          headers: cookie,
+        },
+      );
+      const plainList = await createApp(article, undefined).request('https://worker.test/api/v1/articles', {
+        headers: cookie,
+      });
+
+      await expect(digestList.json()).resolves.toMatchObject({
+        articles: [{ articleId: article.articleId, isDigest: true }],
+      });
+      await expect(plainList.json()).resolves.toMatchObject({
+        articles: [{ articleId: article.articleId, isDigest: false }],
+      });
+    });
+
+    it('匿名の一覧には isDigest を付けない', async () => {
+      const article = createArticle('published');
+
+      const response = await createApp(article, createDigest(article, 1)).request(
+        'https://worker.test/api/v1/articles',
+      );
+
+      const body = await response.json() as { articles: Array<Record<string, unknown>> };
+      expect(body.articles[0]).not.toHaveProperty('isDigest');
     });
   });
 });

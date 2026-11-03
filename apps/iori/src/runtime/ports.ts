@@ -18,7 +18,12 @@ import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domai
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
-import type { DigestResolverByUserId, DigestResolverByUserIdAndDigestDate } from '../domain/digest/digest.ts';
+import type {
+  DigestHeaderResolverByArticleId,
+  DigestHeadersResolverByArticleIds,
+  DigestResolverByUserId,
+  DigestResolverByUserIdAndDigestDate,
+} from '../domain/digest/digest.ts';
 import type {
   HatenaTrendsResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
@@ -167,6 +172,9 @@ export type IoriArticlesRuntimePorts = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
+  digestHeadersResolverByArticleIds: DigestHeadersResolverByArticleIds;
+  digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
   sessionResolver: SessionResolver;
   actorResolverByUserId: ActorResolverByUserId;
   publishOgImage: (article: Article) => Promise<void>;

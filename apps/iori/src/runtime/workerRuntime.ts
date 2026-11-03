@@ -23,6 +23,7 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
+import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -450,6 +451,9 @@ export const createWorkerRuntimePorts = async (
         articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
+      digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
+      digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
+      digestResolverByUserIdAndDigestDate,
       sessionResolver,
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
