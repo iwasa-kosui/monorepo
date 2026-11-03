@@ -370,6 +370,81 @@ describe('Worker の Mastodon 互換 API', () => {
       warn.mockRestore();
     });
 
+    it('置き換えた独自の書き込み API のパスは Cookie があっても未実装として 404 を返す', async () => {
+      const { request } = setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin, 'Content-Type': 'application/json' };
+      const body = JSON.stringify({ postId: crypto.randomUUID(), actorId: crypto.randomUUID(), handle: '@a@b.test' });
+
+      const responses = await Promise.all([
+        request('/api/v1/like', { method: 'POST', headers, body }),
+        request('/api/v1/like', { method: 'DELETE', headers, body }),
+        request('/api/v1/repost', { method: 'POST', headers, body }),
+        request('/api/v1/repost', { method: 'DELETE', headers, body }),
+        request('/api/v1/mute', { method: 'POST', headers, body }),
+        request('/api/v1/mute', { method: 'DELETE', headers, body }),
+        request('/api/v1/follow', { method: 'POST', headers, body }),
+        request(`/remote-users/${crypto.randomUUID()}/follow`, { method: 'POST', headers }),
+        request(`/remote-users/${crypto.randomUUID()}/unfollow`, { method: 'POST', headers }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404]);
+      warn.mockRestore();
+    });
+
+    it('Cookie の利用者の いいね、ミュート、通知の削除を実際の配線で処理する', async () => {
+      const { request, sqlite } = setup();
+      const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin };
+      const postId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        actorId,
+        '<p>mine</p>',
+        Date.UTC(2025, 0, 3),
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      const remoteId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').run(
+        remoteId,
+        'https://remote.example/users/alice',
+        'https://remote.example/users/alice/inbox',
+        'remote',
+      );
+      sqlite.prepare('INSERT INTO remote_actors(actorId,url,username) VALUES (?,?,?)').run(
+        remoteId,
+        'https://remote.example/@alice',
+        'alice',
+      );
+      const notificationId = crypto.randomUUID();
+      sqlite.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      )
+        .run(notificationId, userId, 'follow', 0, Date.UTC(2025, 0, 4));
+      sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)').run(
+        notificationId,
+        remoteId,
+      );
+
+      const favourite = await request(`/api/v1/statuses/${postId}/favourite`, { method: 'POST', headers });
+      const mute = await request(`/api/v1/accounts/${remoteId}/mute`, { method: 'POST', headers });
+      const dismiss = await request(`/api/v2/notifications/ungrouped-${notificationId}/dismiss`, {
+        method: 'POST',
+        headers,
+      });
+      const clear = await request('/api/v1/notifications/clear', { method: 'POST', headers });
+      const crossOrigin = await request(`/api/v1/statuses/${postId}/unfavourite`, {
+        method: 'POST',
+        headers: { Cookie: headers.Cookie, Origin: 'https://evil.example' },
+      });
+
+      expect(StatusSchema.parse(await favourite.json())).toMatchObject({ id: postId, favourited: true });
+      expect(await mute.json()).toMatchObject({ id: remoteId, muting: true });
+      expect([dismiss.status, clear.status, crossOrigin.status]).toEqual([200, 200, 403]);
+      expect(sqlite.prepare('SELECT count(*) AS n FROM notifications').get()).toEqual({ n: 0 });
+      expect(sqlite.prepare('SELECT count(*) AS n FROM likes').get()).toEqual({ n: 1 });
+    });
+
     it('accounts/lookup、accounts/relationships、favourites、mutes を Mastodon の形で返す', async () => {
       const { request, sqlite } = setup();
       const headers = { Cookie: `sessionId=${sessionId}` };

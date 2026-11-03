@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
 import { Marker } from '../../../domain/marker/marker.ts';
-import type { Notification } from '../../../domain/notification/notification.ts';
+import { Notification } from '../../../domain/notification/notification.ts';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import type { PageRequest } from '../../../domain/page/page.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createD1MarkerSavedStore } from '../marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../marker/markersResolverByUserId.ts';
+import {
+  createD1NotificationDismissedStore,
+  createD1NotificationsClearedStore,
+} from '../notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../notification/notificationsResolverByPage.ts';
@@ -203,6 +207,75 @@ describe('createD1NotificationCountResolverSinceMarker', () => {
     const t = seedNotifications();
 
     expect(await count(t, 2)).toEqual({ ok: true, val: 2, err: undefined });
+  });
+});
+
+describe('通知の削除と notifications のマーカー', () => {
+  const dismiss = (t: ReturnType<typeof seedNotifications>, notificationId: string) =>
+    createD1NotificationDismissedStore(t.db).store(
+      Notification.dismissNotification({
+        type: 'like',
+        notificationId: NotificationId.orThrow(notificationId),
+        recipientUserId: UserId.orThrow(t.me.userId),
+        isRead: false,
+        likerActorId: t.alice.actorId as never,
+        likedPostId: t.myPost.postId as never,
+      }, Instant.orThrow(9_000)),
+    );
+  const unread = (t: ReturnType<typeof seedNotifications>) =>
+    createD1NotificationCountResolverSinceMarker(t.db).resolve({
+      userId: UserId.orThrow(t.me.userId),
+      types: mastodonTypes,
+      limit: 100,
+    });
+  const markerOf = (t: ReturnType<typeof seedNotifications>, timeline: string) =>
+    t.sqlite.prepare('SELECT lastReadId FROM mastodon_markers WHERE userId = ? AND timeline = ?').get(
+      t.me.userId,
+      timeline,
+    ) as { lastReadId: string } | undefined;
+
+  it('マーカーが指す最新の通知を削除しても、未読件数が増えない', async () => {
+    const t = seedNotifications();
+    t.seed.setMarker(t.me.userId, 'notifications', t.ids.follow);
+    expect(await unread(t)).toEqual({ ok: true, val: 0, err: undefined });
+
+    await dismiss(t, t.ids.follow);
+
+    expect(await unread(t)).toEqual({ ok: true, val: 0, err: undefined });
+    expect(markerOf(t, 'notifications')).toEqual({ lastReadId: t.ids.reply });
+  });
+
+  it('マーカーが指す通知より古い自分の通知がなければ、マーカーを消す', async () => {
+    const t = seedNotifications();
+    t.seed.setMarker(t.me.userId, 'notifications', t.ids.like);
+
+    await dismiss(t, t.ids.like);
+
+    expect(markerOf(t, 'notifications')).toBeUndefined();
+  });
+
+  it('マーカーが指さない通知の削除では、マーカーを変えない', async () => {
+    const t = seedNotifications();
+    t.seed.setMarker(t.me.userId, 'notifications', t.ids.reply);
+
+    await dismiss(t, t.ids.follow);
+
+    expect(markerOf(t, 'notifications')).toEqual({ lastReadId: t.ids.reply });
+  });
+
+  it('全件削除は notifications のマーカーだけを消す', async () => {
+    const t = seedNotifications();
+    t.seed.setMarker(t.me.userId, 'notifications', t.ids.reply);
+    t.seed.setMarker(t.me.userId, 'home', 'h');
+
+    await createD1NotificationsClearedStore(t.db).store(
+      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(9_000)),
+    );
+
+    expect(markerOf(t, 'notifications')).toBeUndefined();
+    expect(markerOf(t, 'home')).toEqual({ lastReadId: 'h' });
+    expect(t.sqlite.prepare('SELECT count(*) AS n FROM notifications WHERE recipientUserId = ?').get(t.me.userId))
+      .toMatchObject({ n: 0 });
   });
 });
 

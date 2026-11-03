@@ -37,6 +37,9 @@ export const isNotFoundError = (error: unknown): boolean => isMastodonApiError(e
 
 export const isUnprocessableError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 422;
 
+export const failureMessage = (action: string, error: unknown): string =>
+  isMastodonApiError(error) ? `Failed to ${action}: ${error.message}` : `Failed to ${action}. Please try again.`;
+
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
     return new URL(url, 'http://localhost').searchParams;
@@ -185,6 +188,44 @@ export const fetchNotifications = (
   params: PageParams = {},
 ): Promise<Page<Notification>> =>
   getPage<Notification>('/api/v1/notifications', { ...pageQuery(params), 'types[]': types });
+
+const post = async <T>(path: string): Promise<T> => {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as T;
+};
+
+const statusActionPath = (id: string, action: string) => `/api/v1/statuses/${encodeURIComponent(id)}/${action}`;
+
+const accountActionPath = (id: string, action: string) => `/api/v1/accounts/${encodeURIComponent(id)}/${action}`;
+
+export const favourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'favourite'));
+
+export const unfavourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unfavourite'));
+
+export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
+
+export const unreblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unreblog'));
+
+export const follow = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'follow'));
+
+export const unfollow = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unfollow'));
+
+export const mute = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'mute'));
+
+export const unmute = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export const searchAccount = async (acct: string): Promise<Account | undefined> =>
+  (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))
+    .body.accounts[0];
 
 export const saveNotificationsMarker = async (lastReadId: string): Promise<void> => {
   const res = await fetch('/api/v1/markers', {

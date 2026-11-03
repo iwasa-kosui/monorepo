@@ -11,7 +11,6 @@ const createDeps = () => ({
   signUpUseCase: { run: vi.fn(async () => RA.ok({ user: { username: 'newuser' } })) },
   sendReplyUseCase: { run: vi.fn() },
   deletePostUseCase: { run: vi.fn() },
-  sendFollowRequestUseCase: { run: vi.fn() },
   subscribePushUseCase: { run: vi.fn() },
   unsubscribePushUseCase: { run: vi.fn() },
   uploads: {
@@ -26,7 +25,7 @@ const createDeps = () => ({
 });
 
 describe('createWorkerCoreApiRouter', () => {
-  it('mounts the remaining Worker API contracts and no longer serves the replaced post listings', async () => {
+  it('mounts the remaining Worker API contracts and no longer serves the replaced follow and post listings', async () => {
     const deps = createDeps();
     const app = createIoriApp({
       federationMiddleware: undefined,
@@ -59,7 +58,7 @@ describe('createWorkerCoreApiRouter', () => {
       200,
       400,
       401,
-      400,
+      404,
       404,
       404,
       200,

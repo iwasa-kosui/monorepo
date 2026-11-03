@@ -1,9 +1,10 @@
+import { Person } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TextGenerator } from '../../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../../testing/aiStubs.ts';
-import { StatusSchema } from '../../mastodon/entities.ts';
+import { AccountSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 
 const parseStatuses = (body: unknown) => (body as unknown[]).map((item) => StatusSchema.parse(item));
@@ -448,5 +449,198 @@ describe('GET /api/v2/search', () => {
 
     expect(response.status).toBe(200);
     expect(parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses)).toHaveLength(20);
+  });
+});
+
+describe('GET /api/v2/search の resolve=true', () => {
+  const remotePerson = (username: string) =>
+    new Person({
+      id: new URL(`https://remote.example/users/${username}`),
+      inbox: new URL(`https://remote.example/users/${username}/inbox`),
+      preferredUsername: username,
+      url: new URL(`https://remote.example/@${username}`),
+    });
+
+  const seedResolve = async () => {
+    const t = await seedTimeline();
+    t.remoteActorLookup.lookup.mockImplementation(() => RA.ok(remotePerson('erin')) as never);
+    const actorCount = () =>
+      Number((t.sqlite.prepare('SELECT count(*) AS n FROM actors').get() as { n: number | bigint }).n);
+    const search = (params: Record<string, string>, headers: Record<string, string> = t.me.bearer) =>
+      t.request(searchUrl('/api/v2/search', params), { headers });
+    return { ...t, actorCount, search };
+  };
+
+  it('acct の形の q をリモートから解決して accounts に入れ、アクターを保存する', async () => {
+    const t = await seedResolve();
+    const before = t.actorCount();
+
+    const response = await t.search({ q: '@erin@remote.example', resolve: 'true', type: 'accounts' });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { accounts: unknown[]; statuses: unknown[]; hashtags: unknown[] };
+    const accounts = body.accounts.map((item) => AccountSchema.parse(item));
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({ username: 'erin', acct: 'erin@remote.example' });
+    expect([body.statuses, body.hashtags]).toEqual([[], []]);
+    expect(t.actorCount()).toBe(before + 1);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledWith(
+      expect.objectContaining({ handle: 'erin@remote.example', identifier: 'kosui' }),
+    );
+  });
+
+  it('@ を省いた形も解決し、type を省くと投稿の検索と同時に返す', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({ q: 'erin@remote.example', resolve: '1' });
+
+    const body = await response.json() as { accounts: unknown[]; statuses: unknown[] };
+    expect(body.accounts.map((item) => AccountSchema.parse(item).username)).toEqual(['erin']);
+    expect(body.statuses).toEqual([]);
+  });
+
+  it('保存済みのアクターは重複して作らず、その ID の Account を返す', async () => {
+    const t = await seedResolve();
+    t.remoteActorLookup.lookup.mockImplementation(() => RA.ok(remotePerson('carol')) as never);
+    const known = t.sqlite.prepare('SELECT actorId FROM actors WHERE uri = ?').get(
+      'https://remote.example/users/carol',
+    ) as { actorId: string };
+    const before = t.actorCount();
+
+    const response = await t.search({ q: '@carol@remote.example', resolve: 'true', type: 'accounts' });
+
+    const body = await response.json() as { accounts: unknown[] };
+    expect(body.accounts.map((item) => AccountSchema.parse(item).id)).toEqual([known.actorId]);
+    expect(t.actorCount()).toBe(before);
+  });
+
+  it('acct: 付きの q も解決し、先頭の acct: を取り除いたハンドルで検索する', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({ q: 'acct:erin@remote.example', resolve: 'true', type: 'accounts' });
+
+    const body = await response.json() as { accounts: unknown[] };
+    expect(body.accounts.map((item) => AccountSchema.parse(item).username)).toEqual(['erin']);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledWith(expect.objectContaining({ handle: 'erin@remote.example' }));
+  });
+
+  it('https の URL の q を、その URL のまま解決して accounts に入れる', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({ q: 'https://remote.example/users/erin', resolve: 'true', type: 'accounts' });
+
+    const body = await response.json() as { accounts: unknown[] };
+    expect(body.accounts.map((item) => AccountSchema.parse(item).username)).toEqual(['erin']);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledWith(
+      expect.objectContaining({ handle: 'https://remote.example/users/erin' }),
+    );
+  });
+
+  it('http の URL は解決せず、accounts を空にして 200 を返す', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({ q: 'http://remote.example/users/erin', resolve: 'true', type: 'accounts' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
+  it('ユーザー情報付きの URL は解決せず、accounts を空にして 200 を返す', async () => {
+    const t = await seedResolve();
+
+    const response = await t.search({
+      q: 'https://user:pw@remote.example/users/erin',
+      resolve: 'true',
+      type: 'accounts',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
+  it('外部の取得が例外を投げても、検索全体を 500 にせず accounts を空にして投稿の検索を返す', async () => {
+    const t = await seedResolve();
+    t.remoteActorLookup.lookup.mockImplementation(() => {
+      throw new Error('network down');
+    });
+
+    const response = await t.search({ q: '@erin@remote.example', resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+  });
+
+  it('resolve がないか true でないときは解決しない', async () => {
+    const t = await seedResolve();
+
+    const responses = await Promise.all([
+      t.search({ q: '@carol@remote.example', type: 'accounts' }),
+      t.search({ q: '@carol@remote.example', type: 'accounts', resolve: 'false' }),
+    ]);
+
+    for (const response of responses) {
+      expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    }
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
+  it('acct の形でも https の URL でもない q、自サーバーの acct と URL、type=statuses、ページ送りでは解決しない', async () => {
+    const t = await seedResolve();
+
+    await Promise.all([
+      t.search({ q: 'carol', resolve: 'true', type: 'accounts' }),
+      t.search({ q: '@carol', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'carol@', resolve: 'true', type: 'accounts' }),
+      t.search({ q: '京都 旅行', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'http://remote.example/users/carol', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'ftp://remote.example/users/carol', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'https://iori.test/users/kosui', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'acct:kosui@iori.test', resolve: 'true', type: 'accounts' }),
+      t.search({ q: '@kosui@iori.test', resolve: 'true', type: 'accounts' }),
+      t.search({ q: '@carol@remote.example', resolve: 'true', type: 'statuses' }),
+      t.search({ q: '@carol@remote.example', resolve: 'true', type: 'accounts', offset: '20' }),
+    ]);
+
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
+  it('解決できなかったときは accounts を空にして 200 を返し、アクターを作らない', async () => {
+    const t = await seedResolve();
+    t.remoteActorLookup.lookup.mockImplementation(() =>
+      RA.err({ type: 'RemoteActorLookupError', message: 'Failed', detail: { handle: 'x', reason: 'x' } }) as never
+    );
+    const before = t.actorCount();
+
+    const response = await t.search({ q: '@ghost@remote.example', resolve: 'true', type: 'accounts' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(t.actorCount()).toBe(before);
+  });
+
+  it('ログインしていないと 401 にして解決しない', async () => {
+    const t = await seedResolve();
+
+    const response = await t.request(
+      searchUrl('/api/v2/search', { q: '@carol@remote.example', resolve: 'true', type: 'accounts' }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+  });
+
+  it('投稿の検索の結果は resolve の有無で変わらない', async () => {
+    const t = await seedResolve();
+
+    const [without, withResolve] = await Promise.all([
+      t.search({ q: '京都 旅行' }),
+      t.search({ q: '京都 旅行', resolve: 'true' }),
+    ]);
+
+    const idsOf = async (response: Response) =>
+      ((await response.json()) as { statuses: Array<{ id: string }> }).statuses.map((status) => status.id);
+    expect(await idsOf(withResolve)).toEqual(await idsOf(without));
   });
 });

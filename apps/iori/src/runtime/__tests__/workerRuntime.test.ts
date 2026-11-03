@@ -34,6 +34,12 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.notificationCountResolverSinceMarker.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.markersResolverByUserId.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.saveMarkersUseCase.run).toBeTypeOf('function');
+    expect(runtime.mastodon.dismissNotificationUseCase.run).toBeTypeOf('function');
+    expect(runtime.mastodon.clearNotificationsUseCase.run).toBeTypeOf('function');
+    expect(runtime.mastodon.resolveRemoteAccountUseCase.run).toBeTypeOf('function');
+    expect(runtime.mastodon.repostResolver.resolve).toBeTypeOf('function');
+    expect(runtime.core.followRemoteActor).toBeTypeOf('function');
+    expect(runtime.core.unfollowRemoteActor).toBeTypeOf('function');
     expect(runtime.articles.getArticleWithThreadUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.getArticlesUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.createArticleUseCase.run).toBeTypeOf('function');
@@ -50,7 +56,6 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.core.signUpUseCase.run).toBeTypeOf('function');
     expect(runtime.core.sendReplyUseCase.run).toBeTypeOf('function');
     expect(runtime.core.deletePostUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.sendFollowRequestUseCase.run).toBeTypeOf('function');
     expect(runtime.mastodon.localPostsResolverByPage.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.federatedTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.threadResolver.resolve).toBeTypeOf('function');
