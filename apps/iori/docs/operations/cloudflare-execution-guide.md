@@ -1393,7 +1393,7 @@ IORI_DIAG stage=target-read-<処理> program=<terraform|none> exit=<0-255|none> 
 - `route-imported`: 段6が route を state に import しました。
 - `route-in-state`: route が既に state にあったため、段6は import しませんでした。
 - `refresh-no-drift`: 段7の refresh-only の plan に drift がありませんでした。
-- `refresh-drift-allowed`: 段7の refresh-only の plan に drift があり、許可する範囲に収まっていました。許可するのは、`cloudflare_queue.fedify` の `settings.delivery_paused` が true から false に変わった update と、`modified_on` の更新だけです。
+- `refresh-drift-allowed`: 段7の refresh-only の plan に drift があり、許可する範囲に収まっていました。許可するのは、`cloudflare_d1_database.iori` と `cloudflare_queue.fedify` の update だけです。変わってよい属性は、provider 5.23.0 の schema で computed だけ（optional でも required でもない、読み取り専用）の属性に限ります。d1 は `file_size`、`num_tables`、`version` です。main queue は `consumers`、`consumers_total_count`、`modified_on`、`producers`、`producers_total_count` です。リソースを識別する属性（`id`、`uuid`、`queue_id`）と作成日時の属性（`created_at`、`created_on`）は、別のリソースに置き換わったときに変わるので、computed だけの属性でも許しません。`consumers` と `producers` は、それより下の変化もまとめて許します。加えて、main queue の `settings.delivery_paused` が true から false に変わることも許します。`settings` のほかの属性と、設定できる属性の変化は許しません。DLQ、route、consumer、Worker、R2、KV の drift も許しません。
 - `refresh-applied`: 段8が保存した plan ファイルを apply しました。
 - `plan-clean`: 段9の最終 plan が全リソースで no-op でした。route の zone、pattern、script が期待どおりで、main queue が稼働し、DLQ が停止し、consumer が1件であることも確認済みです。
 - `adopted`: 段11の読み取りが段5と同じでした。取り込みが完了しています。

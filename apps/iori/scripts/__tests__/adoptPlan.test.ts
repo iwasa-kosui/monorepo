@@ -58,6 +58,102 @@ it('accepts a refresh plan without drift and one whose only drift is the Queue b
     ])),
   ).toEqual([]);
 });
+it('accepts the drift of the cutover run: computed Database and Queue attributes and the Queue becoming active', () => {
+  expect(
+    inspectRefreshPlan(refreshFixture([
+      drift('cloudflare_d1_database.iori', { name: 'iori', file_size: 1, num_tables: 2 }, {
+        name: 'iori',
+        file_size: 3,
+        num_tables: 4,
+      }),
+      drift(
+        'cloudflare_queue.fedify',
+        {
+          modified_on: 'a',
+          consumers_total_count: 0,
+          consumers: [],
+          settings: { delivery_paused: true, delivery_delay: 0 },
+        },
+        {
+          modified_on: 'b',
+          consumers_total_count: 1,
+          consumers: [{ consumer_id: 'c', settings: { batch_size: 5 } }],
+          settings: { delivery_paused: false, delivery_delay: 0 },
+        },
+      ),
+    ])),
+  ).toEqual([]);
+});
+it.each([
+  [
+    'a writable Database attribute',
+    drift('cloudflare_d1_database.iori', { name: 'a', file_size: 1 }, { name: 'b', file_size: 2 }),
+    ['file-size', 'name'],
+  ],
+  [
+    'an optional Database attribute',
+    drift('cloudflare_d1_database.iori', { jurisdiction: 'eu' }, { jurisdiction: 'fedramp' }),
+    ['jurisdiction'],
+  ],
+  [
+    'a nested optional Database attribute',
+    drift('cloudflare_d1_database.iori', { read_replication: { mode: 'auto' } }, {
+      read_replication: { mode: 'disabled' },
+    }),
+    ['read-replication-mode'],
+  ],
+  [
+    'the Database identifier',
+    drift('cloudflare_d1_database.iori', { uuid: 'a', created_at: 'a' }, { uuid: 'b', created_at: 'b' }),
+    ['created-at', 'uuid'],
+  ],
+  [
+    'the Queue identifier',
+    drift('cloudflare_queue.fedify', { queue_id: 'a', created_on: 'a' }, { queue_id: 'b', created_on: 'b' }),
+    ['created-on', 'queue-id'],
+  ],
+  [
+    'another Queue settings attribute',
+    drift(
+      'cloudflare_queue.fedify',
+      { consumers_total_count: 0, settings: { delivery_paused: false, message_retention_period: 1 } },
+      { consumers_total_count: 1, settings: { delivery_paused: false, message_retention_period: 2 } },
+    ),
+    ['consumers-total-count', 'message-retention-period'],
+  ],
+  [
+    'the Queue becoming paused with a computed attribute',
+    drift(
+      'cloudflare_queue.fedify',
+      { modified_on: 'a', settings: { delivery_paused: false } },
+      { modified_on: 'b', settings: { delivery_paused: true } },
+    ),
+    ['modified-on', 'delivery-paused'],
+  ],
+  [
+    'the Dead Letter Queue in a computed attribute',
+    drift('cloudflare_queue.fedify_dlq', { modified_on: 'a', consumers_total_count: 0 }, {
+      modified_on: 'b',
+      consumers_total_count: 1,
+    }),
+    ['consumers-total-count', 'modified-on'],
+  ],
+])('rejects drift in %s', (_name, item, attributes) => {
+  expect(inspectRefreshPlan(refreshFixture([item]))).toEqual([{
+    message: 'Refresh drift is not allowed',
+    address: item.address,
+    actions: ['update'],
+    attributes,
+  }]);
+});
+it('rejects a Database or Queue drift that is not a plain update', () => {
+  for (const address of ['cloudflare_d1_database.iori', 'cloudflare_queue.fedify']) {
+    for (const actions of [['delete'], ['create'], ['delete', 'create'], ['no-op']]) {
+      const item = { address, change: { actions, before: { file_size: 1 }, after: { file_size: 2 } } };
+      expect(inspectRefreshPlan(refreshFixture([item]))).toHaveLength(1);
+    }
+  }
+});
 it('rejects a plan that is not an object or lists non-array state', () => {
   for (const plan of [null, 'text', { resource_changes: {} }, { resource_drift: {} }]) {
     expect(inspectRefreshPlan(plan)).toEqual([{ message: 'Refresh plan state is invalid' }]);
