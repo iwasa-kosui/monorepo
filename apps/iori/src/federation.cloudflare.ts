@@ -225,6 +225,7 @@ export const createCloudflareFederationRuntime = async (
     // processQueuedTask().  WorkersMessageQueue deliberately cannot listen.
     manuallyStartQueue: true,
     contextLoaderFactory: createContextLoaderFactory(),
+    firstKnock: 'draft-cavage-http-signatures-12',
   });
 
   return {

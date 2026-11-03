@@ -102,6 +102,12 @@ describe('createCloudflareFederationRuntime', () => {
     expect(parsed?.type).toBe(type);
   });
 
+  it('signs the first request to an unknown server with draft-cavage', async () => {
+    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
+
+    expect((federation as unknown as { firstKnock?: string }).firstKnock).toBe('draft-cavage-http-signatures-12');
+  });
+
   it('serves NodeInfo 2.1 for iori', async () => {
     const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
 

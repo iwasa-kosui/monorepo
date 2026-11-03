@@ -48,6 +48,7 @@ const create = () => {
     manuallyStartQueue: true,
     origin: env.ORIGIN,
     contextLoaderFactory: createContextLoaderFactory(),
+    firstKnock: 'draft-cavage-http-signatures-12',
   });
   const inboxListener = InboxListener.getInstance();
   const sharedKeyDispatcher = SharedKeyDispatcher.getInstance();
