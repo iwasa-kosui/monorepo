@@ -36,7 +36,7 @@ describe('isSummarizable', () => {
   it.each<[Visibility | null, boolean]>([
     ['public', true],
     ['unlisted', true],
-    ['private', false],
+    ['private', true],
     ['direct', false],
     [null, false],
   ])('リモートの投稿は公開範囲が %s のとき %s', (visibility, expected) => {
