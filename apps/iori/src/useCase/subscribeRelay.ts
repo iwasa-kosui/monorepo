@@ -1,6 +1,7 @@
-import { Follow, type RequestContext } from '@fedify/fedify';
+import type { RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
+import { RelayFollow } from '../adaptor/fedify/relayFollow.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../adaptor/fedify/sharedKeyDispatcher.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -40,7 +41,7 @@ const sendFollowActivity = async (
       id: new URL(relay.actorUri),
       inboxId: new URL(relay.inboxUrl),
     },
-    new Follow({
+    new RelayFollow({
       actor: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
       object: new URL('https://www.w3.org/ns/activitystreams#Public'),
       to: new URL('https://www.w3.org/ns/activitystreams#Public'),
