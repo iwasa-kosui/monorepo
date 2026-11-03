@@ -6,13 +6,23 @@ import { createDeploymentWorkerConfig } from '../temporary-worker-config.mjs';
 
 const readAppFile = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-const stripJsonc = (source: string) =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1')
-    .replace(/,\s*([}\]])/g, '$1');
+const readLocalRunWorkerFirst = async () => {
+  const source = await readAppFile('workers/iori/wrangler.local.jsonc');
+  const match = /"run_worker_first"\s*:\s*(\[[^\]]*\])/.exec(source);
+  if (match === null) throw new Error('run_worker_first is missing in wrangler.local.jsonc');
+  return JSON.parse(match[1]) as unknown;
+};
 
-const parseJsonc = (source: string) => JSON.parse(stripJsonc(source)) as { assets: { run_worker_first: unknown } };
+const readDeployedRunWorkerFirst = async () => {
+  for (const [name, value] of Object.entries(fixtureEnvironment)) vi.stubEnv(name, value);
+  const config = await createDeploymentWorkerConfig();
+  try {
+    const deployed = JSON.parse(await readFile(config.path, 'utf8')) as { assets: { run_worker_first: unknown } };
+    return deployed.assets.run_worker_first;
+  } finally {
+    await config.cleanup();
+  }
+};
 
 const matchesPattern = (pattern: string, path: string) =>
   new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(path);
@@ -33,6 +43,7 @@ const workerPaths = [
   '/inbox',
   '/health',
   '/readyz',
+  '/static',
   '/sw.js',
 ];
 const assetPaths = [
@@ -41,6 +52,7 @@ const assetPaths = [
   '/manifest.json',
   '/favicon.ico',
   '/icon-192.png',
+  '/icon-512.png',
 ];
 
 const expectRouting = (rules: unknown) => {
@@ -70,36 +82,20 @@ afterEach(() => {
 });
 
 describe('assets.run_worker_first', () => {
-  it('sends static files to Assets and everything else to the Worker in the template', async () => {
-    const template = parseJsonc(await readAppFile('workers/iori/wrangler.template.jsonc'));
-
-    expectRouting(template.assets.run_worker_first);
+  it('sends static files to Assets and everything else to the Worker in the deployment config built from the template', async () => {
+    expectRouting(await readDeployedRunWorkerFirst());
   });
 
-  it('sends static files to Assets and everything else to the Worker in the local config', async () => {
-    const local = parseJsonc(await readAppFile('workers/iori/wrangler.local.jsonc'));
-
-    expectRouting(local.assets.run_worker_first);
+  it('keeps the same rules in the local config and the deployment config', async () => {
+    expect(await readLocalRunWorkerFirst()).toEqual(await readDeployedRunWorkerFirst());
   });
 
-  it('keeps the same rules in the local config and the template', async () => {
-    const template = parseJsonc(await readAppFile('workers/iori/wrangler.template.jsonc'));
-    const local = parseJsonc(await readAppFile('workers/iori/wrangler.local.jsonc'));
-
-    expect(local.assets.run_worker_first).toEqual(template.assets.run_worker_first);
-  });
-
-  it('keeps the array in the deployment config built from the template', async () => {
-    for (const [name, value] of Object.entries(fixtureEnvironment)) vi.stubEnv(name, value);
-    const config = await createDeploymentWorkerConfig();
-    try {
-      const deployed = parseJsonc(await readFile(config.path, 'utf8'));
-
-      expectRouting(deployed.assets.run_worker_first);
-    } finally {
-      await config.cleanup();
-    }
-  });
+  it.each(['workers/iori/wrangler.template.jsonc', 'workers/iori/wrangler.local.jsonc'])(
+    'has no block comment terminator in %s that would cut the run_worker_first array when comments are stripped',
+    async (path) => {
+      expect(await readAppFile(path)).not.toContain('*/');
+    },
+  );
 });
 
 describe('public/_headers', () => {
