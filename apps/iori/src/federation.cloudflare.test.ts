@@ -25,7 +25,7 @@ const workerEnv = {
 } satisfies IoriWorkerEnv;
 
 const parseRuntimePath = async (path: string) => {
-  const { federation } = await createCloudflareFederationRuntime(workerEnv);
+  const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
   const context = federation.createContext(new URL(workerEnv.ORIGIN), undefined);
   return context.parseUri(new URL(`${workerEnv.ORIGIN}${path}`));
 };
@@ -109,13 +109,79 @@ describe('Cloudflare Fedify message queue', () => {
     const { queue } = await createCloudflareFederationRuntime({
       ...workerEnv,
       FEDIFY_QUEUE: { sendBatch } as never,
-    });
+    }, vi.fn());
 
     await queue.enqueueMany?.([]);
     expect(sendBatch).not.toHaveBeenCalled();
 
     await queue.enqueueMany?.([{ type: 'outbox' }]);
     expect(sendBatch).toHaveBeenCalledOnce();
+  });
+
+  it('registers enqueue and enqueueMany promises with waitUntil', async () => {
+    const send = vi.fn(async () => undefined);
+    const sendBatch = vi.fn(async () => undefined);
+    const waitUntil = vi.fn();
+    const { queue } = await createCloudflareFederationRuntime({
+      ...workerEnv,
+      FEDIFY_QUEUE: { send, sendBatch } as never,
+    }, waitUntil);
+
+    const enqueued = queue.enqueue({ type: 'outbox' });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
+    await enqueued;
+
+    const enqueuedMany = queue.enqueueMany?.([{ type: 'outbox' }]);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    expect(waitUntil.mock.calls[1]?.[0]).toBeInstanceOf(Promise);
+    await enqueuedMany;
+    expect(send).toHaveBeenCalledOnce();
+    expect(sendBatch).toHaveBeenCalledOnce();
+  });
+
+  it('logs the error name and truncated message without the stack when a fire-and-forget enqueue fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const waitUntil = vi.fn();
+    const { queue } = await createCloudflareFederationRuntime({
+      ...workerEnv,
+      FEDIFY_QUEUE: {
+        send: async () => {
+          throw new TypeError('x'.repeat(600), { cause: new Error('hidden cause') });
+        },
+      } as never,
+    }, waitUntil);
+
+    void queue.enqueue({ type: 'outbox', secret: 'queue-body' });
+    await waitUntil.mock.calls[0]?.[0];
+    await new Promise((resolve) => setImmediate(resolve));
+
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith('Fedify queue send failed.', {
+      name: 'TypeError',
+      message: 'x'.repeat(500),
+    });
+    expect(JSON.stringify(error.mock.calls)).not.toMatch(/stack|hidden cause|queue-body/);
+    error.mockRestore();
+  });
+
+  it('propagates the failure to a caller that awaits enqueue', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { queue } = await createCloudflareFederationRuntime({
+      ...workerEnv,
+      FEDIFY_QUEUE: {
+        send: async () => {
+          throw new Error('send rejected');
+        },
+      } as never,
+    }, vi.fn());
+
+    await expect(queue.enqueue({ type: 'outbox' })).rejects.toThrow('send rejected');
+    error.mockRestore();
   });
 });
 
@@ -132,7 +198,43 @@ describe('processCloudflareFedifyMessages', () => {
 
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).toHaveBeenCalledOnce();
-    expect(error).toHaveBeenCalledWith('Fedify queued task failed.');
+    expect(error).toHaveBeenCalledWith('Fedify queued task failed.', {
+      name: 'Error',
+      message: 'fixture failure',
+    });
+    error.mockRestore();
+  });
+
+  it('logs the error name and a message truncated to 500 characters without the stack', async () => {
+    const retry = vi.fn();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await processCloudflareFedifyMessages({
+      messages: [{ body: { secret: 'queue-body' }, retry }],
+    } as never, async () => {
+      throw new TypeError('x'.repeat(600), { cause: new Error('hidden cause') });
+    });
+
+    expect(retry).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+    const [label, detail] = error.mock.calls[0] ?? [];
+    expect(label).toBe('Fedify queued task failed.');
+    expect(detail).toEqual({ name: 'TypeError', message: 'x'.repeat(500) });
+    expect(JSON.stringify(error.mock.calls)).not.toMatch(/stack|hidden cause|queue-body/);
+    error.mockRestore();
+  });
+
+  it('logs only the type name when a non-Error value is thrown', async () => {
+    const retry = vi.fn();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await processCloudflareFedifyMessages({
+      messages: [{ body: {}, retry }],
+    } as never, async () => {
+      throw 'Authorization: Bearer secret-token';
+    });
+
+    expect(retry).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith('Fedify queued task failed.', { thrownType: 'string' });
+    expect(JSON.stringify(error.mock.calls)).not.toContain('secret-token');
     error.mockRestore();
   });
 });

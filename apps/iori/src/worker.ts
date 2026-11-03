@@ -43,6 +43,8 @@ import {
 import type { IoriWorkerEnv } from './workerEnv.ts';
 import { createWorkerPageFallback } from './workerPageFallback.ts';
 
+import './logging.cloudflare.ts';
+
 const pageIdentity = async (
   request: Request,
   runtime: Awaited<ReturnType<typeof createWorkerRuntimePorts>>,
@@ -87,6 +89,7 @@ type IoriWorkerHandler = Readonly<{
   queue: (
     batch: MessageBatch<unknown>,
     env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
   ) => Promise<void>;
 }>;
 
@@ -106,7 +109,7 @@ export default {
       return Response.json({ accepted: true, queue: { enqueued: 1 } }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (admission.capability === 'smoke') env = readOnlySmokeEnvironment(env);
-    const runtime = await createWorkerRuntimePorts(env);
+    const runtime = await createWorkerRuntimePorts(env, (promise) => executionCtx.waitUntil(promise));
 
     return createIoriApp({
       federationMiddleware: async (c, next) => {
@@ -290,6 +293,7 @@ export default {
   queue: async (
     batch: MessageBatch<unknown>,
     env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
   ): Promise<void> => {
     const identity = parseAdmission(env);
     if (
@@ -313,6 +317,12 @@ export default {
       }
       return true;
     });
-    if (messages.length > 0) await processCloudflareFedifyQueueBatch({ ...batch, messages }, env);
+    if (messages.length > 0) {
+      await processCloudflareFedifyQueueBatch(
+        { ...batch, messages },
+        env,
+        (promise) => executionCtx.waitUntil(promise),
+      );
+    }
   },
 } satisfies IoriWorkerHandler;

@@ -21,7 +21,11 @@ it('does not construct runtime for malformed, sealed or unauthenticated smoke re
       expect(response.status).toBe(503);
       expect(response.headers.get('cache-control')).toBe('no-store');
     }
-    await worker.queue({ queue: 'iori-production-fixture1-fedify', messages: [{ body: {} }], retryAll } as never, env);
+    await worker.queue(
+      { queue: 'iori-production-fixture1-fedify', messages: [{ body: {} }], retryAll } as never,
+      env,
+      {} as ExecutionContext,
+    );
   }
   expect(retryAll).toHaveBeenCalledTimes(3);
   expect(createWorkerRuntimePorts).not.toHaveBeenCalled();
@@ -35,6 +39,7 @@ it('handles only the exact active marker as a no-op and retries reserved near-ma
   await worker.queue(
     { queue: 'iori-production-fixture1-fedify', messages: [{ body: smokeMarker(identity), ack }] } as never,
     env as never,
+    {} as ExecutionContext,
   );
   expect(ack).toHaveBeenCalledOnce();
   expect(processCloudflareFedifyQueueBatch).not.toHaveBeenCalled();
@@ -44,6 +49,7 @@ it('handles only the exact active marker as a no-op and retries reserved near-ma
       messages: [{ body: { ...smokeMarker(identity), runId: 'different' }, ack, retry }],
     } as never,
     env as never,
+    {} as ExecutionContext,
   );
   expect(processCloudflareFedifyQueueBatch).not.toHaveBeenCalled();
   expect(retry).toHaveBeenCalledOnce();
@@ -59,6 +65,7 @@ it.each([undefined, 'old-wrong-generation-fedify'])(
     await worker.queue(
       { queue, messages: [{ body: smokeMarker(parseAdmission(env)!), ack }], retryAll } as never,
       env as never,
+      {} as ExecutionContext,
     );
     expect(retryAll).toHaveBeenCalledOnce();
     expect(ack).not.toHaveBeenCalled();
@@ -78,8 +85,23 @@ it('accepts the exact explicit local fixture Queue identity', async () => {
       retryAll,
     } as never,
     env as never,
+    {} as ExecutionContext,
   );
   expect(ack).toHaveBeenCalledOnce();
   expect(retryAll).not.toHaveBeenCalled();
   expect(processCloudflareFedifyQueueBatch).not.toHaveBeenCalled();
+});
+it('passes the execution context waitUntil to the runtime constructed for an admitted fetch', async () => {
+  vi.clearAllMocks();
+  let waitUntilForRuntime: ((promise: Promise<unknown>) => void) | undefined;
+  vi.mocked(createWorkerRuntimePorts).mockImplementationOnce(async (_env, waitUntil) => {
+    waitUntilForRuntime = waitUntil;
+    throw new Error('runtime stub stops the request');
+  });
+  const waitUntil = vi.fn();
+  await worker.fetch(new Request('https://worker.test/health'), admissionFixture() as never, { waitUntil } as never)
+    .catch(() => undefined);
+  const pending = Promise.resolve();
+  waitUntilForRuntime?.(pending);
+  expect(waitUntil).toHaveBeenCalledWith(pending);
 });

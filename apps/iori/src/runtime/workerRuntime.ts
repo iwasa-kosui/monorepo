@@ -75,7 +75,7 @@ import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareR
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
-import { createCloudflareFederationRuntime } from '../federation.cloudflare.ts';
+import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
 import { createCreatePostUseCase } from '../useCase/createPost.ts';
@@ -116,8 +116,9 @@ import {
 
 export const createWorkerRuntimePorts = async (
   env: IoriWorkerEnv,
+  waitUntil: WaitUntil,
 ): Promise<WorkerRuntimePorts> => {
-  const federationRuntime = await createCloudflareFederationRuntime(env);
+  const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const db = createD1Db(env.DB);
   const sessionResolver = createD1SessionResolver(db);
   const userResolver = createD1UserResolver(db);

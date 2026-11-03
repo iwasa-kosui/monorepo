@@ -64,21 +64,40 @@ export const createCloudflareFederation = (
 const createWorkersKvStore = (kv: KVNamespace): KvStore =>
   new (WorkersKvStore as unknown as WorkersKvStoreConstructor)(kv);
 
-const createWorkersMessageQueue = (env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>): MessageQueue => {
+const QUEUE_FAILURE_MESSAGE_LIMIT = 500;
+
+const describeQueueFailure = (error: unknown): Readonly<{ name: string; message: string } | { thrownType: string }> =>
+  error instanceof Error
+    ? { name: error.name, message: error.message.slice(0, QUEUE_FAILURE_MESSAGE_LIMIT) }
+    : { thrownType: typeof error };
+
+export type WaitUntil = (promise: Promise<unknown>) => void;
+
+const keepAlive = (waitUntil: WaitUntil, send: Promise<void>): Promise<void> => {
+  // Fedify は fanout の enqueue を await しないため、応答後も完了を待たせる
+  waitUntil(send.catch((error: unknown) => console.error('Fedify queue send failed.', describeQueueFailure(error))));
+  return send;
+};
+
+const createWorkersMessageQueue = (
+  env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>,
+  waitUntil: WaitUntil,
+): MessageQueue => {
   const queue = new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
   return {
     nativeRetrial: queue.nativeRetrial,
-    enqueue: (message, options) => queue.enqueue(message, options),
+    enqueue: (message, options) => keepAlive(waitUntil, queue.enqueue(message, options)),
     enqueueMany: (messages, options) =>
-      messages.length === 0 ? Promise.resolve() : queue.enqueueMany!(messages, options),
+      keepAlive(waitUntil, messages.length === 0 ? Promise.resolve() : queue.enqueueMany!(messages, options)),
     listen: (handler, options) => queue.listen(handler, options),
   };
 };
 
 export const createCloudflareFederationRuntime = async (
   env: IoriWorkerEnv,
+  waitUntil: WaitUntil,
 ) => {
-  const queue = createWorkersMessageQueue(env);
+  const queue = createWorkersMessageQueue(env, waitUntil);
   const db = createD1Db(env.DB);
   const userResolverByUsername = createD1UserResolverByUsername(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
@@ -150,8 +169,9 @@ export const createCloudflareFederationRuntime = async (
 export const processCloudflareFedifyQueueBatch = async (
   batch: MessageBatch<unknown>,
   env: IoriWorkerEnv,
+  waitUntil: WaitUntil,
 ): Promise<void> => {
-  const runtime = await createCloudflareFederationRuntime(env);
+  const runtime = await createCloudflareFederationRuntime(env, waitUntil);
 
   await processCloudflareFedifyMessages(
     batch,
@@ -167,8 +187,8 @@ export const processCloudflareFedifyMessages = async (
     try {
       await processTask(message.body as Message);
       message.ack();
-    } catch {
-      console.error('Fedify queued task failed.');
+    } catch (error) {
+      console.error('Fedify queued task failed.', describeQueueFailure(error));
       message.retry();
     }
   }
