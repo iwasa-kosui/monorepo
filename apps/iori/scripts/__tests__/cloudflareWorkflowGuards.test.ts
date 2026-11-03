@@ -266,9 +266,87 @@ it('deploys the Worker on a main push through a fixed deploy-worker job holding 
   expect(main.on).toEqual({
     push: {
       branches: ['main'],
-      paths: ['apps/iori/**', 'packages/**', '.github/workflows/deploy-iori-worker-main.yml'],
+      paths: [
+        'apps/iori/src/**',
+        '!apps/iori/src/**/*.test.ts',
+        '!apps/iori/src/**/*.test.tsx',
+        '!apps/iori/src/**/__tests__/**',
+        '!apps/iori/src/testing/**',
+        'apps/iori/public/**',
+        'apps/iori/drizzle-d1/**',
+        'apps/iori/workers/iori/wrangler.template.jsonc',
+        'apps/iori/infra/cloudflare/*.tf',
+        'apps/iori/infra/cloudflare/.terraform.lock.hcl',
+        'apps/iori/scripts/**',
+        '!apps/iori/scripts/__tests__/**',
+        '!apps/iori/scripts/**/*.d.mts',
+        'apps/iori/package.json',
+        'apps/iori/tsconfig.json',
+        'apps/iori/vite.config.js',
+        'packages/result/src/**',
+        '!packages/result/src/**/*.test.ts',
+        'packages/result/package.json',
+        'packages/result/tsconfig.json',
+        'packages/result/tsconfig.build.json',
+        'package.json',
+        'pnpm-lock.yaml',
+        'pnpm-workspace.yaml',
+        '.github/workflows/deploy-iori-worker-main.yml',
+      ],
     },
   });
+  const pushPaths = (main.on as { push: { paths: string[] } }).push.paths;
+  const toRegExp = (glob: string) =>
+    new RegExp(
+      `^${
+        glob.replace(
+          /\*\*\/|\*\*|\*|[.+?^${}()|[\]\\]/g,
+          (token) => token === '**/' ? '(?:.*/)?' : token === '**' ? '.*' : token === '*' ? '[^/]*' : `\\${token}`,
+        )
+      }$`,
+    );
+  const triggersDeploy = (path: string) =>
+    pushPaths.reduce(
+      (matched, pattern) =>
+        pattern.startsWith('!')
+          ? matched && !toRegExp(pattern.slice(1)).test(path)
+          : matched || toRegExp(pattern).test(path),
+      false,
+    );
+  for (
+    const path of [
+      'apps/iori/src/worker.ts',
+      'apps/iori/src/ui/pages/home.tsx',
+      'apps/iori/drizzle-d1/0000_boring_xavin.sql',
+      'apps/iori/drizzle-d1/meta/_journal.json',
+      'apps/iori/public/sw.js',
+      'apps/iori/scripts/temporary-worker-config.mjs',
+      'apps/iori/workers/iori/wrangler.template.jsonc',
+      'apps/iori/infra/cloudflare/main.tf',
+      'apps/iori/package.json',
+      'packages/result/src/result/result.ts',
+      'pnpm-lock.yaml',
+      '.github/workflows/deploy-iori-worker-main.yml',
+    ]
+  ) expect(triggersDeploy(path), path).toBe(true);
+  for (
+    const path of [
+      'apps/iori/README.md',
+      'apps/iori/docs/execution-guide.md',
+      'apps/iori/src/worker.test.ts',
+      'apps/iori/src/ui/components/Button.test.tsx',
+      'apps/iori/src/useCase/__tests__/helper/mockAdaptors.ts',
+      'apps/iori/src/testing/admissionFixture.ts',
+      'apps/iori/scripts/__tests__/cloudflareWorkflowGuards.test.ts',
+      'apps/iori/scripts/hosted-workflow.d.mts',
+      'apps/iori/workerd-tests/worker.test.ts',
+      'apps/iori/workers/iori/wrangler.local.jsonc',
+      'apps/iori/drizzle/0000_modern_anita_blake.sql',
+      'packages/result/src/result/result.test.ts',
+      'packages/result/README.md',
+      'packages/kosui-ui/package.json',
+    ]
+  ) expect(triggersDeploy(path), path).toBe(false);
   expect(main.concurrency).toEqual({ group: 'deploy-iori-worker-production', 'cancel-in-progress': false });
   expect(main.concurrency.group).toBe(worker.concurrency.group);
   expect(main.env).toMatchObject({
