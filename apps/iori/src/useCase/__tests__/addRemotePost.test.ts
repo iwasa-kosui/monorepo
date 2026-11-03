@@ -72,6 +72,7 @@ describe('AddRemotePostUseCase', () => {
           url: 'https://remote.example.com/@remote',
           username: 'remote',
         },
+        visibility: null,
         attachments: [],
       });
 
@@ -80,6 +81,31 @@ describe('AddRemotePostUseCase', () => {
         expect(result.val.post.aggregateState.content).toBe('Hello from remote!');
         expect(result.val.post.aggregateState.type).toBe('remote');
         expect(deps.postCreatedStore.store).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('受信した公開範囲を投稿に記録する', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      const result = await useCase.run({
+        content: 'Followers only',
+        uri: 'https://remote.example.com/posts/visibility',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'private',
+        attachments: [],
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.val.post.aggregateState).toMatchObject({ type: 'remote', visibility: 'private' });
+        expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+          expect.objectContaining({ aggregateState: expect.objectContaining({ visibility: 'private' }) }),
+        );
       }
     });
 
@@ -97,6 +123,7 @@ describe('AddRemotePostUseCase', () => {
           url: 'https://remote.example.com/@remote',
           username: 'remote',
         },
+        visibility: null,
         attachments: [
           { url: 'https://remote.example.com/image1.png', altText: 'Image 1' },
           { url: 'https://remote.example.com/image2.png', altText: null },
@@ -132,6 +159,7 @@ describe('AddRemotePostUseCase', () => {
           url: 'https://remote.example.com/@remote',
           username: 'remote',
         },
+        visibility: null,
         attachments,
       });
 
@@ -159,6 +187,7 @@ describe('AddRemotePostUseCase', () => {
             url: 'https://remote.example.com/@remote',
             username: 'remote',
           },
+          visibility: null,
           attachments: [],
         });
 
@@ -183,6 +212,7 @@ describe('AddRemotePostUseCase', () => {
           uri: 'https://remote.example.com/users/remote',
           inboxUrl: 'https://remote.example.com/inbox',
         },
+        visibility: null,
         attachments: [],
       });
 
@@ -203,6 +233,7 @@ describe('AddRemotePostUseCase', () => {
           url: 'https://remote.example.com/@new',
           username: 'new',
         },
+        visibility: null,
         attachments: [],
       });
 
@@ -221,6 +252,7 @@ describe('AddRemotePostUseCase', () => {
           uri: 'https://remote.example.com/users/remote',
           inboxUrl: 'https://remote.example.com/inbox',
         },
+        visibility: null,
         attachments: [
           { url: 'https://remote.example.com/image.png', altText: 'Test image' },
         ],
@@ -246,6 +278,7 @@ describe('AddRemotePostUseCase', () => {
           username: 'remote',
           logoUri: 'https://remote.example.com/avatar.png',
         },
+        visibility: null,
         attachments: [],
       });
 
@@ -267,6 +300,7 @@ describe('AddRemotePostUseCase', () => {
           uri: 'https://remote.example.com/users/minimal',
           inboxUrl: 'https://remote.example.com/inbox',
         },
+        visibility: null,
         attachments: [],
       });
 

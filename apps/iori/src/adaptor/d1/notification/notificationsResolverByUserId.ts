@@ -23,6 +23,7 @@ import { LocalPost, type Post, RemotePost } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   localActorsTable,
@@ -96,6 +97,7 @@ const reconstructPost = (row: PostRow): Post => {
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
+      visibility: toVisibility(row.remote_posts.visibility),
       type: 'remote',
     });
   }

@@ -8,6 +8,7 @@ import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../.
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -118,6 +119,7 @@ export const createD1LikedPostsResolverByActorId = (
           createdAt: row.posts.createdAt.getTime(),
           uri: row.remote_posts.uri,
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: toVisibility(row.remote_posts.visibility),
           type: 'remote',
         })
         : (() => {

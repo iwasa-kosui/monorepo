@@ -9,10 +9,7 @@ const CUTOVER_REASONS = new Set([
   'reviewed-checkout-dirty',
   'reviewed-main-changed',
   'job-budget-exhausted',
-  'smoke-failed',
-  'verify-failed',
   'deploy-failed',
-  'source-not-quiescent',
 ]);
 const MESSAGE_REASONS = new Map([
   ['Reviewed main is required.', 'reviewed-main-required'],
@@ -20,19 +17,12 @@ const MESSAGE_REASONS = new Map([
   ['Tracked checkout is dirty.', 'reviewed-checkout-dirty'],
   ['Reviewed main changed.', 'reviewed-main-changed'],
   ['Hosted job budget is exhausted.', 'job-budget-exhausted'],
-  ['Reviewed smoke failed.', 'smoke-failed'],
-  ['Fresh verification failed.', 'verify-failed'],
   ['Reviewed Worker deployment failed; retain current state.', 'deploy-failed'],
   ['Invalid source inputs.', 'config-invalid'],
-  ['Fresh verification configuration is required.', 'config-invalid'],
   ['Target setup configuration is required.', 'config-invalid'],
   ['Target setup invocation is invalid.', 'config-invalid'],
-  ['Independent expected target is required.', 'config-invalid'],
   ['Protected workflow invocation is invalid.', 'config-invalid'],
-  ['Executor configuration is required.', 'config-invalid'],
-  ['Invalid zone.', 'config-invalid'],
   ['Migration target evidence is invalid.', 'identity-mismatch'],
-  ['Target readback configuration is required.', 'config-invalid'],
 ]);
 export const isCutoverReason = (reason) =>
   typeof reason === 'string' && (isPreparationReason(reason) || CUTOVER_REASONS.has(reason));

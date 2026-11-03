@@ -22,8 +22,6 @@ export function createTargetControlPlane(
     fetchRequest?: (url: URL, init: RequestInit) => Promise<Response>;
   },
 ): Readonly<{
-  readQueuePause(input: { queueId: string; paused: boolean }): Promise<{ queueId: string; paused: boolean }>;
-  assertFresh(): Promise<{ fresh: true; resourceCount: 0 }>;
   resolveActiveResources(): Promise<
     { d1Id: string; kvId: string; queueId: string; dlqId: string; consumerId: string }
   >;
@@ -46,40 +44,4 @@ export function createTargetControlPlane(
     },
   ): Promise<{ versionId: string; routeConfiguration: unknown[] }>;
   readCurrentVersion(): Promise<string>;
-  readResources(ids: ResourceIds): Promise<TargetResourceReadback>;
-  readWorkerAdmission(
-    input: {
-      resources: TargetResourceReadback;
-      admissionEnvironment: Record<string, string>;
-      zoneId: string;
-      expectedVersionId: string;
-      routePresent?: boolean;
-    },
-  ): Promise<
-    {
-      versionId: string;
-      workerName: string;
-      mode: string;
-      previewsEnabled: false;
-      routeCount: number;
-      bindingCount: number;
-    }
-  >;
-  readSealedWorker(
-    input: {
-      resources: TargetResourceReadback;
-      admissionEnvironment: Record<string, string>;
-      zoneId: string;
-      expectedVersionId: string;
-    },
-  ): Promise<
-    {
-      versionId: string;
-      workerName: string;
-      mode: 'sealed';
-      previewsEnabled: false;
-      routeCount: 0;
-      bindingCount: number;
-    }
-  >;
 }>;

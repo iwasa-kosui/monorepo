@@ -1,11 +1,11 @@
 variable "cloudflare_account_id" {
-  description = "Cloudflare account ID. Supply through TF_VAR_cloudflare_account_id in a protected runner."
+  description = "Cloudflare account ID."
   type        = string
   sensitive   = true
 }
 
 variable "zone_id" {
-  description = "Existing Cloudflare zone ID. Supply through TF_VAR_zone_id in a protected runner."
+  description = "ID of the existing Cloudflare zone that hosts the Worker route."
   type        = string
   sensitive   = true
 }
@@ -33,7 +33,7 @@ variable "public_hostname" {
 
 
 variable "enable_production_worker_route" {
-  description = "Explicit cutover switch for the production Worker route."
+  description = "Whether to create the production Worker route."
   type        = bool
   default     = false
 
@@ -45,7 +45,7 @@ variable "enable_production_worker_route" {
 
 
 variable "generation" {
-  description = "Fresh isolated generation. Never reuse an old generation or state."
+  description = "Generation identifier used in resource names and the state key."
   type        = string
   validation {
     condition     = can(regex("^[a-z][a-z0-9]{7,19}$", var.generation))
@@ -53,18 +53,18 @@ variable "generation" {
   }
 }
 variable "attach_queue_consumer" {
-  description = "Attach only after the first sealed Worker has been deployed and read back."
+  description = "Whether to attach the Worker as the Queue consumer."
   type        = bool
   default     = false
 }
 variable "queue_delivery_paused" {
-  description = "Keep true through preparation, import, verification and smoke. Resume last."
+  description = "Whether delivery of the main Queue is paused."
   type        = bool
   default     = true
 }
 
 variable "enable_staging_worker_route" {
-  description = "Explicit rehearsal switch for the isolated staging hostname route."
+  description = "Whether to create the staging Worker route."
   type        = bool
   default     = false
   validation {
