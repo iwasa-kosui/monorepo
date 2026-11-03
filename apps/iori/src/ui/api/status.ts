@@ -4,6 +4,9 @@ export const displayStatus = (status: Status): Status => status.reblog ?? status
 
 export const isLocalAccount = (account: Account): boolean => !account.acct.includes('@');
 
+export const remoteUserPathOf = (account: Account): string | undefined =>
+  isLocalAccount(account) ? undefined : `/remote-users/${account.id}`;
+
 export const accountHandle = (account: Account): string => {
   if (!isLocalAccount(account)) return account.acct;
   try {

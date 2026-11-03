@@ -33,6 +33,8 @@ export const isUnauthorizedError = (error: unknown): boolean => isMastodonApiErr
 
 export const isNotFoundError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 404;
 
+export const isUnprocessableError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 422;
+
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
     return new URL(url, 'http://localhost').searchParams;
@@ -140,6 +142,18 @@ export const fetchAccountStatuses = (
 
 export const fetchRelationships = async (accountIds: readonly string[]): Promise<readonly Relationship[]> =>
   (await request<Relationship[]>('/api/v1/accounts/relationships', { 'id[]': accountIds })).body;
+
+// 3つの取得のうちログインが必要なのは relationships だけなので、401 を未ログイン、422（アクターを持たない利用者）を関係なしとみなす
+export const fetchRelationshipOrSignedOut = async (accountId: string) => {
+  try {
+    const [relationship] = await fetchRelationships([accountId]);
+    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+  } catch (error) {
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
+    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false };
+    throw error;
+  }
+};
 
 export const fetchFavourites = (params: PageParams = {}): Promise<Page<Status>> =>
   getPage<Status>('/api/v1/favourites', pageQuery(params));

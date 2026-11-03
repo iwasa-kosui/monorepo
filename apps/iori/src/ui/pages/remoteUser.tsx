@@ -8,9 +8,8 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import {
   fetchAccount,
   fetchAccountStatuses,
-  fetchRelationships,
+  fetchRelationshipOrSignedOut,
   isNotFoundError,
-  isUnauthorizedError,
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId, withFavourited } from '../api/status.ts';
 import { PostView } from '../components/PostView.tsx';
@@ -279,17 +278,6 @@ const getActorIdFromUrl = () => {
   const pathParts = window.location.pathname.split('/');
   const actorIdIndex = pathParts.indexOf('remote-users') + 1;
   return pathParts[actorIdIndex];
-};
-
-// 3つの取得のうちログインが必要なのは relationships だけなので、401 を未ログインとみなす
-const fetchRelationshipOrSignedOut = async (accountId: string) => {
-  try {
-    const [relationship] = await fetchRelationships([accountId]);
-    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
-  } catch (error) {
-    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
-    throw error;
-  }
 };
 
 const App = () => {

@@ -10,7 +10,7 @@ import {
   isNotFoundError,
   lookupAccount,
 } from '../api/mastodonClient.ts';
-import { accountHandle } from '../api/status.ts';
+import { accountHandle, remoteUserPathOf } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
@@ -285,6 +285,11 @@ const App = () => {
     const fetchFirstPage = async () => {
       try {
         const account = await lookupAccount(username);
+        const remotePath = remoteUserPathOf(account);
+        if (remotePath !== undefined) {
+          window.location.replace(remotePath);
+          return;
+        }
         const [page, followers, following] = await Promise.all([
           fetchAccountStatuses(account.id, { excludeReblogs: true }),
           fetchFollowers(account.id, { limit: ACCOUNT_LIST_LIMIT }),

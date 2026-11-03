@@ -8,6 +8,7 @@ import {
   fetchHomeTimeline,
   fetchNotifications,
   fetchPublicTimeline,
+  fetchRelationshipOrSignedOut,
   fetchRelationships,
   fetchStatus,
   fetchStatusContext,
@@ -263,6 +264,12 @@ describe('mastodon client requests', () => {
 
     expect(isNotFoundError(error)).toBe(true);
     expect((error as Error).message).toBe('HTTP 404');
+  });
+
+  it('treats a 422 from relationships as logged in without a relationship', async () => {
+    stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
+
+    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
   });
 
   it('does not treat a network failure as an unauthorized error', () => {
