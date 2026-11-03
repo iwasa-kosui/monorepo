@@ -58,7 +58,7 @@ Each credential prefix below denotes its `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KE
 | `deploy-worker`          | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`  | —                          | —                            | —                               |
 | `adopt-cutover-state`    | `IORI_CLOUDFLARE_CUTOVER_API_TOKEN` | `IORI_TERRAFORM_WRITE`     | —                            | —                               |
 
-`deploy-worker` receives only six secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_ADMISSION_IDENTITY`, `ORIGIN`, `VAPID_SUBJECT` and `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`. It reads neither the Terraform state nor the transfer bucket. It looks up the D1, KV, Queue, DLQ and consumer ids by name through the Cloudflare API. If a name does not resolve, or the API returns 401 or 403, it prints an `IORI_DIAG` line with `stage=deploy-worker-resolve` and stops before `wrangler deploy`.
+`deploy-worker` receives only six secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `IORI_ADMISSION_IDENTITY`, `ORIGIN`, `VAPID_SUBJECT` and `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`. It reads neither the Terraform state nor the transfer bucket. It looks up the D1, KV, Queue, DLQ and consumer ids by name through the Cloudflare API. If zero resources or two or more resources match a name, or if the Cloudflare API fails (including a 401 or 403 response), it prints an `IORI_DIAG` line with `stage=deploy-worker-resolve` and stops before `wrangler deploy`.
 
 `estimate-source` receives only the four source SSH references listed below and no Cloudflare, state, transfer or application credential. `purge-rehearsal-target` reads the transfer bucket with read-only credentials, writes only to the application bucket, and receives no SSH, receipt key or rehearsal profile.
 

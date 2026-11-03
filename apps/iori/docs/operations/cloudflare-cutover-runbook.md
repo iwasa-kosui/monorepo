@@ -263,7 +263,7 @@ workers.dev と切替後の custom-domain smoke は、protected queue token を�
 
 切替後の `deploy-worker` は、現在 `active` の同じ generation への通常更新に限定します。`MAIN_SHA` は今回の checkout/build を制御する reviewed current-main SHA、`IORI_MIGRATION_MAIN_SHA` は移行時から不変の admission `mainSha` です。run ID と generation も元の移行から保持します。準備記録や署名済み target を新しいコード SHA に合わせて書き換えず、更新後の live data を移行時の manifest と比較しません。
 
-`deploy-worker` は、Terraform の state も準備記録も読みません。`deploy-worker` は、D1、KV、Queue、DLQ、consumer の id を、Cloudflare API で名前から引きます。名前から id を引けないとき、または API が 401 か 403 を返したときは、`deploy-worker` が `stage=deploy-worker-resolve` の `IORI_DIAG` 行を出し、`wrangler deploy` の前に止まります。job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の6つです。
+`deploy-worker` は、Terraform の state も準備記録も読みません。`deploy-worker` は、D1、KV、Queue、DLQ、consumer の id を、Cloudflare API で名前から引きます。名前に一致するリソースが0件か2件以上のとき、または Cloudflare API が失敗したとき（401 と 403 を含む）は、`deploy-worker` が `stage=deploy-worker-resolve` の `IORI_DIAG` 行を出し、`wrangler deploy` の前に止まります。job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の6つです。
 
 通常更新では backend、binding、canonical route、consumer、main Queue の配送中状態、DLQ の配送停止状態を更新前後で照合します。secret 更新、Terraform apply、データ import、source の再凍結は含めません。Wrangler は producer の Queue API を呼ぶ場合があるため、設定が変わらないことを実 readback で確認します。不確かな失敗後に自動 redeploy や producer 復元は行いません。
 
