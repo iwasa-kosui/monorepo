@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -440,10 +441,10 @@ const UserProfile = () => {
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <a href='#update-bio' class='relative group flex-shrink-0'>
               <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
-                {actor.logoUri
+                {safeUrl(actor.logoUri)
                   ? (
                     <img
-                      src={actor.logoUri}
+                      src={safeUrl(actor.logoUri)}
                       alt='User Logo'
                       class='w-16 h-16 blob-avatar object-cover'
                     />

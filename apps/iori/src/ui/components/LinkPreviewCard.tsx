@@ -1,31 +1,37 @@
 import type { LinkPreview } from '../../domain/linkPreview/linkPreview.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 
 type Props = Readonly<{
   preview: LinkPreview;
 }>;
 
 export const LinkPreviewCard = ({ preview }: Props) => {
+  const previewUrl = safeUrl(preview.url);
+  if (!previewUrl) return null;
+  const imageUrl = safeUrl(preview.imageUrl);
+  const faviconUrl = safeUrl(preview.faviconUrl);
+
   const displayUrl = (() => {
     try {
-      const url = new URL(preview.url);
+      const url = new URL(previewUrl);
       return url.hostname;
     } catch {
-      return preview.url;
+      return previewUrl;
     }
   })();
 
   return (
     <a
-      href={preview.url}
+      href={previewUrl}
       target='_blank'
       rel='noopener noreferrer'
       class='block rounded-xl border border-warm-gray dark:border-gray-700 overflow-hidden hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
     >
       <div class='flex'>
-        {preview.imageUrl && (
+        {imageUrl && (
           <div class='flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32'>
             <img
-              src={preview.imageUrl}
+              src={imageUrl}
               alt={preview.title ?? 'Link preview'}
               class='w-full h-full object-cover'
               loading='lazy'
@@ -34,9 +40,9 @@ export const LinkPreviewCard = ({ preview }: Props) => {
         )}
         <div class='flex-1 min-w-0 p-3'>
           <div class='flex items-center gap-1 text-xs text-charcoal-light dark:text-gray-400 mb-1'>
-            {preview.faviconUrl && (
+            {faviconUrl && (
               <img
-                src={preview.faviconUrl}
+                src={faviconUrl}
                 alt=''
                 class='w-4 h-4 flex-shrink-0'
                 loading='lazy'

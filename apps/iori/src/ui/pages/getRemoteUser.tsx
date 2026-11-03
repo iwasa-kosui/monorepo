@@ -1,5 +1,6 @@
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { Layout } from '../../layout.tsx';
 
 type Props = Readonly<{
@@ -33,10 +34,10 @@ export const GetRemoteUserPage = ({
         <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
           <div class='flex items-center gap-4 mb-4'>
             <div class='w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
-              {remoteActor.logoUri
+              {safeUrl(remoteActor.logoUri)
                 ? (
                   <img
-                    src={remoteActor.logoUri}
+                    src={safeUrl(remoteActor.logoUri)}
                     alt='User Logo'
                     class='w-16 h-16 rounded-2xl object-cover'
                   />
@@ -122,9 +123,9 @@ export const GetRemoteUserPage = ({
                   to follow this user
                 </p>
               )}
-            {remoteActor.url && (
+            {safeUrl(remoteActor.url) && (
               <a
-                href={remoteActor.url}
+                href={safeUrl(remoteActor.url)}
                 target='_blank'
                 rel='noopener noreferrer'
                 class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'

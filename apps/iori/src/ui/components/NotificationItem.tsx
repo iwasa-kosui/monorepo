@@ -9,6 +9,7 @@ import type {
   NotificationWithDetails,
   ReplyNotificationWithDetails,
 } from '../../domain/notification/notification.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 
 type Props = Readonly<{
   notification: NotificationWithDetails;
@@ -63,10 +64,10 @@ const LikeNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {likerActor.logoUri
+                {safeUrl(likerActor.logoUri)
                   ? (
                     <img
-                      src={likerActor.logoUri}
+                      src={safeUrl(likerActor.logoUri)}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -144,10 +145,10 @@ const FollowNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {followerActor.logoUri
+                {safeUrl(followerActor.logoUri)
                   ? (
                     <img
-                      src={followerActor.logoUri}
+                      src={safeUrl(followerActor.logoUri)}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -202,8 +203,9 @@ const EmojiReactNotificationItem = ({
 
   const postUrl = `/users/${recipientUsername}/posts/${reactedPost.postId}`;
 
-  const emojiDisplay = emojiImageUrl
-    ? <img src={emojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
+  const safeEmojiImageUrl = safeUrl(emojiImageUrl);
+  const emojiDisplay = safeEmojiImageUrl
+    ? <img src={safeEmojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
     : <span class='text-lg'>{emoji}</span>;
 
   return (
@@ -220,10 +222,10 @@ const EmojiReactNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sand dark:bg-gray-600 flex items-center justify-center text-charcoal text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {reactorActor.logoUri
+                {safeUrl(reactorActor.logoUri)
                   ? (
                     <img
-                      src={reactorActor.logoUri}
+                      src={safeUrl(reactorActor.logoUri)}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -311,10 +313,10 @@ const ReplyNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {replierActor.logoUri
+                {safeUrl(replierActor.logoUri)
                   ? (
                     <img
-                      src={replierActor.logoUri}
+                      src={safeUrl(replierActor.logoUri)}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />

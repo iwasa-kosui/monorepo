@@ -8,6 +8,7 @@ import type { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { User } from '../../domain/user/user.ts';
 import { debounce } from '../../helper/debounce.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
@@ -70,10 +71,10 @@ export const LocalUserPage = ({
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
-              {actor.logoUri
+              {safeUrl(actor.logoUri)
                 ? (
                   <img
-                    src={actor.logoUri}
+                    src={safeUrl(actor.logoUri)}
                     alt='User Logo'
                     class='w-16 h-16 blob-avatar object-cover'
                   />
