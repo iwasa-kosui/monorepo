@@ -3,14 +3,6 @@ import { join } from 'node:path';
 
 const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-failed-source'];
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
-const allowedMissingOperations = ['estimate-source', 'rehearse-migration', 'migrate-data'];
-const allowedMissingPattern = /^(?:0|[1-9][0-9]{0,5})$/;
-export const allowedMissingUploads = (env) => {
-  const value = env.IORI_ALLOWED_MISSING_UPLOADS ?? '';
-  if (value === '') return 0;
-  if (!allowedMissingPattern.test(value)) throw new Error('Protected workflow invocation is invalid.');
-  return Number(value);
-};
 const shaPattern = /^[a-f0-9]{40}$/;
 const generationPattern = /^[a-z][a-z0-9]{7,19}$/;
 const runIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
@@ -31,7 +23,7 @@ const pushInvocation = (env, deferIdentity) => {
   if (
     env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_SHA !== codeSha || !shaPattern.test(codeSha ?? '')
     || env.IORI_OPERATION !== 'deploy-worker' || env.IORI_ENVIRONMENT !== 'production'
-    || Boolean(env.IORI_RECOVERY) || Boolean(env.IORI_ALLOWED_MISSING_UPLOADS)
+    || Boolean(env.IORI_RECOVERY)
     || (!deferIdentity && !derived)
     || (derived && [
       [env.IORI_GENERATION, derived.generation],
@@ -62,33 +54,22 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
     || env.GITHUB_SHA !== codeSha || !/^[a-f0-9]{40}$/.test(codeSha ?? '')
     || !/^[a-f0-9]{40}$/.test(migrationSha ?? '')
     || ![
-      'prepare-target',
-      'rehearse-migration',
-      'migrate-data',
-      'verify-import',
-      'cutover-route',
       'deploy-worker',
       'put-worker-secrets',
-      'adopt-cutover-state',
-      'estimate-source',
       'diagnose-source',
-      'purge-rehearsal-target',
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (['estimate-source', 'diagnose-source'].includes(operation)
+    || (operation === 'diagnose-source'
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))
-    || (!['deploy-worker', 'put-worker-secrets', 'adopt-cutover-state', 'purge-rehearsal-target'].includes(operation)
+    || (!['deploy-worker', 'put-worker-secrets'].includes(operation)
       && !recoveryOperation
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
     || (!recoveryOperation && env.IORI_RECOVERY)
     || (['release-pending-freeze', 'restart-failed-source'].includes(operation) && env.IORI_RECOVERY)
-    || (allowedMissingOperations.includes(operation)
-      ? Boolean(env.IORI_ALLOWED_MISSING_UPLOADS) && !allowedMissingPattern.test(env.IORI_ALLOWED_MISSING_UPLOADS)
-      : Boolean(env.IORI_ALLOWED_MISSING_UPLOADS))
   ) throw new Error('Protected workflow invocation is invalid.');
   return Object.freeze({
     operation,

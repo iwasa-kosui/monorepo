@@ -19,8 +19,9 @@ const identity = { environment: 'production', generation: 'fixture1', mainSha, r
 const vapid = () => {
   const ecdh = createECDH('prime256v1');
   ecdh.generateKeys();
+  const privateKey = ecdh.getPrivateKey();
   return {
-    VAPID_PRIVATE_KEY: ecdh.getPrivateKey().toString('base64url'),
+    VAPID_PRIVATE_KEY: Buffer.concat([Buffer.alloc(32 - privateKey.length), privateKey]).toString('base64url'),
     VAPID_PUBLIC_KEY: ecdh.getPublicKey().toString('base64url'),
   };
 };

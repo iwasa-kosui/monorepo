@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 
 import {
-  allowedMissingUploads,
   createWorkflowDirectory,
   parseWorkflowInvocation,
   workflowTimeBudget,
@@ -20,17 +19,30 @@ const env = {
   IORI_MIGRATION_RUN_ID: 'fixture',
   IORI_ENVIRONMENT: 'staging',
   IORI_GENERATION: 'fixture01',
-  IORI_OPERATION: 'migrate-data',
+  IORI_OPERATION: 'deploy-worker',
 };
 it('binds protected invocation to reviewed main and separates maintenance code from immutable migration SHA', () => {
   expect(parseWorkflowInvocation(env)).toMatchObject({ codeSha: env.MAIN_SHA, migrationSha: env.MAIN_SHA });
   expect(() => parseWorkflowInvocation({ ...env, GITHUB_REF: 'refs/heads/feature' })).toThrow();
   expect(() => parseWorkflowInvocation({ ...env, IORI_MIGRATION_RUN_ID: '../bad' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...env, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
-  expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'deploy-worker', IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) }))
+  expect(parseWorkflowInvocation({ ...env, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) }))
     .toMatchObject({ migrationSha: 'b'.repeat(40), codeSha: env.MAIN_SHA });
   expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: 'replace-queue-consumer' })).toThrow(
     'Maintenance operation requires a separate review.',
+  );
+});
+it.each([
+  'prepare-target',
+  'estimate-source',
+  'rehearse-migration',
+  'purge-rehearsal-target',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'adopt-cutover-state',
+])('rejects the removed migration operation %s', operation => {
+  expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation })).toThrow(
+    'Protected workflow invocation is invalid.',
   );
 });
 const frozenSha = 'b'.repeat(40);
@@ -107,15 +119,7 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each([
-  'prepare-target',
-  'rehearse-migration',
-  'migrate-data',
-  'verify-import',
-  'cutover-route',
-  'deploy-worker',
-  'adopt-cutover-state',
-])(
+it.each(['deploy-worker', 'put-worker-secrets'])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
     const valid = { ...env, IORI_OPERATION: operation };
@@ -128,122 +132,10 @@ it.each([
     }
   },
 );
-it.each(['estimate-source', 'rehearse-migration', 'migrate-data'])(
-  'accepts an allowed missing upload count for %s and reads it as a number',
-  operation => {
-    const given = operation === 'estimate-source' ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' } : {};
-    const valid = { ...env, ...given, IORI_OPERATION: operation };
-    expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
-    expect(parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: '' })).toMatchObject({ operation });
-    for (const [value, count] of [['0', 0], ['3', 3], ['10', 10], ['999999', 999999]] as const) {
-      const invocation = { ...valid, IORI_ALLOWED_MISSING_UPLOADS: value };
-      expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
-      expect(allowedMissingUploads(invocation)).toBe(count);
-    }
-    for (const value of ['00', '03', '-1', '+1', '1.5', '1e3', '0x1', ' 1', '1 ', '1000000', 'x']) {
-      expect(() => parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow(
-        'Protected workflow invocation is invalid.',
-      );
-      expect(() => allowedMissingUploads({ IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow();
-    }
-  },
-);
-it('reads an absent or empty allowed missing upload count as zero', () => {
-  expect(allowedMissingUploads({})).toBe(0);
-  expect(allowedMissingUploads({ IORI_ALLOWED_MISSING_UPLOADS: '' })).toBe(0);
-});
-it.each([
-  'prepare-target',
-  'verify-import',
-  'cutover-route',
-  'deploy-worker',
-  'adopt-cutover-state',
-  'purge-rehearsal-target',
-  'diagnose-source',
-  'resume-source',
-  'release-pending-freeze',
-  'restart-failed-source',
-])('rejects a non-empty allowed missing upload count for %s', operation => {
-  const recovery = ['resume-source', 'release-pending-freeze', 'restart-failed-source'].includes(operation);
-  const valid = {
-    ...env,
-    IORI_OPERATION: operation,
-    ...(operation === 'diagnose-source' ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' } : {}),
-    ...(recovery ? { IORI_MIGRATION_MAIN_SHA: frozenSha } : {}),
-    ...(operation === 'resume-source' ? { IORI_RECOVERY: 'destination_writes_reconciled' } : {}),
-  };
-  expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
-  expect(parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: '' })).toMatchObject({ operation });
-  for (const value of ['0', '3', 'x']) {
-    expect(() => parseWorkflowInvocation({ ...valid, IORI_ALLOWED_MISSING_UPLOADS: value })).toThrow(
-      'Protected workflow invocation is invalid.',
-    );
-  }
-});
-it('keeps requiring equal code and migration SHAs for the other non-deploy operations', () => {
-  for (const operation of ['prepare-target', 'migrate-data', 'verify-import', 'cutover-route']) {
-    expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, IORI_MIGRATION_MAIN_SHA: frozenSha }))
-      .toThrow();
-  }
-});
-it('accepts the rehearsal operation under the same invocation binding as data migration', () => {
-  expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'rehearse-migration' })).toMatchObject({
-    operation: 'rehearse-migration',
-    codeSha: env.MAIN_SHA,
-    migrationSha: env.MAIN_SHA,
-  });
-  expect(() =>
-    parseWorkflowInvocation({
-      ...env,
-      IORI_OPERATION: 'rehearse-migration',
-      IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
-    })
-  ).toThrow();
-});
-it('accepts adopt-cutover-state and lets its migration SHA differ from the code SHA like deploy-worker', () => {
-  const adopt = { ...env, IORI_OPERATION: 'adopt-cutover-state' };
-  expect(parseWorkflowInvocation(adopt)).toMatchObject({
-    operation: 'adopt-cutover-state',
-    codeSha: env.MAIN_SHA,
-    migrationSha: env.MAIN_SHA,
-    generation: env.IORI_GENERATION,
-    runId: env.IORI_MIGRATION_RUN_ID,
-  });
-  expect(parseWorkflowInvocation({ ...adopt, IORI_MIGRATION_MAIN_SHA: frozenSha })).toMatchObject({
-    operation: 'adopt-cutover-state',
-    codeSha: env.MAIN_SHA,
-    migrationSha: frozenSha,
-  });
-  expect(() => parseWorkflowInvocation({ ...adopt, IORI_MIGRATION_MAIN_SHA: 'not-a-sha' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...adopt, GITHUB_SHA: frozenSha })).toThrow();
-});
-it('accepts the purge operation and lets its migration SHA differ from the code SHA like deploy-worker', () => {
-  expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'purge-rehearsal-target' })).toMatchObject({
-    operation: 'purge-rehearsal-target',
-    codeSha: env.MAIN_SHA,
-    migrationSha: env.MAIN_SHA,
-    generation: env.IORI_GENERATION,
-    runId: env.IORI_MIGRATION_RUN_ID,
-  });
-  const purge = { ...env, IORI_OPERATION: 'purge-rehearsal-target' };
-  expect(parseWorkflowInvocation({ ...purge, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toMatchObject({
-    operation: 'purge-rehearsal-target',
-    codeSha: env.MAIN_SHA,
-    migrationSha: 'b'.repeat(40),
-  });
-  expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_MAIN_SHA: 'not-a-sha' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...purge, GITHUB_SHA: 'b'.repeat(40) })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: '' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...purge, IORI_MIGRATION_RUN_ID: '' })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...purge, IORI_GENERATION: 'Upper_Case' })).toThrow();
-});
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'estimate-source', 'diagnose-source'])(
+it.each(['diagnose-source'])(
   'still requires the code SHA and migration SHA to match for %s',
   operation => {
-    const given = ['estimate-source', 'diagnose-source'].includes(operation)
-      ? { IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
-      : {};
-    const invocation = { ...env, ...given, IORI_OPERATION: operation };
+    const invocation = { ...env, IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '', IORI_OPERATION: operation };
     expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
     expect(() => parseWorkflowInvocation({ ...invocation, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow(
       'Protected workflow invocation is invalid.',
@@ -251,32 +143,30 @@ it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route',
   },
 );
 it.each([
-  ['estimate-source', undefined],
-  ['estimate-source', ''],
   ['diagnose-source', undefined],
   ['diagnose-source', ''],
 ])('accepts %s only without generation and run ID (%s)', (operation, empty) => {
-  const estimate = { ...env, IORI_OPERATION: operation, IORI_GENERATION: empty, IORI_MIGRATION_RUN_ID: empty };
-  expect(parseWorkflowInvocation(estimate)).toMatchObject({
+  const diagnose = { ...env, IORI_OPERATION: operation, IORI_GENERATION: empty, IORI_MIGRATION_RUN_ID: empty };
+  expect(parseWorkflowInvocation(diagnose)).toMatchObject({
     operation,
     codeSha: env.MAIN_SHA,
     migrationSha: env.MAIN_SHA,
   });
-  expect(() => parseWorkflowInvocation({ ...estimate, IORI_GENERATION: env.IORI_GENERATION })).toThrow(
+  expect(() => parseWorkflowInvocation({ ...diagnose, IORI_GENERATION: env.IORI_GENERATION })).toThrow(
     'Protected workflow invocation is invalid.',
   );
-  expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID })).toThrow(
+  expect(() => parseWorkflowInvocation({ ...diagnose, IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID })).toThrow(
     'Protected workflow invocation is invalid.',
   );
   expect(() =>
     parseWorkflowInvocation({
-      ...estimate,
+      ...diagnose,
       IORI_GENERATION: env.IORI_GENERATION,
       IORI_MIGRATION_RUN_ID: env.IORI_MIGRATION_RUN_ID,
     })
   ).toThrow('Protected workflow invocation is invalid.');
-  expect(() => parseWorkflowInvocation({ ...estimate, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
-  expect(() => parseWorkflowInvocation({ ...estimate, GITHUB_REF: 'refs/heads/feature' })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...diagnose, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...diagnose, GITHUB_REF: 'refs/heads/feature' })).toThrow();
 });
 it('rejects diagnose-source with a recovery value, a stale main SHA or an unknown environment', () => {
   const diagnose = { ...env, IORI_OPERATION: 'diagnose-source', IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' };
@@ -290,26 +180,20 @@ it('rejects diagnose-source with a recovery value, a stale main SHA or an unknow
     'Protected workflow invocation is invalid.',
   );
 });
-it.each([
-  'prepare-target',
-  'rehearse-migration',
-  'migrate-data',
-  'verify-import',
-  'cutover-route',
-  'deploy-worker',
-  'adopt-cutover-state',
-  'purge-rehearsal-target',
-])('rejects an empty or missing generation and run ID for %s', operation => {
-  const invocation = { ...env, IORI_OPERATION: operation };
-  expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
-  for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
-    for (const empty of ['', undefined]) {
-      expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
-        'Protected workflow invocation is invalid.',
-      );
+it.each(['deploy-worker', 'put-worker-secrets'])(
+  'rejects an empty or missing generation and run ID for %s',
+  operation => {
+    const invocation = { ...env, IORI_OPERATION: operation };
+    expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+    for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
+      for (const empty of ['', undefined]) {
+        expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
+          'Protected workflow invocation is invalid.',
+        );
+      }
     }
-  }
-});
+  },
+);
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',
@@ -352,11 +236,11 @@ it('checks only the event, ref, SHA and operation of a push while the identity i
   });
   expect(() => parseWorkflowInvocation(withoutIdentity)).toThrow('Protected workflow invocation is invalid.');
   expect(() =>
-    parseWorkflowInvocation({ ...withoutIdentity, IORI_OPERATION: 'cutover-route' }, { deferIdentity: true })
+    parseWorkflowInvocation({ ...withoutIdentity, IORI_OPERATION: 'put-worker-secrets' }, { deferIdentity: true })
   )
     .toThrow('Protected workflow invocation is invalid.');
 });
-it.each(['prepare-target', 'migrate-data', 'cutover-route', 'adopt-cutover-state', 'resume-source', 'source', ''])(
+it.each(['put-worker-secrets', 'resume-source', 'source', ''])(
   'rejects a main push for the operation %j',
   operation => {
     expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: operation })).toThrow(
@@ -372,7 +256,6 @@ it('rejects a push with a wrong ref, SHA, environment, recovery value or conflic
     { IORI_ENVIRONMENT: 'staging' },
     { IORI_ENVIRONMENT: '' },
     { IORI_RECOVERY: 'destination_writes_reconciled' },
-    { IORI_ALLOWED_MISSING_UPLOADS: '1' },
     { IORI_GENERATION: 'other2026110' },
     { IORI_MIGRATION_RUN_ID: 'other' },
     { IORI_MIGRATION_MAIN_SHA: 'd'.repeat(40) },
@@ -408,17 +291,7 @@ it('rejects a push when the admission identity is missing, malformed or not for 
   }
 });
 it('keeps rejecting the push event for every dispatch-only route even with an admission identity', () => {
-  for (
-    const operation of [
-      'prepare-target',
-      'rehearse-migration',
-      'migrate-data',
-      'verify-import',
-      'cutover-route',
-      'adopt-cutover-state',
-      'resume-source',
-    ]
-  ) {
+  for (const operation of ['resume-source']) {
     expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, GITHUB_EVENT_NAME: 'push' })).toThrow(
       'Protected workflow invocation is invalid.',
     );

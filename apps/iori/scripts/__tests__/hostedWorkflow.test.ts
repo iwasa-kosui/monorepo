@@ -11,8 +11,6 @@ import {
   runHostedWorkflow,
 } from '../hosted-workflow.mjs';
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
-import { preparationFailureReport } from '../prepare-migration-target.mjs';
-import { SOURCE_REJECTION_DETAILS, SOURCE_SSH_REASONS } from '../source-transfer-protocol.mjs';
 import { createWorkflowDirectory } from '../workflow-context.mjs';
 import { createFixtureDirectory } from './fixtureTemp.js';
 const baseEnv = (operation: string) => ({
@@ -25,43 +23,6 @@ const baseEnv = (operation: string) => ({
   IORI_MIGRATION_RUN_ID: 'run1',
   IORI_OPERATION: operation,
 });
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'])(
-  'materializes %s into a new private root with only its required file roles',
-  async operation => {
-    const runnerTemp = await createFixtureDirectory('iori-hosted-');
-    try {
-      const paths = await createWorkflowDirectory(runnerTemp);
-      const env = {
-        ...baseEnv(operation),
-        RUNNER_TEMP: runnerTemp,
-        IORI_PRIVATE_DIRECTORY: paths.base,
-        IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
-        IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
-        IORI_MIGRATION_RECEIPT_PUBLIC_KEY: 'synthetic-public-key',
-        IORI_MIGRATION_RECEIPT_PRIVATE_KEY: 'synthetic-signing-key',
-        IORI_MIGRATION_REHEARSAL: '{}',
-      };
-      const mapped = await materializeHostedValues(env);
-      expect(await readdir(mapped.IORI_MIGRATION_ROOT!)).toEqual([]);
-      expect((await lstat(mapped.IORI_MIGRATION_ROOT!)).mode & 0o777).toBe(0o700);
-      expect((await lstat(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH!)).mode & 0o777).toBe(0o600);
-      expect(await readFile(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH!, 'utf8')).toBe('synthetic-public-key');
-      expect(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY).toBeUndefined();
-      expect(mapped.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
-      expect(mapped.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
-      const files = await readdir(join(paths.base, 'keys'));
-      expect(files.includes('receipt-private.pem')).toBe(
-        operation === 'migrate-data' || operation === 'rehearse-migration',
-      );
-      expect(mapped.IORI_MIGRATION_REHEARSAL).toBeUndefined();
-      expect(mapped.IORI_MIGRATION_REHEARSAL_PATH !== undefined).toBe(operation === 'migrate-data');
-      expect((await readdir(join(paths.base, 'config'))).includes('rehearsal.json')).toBe(operation === 'migrate-data');
-      expect(files.includes('source-key')).toBe(operation !== 'verify-import');
-    } finally {
-      await rm(runnerTemp, { recursive: true, force: true });
-    }
-  },
-);
 it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'diagnose-source'])(
   'materializes only the source SSH files for %s',
   async operation => {
@@ -78,22 +39,22 @@ it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'di
         IORI_PRIVATE_DIRECTORY: paths.base,
         IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
         IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
-        IORI_MIGRATION_RECEIPT_PUBLIC_KEY: 'synthetic-public-key',
       });
       expect((await readdir(join(paths.base, 'keys'))).sort()).toEqual(['source-key', 'source-known-hosts']);
       expect(await readFile(mapped.IORI_SOURCE_SSH_IDENTITY_FILE!, 'utf8')).toBe('synthetic-source-key\n');
       expect(mapped.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
       expect(mapped.IORI_SOURCE_SSH_KNOWN_HOSTS).toBeUndefined();
-      expect(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY).toBeUndefined();
     } finally {
       await rm(runnerTemp, { recursive: true, force: true });
     }
   },
 );
-it('maps the recovery operations to their fixed scripts', async () => {
+it('maps the operations to their fixed scripts', async () => {
   const text = await readFile(new URL('../hosted-workflow.mjs', import.meta.url), 'utf8');
   for (
     const [name, script] of [
+      ['deploy-worker', 'deploy-active-worker.mjs'],
+      ['put-worker-secrets', 'worker-bindings-put.mjs'],
       ['resume-source', 'resume-source.mjs'],
       [
         'release-pending-freeze',
@@ -101,66 +62,10 @@ it('maps the recovery operations to their fixed scripts', async () => {
       ],
       ['restart-failed-source', 'restart-failed-source.mjs'],
       ['diagnose-source', 'diagnose-source.mjs'],
-      ['adopt-cutover-state', 'adopt-cutover-state.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
     expect((await lstat(new URL(`../${script}`, import.meta.url))).isFile()).toBe(true);
-  }
-});
-it('materializes estimate-source with only the source SSH files and no generation or run ID', async () => {
-  const runnerTemp = await createFixtureDirectory('iori-hosted-');
-  try {
-    const paths = await createWorkflowDirectory(runnerTemp);
-    const mapped = await materializeHostedValues({
-      ...baseEnv('estimate-source'),
-      IORI_GENERATION: '',
-      IORI_MIGRATION_RUN_ID: '',
-      RUNNER_TEMP: runnerTemp,
-      IORI_PRIVATE_DIRECTORY: paths.base,
-      IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
-      IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
-    });
-    expect((await readdir(join(paths.base, 'keys'))).sort()).toEqual(['source-key', 'source-known-hosts']);
-    expect(await readdir(mapped.IORI_MIGRATION_ROOT!)).toEqual([]);
-    expect(await readdir(join(paths.base, 'config'))).toEqual([]);
-    expect(await readFile(mapped.IORI_SOURCE_SSH_IDENTITY_FILE!, 'utf8')).toBe('synthetic-source-key\n');
-    expect(mapped.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
-    expect(mapped.IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH).toBeUndefined();
-  } finally {
-    await rm(runnerTemp, { recursive: true, force: true });
-  }
-});
-it.each([
-  { IORI_GENERATION: 'fixture1' },
-  { IORI_MIGRATION_RUN_ID: 'run1' },
-])('rejects estimate-source when generation or run ID is supplied (%j)', async given => {
-  await expect(
-    materializeHostedValues({
-      ...baseEnv('estimate-source'),
-      IORI_GENERATION: '',
-      IORI_MIGRATION_RUN_ID: '',
-      ...given,
-      IORI_PRIVATE_DIRECTORY: '/not-inspected',
-    }),
-  ).rejects.toThrow('Protected workflow invocation is invalid.');
-});
-it('hands purge-rehearsal-target the migration SHA as MAIN_SHA while the invocation keeps the code SHA', async () => {
-  const runnerTemp = await createFixtureDirectory('iori-hosted-');
-  try {
-    const paths = await createWorkflowDirectory(runnerTemp);
-    const env = {
-      ...baseEnv('purge-rehearsal-target'),
-      IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
-      RUNNER_TEMP: runnerTemp,
-      IORI_PRIVATE_DIRECTORY: paths.base,
-    };
-    const mapped = await materializeHostedValues(env);
-    expect(mapped.MAIN_SHA).toBe('b'.repeat(40));
-    expect(mapped.IORI_MIGRATION_RUN_ID).toBe('run1');
-    expect(env.MAIN_SHA).toBe('a'.repeat(40));
-  } finally {
-    await rm(runnerTemp, { recursive: true, force: true });
   }
 });
 it('hands a main push deploy-worker the generation, run ID and migration SHA taken from the admission identity', async () => {
@@ -192,52 +97,9 @@ it('hands a main push deploy-worker the generation, run ID and migration SHA tak
     await expect(materializeHostedValues({ ...env, IORI_ADMISSION_IDENTITY: '{}' })).rejects.toThrow(
       'Protected workflow invocation is invalid.',
     );
-    await expect(materializeHostedValues({ ...env, IORI_OPERATION: 'migrate-data' })).rejects.toThrow(
+    await expect(materializeHostedValues({ ...env, IORI_OPERATION: 'put-worker-secrets' })).rejects.toThrow(
       'Protected workflow invocation is invalid.',
     );
-  } finally {
-    await rm(runnerTemp, { recursive: true, force: true });
-  }
-});
-it.each(['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'])(
-  'rejects %s when the migration SHA differs from the code SHA',
-  async operation => {
-    await expect(
-      materializeHostedValues({
-        ...baseEnv(operation),
-        IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
-        IORI_PRIVATE_DIRECTORY: '/not-inspected',
-      }),
-    ).rejects.toThrow('Protected workflow invocation is invalid.');
-  },
-);
-it('materializes purge-rehearsal-target without SSH, receipt or rehearsal files', async () => {
-  const runnerTemp = await createFixtureDirectory('iori-hosted-');
-  try {
-    const paths = await createWorkflowDirectory(runnerTemp);
-    const mapped = await materializeHostedValues({
-      ...baseEnv('purge-rehearsal-target'),
-      RUNNER_TEMP: runnerTemp,
-      IORI_PRIVATE_DIRECTORY: paths.base,
-      IORI_SOURCE_SSH_PRIVATE_KEY: 'synthetic-source-key',
-      IORI_SOURCE_SSH_KNOWN_HOSTS: 'synthetic-trusted-host',
-      IORI_MIGRATION_RECEIPT_PUBLIC_KEY: 'synthetic-public-key',
-      IORI_MIGRATION_RECEIPT_PRIVATE_KEY: 'synthetic-signing-key',
-      IORI_MIGRATION_REHEARSAL: '{}',
-    });
-    expect(await readdir(join(paths.base, 'keys'))).toEqual([]);
-    expect(await readdir(join(paths.base, 'config'))).toEqual([]);
-    expect(await readdir(mapped.IORI_MIGRATION_ROOT!)).toEqual([]);
-    for (
-      const key of [
-        'IORI_SOURCE_SSH_PRIVATE_KEY',
-        'IORI_SOURCE_SSH_KNOWN_HOSTS',
-        'IORI_MIGRATION_RECEIPT_PUBLIC_KEY',
-        'IORI_MIGRATION_RECEIPT_PRIVATE_KEY',
-        'IORI_MIGRATION_REHEARSAL',
-        'IORI_MIGRATION_REHEARSAL_PATH',
-      ]
-    ) expect(mapped[key]).toBeUndefined();
   } finally {
     await rm(runnerTemp, { recursive: true, force: true });
   }
@@ -304,62 +166,6 @@ it('relays only exact fixed-vocabulary diagnostic lines to the public log', asyn
     '-----BEGIN OPENSSH PRIVATE KEY-----',
   ].join('\n'));
   expect(writes).toEqual([`${accepted}\n`]);
-});
-it('relays the fixed-vocabulary target-read diagnostics and refuses a Terraform line outside the vocabulary', async () => {
-  const writes = captureStderr();
-  const accepted = [
-    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=terraform-auth',
-    'IORI_DIAG stage=target-read-tf-show program=terraform exit=none signal=SIGTERM reason=terraform-other',
-    'IORI_DIAG stage=target-read-output-check program=none exit=none signal=none reason=output-mismatch',
-    'IORI_DIAG stage=hosted-main-recheck program=none exit=none signal=none reason=reviewed-checkout-dirty',
-  ];
-  await publishChildDiagnostics([
-    ...accepted,
-    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=Access_Denied',
-    'IORI_DIAG stage=target-read-tf-init program=tofu exit=1 signal=none reason=terraform-auth',
-    'IORI_DIAG stage=target-read-tf-init program=terraform exit=1 signal=none reason=terraform-auth extra=/home/secret',
-    'Error: api error AccessDenied: secret-bucket-name',
-  ].join('\n'));
-  expect(writes).toEqual(accepted.map(line => `${line}\n`));
-});
-it('relays the fixed-vocabulary prepare-target diagnostics to the public log', async () => {
-  const writes = captureStderr();
-  const lines = [
-    'IORI_DIAG stage=prepare-attach-tf-apply program=none exit=none signal=none reason=queues-http-503',
-    'IORI_DIAG stage=prepare-fresh-check program=none exit=none signal=none reason=workers-exists',
-  ];
-  await publishChildDiagnostics([
-    ...lines,
-    'IORI_DIAG stage=prepare-fresh-check program=none exit=none signal=none reason=https://secret.invalid',
-  ].join('\n'));
-  expect(writes).toEqual(lines.map(line => `${line}\n`));
-});
-it('relays the plan rejection detail lines before the plan-rejected line of prepare-target', async () => {
-  const writes = captureStderr();
-  const lines = [
-    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-queue-update',
-    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-bindings-changed',
-    'IORI_DIAG stage=prepare-deploy-read program=none exit=none signal=none reason=queue-not-paused',
-    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-rejected',
-  ];
-  await publishChildDiagnostics([
-    ...lines,
-    'IORI_DIAG stage=prepare-attach-tf-plan program=none exit=none signal=none reason=plan-Queue_update',
-  ].join('\n'));
-  expect(writes).toEqual(lines.map(line => `${line}\n`));
-});
-it('relays the resource readback detail lines before the state-mismatch line of prepare-target', async () => {
-  const writes = captureStderr();
-  const lines = [
-    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource-consumer-script',
-    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource-consumer-settings',
-    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=state-mismatch',
-  ];
-  await publishChildDiagnostics([
-    ...lines,
-    'IORI_DIAG stage=prepare-attach-read program=none exit=none signal=none reason=resource_consumer_script',
-  ].join('\n'));
-  expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
 it('relays only the exact configuration owner notice to the public log', async () => {
   const writes = captureStderr();
@@ -533,126 +339,6 @@ it('relays the recovery diagnostics reasons within the public vocabulary', async
   await publishChildDiagnostics(lines.join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
-it('relays the estimate-source failure diagnostics and refuses lines with raw text', async () => {
-  const writes = captureStderr();
-  const lines = [
-    ...[...SOURCE_SSH_REASONS, ...SOURCE_REJECTION_DETAILS].map(reason =>
-      `IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=${reason}`
-    ),
-    'IORI_DIAG stage=estimate-source program=ssh exit=none signal=SIGTERM reason=aborted',
-    'IORI_DIAG stage=estimate-source program=none exit=none signal=none reason=unclassified',
-  ];
-  await publishChildDiagnostics([
-    ...lines,
-    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=relation "articles" does not exist',
-    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=estimate-query detail=password',
-    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=source.example.test',
-    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=/home/ec2-user/uploads',
-    'IORI_DIAG stage=estimate-source program=ssh exit=1 signal=none reason=Estimate_Query',
-    'Source estimate failed.',
-  ].join('\n'));
-  expect(writes).toEqual(lines.map(line => `${line}\n`));
-});
-const uploadCounts =
-  'upload_missing_count=2 upload_owner_count=0 upload_not_regular_count=1 upload_too_large_count=0 upload_access_count=0 upload_other_count=0 upload_ext_webp_count=1 upload_ext_png_count=2 upload_ext_jpeg_count=3 upload_ext_gif_count=0 upload_failed_ext_webp_count=0 upload_failed_ext_png_count=1 upload_failed_ext_jpeg_count=2 upload_failed_ext_gif_count=0';
-const zeroUploadCounts = uploadCounts.replace(/=\d+/g, '=0');
-const estimateLine =
-  `IORI_ESTIMATE rows=5 upload_count=3 upload_duplicate_count=1 ${uploadCounts} article_count=2 sample=ok capacity=insufficient`;
-const minimalEstimateLine =
-  `IORI_ESTIMATE rows=0 upload_count=0 upload_duplicate_count=0 ${zeroUploadCounts} article_count=0 sample=insufficient capacity=ok`;
-const largestEstimateLine =
-  `IORI_ESTIMATE rows=9007199254740991 upload_count=1 upload_duplicate_count=0 ${zeroUploadCounts} article_count=1 sample=ok capacity=ok`;
-it('relays only the exact estimate line to the public log', async () => {
-  const writes = captureStderr();
-  await publishChildDiagnostics([
-    estimateLine,
-    minimalEstimateLine,
-    largestEstimateLine,
-    `${estimateLine} table_bytes=10000`,
-    `${estimateLine} extra=/home/secret`,
-    ` ${estimateLine}`,
-    `${estimateLine} `,
-    estimateLine.replace('rows=5', 'rows=5 table_bytes=10000'),
-    estimateLine.replace('rows=5', 'rows=0x10'),
-    estimateLine.replace('rows=5', 'rows=1e3'),
-    estimateLine.replace('rows=5', 'rows=-1'),
-    estimateLine.replace('rows=5', 'rows=+1'),
-    estimateLine.replace('rows=5', 'rows=1.5'),
-    estimateLine.replace('rows=5', 'rows=05'),
-    estimateLine.replace('rows=5', 'rows=12345678901234567'),
-    estimateLine.replace('rows=5', 'rows='),
-    estimateLine.replace('upload_count=3', 'upload_bytes=3'),
-    estimateLine.replace('sample=ok', 'sample=yes'),
-    estimateLine.replace('capacity=insufficient', 'capacity=unknown'),
-    estimateLine.replace('IORI_ESTIMATE', 'IORI_NOTICE'),
-    estimateLine.replace('rows=5 upload_count=3', 'upload_count=3 rows=5'),
-    estimateLine.replace(' upload_duplicate_count=1', ''),
-    estimateLine.replace('upload_duplicate_count=1', 'upload_duplicate_count=-1'),
-    estimateLine.replace(' upload_missing_count=2', ''),
-    estimateLine.replace('upload_missing_count=2', 'upload_missing_count=-1'),
-    estimateLine.replace('upload_failed_ext_gif_count=0', 'upload_failed_ext_gif_count=/home/secret'),
-    estimateLine.replace(
-      'upload_ext_png_count=2 upload_ext_jpeg_count=3',
-      'upload_ext_jpeg_count=3 upload_ext_png_count=2',
-    ),
-    estimateLine.replace(' upload_ext_webp_count=1', ' upload_ext_bmp_count=1'),
-  ].join('\n'));
-  expect(writes).toEqual([`${estimateLine}\n`, `${minimalEstimateLine}\n`, `${largestEstimateLine}\n`]);
-});
-it('relays only the exact export-missing-uploads notice with a bare count to the public log', async () => {
-  const writes = captureStderr();
-  const notice = 'IORI_NOTICE stage=export-missing-uploads count=';
-  await publishChildDiagnostics([
-    `${notice}0`,
-    `${notice}3`,
-    `${notice}9007199254740991`,
-    `${notice}`,
-    `${notice}-1`,
-    `${notice}+1`,
-    `${notice}03`,
-    `${notice}1.5`,
-    `${notice}1e3`,
-    `${notice}12345678901234567`,
-    `${notice}3 `,
-    ` ${notice}3`,
-    `${notice}3 file=0aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png`,
-    `${notice}/home/secret`,
-    `${notice}3 count=4`,
-    'IORI_NOTICE stage=export-missing-uploads file=0aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png',
-    'IORI_NOTICE stage=export-missing-uploads  count=3',
-    'IORI_NOTICE stage=export-missing count=3',
-    `${notice}3`.replace('IORI_NOTICE', 'IORI_DIAG'),
-  ].join('\n'));
-  expect(writes).toEqual([`${notice}0\n`, `${notice}3\n`, `${notice}9007199254740991\n`]);
-});
-it('relays the estimate line from a child process and keeps byte counts out of the public log', async () => {
-  const writes = captureStderr();
-  const directory = await createFixtureDirectory('iori-hosted-');
-  try {
-    const logs = join(directory, 'logs');
-    await mkdir(logs, { mode: 0o700 });
-    const script = join(directory, 'child.mjs');
-    await writeFile(
-      script,
-      [
-        `console.error(${JSON.stringify(estimateLine)});`,
-        'console.error(\'table_bytes=10000 upload_bytes=8 source_free_bytes=10000000000\');',
-        `console.error(${JSON.stringify(`${estimateLine} source_free_bytes=10000000000`)});`,
-      ].join('\n'),
-    );
-    await executeHostedOperation(
-      'estimate-source',
-      script,
-      { IORI_PRIVATE_LOG_DIRECTORY: logs },
-      new AbortController().signal,
-      60_000,
-    );
-    expect(writes).toEqual([`${estimateLine}\n`]);
-    expect(writes.join('')).not.toContain('bytes');
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
 it('prints a hosted diagnostic before the failure for an invalid source invocation', async () => {
   const writes = captureStderr();
   await expect(
@@ -699,134 +385,14 @@ it('relays a failed child diagnostic and its hosted diagnostic without raw child
     await rm(directory, { recursive: true, force: true });
   }
 });
-const runExitingChild = async (operation: string, exitCode: number) => {
-  const directory = await createFixtureDirectory('iori-hosted-');
-  try {
-    const logs = join(directory, 'logs');
-    await mkdir(logs, { mode: 0o700 });
-    const script = join(directory, 'child.mjs');
-    await writeFile(script, `process.exit(${exitCode});\n`);
-    const result = await executeHostedOperation(
-      'operation',
-      script,
-      { IORI_PRIVATE_LOG_DIRECTORY: logs },
-      new AbortController().signal,
-      60_000,
-      operation,
-    ).then(() => undefined, (error: unknown) => error);
-    return result;
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-};
-const stoppedMessage =
-  'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.';
 const failedMessage = 'Protected workflow step failed; retain remote state for reviewed recovery.';
-it('classifies a prepare-target child that exits with 78 as stopped before resources', async () => {
-  const writes = captureStderr();
-  const error = await runExitingChild('prepare-target', 78);
-  expect(error).toBeInstanceOf(Error);
-  expect(writes).toEqual([
-    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
-  ]);
-  expect(hostedFailureMessage(error)).toBe(stoppedMessage);
-});
-it('keeps command-failed for a prepare-target child that exits with 1', async () => {
-  const writes = captureStderr();
-  const error = await runExitingChild('prepare-target', 1);
-  expect(writes).toEqual([
-    'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
-  ]);
-  expect(hostedFailureMessage(error)).toBe(failedMessage);
-});
-it('keeps command-failed for another operation that exits with 78', async () => {
-  const writes = captureStderr();
-  const error = await runExitingChild('migrate-data', 78);
-  expect(writes).toEqual([
-    'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=command-failed\n',
-  ]);
-  expect(hostedFailureMessage(error)).toBe(failedMessage);
-});
-it('selects the stopped message only for the marked error and accepts both messages as workflow output', () => {
-  expect(hostedFailureMessage(new Error('x'))).toBe(failedMessage);
-  expect(hostedFailureMessage(undefined)).toBe(failedMessage);
-  expect(assertWorkflowOutput(stoppedMessage)).toEqual([]);
+it('accepts the failure message as workflow output', () => {
+  expect(hostedFailureMessage()).toBe(failedMessage);
   expect(assertWorkflowOutput(failedMessage)).toEqual([]);
-  expect(preparationFailureReport(false).message).toBe(stoppedMessage);
-});
-it('reports the real prepare-migration-target CLI that stops before resources as stopped', async () => {
-  const writes = captureStderr();
-  const directory = await createFixtureDirectory('iori-hosted-');
-  try {
-    const logs = join(directory, 'logs');
-    await mkdir(logs, { mode: 0o700 });
-    const error = await executeHostedOperation(
-      'operation',
-      fileURLToPath(new URL('../prepare-migration-target.mjs', import.meta.url)),
-      { IORI_PRIVATE_LOG_DIRECTORY: logs },
-      new AbortController().signal,
-      60_000,
-      'prepare-target',
-    ).then(() => undefined, (reason: unknown) => reason);
-    expect(error).toBeInstanceOf(Error);
-    expect(writes).toEqual([
-      'IORI_DIAG stage=prepare-inputs program=none exit=none signal=none reason=config-invalid\n',
-      'IORI_DIAG stage=hosted-operation program=node exit=78 signal=none reason=stopped-before-resources\n',
-    ]);
-    expect(hostedFailureMessage(error)).toBe(stoppedMessage);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-it('relays the fixed-vocabulary cutover detail and stage lines to the public log', async () => {
-  const writes = captureStderr();
-  const lines = [
-    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-queue-update',
-    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-bindings-changed',
-    'IORI_DIAG stage=cutover-queue-plan program=none exit=none signal=none reason=plan-dlq-update',
-    'IORI_DIAG stage=cutover-queue-plan program=none exit=none signal=none reason=plan-rejected',
-    'IORI_DIAG stage=cutover-gate-smoke program=none exit=none signal=none reason=source-not-quiescent',
-    'IORI_DIAG stage=cutover-smoke-canonical program=none exit=none signal=none reason=smoke-failed',
-    'IORI_DIAG stage=cutover-smoke-worker program=none exit=none signal=none reason=smoke-readyz-503-status',
-  ];
-  await publishChildDiagnostics([
-    ...lines,
-    'IORI_DIAG stage=cutover-route-plan program=none exit=none signal=none reason=plan-Queue_update',
-    'IORI_DIAG stage=cutover-Route-plan program=none exit=none signal=none reason=plan-rejected',
-  ].join('\n'));
-  expect(writes).toEqual(lines.map(line => `${line}\n`));
-});
-it('publishes the stage and reason of the real cutover-migration CLI that stops at its inputs', async () => {
-  const writes = captureStderr();
-  const directory = await createFixtureDirectory('iori-hosted-');
-  try {
-    const logs = join(directory, 'logs');
-    await mkdir(logs, { mode: 0o700 });
-    const error = await executeHostedOperation(
-      'operation',
-      fileURLToPath(new URL('../cutover-migration.mjs', import.meta.url)),
-      { IORI_PRIVATE_LOG_DIRECTORY: logs },
-      new AbortController().signal,
-      60_000,
-      'cutover-route',
-    ).then(() => undefined, (reason: unknown) => reason);
-    expect(error).toBeInstanceOf(Error);
-    expect(writes).toEqual([
-      'IORI_DIAG stage=cutover-inputs program=none exit=none signal=none reason=config-invalid\n',
-      'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
-    ]);
-    expect(hostedFailureMessage(error)).toBe(failedMessage);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
 });
 it('relays the fixed-vocabulary operation detail and stage lines to the public log', async () => {
   const writes = captureStderr();
   const lines = [
-    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=resource-consumer-script',
-    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=state-mismatch',
-    'IORI_DIAG stage=rehearse-migration program=none exit=none signal=none reason=aborted',
-    'IORI_DIAG stage=migrate-data program=none exit=none signal=none reason=resource-queue-paused',
     'IORI_DIAG stage=deploy-worker-before program=none exit=none signal=none reason=worker-route',
     'IORI_DIAG stage=deploy-worker-deploy program=none exit=none signal=none reason=deploy-failed',
     'IORI_DIAG stage=deploy-worker-after program=none exit=none signal=none reason=mismatch',
@@ -834,18 +400,14 @@ it('relays the fixed-vocabulary operation detail and stage lines to the public l
   ];
   await publishChildDiagnostics([
     ...lines,
-    'IORI_DIAG stage=verify-import program=none exit=none signal=none reason=resource_consumer_script',
+    'IORI_DIAG stage=deploy-worker-before program=none exit=none signal=none reason=worker_route',
     'IORI_DIAG stage=Deploy-worker-after program=none exit=none signal=none reason=mismatch',
   ].join('\n'));
   expect(writes).toEqual(lines.map(line => `${line}\n`));
 });
 it.each([
-  ['restore-protected-migration.mjs', 'verify-import', 'verify-import'],
-  ['rehearse-protected-migration.mjs', 'rehearse-migration', 'rehearse-migration'],
-  ['execute-protected-migration.mjs', 'migrate-data', 'migrate-data'],
-  ['deploy-active-worker.mjs', 'deploy-worker-before', 'deploy-worker'],
-  ['adopt-cutover-state.mjs', 'adopt-inputs', 'adopt-cutover-state'],
-])('publishes the stage line of the real %s CLI that fails without configuration', async (script, stage, operation) => {
+  ['deploy-active-worker.mjs', 'deploy-worker-before'],
+])('publishes the stage line of the real %s CLI that fails without configuration', async (script, stage) => {
   const writes = captureStderr();
   const directory = await createFixtureDirectory('iori-hosted-');
   try {
@@ -857,14 +419,13 @@ it.each([
       { IORI_PRIVATE_LOG_DIRECTORY: logs },
       new AbortController().signal,
       60_000,
-      operation,
     ).then(() => undefined, (reason: unknown) => reason);
     expect(error).toBeInstanceOf(Error);
     expect(writes).toEqual([
       `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=config-invalid\n`,
       'IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed\n',
     ]);
-    expect(hostedFailureMessage(error)).toBe(failedMessage);
+    expect(hostedFailureMessage()).toBe(failedMessage);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

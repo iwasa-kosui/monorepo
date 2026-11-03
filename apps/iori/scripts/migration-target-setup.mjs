@@ -1,6 +1,5 @@
 import { createTargetIdentity } from './fresh-target.mjs';
 import { parseAdmission } from '../src/workerAdmission.ts';
-import { createMigrationR2Storage } from './migration-r2-storage.mjs';
 import { migrationRunIdPattern } from './migration-target-contract.mjs';
 export const targetSetupConfiguration = (env, { backend = true } = {}) => {
   const required = (key) => {
@@ -42,13 +41,3 @@ export const targetSetupConfiguration = (env, { backend = true } = {}) => {
     token: required('CLOUDFLARE_API_TOKEN'),
   };
 };
-export const transferStorageFromEnvironment = (env, identity, readOnly = false, signal) =>
-  createMigrationR2Storage({
-    accountId: identity.accountId,
-    bucket: identity.names.transfer,
-    apiToken: env.CLOUDFLARE_API_TOKEN,
-    accessKeyId: env.IORI_MIGRATION_R2_ACCESS_KEY_ID,
-    secretAccessKey: env.IORI_MIGRATION_R2_SECRET_ACCESS_KEY,
-    readOnly,
-    signal,
-  });

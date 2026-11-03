@@ -1,9 +1,6 @@
 import { expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
-import { cutoverFailureLines } from '../cutover-diagnostics.mjs';
-// @ts-expect-error The reviewed smoke module is executed directly by Node as ESM.
-import { smokeReviewedTarget } from '../reviewed-smoke.mjs';
 // @ts-expect-error The smoke runner is executed directly by Node as ESM.
 import { DEFAULT_STAGING_SMOKE_CHECKS } from '../run-cloudflare-smoke.mjs';
 import {
@@ -12,7 +9,6 @@ import {
   isSmokeDetail,
   SMOKE_ITEM_WORDS,
   SMOKE_KIND_WORDS,
-  SMOKE_MAX_DETAIL_LINES,
   SMOKE_REQUEST_CAUSE_WORDS,
   SMOKE_STATUS_TYPE_WORDS,
   SMOKE_TOKEN_CLASS_WORDS,
@@ -25,73 +21,8 @@ import {
 const publicLine =
   /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|terraform|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const fixtureHostname = 'smoke-fixture-host.example';
-const fixtureWorkerHostname = 'smoke-fixture-worker.example';
 const fixtureToken = 'fixture-smoke-queue-token';
-const fixtureBody = 'fixture response body that must never be logged';
-const uuid = '00000000-0000-4000-8000-000000000000';
-const target = {
-  admission: {
-    hostname: fixtureHostname,
-    workerHostname: fixtureWorkerHostname,
-    smoke: { username: 'iori-smoke', uploadFilename: `${uuid}.png`, articleId: uuid },
-  },
-};
 const itemNames = DEFAULT_STAGING_SMOKE_CHECKS.map((check: { name: string }) => check.name) as string[];
-
-const reply = (status: number, contentType: string, body: unknown) =>
-  new Response(typeof body === 'string' ? body : JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': contentType },
-  });
-const healthyResponse = (path: string): Response => {
-  if (path === '/health') return reply(200, 'text/plain', fixtureBody);
-  if (path === '/healthz') return reply(200, 'application/json', { ok: true, service: 'iori' });
-  if (path === '/readyz') {
-    return reply(200, 'application/json', {
-      ok: true,
-      bindings: { database: true, r2: true, kv: true, queue: true, assets: true, auth: true },
-    });
-  }
-  if (path === '/manifest.json') return reply(200, 'application/json', { name: 'iori' });
-  if (path === '/api/v1/home') return reply(401, 'application/json', { error: 'Unauthorized' });
-  if (path === '/.well-known/webfinger') {
-    return reply(200, 'application/jrd+json', { subject: 'acct:iori-smoke', links: [] });
-  }
-  if (path === '/users/iori-smoke' || path === '/users/iori-smoke/outbox') {
-    return reply(200, 'application/activity+json', { id: 'id', type: 'Person' });
-  }
-  if (path === '/inbox') return reply(405, 'application/json', { error: 'Method Not Allowed' });
-  if (path === `/uploads/${uuid}.png` || path === `/api/og/articles/${uuid}`) {
-    return reply(200, 'image/png', fixtureBody);
-  }
-  if (path === '/__smoke__/queue-enqueue') {
-    return reply(200, 'application/json', { accepted: true, queue: { enqueued: 1 } });
-  }
-  if (path === '/api/v1/push/vapid-public-key') return reply(200, 'application/json', { publicKey: 'key' });
-  return reply(404, 'text/plain', fixtureBody);
-};
-const failureOf = async (
-  override: (path: string) => Response | Error | undefined,
-  token = fixtureToken,
-): Promise<Error & { diagnostic?: { reason: string; details: string[] } }> => {
-  const fetchRequest = async (url: URL): Promise<Response> => {
-    const replacement = override(url.pathname);
-    if (replacement instanceof Error) throw replacement;
-    return replacement ?? healthyResponse(url.pathname);
-  };
-  return smokeReviewedTarget({
-    target,
-    hostname: fixtureHostname,
-    token,
-    signal: new AbortController().signal,
-    fetchRequest,
-  }).then(
-    () => {
-      throw new Error('expected the smoke to fail');
-    },
-    (error: Error) => error,
-  );
-};
 
 const itemWords = Object.values(SMOKE_ITEM_WORDS) as string[];
 const tokenDetails = SMOKE_TOKEN_CLASS_WORDS.map((word: string) => `smoke-token-${word}`) as string[];
@@ -290,84 +221,6 @@ it('accepts the fixed smoke words only', () => {
     ]
   ) expect(isSmokeDetail(word), String(word)).toBe(false);
 });
-it('reports the failed items of the real reviewed smoke without any host, token or body', async () => {
-  const error = await failureOf(path => {
-    if (path === '/readyz') return reply(503, 'application/json', { error: fixtureBody });
-    if (path === '/.well-known/webfinger') return reply(200, 'application/jrd+json', { subject: 5 });
-    if (path === '/inbox') return new Error(`connect ${fixtureHostname} ${fixtureToken}`);
-    return undefined;
-  });
-  expect(error.message).toBe('Reviewed smoke failed.');
-  expect(error.diagnostic?.reason).toBe('smoke-failed');
-  expect(error.diagnostic?.details).toEqual([
-    'smoke-token-ok',
-    'smoke-readyz-503-status-json',
-    'smoke-webfinger-200-json',
-    'smoke-inbox-none-request-other',
-  ]);
-  const serialized = JSON.stringify([error.message, error.diagnostic]);
-  for (const secret of [fixtureHostname, fixtureWorkerHostname, fixtureToken, fixtureBody, 'https://']) {
-    expect(serialized).not.toContain(secret);
-  }
-});
-it('reports a text/plain admission rejection as a 503 status mismatch of the text kind', async () => {
-  const error = await failureOf(path => (path === '/readyz' ? reply(503, 'text/plain', fixtureBody) : undefined));
-  expect(error.diagnostic?.details).toEqual(['smoke-token-ok', 'smoke-readyz-503-status-text']);
-});
-it('reports a content type mismatch of the real reviewed smoke', async () => {
-  const error = await failureOf(path =>
-    path === '/healthz' ? reply(200, 'text/html', { ok: true, service: 'iori' }) : undefined
-  );
-  expect(error.diagnostic?.details).toEqual(['smoke-token-ok', 'smoke-healthz-200-type']);
-});
-it('reports a response that cannot be read as JSON in the real reviewed smoke', async () => {
-  const error = await failureOf(
-    path => (path === '/manifest.json' ? reply(200, 'application/json', fixtureBody) : undefined),
-  );
-  expect(error.diagnostic?.details).toEqual(['smoke-token-ok', 'smoke-asset-200-json']);
-  expect(JSON.stringify(error.diagnostic)).not.toContain(fixtureBody);
-});
-it('reports the cause of a failed request of the real reviewed smoke', async () => {
-  const error = await failureOf(path => {
-    if (path === '/health') return Object.assign(new Error('timed out'), { name: 'TimeoutError' });
-    if (path === '/healthz') {
-      return new TypeError('fetch failed', { cause: { code: 'ENOTFOUND', message: fixtureHostname } });
-    }
-    if (path === '/readyz') return new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
-    if (path === '/manifest.json') return new TypeError('fetch failed', { cause: { code: 'CERT_HAS_EXPIRED' } });
-    if (path === '/inbox') return new TypeError('fetch failed', { cause: new Error('unexpected redirect') });
-    return undefined;
-  });
-  expect(error.diagnostic?.details).toEqual([
-    'smoke-token-ok',
-    'smoke-health-none-request-timeout',
-    'smoke-healthz-none-request-dns',
-    'smoke-readyz-none-request-connect',
-    'smoke-asset-none-request-tls',
-    'smoke-inbox-none-request-redirect',
-  ]);
-  expect(JSON.stringify(error.diagnostic)).not.toContain(fixtureHostname);
-});
-it('puts the token class first and reports every item as token-unavailable when the smoke token is empty', async () => {
-  const error = await failureOf(() => undefined, '');
-  expect(error.diagnostic?.details).toEqual([
-    'smoke-token-empty',
-    ...itemNames.map(name => `smoke-${SMOKE_ITEM_WORDS[name]}-none-token`),
-  ]);
-});
-it.each([
-  [' padded-smoke-queue-token ', 'smoke-token-space'],
-  [`${'a'.repeat(10)}\n${'b'.repeat(10)}`, 'smoke-token-space'],
-  [`${'a'.repeat(20)}\u3042`, 'smoke-token-charset'],
-  [`${'a'.repeat(20)}\u0001`, 'smoke-token-charset'],
-  [`${'a'.repeat(15)}\n`, 'smoke-token-short'],
-  ['short', 'smoke-token-short'],
-  ['a'.repeat(1025), 'smoke-token-long'],
-])('puts %j first as %s without the value', async (token, word) => {
-  const error = await failureOf(() => reply(503, 'text/plain', fixtureBody), token);
-  expect(error.diagnostic?.details?.[0]).toBe(word);
-  expect(JSON.stringify(error.diagnostic)).not.toContain('padded');
-});
 it('keeps every possible word within the public workflow log pattern and 40 characters', () => {
   const words = allWords();
   expect(words.length).toBeGreaterThan(500);
@@ -380,23 +233,6 @@ it('keeps every possible word within the public workflow log pattern and 40 char
   }
   expect(Math.max(...words.map(word => word.length))).toBe('smoke-webfinger-none-request-redirect'.length);
   expect('smoke-webfinger-none-request-redirect'.length).toBeLessThanOrEqual(40);
-});
-it('caps the printed details at the number of items plus the token class line', async () => {
-  expect(SMOKE_MAX_DETAIL_LINES).toBe(Object.keys(SMOKE_ITEM_WORDS).length + 1);
-  expect(SMOKE_MAX_DETAIL_LINES).toBe(14);
-  const everyFailure = await failureOf(() => reply(503, 'text/plain', fixtureBody));
-  const tokenFailure = await failureOf(() => undefined, '');
-  expect(everyFailure.diagnostic?.details).toHaveLength(SMOKE_MAX_DETAIL_LINES);
-  expect(tokenFailure.diagnostic?.details).toHaveLength(SMOKE_MAX_DETAIL_LINES);
-  const lines = cutoverFailureLines('smoke-canonical', everyFailure, false);
-  expect(lines).toHaveLength(SMOKE_MAX_DETAIL_LINES + 1);
-  expect(lines[0]).toMatch(/reason=smoke-token-ok$/);
-  expect(lines[1]).toMatch(/reason=smoke-health-503-status-text$/);
-  for (const line of lines) {
-    expect(line).toMatch(publicLine);
-    expect(assertWorkflowOutput(line)).toEqual([]);
-  }
-  expect(lines.at(-1)).toMatch(/reason=smoke-failed$/);
 });
 it.each([
   [undefined, 'smoke-token-empty'],
