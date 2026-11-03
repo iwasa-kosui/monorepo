@@ -54,10 +54,39 @@ describe('createWorkerPageFallback', () => {
     expect(loggedIn).toContain('<aside class="hidden md:flex fixed left-0 top-0 h-full flex-col p-4">');
     expect(loggedIn).toContain('md:hidden fixed bottom-0 left-0 right-0');
     expect(loggedIn).toContain('id="post-modal"');
-    expect(loggedIn).toContain('pb-16 md:pb-0 md:px-16');
+    expect(loggedIn).toContain('pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16');
     expect(loggedOut).not.toContain('<aside');
     expect(loggedOut).not.toContain('md:hidden fixed bottom-0');
     expect(loggedOut).not.toContain('post-modal');
+  });
+
+  it('orders the BottomNav items as home, notifications, then the post button', async () => {
+    const html = await renderBottomNav(true);
+    const home = html.indexOf('href="/"');
+    const notifications = html.indexOf('href="/notifications"');
+    const post = html.indexOf('href="#post-modal"');
+
+    expect(home).toBeGreaterThanOrEqual(0);
+    expect(notifications).toBeGreaterThan(home);
+    expect(post).toBeGreaterThan(notifications);
+  });
+
+  it('keeps the BottomNav below page modals and inside the bottom safe area', async () => {
+    const html = await renderBottomNav(true);
+
+    expect(html).toContain('z-40');
+    expect(html).not.toContain('z-50');
+    expect(html).toContain('pb-[env(safe-area-inset-bottom)]');
+  });
+
+  it('declares viewport-fit=cover in the logged-in fallback HTML', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+    const html = await response?.text();
+
+    expect(html).toMatch(/<meta name="viewport"[^>]*viewport-fit=cover/);
   });
 
   it('does not claim unknown GET routes', async () => {

@@ -31,7 +31,7 @@ export const Layout: FC<LayoutProps> = (props) => {
     <html lang='en'>
       <head>
         <meta charset='utf-8' />
-        <meta name='viewport' content='width=device-width, initial-scale=1' />
+        <meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover' />
         <meta name='color-scheme' content='light dark' />
         <link rel='icon' href='/favicon.ico' />
         <link rel='manifest' href='/manifest.json' />
@@ -184,27 +184,26 @@ export const Layout: FC<LayoutProps> = (props) => {
             .bg-blob {
               position: absolute;
               border-radius: 50%;
-              filter: blur(80px);
               opacity: 0.35;
             }
             .bg-blob-1 {
               width: 400px;
               height: 400px;
-              background: #D49A82;
+              background: radial-gradient(circle, #D49A82 0%, transparent 70%);
               top: -100px;
               right: -100px;
             }
             .bg-blob-2 {
               width: 300px;
               height: 300px;
-              background: #D4C4A8;
+              background: radial-gradient(circle, #D4C4A8 0%, transparent 70%);
               bottom: 10%;
               left: -50px;
             }
             .bg-blob-3 {
               width: 200px;
               height: 200px;
-              background: #8FA88B;
+              background: radial-gradient(circle, #8FA88B 0%, transparent 70%);
               bottom: 30%;
               right: 10%;
               opacity: 0.2;
@@ -290,7 +289,7 @@ export const Layout: FC<LayoutProps> = (props) => {
       </head>
       <body
         class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
-          isLoggedIn ? 'pb-16 md:pb-0 md:px-24' : ''
+          isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-24' : ''
         }`}
       >
         {/* Background decoration blobs */}
@@ -323,7 +322,7 @@ export const LayoutClient: FC<{
     <html lang='en'>
       <head>
         <meta charset='utf-8' />
-        <meta name='viewport' content='width=device-width, initial-scale=1' />
+        <meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover' />
         <meta name='color-scheme' content='light dark' />
         <link rel='icon' href='/favicon.ico' />
         <link rel='manifest' href='/manifest.json' />
@@ -364,7 +363,7 @@ export const LayoutClient: FC<{
       </head>
       <body
         class={`bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
-          isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''
+          isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16' : ''
         }`}
       >
         {/* Background decoration blobs */}
