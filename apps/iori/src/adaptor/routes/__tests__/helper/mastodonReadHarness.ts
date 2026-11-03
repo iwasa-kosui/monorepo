@@ -1,7 +1,9 @@
 import { afterEach } from 'vitest';
 
 import { createIoriApp } from '../../../../appFactory.tsx';
+import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
+import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
@@ -30,8 +32,11 @@ import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postW
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1RepostResolverById } from '../../../d1/repost/repostResolverById.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../../../d1/timeline/timelineItemsResolverByActorIds.ts';
+import { createD1TimelineSearchCandidatesResolver } from '../../../d1/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
+import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
+import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
@@ -46,7 +51,12 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
-export const setupReadApi = () => {
+export const setupReadApi = (
+  options: Readonly<{
+    textGenerator?: TextGenerator;
+    searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
+  }> = {},
+) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
@@ -110,6 +120,23 @@ export const setupReadApi = () => {
           actorResolverByUserId,
           likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
           mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriSearchRouter({
+          authn,
+          searchTimeline: createSearchTimelineUseCase({
+            actorResolverByUserId,
+            actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+            mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+            textGenerator: options.textGenerator,
+            timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+            htmlToPlainText,
+            ...options.searchTimeline,
+          }),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
         }),

@@ -1,6 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
 import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { SearchTerm } from '../domain/timelineSearch/searchTerm.ts';
@@ -20,15 +21,18 @@ import type { UseCase } from './useCase.ts';
 const CANDIDATE_LIMIT = 200;
 const ORIGINAL_TERM_SCORE = 2;
 const EXPANDED_TERM_SCORE = 1;
+const MIN_EXPANDABLE_QUERY_CHARS = 2;
 
 type Input = Readonly<{
   userId: UserId;
   query: TimelineSearchQuery;
+  onlyActorId?: ActorId;
 }>;
 
 export type TimelineSearchExpansion = 'expanded' | 'skipped' | 'failed';
 
 type Ok = Readonly<{
+  viewerActorId: ActorId;
   postIds: ReadonlyArray<PostId>;
   terms: Readonly<{
     original: ReadonlyArray<SearchTerm>;
@@ -47,6 +51,7 @@ type Deps = Readonly<{
   actorsResolverByFollowerId: ActorsResolverByFollowerId;
   mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
   textGenerator?: TextGenerator;
+  expansionTimeoutMs?: number;
   timelineSearchCandidatesResolver: TimelineSearchCandidatesResolver;
   htmlToPlainText: (html: string, maxChars: number) => string;
 }>;
@@ -62,11 +67,21 @@ const splitQuery = (text: string): Readonly<{ terms: SearchTerm[]; dropped: stri
   return { terms, dropped };
 };
 
+const isWorthExpanding = (text: string): boolean => {
+  const trimmed = text.trim();
+  const lowered = trimmed.toLowerCase();
+  return Array.from(trimmed).length >= MIN_EXPANDABLE_QUERY_CHARS
+    && !lowered.startsWith('http://')
+    && !lowered.startsWith('https://')
+    && !trimmed.startsWith('@');
+};
+
 const create = ({
   actorResolverByUserId,
   actorsResolverByFollowerId,
   mutedActorIdsResolverByUserId,
   textGenerator,
+  expansionTimeoutMs,
   timelineSearchCandidatesResolver,
   htmlToPlainText,
 }: Deps): SearchTimelineUseCase => {
@@ -75,11 +90,11 @@ const create = ({
   const expand = async (
     text: string,
   ): Promise<Readonly<{ expansion: TimelineSearchExpansion; terms: SearchTerm[] }>> => {
-    if (textGenerator === undefined) return { expansion: 'skipped', terms: [] };
-    const expanded = await expandQuery(textGenerator, text);
-    return expanded.ok
-      ? { expansion: 'expanded', terms: expanded.val }
-      : { expansion: 'failed', terms: [] };
+    if (textGenerator === undefined || !isWorthExpanding(text)) return { expansion: 'skipped', terms: [] };
+    const expanded = await expandQuery(textGenerator, text, expansionTimeoutMs);
+    if (expanded.ok) return { expansion: 'expanded', terms: expanded.val };
+    console.warn(`timeline search expansion failed: ${expanded.err.type}`);
+    return { expansion: 'failed', terms: [] };
   };
 
   const rank = (
@@ -120,31 +135,42 @@ const create = ({
         if (!mutedActorIds.ok) return mutedActorIds;
         const mutedActorIdSet = new Set(mutedActorIds.val);
         const actorIds = [actor.id, ...following.val.map((a) => a.id)]
-          .filter((id) => !mutedActorIdSet.has(id));
-        return RA.ok(actorIds);
+          .filter((id) => !mutedActorIdSet.has(id))
+          .filter((id) => input.onlyActorId === undefined || id === input.onlyActorId);
+        return RA.ok({ viewerActorId: actor.id, actorIds });
       }),
-      RA.andThen(async (actorIds) => {
-        const { expansion, terms: expandedTerms } = await expand(input.query.text);
+      RA.andThen(async ({ viewerActorId, actorIds }) => {
         const { terms: originalTerms, dropped: droppedOriginal } = splitQuery(input.query.text);
-        const terms = SearchTerms.create({
-          original: originalTerms,
-          expanded: expandedTerms,
-        });
-        const patterns = SearchTerms.toPatterns(terms);
-        const output = (postIds: ReadonlyArray<PostId>): Ok => ({
+        const output = (
+          postIds: ReadonlyArray<PostId>,
+          terms: SearchTerms,
+          expansion: TimelineSearchExpansion,
+        ): Ok => ({
+          viewerActorId,
           postIds,
           terms: { original: terms.original, expanded: terms.expanded },
           droppedOriginal,
           expansion,
         });
-        if (patterns.length === 0) return RA.ok(output([]));
+        if (actorIds.length === 0) {
+          return RA.ok(
+            output([], SearchTerms.create({ original: originalTerms, expanded: [] }), 'skipped'),
+          );
+        }
+        const { expansion, terms: expandedTerms } = await expand(input.query.text);
+        const terms = SearchTerms.create({
+          original: originalTerms,
+          expanded: expandedTerms,
+        });
+        const patterns = SearchTerms.toPatterns(terms);
+        if (patterns.length === 0) return RA.ok(output([], terms, expansion));
         return RA.flow(
           timelineSearchCandidatesResolver.resolve({
             actorIds,
             terms: patterns,
             limit: CANDIDATE_LIMIT,
           }),
-          RA.map((candidates) => output(rank(candidates, terms, input.query.limit))),
+          RA.map((candidates) => output(rank(candidates, terms, input.query.limit), terms, expansion)),
         );
       }),
     );

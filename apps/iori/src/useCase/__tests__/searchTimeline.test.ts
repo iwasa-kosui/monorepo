@@ -32,7 +32,7 @@ const localActor = (userId: UserId): LocalActor => ({
 
 type StoredPost = TimelineSearchCandidate & Readonly<{ actorId: ActorId }>;
 
-const setup = (options: { textGenerator?: TextGenerator } = {}) => {
+const setup = (options: { textGenerator?: TextGenerator; expansionTimeoutMs?: number } = {}) => {
   const userId = crypto.randomUUID() as UserId;
   const me = localActor(userId);
   const followed = localActor(crypto.randomUUID() as UserId);
@@ -68,11 +68,12 @@ const setup = (options: { textGenerator?: TextGenerator } = {}) => {
     actorsResolverByFollowerId,
     mutedActorIdsResolverByUserId,
     textGenerator: options.textGenerator,
+    expansionTimeoutMs: options.expansionTimeoutMs,
     timelineSearchCandidatesResolver,
     htmlToPlainText,
   });
-  const search = (text: string, limit?: number) =>
-    useCase.run({ userId, query: TimelineSearchQuery.orThrow({ text, limit }) });
+  const search = (text: string, limit?: number, onlyActorId?: ActorId) =>
+    useCase.run({ userId, query: TimelineSearchQuery.orThrow({ text, limit }), onlyActorId });
 
   return {
     userId,
@@ -95,6 +96,11 @@ const expectOk = async <T, E>(result: Promise<{ ok: true; val: T } | { ok: false
   const awaited = await result;
   if (!awaited.ok) throw new Error(`Expected ok but got ${JSON.stringify(awaited.err)}`);
   return awaited.val;
+};
+
+const neverResolvingGenerator: TextGenerator = {
+  summarize: () => new Promise(() => {}),
+  generate: () => new Promise(() => {}),
 };
 
 const errorGenerator: TextGenerator = {
@@ -155,6 +161,42 @@ describe('SearchTimelineUseCase', () => {
 
     expect(result.expansion).toBe('failed');
     expect(result.postIds).toEqual([hit]);
+  });
+
+  it('展開が期限を過ぎると expansion が failed になり、original だけで検索する', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { me, addPost, resolve, search } = setup({
+      textGenerator: neverResolvingGenerator,
+      expansionTimeoutMs: 10,
+    });
+    const hit = addPost(me, '旅行の写真', 1000);
+
+    const result = await expectOk(search('旅行'));
+
+    expect(result.expansion).toBe('failed');
+    expect(normalizedOf(result.terms.original)).toEqual(['旅行']);
+    expect(result.terms.expanded).toEqual([]);
+    expect(result.postIds).toEqual([hit]);
+    expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '旅行', weight: 2 }]);
+    expect(warn).toHaveBeenCalledWith('timeline search expansion failed: QueryExpansionTimeoutError');
+    warn.mockRestore();
+  });
+
+  it.each([
+    ['1 文字', '旅'],
+    ['http:// で始まる', 'http://example.com/旅行'],
+    ['https:// で始まる', 'https://example.com/旅行'],
+    ['大文字の HTTPS:// で始まる', 'HTTPS://example.com/旅行'],
+    ['@ で始まる', '@alice'],
+  ])('問い合わせが %s のときは、textGenerator があっても呼ばずに skipped にする', async (_name, text) => {
+    const { generator, calls } = createStubTextGenerator(() => '["旅行", "trip"]');
+    const { me, addPost, search } = setup({ textGenerator: generator });
+    addPost(me, '旅行 @alice https://example.com/旅行', 1000);
+
+    const result = await expectOk(search(text));
+
+    expect(result.expansion).toBe('skipped');
+    expect(calls).toEqual([]);
   });
 
   it('textGenerator がなければ skipped になる', async () => {
@@ -326,6 +368,50 @@ describe('SearchTimelineUseCase', () => {
     const result = await expectOk(search('京都 旅行'));
 
     expect(result.droppedOriginal).toEqual([]);
+  });
+
+  it('onlyActorId があれば、その actorId の投稿だけを候補の resolver に渡す', async () => {
+    const { me, followed, addPost, resolve, search } = setup();
+    addPost(me, '旅行', 1000);
+    const theirs = addPost(followed, '旅行', 2000);
+
+    const result = await expectOk(search('旅行', undefined, followed.id));
+
+    expect(result.postIds).toEqual([theirs]);
+    expect(resolve.mock.calls[0][0].actorIds).toEqual([followed.id]);
+  });
+
+  it('onlyActorId がフォローしていない相手なら、AI も DB も呼ばずに空の結果と skipped を返す', async () => {
+    const { generator, calls } = createStubTextGenerator(() => '["旅行", "trip"]');
+    const { me, stranger, addPost, resolve, search } = setup({ textGenerator: generator });
+    addPost(me, '旅行', 1000);
+    addPost(stranger, '旅行', 2000);
+
+    const result = await expectOk(search('旅行', undefined, stranger.id));
+
+    expect(result.postIds).toEqual([]);
+    expect(result.expansion).toBe('skipped');
+    expect(calls).toEqual([]);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('onlyActorId がミュート中の相手なら、空の結果を返す', async () => {
+    const { userId, followed, addPost, resolve, search, mutedActorIdsResolverByUserId } = setup();
+    addPost(followed, '旅行', 1000);
+    mutedActorIdsResolverByUserId.setMutedActorIds(userId, [followed.id]);
+
+    const result = await expectOk(search('旅行', undefined, followed.id));
+
+    expect(result.postIds).toEqual([]);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('viewerActorId に本人の actorId を返す', async () => {
+    const { me, search } = setup();
+
+    const result = await expectOk(search('旅行'));
+
+    expect(result.viewerActorId).toBe(me.id);
   });
 
   it('ローカルのアクターが見つからなければ UserNotFoundError を返す', async () => {
