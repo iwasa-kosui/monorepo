@@ -3,6 +3,8 @@ import { RA, type Result } from '@iwasa-kosui/result';
 import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import type { PostImage, PostImageCreatedStore } from '../../../domain/image/image.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import {
   Post,
@@ -16,6 +18,7 @@ import { upsertRemoteActor } from '../../../useCase/helper/upsertRemoteActor.ts'
 import { PgActorResolverByUri } from '../actor/actorResolverByUri.ts';
 import { PgLogoUriUpdatedStore } from '../actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../actor/remoteActorCreatedStore.ts';
+import { PgPostImageCreatedStore } from '../image/postImageCreatedStore.ts';
 import { PgPostCreatedStore } from './postCreatedStore.ts';
 import type { PostResolverByUri } from './postResolverByUri.ts';
 import { PgPostResolverByUri } from './postResolverByUri.ts';
@@ -25,6 +28,7 @@ export type { RemotePostIdentity, RemotePostUpserter } from '../../../domain/pos
 type Dependencies = Readonly<{
   postResolverByUri: PostResolverByUri;
   postCreatedStore: PostCreatedStore;
+  postImageCreatedStore: PostImageCreatedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
@@ -33,6 +37,7 @@ type Dependencies = Readonly<{
 const create = ({
   postResolverByUri,
   postCreatedStore,
+  postImageCreatedStore,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUri,
@@ -66,6 +71,17 @@ const create = ({
       inReplyToUri: identity.inReplyToUri,
     });
     await postCreatedStore.store(createPost);
+    const attachments = identity.attachments ?? [];
+    if (attachments.length > 0) {
+      const images: PostImage[] = attachments.map((attachment) => ({
+        imageId: ImageId.generate(),
+        postId: createPost.aggregateState.postId,
+        url: attachment.url,
+        altText: attachment.altText,
+        createdAt: now,
+      }));
+      await postImageCreatedStore.store(images);
+    }
     return RA.ok(createPost.aggregateState);
   };
 
@@ -76,6 +92,7 @@ const getInstance = singleton((): RemotePostUpserter => {
   return create({
     postResolverByUri: PgPostResolverByUri.getInstance(),
     postCreatedStore: PgPostCreatedStore.getInstance(),
+    postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
     remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
     logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
     actorResolverByUri: PgActorResolverByUri.getInstance(),

@@ -139,6 +139,7 @@ export type RemotePostIdentity = Readonly<{
     logoUri?: string;
   }>;
   inReplyToUri?: string | null;
+  attachments?: readonly { url: string; altText: string | null }[];
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<

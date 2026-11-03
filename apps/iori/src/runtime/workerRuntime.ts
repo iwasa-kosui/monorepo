@@ -141,6 +141,7 @@ export const createWorkerRuntimePorts = async (
   const remotePostUpserter = createD1RemotePostUpserter({
     postResolverByUri: createD1PostResolverByUri(db),
     postCreatedStore,
+    postImageCreatedStore: createD1PostImageCreatedStore(db),
     remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
     logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),

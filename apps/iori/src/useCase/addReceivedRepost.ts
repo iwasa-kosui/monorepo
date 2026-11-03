@@ -30,6 +30,7 @@ type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
   authorIdentity: ActorIdentity;
+  attachments?: readonly { url: string; altText: string | null }[];
 }>;
 
 type LocalPostInput = Readonly<{

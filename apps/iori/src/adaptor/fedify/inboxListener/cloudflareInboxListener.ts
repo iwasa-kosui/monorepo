@@ -88,6 +88,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
   const remotePostUpserter = createD1RemotePostUpserter({
     postResolverByUri,
     postCreatedStore,
+    postImageCreatedStore: createD1PostImageCreatedStore(db),
     remoteActorCreatedStore,
     logoUriUpdatedStore,
     actorResolverByUri,

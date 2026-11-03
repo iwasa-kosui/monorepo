@@ -3,6 +3,8 @@ import { RA } from '@iwasa-kosui/result';
 import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import type { PostImage, PostImageCreatedStore } from '../../../domain/image/image.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { PostResolverByUri } from '../../../domain/post/post.ts';
 import {
@@ -16,6 +18,7 @@ import { upsertRemoteActor } from '../../../useCase/helper/upsertRemoteActor.ts'
 type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
   postCreatedStore: PostCreatedStore;
+  postImageCreatedStore: PostImageCreatedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
@@ -40,6 +43,17 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       inReplyToUri: identity.inReplyToUri,
     });
     await deps.postCreatedStore.store(event);
+    const attachments = identity.attachments ?? [];
+    if (attachments.length > 0) {
+      const images: PostImage[] = attachments.map((attachment) => ({
+        imageId: ImageId.generate(),
+        postId: event.aggregateState.postId,
+        url: attachment.url,
+        altText: attachment.altText,
+        createdAt: now,
+      }));
+      await deps.postImageCreatedStore.store(images);
+    }
     return RA.ok(event.aggregateState);
   },
 });
