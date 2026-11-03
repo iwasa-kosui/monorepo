@@ -187,6 +187,25 @@ describe('POST /api/v1/statuses', () => {
     expect(StatusSchema.parse(await response.json()).content).toContain('<strong>bold</strong>');
   });
 
+  it('text/markdown の本文に含まれる script、イベント属性、javascript: のリンク、iframe を保存前に取り除く', async () => {
+    const t = await setup();
+
+    const response = await t.json({
+      status: '<script>alert(1)</script>\n\n<p onclick="alert(2)">hi</p>\n\n[x](javascript:alert(3))\n\n'
+        + '<iframe src="https://evil.example"></iframe>\n\n**ok**',
+      content_type: 'text/markdown',
+    });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    const stored = t.sqlite.prepare('SELECT content FROM posts WHERE postId = ?').get(status.id) as {
+      content: string;
+    };
+    expect(stored.content).not.toMatch(/<script|<iframe|onclick|javascript:/i);
+    expect(stored.content).toContain('<p>hi</p>');
+    expect(stored.content).toContain('<strong>ok</strong>');
+  });
+
   it('画像の順序と説明を保って保存し、レスポンスでも同じ順序で返す', async () => {
     const t = await setup();
     const first = await t.addMedia(t.me.userId, 'first');

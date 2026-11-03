@@ -213,6 +213,22 @@ describe('createObjectDispatcher ofNote', () => {
     expect(result).toBeInstanceOf(Note);
   });
 
+  it('保存済みの生の HTML は、配送する Note の content からサニタイズして除く', async () => {
+    const post = {
+      ...createLocalPost(),
+      content:
+        '<p onclick="alert(1)">hi</p><script>alert(2)</script><a href="javascript:alert(3)">link</a><a href="https://example.com/">ok</a>',
+    };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    const content = (result as Note).content?.toString() ?? '';
+    expect(content).not.toMatch(/<script|onclick|javascript:/i);
+    expect(content).toContain('hi');
+    expect(content).toContain('link');
+    expect(content).toContain('href="https://example.com/"');
+  });
+
   it.each([null, 'public', 'unlisted', 'private', 'direct'] as const)(
     'リモートの投稿（visibility: %s）は null を返す',
     async (visibility) => {
