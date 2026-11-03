@@ -1,28 +1,30 @@
 import { hc } from 'hono/client';
-import { useEffect, useRef, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
-import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor.ts';
-import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import { debounce } from '../../helper/debounce.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import {
+  fetchAccount,
+  fetchAccountStatuses,
+  fetchRelationships,
+  isNotFoundError,
+  isUnauthorizedError,
+} from '../api/mastodonClient.ts';
+import { isLocalAccount, updateStatusesByPostId, withFavourited } from '../api/status.ts';
 import { PostView } from '../components/PostView.tsx';
-import { appendUniqueBy } from '../hooks/appendUnique.ts';
-import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
-import { postToStatus } from '../legacyConversion.ts';
+import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 const client = hc<APIRouterType>('/api');
 
 type Props = Readonly<{
-  remoteActor: RemoteActor;
-  posts: ReadonlyArray<PostWithAuthor>;
+  account: Account;
+  statuses: readonly Status[];
   isFollowing: boolean;
   isMuted: boolean;
   isLoggedIn: boolean;
-  fetchData: (createdAt: Instant | undefined) => Promise<void>;
   onLike: (postId: string) => Promise<void>;
   onMute: () => Promise<void>;
   onUnmute: () => Promise<void>;
@@ -31,39 +33,22 @@ type Props = Readonly<{
 }>;
 
 export const RemoteUserPage = ({
-  remoteActor,
-  posts,
+  account,
+  statuses,
   isFollowing,
   isMuted,
   isLoggedIn,
-  fetchData,
   onLike,
   onMute,
   onUnmute,
   likingPostId,
   isMuting,
 }: Props) => {
-  const handle = RemoteActorDomain.getHandle(remoteActor) ?? remoteActor.uri;
-  const displayName = remoteActor.username ?? handle;
+  const handle = account.acct;
+  const displayName = account.username;
 
-  const debouncedFetchData = debounce(fetchData, 300);
-
-  useEffect(() => {
-    if (posts.length === 0) return;
-
-    const handleScroll = () => {
-      if (isNearDocumentEnd()) {
-        const oldest = posts.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
-        debouncedFetchData(oldest.createdAt);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [posts]);
-
-  const logoUrl = safeUrl(remoteActor.logoUri);
-  const profileUrl = safeUrl(remoteActor.url);
+  const logoUrl = safeUrl(account.avatar);
+  const profileUrl = safeUrl(account.url);
 
   return (
     <>
@@ -99,7 +84,7 @@ export const RemoteUserPage = ({
                     ? (
                       <form
                         method='post'
-                        action={`/remote-users/${remoteActor.id}/unfollow`}
+                        action={`/remote-users/${account.id}/unfollow`}
                         class='m-0'
                       >
                         <button
@@ -132,7 +117,7 @@ export const RemoteUserPage = ({
                     : (
                       <form
                         method='post'
-                        action={`/remote-users/${remoteActor.id}/follow`}
+                        action={`/remote-users/${account.id}/follow`}
                         class='m-0'
                       >
                         <button
@@ -266,13 +251,13 @@ export const RemoteUserPage = ({
         <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>
           Posts
         </h2>
-        {posts.length === 0 ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p> : (
-          posts.map((post) => (
+        {statuses.length === 0 ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p> : (
+          statuses.map((status) => (
             <PostView
-              key={post.postId}
-              status={postToStatus(post)}
+              key={status.id}
+              status={status}
               onLike={onLike}
-              isLiking={likingPostId === post.postId}
+              isLiking={likingPostId === status.id}
             />
           ))
         )}
@@ -281,58 +266,88 @@ export const RemoteUserPage = ({
   );
 };
 
+type RemoteUserData = Readonly<{
+  account: Account;
+  statuses: readonly Status[];
+  nextMaxId: string | undefined;
+  isFollowing: boolean;
+  isMuted: boolean;
+  isLoggedIn: boolean;
+}>;
+
+const getActorIdFromUrl = () => {
+  const pathParts = window.location.pathname.split('/');
+  const actorIdIndex = pathParts.indexOf('remote-users') + 1;
+  return pathParts[actorIdIndex];
+};
+
+// 3つの取得のうちログインが必要なのは relationships だけなので、401 を未ログインとみなす
+const fetchRelationshipOrSignedOut = async (accountId: string) => {
+  try {
+    const [relationship] = await fetchRelationships([accountId]);
+    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+  } catch (error) {
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
+    throw error;
+  }
+};
+
 const App = () => {
-  const [init, setInit] = useState(false);
   const isFetchingMoreRef = useRef(false);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
-  const [data, setData] = useState<
-    | { error: string }
-    | {
-      remoteActor: RemoteActor;
-      posts: readonly PostWithAuthor[];
-      isFollowing: boolean;
-      isMuted: boolean;
-      isLoggedIn: boolean;
-    }
-    | null
-  >(null);
+  const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
 
-  // Get actorId from URL
-  const getActorIdFromUrl = () => {
-    const pathParts = window.location.pathname.split('/');
-    const actorIdIndex = pathParts.indexOf('remote-users') + 1;
-    return pathParts[actorIdIndex];
-  };
-
-  const fetchData = async (createdAt: Instant | undefined) => {
+  useEffect(() => {
     const actorId = getActorIdFromUrl();
     if (!actorId) return;
-    if (createdAt !== undefined) {
-      if (isFetchingMoreRef.current) return;
-      isFetchingMoreRef.current = true;
-    }
-    try {
-      const res = await client.v1['remote-users'][':actorId'].posts.$get({
-        param: { actorId },
-        query: { createdAt: createdAt ? String(createdAt) : undefined },
-      });
-      const latest = await res.json();
-
-      if (latest && !('error' in latest) && data && !('error' in data)) {
+    const fetchFirstPage = async () => {
+      try {
+        const [account, page, relationship] = await Promise.all([
+          fetchAccount(actorId),
+          fetchAccountStatuses(actorId, { excludeReblogs: true }),
+          fetchRelationshipOrSignedOut(actorId),
+        ]);
+        if (isLocalAccount(account)) {
+          window.location.replace(`/users/${encodeURIComponent(account.username)}`);
+          return;
+        }
+        setData({ account, statuses: page.items, nextMaxId: page.nextMaxId, ...relationship });
+      } catch (error) {
         setData({
-          ...latest,
-          posts: appendUniqueBy(data.posts, latest.posts, (post) => post.postId),
+          error: isNotFoundError(error)
+            ? `Remote actor with ID "${actorId}" was not found.`
+            : error instanceof Error
+            ? error.message
+            : String(error),
         });
-      } else {
-        setData(latest);
       }
+    };
+    fetchFirstPage();
+  }, []);
+
+  const loaded = data !== null && !('error' in data) ? data : undefined;
+  const accountId = loaded?.account.id;
+
+  const loadMore = useCallback(async (maxId: string) => {
+    if (accountId === undefined || isFetchingMoreRef.current) return;
+    isFetchingMoreRef.current = true;
+    try {
+      const page = await fetchAccountStatuses(accountId, { maxId, excludeReblogs: true });
+      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, statuses: appendUniqueById(prev.statuses, page.items), nextMaxId }
+      );
+    } catch (error) {
+      console.error('Failed to load more posts:', error);
     } finally {
-      if (createdAt !== undefined) {
-        isFetchingMoreRef.current = false;
-      }
+      isFetchingMoreRef.current = false;
     }
-  };
+  }, [accountId]);
+
+  useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
 
   const handleLike = async (postId: string) => {
     setLikingPostId(postId);
@@ -342,16 +357,14 @@ const App = () => {
       });
       const result = await res.json();
       if ('success' in result && result.success) {
-        if (data && !('error' in data)) {
-          setData({
-            ...data,
-            posts: data.posts.map((post) =>
-              post.postId === postId
-                ? { ...post, liked: true }
-                : post
-            ),
-          });
-        }
+        setData((prev) =>
+          prev === null || 'error' in prev
+            ? prev
+            : {
+              ...prev,
+              statuses: updateStatusesByPostId(prev.statuses, postId, (status) => withFavourited(status, true)),
+            }
+        );
       } else if ('error' in result) {
         console.error('Failed to like:', result.error);
       }
@@ -367,7 +380,7 @@ const App = () => {
     setIsMuting(true);
     try {
       const res = await client.v1.mute.$post({
-        json: { actorId: data.remoteActor.id },
+        json: { actorId: data.account.id },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -387,7 +400,7 @@ const App = () => {
     setIsMuting(true);
     try {
       const res = await client.v1.mute.$delete({
-        json: { actorId: data.remoteActor.id },
+        json: { actorId: data.account.id },
       });
       const result = await res.json();
       if ('success' in result && result.success) {
@@ -402,13 +415,6 @@ const App = () => {
     }
   };
 
-  useEffect(() => {
-    if (!init) {
-      setInit(true);
-      fetchData(undefined);
-    }
-  }, [init]);
-
   if (data === null) {
     return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
@@ -419,12 +425,11 @@ const App = () => {
 
   return (
     <RemoteUserPage
-      remoteActor={data.remoteActor}
-      posts={data.posts}
+      account={data.account}
+      statuses={data.statuses}
       isFollowing={data.isFollowing}
       isMuted={data.isMuted}
       isLoggedIn={data.isLoggedIn}
-      fetchData={fetchData}
       onLike={handleLike}
       onMute={handleMute}
       onUnmute={handleUnmute}

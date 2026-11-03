@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  fetchAccount,
+  fetchAccountStatuses,
+  fetchFavourites,
   fetchFollowers,
   fetchHomeTimeline,
   fetchNotifications,
   fetchPublicTimeline,
+  fetchRelationships,
   fetchStatus,
   fetchStatusContext,
   isNotFoundError,
   isUnauthorizedError,
+  lookupAccount,
   parseLinkHeader,
   saveNotificationsMarker,
 } from './mastodonClient.ts';
@@ -140,6 +145,72 @@ describe('mastodon client requests', () => {
     await fetchFollowers('actor-1', { limit: 80 });
 
     expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/actor-1/followers?limit=80');
+  });
+
+  it('looks up an account by acct with the query encoded', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a1' }));
+
+    const account = await lookupAccount('alice@remote.example');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/lookup?acct=alice%40remote.example');
+    expect(account).toEqual({ id: 'a1' });
+  });
+
+  it('requests an account by encoded id', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b' }));
+
+    await fetchAccount('a/b');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/a%2Fb');
+  });
+
+  it('requests account statuses with exclude_reblogs and max_id, and returns the cursors', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/accounts/a1/statuses?max_id=s1>; rel="next"',
+    }));
+
+    const page = await fetchAccountStatuses('a1', { maxId: 'm1', excludeReblogs: true });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/a1/statuses?max_id=m1&exclude_reblogs=true');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 's1', prevMinId: undefined });
+  });
+
+  it('requests account statuses without a query when no parameter is given', async () => {
+    const fetchMock = stubFetch(jsonResponse([]));
+
+    await fetchAccountStatuses('a1');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/a1/statuses');
+  });
+
+  it('requests relationships with the repeated id[]', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 'a1', following: true }]));
+
+    const relationships = await fetchRelationships(['a1', 'a2']);
+
+    expect(decodeURIComponent(String(requestedUrl(fetchMock)))).toBe(
+      '/api/v1/accounts/relationships?id[]=a1&id[]=a2',
+    );
+    expect(relationships).toEqual([{ id: 'a1', following: true }]);
+  });
+
+  it('throws an unauthorized error when the relationships are requested while signed out', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await fetchRelationships(['a1']).catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
+  });
+
+  it('requests favourites with max_id and returns the cursors from the Link header', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/favourites?max_id=f1>; rel="next"',
+    }));
+
+    const page = await fetchFavourites({ maxId: 'm1' });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/favourites?max_id=m1');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'f1', prevMinId: undefined });
   });
 
   it('requests notifications with the repeated types[] and max_id, and returns the cursors', async () => {
