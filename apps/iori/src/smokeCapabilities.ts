@@ -54,6 +54,8 @@ export const isReviewedSmokeSelect = (sql: string) => {
     if (/^[a-z]/.test(token) && !words.has(token)) return false;
     if (token === '(') depth++;
     if (token === ')') depth--;
+    if (depth < 0) return false;
+    if (token === 'in' && significant[index + 1] !== '(') return false;
     if (token === 'from') inFromClause = true;
     if (depth === 0 && ['where', 'order', 'limit', 'offset'].includes(token)) inFromClause = false;
     if (

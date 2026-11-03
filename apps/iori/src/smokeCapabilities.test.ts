@@ -32,6 +32,10 @@ it('permits generated reads and rejects SQL side effects and unsupported syntax'
       'SELECT * FROM "users","sessions","user_passwords"',
       'SELECT * FROM "users" LEFT JOIN "actors" ON "users"."id" = "actors"."id", "sqlite_master"',
       'SELECT * FROM "users" AS "a", "pragma_database_list"',
+      'SELECT "a" FROM "users" WHERE "a" IN "sessions"',
+      'SELECT "a" FROM "users" WHERE "a" IN "main"."sessions"',
+      'SELECT count(*) FROM "users" WHERE (?, "user_id", ?) IN "sessions"',
+      'SELECT * FROM "users" ) , "sqlite_master"',
     ]
   ) expect(isReviewedSmokeSelect(sql)).toBe(false);
 });
