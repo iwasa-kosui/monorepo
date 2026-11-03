@@ -63,7 +63,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
   const addRemotePost = (
     actor: { actorId: string },
     createdAt: number,
-    options: { content?: string; inReplyToUri?: string | null; timeline?: boolean } = {},
+    options: { content?: string; inReplyToUri?: string | null; timeline?: boolean; visibility?: string | null } = {},
   ) => {
     const postId = uuid();
     const uri = `https://remote.example/notes/${postId}`;
@@ -74,10 +74,11 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       createdAt,
       'remote',
     );
-    sqlite.prepare('INSERT INTO remote_posts(postId,uri,inReplyToUri) VALUES (?,?,?)').run(
+    sqlite.prepare('INSERT INTO remote_posts(postId,uri,inReplyToUri,visibility) VALUES (?,?,?,?)').run(
       postId,
       uri,
       options.inReplyToUri ?? null,
+      options.visibility ?? null,
     );
     const timelineItemId = options.timeline === true ? addTimelineItem(actor.actorId, postId, createdAt) : undefined;
     return { postId, uri, timelineItemId };

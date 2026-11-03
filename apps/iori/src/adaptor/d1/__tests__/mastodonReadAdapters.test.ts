@@ -12,7 +12,11 @@ import {
 } from '../follow/actorIdsResolverByFollowsWithPagination.ts';
 import { createD1LocalPostsResolverByPage } from '../post/localPostsResolverByPage.ts';
 import { createD1PostExtrasResolverByPosts } from '../post/postExtrasResolverByPosts.ts';
-import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
+import {
+  createD1PostsWithAuthorResolverByPostIds,
+  enrichPostRows,
+  postRowsQuery,
+} from '../post/postWithAuthorBatch.ts';
 import { createD1ThreadResolver } from '../post/threadResolver.ts';
 import { createD1RepostResolverById } from '../repost/repostResolverById.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
@@ -383,6 +387,52 @@ describe('createD1AccountProfilesResolverByActorIds', () => {
       actor: { username: 'alice', url: 'https://remote.example/@alice' },
       stats: { statusesCount: 1 },
     });
+  });
+});
+
+describe('json_each で ID をまとめて渡す Resolver は 100 件を超えても D1 のバインド上限に当たらない', () => {
+  const COUNT = 150;
+
+  it('enrichPostRows は 100 件を超える投稿の行をまとめて処理する', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const posts = Array.from({ length: COUNT }, (_, index) => t.seed.addLocalPost(me, 1_000 + index));
+    for (const post of posts) t.seed.addLike(me.actorId, post.postId);
+    const rows = await postRowsQuery(t.db);
+    t.queries.length = 0;
+
+    const enriched = await enrichPostRows(t.db, rows, actorId(me.actorId));
+
+    expect(enriched).toHaveLength(COUNT);
+    expect(enriched.every((post) => post.liked && post.likeCount === 1)).toBe(true);
+    expect(Math.max(...t.queries.map((query) => query.params.length))).toBeLessThanOrEqual(100);
+  });
+
+  it('createD1PostsWithAuthorResolverByPostIds は 100 件を超える postIds を引ける', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const posts = Array.from({ length: COUNT }, (_, index) => t.seed.addLocalPost(me, 1_000 + index));
+
+    const result = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+      postIds: posts.map((post) => PostId.orThrow(post.postId)),
+      currentActorId: undefined,
+    });
+
+    expect(result.ok ? result.val.size : 0).toBe(COUNT);
+  });
+
+  it('createD1AccountProfilesResolverByActorIds は 100 件を超える actorIds を引ける', async () => {
+    const t = setup();
+    const actors = Array.from({ length: COUNT }, (_, index) => t.seed.addRemoteActor(`user${index}`));
+    t.seed.addRemotePost(actors[0], 1_000);
+
+    const result = await createD1AccountProfilesResolverByActorIds(t.db).resolve(
+      actors.map((actor) => actorId(actor.actorId)),
+    );
+
+    const profiles = result.ok ? result.val : new Map();
+    expect(profiles.size).toBe(COUNT);
+    expect(profiles.get(actorId(actors[0].actorId))).toMatchObject({ stats: { statusesCount: 1 } });
   });
 });
 

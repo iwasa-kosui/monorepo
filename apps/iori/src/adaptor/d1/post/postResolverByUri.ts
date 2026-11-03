@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { type PostResolverByUri, RemotePost } from '../../../domain/post/post.ts';
 import type { IoriD1Db } from '../client.ts';
 import { postsTable, remotePostsTable } from '../schema.ts';
+import { toVisibility } from './toVisibility.ts';
 
 export const createD1PostResolverByUri = (db: IoriD1Db): PostResolverByUri => ({
   resolve: async ({ uri }) => {
@@ -19,6 +20,7 @@ export const createD1PostResolverByUri = (db: IoriD1Db): PostResolverByUri => ({
         createdAt: row.posts.createdAt.getTime(),
         uri: row.remote_posts.uri,
         inReplyToUri: row.remote_posts.inReplyToUri,
+        visibility: toVisibility(row.remote_posts.visibility),
       }),
     );
   },

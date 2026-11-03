@@ -1,7 +1,7 @@
 import type { AccountProfilesResolverByActorIds } from '../../domain/actor/accountProfile.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { Post, type PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../domain/post/postExtras.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
@@ -53,7 +53,7 @@ export type StatusAssembler = Readonly<{
 export const statusSourceId = (source: StatusSource): string =>
   source.type === 'repost' ? source.repostId : source.post.postId;
 
-export const isRemoteSource = (source: StatusSource): boolean => source.post.type === 'remote';
+export const isSourceVisibleToAnonymous = (source: StatusSource): boolean => Post.isVisibleToAnonymous(source.post);
 
 export class StatusAssemblyError extends Error {
   constructor(message: string) {

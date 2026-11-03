@@ -21,6 +21,7 @@ import { Username } from '../../../domain/user/username.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -216,6 +217,7 @@ export const createD1TimelineItemsResolverByActorIds = (
             content: row.posts.content,
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
+            visibility: toVisibility(row.remote_posts.visibility),
             type: 'remote',
           })
           : (() => {
