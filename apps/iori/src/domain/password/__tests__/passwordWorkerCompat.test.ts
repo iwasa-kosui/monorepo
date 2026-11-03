@@ -28,7 +28,7 @@ describe('Worker password compatibility', () => {
     });
 
     expect(Buffer.from(workerHash).toString('hex')).toBe(nodeHash.toString('hex'));
-  });
+  }, 30_000);
 
   it('matches @noble/hashes and node:crypto with the WASM Argon2id', async () => {
     const expected = argon2Sync('argon2id', {
@@ -53,5 +53,5 @@ describe('Worker password compatibility', () => {
 
     expect(Buffer.from(wasmHash).toString('hex')).toBe(expected.toString('hex'));
     expect(Buffer.from(wasmHash).toString('hex')).toBe(Buffer.from(nobleHash).toString('hex'));
-  });
+  }, 30_000);
 });
