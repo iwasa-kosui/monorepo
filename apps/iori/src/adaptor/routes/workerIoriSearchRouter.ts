@@ -177,7 +177,7 @@ export const createWorkerIoriSearchRouter = ({
       if (!searched.ok) {
         return searched.err;
       }
-      // 配備後に検索1回の遅延を測るために付ける。値は数値だけで、語や本文は入れない
+      // 配備後に検索1回の遅延を測るために付ける
       c.header('Server-Timing', searched.val.serverTiming);
       const body: MastodonSearchResponse = { accounts: [], statuses: searched.val.statuses, hashtags: [] };
       return c.json(body);

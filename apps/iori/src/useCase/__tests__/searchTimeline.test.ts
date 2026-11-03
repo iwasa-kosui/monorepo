@@ -186,6 +186,7 @@ describe('SearchTimelineUseCase', () => {
     ['1 文字', '旅'],
     ['http:// で始まる', 'http://example.com/旅行'],
     ['https:// で始まる', 'https://example.com/旅行'],
+    ['大文字の HTTPS:// で始まる', 'HTTPS://example.com/旅行'],
     ['@ で始まる', '@alice'],
   ])('問い合わせが %s のときは、textGenerator があっても呼ばずに skipped にする', async (_name, text) => {
     const { generator, calls } = createStubTextGenerator(() => '["旅行", "trip"]');

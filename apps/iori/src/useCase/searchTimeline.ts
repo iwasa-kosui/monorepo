@@ -69,9 +69,10 @@ const splitQuery = (text: string): Readonly<{ terms: SearchTerm[]; dropped: stri
 
 const isWorthExpanding = (text: string): boolean => {
   const trimmed = text.trim();
+  const lowered = trimmed.toLowerCase();
   return Array.from(trimmed).length >= MIN_EXPANDABLE_QUERY_CHARS
-    && !trimmed.startsWith('http://')
-    && !trimmed.startsWith('https://')
+    && !lowered.startsWith('http://')
+    && !lowered.startsWith('https://')
     && !trimmed.startsWith('@');
 };
 
