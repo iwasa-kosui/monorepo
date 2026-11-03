@@ -30,21 +30,32 @@ describe('logging.cloudflare', () => {
     expect(info).toHaveBeenCalledTimes(2);
   });
 
-  it('writes debug of the fedify http signature logger without request headers', async () => {
+  it('writes the double-knocking debug of the fedify http signature logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+    getLogger(['fedify', 'sig', 'http']).debug(
+      'Failed to verify with the spec {spec} ({status} {statusText}); retrying with spec {secondSpec}... (double-knocking)',
+      {
+        spec: 'rfc9421',
+        secondSpec: 'draft-cavage-http-signatures-12',
+        status: 400,
+        statusText: 'Bad Request',
+      },
+    );
+
+    expect(debug).toHaveBeenCalledOnce();
+  });
+
+  it('drops other debug records of the fedify http signature logger without spec and secondSpec', async () => {
     await import('./logging.cloudflare.ts');
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
     const logger = getLogger(['fedify', 'sig', 'http']);
 
-    logger.debug('Failed to verify with the spec {spec} ({status} {statusText})', {
-      spec: 'rfc9421',
-      status: 400,
-      statusText: 'Bad Request',
-    });
-    logger.debug('Failed to verify; required headers missing in the Signature header: {headers}.', {
-      headers: '(request-target) date',
-    });
+    logger.debug('Signature {signature}', { signature: 'keyId="https://example.com/key",signature="secret"' });
+    logger.debug('Key {keyId}', { keyId: 'https://example.com/key' });
 
-    expect(debug).toHaveBeenCalledTimes(2);
+    expect(debug).not.toHaveBeenCalled();
   });
 
   it('drops debug records of the fedify http signature logger that carry request headers', async () => {
@@ -54,6 +65,18 @@ describe('logging.cloudflare', () => {
     getLogger(['fedify', 'sig', 'http']).debug('Failed to verify; no Signature header found.', {
       headers: { authorization: 'Bearer secret', cookie: 'session=secret' },
     });
+
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('drops debug records of the fedify http signature logger whose headers is a string', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+    getLogger(['fedify', 'sig', 'http']).debug(
+      'Failed to verify; required headers missing in the Signature header: {headers}.',
+      { headers: '(request-target) date' },
+    );
 
     expect(debug).not.toHaveBeenCalled();
   });
