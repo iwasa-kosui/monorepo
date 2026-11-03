@@ -67,11 +67,53 @@ export const createD1TimelineItemsResolverByActorIds = (
       .orderBy(desc(timelineItemsTable.createdAt));
 
     const postIds = rows.map((row) => row.posts.postId);
-    const imageRows = postIds.length === 0
-      ? []
-      : await db.select()
-        .from(postImagesTable)
-        .where(inArray(postImagesTable.postId, postIds));
+    const reposterActorIds = rows
+      .filter((row) => row.timeline_items.type === 'repost')
+      .map((row) => row.timeline_items.actorId);
+    const [imageRows, repostRows, likeCounts, repostCounts, reactions, linkPreviews, reposters] = await Promise.all([
+      postIds.length === 0
+        ? Promise.resolve([])
+        : db.select()
+          .from(postImagesTable)
+          .where(inArray(postImagesTable.postId, postIds)),
+      currentActorId !== undefined && postIds.length > 0
+        ? db.select({ postId: repostsTable.postId })
+          .from(repostsTable)
+          .where(and(
+            eq(repostsTable.actorId, currentActorId),
+            inArray(repostsTable.postId, postIds),
+          ))
+        : Promise.resolve([]),
+      postIds.length === 0
+        ? Promise.resolve([])
+        : db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
+          .from(likesTable).where(inArray(likesTable.postId, postIds)).groupBy(likesTable.postId),
+      postIds.length === 0
+        ? Promise.resolve([])
+        : db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
+          .from(repostsTable).where(inArray(repostsTable.postId, postIds)).groupBy(repostsTable.postId),
+      postIds.length === 0
+        ? Promise.resolve([])
+        : db.select({
+          postId: emojiReactsTable.postId,
+          emoji: emojiReactsTable.emoji,
+          emojiImageUrl: emojiReactsTable.emojiImageUrl,
+          count: sql<number>`count(*)`,
+        }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, postIds))
+          .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl),
+      postIds.length === 0
+        ? Promise.resolve([])
+        : db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, postIds)),
+      reposterActorIds.length > 0
+        ? db.select()
+          .from(actorsTable)
+          .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+          .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+          .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
+          .where(inArray(actorsTable.actorId, reposterActorIds))
+        : Promise.resolve([]),
+    ]);
+
     const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
     for (const image of imageRows) {
       const images = imagesByPostId.get(image.postId) ?? [];
@@ -80,84 +122,49 @@ export const createD1TimelineItemsResolverByActorIds = (
     }
 
     const repostedPostIds = new Set<string>();
-    if (currentActorId !== undefined && postIds.length > 0) {
-      const repostRows = await db.select({ postId: repostsTable.postId })
-        .from(repostsTable)
-        .where(and(
-          eq(repostsTable.actorId, currentActorId),
-          inArray(repostsTable.postId, postIds),
-        ));
-      for (const repost of repostRows) {
-        repostedPostIds.add(repost.postId);
-      }
+    for (const repost of repostRows) {
+      repostedPostIds.add(repost.postId);
     }
 
     const likeCountsByPostId = new Map<string, number>();
     const repostCountsByPostId = new Map<string, number>();
     const reactionsByPostId = new Map<string, { emoji: string; count: number; emojiImageUrl: string | null }[]>();
     const linkPreviewsByPostId = new Map<string, LinkPreview[]>();
-    if (postIds.length > 0) {
-      const [likeCounts, repostCounts, reactions, linkPreviews] = await Promise.all([
-        db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
-          .from(likesTable).where(inArray(likesTable.postId, postIds)).groupBy(likesTable.postId),
-        db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
-          .from(repostsTable).where(inArray(repostsTable.postId, postIds)).groupBy(repostsTable.postId),
-        db.select({
-          postId: emojiReactsTable.postId,
-          emoji: emojiReactsTable.emoji,
-          emojiImageUrl: emojiReactsTable.emojiImageUrl,
-          count: sql<number>`count(*)`,
-        }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, postIds))
-          .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl),
-        db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, postIds)),
-      ]);
-      for (const count of likeCounts) likeCountsByPostId.set(count.postId, Number(count.count));
-      for (const count of repostCounts) repostCountsByPostId.set(count.postId, Number(count.count));
-      for (const reaction of reactions) {
-        const postReactions = reactionsByPostId.get(reaction.postId) ?? [];
-        postReactions.push({
-          emoji: reaction.emoji,
-          count: Number(reaction.count),
-          emojiImageUrl: reaction.emojiImageUrl,
-        });
-        reactionsByPostId.set(reaction.postId, postReactions);
-      }
-      for (const preview of linkPreviews) {
-        const postPreviews = linkPreviewsByPostId.get(preview.postId) ?? [];
-        postPreviews.push(LinkPreview.orThrow({
-          linkPreviewId: LinkPreviewId.orThrow(preview.linkPreviewId),
-          postId: preview.postId as PostId,
-          url: preview.url,
-          title: preview.title,
-          description: preview.description,
-          imageUrl: preview.imageUrl,
-          faviconUrl: preview.faviconUrl,
-          siteName: preview.siteName,
-          createdAt: preview.createdAt.getTime(),
-        }));
-        linkPreviewsByPostId.set(preview.postId, postPreviews);
-      }
+    for (const count of likeCounts) likeCountsByPostId.set(count.postId, Number(count.count));
+    for (const count of repostCounts) repostCountsByPostId.set(count.postId, Number(count.count));
+    for (const reaction of reactions) {
+      const postReactions = reactionsByPostId.get(reaction.postId) ?? [];
+      postReactions.push({
+        emoji: reaction.emoji,
+        count: Number(reaction.count),
+        emojiImageUrl: reaction.emojiImageUrl,
+      });
+      reactionsByPostId.set(reaction.postId, postReactions);
+    }
+    for (const preview of linkPreviews) {
+      const postPreviews = linkPreviewsByPostId.get(preview.postId) ?? [];
+      postPreviews.push(LinkPreview.orThrow({
+        linkPreviewId: LinkPreviewId.orThrow(preview.linkPreviewId),
+        postId: preview.postId as PostId,
+        url: preview.url,
+        title: preview.title,
+        description: preview.description,
+        imageUrl: preview.imageUrl,
+        faviconUrl: preview.faviconUrl,
+        siteName: preview.siteName,
+        createdAt: preview.createdAt.getTime(),
+      }));
+      linkPreviewsByPostId.set(preview.postId, postPreviews);
     }
 
-    const reposterActorIds = rows
-      .filter((row) => row.timeline_items.type === 'repost')
-      .map((row) => row.timeline_items.actorId);
     const reposterInfo = new Map<string, { username: string; logoUri: string | undefined }>();
-    if (reposterActorIds.length > 0) {
-      const reposters = await db.select()
-        .from(actorsTable)
-        .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
-        .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
-        .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
-        .where(inArray(actorsTable.actorId, reposterActorIds));
-      for (const reposter of reposters) {
-        const username = reposter.users?.username ?? reposter.remote_actors?.username;
-        if (username !== null && username !== undefined) {
-          reposterInfo.set(reposter.actors.actorId, {
-            username,
-            logoUri: reposter.actors.logoUri ?? undefined,
-          });
-        }
+    for (const reposter of reposters) {
+      const username = reposter.users?.username ?? reposter.remote_actors?.username;
+      if (username !== null && username !== undefined) {
+        reposterInfo.set(reposter.actors.actorId, {
+          username,
+          logoUri: reposter.actors.logoUri ?? undefined,
+        });
       }
     }
 

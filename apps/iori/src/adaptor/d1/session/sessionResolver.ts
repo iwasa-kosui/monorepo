@@ -8,6 +8,13 @@ import { sessionsTable } from '../schema.ts';
 
 const toTimestampMs = (timestamp: Date | number): number => timestamp instanceof Date ? timestamp.getTime() : timestamp;
 
+export const toSession = (row: typeof sessionsTable.$inferSelect): Session =>
+  Session.orThrow({
+    sessionId: row.sessionId,
+    userId: row.userId,
+    expires: toTimestampMs(row.expires),
+  });
+
 export const createD1SessionResolver = (db: IoriD1Db): SessionResolver => ({
   resolve: (sessionId) =>
     RA.flow(
@@ -21,11 +28,7 @@ export const createD1SessionResolver = (db: IoriD1Db): SessionResolver => ({
         if (rest.length > 0) {
           throw new Error(`Multiple sessions found with the same ID: ${sessionId}`);
         }
-        return Session.orThrow({
-          sessionId: row.sessionId,
-          userId: row.userId,
-          expires: toTimestampMs(row.expires),
-        });
+        return toSession(row);
       }),
       RA.mapErr((error): never => {
         throw error;

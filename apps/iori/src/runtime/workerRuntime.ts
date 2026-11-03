@@ -62,6 +62,7 @@ import { createD1RepostDeletedStore } from '../adaptor/d1/repost/repostDeletedSt
 import { createD1RepostResolver } from '../adaptor/d1/repost/repostResolver.ts';
 import { createD1SessionResolver } from '../adaptor/d1/session/sessionResolver.ts';
 import { createD1SessionStartedStore } from '../adaptor/d1/session/sessionStartedStore.ts';
+import { createD1SessionWithUserAndActorResolver } from '../adaptor/d1/session/sessionWithUserAndActorResolver.ts';
 import { createD1TimelineItemCreatedStore } from '../adaptor/d1/timeline/timelineItemCreatedStore.ts';
 import { createD1TimelineItemDeletedStore } from '../adaptor/d1/timeline/timelineItemDeletedStore.ts';
 import { createD1TimelineItemResolverByRepostId } from '../adaptor/d1/timeline/timelineItemResolverByRepostId.ts';
@@ -121,6 +122,7 @@ export const createWorkerRuntimePorts = async (
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const db = createD1Db(env.DB);
   const sessionResolver = createD1SessionResolver(db);
+  const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const postResolver = createD1PostResolver(db);
@@ -149,6 +151,7 @@ export const createWorkerRuntimePorts = async (
     sessionResolver,
     userResolver,
     actorResolverByUserId,
+    sessionWithUserAndActorResolver,
     actorResolverById: createD1ActorResolverById(db),
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
@@ -169,6 +172,7 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         actorResolverByUserId,
+        sessionWithUserAndActorResolver,
         timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
         actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(db),
@@ -247,11 +251,13 @@ export const createWorkerRuntimePorts = async (
       getUnreadNotificationCountUseCase: createGetUnreadNotificationCountUseCase({
         sessionResolver,
         userResolver,
+        sessionWithUserAndActorResolver,
         unreadNotificationCountResolverByUserId: createD1UnreadNotificationCountResolverByUserId(db),
       }),
       getNotificationsUseCase: GetNotificationsUseCase.create({
         sessionResolver,
         userResolver,
+        sessionWithUserAndActorResolver,
         notificationsResolver: createD1NotificationsResolverByUserId(db),
         notificationsReadStore: createD1NotificationsReadStore(db),
       }),
@@ -259,6 +265,7 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         actorResolverByUserId,
+        sessionWithUserAndActorResolver,
         likedPostsResolver: createD1LikedPostsResolverByActorId(db),
       }),
     },
@@ -375,6 +382,7 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         actorResolverByUserId,
+        sessionWithUserAndActorResolver,
         federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db, env.ORIGIN),
         mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
       }),
@@ -389,6 +397,7 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         actorResolverByUserId,
+        sessionWithUserAndActorResolver,
         actorResolverById: createD1ActorResolverById(db),
         followResolver: createD1FollowResolver(db),
         muteResolver: createD1MuteResolver(db),

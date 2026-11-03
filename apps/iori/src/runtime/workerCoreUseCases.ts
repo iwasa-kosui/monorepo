@@ -20,13 +20,13 @@ import type {
   PostsResolverByActorIdWithPagination,
   PostWithAuthor,
 } from '../domain/post/post.ts';
-import type { SessionResolver } from '../domain/session/session.ts';
+import type { SessionResolver, SessionWithUserAndActorResolver } from '../domain/session/session.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
 import {
+  composeSessionWithUserAndActorResolver,
   resolveLocalActorWith,
-  resolveSessionWith,
+  resolveSessionWithUserAndActorWith,
   resolveUserByUsernameWith,
-  resolveUserWith,
 } from '../useCase/helper/resolve.ts';
 import type { IoriCoreRuntimePorts, WorkerRemoteActorAction } from './ports.ts';
 
@@ -36,6 +36,7 @@ type WorkerRemoteActorActionsDeps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
+  sessionWithUserAndActorResolver?: SessionWithUserAndActorResolver;
   actorResolverById: ActorResolverById;
   followResolver: FollowResolver;
   followRequestedStore: FollowRequestedStore;
@@ -45,21 +46,25 @@ type WorkerRemoteActorActionsDeps = Readonly<{
 const actionActors = async (
   deps: Pick<
     WorkerRemoteActorActionsDeps,
-    'actorResolverById' | 'actorResolverByUserId' | 'sessionResolver' | 'userResolver'
+    | 'actorResolverById'
+    | 'actorResolverByUserId'
+    | 'sessionResolver'
+    | 'sessionWithUserAndActorResolver'
+    | 'userResolver'
   >,
   input: WorkerRemoteActorActionInput,
 ) => {
-  const session = await resolveSessionWith(deps.sessionResolver, Instant.now())(input.sessionId);
-  if (!session.ok) return RA.err({ message: session.err.message });
-  const user = await resolveUserWith(deps.userResolver)(session.val.userId);
-  if (!user.ok) return RA.err({ message: user.err.message });
-  const follower = await resolveLocalActorWith(deps.actorResolverByUserId)(user.val.id);
-  if (!follower.ok) return RA.err({ message: follower.err.message });
+  const authenticated = await resolveSessionWithUserAndActorWith(
+    deps.sessionWithUserAndActorResolver
+      ?? composeSessionWithUserAndActorResolver(deps.sessionResolver, deps.userResolver, deps.actorResolverByUserId),
+    Instant.now(),
+  )(input.sessionId);
+  if (!authenticated.ok) return RA.err({ message: authenticated.err.message });
   const following = await deps.actorResolverById.resolve(input.actorId);
   if (!following.ok || following.val === undefined || following.val.type !== 'remote') {
     return RA.err({ message: `Remote actor not found: ${input.actorId}` });
   }
-  return RA.ok({ user: user.val, follower: follower.val, following: following.val });
+  return RA.ok({ user: authenticated.val.user, follower: authenticated.val.actor, following: following.val });
 };
 
 export const createWorkerRemoteActorActions = (
@@ -167,6 +172,7 @@ export const createWorkerGetRemoteActorPostsUseCase = (
     sessionResolver: SessionResolver;
     userResolver: UserResolver;
     actorResolverByUserId: ActorResolverByUserId;
+    sessionWithUserAndActorResolver?: SessionWithUserAndActorResolver;
     actorResolverById: ActorResolverById;
     followResolver: FollowResolver;
     muteResolver: MuteResolver;
@@ -174,23 +180,30 @@ export const createWorkerGetRemoteActorPostsUseCase = (
   }>,
 ): IoriCoreRuntimePorts['getRemoteActorPostsUseCase'] => ({
   run: async ({ sessionId, actorId, createdAt }) => {
-    const session = await resolveSessionWith(deps.sessionResolver, Instant.now())(sessionId);
-    if (!session.ok) return session;
-    const user = await resolveUserWith(deps.userResolver)(session.val.userId);
-    if (!user.ok) return user;
-    const currentActor = await resolveLocalActorWith(deps.actorResolverByUserId)(user.val.id);
-    if (!currentActor.ok) return currentActor;
-    const actor = await deps.actorResolverById.resolve(actorId);
+    const [authenticated, actor] = await Promise.all([
+      resolveSessionWithUserAndActorWith(
+        deps.sessionWithUserAndActorResolver
+          ?? composeSessionWithUserAndActorResolver(
+            deps.sessionResolver,
+            deps.userResolver,
+            deps.actorResolverByUserId,
+          ),
+        Instant.now(),
+      )(sessionId),
+      deps.actorResolverById.resolve(actorId),
+    ]);
+    if (!authenticated.ok) return authenticated;
     if (!actor.ok) return actor;
+    const { user, actor: currentActor } = authenticated.val;
     if (actor.val === undefined || actor.val.type !== 'remote') {
       return RA.err({ message: `Remote actor not found: ${actorId}` });
     }
     const [follow, mute, posts] = await Promise.all([
-      deps.followResolver.resolve({ followerId: currentActor.val.id, followingId: actor.val.id }),
-      deps.muteResolver.resolve({ userId: user.val.id, mutedActorId: actor.val.id }),
+      deps.followResolver.resolve({ followerId: currentActor.id, followingId: actor.val.id }),
+      deps.muteResolver.resolve({ userId: user.id, mutedActorId: actor.val.id }),
       deps.postsResolverByActorIdWithPagination.resolve({
         actorId: actor.val.id,
-        currentActorId: currentActor.val.id,
+        currentActorId: currentActor.id,
         createdAt,
       }),
     ]);

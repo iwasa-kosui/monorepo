@@ -6,11 +6,15 @@ import type {
 } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
-import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
+import {
+  SessionExpiredError,
+  type SessionResolver,
+  type SessionWithUserAndActorResolver,
+} from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import type { ActorResolverByUserId } from './../domain/actor/actor.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { composeSessionWithUserAndActorResolver, resolveSessionWithUserAndActorWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -31,6 +35,7 @@ type Deps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
+  sessionWithUserAndActorResolver?: SessionWithUserAndActorResolver;
   federatedTimelineItemsResolver: FederatedTimelineItemsResolver;
   mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
 }>;
@@ -39,20 +44,22 @@ const create = ({
   sessionResolver,
   userResolver,
   actorResolverByUserId,
+  sessionWithUserAndActorResolver,
   federatedTimelineItemsResolver,
   mutedActorIdsResolverByUserId,
 }: Deps): GetFederatedTimelineUseCase => {
   const now = Date.now() as Instant;
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
-  const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+  const resolveSessionUserActor = resolveSessionWithUserAndActorWith(
+    sessionWithUserAndActorResolver
+      ?? composeSessionWithUserAndActorResolver(sessionResolver, userResolver, actorResolverByUserId),
+    now,
+  );
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
-      RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
+      RA.andBind('resolved', ({ sessionId }) => resolveSessionUserActor(sessionId)),
+      RA.map(({ resolved, ...rest }) => ({ ...rest, ...resolved })),
       RA.andBind('mutedActorIds', ({ user }) => mutedActorIdsResolverByUserId.resolve(user.id)),
       RA.andBind('items', ({ mutedActorIds, actor }) =>
         federatedTimelineItemsResolver.resolve({
