@@ -1,6 +1,5 @@
 import type { TargetIdentity } from './fresh-target.mjs';
 import type { ExpectedTarget } from './migration-target-contract.mjs';
-import type { MigrationStorage } from './migration-bundle.mjs';
 export function targetSetupConfiguration(
   env: Record<string, string | undefined>,
   options?: { backend?: boolean },
@@ -15,9 +14,3 @@ export function targetSetupConfiguration(
   hostname: string;
   token: string;
 };
-export function transferStorageFromEnvironment(
-  env: Record<string, string | undefined>,
-  identity: TargetIdentity,
-  readOnly?: boolean,
-  signal?: AbortSignal,
-): MigrationStorage;

@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import {
   assertTargetSummary,
   parseExpectedTarget,
   parsePreparationRecord,
   serializePreparationRecord,
 } from '../migration-target-contract.mjs';
-import { readPreparationRecord, writePreparationRecord } from '../target-preparation-record.mjs';
 import { expectedTargetFixture, preparationFixture, targetSummaryFixture } from './migrationTargetFixture.js';
 
 it('accepts an independent expected target and canonical prepared evidence', () => {
@@ -58,38 +57,4 @@ it.each(['a.b', 'a:b', 'a'.repeat(81)])('rejects unsupported run %s', (run) => {
   target.identity.run_id = run;
   target.admission.runId = run;
   expect(() => parseExpectedTarget(target)).toThrow();
-});
-it('publishes only the fixed conditional record then verifies exact readback', async () => {
-  let body: Buffer;
-  const storage = {
-    assertPrivate: vi.fn(async () => {}),
-    putNew: vi.fn(async (_key: string, value: Buffer) => {
-      body = value;
-    }),
-    get: vi.fn(async () => body),
-  };
-  await writePreparationRecord({ storage, expectedTarget: expectedTargetFixture(), record: preparationFixture() });
-  expect(storage.putNew.mock.calls[0]![0]).toBe('prepared-target/v1/production/fixture1/record.json');
-  await expect(readPreparationRecord({ storage, expectedTarget: expectedTargetFixture() })).resolves.toBeTruthy();
-  storage.get.mockRejectedValueOnce(new Error('uncertain'));
-  await expect(
-    writePreparationRecord({ storage, expectedTarget: expectedTargetFixture(), record: preparationFixture() }),
-  ).rejects.toThrow();
-  expect(storage.putNew).toHaveBeenCalledTimes(2);
-});
-it('rejects absent expected target before record storage access and conditional collisions without retry', async () => {
-  const storage = {
-    assertPrivate: vi.fn(async () => {}),
-    putNew: vi.fn(async () => {
-      throw new Error('exists');
-    }),
-    get: vi.fn(async () => Buffer.alloc(0)),
-  };
-  await expect(readPreparationRecord({ storage, expectedTarget: undefined as any })).rejects.toThrow();
-  expect(storage.assertPrivate).not.toHaveBeenCalled();
-  await expect(
-    writePreparationRecord({ storage, expectedTarget: expectedTargetFixture(), record: preparationFixture() }),
-  ).rejects.toThrow();
-  expect(storage.putNew).toHaveBeenCalledTimes(1);
-  expect(storage.get).not.toHaveBeenCalled();
 });

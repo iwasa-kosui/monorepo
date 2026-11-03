@@ -2,9 +2,6 @@ import { classifyFailure } from './failure-classification.mjs';
 import { isPreparationReason } from './target-preparation-diagnostics.mjs';
 
 export const OPERATION_STAGES = Object.freeze([
-  'verify-import',
-  'rehearse-migration',
-  'migrate-data',
   'deploy-worker-before',
   'deploy-worker-resolve',
   'deploy-worker-migrate',
