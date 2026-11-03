@@ -52,15 +52,14 @@ export const createOAuthInMemory = () => {
     },
   };
   const authorizationCodeConsumedStore = {
-    store: (...batch: Array<{ aggregateState: AuthorizationCode } & AnyDomainEvent>) => {
-      for (const event of batch) {
-        const current = codes.get(event.aggregateState.codeHash);
-        if (current !== undefined && current.consumedAt === null) {
-          codes.set(current.codeHash, event.aggregateState);
-        }
-        events.push(event);
+    store: (event: { aggregateState: AuthorizationCode } & AnyDomainEvent) => {
+      const current = codes.get(event.aggregateState.codeHash);
+      if (current === undefined || current.consumedAt !== null) {
+        return ok(false);
       }
-      return ok(undefined);
+      codes.set(current.codeHash, event.aggregateState);
+      events.push(event);
+      return ok(true);
     },
   };
   const authorizationCodeResolverByCodeHash = {

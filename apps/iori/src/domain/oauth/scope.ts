@@ -33,6 +33,9 @@ const writeScopes = [
   'write:statuses',
 ] as const;
 
+const MAX_LIST_LENGTH = 1000;
+const listInputSchema = z.string().max(MAX_LIST_LENGTH);
+
 const baseScopes = ['read', 'write', 'follow', 'push', 'profile'] as const;
 const allScopes = [...baseScopes, ...readScopes, ...writeScopes] as const;
 const followImplied: ReadonlyArray<string> = ['read:follows', 'write:follows', 'write:blocks', 'write:mutes'];
@@ -54,6 +57,11 @@ export const InvalidScopeError = {
     message: `The scope "${scope}" is not supported.`,
     detail: { scope },
   }),
+  tooLong: (): InvalidScopeError => ({
+    type: 'InvalidScopeError',
+    message: `The scope must be at most ${MAX_LIST_LENGTH} characters.`,
+    detail: { scope: '' },
+  }),
 } as const;
 
 const read = schema.orThrow('read');
@@ -61,6 +69,9 @@ const defaultScopes: ReadonlyArray<Scope> = [read];
 const fullAccess: ReadonlyArray<Scope> = baseScopes.map((scope) => schema.orThrow(scope));
 
 const parseList = (input: string | null | undefined): Result<ReadonlyArray<Scope>, InvalidScopeError> => {
+  if (!listInputSchema.safeParse(input ?? '').success) {
+    return Result.err(InvalidScopeError.tooLong());
+  }
   const tokens = (input ?? '').split(/\s+/).filter((token) => token.length > 0);
   if (tokens.length === 0) {
     return Result.ok(defaultScopes);

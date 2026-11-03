@@ -59,6 +59,9 @@ describe('toAccount', () => {
       followers_count: 3,
       following_count: 2,
       statuses_count: 10,
+      discoverable: null,
+      indexable: false,
+      hide_collections: null,
     });
   });
 

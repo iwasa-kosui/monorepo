@@ -5,6 +5,7 @@ import { Schema } from '../../helper/schema.ts';
 
 const OOB = 'urn:ietf:wg:oauth:2.0:oob';
 const MAX_LENGTH = 2000;
+const MAX_COUNT = 10;
 const blockedProtocols: ReadonlyArray<string> = ['javascript:', 'data:', 'vbscript:', 'file:'];
 
 const isAcceptable = (value: string): boolean => {
@@ -50,6 +51,9 @@ const parseList = (input: unknown): Result<ReadonlyArray<RedirectUri>, InvalidRe
   if (candidates.length === 0) {
     return Result.err(InvalidRedirectUriError.create('redirect_uris is required'));
   }
+  if (candidates.length > MAX_COUNT) {
+    return Result.err(InvalidRedirectUriError.create(`redirect_uris accepts at most ${MAX_COUNT} URIs`));
+  }
   const uris: RedirectUri[] = [];
   for (const candidate of candidates) {
     const parsed = schema.parse(candidate);
@@ -63,6 +67,7 @@ const parseList = (input: unknown): Result<ReadonlyArray<RedirectUri>, InvalidRe
 
 export const RedirectUri = {
   ...schema,
+  maxCount: MAX_COUNT,
   oob: OOB as RedirectUri,
   isOob: (uri: string): boolean => uri === OOB,
   parseList,

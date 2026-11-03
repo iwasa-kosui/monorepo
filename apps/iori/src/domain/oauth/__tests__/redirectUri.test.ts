@@ -44,6 +44,12 @@ describe('RedirectUri', () => {
       expect(result).toMatchObject({ ok: true, val: ['https://a.example/cb'] });
     });
 
+    it('10 件までを受け付け、11 件を拒む', () => {
+      const uris = (count: number) => Array.from({ length: count }, (_, index) => `https://a.example/cb${index}`);
+      expect(RedirectUri.parseList(uris(10))).toMatchObject({ ok: true });
+      expect(RedirectUri.parseList(uris(11))).toMatchObject({ ok: false });
+    });
+
     it('空、未指定、不正な値を拒む', () => {
       expect(RedirectUri.parseList(undefined)).toMatchObject({ ok: false });
       expect(RedirectUri.parseList('  \n ')).toMatchObject({ ok: false });

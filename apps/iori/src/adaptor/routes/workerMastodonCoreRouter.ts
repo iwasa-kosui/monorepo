@@ -93,7 +93,16 @@ export const createWorkerMastodonCoreRouter = ({
     });
     return {
       ...account,
-      source: { privacy: 'public', sensitive: false, language: null, note: '', fields: [], follow_requests_count: 0 },
+      source: {
+        privacy: 'public',
+        sensitive: false,
+        language: null,
+        note: '',
+        fields: [],
+        discoverable: null,
+        indexable: false,
+        follow_requests_count: 0,
+      },
     };
   };
 

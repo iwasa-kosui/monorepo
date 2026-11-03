@@ -32,7 +32,7 @@ export type MastodonAuthnDeps = Readonly<{
 export type MastodonAuthn = Readonly<{
   optionalAuth: MiddlewareHandler<MastodonAuthEnv>;
   requireApp: MiddlewareHandler<MastodonAuthEnv>;
-  requireUser: (...scopes: ReadonlyArray<Scope>) => MiddlewareHandler<MastodonAuthEnv>;
+  requireUser: (...scopes: [Scope, ...Scope[]]) => MiddlewareHandler<MastodonAuthEnv>;
 }>;
 
 const unsafeMethods: ReadonlyArray<string> = ['POST', 'PUT', 'PATCH', 'DELETE'];
@@ -125,7 +125,7 @@ export const createMastodonAuthn = (
         if (principal === undefined || principal.userId === null) {
           return invalidToken(c);
         }
-        return scopes.length === 0 || Scope.includesAny(principal.scopes, scopes) ? undefined : outsideScopes(c);
+        return Scope.includesAny(principal.scopes, scopes) ? undefined : outsideScopes(c);
       }),
   };
 };

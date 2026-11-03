@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a815d1d9-2290-4f44-9627-a5b2af2aafc6",
+  "id": "2982b7f3-9ac5-495f-aa72-852759581047",
   "prevId": "7c28c674-90b4-4817-94c8-4b6baa9d4bb4",
   "tables": {
     "actors": {
@@ -252,7 +252,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "domain_events_aggregate_id_idx": {
+          "name": "domain_events_aggregate_id_idx",
+          "columns": [
+            "aggregateId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -467,6 +475,13 @@
             "followingId"
           ],
           "isUnique": true
+        },
+        "follows_following_id_idx": {
+          "name": "follows_following_id_idx",
+          "columns": [
+            "followingId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -1749,7 +1764,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "posts_actor_id_idx": {
+          "name": "posts_actor_id_idx",
+          "columns": [
+            "actorId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "posts_actorId_actors_actorId_fk": {
           "name": "posts_actorId_actors_actorId_fk",

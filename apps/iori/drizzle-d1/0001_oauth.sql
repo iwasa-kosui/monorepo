@@ -40,3 +40,7 @@ CREATE TABLE `oauth_authorization_codes` (
 	FOREIGN KEY (`applicationId`) REFERENCES `oauth_applications`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`userId`) REFERENCES `users`(`userId`) ON UPDATE no action ON DELETE no action
 );
+--> statement-breakpoint
+CREATE INDEX `domain_events_aggregate_id_idx` ON `domain_events` (`aggregateId`);--> statement-breakpoint
+CREATE INDEX `follows_following_id_idx` ON `follows` (`followingId`);--> statement-breakpoint
+CREATE INDEX `posts_actor_id_idx` ON `posts` (`actorId`);

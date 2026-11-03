@@ -1,13 +1,7 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-const resolveNextPath = (): string => {
-  const next = new URLSearchParams(window.location.search).get('next');
-  if (next === null || !next.startsWith('/oauth/authorize')) {
-    return '/';
-  }
-  return new URL(next, window.location.origin).origin === window.location.origin ? next : '/';
-};
+import { resolveNextPath } from './signInNext.ts';
 
 const SignInPage = () => {
   const [username, setUsername] = useState('');
@@ -28,7 +22,10 @@ const SignInPage = () => {
       });
 
       if (response.ok) {
-        window.location.href = resolveNextPath();
+        window.location.href = resolveNextPath(
+          new URLSearchParams(window.location.search).get('next'),
+          window.location.origin,
+        );
         return;
       }
 

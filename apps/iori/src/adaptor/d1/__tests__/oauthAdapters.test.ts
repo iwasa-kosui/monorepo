@@ -9,6 +9,8 @@ import { RedirectUri } from '../../../domain/oauth/redirectUri.ts';
 import { Scope } from '../../../domain/oauth/scope.ts';
 import { Secret } from '../../../domain/oauth/secret.ts';
 import { UserId } from '../../../domain/user/userId.ts';
+import { ExchangeTokenUseCase } from '../../../useCase/exchangeToken.ts';
+import { RegisterOAuthApplicationUseCase } from '../../../useCase/registerOAuthApplication.ts';
 import { createD1AccessTokenIssuedStore } from '../oauth/accessTokenIssuedStore.ts';
 import {
   createD1AccessTokenResolverByTokenHash,
@@ -159,11 +161,15 @@ describe('D1 authorization code adapters', () => {
     const first = AuthorizationCode.consume(Instant.addDuration(ctx.now, 1000))(issued.aggregateState);
     const second = AuthorizationCode.consume(Instant.addDuration(ctx.now, 2000))(issued.aggregateState);
     if (!first.ok || !second.ok) throw new Error('consume failed');
-    await store.store(first.val);
-    await store.store(second.val);
+    expect(await store.store(first.val)).toMatchObject({ ok: true, val: true });
+    expect(await store.store(second.val)).toMatchObject({ ok: true, val: false });
 
     const resolved = await resolver.resolve(issued.aggregateState.codeHash);
     expect(resolved).toMatchObject({ ok: true, val: { consumedAt: ctx.now + 1000 } });
+    const consumedEvents = ctx.sqlite.prepare('SELECT eventId FROM domain_events WHERE eventName = ?').all(
+      'authorizationCode.consumed',
+    );
+    expect(consumedEvents).toHaveLength(1);
   });
 
   it('存在しないユーザーのコードを外部キーで拒む', async () => {
@@ -279,5 +285,58 @@ describe('D1 access token adapters', () => {
 
     const resolved = await createD1AccessTokenResolverByTokenHash(ctx.db).resolve(issued.aggregateState.tokenHash);
     expect(resolved).toMatchObject({ ok: true, val: { lastUsedAt: ctx.now + 9000 } });
+  });
+});
+
+describe('D1 での認可コードの並行交換', () => {
+  it('同じコードを同時に交換しても、トークンは 1 本だけ発行する', async () => {
+    const ctx = setup();
+    const registered = await RegisterOAuthApplicationUseCase.create({
+      oauthApplicationRegisteredStore: createD1OAuthApplicationRegisteredStore(ctx.db),
+    }).run({ clientName: 'Test App', redirectUris: 'https://app.example/cb', scopes: 'read', website: undefined });
+    if (!registered.ok) throw new Error(registered.err.message);
+    const { application, clientId, clientSecret } = registered.val;
+    const code = 'concurrent-code';
+    const issued = AuthorizationCode.issue(ctx.now)({
+      codeHash: await Secret.hash(code),
+      applicationId: application.id,
+      userId: ctx.userId,
+      redirectUri: RedirectUri.orThrow('https://app.example/cb'),
+      scopes: [Scope.orThrow('read')],
+      codeChallenge: null,
+      codeChallengeMethod: null,
+    });
+    if (!issued.ok) throw new Error('issue failed');
+    await createD1AuthorizationCodeIssuedStore(ctx.db).store(issued.val);
+    const exchangeToken = ExchangeTokenUseCase.create({
+      oauthApplicationResolverByClientId: createD1OAuthApplicationResolverByClientId(ctx.db),
+      authorizationCodeResolverByCodeHash: createD1AuthorizationCodeResolverByCodeHash(ctx.db),
+      authorizationCodeConsumedStore: createD1AuthorizationCodeConsumedStore(ctx.db),
+      accessTokenIssuedStore: createD1AccessTokenIssuedStore(ctx.db),
+      accessTokenRevokedStore: createD1AccessTokenRevokedStore(ctx.db),
+      accessTokensResolverByAuthorizationCodeHash: createD1AccessTokensResolverByAuthorizationCodeHash(ctx.db),
+    });
+    const input = {
+      grantType: 'authorization_code',
+      clientId,
+      clientSecret,
+      code,
+      redirectUri: 'https://app.example/cb',
+      codeVerifier: undefined,
+      scope: undefined,
+    };
+
+    const results = await Promise.all([exchangeToken.run(input), exchangeToken.run(input)]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toMatchObject([{ err: { error: 'invalid_grant' } }]);
+    const tokens = ctx.sqlite.prepare('SELECT revokedAt FROM oauth_access_tokens').all() as Array<
+      { revokedAt: number | null }
+    >;
+    expect(tokens).toHaveLength(1);
+    const consumedEvents = ctx.sqlite.prepare('SELECT eventId FROM domain_events WHERE eventName = ?').all(
+      'authorizationCode.consumed',
+    );
+    expect(consumedEvents).toHaveLength(1);
   });
 });

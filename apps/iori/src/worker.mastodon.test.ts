@@ -160,19 +160,39 @@ describe('Worker の Mastodon 互換 API', () => {
     expect(response.status).toBe(401);
   });
 
-  it('未実装の /api/v1 と /api/v2 のパスは 404 の JSON にし、ログに出す', async () => {
+  it('未実装の /api/v1 と /api/v2 のパスは 404 の JSON にし、認証付きの要求をログに出す', async () => {
     const { request } = setup();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const headers = { Cookie: `sessionId=${sessionId}` };
 
     const [v1, v2] = await Promise.all([
-      request('/api/v1/statuses/abc?q=1'),
-      request('/api/v2/media', { method: 'POST' }),
+      request('/api/v1/statuses/abc?q=1', { headers }),
+      request('/api/v2/media', { method: 'POST', headers }),
     ]);
 
     expect([v1.status, v2.status]).toEqual([404, 404]);
     expect(await v1.json()).toEqual({ error: 'Record not found' });
     expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: GET /api/v1/statuses/abc');
     expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: POST /api/v2/media');
+    warn.mockRestore();
+  });
+
+  it('/、/sign-in、/.well-known/webfinger を Mastodon のルーターと受け皿の 404 に取らせない', async () => {
+    const { request } = setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const responses = await Promise.all([
+      request('/', { headers: { Authorization: 'Bearer none' } }),
+      request('/sign-in', { headers: { Authorization: 'Bearer none' } }),
+      request('/.well-known/webfinger?resource=acct:kosui@worker.test', { headers: { Authorization: 'Bearer none' } }),
+    ]);
+
+    const bodies = await Promise.all(responses.map((response) => response.text()));
+    for (const body of bodies) {
+      expect(body).not.toContain('Record not found');
+    }
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(warn.mock.calls.some((call) => String(call[0]).startsWith('Unimplemented Mastodon API'))).toBe(false);
     warn.mockRestore();
   });
 

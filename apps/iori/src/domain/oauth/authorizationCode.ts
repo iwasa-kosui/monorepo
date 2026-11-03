@@ -1,4 +1,4 @@
-import { Result } from '@iwasa-kosui/result';
+import { type RA, Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -53,7 +53,9 @@ export type AuthorizationCodeConsumed = AuthorizationCodeEvent<
   { codeHash: SecretHash; consumedAt: Instant }
 >;
 export type AuthorizationCodeIssuedStore = Agg.Store<AuthorizationCodeIssued>;
-export type AuthorizationCodeConsumedStore = Agg.Store<AuthorizationCodeConsumed>;
+export type AuthorizationCodeConsumedStore = Readonly<{
+  store: (event: AuthorizationCodeConsumed) => RA<boolean, never>;
+}>;
 export type AuthorizationCodeResolverByCodeHash = Agg.Resolver<SecretHash, AuthorizationCode | undefined>;
 
 export type AuthorizationCodeAlreadyConsumedError = Readonly<{

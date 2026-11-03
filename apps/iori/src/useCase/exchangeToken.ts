@@ -90,6 +90,15 @@ const create = (deps: Deps): ExchangeTokenUseCase => {
       }),
     );
 
+  const consumeCode = async (code: AuthorizationCode, now: Instant): Promise<boolean> => {
+    const consumed = AuthorizationCode.consume(now)(code);
+    if (!consumed.ok) {
+      return false;
+    }
+    const stored = await deps.authorizationCodeConsumedStore.store(consumed.val);
+    return stored.ok && stored.val;
+  };
+
   const exchangeAuthorizationCode = (
     application: OAuthApplication,
     input: Input,
@@ -111,37 +120,30 @@ const create = (deps: Deps): ExchangeTokenUseCase => {
         return RA.ok(resolved.val);
       }),
       RA.andThen(async (state) => {
-        if (state.authorizationCode.consumedAt !== null) {
-          await revokeIssuedTokens(now, state.codeHash);
+        const { authorizationCode, codeHash } = state;
+        if (authorizationCode.consumedAt !== null) {
+          await revokeIssuedTokens(now, codeHash);
           return invalidGrant('The authorization code has already been used.');
         }
-        if (AuthorizationCode.isExpired(state.authorizationCode, now)) {
+        if (AuthorizationCode.isExpired(authorizationCode, now)) {
           return invalidGrant('The authorization code has expired.');
         }
-        if (state.authorizationCode.redirectUri !== state.redirectUri) {
+        const redirectUriMatches = authorizationCode.redirectUri === state.redirectUri;
+        const { codeChallenge } = authorizationCode;
+        const verified = codeChallenge === null
+          || (input.codeVerifier !== undefined && await CodeChallenge.verify(codeChallenge, input.codeVerifier));
+        const consumed = await consumeCode(authorizationCode, now);
+        if (!redirectUriMatches) {
           return invalidGrant('The redirect_uri does not match the authorization request.');
         }
-        return RA.ok(state);
-      }),
-      RA.andThen(async (state) => {
-        const { codeChallenge } = state.authorizationCode;
-        if (codeChallenge === null) {
-          return RA.ok(state);
+        if (!verified) {
+          return invalidGrant('The code_verifier is invalid.');
         }
-        const verified = input.codeVerifier !== undefined
-          && await CodeChallenge.verify(codeChallenge, input.codeVerifier);
-        return verified ? RA.ok(state) : invalidGrant('The code_verifier is invalid.');
-      }),
-      RA.andThen((state) => {
-        const consumed = AuthorizationCode.consume(now)(state.authorizationCode);
-        return consumed.ok ? RA.ok({ ...state, consumed: consumed.val }) : invalidGrant(consumed.err.message);
-      }),
-      RA.andThrough(({ consumed }) => deps.authorizationCodeConsumedStore.store(consumed)),
-      RA.andThen(async (state) => {
-        const stored = await deps.authorizationCodeResolverByCodeHash.resolve(state.codeHash);
-        return stored.ok && stored.val?.consumedAt === now
-          ? RA.ok(state)
-          : invalidGrant('The authorization code has already been used.');
+        if (!consumed) {
+          await revokeIssuedTokens(now, codeHash);
+          return invalidGrant('The authorization code has already been used.');
+        }
+        return RA.ok(state);
       }),
       RA.andThen(({ authorizationCode, codeHash }) =>
         issueToken(now, {

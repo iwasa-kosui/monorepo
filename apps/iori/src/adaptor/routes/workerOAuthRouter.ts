@@ -154,6 +154,7 @@ export const createWorkerOAuthRouter = ({
         renderConsentPage({
           application: validated.val.application,
           scopes: validated.val.scopes,
+          redirectUri: validated.val.redirectUri,
           hiddenFields: [
             ['client_id', fields.clientId],
             ['redirect_uri', fields.redirectUri],

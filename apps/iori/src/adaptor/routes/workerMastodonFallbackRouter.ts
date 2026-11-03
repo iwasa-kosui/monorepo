@@ -1,8 +1,11 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
 
 const notFound = (c: Context) => {
-  console.warn(`Unimplemented Mastodon API: ${c.req.method} ${c.req.path}`);
+  if (c.req.header('Authorization') !== undefined || getCookie(c, 'sessionId') !== undefined) {
+    console.warn(`Unimplemented Mastodon API: ${c.req.method} ${c.req.path}`);
+  }
   return c.json({ error: 'Record not found' }, 404);
 };
 

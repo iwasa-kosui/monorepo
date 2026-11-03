@@ -71,6 +71,22 @@ describe('createWorkerMastodonAppsRouter', () => {
       ['redirect_uris がない', { client_name: 'App' }],
       ['redirect_uris が javascript:', { client_name: 'App', redirect_uris: 'javascript:alert(1)' }],
       ['scopes が未知', { client_name: 'App', redirect_uris: 'https://a.example/cb', scopes: 'admin' }],
+      [
+        'redirect_uris が 11 件',
+        {
+          client_name: 'App',
+          redirect_uris: Array.from({ length: 11 }, (_, index) => `https://a.example/cb${index}`).join('\n'),
+        },
+      ],
+      ['client_name が 201 文字', { client_name: 'a'.repeat(201), redirect_uris: 'https://a.example/cb' }],
+      [
+        'website が 2001 文字',
+        { client_name: 'App', redirect_uris: 'https://a.example/cb', website: `https://a.example/${'a'.repeat(1983)}` },
+      ],
+      [
+        'scopes が 1001 文字',
+        { client_name: 'App', redirect_uris: 'https://a.example/cb', scopes: `read${' read'.repeat(200)}` },
+      ],
     ])('%s と 422 にする', async (_label, values) => {
       const h = createOAuthHarness();
 

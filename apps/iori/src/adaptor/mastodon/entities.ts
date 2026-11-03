@@ -34,6 +34,8 @@ export const AccountSchema = z.object({
   bot: z.boolean(),
   group: z.boolean(),
   discoverable: z.boolean().nullable(),
+  indexable: z.boolean(),
+  hide_collections: z.boolean().nullable(),
   created_at: z.string(),
   last_status_at: z.string().nullable(),
   statuses_count: z.number().int().nonnegative(),
@@ -49,6 +51,8 @@ export const CredentialAccountSchema = AccountSchema.extend({
     privacy: z.enum(['public', 'unlisted', 'private', 'direct']),
     sensitive: z.boolean(),
     language: z.string().nullable(),
+    discoverable: z.boolean().nullable(),
+    indexable: z.boolean(),
     follow_requests_count: z.number().int().nonnegative(),
   }),
 });

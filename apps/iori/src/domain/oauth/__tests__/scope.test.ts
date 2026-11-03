@@ -18,6 +18,12 @@ describe('Scope', () => {
       expect(result).toMatchObject({ ok: true, val: ['read', 'write', 'read:accounts'] });
     });
 
+    it('1000 文字までを受け付け、1001 文字を拒む', () => {
+      const input = (length: number) => `read${' '.repeat(length - 4)}`;
+      expect(Scope.parseList(input(1000))).toMatchObject({ ok: true });
+      expect(Scope.parseList(input(1001))).toMatchObject({ ok: false, err: { type: 'InvalidScopeError' } });
+    });
+
     it('未知のスコープはエラーにする', () => {
       const result = Scope.parseList('read admin:read');
       expect(result).toMatchObject({ ok: false, err: { type: 'InvalidScopeError', detail: { scope: 'admin:read' } } });

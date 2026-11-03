@@ -1,11 +1,13 @@
 import { html } from 'hono/html';
 
 import type { OAuthApplication } from '../../../domain/oauth/oauthApplication.ts';
+import { RedirectUri } from '../../../domain/oauth/redirectUri.ts';
 import type { Scope } from '../../../domain/oauth/scope.ts';
 
 export type ConsentPageProps = Readonly<{
   application: OAuthApplication;
   scopes: ReadonlyArray<Scope>;
+  redirectUri: string;
   hiddenFields: ReadonlyArray<readonly [string, string]>;
 }>;
 
@@ -29,7 +31,24 @@ const layout = (title: string, body: unknown) =>
   <body>${body}</body>
 </html>`;
 
-export const renderConsentPage = ({ application, scopes, hiddenFields }: ConsentPageProps) =>
+const describeRedirectDestination = (redirectUri: string): string => {
+  try {
+    const url = new URL(redirectUri);
+    if (url.origin !== 'null') {
+      return url.origin;
+    }
+    return url.host.length > 0 ? `${url.protocol}//${url.host}` : redirectUri;
+  } catch {
+    return redirectUri;
+  }
+};
+
+const renderCodeDestination = (redirectUri: string) =>
+  RedirectUri.isOob(redirectUri)
+    ? html`<p>The authorization code will be shown on screen.</p>`
+    : html`<p>The authorization code will be sent to <code>${describeRedirectDestination(redirectUri)}</code>.</p>`;
+
+export const renderConsentPage = ({ application, scopes, redirectUri, hiddenFields }: ConsentPageProps) =>
   layout(
     'Authorize application',
     html`
@@ -38,6 +57,7 @@ export const renderConsentPage = ({ application, scopes, hiddenFields }: Consent
     ${application.website === null ? '' : html`<p>Website: ${application.website}</p>`}
     <p>It will be able to:</p>
     <ul>${scopes.map((scope) => html`<li><code>${scope}</code></li>`)}</ul>
+    ${renderCodeDestination(redirectUri)}
     <form method="post" action="/oauth/authorize">
       ${hiddenFields.map(([name, value]) => html`<input type="hidden" name="${name}" value="${value}">`)}
       <div class="actions">

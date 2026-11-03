@@ -24,9 +24,9 @@ const zodType = z.object({
   id: OAuthApplicationId.zodType,
   clientId: ClientId.zodType,
   clientSecretHash: SecretHash.zodType,
-  name: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).max(200),
   website: z.nullable(z.string().max(2000).refine(isHttpUrl, 'website must be an http or https URL')),
-  redirectUris: z.array(RedirectUri.zodType).min(1),
+  redirectUris: z.array(RedirectUri.zodType).min(1).max(RedirectUri.maxCount),
   scopes: z.array(Scope.zodType).min(1),
   createdAt: Instant.zodType,
 }).describe('OAuthApplication');

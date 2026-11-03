@@ -135,6 +135,22 @@ describe('GET /oauth/authorize', () => {
     expect(fields['csrf_token']).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
+  it('同意画面にコードを受け取るサイトを、エスケープして表示する', async () => {
+    const h = createOAuthHarness();
+    const { clientId } = await h.registerApp({
+      redirectUris: [REDIRECT_URI, 'ivory://oauth/callback', 'urn:ietf:wg:oauth:2.0:oob'],
+    });
+    const { sessionId } = h.memory.addSession();
+    const page = async (redirectUri: string) =>
+      (await h.request(`/oauth/authorize?${authorizeQuery(clientId, { redirect_uri: redirectUri })}`, {
+        headers: { Cookie: `sessionId=${sessionId}` },
+      })).text();
+
+    expect(await page(REDIRECT_URI)).toContain('sent to <code>https://app.example</code>');
+    expect(await page('ivory://oauth/callback')).toContain('sent to <code>ivory://oauth</code>');
+    expect(await page('urn:ietf:wg:oauth:2.0:oob')).toContain('The authorization code will be shown on screen.');
+  });
+
   it('scope を省略すると read の同意画面にする', async () => {
     const h = createOAuthHarness();
     const { clientId } = await h.registerApp();
@@ -169,6 +185,21 @@ describe('GET /oauth/authorize', () => {
 
     expect(response.status).toBe(302);
     expect(new URL(response.headers.get('Location')!).searchParams.get('error')).toBe('unsupported_response_type');
+  });
+
+  it('code_challenge_method=plain は redirect_uri へ invalid_request を付けて返す', async () => {
+    const h = createOAuthHarness();
+    const { clientId } = await h.registerApp();
+
+    const response = await h.request(
+      `/oauth/authorize?${authorizeQuery(clientId, { code_challenge: CHALLENGE, code_challenge_method: 'plain' })}`,
+    );
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('Location')!);
+    expect(`${location.origin}${location.pathname}`).toBe(REDIRECT_URI);
+    expect(location.searchParams.get('error')).toBe('invalid_request');
+    expect(location.searchParams.get('state')).toBe('xyz');
   });
 
   it('PKCE の code_challenge を同意画面の隠しフィールドに引き継ぐ', async () => {
@@ -355,7 +386,7 @@ describe('POST /oauth/authorize', () => {
     expect(h.memory.codes.size).toBe(0);
   });
 
-  it('PKCE の code_challenge を認可コードに結び付ける', async () => {
+  it('PKCE の code_challenge を認可コードに結び付け、不一致の要求でコードを消費する', async () => {
     const { h, fields, sessionId, clientId, clientSecret } = await setupConsent({
       code_challenge: CHALLENGE,
       code_challenge_method: 'S256',
@@ -377,7 +408,7 @@ describe('POST /oauth/authorize', () => {
       );
 
     expect((await exchange('x'.repeat(43))).status).toBe(400);
-    expect((await exchange(VERIFIER)).status).toBe(200);
+    expect((await exchange(VERIFIER)).status).toBe(400);
   });
 });
 

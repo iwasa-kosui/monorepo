@@ -96,7 +96,17 @@ describe('createWorkerMastodonCoreRouter', () => {
         last_status_at: '2025-06-06',
         avatar: `${ORIGIN}/default-avatar.png`,
         header: `${ORIGIN}/default-header.png`,
-        source: { privacy: 'public', sensitive: false, language: null, note: '', fields: [] },
+        indexable: false,
+        hide_collections: null,
+        source: {
+          privacy: 'public',
+          sensitive: false,
+          language: null,
+          note: '',
+          fields: [],
+          discoverable: null,
+          indexable: false,
+        },
       });
     });
 
@@ -336,13 +346,14 @@ describe('createWorkerMastodonCoreRouter', () => {
   });
 
   describe('未実装のパスの受け皿', () => {
-    it('/api/v1 と /api/v2 の未実装のパスに 404 を返し、メソッドとパスだけをログに出す', async () => {
+    it('/api/v1 と /api/v2 の未実装のパスに 404 を返し、認証付きの要求だけメソッドとパスをログに出す', async () => {
       const h = setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { token, sessionId } = { ...(await h.issueUserToken('read')), ...h.memory.addSession() };
 
       const responses = await Promise.all([
-        h.request('/api/v1/statuses/abc?secret=1'),
-        h.request('/api/v2/unknown', { method: 'POST' }),
+        h.request('/api/v1/statuses/abc?secret=1', { headers: { Authorization: `Bearer ${token}` } }),
+        h.request('/api/v2/unknown', { method: 'POST', headers: { Cookie: `sessionId=${sessionId}` } }),
       ]);
 
       expect(responses.map((response) => response.status)).toEqual([404, 404]);
@@ -351,6 +362,20 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(logged).toContain('Unimplemented Mastodon API: GET /api/v1/statuses/abc');
       expect(logged).toContain('Unimplemented Mastodon API: POST /api/v2/unknown');
       expect(logged.join('\n')).not.toContain('secret');
+      warn.mockRestore();
+    });
+
+    it('Authorization も Cookie の sessionId もない要求は 404 を返し、ログに出さない', async () => {
+      const h = setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const responses = await Promise.all([
+        h.request('/api/v1/statuses/abc'),
+        h.request('/api/v2/unknown', { method: 'POST' }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404]);
+      expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
     });
 

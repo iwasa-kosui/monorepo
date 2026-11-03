@@ -13,6 +13,7 @@ export const createSqliteD1Fixture = () => {
   }
   sqlite.exec('PRAGMA foreign_keys=ON');
   const queries: Array<{ sql: string; params: SQLInputValue[] }> = [];
+  const totalChanges = () => Number((sqlite.prepare('SELECT total_changes() AS n').get() as { n: number | bigint }).n);
   const bound = (sql: string, params: SQLInputValue[]) => ({
     sql,
     params,
@@ -21,7 +22,11 @@ export const createSqliteD1Fixture = () => {
       statement.setReturnArrays(true);
       return statement.all(...params);
     },
-    all: async () => ({ results: sqlite.prepare(sql).all(...params), success: true, meta: {} }),
+    all: async () => {
+      const before = totalChanges();
+      const results = sqlite.prepare(sql).all(...params);
+      return { results, success: true, meta: { changes: totalChanges() - before } };
+    },
     run: async () => {
       const { changes } = sqlite.prepare(sql).run(...params);
       return { results: [], success: true, meta: { changes: Number(changes) } };

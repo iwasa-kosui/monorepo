@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { Scope } from '../../../../domain/oauth/scope.ts';
 import { createOAuthInMemory } from '../../../../useCase/__tests__/helper/oauthInMemory.ts';
 import { createMastodonAuthn, type MastodonAuthEnv } from '../../mastodonAuthn.ts';
 import { createWorkerMastodonAppsRouter } from '../../workerMastodonAppsRouter.ts';
@@ -15,8 +16,8 @@ export const createOAuthHarness = () => {
     sessionResolver: memory.sessionResolver as never,
   });
   const protectedRoutes = new Hono<MastodonAuthEnv>()
-    .get('/api/v1/user', authn.requireUser(), (c) => c.json(c.get('principal') ?? null))
-    .post('/api/v1/user', authn.requireUser(), (c) => c.json({ ok: true }))
+    .get('/api/v1/user', authn.requireUser(Scope.orThrow('read')), (c) => c.json(c.get('principal') ?? null))
+    .post('/api/v1/user', authn.requireUser(Scope.orThrow('read')), (c) => c.json({ ok: true }))
     .get('/api/v1/statuses', authn.requireUser('read:statuses' as never), (c) => c.json({ ok: true }))
     .get(
       '/api/v1/account',

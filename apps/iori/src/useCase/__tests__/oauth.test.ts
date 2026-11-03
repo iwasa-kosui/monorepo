@@ -120,6 +120,17 @@ describe('RegisterOAuthApplicationUseCase', () => {
     ['redirect_uris がない', { clientName: 'App', redirectUris: undefined }],
     ['redirect_uris が javascript:', { clientName: 'App', redirectUris: 'javascript:alert(1)' }],
     ['scopes が未知', { clientName: 'App', redirectUris: REDIRECT_URI, scopes: 'admin' }],
+    ['redirect_uris が 11 件', {
+      clientName: 'App',
+      redirectUris: Array.from({ length: 11 }, (_, index) => `https://a.example/cb${index}`),
+    }],
+    ['client_name が 201 文字', { clientName: 'a'.repeat(201), redirectUris: REDIRECT_URI }],
+    ['website が 2001 文字', {
+      clientName: 'App',
+      redirectUris: REDIRECT_URI,
+      website: `https://a.example/${'a'.repeat(1983)}`,
+    }],
+    ['scopes が 1001 文字', { clientName: 'App', redirectUris: REDIRECT_URI, scopes: `read${' read'.repeat(200)}` }],
     ['website が URL でない', { clientName: 'App', redirectUris: REDIRECT_URI, website: 'javascript:alert(1)' }],
   ])('%s と拒否する', async (_label, input) => {
     const { useCases, memory } = setup();
@@ -282,6 +293,18 @@ describe('ExchangeTokenUseCase (authorization_code)', () => {
     });
   });
 
+  it('redirect_uri が違う要求でコードを消費し、その後の正しい要求も invalid_grant にする', async () => {
+    const { register, issueCode, exchange, memory } = setup();
+    const app = await register({ redirectUris: [REDIRECT_URI, 'https://other.example/cb'] });
+    const code = await issueCode(app);
+
+    await exchange(app, { code, redirectUri: 'https://other.example/cb' });
+
+    expect([...memory.codes.values()][0]!.consumedAt).not.toBeNull();
+    expect(await exchange(app, { code })).toMatchObject({ ok: false, err: { error: 'invalid_grant' } });
+    expect(memory.tokens.size).toBe(0);
+  });
+
   it('別のアプリのコードを invalid_grant にする', async () => {
     const { register, issueCode, exchange } = setup();
     const app = await register();
@@ -327,18 +350,35 @@ describe('ExchangeTokenUseCase (authorization_code)', () => {
       expect(await exchange(app, { code, codeVerifier: VERIFIER })).toMatchObject({ ok: true });
     });
 
-    it('code_verifier がない、または違うと invalid_grant にし、コードは消費しない', async () => {
+    it('code_verifier がないと invalid_grant にし、コードを消費する', async () => {
       const { register, issueCode, exchange, memory } = setup();
       const app = await register();
       const code = await issueCode(app, { codeChallenge: CHALLENGE, codeChallengeMethod: 'S256' });
 
       expect(await exchange(app, { code })).toMatchObject({ ok: false, err: { error: 'invalid_grant' } });
+
+      expect([...memory.codes.values()][0]!.consumedAt).not.toBeNull();
+      expect(await exchange(app, { code, codeVerifier: VERIFIER })).toMatchObject({
+        ok: false,
+        err: { error: 'invalid_grant' },
+      });
+      expect(memory.tokens.size).toBe(0);
+    });
+
+    it('code_verifier が違うと invalid_grant にし、その後に正しい code_verifier でも invalid_grant にする', async () => {
+      const { register, issueCode, exchange, memory } = setup();
+      const app = await register();
+      const code = await issueCode(app, { codeChallenge: CHALLENGE, codeChallengeMethod: 'S256' });
+
       expect(await exchange(app, { code, codeVerifier: `${VERIFIER}x` })).toMatchObject({
         ok: false,
         err: { error: 'invalid_grant' },
       });
-      expect([...memory.codes.values()][0]!.consumedAt).toBeNull();
-      expect(await exchange(app, { code, codeVerifier: VERIFIER })).toMatchObject({ ok: true });
+      expect(await exchange(app, { code, codeVerifier: VERIFIER })).toMatchObject({
+        ok: false,
+        err: { error: 'invalid_grant' },
+      });
+      expect(memory.tokens.size).toBe(0);
     });
 
     it('PKCE なしで発行したコードは code_verifier なしで交換できる', async () => {
@@ -351,6 +391,19 @@ describe('ExchangeTokenUseCase (authorization_code)', () => {
   });
 
   describe('コードの再使用', () => {
+    it('同じコードを同時に交換しても、トークンは 1 本だけ発行する', async () => {
+      const { register, issueCode, exchange, memory } = setup();
+      const app = await register();
+      const code = await issueCode(app);
+
+      const results = await Promise.all([exchange(app, { code }), exchange(app, { code })]);
+
+      expect(results.filter((result) => result.ok)).toHaveLength(1);
+      expect(results.filter((result) => !result.ok)).toMatchObject([{ err: { error: 'invalid_grant' } }]);
+      expect(memory.tokens.size).toBe(1);
+      expect(memory.events.filter((event) => event.eventName === 'authorizationCode.consumed')).toHaveLength(1);
+    });
+
     it('使用済みコードが再び来たら invalid_grant にし、そのコードのトークンをすべて失効させる', async () => {
       const { register, issueCode, exchange, memory } = setup();
       const app = await register();

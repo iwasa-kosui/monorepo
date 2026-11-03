@@ -29,6 +29,8 @@ const account: Account = {
   bot: false,
   group: false,
   discoverable: null,
+  indexable: false,
+  hide_collections: null,
   created_at: '2025-01-01T00:00:00.000Z',
   last_status_at: null,
   statuses_count: 0,

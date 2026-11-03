@@ -63,6 +63,8 @@ const toAccountOf = (
     bot: false,
     group: false,
     discoverable: null,
+    indexable: false,
+    hide_collections: null,
     created_at: toIsoString(options.createdAt),
     last_status_at: options.lastStatusAt === null ? null : toDateString(options.lastStatusAt),
     statuses_count: options.statusesCount,

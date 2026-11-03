@@ -29,7 +29,9 @@ export const domainEventsTable = sqliteTable('domain_events', {
   eventName: text('eventName').notNull(),
   eventPayload: text('eventPayload'),
   occurredAt: timestamp().notNull(),
-});
+}, (table) => [
+  index('domain_events_aggregate_id_idx').on(table.aggregateId),
+]);
 
 export const actorsTable = sqliteTable('actors', {
   actorId: text('actorId').primaryKey(),
@@ -64,6 +66,7 @@ export const followsTable = sqliteTable('follows', {
     .references(() => actorsTable.actorId),
 }, (table) => [
   uniqueIndex('follower_following_unique').on(table.followerId, table.followingId),
+  index('follows_following_id_idx').on(table.followingId),
 ]);
 
 export const userPasswordsTable = sqliteTable('user_passwords', {
@@ -90,7 +93,9 @@ export const postsTable = sqliteTable('posts', {
   createdAt: timestamp().notNull(),
   type: text('type').notNull(),
   deletedAt: timestamp(),
-});
+}, (table) => [
+  index('posts_actor_id_idx').on(table.actorId),
+]);
 
 export const remotePostsTable = sqliteTable('remote_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
