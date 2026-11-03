@@ -189,8 +189,6 @@ export default {
           '/api',
           createWorkerTimelinePostingApiRouter({
             getTimelineUseCase: runtime.timeline.getTimelineUseCase,
-            createPostUseCase: runtime.posting.createPostUseCase,
-            createContext: (timelineRequest) => runtime.federation.createContext(timelineRequest, undefined),
           }),
         );
         app.route(
