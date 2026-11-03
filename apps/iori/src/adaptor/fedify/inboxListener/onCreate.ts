@@ -4,11 +4,13 @@ import { getLogger } from '@logtape/logtape';
 
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
 
 export type OnCreateDeps = Readonly<{
+  origin: string;
   inboxActorResolver: InboxActorResolver;
   addRemotePostUseCase: AddRemotePostUseCase;
   fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase;
@@ -40,6 +42,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
   const inReplyToUri = object.replyTargetId?.href ?? null;
   const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
   const visibility = extractVisibility(addressed, actor.followersId);
+  const recipientActorUris = extractRecipientActorUris([object, activity], deps.origin);
 
   return RA.flow(
     deps.addRemotePostUseCase.run({
@@ -49,6 +52,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       attachments,
       inReplyToUri,
       visibility,
+      recipientActorUris,
     }),
     RA.match({
       ok: async ({ actor: createdActor }) => {

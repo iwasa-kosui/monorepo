@@ -19,6 +19,7 @@ import {
   repostsTable,
 } from '../schema.ts';
 import { resolvePostsWithAuthorByIds } from './postWithAuthorBatch.ts';
+import { visibleToViewer } from './visibleToViewer.ts';
 
 const cursorPost = alias(postsTable, 'cursor_post');
 const cursorRepost = alias(repostsTable, 'cursor_repost');
@@ -45,7 +46,10 @@ const comparePosition = (page: PageRequest) => (a: Entry, b: Entry): number => {
 };
 
 export const createD1AccountStatusItemsResolverByActorId = (db: IoriD1Db): AccountStatusItemsResolverByActorId => ({
-  resolve: async ({ actorId, currentActorId, page, excludeReplies, excludeReblogs, onlyMedia }) => {
+  resolve: async (
+    { actorId, currentActorId, page, excludeReplies, excludeReblogs, onlyMedia, onlyVisibleToViewer },
+  ) => {
+    const visible = visibleToViewer({ currentActorId, onlyVisibleToViewer });
     const postColumns = { createdAt: postsTable.createdAt, id: postsTable.postId };
     const repostColumns = { createdAt: repostsTable.createdAt, id: repostsTable.repostId };
     const [postRows, repostRows] = await Promise.all([
@@ -56,6 +60,7 @@ export const createD1AccountStatusItemsResolverByActorId = (db: IoriD1Db): Accou
         .where(and(
           eq(postsTable.actorId, actorId),
           isNull(postsTable.deletedAt),
+          visible,
           excludeReplies ? and(isNull(localPostsTable.inReplyToUri), isNull(remotePostsTable.inReplyToUri)) : undefined,
           onlyMedia
             ? sql`exists (select 1 from ${postImagesTable} where ${postImagesTable.postId} = ${postsTable.postId})`
@@ -73,6 +78,7 @@ export const createD1AccountStatusItemsResolverByActorId = (db: IoriD1Db): Accou
           .where(and(
             eq(repostsTable.actorId, actorId),
             isNull(postsTable.deletedAt),
+            visible,
             ...pageConditions(page, repostColumns, cursorOf),
           ))
           .orderBy(...pageOrderBy(page, repostColumns))

@@ -324,6 +324,7 @@ export const createWorkerRuntimePorts = async (
         postResolver,
       }),
       sendRepostUseCase: SendRepostUseCase.create({
+        origin: env.ORIGIN,
         sessionResolver,
         userResolver,
         actorResolverByUserId,

@@ -36,6 +36,7 @@ describe('D1 schema', () => {
       'relaysTable',
       'remoteActorsTable',
       'remoteLikesTable',
+      'remotePostRecipientsTable',
       'remotePostsTable',
       'repostsTable',
       'sessionsTable',

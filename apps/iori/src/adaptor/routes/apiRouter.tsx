@@ -292,6 +292,7 @@ const app = new Hono()
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
 
       const useCase = SendRepostUseCase.create({
+        origin: Env.getInstance().ORIGIN,
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),

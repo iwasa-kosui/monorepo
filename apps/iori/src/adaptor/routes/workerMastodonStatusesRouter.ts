@@ -53,7 +53,11 @@ export const createWorkerMastodonStatusesRouter = ({
     viewerActorId: ActorId | undefined,
   ): Promise<StatusSource | undefined> => {
     const [posts, repost] = await Promise.all([
-      postsWithAuthorResolverByPostIds.resolve({ postIds: [id], currentActorId: viewerActorId }),
+      postsWithAuthorResolverByPostIds.resolve({
+        postIds: [id],
+        currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
+      }),
       repostResolverById.resolve(RepostId.orThrow(id)),
     ]);
     if (!posts.ok || !repost.ok) {
@@ -69,6 +73,7 @@ export const createWorkerMastodonStatusesRouter = ({
     const original = await postsWithAuthorResolverByPostIds.resolve({
       postIds: [repost.val.postId],
       currentActorId: viewerActorId,
+      onlyVisibleToViewer: true,
     });
     if (!original.ok) {
       throw new StatusAssemblyError('Failed to resolve the reposted status');
@@ -125,7 +130,11 @@ export const createWorkerMastodonStatusesRouter = ({
         return c.json(internalServerError, 500);
       }
       const { viewerActorId } = viewer;
-      const thread = await threadResolver.resolve({ postId: id.val, currentActorId: viewerActorId });
+      const thread = await threadResolver.resolve({
+        postId: id.val,
+        currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
+      });
       if (!thread.ok) {
         return c.json(internalServerError, 500);
       }

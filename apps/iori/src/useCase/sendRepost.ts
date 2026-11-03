@@ -1,6 +1,7 @@
 import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
+import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -52,6 +53,7 @@ type Err =
 export type SendRepostUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
+  origin: string;
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
@@ -63,6 +65,7 @@ type Deps = Readonly<{
 }>;
 
 const create = ({
+  origin,
   sessionResolver,
   userResolver,
   actorResolverByUserId,
@@ -188,6 +191,7 @@ const create = ({
           uri: objectUri,
           content: String(result.content ?? ''),
           visibility: extractVisibility(result, author.followersId),
+          recipientActorUris: extractRecipientActorUris([result], origin),
           authorIdentity: {
             uri: author.id.href,
             inboxUrl: author.inboxId.href,

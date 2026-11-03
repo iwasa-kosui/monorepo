@@ -7,7 +7,7 @@ import { FetchReplyNotesRecursiveUseCase } from '../fetchReplyNotesRecursive.ts'
 const followersId = new URL('https://remote.example/users/alice/followers');
 const publicUri = new URL('https://www.w3.org/ns/activitystreams#Public');
 
-const createNote = (addressing: { tos?: URL[]; ccs?: URL[] }) =>
+const createNote = (addressing: { tos?: URL[]; ccs?: URL[]; btos?: URL[]; bccs?: URL[] }) =>
   new Note({
     id: new URL('https://remote.example/notes/parent'),
     content: '<p>parent</p>',
@@ -23,6 +23,7 @@ const createNote = (addressing: { tos?: URL[]; ccs?: URL[] }) =>
 const run = async (note: Note) => {
   const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1' } as never)) };
   const useCase = FetchReplyNotesRecursiveUseCase.create({
+    origin: 'https://iori.test',
     postResolverByUri: { resolve: async () => RA.ok(undefined) },
     localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
     remotePostUpserter,
@@ -52,5 +53,18 @@ describe('FetchReplyNotesRecursiveUseCase', () => {
     const upsert = await run(createNote({}));
 
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
+  });
+
+  it('records the local actors addressed by the fetched Note', async () => {
+    const upsert = await run(createNote({
+      tos: [new URL('https://iori.test/users/kosui'), followersId],
+      bccs: [new URL('https://iori.test/users/hanako')],
+    }));
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientActorUris: ['https://iori.test/users/kosui', 'https://iori.test/users/hanako'],
+      }),
+    );
   });
 });

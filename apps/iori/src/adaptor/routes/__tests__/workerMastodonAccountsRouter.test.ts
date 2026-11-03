@@ -150,6 +150,7 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(me.actorId, alice.actorId);
     const first = t.seed.addLocalPost(me, 1_000, { content: '<p>first</p>' });
     const media = t.seed.addLocalPost(me, 1_500);
     t.seed.addImage(media.postId, '/uploads/a.png', 'alt');
@@ -217,7 +218,7 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await response.json()).toEqual([]);
   });
 
-  it('未認証ではリモートのアカウントの public と unlisted の投稿だけを返し、ログインすると全部返す', async () => {
+  it('未認証ではリモートのアカウントの public と unlisted の投稿だけを返し、ログインするとフォロー中の相手の private も返す', async () => {
     const t = await seedAccounts();
     const publicNote = t.seed.addRemotePost(t.alice, 5_000, { visibility: 'public' });
     t.seed.addRemotePost(t.alice, 5_100, { visibility: 'private' });
@@ -232,7 +233,7 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
       [unlistedNote.postId, 'unlisted'],
       [publicNote.postId, 'public'],
     ]);
-    expect(await statusIds(loggedIn)).toHaveLength(8);
+    expect(await statusIds(loggedIn)).toHaveLength(7);
   });
 
   it('未認証では public のリモートの投稿のブーストを返す', async () => {

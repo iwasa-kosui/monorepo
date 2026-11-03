@@ -65,7 +65,11 @@ export type PostEvent<
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
 export type PostCreated = PostEvent<Post, 'post.created', Post>;
-export type RemotePostCreated = PostEvent<RemotePost, 'post.remotePostCreated', RemotePost>;
+export type RemotePostCreated = PostEvent<
+  RemotePost,
+  'post.remotePostCreated',
+  RemotePost & { recipientActorUris: ReadonlyArray<string> }
+>;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
 const createPost = (now: Instant) =>
@@ -91,21 +95,24 @@ const createPost = (now: Instant) =>
 
 const createRemotePost = (now: Instant) =>
 (
-  payload: Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'> & { inReplyToUri?: string | null },
+  payload:
+    & Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'>
+    & { inReplyToUri?: string | null; recipientActorUris?: ReadonlyArray<string> },
 ): RemotePostCreated => {
+  const { recipientActorUris = [], ...postPayload } = payload;
   const postId = PostId.generate();
   const post: RemotePost = {
-    ...payload,
+    ...postPayload,
     postId,
     type: 'remote',
     createdAt: now,
-    inReplyToUri: payload.inReplyToUri ?? null,
+    inReplyToUri: postPayload.inReplyToUri ?? null,
   };
   return PostEvent.create(
     postId,
     post,
     'post.remotePostCreated',
-    post,
+    { ...post, recipientActorUris },
     Instant.now(),
   );
 };
@@ -149,15 +156,16 @@ export type RemotePostIdentity = Readonly<{
   }>;
   inReplyToUri?: string | null;
   visibility: Visibility | null;
+  recipientActorUris?: ReadonlyArray<string>;
   attachments?: readonly RemotePostAttachment[];
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<
-  { postId: PostId; currentActorId?: ActorId },
+  { postId: PostId; currentActorId?: ActorId; onlyVisibleToViewer?: boolean },
   { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
 >;
 export type PostsWithAuthorResolverByPostIds = Agg.Resolver<
-  { postIds: ReadonlyArray<PostId>; currentActorId: ActorId | undefined },
+  { postIds: ReadonlyArray<PostId>; currentActorId: ActorId | undefined; onlyVisibleToViewer?: boolean },
   ReadonlyMap<PostId, PostWithAuthor>
 >;
 export type LocalPostsResolverByPage = Agg.Resolver<
