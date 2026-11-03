@@ -167,7 +167,12 @@ const byNewest = (a: Candidate, b: Candidate): number => {
   return b.publishedAt.getTime() - a.publishedAt.getTime();
 };
 
-export const parseFeed = (xml: string): Result<ParsedFeedItem[], FeedParseError> => {
+export type ParseFeedOptions = Readonly<{ maxItems?: number }>;
+
+export const parseFeed = (
+  xml: string,
+  { maxItems = MAX_FEED_ITEMS }: ParseFeedOptions = {},
+): Result<ParsedFeedItem[], FeedParseError> => {
   if (/<!ENTITY/i.test(xml)) return Result.err(feedParseError('Invalid XML: entity declarations are not supported'));
   const validation = XMLValidator.validate(xml);
   if (validation !== true) return Result.err(feedParseError(`Invalid XML: ${validation.err.msg}`));
@@ -180,7 +185,7 @@ export const parseFeed = (xml: string): Result<ParsedFeedItem[], FeedParseError>
   const candidates = isNode(root) ? collectCandidates(root) : undefined;
   if (candidates === undefined) return Result.err(feedParseError('Unsupported feed format.'));
   return Result.ok(
-    candidates.toSorted(byNewest).slice(0, MAX_FEED_ITEMS).flatMap((candidate) => {
+    candidates.toSorted(byNewest).slice(0, maxItems).flatMap((candidate) => {
       const item = toItem(candidate);
       return item === undefined ? [] : [item];
     }),

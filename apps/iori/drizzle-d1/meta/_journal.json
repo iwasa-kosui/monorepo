@@ -71,6 +71,13 @@
       "when": 1793743330080,
       "tag": "0009_ai_summary_usages",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793744201976,
+      "tag": "0010_interest_sources",
+      "breakpoints": true
     }
   ]
 }

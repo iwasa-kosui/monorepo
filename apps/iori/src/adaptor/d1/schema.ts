@@ -1,5 +1,7 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import { embeddingBlob } from './embeddingColumn.ts';
+
 const timestamp = () => integer({ mode: 'timestamp_ms' });
 
 export const usersTable = sqliteTable('users', {
@@ -461,6 +463,24 @@ export const digestTrendsTable = sqliteTable('digest_trends', {
   primaryKey({ columns: [table.digestId, table.kind, table.rank] }),
 ]);
 
+export const interestSourcesTable = sqliteTable('interest_sources', {
+  interestSourceId: text('interestSourceId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  kind: text('kind').notNull(),
+  ref: text('ref').notNull(),
+  contentHash: text('contentHash').notNull(),
+  weight: real('weight').notNull(),
+  occurredAt: timestamp().notNull(),
+  embedding: embeddingBlob('embedding'),
+  embeddedAt: timestamp(),
+  deletedAt: timestamp(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('interest_sources_user_id_kind_ref_unique').on(table.userId, table.kind, table.ref),
+  index('interest_sources_user_id_embedded_at_deleted_at_idx').on(table.userId, table.embeddedAt, table.deletedAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -506,4 +526,5 @@ export const schema = {
   digestsTable,
   digestItemsTable,
   digestTrendsTable,
+  interestSourcesTable,
 } as const;
