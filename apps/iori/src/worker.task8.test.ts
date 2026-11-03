@@ -83,8 +83,8 @@ vi.mock('./adaptor/d1/article/articleResolver.ts', () => ({
 }));
 vi.mock('./adaptor/ogImage/workerOgImageRenderer.ts', () => ({ renderWorkerOgImage: ogImage.render }));
 vi.mock('./adaptor/ogImage/ogImageFont.ts', () => ({ fetchOgFont: ogImage.fetchFont }));
-vi.mock('@fedify/hono', () => ({
-  federation: () => async (_context: unknown, next: () => Promise<void>) => next(),
+vi.mock('./adaptor/fedify/activityPubArticleNotFound.ts', () => ({
+  federationWithArticleNotFound: () => async (_context: unknown, next: () => Promise<void>) => next(),
 }));
 
 import worker from './worker.ts';

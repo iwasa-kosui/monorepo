@@ -72,8 +72,8 @@ const runtime = vi.hoisted(() => ({
 vi.mock('./runtime/workerRuntime.ts', () => ({
   createWorkerRuntimePorts: async () => runtime,
 }));
-vi.mock('@fedify/hono', () => ({
-  federation: () => async (_context: unknown, next: () => Promise<void>) => next(),
+vi.mock('./adaptor/fedify/activityPubArticleNotFound.ts', () => ({
+  federationWithArticleNotFound: () => async (_context: unknown, next: () => Promise<void>) => next(),
 }));
 
 import worker from './worker.ts';

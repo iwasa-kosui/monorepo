@@ -118,6 +118,107 @@ describe('iori Worker on workerd', () => {
     expect(actor.publicKey?.publicKeyPem).toContain('BEGIN PUBLIC KEY');
   });
 
+  describe('ActivityPub article objects', () => {
+    const publishedId = '7b0f3c1e-52a4-4d38-8e6b-1c9a4f2d7e10';
+    const draftId = '8c1a4d2f-63b5-4e49-9f7c-2d0b5a3e8f21';
+    const unpublishedId = '9d2b5e30-74c6-4f5a-8a8d-3e1c6b4f9a32';
+    const missingId = 'a3c6f041-85d7-4a6b-9b9e-4f2d7c5a0b43';
+    const activityJson = { Accept: 'application/activity+json' };
+    const articlePath = (id: string) => `${origin}/users/${username}/articles/${id}`;
+
+    it('seeds a published, a draft, and an unpublished article', async () => {
+      const cookie = requireSession();
+      for (const content of ['article root 1', 'article root 2', 'article root 3']) {
+        const created = await SELF.fetch(`${origin}/posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+          body: new URLSearchParams({ content }),
+          redirect: 'manual',
+        });
+        expect(created.status).toBe(302);
+      }
+      const author = await env.DB.prepare('SELECT actorId, userId FROM local_actors LIMIT 1').first<
+        { actorId: string; userId: string }
+      >();
+      const roots = await env.DB.prepare(
+        'SELECT postId FROM posts WHERE postId NOT IN (SELECT rootPostId FROM articles) LIMIT 3',
+      ).all<{ postId: string }>();
+      expect(roots.results).toHaveLength(3);
+      const [published, draft, unpublished] = roots.results.map((root) => root.postId);
+      const insert = env.DB.prepare(
+        'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt, publishedAt, unpublishedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      await env.DB.batch([
+        insert.bind(
+          publishedId,
+          author!.actorId,
+          author!.userId,
+          published,
+          'published article',
+          'published',
+          1,
+          2,
+          null,
+        ),
+        insert.bind(draftId, author!.actorId, author!.userId, draft, 'draft article', 'draft', 1, null, null),
+        insert.bind(
+          unpublishedId,
+          author!.actorId,
+          author!.userId,
+          unpublished,
+          'unpublished article',
+          'unpublished',
+          1,
+          2,
+          3,
+        ),
+      ]);
+    });
+
+    it('returns 404 for an unknown article with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath(missingId), { headers: activityJson });
+      expect(response.status).toBe(404);
+    });
+
+    it('returns 404 for a draft article with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath(draftId), { headers: activityJson });
+      expect(response.status).toBe(404);
+    });
+
+    it('returns 404 for an unpublished article with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath(unpublishedId), { headers: activityJson });
+      expect(response.status).toBe(404);
+    });
+
+    it('returns the Article for a published article with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath(publishedId), { headers: activityJson });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toContain('application/activity+json');
+      const article = await response.json<{ type: string; id: string; name: string }>();
+      expect(article.type).toBe('Article');
+      expect(article.id).toBe(articlePath(publishedId));
+      expect(article.name).toBe('published article');
+    });
+
+    it('keeps serving the HTML shell for an unknown article with text/html', async () => {
+      const response = await SELF.fetch(articlePath(missingId), { headers: { Accept: 'text/html' } });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toContain('text/html');
+    });
+
+    it('keeps the actor unchanged for application/activity+json', async () => {
+      const actor = await SELF.fetch(`${origin}/users/${username}`, { headers: activityJson });
+      expect(actor.status).toBe(200);
+      expect((await actor.json<{ type: string }>()).type).toBe('Person');
+    });
+
+    it('keeps passing a missing post through to the page route for application/activity+json', async () => {
+      const post = await SELF.fetch(`${origin}/users/${username}/posts/${missingId}`, { headers: activityJson });
+      expect(post.status).toBe(200);
+      expect(post.headers.get('Content-Type')).toContain('text/html');
+    });
+  });
+
   it('verifies a stored @noble/hashes password hash with the WASM Argon2id', async () => {
     const nobleHashedPassword = 'noble-hashed-password-1';
     const hashed = await Password.hashPassword(nobleArgon2idDerive)(Password.orThrow(nobleHashedPassword));
