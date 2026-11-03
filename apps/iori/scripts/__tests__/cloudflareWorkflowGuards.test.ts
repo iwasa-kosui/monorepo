@@ -41,6 +41,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     'verify-import',
     'cutover-route',
     'deploy-worker',
+    'adopt-cutover-state',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -193,6 +194,39 @@ it('gives purge-rehearsal-target target read credentials and application R2 writ
     [],
   );
   expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|IORI_MIGRATION_REHEARSAL/);
+});
+it('gives adopt-cutover-state the cutover token and the Terraform state write keys without SSH, receipt, R2 or smoke secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['adopt-cutover-state'];
+  const adopt = operation(job).env!;
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'adopt-cutover-state\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(adopt.IORI_ADMISSION_MODE).toBe('sealed');
+  expect(adopt.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_CUTOVER_API_TOKEN'));
+  expect(adopt.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_WRITE_ACCESS_KEY_ID'));
+  expect(adopt.AWS_SECRET_ACCESS_KEY).toBe(secret('IORI_TERRAFORM_WRITE_SECRET_ACCESS_KEY'));
+  expect(Object.keys(adopt)).toEqual([
+    'IORI_ADMISSION_MODE',
+    'CLOUDFLARE_ACCOUNT_ID',
+    'CLOUDFLARE_ZONE_ID',
+    'IORI_TERRAFORM_BACKEND_BUCKET',
+    'IORI_ADMISSION_IDENTITY',
+    'ORIGIN',
+    'VAPID_SUBJECT',
+    'CLOUDFLARE_API_TOKEN',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+  ]);
+  expect(JSON.stringify(job)).not.toMatch(
+    /SSH|RECEIPT|R2|SMOKE_QUEUE_TOKEN|IORI_MIGRATION_REHEARSAL|VAPID_(?:PUBLIC|PRIVATE)|STAGING_ACCESS_TOKEN|READ_ONLY/,
+  );
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toEqual(
+    expect.arrayContaining(['adopt-cutover-state', 'reconcile-resources', 'replace-queue-consumer']),
+  );
 });
 it('lets estimate-source start without generation or run ID while keeping them selectable for the other operations', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');

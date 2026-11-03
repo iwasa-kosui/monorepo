@@ -2,6 +2,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { adoptPlanDetails, inspectAdoptedPlan, inspectRefreshPlan } from './adopt-plan.mjs';
 import { assertFreshTargetState, createTargetIdentity, inspectFreshTargetPlan } from './fresh-target.mjs';
 import { runInfrastructureCommand } from './infrastructure-command.mjs';
 import { inspectRouteCutoverPlan } from './route-cutover-plan.mjs';
@@ -14,6 +15,7 @@ const fail = (reason, details) => {
     diagnostic: { reason, ...(details ? { details } : {}) },
   });
 };
+const ROUTE_ADDRESS = 'cloudflare_workers_route.iori[0]';
 const parsePrivateJson = (source) => {
   try {
     return JSON.parse(source);
@@ -32,6 +34,7 @@ export const createTargetTerraform = (
     runCommand = runInfrastructureCommand,
     signal = AbortSignal.timeout(30 * 60_000),
     onStage = () => {},
+    onNotice = () => {},
   },
 ) => {
   const identity = createTargetIdentity(supplied);
@@ -40,7 +43,7 @@ export const createTargetTerraform = (
     || !/^[a-f0-9]{32}$/.test(zoneId ?? '') || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(hostname ?? '')
     || !privateDirectory || resolve(privateDirectory) !== privateDirectory
   ) fail('config-invalid');
-  const run = async (args) => {
+  const runWithStatus = async (args, acceptedStatuses = []) => {
     signal.throwIfAborted();
     await mkdir(privateDirectory, { recursive: true, mode: 0o700 });
     await chmod(privateDirectory, 0o700);
@@ -65,7 +68,8 @@ export const createTargetTerraform = (
       });
     } catch (error) {
       signal.throwIfAborted();
-      throw withReason(error, 'command-failed');
+      if (!acceptedStatuses.includes(error?.exitCode)) throw withReason(error, 'command-failed');
+      result = { status: error.exitCode, stdout: '', stderr: '' };
     }
     await writeFile(
       join(privateDirectory, 'terraform-diagnostic.txt'),
@@ -74,9 +78,10 @@ export const createTargetTerraform = (
     );
     await chmod(join(privateDirectory, 'terraform-diagnostic.txt'), 0o600);
     signal.throwIfAborted();
-    if (result.status !== 0) fail('command-failed');
-    return result.stdout;
+    if (result.status !== 0 && !acceptedStatuses.includes(result.status)) fail('command-failed');
+    return { status: result.status, stdout: result.stdout };
   };
+  const run = async (args) => (await runWithStatus(args)).stdout;
   let initialized = false;
   const initializeBackend = async () => {
     onStage('tf-init');
@@ -157,8 +162,9 @@ export const createTargetTerraform = (
     ) fail('output-mismatch');
     return { workerBindings: bindings, targetIdentity: target, migrationStorage: storage };
   };
-  const initializeExisting = async (paused) => {
+  const readExisting = async (paused, readStage) => {
     await initializeBackend();
+    if (readStage) onStage(readStage);
     const state = parsePrivateJson(await run(['show', '-json']));
     if (!state.values?.root_module?.resources?.length) fail('output-mismatch');
     const outputs = parsePrivateJson(await run(['output', '-json']));
@@ -178,12 +184,19 @@ export const createTargetTerraform = (
       || !result.workerBindings.d1_database_id || !result.workerBindings.kv_namespace_id
       || result.migrationStorage.bucket_name !== identity.names.transfer
       || result.migrationStorage.environment !== identity.environment
-      || !t.queue_id || !t.dlq_id || t.queue_id === t.dlq_id || t.queue_settings?.delivery_paused !== paused
+      || !t.queue_id || !t.dlq_id || t.queue_id === t.dlq_id
+      || (paused !== undefined && t.queue_settings?.delivery_paused !== paused)
       || t.dlq_settings?.delivery_paused !== true || !Array.isArray(t.consumer) || t.consumer.length !== 1
       || !t.consumer[0].consumer_id || t.consumer[0].queue_id !== t.queue_id
       || t.consumer[0].script_name !== identity.workerName || t.consumer[0].dead_letter_queue !== identity.names.dlq
     ) fail('output-mismatch');
-    return result;
+    return { result, resources: state.values.root_module.resources };
+  };
+  const initializeExisting = async (paused) => (await readExisting(paused)).result;
+  const initializeAdoptable = async ({ paused } = {}) => {
+    const { result, resources } = await readExisting(paused, 'adopt-state-read');
+    const route = resources.find((resource) => resource.address === ROUTE_ADDRESS);
+    return { ...result, routeInState: route !== undefined, routeId: route?.values?.id };
   };
   const changeQueuePause = async ({ paused, establishedBindings, routeEnabled }) => {
     onStage('queue-plan');
@@ -241,12 +254,59 @@ export const createTargetTerraform = (
     await run(['apply', '-input=false', path]);
     return { applied: true };
   };
+  const adoptCutoverState = async ({ routeId, routeInState, establishedBindings }) => {
+    if (!/^[a-f0-9]{32}$/.test(routeId ?? '')) fail('route-id-invalid');
+    if (typeof routeInState !== 'boolean' || !establishedBindings) fail('plan-rejected');
+    const variables = [
+      '-var=attach_queue_consumer=true',
+      '-var=queue_delivery_paused=false',
+      `-var=enable_production_worker_route=${identity.environment === 'production'}`,
+      `-var=enable_staging_worker_route=${identity.environment === 'staging'}`,
+    ];
+    onStage('adopt-route-import');
+    if (!routeInState) {
+      await run(['import', '-input=false', '-lock=true', ...variables, ROUTE_ADDRESS, `${zoneId}/${routeId}`]);
+    }
+    onNotice('adopt-route-import', routeInState ? 'route-in-state' : 'route-imported');
+    onStage('adopt-refresh-plan');
+    const refreshPath = join(privateDirectory, 'adopt-refresh.tfplan');
+    await run(['plan', '-refresh-only', '-input=false', '-lock=true', `-out=${refreshPath}`, ...variables]);
+    const refresh = parsePrivateJson(await run(['show', '-json', refreshPath]));
+    const refreshIssues = inspectRefreshPlan(refresh);
+    if (refreshIssues.length) fail('plan-rejected', adoptPlanDetails(refreshIssues, 'drift'));
+    onNotice('adopt-refresh-plan', refresh.resource_drift?.length ? 'refresh-drift-allowed' : 'refresh-no-drift');
+    onStage('adopt-refresh-apply');
+    await run(['apply', '-input=false', '-lock=true', refreshPath]);
+    onNotice('adopt-refresh-apply', 'refresh-applied');
+    onStage('adopt-final-plan');
+    const finalPath = join(privateDirectory, 'adopt-final.tfplan');
+    const { status } = await runWithStatus([
+      'plan',
+      '-detailed-exitcode',
+      '-input=false',
+      '-lock=true',
+      `-out=${finalPath}`,
+      ...variables,
+    ], [2]);
+    const plan = parsePrivateJson(await run(['show', '-json', finalPath]));
+    const bindingsChanged =
+      JSON.stringify(plan?.output_changes?.worker_bindings?.before) !== JSON.stringify(establishedBindings);
+    const issues = inspectAdoptedPlan(plan, { hostname, workerName: identity.workerName, zoneId });
+    if (status === 2 || bindingsChanged || issues.length) {
+      const details = [...(bindingsChanged ? ['plan-bindings-changed'] : []), ...adoptPlanDetails(issues, 'diff')];
+      fail('plan-rejected', details.length ? details : ['plan-invalid']);
+    }
+    onNotice('adopt-final-plan', 'plan-clean');
+    return { imported: !routeInState };
+  };
   return Object.freeze({
     initializeFresh,
     initializeEstablished,
     initializeActive,
+    initializeAdoptable,
     prepare,
     changeQueuePause,
     changeRoute,
+    adoptCutoverState,
   });
 };

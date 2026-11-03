@@ -127,6 +127,19 @@ staging rehearsal の実施有無にかかわらず、この節の手順を実�
 
 activitypub.academy はサービスを終了しているため、この確認には使えません（2026-11-01 に operator が確認）。
 
+### 手作業で cutover した後の state の取り込み
+
+`cutover-route` を使わず、手作業で cutover した場合は、Cloudflare の実物が active になっても、Terraform の state は cutover 前のままです。この状態では、`deploy-worker` が state の出力と実物の不一致で止まります。operation `adopt-cutover-state` は、この state を実物に合わせます。この operation は、第3節の手順 1 から 13 の順序に含まれません。
+
+事前条件は、次の2つです。
+
+- source の凍結が続いている。
+- Cloudflare の実物が active である。main queue が稼働し、DLQ が停止し、consumer が1件で、route があり、Worker の `IORI_ADMISSION_MODE` が `active` である。
+
+`adopt-cutover-state` は、Cloudflare に書き込みません。state を書くのは、route の `terraform import` と、保存した `plan -refresh-only` の plan ファイルの `apply` の2回だけです。`-auto-approve`、`destroy`、`state rm`、`taint` は使いません。plan に差分があれば、operation は止まり、`apply` しません。
+
+input と dispatch の例、止まった段の読み方は、実行手順の[第6.2節](./cloudflare-execution-guide.md#62-一段階ずつ-dispatch-する)と[第6.5節](./cloudflare-execution-guide.md#65-adopt-cutover-state-の失敗した段)に従います。止まっても Cloudflare の実物は変わりません。state が進んでいても、同じ入力で再 dispatch してよいです。
+
 ## 4. Rollback
 
 移行に失敗しても Lightsail の書き込みを自動再開しません。route 作成前であっても、失敗した実行 ID、部分的な import、移行先の受付状態を確認します。再起動だけでは永続的な凍結は解除されません。移行先への通常書き込みを有効にしていないと確認し、復旧を明示的に承認した場合だけ、同じ SHA と run ID の source control に `resume` と `destination_writes_not_enabled` を指定します。
@@ -250,7 +263,9 @@ workers.dev と切替後の custom-domain smoke は、protected queue token を�
 
 通常更新では backend、binding、canonical route、consumer、main Queue の配送中状態、DLQ の配送停止状態を更新前後で照合します。secret 更新、Terraform apply、データ import、source の再凍結は含めません。Wrangler は producer の Queue API を呼ぶ場合があるため、設定が変わらないことを実 readback で確認します。不確かな失敗後に自動 redeploy や producer 復元は行いません。
 
-`reconcile-resources` と `replace-queue-consumer` は、別の保守手順をレビューするまで権限を使う前に明示的に停止します。移行の再実行や consumer の置換に流用しません。基礎 API と旧環境は保持しますが、この runbook はその保守操作を承認するものではありません。
+手作業で cutover した場合は、`adopt-cutover-state` が `adopted` で終わった後に、Terraform が route を管理します。作業者は、その後の更新を通常の `deploy-worker` で行います。
+
+`reconcile-resources` と `replace-queue-consumer` は、別の保守手順をレビューするまで権限を使う前に明示的に停止します。移行の再実行や consumer の置換に流用しません。`adopt-cutover-state` も、この2つを流用していません。基礎 API と旧環境は保持しますが、この runbook はその保守操作を承認するものではありません。
 
 final acceptance は次をすべて満たすまで完了としない。
 

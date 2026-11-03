@@ -322,6 +322,14 @@ R2 の S3 credential と Cloudflare REST API token は別に扱います。作�
 - Transfer S3: `IORI_TRANSFER_R2_READ_ONLY`
 - Application S3: `IORI_APPLICATION_R2_WRITE`
 
+`adopt-cutover-state` が使う参照名は、次のとおりです。Source SSH、署名、実測、Transfer S3、Application S3 の参照名は使いません。
+
+- 移行先: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_TERRAFORM_BACKEND_BUCKET`、`ORIGIN`
+- 実行 identity: `IORI_ADMISSION_IDENTITY`
+- Web Push: `VAPID_SUBJECT`
+- API role: `IORI_CLOUDFLARE_CUTOVER_API_TOKEN`
+- State S3: `IORI_TERRAFORM_WRITE`
+
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
 
 ### VAPID 値の確認
@@ -1080,6 +1088,34 @@ gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
 
 この2つは移行の順序に含まれません。凍結が残ったときの復旧だけに使います。environment には dispatch の input の environment を使います。production では Environment の承認が必要です。手順は第7.1節に書きます。この2つの dispatch は `migration_main_sha` を必要とし、`resume-source` は `recovery` も必要とするため、上の例は使わず、第7.1節の例に従います。旧環境の状態を読み取るだけの `diagnose-source` は、旧環境に書き込まないため、この2つには含みません。手順は第7.2節に書きます。
 
+`adopt-cutover-state` も、上の表の順序に含まれません。この operation は、手作業で cutover した後に、Terraform の state を Cloudflare の実物に合わせるために使います。`cutover-route` で移行した場合は、dispatch しません。
+
+作業者は、次の事前条件を確かめてから dispatch します。
+
+- source の凍結が続いている。
+- Cloudflare の実物が active である。main queue が稼働し、DLQ が停止し、consumer が1件で、route があり、Worker の `IORI_ADMISSION_MODE` が `active` である。
+
+input は次のとおりです。
+
+- `operation`: `adopt-cutover-state`
+- `environment`: 移行時の environment
+- `main_sha`: main の最新の SHA
+- `generation`、`migration_run_id`、`migration_main_sha`: 移行時の値
+
+```bash
+gh workflow run deploy-iori-worker.yml --repo "$iori_repo" --ref main \
+  -f main_sha='<現在の main の SHA>' \
+  -f migration_main_sha='<移行時の main SHA>' \
+  -f operation=adopt-cutover-state \
+  -f environment='<移行時の environment>' \
+  -f generation='<移行時の generation>' \
+  -f migration_run_id='<移行時の run_id>'
+```
+
+この operation は、Cloudflare に書き込みません。create、update、delete を一度も発行しません。state を書くのは、route の `terraform import` と、保存した `plan -refresh-only` の plan ファイルの `apply` の2回だけです。`-auto-approve`、`destroy`、`state rm`、`taint` は使いません。plan に差分があれば、operation は止まり、`apply` しません。止まった段の読み方は第6.5節に書きます。
+
+取り込みが `adopted` で終わると、Terraform が route を管理します。作業者は、その後の更新を通常の `deploy-worker` で行います。
+
 `migrate-data` は、旧 DB の全行を移しません。`scripts/export-postgres-lib.mjs` の `EXPORT_ROW_SCOPE` が、本人の投稿と本人に関わる相手の行だけを export の対象にします。export は、本人を users と local_actors から求めます。
 
 - 全行を移す表は、users、user_passwords、keys、instance_actor_keys、local_actors、local_posts、articles、relays、push_subscriptions、mutes です。keys と instance_actor_keys が無いと、Worker が新しい鍵を作り、連合が壊れます。このため export は、この2表を必ず全行移します。
@@ -1332,17 +1368,87 @@ IORI_DIAG stage=target-read-<処理> program=<terraform|none> exit=<0-255|none> 
 - `output-mismatch`: `target-read-tf-show` では state が空です。`target-read-output-check` では、出力が想定の identity と合いません。
 - `identity-mismatch`: `target-read-expected` で、出力から有効な移行先を組み立てられません。
 
+### 6.5 adopt-cutover-state の失敗した段
+
+`adopt-cutover-state` は、11段の結果を公開ログに `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行で出します。成功の行を出すのは、段6〜9と段11だけです。段1〜5と段10は、成功の行を出しません。失敗した行の `program`、`exit`、`signal` は、Terraform のコマンドが失敗した段も含めて、常に `program=none exit=none signal=none` です。Terraform の終了コードは、この行に入りません。どの段で止まっても、`adopt-cutover-state` の行の後に、実行基盤が `IORI_DIAG stage=hosted-operation program=node exit=1 signal=none reason=command-failed` の行を1行出します。この行の `exit=1` は、`adopt-cutover-state` のプロセスが終了コード 1 で終わったことを表します。行には固定の語だけが入り、メッセージの本文、ID、属性の値は入りません。
+
+| 段 | `stage`               | 処理                                                                                                              | 成功の語                                    | 失敗の `reason`                                                                                                    |
+| -- | --------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1  | `adopt-inputs`        | 入力と identity の照合。`CLOUDFLARE_API_TOKEN` が空でないことの確認                                               | なし                                        | `config-invalid`                                                                                                   |
+| 2  | `adopt-main-check`    | `main_sha` が最新の main であることの確認                                                                         | なし                                        | `reviewed-main-*`、`aborted`                                                                                       |
+| 3  | `adopt-tf-init`       | `terraform init`                                                                                                  | なし                                        | `command-failed`                                                                                                   |
+| 4  | `adopt-state-read`    | state の読み取り。identity、consumer が1件であること、DLQ が停止していること、route が state にあるかどうかの確認 | なし                                        | `output-mismatch`、`output-invalid`、`command-failed`                                                              |
+| 5  | `adopt-cloud-read`    | Cloudflare の実物の読み取りと、state の ID との照合。route の id の形式の検査                                     | なし                                        | `state-mismatch`、`worker-*`、`mismatch`、`route-id-invalid`、Cloudflare API の `reason`（`queues-http-403` など） |
+| 6  | `adopt-route-import`  | state に route がない場合だけ、route を `terraform import` する                                                   | `route-imported`、`route-in-state`          | `command-failed`                                                                                                   |
+| 7  | `adopt-refresh-plan`  | `plan -refresh-only` と、plan の検査                                                                              | `refresh-no-drift`、`refresh-drift-allowed` | `plan-rejected`、`command-failed`、`output-invalid`                                                                |
+| 8  | `adopt-refresh-apply` | 段7で保存した plan ファイルの `apply`                                                                             | `refresh-applied`                           | `command-failed`                                                                                                   |
+| 9  | `adopt-final-plan`    | 最終の `plan` と検査。この plan は apply しない                                                                   | `plan-clean`                                | `plan-rejected`、`plan-bindings-changed`、`command-failed`、`output-invalid`                                       |
+| 10 | `adopt-final-check`   | state の出力が active の期待に合うことと、state の route の id が段5の id と一致することの確認                    | なし                                        | `output-mismatch`、`mismatch`、`command-failed`                                                                    |
+| 11 | `adopt-cloud-reread`  | 段5と同じ読み取りをもう一度行い、変化がないことの確認                                                             | `adopted`                                   | `mismatch`、`state-mismatch`、Cloudflare API の `reason`                                                           |
+
+`route-id-invalid` は、段5で読み取った route の id の形式が不正なときの `reason` です。ほかの `reason` の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)と[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の表と同じです。`state-mismatch` で止まったときは、`resource-` で始まる行が出ます。この行は、details 全体の上限（24行）の中で数えます。`resource-` の語の意味は、[prepare-target の失敗した段](#prepare-target-の失敗した段)の `resource-` の表と同じです。
+
+成功の語の意味は、次のとおりです。
+
+- `route-imported`: 段6が route を state に import しました。
+- `route-in-state`: route が既に state にあったため、段6は import しませんでした。
+- `refresh-no-drift`: 段7の refresh-only の plan に drift がありませんでした。
+- `refresh-drift-allowed`: 段7の refresh-only の plan に drift があり、許可する範囲に収まっていました。許可するのは、`cloudflare_queue.fedify` の `settings.delivery_paused` が true から false に変わった update と、`modified_on` の更新だけです。
+- `refresh-applied`: 段8が保存した plan ファイルを apply しました。
+- `plan-clean`: 段9の最終 plan が全リソースで no-op でした。route の zone、pattern、script が期待どおりで、main queue が稼働し、DLQ が停止し、consumer が1件であることも確認済みです。
+- `adopted`: 段11の読み取りが段5と同じでした。取り込みが完了しています。
+
+#### 許可外の drift と差分の行
+
+段7が許可外の drift で止まったときは、`reason=plan-rejected` の行の前に、変わった属性ごとに次の行が出ます。
+
+```text
+IORI_DIAG stage=adopt-refresh-plan program=none exit=none signal=none reason=drift-<resource>-<attribute>
+```
+
+段9が差分で止まったときは、`reason=plan-rejected` の行の前に、変わった属性ごとに次の行が出ます。
+
+```text
+IORI_DIAG stage=adopt-final-plan program=none exit=none signal=none reason=diff-<resource>-<attribute>
+```
+
+`resource` と `attribute` の読み方は、次のとおりです。
+
+- `<resource>`: 変わったリソースです。`d1`、`uploads`、`kv`、`queue`、`dlq`、`transfer`、`transfer-domain`、`consumer`、`route`、`other` のどれかで、意味は `plan-<resource>-<action>` の `<resource>` と同じです。
+- `<attribute>`: 変わった属性です。Terraform の属性名の下線をハイフンに変えた語が出ます。例として、`settings.delivery_paused` は `delivery-paused`、`zone_id` は `zone-id`、`dead_letter_queue` は `dead-letter-queue`、`modified_on` は `modified-on` です。固定の対応表にない属性は `other` になります。
+- `drift-<resource>-more` と `diff-<resource>-more`: 1つのリソースで変わった属性の語が、`more` を含めて8語に収まりませんでした。このとき、行に出る語は先頭の7語と `more` の計8語です。8語目以降の属性は、行に出ません。
+
+変わった属性は、before と after の JSON を比べて求めます。行には属性の名前だけが入り、値は入りません。たとえば `reason=drift-consumer-script-name` は、consumer の `script_name` が refresh で変わったことを表します。drift と diff の行は、`plan-<resource>-<action>` の行と同じ details に入ります。details は、重複を除いて全体で24行までです。24行を超えた分は、行に出ません。この行が出たとき、作業者は `stage` と `reason` を記録し、レビューに戻します。
+
+#### 止まった段ごとに残るもの
+
+`adopt-cutover-state` は、Cloudflare に書き込みません。どの段で止まっても、Cloudflare の実物は変わっていません。state を書くのは、段6の import と段8の apply の2回だけです。
+
+| 止まった段 | state の状態                                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 段1〜5     | 変わっていません。                                                                                                                                 |
+| 段6        | route の import の途中で止まっています。route が state に入ったかどうかは、再 dispatch の段4が読み取って判断します。                               |
+| 段7        | route が state に入っています。保存した plan は apply していないので、refresh の結果は state に入っていません。                                    |
+| 段8        | route が state に入っています。apply の途中で止まったので、refresh の結果の一部が state に入っている可能性があります。                             |
+| 段9        | route と refresh の結果が state に入っています。最終 plan は apply していません。                                                                  |
+| 段10、11   | route と refresh の結果が state に入っています。段11の `mismatch` は、段5から段11までの間に、Cloudflare の実物が別の操作で変わったことを表します。 |
+
+段6以降で止まったときは、state が進んでいます。それでも、作業者は同じ入力で `adopt-cutover-state` を再 dispatch してよいです。再 dispatch すると、段4が state の現在の内容を読み、route が既にあれば段6は import せず `route-in-state` を出します。ただし、段7と段9が許可外の drift や差分で止まった場合は、原因を解消しないまま再 dispatch しても同じ行で止まります。再 dispatch の前に、作業者が上の drift と差分の行から原因を確かめます。
+
+再 dispatch では、`main_sha` に最新の main の SHA を指定します。`generation`、`migration_run_id`、`migration_main_sha` は、移行時の値のまま変えません。
+
 ## 7. 中断と引き継ぎ
 
-| 中断地点                      | 維持する状態                            | 次の対応                                                                                                                                                                                                                                                                                                             |
-| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 認証・保護・source 診断で停止 | 稼働中 source を維持                    | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                                                                                                                                                                                       |
-| 準備の結果が不明              | 部分生成した generation と state を保持 | 実 readback で状態を特定。`stage=prepare-<段>` の行を見て、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表で判断する。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
-| 凍結後、HTTP 有効化前         | Source の凍結、予約、部分 import を保持 | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                                                                                                                                 |
-| HTTP 有効化後                 | 旧 source を凍結したまま保持            | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                                                                                                                                     |
-| cutover-route が止まった      | 旧 source を凍結したまま保持            | source の凍結を保ち、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の `stage` と `reason` を記録して、レビューに戻します。`cutover-queue-apply` 以降の段で止まった場合は、HTTP 有効化後の行に従います。                                                                                                |
+| 中断地点                       | 維持する状態                                                                          | 次の対応                                                                                                                                                                                                                                                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 認証・保護・source 診断で停止  | 稼働中 source を維持                                                                  | 未確認項目・拒否された操作・必要な担当者を記録                                                                                                                                                                                                                                                                       |
+| 準備の結果が不明               | 部分生成した generation と state を保持                                               | 実 readback で状態を特定。`stage=prepare-<段>` の行を見て、[prepare-target の失敗した段](#prepare-target-の失敗した段)の表で判断する。generation を再利用して自動再実行しない（generation のリソースが1つも無く、backend bucket の state の場所に object も無い場合を除く。[VAPID 値の確認](#vapid-値の確認)を参照） |
+| 凍結後、HTTP 有効化前          | Source の凍結、予約、部分 import を保持                                               | 移行先書き込みが未有効であることを確認し、明示承認した復旧だけを実施                                                                                                                                                                                                                                                 |
+| HTTP 有効化後                  | 旧 source を凍結したまま保持                                                          | 移行先での復旧を優先し、差分を照合するまで旧 source を再開しない                                                                                                                                                                                                                                                     |
+| cutover-route が止まった       | 旧 source を凍結したまま保持                                                          | source の凍結を保ち、[cutover-route の失敗した段](#63-cutover-route-の失敗した段)の `stage` と `reason` を記録して、レビューに戻します。`cutover-queue-apply` 以降の段で止まった場合は、HTTP 有効化後の行に従います。                                                                                                |
+| adopt-cutover-state が止まった | 旧 source を凍結したまま保持。Cloudflare の実物は未変更。段6以降は state が進んでいる | `stage` と `reason` を記録し、[adopt-cutover-state の失敗した段](#65-adopt-cutover-state-の失敗した段)で原因を確かめます。同じ入力で再 dispatch してよいです。                                                                                                                                                       |
 
-具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。
+具体的な復旧条件は [cutover runbook の Rollback](./cloudflare-cutover-runbook.md#4-rollback)に従います。`reconcile-resources` と `replace-queue-consumer` は現行 workflow が権限使用前に拒否する保守用の未提供操作です。復旧の代用として dispatch しません。`adopt-cutover-state` は、この2つの予約名を流用せず、別に追加した operation です。
 
 完了後も14日間の監視・保持を続け、AWS retirement は保持証跡と destroy plan のレビュー・明示承認後の別作業とします。実行者は「最後に成功した段階」「確認済みの現在状態」「次の操作」「必要な承認」を残し、次の担当者が同じ run の続行と新規移行を取り違えないようにします。
 

@@ -107,7 +107,15 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each(['prepare-target', 'rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'deploy-worker'])(
+it.each([
+  'prepare-target',
+  'rehearse-migration',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'deploy-worker',
+  'adopt-cutover-state',
+])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
     const valid = { ...env, IORI_OPERATION: operation };
@@ -149,6 +157,7 @@ it.each([
   'verify-import',
   'cutover-route',
   'deploy-worker',
+  'adopt-cutover-state',
   'purge-rehearsal-target',
   'diagnose-source',
   'resume-source',
@@ -190,6 +199,23 @@ it('accepts the rehearsal operation under the same invocation binding as data mi
       IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
     })
   ).toThrow();
+});
+it('accepts adopt-cutover-state and lets its migration SHA differ from the code SHA like deploy-worker', () => {
+  const adopt = { ...env, IORI_OPERATION: 'adopt-cutover-state' };
+  expect(parseWorkflowInvocation(adopt)).toMatchObject({
+    operation: 'adopt-cutover-state',
+    codeSha: env.MAIN_SHA,
+    migrationSha: env.MAIN_SHA,
+    generation: env.IORI_GENERATION,
+    runId: env.IORI_MIGRATION_RUN_ID,
+  });
+  expect(parseWorkflowInvocation({ ...adopt, IORI_MIGRATION_MAIN_SHA: frozenSha })).toMatchObject({
+    operation: 'adopt-cutover-state',
+    codeSha: env.MAIN_SHA,
+    migrationSha: frozenSha,
+  });
+  expect(() => parseWorkflowInvocation({ ...adopt, IORI_MIGRATION_MAIN_SHA: 'not-a-sha' })).toThrow();
+  expect(() => parseWorkflowInvocation({ ...adopt, GITHUB_SHA: frozenSha })).toThrow();
 });
 it('accepts the purge operation and lets its migration SHA differ from the code SHA like deploy-worker', () => {
   expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: 'purge-rehearsal-target' })).toMatchObject({
@@ -271,6 +297,7 @@ it.each([
   'verify-import',
   'cutover-route',
   'deploy-worker',
+  'adopt-cutover-state',
   'purge-rehearsal-target',
 ])('rejects an empty or missing generation and run ID for %s', operation => {
   const invocation = { ...env, IORI_OPERATION: operation };

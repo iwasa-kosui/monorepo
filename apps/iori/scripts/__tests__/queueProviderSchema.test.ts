@@ -15,3 +15,15 @@ it.skipIf(!process.env.IORI_PROVIDER_SCHEMA_PATH && !process.env.CI)(
       .toBeUndefined();
   },
 );
+it.skipIf(!process.env.IORI_PROVIDER_SCHEMA_PATH && !process.env.CI)(
+  'pinned provider exposes the Worker route attributes that the adoption plan inspects',
+  async () => {
+    const schema = JSON.parse(await readFile(process.env.IORI_PROVIDER_SCHEMA_PATH!, 'utf8'));
+    const route = schema.provider_schemas['registry.terraform.io/cloudflare/cloudflare'].resource_schemas
+      .cloudflare_workers_route.block.attributes;
+    expect(route.zone_id).toMatchObject({ type: 'string', required: true });
+    expect(route.pattern).toMatchObject({ type: 'string', required: true });
+    expect(route.script).toMatchObject({ type: 'string', optional: true });
+    expect(route.id).toMatchObject({ type: 'string', computed: true });
+  },
+);
