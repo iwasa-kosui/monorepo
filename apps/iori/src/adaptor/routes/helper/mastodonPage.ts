@@ -6,13 +6,15 @@ export type PageLimits = Readonly<{ defaultLimit: number; maxLimit: number }>;
 
 export const timelineLimits: PageLimits = { defaultLimit: 20, maxLimit: 40 };
 export const accountListLimits: PageLimits = { defaultLimit: 40, maxLimit: 80 };
+export const notificationLimits: PageLimits = { defaultLimit: 40, maxLimit: 80 };
+export const unreadCountLimits: PageLimits = { defaultLimit: 100, maxLimit: 1000 };
 
 export const isTrue = (value: string | undefined): boolean => value === 'true' || value === '1';
 
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value.length === 0 ? undefined : value;
 
-const parseLimit = (value: string | undefined, { defaultLimit, maxLimit }: PageLimits): number => {
+export const parseLimit = (value: string | undefined, { defaultLimit, maxLimit }: PageLimits): number => {
   const parsed = value === undefined ? Number.NaN : Number.parseInt(value, 10);
   return Number.isNaN(parsed) || parsed < 1 ? defaultLimit : Math.min(parsed, maxLimit);
 };

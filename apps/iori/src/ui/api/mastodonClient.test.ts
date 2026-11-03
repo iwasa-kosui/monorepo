@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchFollowers,
   fetchHomeTimeline,
+  fetchNotifications,
   fetchPublicTimeline,
   fetchStatus,
   fetchStatusContext,
   isNotFoundError,
   isUnauthorizedError,
   parseLinkHeader,
+  saveNotificationsMarker,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -138,6 +140,39 @@ describe('mastodon client requests', () => {
     await fetchFollowers('actor-1', { limit: 80 });
 
     expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/actor-1/followers?limit=80');
+  });
+
+  it('requests notifications with the repeated types[] and max_id, and returns the cursors', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 'n1' }], {
+      link: '<https://iori.example/api/v1/notifications?max_id=n1>; rel="next"',
+    }));
+
+    const page = await fetchNotifications(['favourite', 'iori:emoji_reaction'], { maxId: 'm1' });
+
+    expect(decodeURIComponent(String(requestedUrl(fetchMock)))).toBe(
+      '/api/v1/notifications?max_id=m1&types[]=favourite&types[]=iori:emoji_reaction',
+    );
+    expect(page).toEqual({ items: [{ id: 'n1' }], nextMaxId: 'n1', prevMinId: undefined });
+  });
+
+  it('saves the notifications marker with a same-origin JSON post', async () => {
+    const fetchMock = stubFetch(jsonResponse({}));
+
+    await saveNotificationsMarker('n9');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/markers');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({ notifications: { last_read_id: 'n9' } });
+  });
+
+  it('rejects when saving the marker fails', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await saveNotificationsMarker('n9').catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
   });
 
   it('throws an unauthorized error carrying the server message on 401', async () => {

@@ -16,7 +16,13 @@ import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
+import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
 import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
+import type {
+  NotificationCountResolverSinceMarker,
+  NotificationResolverByUserIdAndId,
+  NotificationsResolverByPage,
+} from '../domain/notification/notification.ts';
 import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.ts';
 import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
@@ -42,14 +48,13 @@ import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
 import type { GetMutesUseCase } from '../useCase/getMutes.ts';
-import type { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
-import type { GetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
 import type { GetUserPostsUseCase } from '../useCase/getUserPosts.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -107,6 +112,11 @@ export type IoriMastodonRuntimePorts = Readonly<{
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
   statusAssembler: StatusAssembler;
+  notificationsResolverByPage: NotificationsResolverByPage;
+  notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
+  notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
+  markersResolverByUserId: MarkersResolverByUserId;
+  saveMarkersUseCase: SaveMarkersUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -123,8 +133,6 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
 }>;
 export type IoriNotificationsRuntimePorts = Readonly<{
-  getUnreadNotificationCountUseCase: GetUnreadNotificationCountUseCase;
-  getNotificationsUseCase: GetNotificationsUseCase;
   getLikedPostsUseCase: GetLikedPostsUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
