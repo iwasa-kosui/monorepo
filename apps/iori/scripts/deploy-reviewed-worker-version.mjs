@@ -93,13 +93,19 @@ export const deployReviewedWorkerVersion = async (
             },
           });
         } catch {
-          migrationFailure = withReason(new Error('D1 migration failed; retain current state.'), 'command-failed');
+          migrationFailure = withReason(
+            new Error('D1 migration failed; retain current state.'),
+            signal.aborted ? 'aborted' : 'command-failed',
+          );
           throw migrationFailure;
         }
         await writeFile(join(directory, `${name}-diagnostic.txt`), `${result.stdout ?? ''}\n${result.stderr ?? ''}`, {
           mode: 0o600,
         });
-        signal.throwIfAborted();
+        if (signal.aborted) {
+          migrationFailure = withReason(new Error('D1 migration failed; retain current state.'), 'aborted');
+          throw migrationFailure;
+        }
         if (result.status !== 0) {
           migrationFailure = withReason(new Error('D1 migration failed; retain current state.'), 'command-failed');
           throw migrationFailure;

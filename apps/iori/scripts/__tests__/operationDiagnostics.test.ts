@@ -519,6 +519,40 @@ INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
       operationLine('deploy-worker-migrate', 'command-failed'),
     ]);
   });
+  it('does not deploy and prints aborted at deploy-worker-migrate when the command rejects after the signal aborts', async () => {
+    const controller = new AbortController();
+    const runCommand = vi.fn(async () => {
+      controller.abort();
+      throw Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+    });
+    const stages: string[] = [];
+    const { input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion({ ...input, signal: controller.signal }).catch((
+      error: unknown,
+    ) => error);
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['deploy-worker-migrate']);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'aborted'),
+    ]);
+  });
+  it('does not deploy and prints aborted at deploy-worker-migrate when the signal aborts after the command succeeds', async () => {
+    const controller = new AbortController();
+    const runCommand = vi.fn(async () => {
+      controller.abort();
+      return { status: 0, stdout: d1Json([]), stderr: '' };
+    });
+    const stages: string[] = [];
+    const { input } = await deployInput(runCommand, (stage) => stages.push(stage));
+    const failure = await deployReviewedWorkerVersion({ ...input, signal: controller.signal }).catch((
+      error: unknown,
+    ) => error);
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['deploy-worker-migrate']);
+    expect(operationFailureLines(stages.at(-1)!, failure)).toEqual([
+      operationLine('deploy-worker-migrate', 'aborted'),
+    ]);
+  });
   it('parses the table names that the initial migration creates', () => {
     expect(
       parseInitialMigrationTables(
