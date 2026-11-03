@@ -5,7 +5,6 @@ import { deleteCookie, getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
 import { Instant } from '../../domain/instant/instant.ts';
-import { PostContent } from '../../domain/post/postContent.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import type { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { sanitize } from './helper/sanitize.ts';
@@ -59,19 +58,5 @@ export const createWorkerTimelinePostingApiRouter = ({
             },
           }),
         );
-      },
-    )
-    .post(
-      '/v1/preview',
-      sValidator(
-        'json',
-        z.object({
-          markdown: z.string(),
-        }),
-      ),
-      async (c) => {
-        const { markdown } = c.req.valid('json');
-        const html = await PostContent.fromMarkdown(markdown);
-        return c.json({ html: sanitize(html) });
       },
     );

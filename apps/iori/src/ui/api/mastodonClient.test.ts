@@ -25,6 +25,7 @@ import {
   mute,
   parseLinkHeader,
   parseRetryAfter,
+  react,
   reblog,
   saveNotificationsMarker,
   searchAccount,
@@ -33,6 +34,7 @@ import {
   unfavourite,
   unfollow,
   unmute,
+  unreact,
   unreblog,
   updateAvatar,
   updateMedia,
@@ -402,6 +404,37 @@ describe('mastodon client requests', () => {
     expect(init.credentials).toBe('same-origin');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
     expect(body).toEqual({ id: 's1' });
+  });
+
+  it.each(
+    [
+      ['react', react, 'PUT'],
+      ['unreact', unreact, 'DELETE'],
+    ] as const,
+  )('sends %s to the reaction path with the encoded id and emoji and returns the status', async (
+    _name,
+    action,
+    method,
+  ) => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b', iori: { reactions: [], link_previews: [] } }));
+
+    const status = await action('a/b', ':wave:');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/statuses/a%2Fb/reactions/%3Awave%3A');
+    expect(init.method).toBe(method);
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(status).toEqual({ id: 'a/b', iori: { reactions: [], link_previews: [] } });
+  });
+
+  it('throws a not found error carrying the server message when the reaction target is hidden', async () => {
+    stubFetch(jsonResponse({ error: 'Record not found' }, { status: 404 }));
+
+    const error = await react('s1', '👍').catch((e: unknown) => e);
+
+    expect(isNotFoundError(error)).toBe(true);
+    expect(failureMessage('add reaction', error)).toBe('Failed to add reaction: Record not found');
   });
 
   it('encodes the id in a write path', async () => {

@@ -190,15 +190,17 @@ export const fetchNotifications = (
 ): Promise<Page<Notification>> =>
   getPage<Notification>('/api/v1/notifications', { ...pageQuery(params), 'types[]': types });
 
-const post = async <T>(path: string): Promise<T> => {
+const act = async <T>(method: 'POST' | 'PUT' | 'DELETE', path: string): Promise<T> => {
   const res = await fetch(path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as T;
 };
+
+const post = <T>(path: string): Promise<T> => act<T>('POST', path);
 
 const statusActionPath = (id: string, action: string) => `/api/v1/statuses/${encodeURIComponent(id)}/${action}`;
 
@@ -207,6 +209,13 @@ const accountActionPath = (id: string, action: string) => `/api/v1/accounts/${en
 export const favourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'favourite'));
 
 export const unfavourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unfavourite'));
+
+const reactionPath = (id: string, emoji: string) =>
+  `/api/iori/v1/statuses/${encodeURIComponent(id)}/reactions/${encodeURIComponent(emoji)}`;
+
+export const react = (id: string, emoji: string): Promise<Status> => act<Status>('PUT', reactionPath(id, emoji));
+
+export const unreact = (id: string, emoji: string): Promise<Status> => act<Status>('DELETE', reactionPath(id, emoji));
 
 export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
 

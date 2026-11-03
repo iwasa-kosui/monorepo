@@ -32,7 +32,7 @@ export const MarkdownEditor = ({
     }
     setIsLoadingPreview(true);
     try {
-      const res = await fetch('/api/v1/preview', {
+      const res = await fetch('/api/iori/v1/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdown }),
