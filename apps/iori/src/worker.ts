@@ -9,9 +9,9 @@ import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts'
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
-import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
+import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
@@ -201,13 +201,6 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerArticlesApiRouter({
-            ...runtime.articles,
-            createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
-          }),
-        );
-        app.route(
-          '/api',
           createWorkerMutesRelaysApiRouter({
             ...runtime.mutesRelays,
             createContext: (relayRequest) => runtime.federation.createContext(relayRequest, undefined),
@@ -273,6 +266,14 @@ export default {
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
+        app.route(
+          '/api',
+          createWorkerIoriArticlesRouter({
+            ...runtime.articles,
+            authn,
+            createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
+          }),
+        );
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMediaRouter({ ...runtime.mastodon, authn }));

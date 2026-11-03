@@ -34,7 +34,7 @@ const ArticlesPage = () => {
 
   const fetchArticles = async () => {
     try {
-      const res = await fetch('/api/v1/articles');
+      const res = await fetch('/api/iori/v1/articles');
       const data = (await res.json()) as ArticlesResponse | { error: string };
 
       if ('error' in data) {
@@ -58,7 +58,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => (a.articleId === articleId ? { ...a, isPublishing: true } : a)));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}/publish`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}/publish`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -85,7 +85,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => a.articleId === articleId ? { ...a, isUnpublishing: true } : a));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}/unpublish`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}/unpublish`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -116,7 +116,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => (a.articleId === articleId ? { ...a, isDeleting: true } : a)));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -143,7 +143,7 @@ const ArticlesPage = () => {
     setCreateError(null);
 
     try {
-      const res = await fetch('/api/v1/articles', {
+      const res = await fetch('/api/iori/v1/articles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

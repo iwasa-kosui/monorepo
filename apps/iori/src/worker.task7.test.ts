@@ -84,6 +84,7 @@ describe('Task 7 Worker route mounting', () => {
         executionContext,
       ),
       worker.fetch(new Request('https://worker.test/api/v1/notifications'), env, executionContext),
+      worker.fetch(new Request('https://worker.test/api/iori/v1/articles/not-an-id'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/articles/not-an-id'), env, executionContext),
       worker.fetch(
         new Request('https://worker.test/api/v1/mute', {
@@ -104,7 +105,7 @@ describe('Task 7 Worker route mounting', () => {
       ),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 401, 404]);
+    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 404, 401, 404]);
     expect(await responses[1]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });
