@@ -6,6 +6,7 @@ import type { Actor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import type { User } from '../../domain/user/user.ts';
+import { stateAfterFetchFailure } from './timelineFailure.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -17,7 +18,7 @@ export type TimelineData = Readonly<{
   following: readonly Actor[];
 }>;
 
-type TimelineState =
+export type TimelineState =
   | { status: 'loading' }
   | { status: 'error'; error: string }
   | { status: 'success'; data: TimelineData };
@@ -49,12 +50,12 @@ export const useTimeline = (): UseTimelineReturn => {
         const latest = await res.json();
 
         if ('error' in latest) {
-          setState({ status: 'error', error: latest.error });
+          setState((prev) => stateAfterFetchFailure(prev, createdAt, latest.error));
           return;
         }
 
         if (!res.ok) {
-          setState({ status: 'error', error: `HTTP ${res.status}` });
+          setState((prev) => stateAfterFetchFailure(prev, createdAt, `HTTP ${res.status}`));
           return;
         }
 
@@ -71,10 +72,8 @@ export const useTimeline = (): UseTimelineReturn => {
           return { status: 'success', data: latest };
         });
       } catch (error) {
-        setState({
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        setState((prev) => stateAfterFetchFailure(prev, createdAt, message));
       }
     },
     [],
