@@ -20,6 +20,7 @@ import { resolveSessionWith } from '../../useCase/helper/resolve.ts';
 import type { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
 import type { UnpublishArticleUseCase } from '../../useCase/unpublishArticle.ts';
 import { sanitize } from './helper/sanitize.ts';
+import { sanitizeArticleBody } from './helper/sanitizeArticleBody.ts';
 
 export type WorkerArticlesApiRouterDeps = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
@@ -71,6 +72,7 @@ export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps)
     return c.json({
       article: result.val.article,
       thread: result.val.thread.map((post) => ({ ...post, content: sanitize(post.content) })),
+      ...(result.val.body === undefined ? {} : { body: { html: sanitizeArticleBody(result.val.body.html) } }),
     });
   });
 

@@ -5,14 +5,11 @@ import { EmojiReactId } from '../../../domain/emojiReact/emojiReactId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { Like } from '../../../domain/like/like.ts';
 import { LikeId } from '../../../domain/like/likeId.ts';
-import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { RepostId } from '../../../domain/repost/repostId.ts';
 import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
-import { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
-import { createD1LikedPostsResolverByActorId } from '../like/likedPostsResolverByActorId.ts';
 import { createD1LikeResolver } from '../like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../like/localLikeCreatedStore.ts';
 import { createD1RepostResolver } from '../repost/repostResolver.ts';
@@ -98,72 +95,5 @@ describe('D1 social action adapters', () => {
     expect(repost).toMatchObject({ ok: true, val: { repostId } });
     expect(reaction).toMatchObject({ ok: true, val: { emojiReactId, emoji: ':wave:' } });
     expect(timelineItem).toMatchObject({ ok: true, val: { timelineItemId, repostId } });
-  });
-
-  it('projects liked local posts with engagement, images, reactions, and link previews', async () => {
-    const actorId = ActorId.generate();
-    const postId = PostId.generate();
-    const userId = UserId.generate();
-    const now = new Date('2026-08-05T00:00:00.000Z');
-    const db = queryDb([
-      [{
-        likes: { likeId: LikeId.generate(), actorId, postId, type: 'local', createdAt: now },
-        posts: { postId, actorId, content: '<p>liked</p>', createdAt: now, type: 'local', deletedAt: null },
-        local_posts: { postId, userId, inReplyToUri: null },
-        remote_posts: null,
-        actors: {
-          actorId,
-          uri: 'https://worker.test/users/kosui',
-          logoUri: null,
-          inboxUrl: 'https://worker.test/inbox',
-        },
-        local_actors: { actorId, userId },
-        remote_actors: null,
-        users: { userId, username: 'kosui' },
-      }],
-      [{
-        imageId: '4f9b6f0e-6c52-4b5a-9a43-5f2f1f0e7a11',
-        postId,
-        url: 'https://worker.test/uploads/image.webp',
-        altText: 'alt',
-        createdAt: now,
-      }],
-      [{ postId }],
-      [{ postId, count: 2 }],
-      [{ postId, count: 1 }],
-      [{ postId, emoji: ':wave:', emojiImageUrl: null, count: 3 }],
-      [{
-        linkPreviewId: LinkPreviewId.generate(),
-        postId,
-        url: 'https://example.test',
-        title: 'Example',
-        description: null,
-        imageUrl: null,
-        faviconUrl: null,
-        siteName: 'Example',
-        createdAt: now,
-      }],
-    ]);
-
-    const result = await createD1LikedPostsResolverByActorId(db).resolve({
-      actorId,
-      currentActorId: actorId,
-      createdAt: undefined,
-    });
-
-    expect(result).toMatchObject({
-      ok: true,
-      val: [{
-        postId,
-        username: 'kosui',
-        liked: true,
-        reposted: true,
-        images: [{ altText: 'alt' }],
-        likeCount: 2,
-        repostCount: 1,
-        reactions: [{ emoji: ':wave:', count: 3 }],
-        linkPreviews: [{ title: 'Example' }],
-      }],
-    });
   });
 });

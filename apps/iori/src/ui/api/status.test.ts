@@ -7,6 +7,7 @@ import {
   displayStatus,
   isLocalAccount,
   isOwnBoost,
+  remoteUserPathOf,
   removeStatusesByPostId,
   statusHref,
   updateStatusesByPostId,
@@ -57,6 +58,11 @@ describe('account helpers', () => {
   it('treats an acct without a host as local', () => {
     expect(isLocalAccount(localAccount)).toBe(true);
     expect(isLocalAccount(remoteAccount)).toBe(false);
+  });
+
+  it('redirects a remote account opened on the local user page to the remote user page', () => {
+    expect(remoteUserPathOf(localAccount)).toBeUndefined();
+    expect(remoteUserPathOf(remoteAccount)).toBe('/remote-users/actor-2');
   });
 
   it('builds the handle with the host for a local account and keeps the acct for a remote account', () => {

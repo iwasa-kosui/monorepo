@@ -353,22 +353,68 @@ describe('Worker の Mastodon 互換 API', () => {
 
       expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
     });
+
+    it('置き換えた独自 API のパスは Cookie があっても未実装として 404 の JSON を返す', async () => {
+      const { request } = setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const headers = { Cookie: `sessionId=${sessionId}` };
+
+      const responses = await Promise.all([
+        request('/api/v1/users/kosui/posts', { headers }),
+        request(`/api/v1/remote-users/${crypto.randomUUID()}/posts`, { headers }),
+        request('/api/v1/liked-posts', { headers }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
+      expect(await responses[2]!.json()).toEqual({ error: 'Record not found' });
+      warn.mockRestore();
+    });
+
+    it('accounts/lookup、accounts/relationships、favourites、mutes を Mastodon の形で返す', async () => {
+      const { request, sqlite } = setup();
+      const headers = { Cookie: `sessionId=${sessionId}` };
+      const postId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        actorId,
+        '<p>liked</p>',
+        Date.UTC(2025, 0, 3),
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
+        crypto.randomUUID(),
+        actorId,
+        postId,
+        'local',
+        Date.UTC(2025, 0, 4),
+      );
+
+      const [lookup, relationships, favourites, mutes] = await Promise.all([
+        request('/api/v1/accounts/lookup?acct=kosui'),
+        request(`/api/v1/accounts/relationships?id[]=${actorId}`, { headers }),
+        request('/api/v1/favourites', { headers }),
+        request('/api/v1/mutes', { headers }),
+      ]);
+
+      expect(lookup.status).toBe(200);
+      expect(AccountSchema.parse(await lookup.json())).toMatchObject({ id: actorId, acct: 'kosui' });
+      expect(await relationships.json()).toMatchObject([{ id: actorId, following: false, muting: false }]);
+      expect((await favourites.json() as Array<{ id: string }>).map((status) => status.id)).toEqual([postId]);
+      expect(await mutes.json()).toEqual([]);
+    });
   });
 
   it('既存の独自 API と /api/og/* の応答を変えない', async () => {
     const { request } = setup();
 
-    const [home, likedPosts, mutes, vapid, og] = await Promise.all([
+    const [home, vapid, og] = await Promise.all([
       request('/api/v1/home'),
-      request('/api/v1/liked-posts'),
-      request('/api/v1/mutes'),
       request('/api/v1/push/vapid-public-key'),
       request('/api/og/articles/not-an-id'),
     ]);
 
-    expect([home.status, likedPosts.status, mutes.status, vapid.status, og.status]).toEqual([
-      401,
-      401,
+    expect([home.status, vapid.status, og.status]).toEqual([
       401,
       200,
       404,

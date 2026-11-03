@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { PageRequest } from '../page/page.ts';
 import { PostId } from '../post/postId.ts';
 import { LikeId } from './likeId.ts';
 
@@ -124,6 +125,10 @@ export type LikesResolverByPostId = Agg.Resolver<{ postId: PostId }, Like[]>;
 export type RemoteLikeResolverByActivityUri = Agg.Resolver<
   { likeActivityUri: string },
   RemoteLike | undefined
+>;
+export type LikedPostIdsResolverByActorIdWithPagination = Agg.Resolver<
+  Readonly<{ actorId: ActorId; page: PageRequest }>,
+  ReadonlyArray<Readonly<{ likeId: LikeId; postId: PostId }>>
 >;
 
 export const Like = {
