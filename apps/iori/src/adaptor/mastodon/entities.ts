@@ -136,6 +136,8 @@ export const IoriStatusExtensionSchema = z.object({
     title: z.string().nullable(),
     description: z.string().nullable(),
     image: z.string().nullable(),
+    site_name: z.string().nullable(),
+    favicon: z.string().nullable(),
   })),
 });
 export type IoriStatusExtension = z.infer<typeof IoriStatusExtensionSchema>;

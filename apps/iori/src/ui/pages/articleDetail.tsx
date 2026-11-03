@@ -4,6 +4,7 @@ import { render } from 'hono/jsx/dom';
 import type { Article } from '../../domain/article/article.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { PostView } from '../components/PostView.tsx';
+import { postToStatus } from '../legacyConversion.ts';
 
 type ArticleData = {
   article: Article;
@@ -229,7 +230,7 @@ const ArticleDetailPage = () => {
           )
           : (
             <div class='space-y-6 py-2'>
-              {thread.map((post) => <PostView key={post.postId} post={post} />)}
+              {thread.map((post) => <PostView key={post.postId} status={postToStatus(post)} />)}
             </div>
           )}
       </div>

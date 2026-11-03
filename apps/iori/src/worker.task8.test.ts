@@ -51,17 +51,15 @@ const runtime = vi.hoisted(() => ({
     deleteArticleUseCase: {},
     publishedArticlesResolver: {},
     publishOgImage: async () => undefined,
+    deleteOgImage: async () => undefined,
   },
   core: {
     signUpUseCase: {},
     sendReplyUseCase: {},
     deletePostUseCase: {},
     sendFollowRequestUseCase: {},
-    getFederatedTimelineUseCase: {},
     getUserPostsUseCase: {},
     getRemoteActorPostsUseCase: {},
-    getServerTimelineUseCase: {},
-    threadResolver: {},
     subscribePushUseCase: {},
     unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
@@ -105,6 +103,7 @@ describe('Task 8 Worker OGP route', () => {
       httpMetadata: { contentType: 'image/png', cacheControl: 'public, max-age=60' },
     }));
     const env = { ...admissionFixture(), UPLOADS: { get } } as never;
+    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '公開記事', status: 'published' } });
 
     const response = await worker.fetch(
       new Request('https://worker.test/api/og/articles/573c7c51-0e4b-453c-bb9f-5dbd15a319a7'),
@@ -114,8 +113,26 @@ describe('Task 8 Worker OGP route', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600');
     expect(get).toHaveBeenCalledWith('og/573c7c51-0e4b-453c-bb9f-5dbd15a319a7.png');
+  });
+
+  it('returns 404 even when R2 holds an image for an article that is not published', async () => {
+    const get = vi.fn(async () => ({
+      body: png.buffer,
+      httpMetadata: { contentType: 'image/png', cacheControl: 'public, max-age=60' },
+    }));
+    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '非公開記事', status: 'unpublished' } });
+    const env = { ...admissionFixture(), UPLOADS: { get } } as never;
+
+    const response = await worker.fetch(
+      new Request(`https://worker.test/api/og/articles/${articleId}`),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(404);
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('rejects invalid article IDs before reading UPLOADS', async () => {

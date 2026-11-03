@@ -33,6 +33,28 @@ describe('createWorkersAiEmbedder', () => {
     expect(result).toEqual({ ok: false, err: { type: 'AiError', message: 'boom' } });
   });
 
+  it('splits 250 texts into three runs and keeps the order', async () => {
+    const run = vi.fn(async (_model: string, input: Record<string, unknown>) => ({
+      data: (input.text as string[]).map((text) => [Number(text)]),
+    }));
+    const texts = Array.from({ length: 250 }, (_, index) => String(index));
+    const result = await createWorkersAiEmbedder({ run }).embed({ model: 'embed-model', texts });
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(run.mock.calls.map(([, input]) => (input.text as string[]).length)).toEqual([100, 100, 50]);
+    expect(result).toEqual({ ok: true, val: texts.map((text) => [Number(text)]) });
+  });
+
+  it('returns AiError for the whole request when one run fails', async () => {
+    const run = vi.fn(async (_model: string, input: Record<string, unknown>) => {
+      if (run.mock.calls.length === 2) throw new Error('second run failed');
+      return { data: (input.text as string[]).map(() => [0]) };
+    });
+    const texts = Array.from({ length: 250 }, (_, index) => String(index));
+    const result = await createWorkersAiEmbedder({ run }).embed({ model: 'embed-model', texts });
+    expect(result).toEqual({ ok: false, err: { type: 'AiError', message: 'second run failed' } });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it('does not call run for empty texts', async () => {
     const run = vi.fn(async () => ({ data: [] }));
     const result = await createWorkersAiEmbedder({ run }).embed({ model: 'embed-model', texts: [] });

@@ -17,8 +17,17 @@ describe('createR2OgImageStore', () => {
     expect(put).toHaveBeenCalledWith('og/article-id.png', body, {
       httpMetadata: {
         contentType: 'image/png',
-        cacheControl: 'public, max-age=31536000, immutable',
+        cacheControl: 'public, max-age=3600',
       },
     });
+  });
+
+  it('deletes the object under the og prefix', async () => {
+    const del = vi.fn(async () => undefined);
+    const store = createR2OgImageStore({ get: vi.fn(), put: vi.fn(), delete: del } as never);
+
+    await store.delete('article-id');
+
+    expect(del).toHaveBeenCalledWith('og/article-id.png');
   });
 });

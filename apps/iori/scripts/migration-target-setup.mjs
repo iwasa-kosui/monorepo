@@ -1,7 +1,7 @@
 import { createTargetIdentity } from './fresh-target.mjs';
 import { parseAdmission } from '../src/workerAdmission.ts';
 import { migrationRunIdPattern } from './migration-target-contract.mjs';
-export const targetSetupConfiguration = (env, { backend = true } = {}) => {
+export const targetSetupConfiguration = (env) => {
   const required = (key) => {
     const value = env[key];
     if (typeof value !== 'string' || !value) throw new Error('Target setup configuration is required.');
@@ -11,7 +11,6 @@ export const targetSetupConfiguration = (env, { backend = true } = {}) => {
     environment: required('IORI_ENVIRONMENT'),
     generation: required('IORI_GENERATION'),
     accountId: required('CLOUDFLARE_ACCOUNT_ID'),
-    backendBucket: backend ? required('IORI_TERRAFORM_BACKEND_BUCKET') : undefined,
   });
   const mainSha = required('MAIN_SHA');
   const runId = required('IORI_MIGRATION_RUN_ID');
@@ -36,7 +35,6 @@ export const targetSetupConfiguration = (env, { backend = true } = {}) => {
     zoneId,
     admission,
     admissionEnvironment,
-    backendEndpoint: `https://${identity.accountId}.r2.cloudflarestorage.com`,
     hostname: a.hostname,
     token: required('CLOUDFLARE_API_TOKEN'),
   };

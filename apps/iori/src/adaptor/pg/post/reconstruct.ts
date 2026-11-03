@@ -50,6 +50,7 @@ export const reconstructPost = (row: PostRow): Post => {
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
+      visibility: null,
       type: 'remote',
     });
   }

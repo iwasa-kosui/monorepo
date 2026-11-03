@@ -10,6 +10,11 @@ export const OPERATION_STAGES = Object.freeze([
   'put-worker-secrets',
   'put-worker-secrets-read',
   'put-worker-secrets-put',
+  'rehearsal-delete',
+  'rehearsal-delete-list',
+  'rehearsal-delete-check',
+  'rehearsal-delete-remove',
+  'rehearsal-delete-verify',
 ]);
 export const operationFailureLines = (stage, error) => {
   const stageWord = OPERATION_STAGES.includes(stage) ? stage : 'unclassified';

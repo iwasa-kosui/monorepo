@@ -9,6 +9,7 @@ import { AccountSchema } from './entities.ts';
 import { toAccount, type ToAccountOptions } from './toAccount.ts';
 
 const options: ToAccountOptions = {
+  baseUrl: 'https://iori.example/api/v1/accounts/1',
   defaultAvatarUrl: 'https://iori.example/static/avatar.png',
   defaultHeaderUrl: 'https://iori.example/static/header.png',
   followersCount: 3,
@@ -100,5 +101,46 @@ describe('toAccount', () => {
     expect(account.acct).toBe('alice@remote.example');
     expect(account.url).toBe('https://remote.example/users/alice');
     expect(account.avatar).toBe(options.defaultAvatarUrl);
+  });
+
+  it('turns a relative logoUri into an absolute url', () => {
+    const account = toAccount(
+      { type: 'local', user, actor: { ...localActor, logoUri: '/uploads/logo.png' } },
+      options,
+    );
+
+    expect(account.avatar).toBe('https://iori.example/uploads/logo.png');
+    expect(account.avatar_static).toBe('https://iori.example/uploads/logo.png');
+  });
+
+  it('uses the default avatar when the logoUri of a remote actor is not http or https', () => {
+    const account = toAccount(
+      { type: 'remote', actor: { ...remoteActor, logoUri: 'javascript:alert(1)' } },
+      options,
+    );
+
+    expect(account.avatar).toBe(options.defaultAvatarUrl);
+    expect(account.avatar_static).toBe(options.defaultAvatarUrl);
+  });
+
+  it('uses the uri as the url when the url of a remote actor is unsafe', () => {
+    const account = toAccount(
+      { type: 'remote', actor: { ...remoteActor, url: 'javascript:alert(1)' } },
+      options,
+    );
+
+    expect(account.url).toBe('https://remote.example/users/alice');
+    expect(account.uri).toBe('https://remote.example/users/alice');
+  });
+
+  it('points to the remote user page of this server when both the uri and the url are unsafe', () => {
+    const account = toAccount(
+      { type: 'remote', actor: { ...remoteActor, uri: 'javascript:alert(1)', url: 'data:text/html,x' } },
+      options,
+    );
+
+    expect(account.uri).toBe(`https://iori.example/remote-users/${remoteActor.id}`);
+    expect(account.url).toBe(account.uri);
+    expect(AccountSchema.safeParse(account).success).toBe(true);
   });
 });

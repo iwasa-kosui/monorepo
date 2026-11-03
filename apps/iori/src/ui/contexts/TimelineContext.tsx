@@ -32,7 +32,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const reply = useReplyDialog({
     onReplySent: () => {
-      timeline.fetchMore(undefined);
+      timeline.reload();
     },
   });
 
@@ -40,7 +40,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     updateTimelineItem: timeline.updateTimelineItem,
     updateThreadPost: thread.updateThreadPost,
     removePost: timeline.removePost,
-    refreshTimeline: () => timeline.fetchMore(undefined),
+    refreshTimeline: () => timeline.reload(),
     onPostDeleted: thread.removeFromThread,
   });
 
@@ -52,15 +52,15 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     isRefreshing: timeline.isRefreshing,
   });
 
-  const timelineItems = data?.timelineItems ?? [];
+  const statuses = data?.statuses ?? [];
 
   useInfiniteScroll({
-    items: timelineItems,
-    onLoadMore: timeline.fetchMore,
+    nextCursor: data?.nextMaxId,
+    onLoadMore: timeline.loadMore,
   });
 
   useKeyboardNavigation({
-    items: timelineItems,
+    items: statuses,
     selectedIndex: ui.selectedIndex,
     setSelectedIndex: ui.setSelectedIndex,
     scrollToSelected: ui.scrollToSelected,

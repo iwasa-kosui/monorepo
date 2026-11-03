@@ -17,11 +17,39 @@ const requireEnv = (name) => {
   return value;
 };
 
-const stripJsonc = (source) =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1')
-    .replace(/,\s*([}\]])/g, '$1');
+export const stripJsonc = (source) => {
+  let output = '';
+  let lastCommaIndex = -1;
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (char === '"') {
+      let end = index + 1;
+      while (end < source.length && source[end] !== '"') end += source[end] === '\\' ? 2 : 1;
+      output += source.slice(index, end + 1);
+      index = end + 1;
+    } else if (char === '/' && next === '/') {
+      while (index < source.length && source[index] !== '\n' && source[index] !== '\r') index += 1;
+    } else if (char === '/' && next === '*') {
+      const close = source.indexOf('*/', index + 2);
+      if (close === -1) {
+        output += source.slice(index);
+        break;
+      }
+      index = close + 2;
+    } else {
+      if (char === ',') lastCommaIndex = output.length;
+      if ((char === '}' || char === ']') && lastCommaIndex !== -1 && output.slice(lastCommaIndex + 1).trim() === '') {
+        output = output.slice(0, lastCommaIndex) + output.slice(lastCommaIndex + 1);
+        lastCommaIndex = -1;
+      }
+      output += char;
+      index += 1;
+    }
+  }
+  return output;
+};
 
 const resolveFromTemplate = (path) => (path === undefined || isAbsolute(path) ? path : join(templateDirectory, path));
 

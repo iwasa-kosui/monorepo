@@ -95,21 +95,27 @@ export const postsTable = sqliteTable('posts', {
   deletedAt: timestamp(),
 }, (table) => [
   index('posts_actor_id_idx').on(table.actorId),
+  index('posts_created_at_post_id_idx').on(table.createdAt, table.postId),
+  index('posts_actor_id_created_at_post_id_idx').on(table.actorId, table.createdAt, table.postId),
 ]);
 
 export const remotePostsTable = sqliteTable('remote_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   uri: text('uri').notNull(),
   inReplyToUri: text('inReplyToUri'),
+  visibility: text('visibility'),
 }, (table) => [
   uniqueIndex('remote_posts_uri_unique').on(table.uri),
+  index('remote_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);
 
 export const localPostsTable = sqliteTable('local_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   userId: text('userId').notNull().references(() => usersTable.userId),
   inReplyToUri: text('inReplyToUri'),
-});
+}, (table) => [
+  index('local_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
+]);
 
 export const likesTable = sqliteTable('likes', {
   likeId: text('likeId').primaryKey(),
@@ -179,6 +185,7 @@ export const repostsTable = sqliteTable('reposts', {
 }, (table) => [
   uniqueIndex('repost_actor_post_unique').on(table.actorId, table.postId),
   uniqueIndex('reposts_announceActivityUri_unique').on(table.announceActivityUri),
+  index('reposts_actor_id_created_at_repost_id_idx').on(table.actorId, table.createdAt, table.repostId),
 ]);
 
 export const timelineItemsTable = sqliteTable('timeline_items', {
@@ -189,7 +196,9 @@ export const timelineItemsTable = sqliteTable('timeline_items', {
   repostId: text('repostId'),
   createdAt: timestamp().notNull(),
   deletedAt: timestamp(),
-});
+}, (table) => [
+  index('timeline_items_created_at_id_idx').on(table.createdAt, table.timelineItemId),
+]);
 
 export const instanceActorKeysTable = sqliteTable('instance_actor_keys', {
   keyId: text('keyId').primaryKey(),
@@ -291,6 +300,7 @@ export const federatedTimelineItemsTable = sqliteTable('federated_timeline_items
   receivedAt: timestamp().notNull(),
 }, (table) => [
   index('federated_timeline_items_received_at_idx').on(table.receivedAt),
+  index('federated_timeline_items_received_at_id_idx').on(table.receivedAt, table.federatedTimelineItemId),
   index('federated_timeline_items_post_id_idx').on(table.postId),
 ]);
 
