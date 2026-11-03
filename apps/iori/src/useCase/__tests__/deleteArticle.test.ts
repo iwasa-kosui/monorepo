@@ -58,6 +58,7 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     articleId: article.articleId,
     createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
     pushSentAt: null,
+    trigger: 'scheduled',
   };
   const sessionResolver = createMockSessionResolver();
   sessionResolver.setSession(session);

@@ -133,6 +133,7 @@ import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
+import { createDigestUseCases } from '../scheduled/digestTasks.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -387,6 +388,7 @@ export const createWorkerRuntimePorts = async (
         digestSubscriptionResolverByUserId,
         digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
       }),
+      requestDigestUseCase: createDigestUseCases(env).requestDigest,
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({

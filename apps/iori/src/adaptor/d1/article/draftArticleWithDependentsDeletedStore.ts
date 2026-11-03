@@ -1,0 +1,54 @@
+import { RA } from '@iwasa-kosui/result';
+import { and, eq, sql } from 'drizzle-orm';
+
+import type { DraftArticleWithDependentsDeletedStore } from '../../../domain/article/article.ts';
+import type { IoriD1Db } from '../client.ts';
+import { toD1DomainEventRow } from '../eventRow.ts';
+import { runBatch } from '../runBatch.ts';
+import {
+  articleBodiesTable,
+  articlesTable,
+  digestItemsTable,
+  digestsTable,
+  digestTrendsTable,
+  domainEventsTable,
+} from '../schema.ts';
+
+export const createD1DraftArticleWithDependentsDeletedStore = (
+  db: IoriD1Db,
+): DraftArticleWithDependentsDeletedStore => ({
+  store: async (articleDeleted, bodyDeleted, digestExpired) => {
+    const { articleId } = articleDeleted.eventPayload;
+    const { digestId } = digestExpired.eventPayload;
+    const articleIsDraft =
+      sql`EXISTS (SELECT 1 FROM articles WHERE articles.articleId = ${articleId} AND articles.status = 'draft')`;
+    const insertEventIfDraft = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
+      const row = toD1DomainEventRow(event);
+      return db.insert(domainEventsTable).select(
+        db.select({
+          eventId: sql<string>`${row.eventId}`.as('eventId'),
+          aggregateId: sql<string>`${row.aggregateId}`.as('aggregateId'),
+          aggregateName: sql<string>`${row.aggregateName}`.as('aggregateName'),
+          aggregateState: sql<string | null>`${row.aggregateState}`.as('aggregateState'),
+          eventName: sql<string>`${row.eventName}`.as('eventName'),
+          eventPayload: sql<string>`${row.eventPayload}`.as('eventPayload'),
+          occurredAt: sql<Date>`${row.occurredAt.getTime()}`.as('occurredAt'),
+        }).from(articlesTable).where(and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'))),
+      );
+    };
+    await runBatch(db, [
+      db.delete(digestTrendsTable).where(and(eq(digestTrendsTable.digestId, digestId), articleIsDraft)),
+      db.delete(digestItemsTable).where(and(eq(digestItemsTable.digestId, digestId), articleIsDraft)),
+      db.delete(digestsTable).where(and(eq(digestsTable.digestId, digestId), articleIsDraft)),
+      insertEventIfDraft(digestExpired),
+      db.delete(articleBodiesTable).where(and(eq(articleBodiesTable.articleId, articleId), articleIsDraft)),
+      ...(bodyDeleted === undefined ? [] : [insertEventIfDraft(bodyDeleted)]),
+      insertEventIfDraft(articleDeleted),
+      db.delete(articlesTable).where(and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'))),
+    ]);
+    const [remaining] = await db.select({ articleId: articlesTable.articleId }).from(articlesTable).where(
+      eq(articlesTable.articleId, articleId),
+    ).limit(1);
+    return RA.ok({ deleted: remaining === undefined });
+  },
+});

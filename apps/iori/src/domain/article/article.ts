@@ -126,6 +126,13 @@ export type ArticleWithDependentsDeletedStore = Readonly<{
     digestExpired: DigestExpired | undefined,
   ) => RA<void, never>;
 }>;
+export type DraftArticleWithDependentsDeletedStore = Readonly<{
+  store: (
+    articleDeleted: ArticleDeleted,
+    bodyDeleted: ArticleBodyDeleted | undefined,
+    digestExpired: DigestExpired,
+  ) => RA<{ deleted: boolean }, never>;
+}>;
 
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;
 export type ArticleResolverByRootPostId = Agg.Resolver<{ rootPostId: PostId }, Article | undefined>;

@@ -11,6 +11,7 @@ const payload = () => ({
   userId: UserId.generate(),
   digestDate: '2026-11-05',
   articleId: ArticleId.generate(),
+  trigger: 'scheduled' as const,
   items: [{
     feedEntryId: 'entry-1',
     url: 'https://example.com/a',
@@ -33,7 +34,7 @@ describe('Digest', () => {
     expect(created.val).toMatchObject({
       aggregateName: 'digest',
       eventName: 'digest.created',
-      aggregateState: { digestDate: '2026-11-05', createdAt: now, pushSentAt: null },
+      aggregateState: { digestDate: '2026-11-05', createdAt: now, pushSentAt: null, trigger: 'scheduled' },
     });
     expect(created.val.aggregateState.items).toHaveLength(1);
     expect(created.val.aggregateState.items[0]!.digestItemId).toEqual(expect.any(String));
@@ -42,6 +43,16 @@ describe('Digest', () => {
 
   it('create は日付の形式が違う digest を作らない', () => {
     expect(Digest.create({ ...payload(), digestDate: '2026/11/05' }, now).ok).toBe(false);
+  });
+
+  it('create は requested の trigger を aggregateState に持つ', () => {
+    const created = Digest.create({ ...payload(), trigger: 'requested' }, now);
+
+    expect(created.ok && created.val.aggregateState.trigger).toBe('requested');
+  });
+
+  it('create は未知の trigger の digest を作らない', () => {
+    expect(Digest.create({ ...payload(), trigger: 'manual' as never }, now).ok).toBe(false);
   });
 
   it('recordPushSent は pushSentAt を入れた状態の digest.pushSent を返す', () => {

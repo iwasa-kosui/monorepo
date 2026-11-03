@@ -2,6 +2,8 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
+import { isMastodonApiError, requestDigest } from '../api/mastodonClient.ts';
+import { buildDigestRequestFailureMessage, DIGEST_REQUEST_PENDING_LABEL } from './digestRequestMessage.ts';
 
 type ArticleWithStatus = Article & {
   isPublishing?: boolean;
@@ -31,6 +33,8 @@ const ArticlesPage = () => {
   const [newArticleTitle, setNewArticleTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isRequestingDigest, setIsRequestingDigest] = useState(false);
+  const [digestRequestError, setDigestRequestError] = useState<string | null>(null);
 
   const fetchArticles = async () => {
     try {
@@ -170,6 +174,25 @@ const ArticlesPage = () => {
     }
   };
 
+  const handleRequestDigest = async () => {
+    setIsRequestingDigest(true);
+    setDigestRequestError(null);
+
+    try {
+      const { articleId } = await requestDigest();
+      window.location.href = `/articles/${articleId}`;
+    } catch (err) {
+      setDigestRequestError(
+        buildDigestRequestFailureMessage(
+          isMastodonApiError(err)
+            ? { status: err.status, error: err.message, retryAfterSeconds: err.retryAfterSeconds }
+            : {},
+        ),
+      );
+      setIsRequestingDigest(false);
+    }
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
       year: 'numeric',
@@ -246,6 +269,23 @@ const ArticlesPage = () => {
             <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7' />
           </svg>
         </a>
+      )}
+      {isLoggedIn && (
+        <div class='mb-4 flex flex-col items-start gap-2 flex-shrink-0'>
+          <button
+            type='button'
+            onClick={handleRequestDigest}
+            disabled={isRequestingDigest}
+            class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
+          >
+            {isRequestingDigest ? DIGEST_REQUEST_PENDING_LABEL : '今すぐダイジェストを作る'}
+          </button>
+          {digestRequestError && (
+            <p role='alert' class='text-sm text-terracotta-dark dark:text-terracotta-light'>
+              {digestRequestError}
+            </p>
+          )}
+        </div>
       )}
       {/* Header */}
       <div class='flex items-center justify-between mb-6 flex-shrink-0'>

@@ -1,5 +1,5 @@
 import { ArticleId } from '../../../domain/article/articleId.ts';
-import type { DigestHeader } from '../../../domain/digest/digest.ts';
+import { type DigestHeader, DigestTrigger } from '../../../domain/digest/digest.ts';
 import { DigestId } from '../../../domain/digest/digestId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { UserId } from '../../../domain/user/userId.ts';
@@ -12,4 +12,5 @@ export const reconstructDigestHeader = (row: typeof digestsTable.$inferSelect): 
   articleId: ArticleId.orThrow(row.articleId),
   createdAt: Instant.orThrow(row.createdAt.getTime()),
   pushSentAt: row.pushSentAt === null ? null : Instant.orThrow(row.pushSentAt.getTime()),
+  trigger: DigestTrigger.zodType.parse(row.trigger),
 });

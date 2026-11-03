@@ -30,6 +30,7 @@ const createDigest = () => {
     userId: UserId.generate(),
     digestDate: '2026-11-05',
     articleId: ArticleId.generate(),
+    trigger: 'scheduled',
     items: [
       {
         feedEntryId: 'e1',
