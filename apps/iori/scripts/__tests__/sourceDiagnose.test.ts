@@ -557,6 +557,8 @@ it('runs the fixed bundle over SSH stdin and relays only the exact notice once',
   expect(calls[0].program).toBe('ssh');
   expect(calls[0].args.slice(-3)).toEqual(['"$HOME/.nvm/versions/node/v24.12.0/bin/node"', '--input-type=module', '-']);
   expect(calls[0].args).toContain('StrictHostKeyChecking=yes');
+  expect(calls[0].args).toContain('ServerAliveInterval=30');
+  expect(calls[0].args).toContain('ServerAliveCountMax=4');
   expect(calls[0].input).toContain('runSourceDiagnosis');
   expect(writes).toEqual([`${accepted}\n`]);
 });

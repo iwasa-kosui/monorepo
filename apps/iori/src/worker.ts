@@ -35,6 +35,7 @@ import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
 import {
   admissionRejected,
   admitWorkerRequest,
+  hasNoBody,
   isSmokeMarker,
   parseAdmission,
   smokeMarker,
@@ -98,7 +99,7 @@ export default {
     const admission = await admitWorkerRequest(request, env);
     if (!admission) return admissionRejected();
     if (new URL(request.url).pathname === '/__smoke__/queue-enqueue') {
-      if (admission.capability !== 'smoke' || request.method !== 'POST' || request.body !== null) {
+      if (admission.capability !== 'smoke' || request.method !== 'POST' || !hasNoBody(request)) {
         return admissionRejected();
       }
       await env.FEDIFY_QUEUE.send(smokeMarker(admission.identity));
