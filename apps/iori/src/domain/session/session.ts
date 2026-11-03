@@ -35,14 +35,16 @@ export type SessionWithUserAndActor = Readonly<{
 }>;
 export type SessionWithUserAndActorResolver = Agg.Resolver<SessionId, SessionWithUserAndActor | undefined>;
 
-const startSession = (now: Instant) => (payload: Omit<Session, 'sessionId'>): SessionStarted =>
-  SessionEvent.create(
-    SessionId.generate(),
-    { ...payload, sessionId: SessionId.generate() },
+const startSession = (now: Instant) => (payload: Omit<Session, 'sessionId'>): SessionStarted => {
+  const sessionId = SessionId.generate();
+  return SessionEvent.create(
+    sessionId,
+    { ...payload, sessionId },
     'session.started',
     payload,
     now,
   );
+};
 
 export const Session = {
   ...schema,
