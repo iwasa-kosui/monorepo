@@ -1,3 +1,4 @@
+import { createD1AccountProfilesResolverByActorIds } from '../adaptor/d1/actor/accountProfilesResolverByActorIds.ts';
 import { createD1AccountStatsResolverByActorId } from '../adaptor/d1/actor/accountStatsResolverByActorId.ts';
 import { createD1ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../adaptor/d1/actor/actorResolverByUri.ts';
@@ -20,6 +21,10 @@ import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiRe
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import {
+  createD1ActorIdsResolverByFollowerIdWithPagination,
+  createD1ActorIdsResolverByFollowingIdWithPagination,
+} from '../adaptor/d1/follow/actorIdsResolverByFollowsWithPagination.ts';
 import { createD1FollowRequestedStore } from '../adaptor/d1/follow/followRequestedStore.ts';
 import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
@@ -53,13 +58,16 @@ import {
   createD1OAuthApplicationResolver,
   createD1OAuthApplicationResolverByClientId,
 } from '../adaptor/d1/oauth/oauthApplicationResolvers.ts';
+import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
+import { createD1LocalPostsResolverByPage } from '../adaptor/d1/post/localPostsResolverByPage.ts';
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../adaptor/d1/post/postDeletedStore.ts';
+import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtrasResolverByPosts.ts';
 import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
+import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import {
-  createD1LocalPostsResolver,
   createD1PostsResolverByActorIds,
   createD1PostsResolverByActorIdWithPagination,
 } from '../adaptor/d1/post/postWithAuthorResolvers.ts';
@@ -76,6 +84,7 @@ import { createD1RelaySubscriptionRequestedStore } from '../adaptor/d1/relay/rel
 import { createD1RepostCreatedStore } from '../adaptor/d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../adaptor/d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../adaptor/d1/repost/repostResolver.ts';
+import { createD1RepostResolverById } from '../adaptor/d1/repost/repostResolverById.ts';
 import { createD1SessionResolver } from '../adaptor/d1/session/sessionResolver.ts';
 import { createD1SessionStartedStore } from '../adaptor/d1/session/sessionStartedStore.ts';
 import { createD1SessionWithUserAndActorResolver } from '../adaptor/d1/session/sessionWithUserAndActorResolver.ts';
@@ -90,6 +99,7 @@ import { createD1UserWithLocalActorResolverByUsername } from '../adaptor/d1/user
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
+import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
@@ -104,7 +114,6 @@ import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
-import { GetFederatedTimelineUseCase } from '../useCase/getFederatedTimeline.ts';
 import { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
 import { GetMutesUseCase } from '../useCase/getMutes.ts';
 import { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
@@ -134,7 +143,6 @@ import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import {
   createWorkerGetRemoteActorPostsUseCase,
-  createWorkerGetServerTimelineUseCase,
   createWorkerGetUserPostsUseCase,
   createWorkerRemoteActorActions,
 } from './workerCoreUseCases.ts';
@@ -238,7 +246,23 @@ export const createWorkerRuntimePorts = async (
       userResolver,
       userResolverByUsername: createD1UserResolverByUsername(db),
       actorResolverByUserId,
+      actorResolverById: createD1ActorResolverById(db),
       accountStatsResolver: createD1AccountStatsResolverByActorId(db),
+      actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+      mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+      timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
+      localPostsResolverByPage: createD1LocalPostsResolverByPage(db),
+      accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
+      federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db),
+      postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+      repostResolverById: createD1RepostResolverById(db),
+      threadResolver,
+      actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
+      actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
+      statusAssembler: createStatusAssembler({
+        accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
+        postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
+      }),
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({
@@ -452,14 +476,6 @@ export const createWorkerRuntimePorts = async (
         logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
-      getFederatedTimelineUseCase: GetFederatedTimelineUseCase.create({
-        sessionResolver,
-        userResolver,
-        actorResolverByUserId,
-        sessionWithUserAndActorResolver,
-        federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db, env.ORIGIN),
-        mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
-      }),
       getUserPostsUseCase: createWorkerGetUserPostsUseCase({
         userWithLocalActorResolverByUsername: createD1UserWithLocalActorResolverByUsername(db),
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
@@ -476,8 +492,6 @@ export const createWorkerRuntimePorts = async (
         muteResolver: createD1MuteResolver(db),
         postsResolverByActorIdWithPagination: createD1PostsResolverByActorIdWithPagination(db, env.ORIGIN),
       }),
-      getServerTimelineUseCase: createWorkerGetServerTimelineUseCase(createD1LocalPostsResolver(db, env.ORIGIN)),
-      threadResolver,
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,
         userResolver,

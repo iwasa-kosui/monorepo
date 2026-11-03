@@ -49,11 +49,12 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.core.sendReplyUseCase.run).toBeTypeOf('function');
     expect(runtime.core.deletePostUseCase.run).toBeTypeOf('function');
     expect(runtime.core.sendFollowRequestUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.getFederatedTimelineUseCase.run).toBeTypeOf('function');
     expect(runtime.core.getUserPostsUseCase.run).toBeTypeOf('function');
     expect(runtime.core.getRemoteActorPostsUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.getServerTimelineUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.threadResolver.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.localPostsResolverByPage.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.federatedTimelineItemsResolver.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.threadResolver.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.statusAssembler.assemble).toBeTypeOf('function');
     expect(runtime.core.subscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.core.unsubscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.uploads).toBeDefined();

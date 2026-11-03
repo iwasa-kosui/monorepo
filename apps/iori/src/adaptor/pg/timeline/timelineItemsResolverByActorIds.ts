@@ -3,11 +3,13 @@ import { randomUUID } from 'crypto';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import { RepostId } from '../../../domain/repost/repostId.ts';
 import type {
   PostTimelineItem,
   RepostTimelineItem,
@@ -104,10 +106,10 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       : [];
 
     // Group images by postId
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const imageRow of imageRows) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
 
@@ -306,10 +308,12 @@ const getInstance = singleton((): TimelineItemsResolverByActorIds => {
       // Return discriminated union based on type
       if (isRepost) {
         const reposterInfo = reposterInfoMap.get(row.timeline_items.actorId);
-        if (reposterInfo) {
+        const repostId = row.timeline_items.repostId;
+        if (reposterInfo && repostId !== null) {
           const repostItem: RepostTimelineItem = {
             type: 'repost',
             timelineItemId,
+            repostId: RepostId.orThrow(repostId),
             post,
             repostedBy: {
               actorId: row.timeline_items.actorId as ActorId,

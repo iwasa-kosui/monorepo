@@ -1,5 +1,5 @@
 import { Follow as ActivityPubFollow, Undo } from '@fedify/fedify';
-import { RA, type ResultAsync } from '@iwasa-kosui/result';
+import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type {
@@ -15,11 +15,7 @@ import {
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { MuteResolver } from '../domain/mute/mute.ts';
-import type {
-  PostsResolverByActorIds,
-  PostsResolverByActorIdWithPagination,
-  PostWithAuthor,
-} from '../domain/post/post.ts';
+import type { PostsResolverByActorIds, PostsResolverByActorIdWithPagination } from '../domain/post/post.ts';
 import type { SessionResolver, SessionWithUserAndActorResolver } from '../domain/session/session.ts';
 import type { UserResolver, UserWithLocalActorResolverByUsername } from '../domain/user/user.ts';
 import {
@@ -211,18 +207,5 @@ export const createWorkerGetRemoteActorPostsUseCase = (
       isMuted: mute.ok && mute.val !== undefined,
       posts: posts.val,
     });
-  },
-});
-
-export const createWorkerGetServerTimelineUseCase = (
-  localPostsResolver: Readonly<{
-    resolve: (
-      input: Readonly<{ createdAt: Instant | undefined; limit?: number }>,
-    ) => ResultAsync<PostWithAuthor[], never>;
-  }>,
-): IoriCoreRuntimePorts['getServerTimelineUseCase'] => ({
-  run: async ({ createdAt, limit }) => {
-    const posts = await localPostsResolver.resolve({ createdAt, limit });
-    return posts.ok ? RA.ok({ posts: posts.val }) : posts;
   },
 });

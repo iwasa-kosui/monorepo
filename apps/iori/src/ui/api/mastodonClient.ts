@@ -1,0 +1,120 @@
+import type { Account, CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
+
+export type PageCursors = Readonly<{
+  nextMaxId: string | undefined;
+  prevMinId: string | undefined;
+}>;
+
+export type Page<T> = Readonly<
+  {
+    items: readonly T[];
+  } & PageCursors
+>;
+
+export type PageParams = Readonly<{
+  maxId?: string;
+  sinceId?: string;
+  minId?: string;
+  limit?: number;
+}>;
+
+export type MastodonApiError = Error & Readonly<{ status: number }>;
+
+export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
+  error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
+
+export const isUnauthorizedError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 401;
+
+export const isNotFoundError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 404;
+
+const queryOf = (url: string): URLSearchParams | undefined => {
+  try {
+    return new URL(url, 'http://localhost').searchParams;
+  } catch {
+    return undefined;
+  }
+};
+
+export const parseLinkHeader = (header: string | null): PageCursors => {
+  let nextMaxId: string | undefined;
+  let prevMinId: string | undefined;
+  if (header === null) return { nextMaxId, prevMinId };
+  for (const match of header.matchAll(/<([^>]*)>([^<]*)/g)) {
+    const url = match[1] ?? '';
+    const params = match[2] ?? '';
+    const rels = /;\s*rel\s*=\s*"?([^";,]*)"?/i.exec(params)?.[1]?.trim().split(/\s+/) ?? [];
+    const query = queryOf(url);
+    if (rels.includes('next')) nextMaxId = query?.get('max_id') ?? undefined;
+    if (rels.includes('prev')) prevMinId = query?.get('min_id') ?? undefined;
+  }
+  return { nextMaxId, prevMinId };
+};
+
+const toApiError = async (res: Response): Promise<MastodonApiError> => {
+  const body: unknown = await res.json().catch(() => undefined);
+  const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+    ? body.error
+    : `HTTP ${res.status}`;
+  return Object.assign(new Error(message), { status: res.status });
+};
+
+type Query = Readonly<Record<string, string | number | boolean | undefined>>;
+
+const request = async <T>(
+  path: string,
+  query: Query = {},
+): Promise<Readonly<{ body: T; cursors: PageCursors }>> => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+  const queryString = search.toString();
+  const res = await fetch(queryString.length > 0 ? `${path}?${queryString}` : path, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return { body: await res.json() as T, cursors: parseLinkHeader(res.headers.get('Link')) };
+};
+
+const getPage = async <T>(path: string, query: Query = {}): Promise<Page<T>> => {
+  const { body, cursors } = await request<T[]>(path, query);
+  return { items: body, ...cursors };
+};
+
+const pageQuery = (params: PageParams): Query => ({
+  max_id: params.maxId,
+  since_id: params.sinceId,
+  min_id: params.minId,
+  limit: params.limit,
+});
+
+export const fetchHomeTimeline = (params: PageParams = {}): Promise<Page<Status>> =>
+  getPage<Status>('/api/v1/timelines/home', pageQuery(params));
+
+export type PublicTimelineScope = 'local' | 'remote';
+
+export const fetchPublicTimeline = (
+  scope: PublicTimelineScope,
+  params: PageParams = {},
+): Promise<Page<Status>> => getPage<Status>('/api/v1/timelines/public', { ...pageQuery(params), [scope]: true });
+
+export const fetchStatus = async (id: string): Promise<Status> =>
+  (await request<Status>(`/api/v1/statuses/${encodeURIComponent(id)}`)).body;
+
+export type StatusContext = Readonly<{
+  ancestors: readonly Status[];
+  descendants: readonly Status[];
+}>;
+
+export const fetchStatusContext = async (id: string): Promise<StatusContext> =>
+  (await request<StatusContext>(`/api/v1/statuses/${encodeURIComponent(id)}/context`)).body;
+
+export const fetchVerifyCredentials = async (): Promise<CredentialAccount> =>
+  (await request<CredentialAccount>('/api/v1/accounts/verify_credentials')).body;
+
+export const fetchFollowers = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
+  getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/followers`, pageQuery(params));
+
+export const fetchFollowing = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
+  getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/following`, pageQuery(params));

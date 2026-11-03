@@ -1,6 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../../domain/post/post.ts';
@@ -45,10 +46,10 @@ export const createD1LikedPostsResolverByActorId = (
     if (postIds.length === 0) return RA.ok([]);
 
     const imageRows = await db.select().from(postImagesTable).where(inArray(postImagesTable.postId, postIds));
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const image of imageRows) {
       const images = imagesByPostId.get(image.postId) ?? [];
-      images.push({ url: image.url, altText: image.altText });
+      images.push({ imageId: ImageId.orThrow(image.imageId), url: image.url, altText: image.altText });
       imagesByPostId.set(image.postId, images);
     }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
+import { ImageId } from '../../domain/image/imageId.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import { LinkPreviewId } from '../../domain/linkPreview/linkPreviewId.ts';
 import type { LocalPost, PostWithAuthor, RemotePost } from '../../domain/post/post.ts';
@@ -30,6 +31,7 @@ const account: Account = toAccount(
     },
   },
   {
+    baseUrl: 'https://iori.example/api/v1/timelines/home',
     defaultAvatarUrl: 'https://iori.example/static/avatar.png',
     defaultHeaderUrl: 'https://iori.example/static/header.png',
     followersCount: 0,
@@ -45,7 +47,8 @@ const author = {
   logoUri: undefined,
   liked: true,
   reposted: false,
-  images: [{ url: 'https://iori.example/uploads/a.png', altText: 'alt' }, {
+  images: [{ imageId: ImageId.generate(), url: 'https://iori.example/uploads/a.png', altText: 'alt' }, {
+    imageId: ImageId.generate(),
     url: 'https://iori.example/uploads/b.png',
     altText: null,
   }],
@@ -63,7 +66,7 @@ const author = {
       title: 'Title A',
       description: null,
       imageUrl: 'https://example.com/a.png',
-      faviconUrl: null,
+      faviconUrl: 'https://example.com/favicon.ico',
       siteName: 'Example',
       createdAt,
     },
@@ -104,6 +107,7 @@ const remotePost: PostWithAuthor = {
 } satisfies RemotePost & typeof author;
 
 const options = {
+  baseUrl: 'https://iori.example/api/v1/timelines/home',
   account,
   mediaAttachmentIds: ['media-1', 'media-2'],
   repliesCount: 5,
@@ -187,8 +191,15 @@ describe('toStatus', () => {
       image: 'https://example.com/a.png',
     });
     expect(status.iori?.link_previews).toEqual([
-      { url: 'https://example.com/a', title: 'Title A', description: null, image: 'https://example.com/a.png' },
-      { url: 'https://example.com/b', title: null, description: 'Desc B', image: null },
+      {
+        url: 'https://example.com/a',
+        title: 'Title A',
+        description: null,
+        image: 'https://example.com/a.png',
+        site_name: 'Example',
+        favicon: 'https://example.com/favicon.ico',
+      },
+      { url: 'https://example.com/b', title: null, description: 'Desc B', image: null, site_name: null, favicon: null },
     ]);
   });
 
@@ -209,6 +220,102 @@ describe('toStatus', () => {
   });
 });
 
+describe('toStatus content sanitization', () => {
+  it('sanitizes the content of the status and of the status it boosts', () => {
+    const dirty = { ...localPost, content: '<p>hi<script>alert(1)</script><img src=x onerror=alert(1)></p>' };
+
+    const status = toStatus(dirty, options);
+    const reposterActorId = ActorId.generate();
+    const repostId = RepostId.generate();
+    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
+      repostId,
+      account: { ...account, id: reposterActorId },
+      reblog: status,
+    });
+
+    expect(status.content).toBe('<p>hi</p>');
+    expect(boost.reblog?.content).toBe('<p>hi</p>');
+  });
+});
+
+describe('toStatus url safety', () => {
+  const unsafe = 'javascript:alert(1)';
+
+  it('turns a relative upload path into an absolute url', () => {
+    const post: PostWithAuthor = {
+      ...localPost,
+      images: [{ imageId: ImageId.generate(), url: '/uploads/a.png', altText: null }],
+    };
+
+    const status = toStatus(post, { ...options, mediaAttachmentIds: ['media-1'] });
+
+    expect(status.media_attachments[0]).toMatchObject({
+      url: 'https://iori.example/uploads/a.png',
+      preview_url: 'https://iori.example/uploads/a.png',
+    });
+  });
+
+  it('drops a media attachment whose url is not http or https', () => {
+    const post: PostWithAuthor = {
+      ...localPost,
+      images: [
+        { imageId: ImageId.generate(), url: unsafe, altText: null },
+        { imageId: ImageId.generate(), url: 'https://iori.example/uploads/b.png', altText: null },
+      ],
+    };
+
+    const status = toStatus(post, options);
+
+    expect(status.media_attachments.map((attachment) => attachment.id)).toEqual(['media-2']);
+  });
+
+  it('uses a null card and drops link previews when the url is unsafe, and nulls unsafe images', () => {
+    const [first, second] = localPost.linkPreviews;
+    const post: PostWithAuthor = {
+      ...localPost,
+      linkPreviews: [
+        { ...first!, url: unsafe },
+        { ...second!, url: 'https://example.com/b', imageUrl: unsafe, faviconUrl: unsafe },
+      ],
+    };
+
+    const status = toStatus(post, options);
+
+    expect(status.card).toBeNull();
+    expect(status.iori?.link_previews).toEqual([
+      {
+        url: 'https://example.com/b',
+        title: null,
+        description: 'Desc B',
+        image: null,
+        site_name: null,
+        favicon: null,
+      },
+    ]);
+  });
+
+  it('nulls the image of a card and the url of a reaction when they are unsafe', () => {
+    const post: PostWithAuthor = {
+      ...localPost,
+      linkPreviews: [{ ...localPost.linkPreviews[0]!, imageUrl: unsafe }],
+      reactions: [{ emoji: ':x:', count: 1, emojiImageUrl: unsafe }],
+    };
+
+    const status = toStatus(post, options);
+
+    expect(status.card?.image).toBeNull();
+    expect(status.iori?.reactions).toEqual([{ emoji: ':x:', count: 1, url: null, me: false }]);
+  });
+
+  it('keeps the uri of a remote post and sets url to null when the uri is unsafe', () => {
+    const status = toStatus({ ...remotePost, uri: unsafe } as PostWithAuthor, options);
+
+    expect(status.url).toBeNull();
+    expect(status.uri).toBe(`https://iori.example/api/v1/statuses/${remotePost.postId}`);
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+  });
+});
+
 describe('toReblogStatus', () => {
   it('wraps the original Status with the repost id and the reposter account', () => {
     const reposterActorId = ActorId.generate();
@@ -218,6 +325,7 @@ describe('toReblogStatus', () => {
     const item: RepostTimelineItem = {
       type: 'repost',
       timelineItemId: TimelineItemId.generate(),
+      repostId,
       post: localPost,
       repostedBy: { actorId: reposterActorId, username: 'alice', logoUri: undefined },
       createdAt: Date.UTC(2025, 1, 3) as Instant,

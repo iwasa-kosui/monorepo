@@ -4,8 +4,10 @@ import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { ImageId } from '../image/imageId.ts';
 import { Instant } from '../instant/instant.ts';
 import type { LinkPreview } from '../linkPreview/linkPreview.ts';
+import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
 import { PostId } from './postId.ts';
@@ -34,7 +36,7 @@ export const LocalPost = Schema.create(localPostZodType);
 export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
-export type PostImage = { url: string; altText: string | null };
+export type PostImage = { imageId: ImageId; url: string; altText: string | null };
 export type PostReaction = { emoji: string; count: number; emojiImageUrl: string | null };
 export type PostWithAuthor = Post & {
   username: Username;
@@ -144,8 +146,16 @@ export type RemotePostIdentity = Readonly<{
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<
-  { postId: PostId },
+  { postId: PostId; currentActorId?: ActorId },
   { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
+>;
+export type PostsWithAuthorResolverByPostIds = Agg.Resolver<
+  { postIds: ReadonlyArray<PostId>; currentActorId: ActorId | undefined },
+  ReadonlyMap<PostId, PostWithAuthor>
+>;
+export type LocalPostsResolverByPage = Agg.Resolver<
+  { currentActorId: ActorId | undefined; mutedActorIds: ReadonlyArray<ActorId>; page: PageRequest },
+  PostWithAuthor[]
 >;
 export type PostsResolverByActorId = Agg.Resolver<ActorId, Post[]>;
 export type PostsResolverByActorIds = Agg.Resolver<

@@ -12,11 +12,8 @@ const createDeps = () => ({
   sendReplyUseCase: { run: vi.fn() },
   deletePostUseCase: { run: vi.fn() },
   sendFollowRequestUseCase: { run: vi.fn() },
-  getFederatedTimelineUseCase: { run: vi.fn() },
   getUserPostsUseCase: { run: vi.fn(async () => RA.err({ message: 'not found' })) },
   getRemoteActorPostsUseCase: { run: vi.fn() },
-  getServerTimelineUseCase: { run: vi.fn(async () => RA.ok({ posts: [] })) },
-  threadResolver: { resolve: vi.fn() },
   subscribePushUseCase: { run: vi.fn() },
   unsubscribePushUseCase: { run: vi.fn() },
   uploads: {
@@ -50,17 +47,14 @@ describe('createWorkerCoreApiRouter', () => {
       app.request('/api/v1/reply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
       app.request(`/api/v1/posts/${postId}`, { method: 'DELETE' }),
       app.request('/api/v1/follow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
-      app.request('/api/v1/federated'),
       app.request('/api/v1/remote-users/not-an-id/posts'),
       app.request('/api/v1/users/not valid/posts'),
-      app.request('/api/v1/thread?postId=not-an-id'),
       app.request('/api/v1/push/vapid-public-key'),
       app.request('/api/v1/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
       }),
-      app.request('/api/v1/server-timeline'),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
@@ -68,13 +62,10 @@ describe('createWorkerCoreApiRouter', () => {
       400,
       401,
       400,
-      401,
-      400,
       400,
       400,
       200,
       400,
-      200,
     ]);
   });
 

@@ -1,22 +1,15 @@
-import { Actor } from '../../domain/actor/actor.ts';
-import { LocalActor } from '../../domain/actor/localActor.ts';
-import { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import type { Account } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import { accountHandle, isLocalAccount } from '../api/status.ts';
 
-export const ActorLink = ({ actor }: { actor: Actor }) => {
-  const handle = Actor.match({
-    onLocal: LocalActor.getHandle,
-    onRemote: (x) => RemoteActor.getHandle(x) ?? actor.uri,
-  })(actor);
+export const ActorLink = ({ account }: { account: Account }) => {
+  const handle = accountHandle(account);
 
-  const logoUrl = safeUrl(actor.logoUri);
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <a
-      href={Actor.match({
-        onLocal: (x) => x.uri,
-        onRemote: (x) => `/remote-users/${x.id}`,
-      })(actor)}
+      href={isLocalAccount(account) ? safeUrl(account.uri) : `/remote-users/${account.id}`}
       class='flex items-center gap-2 p-2 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
     >
       <div class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>

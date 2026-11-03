@@ -7,10 +7,7 @@ import type { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../../domain/post/post.ts';
 import { Username } from '../../../domain/user/username.ts';
-import {
-  createWorkerGetServerTimelineUseCase,
-  createWorkerGetUserPostsUseCase,
-} from '../../../runtime/workerCoreUseCases.ts';
+import { createWorkerGetUserPostsUseCase } from '../../../runtime/workerCoreUseCases.ts';
 import { resolveLocalActorWith, resolveUserByUsernameWith } from '../../../useCase/helper/resolve.ts';
 import { createD1ActorResolverByUserId } from '../actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../actor/actorsResolverByFollowerId.ts';
@@ -19,7 +16,6 @@ import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import { createD1FederatedTimelineItemsResolver } from '../federatedTimeline/federatedTimelineItemsResolver.ts';
 import {
-  createD1LocalPostsResolver,
   createD1PostsResolverByActorIds,
   createD1PostsResolverByActorIdWithPagination,
 } from '../post/postWithAuthorResolvers.ts';
@@ -202,9 +198,7 @@ const setup = () => {
 type Input = Readonly<{
   actorIds?: readonly ActorId[];
   currentActorId?: ActorId;
-  localOnly?: boolean;
   createdAt: Instant | undefined;
-  limit?: number;
 }>;
 
 // Implementation before batching: one id query, then threadResolver.resolve per post.
@@ -230,11 +224,10 @@ const legacyResolvePosts = async (db: IoriD1Db, origin: string, input: Input): P
       input.actorIds === undefined
         ? undefined
         : inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(input.actorIds)}))`),
-      input.localOnly === true ? eq(localPostsTable.postId, postsTable.postId) : undefined,
       input.createdAt === undefined ? undefined : lt(postsTable.createdAt, new Date(input.createdAt)),
     ))
     .orderBy(desc(postsTable.createdAt))
-    .limit(input.limit ?? 20);
+    .limit(20);
   const threadResolver = createD1ThreadResolver(db, origin);
   const resolved = await Promise.all(rows.map((row) => threadResolver.resolve({ postId: row.postId as never })));
   return resolved.flatMap((result, index) =>
@@ -301,7 +294,7 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     ]);
     const thread = unwrap(await createD1ThreadResolver(db, ORIGIN).resolve({ postId: postIdOf(replyIndex) as never }));
     expect(thread.ancestors.map(post => post.postId)).toEqual([remoteReplyTargetId]);
-    expect(thread.descendants.map(post => post.postId)).toEqual([postIdOf(richIndex)]);
+    expect(thread.descendants.map(post => post.postId)).toEqual([postIdOf(richIndex), postIdOf(parentIndex)]);
   });
 
   it('returns the same posts as the per-post threadResolver for remote-users posts (with pagination)', async () => {
@@ -320,33 +313,14 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     }
   });
 
-  it('returns the same posts as the per-post threadResolver for /v1/server-timeline (local posts only)', async () => {
-    const { db } = setup();
-    const resolver = createD1LocalPostsResolver(db, ORIGIN);
-    for (const createdAt of cursors) {
-      for (const limit of [undefined, 3, 50]) {
-        const actual = unwrap(await resolver.resolve({ createdAt, limit }));
-        const expected = await legacyResolvePosts(db, ORIGIN, { createdAt, localOnly: true, limit });
-        expect(actual.length).toBeGreaterThan(0);
-        expect(actual.every(post => post.type === 'local')).toBe(true);
-        expect(actual).toEqual(expected);
-        expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
-      }
-    }
-    const response = await createWorkerCoreApiRouter({
-      getServerTimelineUseCase: createWorkerGetServerTimelineUseCase(resolver),
-    } as never).request('/v1/server-timeline');
-    const legacy = await legacyResolvePosts(db, ORIGIN, { createdAt: undefined, localOnly: true });
-    expect(response.status).toBe(200);
-    expect((await response.json() as { posts: PostWithAuthor[] }).posts.map(post => post.postId)).toEqual(
-      legacy.map(post => post.postId),
-    );
-  });
-
   it('keeps /v1/federated posts identical to the thread resolver result', async () => {
     const { db } = setup();
     const result = unwrap(
-      await createD1FederatedTimelineItemsResolver(db, ORIGIN).resolve({ receivedAt: undefined, mutedActorIds: [] }),
+      await createD1FederatedTimelineItemsResolver(db).resolve({
+        page: { limit: 20, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
+        mutedActorIds: [],
+        currentActorId: undefined,
+      }),
     );
     const threadResolver = createD1ThreadResolver(db, ORIGIN);
     expect(result.map(item => item.post.postId)).toEqual([postIdOf(richIndex), postIdOf(3), id(3002), id(3003)]);
@@ -358,79 +332,6 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     expect(result[0].post.images).toHaveLength(2);
     expect(result[0].post.reactions).toHaveLength(3);
     expect(result[0].post.linkPreviews).toHaveLength(2);
-  });
-
-  it('returns the same posts as the per-post threadResolver when limit exceeds the D1 binding limit', async () => {
-    const { sqlite, db, queries } = setup();
-    const extraCount = 100;
-    for (let offset = 1; offset <= extraCount; offset++) {
-      const index = LOCAL_POST_COUNT + offset;
-      const postId = postIdOf(index);
-      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
-        postId,
-        localActorId,
-        `local post ${index}`,
-        index * 1000,
-        'local',
-      );
-      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
-      if (offset % 7 === 0) {
-        sqlite.prepare('INSERT INTO post_images(imageId,postId,url,altText,createdAt) VALUES (?,?,?,?,?)').run(
-          id(8000 + offset),
-          postId,
-          `https://iori.test/uploads/extra-${offset}.png`,
-          null,
-          offset,
-        );
-        sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
-          id(8200 + offset),
-          viewerActorId,
-          postId,
-          'remote',
-          1,
-        );
-        sqlite.prepare('INSERT INTO remote_likes(likeId,likeActivityUri) VALUES (?,?)').run(
-          id(8200 + offset),
-          `https://remote.test/likes/${id(8200 + offset)}`,
-        );
-        sqlite.prepare('INSERT INTO reposts(repostId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
-          id(8400 + offset),
-          viewerActorId,
-          postId,
-          1,
-        );
-        sqlite.prepare(
-          'INSERT INTO emoji_reacts(emojiReactId,actorId,postId,emoji,emojiImageUrl,createdAt) VALUES (?,?,?,?,?,?)',
-        ).run(id(8600 + offset), viewerActorId, postId, '👍', null, 1);
-        sqlite.prepare(
-          'INSERT INTO link_previews(linkPreviewId,postId,url,title,description,imageUrl,faviconUrl,siteName,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
-        ).run(
-          id(8800 + offset),
-          postId,
-          `https://example.test/extra-${offset}`,
-          `Extra ${offset}`,
-          null,
-          null,
-          null,
-          null,
-          1,
-        );
-      }
-    }
-    const resolver = createD1LocalPostsResolver(db, ORIGIN);
-    for (const limit of [120, 125]) {
-      const before = queries.length;
-      const actual = unwrap(await resolver.resolve({ createdAt: undefined, limit }));
-      expect(queries.length - before).toBe(11);
-      const expected = await legacyResolvePosts(db, ORIGIN, { createdAt: undefined, localOnly: true, limit });
-      expect(actual).toHaveLength(limit);
-      expect(actual.some(post => post.images.length > 0 && post.likeCount === 1)).toBe(true);
-      expect(actual).toEqual(expected);
-      expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
-    }
-    const before = queries.length;
-    expect(unwrap(await resolver.resolve({ createdAt: undefined, limit: 90 }))).toHaveLength(90);
-    expect(queries.length - before).toBe(6);
   });
 
   it('returns an empty page with one query when no post matches', async () => {

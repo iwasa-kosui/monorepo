@@ -1,38 +1,66 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, lt } from 'drizzle-orm';
+import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
-import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { FederatedTimelineItemsResolver } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { PostId } from '../../../domain/post/postId.ts';
 import { RelayId } from '../../../domain/relay/relayId.ts';
 import type { IoriD1Db } from '../client.ts';
-import { createD1ThreadResolver } from '../post/threadResolver.ts';
-import { federatedTimelineItemsTable } from '../schema.ts';
+import { idsJson } from '../idsJson.ts';
+import { pageConditions, pageOrderBy } from '../pageCondition.ts';
+import { resolvePostsWithAuthorByIds } from '../post/postWithAuthorBatch.ts';
+import { federatedTimelineItemsTable, postsTable } from '../schema.ts';
 
-export const createD1FederatedTimelineItemsResolver = (
-  db: IoriD1Db,
-  origin: string,
-): FederatedTimelineItemsResolver => ({
-  resolve: async ({ receivedAt, mutedActorIds }) => {
-    const rows = await db.select().from(federatedTimelineItemsTable)
+const cursorItem = alias(federatedTimelineItemsTable, 'cursor_item');
+const latestItem = alias(federatedTimelineItemsTable, 'latest_item');
+
+const cursorOf = (postId: string) =>
+  sql`select ${cursorItem.receivedAt}, ${cursorItem.federatedTimelineItemId} from ${federatedTimelineItemsTable} ${cursorItem}
+    where ${cursorItem.postId} = ${postId}
+    order by ${cursorItem.receivedAt} desc, ${cursorItem.federatedTimelineItemId} desc
+    limit 1`;
+
+export const createD1FederatedTimelineItemsResolver = (db: IoriD1Db): FederatedTimelineItemsResolver => ({
+  resolve: async ({ page, mutedActorIds, currentActorId }) => {
+    const columns = {
+      createdAt: federatedTimelineItemsTable.receivedAt,
+      id: federatedTimelineItemsTable.federatedTimelineItemId,
+    };
+    const rows = await db.select({
+      federatedTimelineItemId: federatedTimelineItemsTable.federatedTimelineItemId,
+      postId: federatedTimelineItemsTable.postId,
+      relayId: federatedTimelineItemsTable.relayId,
+      receivedAt: federatedTimelineItemsTable.receivedAt,
+    })
+      .from(federatedTimelineItemsTable)
+      .innerJoin(postsTable, eq(federatedTimelineItemsTable.postId, postsTable.postId))
       .where(and(
-        receivedAt === undefined ? undefined : lt(federatedTimelineItemsTable.receivedAt, new Date(receivedAt)),
+        isNull(postsTable.deletedAt),
+        mutedActorIds.length === 0
+          ? undefined
+          : notInArray(postsTable.actorId, sql`(select value from json_each(${idsJson(mutedActorIds)}))`),
+        eq(
+          federatedTimelineItemsTable.federatedTimelineItemId,
+          sql`(select ${latestItem.federatedTimelineItemId} from ${federatedTimelineItemsTable} ${latestItem}
+            where ${latestItem.postId} = ${federatedTimelineItemsTable.postId}
+            order by ${latestItem.receivedAt} desc, ${latestItem.federatedTimelineItemId} desc
+            limit 1)`,
+        ),
+        ...pageConditions(page, columns, cursorOf),
       ))
-      .orderBy(desc(federatedTimelineItemsTable.receivedAt))
-      .limit(20);
-    const muted = new Set<ActorId>(mutedActorIds);
-    const threadResolver = createD1ThreadResolver(db, origin);
-    const items = await Promise.all(rows.map(async (row) => {
-      const post = await threadResolver.resolve({ postId: row.postId as never });
-      if (!post.ok || post.val.currentPost === null || muted.has(post.val.currentPost.actorId)) return undefined;
-      return {
+      .orderBy(...pageOrderBy(page, columns))
+      .limit(page.limit);
+    const posts = await resolvePostsWithAuthorByIds(db, rows.map((row) => PostId.orThrow(row.postId)), currentActorId);
+    return RA.ok(rows.flatMap((row) => {
+      const post = posts.get(PostId.orThrow(row.postId));
+      return post === undefined ? [] : [{
         federatedTimelineItemId: FederatedTimelineItemId.orThrow(row.federatedTimelineItemId),
-        post: post.val.currentPost,
+        post,
         relayId: RelayId.orThrow(row.relayId),
         receivedAt: Instant.orThrow(row.receivedAt.getTime()),
-      };
+      }];
     }));
-    return RA.ok(items.filter((item) => item !== undefined));
   },
 });
