@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withCliSignal } from './cli-lifetime.mjs';
-import { targetWorkerName } from './fresh-target.mjs';
+import { createTargetIdentity } from './fresh-target.mjs';
 import { runMigrationCommand } from './migration-command.mjs';
 import { operationFailureLines } from './operation-diagnostics.mjs';
 import { assertSmokeQueueToken } from './smoke-diagnostics.mjs';
@@ -77,7 +77,16 @@ export const putWorkerSecrets = async ({
   onStage('put-worker-secrets');
   assertIdentity(env, invocation);
   assertInputs(env);
-  const workerName = targetWorkerName(invocation);
+  let workerName;
+  try {
+    workerName = createTargetIdentity({
+      environment: invocation.environment,
+      generation: invocation.generation,
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+    }).workerName;
+  } catch {
+    throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
+  }
   onStage('put-worker-secrets-read');
   await assertWorkerExists({
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
@@ -91,20 +100,22 @@ export const putWorkerSecrets = async ({
     WRANGLER_SEND_METRICS: 'false',
   };
   onStage('put-worker-secrets-put');
-  for (const name of SECRET_NAMES) {
-    try {
-      await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'put', name, '--name', workerName], {
-        cwd: appRoot,
-        env: childEnv,
-        signal,
-        timeout,
-        maxBuffer: 1_000_000,
-        killGraceMs: 15000,
-        input: env[name],
-      });
-    } catch {
-      throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
-    }
+  let result;
+  try {
+    result = await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'bulk', '--name', workerName], {
+      cwd: appRoot,
+      env: childEnv,
+      signal,
+      timeout,
+      maxBuffer: 1_000_000,
+      killGraceMs: 15000,
+      input: JSON.stringify(Object.fromEntries(SECRET_NAMES.map((name) => [name, env[name]]))),
+    });
+  } catch {
+    throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
+  }
+  if (!String(result?.stdout ?? '').includes(`${SECRET_NAMES.length} secrets successfully uploaded`)) {
+    throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
   }
 };
 const main = async (cliSignal, onStage) => {

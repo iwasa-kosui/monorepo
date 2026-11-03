@@ -1371,15 +1371,15 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 
 手順は次のとおりです。
 
-1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は3つすべてを put するからです。
+1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は3つすべてを put するからです。VAPID の鍵を入れ替えると、ブラウザが登録済みの push の購読は使えなくなります。利用者は、購読し直す必要があります。
 2. 作業者は、`deploy-iori-worker.yml` を `operation=put-worker-secrets`、`environment`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。
 3. production の場合、承認者は job の承認待ちを承認します。
 4. job は、`IORI_ADMISSION_IDENTITY` の `environment`、`generation`、`runId`、`mainSha` が dispatch の入力と一致することを確かめます。
 5. job は、`SMOKE_QUEUE_TOKEN` の形式と、`VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対の鍵であることを確かめます。
 6. job は、Cloudflare API で Worker `iori-<environment>-<generation>` の deployments を読み、Worker が存在することを確かめます。
-7. job は、`wrangler secret put` を `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の順に実行します。job は値を標準入力だけで渡します。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
+7. job は、`wrangler secret bulk` を1回だけ実行します。job は、3つの値を JSON にして標準入力だけで渡し、ファイルの引数は付けません。job は、wrangler が `3 secrets successfully uploaded` の行を出したことも、成功の条件にします。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
 
-`wrangler secret put` は、1回ごとに Worker の新しい version を作って deploy します。このため、1回の `put-worker-secrets` で Worker の version は3つ増えます。作業者は、実行後に Worker の現在の version を記録します。途中の put が失敗した場合は、先に put した secret だけが新しい値になっています。作業者は、原因を直してから `put-worker-secrets` を最初から dispatch し直します。
+`wrangler secret bulk` は、3つの secret を1回の設定の更新で Worker に送ります。このため、3つとも新しい値が反映されるか、どれも反映されないかのどちらかです。1回の `put-worker-secrets` で Worker の version は1つだけ増えます。作業者は、実行後に Worker の現在の version を記録します。失敗した場合は、どの secret も新しい値になっていません。作業者は、原因を直してから `put-worker-secrets` を dispatch し直します。
 
 失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を1行出します。`stage` は次のとおりです。
 
@@ -1387,7 +1387,7 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | ------------------------- | --------------------------------------------------------------------------- |
 | `put-worker-secrets`      | 入力の検査（identity、値の有無、`SMOKE_QUEUE_TOKEN`、VAPID の鍵の対）の途中 |
 | `put-worker-secrets-read` | Worker の存在を Cloudflare API で確かめている途中                           |
-| `put-worker-secrets-put`  | `wrangler secret put` を実行している途中                                    |
+| `put-worker-secrets-put`  | `wrangler secret bulk` を実行している途中                                   |
 
 `reason` には、次の語が出ます。
 
@@ -1400,7 +1400,7 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | `vapid-rejected`                                | `VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対になっていません                                           |
 | `workers-http-404` など `workers-http-<status>` | Worker の deployments を読む API が、その status を返しました。404 は、Worker が存在しないことを示します |
 | `workers-request`、`workers-shape`              | API への要求が失敗したか、応答の形が想定と違います                                                       |
-| `command-failed`                                | `wrangler secret put` が失敗しました                                                                     |
+| `command-failed`                                | `wrangler secret bulk` が失敗したか、成功を示す `3 secrets successfully uploaded` の行が出ませんでした   |
 | `aborted`                                       | 時間切れか中断で止まりました                                                                             |
 
 #### 移行先の読み取りの失敗

@@ -35,15 +35,20 @@ const environment = (overrides: Record<string, string> = {}) => ({
 type Call = { program: string; args: string[]; options: { input?: string; env: Record<string, string | undefined> } };
 const run = async (
   env: Record<string, string>,
-  { status = 200, failPut }: { status?: number; failPut?: string } = {},
+  {
+    status = 200,
+    failPut = false,
+    stdout = '\u2728 3 secrets successfully uploaded\n',
+    signal = new AbortController().signal,
+  }: { status?: number; failPut?: boolean; stdout?: string; signal?: AbortSignal } = {},
 ) => {
   const calls: Call[] = [];
   const stages: string[] = [];
   const requests: { url: string; headers: unknown }[] = [];
   const runCommand = vi.fn(async (program: string, args: string[], options: Call['options']) => {
     calls.push({ program, args, options });
-    if (args[4] === failPut) throw Object.assign(new Error(`failed with ${options.input}`), { exitCode: 1 });
-    return { stdout: '', stderr: '' };
+    if (failPut) throw Object.assign(new Error(`failed with ${options.input}`), { exitCode: 1 });
+    return { stdout, stderr: '' };
   });
   const fetchRequest = vi.fn(async (url: URL, init: { headers: unknown }) => {
     requests.push({ url: url.toString(), headers: init.headers });
@@ -54,7 +59,7 @@ const run = async (
     await putWorkerSecrets({
       invocation,
       env,
-      signal: new AbortController().signal,
+      signal,
       timeout: 60_000,
       onStage: stage => stages.push(stage),
       runCommand: runCommand as never,
@@ -81,7 +86,7 @@ const expectDiagnostic = (stage: string, error: unknown, reason: string, env: Re
 };
 
 describe('put-worker-secrets', () => {
-  it('puts the three values in order, passing each only on standard input', async () => {
+  it('puts the three values in one bulk call, passing them only on standard input', async () => {
     const env = environment();
     const { calls, stages, requests, error } = await run(env);
     expect(error).toBeUndefined();
@@ -89,23 +94,22 @@ describe('put-worker-secrets', () => {
     expect(requests.map(request => request.url)).toEqual([
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/iori-production-fixture1/deployments`,
     ]);
-    expect(calls.map(call => [call.program, call.args])).toEqual([
-      ['pnpm', ['exec', 'wrangler', 'secret', 'put', 'VAPID_PUBLIC_KEY', '--name', 'iori-production-fixture1']],
-      ['pnpm', ['exec', 'wrangler', 'secret', 'put', 'VAPID_PRIVATE_KEY', '--name', 'iori-production-fixture1']],
-      ['pnpm', ['exec', 'wrangler', 'secret', 'put', 'SMOKE_QUEUE_TOKEN', '--name', 'iori-production-fixture1']],
+    expect(calls).toHaveLength(1);
+    const [call] = calls;
+    expect([call.program, call.args]).toEqual([
+      'pnpm',
+      ['exec', 'wrangler', 'secret', 'bulk', '--name', 'iori-production-fixture1'],
     ]);
-    expect(calls.map(call => call.options.input)).toEqual([
-      env.VAPID_PUBLIC_KEY,
-      env.VAPID_PRIVATE_KEY,
-      env.SMOKE_QUEUE_TOKEN,
-    ]);
-    for (const call of calls) {
-      for (const value of values(env).slice(0, 3)) {
-        expect(call.args.join(' ')).not.toContain(value);
-        expect(Object.values(call.options.env)).not.toContain(value);
-      }
-      expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
+    expect(JSON.parse(call.options.input!)).toEqual({
+      VAPID_PUBLIC_KEY: env.VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY: env.VAPID_PRIVATE_KEY,
+      SMOKE_QUEUE_TOKEN: env.SMOKE_QUEUE_TOKEN,
+    });
+    for (const value of values(env).slice(0, 3)) {
+      expect(call.args.join(' ')).not.toContain(value);
+      expect(Object.values(call.options.env)).not.toContain(value);
     }
+    expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
   });
   it.each([
     ['environment', { environment: 'staging' }],
@@ -159,12 +163,31 @@ describe('put-worker-secrets', () => {
     expect(stages.at(-1)).toBe('put-worker-secrets-read');
     expectDiagnostic(stages.at(-1)!, error, 'workers-http-404', env);
   });
-  it('stops at the failed put and keeps the values out of the diagnostics', async () => {
+  it('keeps the values out of the diagnostics when the put fails', async () => {
     const env = environment();
-    const { calls, stages, error } = await run(env, { failPut: 'VAPID_PRIVATE_KEY' });
-    expect(calls.map(call => call.args[4])).toEqual(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']);
+    const { calls, stages, error } = await run(env, { failPut: true });
+    expect(calls).toHaveLength(1);
     expect(stages.at(-1)).toBe('put-worker-secrets-put');
     expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
     for (const value of values(env)) expect(String((error as Error).message)).not.toContain(value);
+  });
+  it.each(['', 'No content found in file or piped input.\n', '\u2728 2 secrets successfully uploaded\n'])(
+    'fails with exit code 0 when the success line is missing from %j',
+    async (stdout) => {
+      const env = environment();
+      const { calls, stages, error } = await run(env, { stdout });
+      expect(calls).toHaveLength(1);
+      expect(stages.at(-1)).toBe('put-worker-secrets-put');
+      expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
+      for (const value of values(env)) expect(String((error as Error).message)).not.toContain(value);
+    },
+  );
+  it('reports an abort when the signal is aborted and the command fails', async () => {
+    const env = environment();
+    const controller = new AbortController();
+    controller.abort();
+    const { stages, error } = await run(env, { failPut: true, signal: controller.signal });
+    expect(stages.at(-1)).toBe('put-worker-secrets-put');
+    expectDiagnostic(stages.at(-1)!, error, 'aborted', env);
   });
 });

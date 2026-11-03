@@ -1,14 +1,13 @@
 const fail = () => {
   throw new Error('Fresh target evidence is invalid.');
 };
-export const targetWorkerName = ({ environment, generation }) => `iori-${environment}-${generation}`;
 export const createTargetIdentity = ({ environment, generation, accountId, backendBucket }) => {
   if (
     !['production', 'staging'].includes(environment) || !/^[a-z][a-z0-9]{7,19}$/.test(generation ?? '')
     || !/^[a-f0-9]{32}$/.test(accountId ?? '')
     || (backendBucket !== undefined && !/^[a-z0-9][a-z0-9-]{2,62}$/.test(backendBucket ?? ''))
   ) fail();
-  const prefix = targetWorkerName({ environment, generation });
+  const prefix = `iori-${environment}-${generation}`;
   const names = {
     d1: prefix,
     uploads: `${prefix}-uploads`,
