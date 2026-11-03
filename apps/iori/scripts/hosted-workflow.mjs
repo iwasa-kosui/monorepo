@@ -33,12 +33,13 @@ const operations = Object.freeze({
 });
 const sourceInvocation = (env) => {
   if (
-    !['push', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME) || env.GITHUB_REF !== 'refs/heads/main'
+    env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main'
     || !/^[a-f0-9]{40}$/.test(env.MAIN_SHA ?? '') || env.MAIN_SHA !== env.GITHUB_SHA
   ) throw new Error('Invalid source invocation.');
   return { operation: 'source', codeSha: env.MAIN_SHA };
 };
-const invocation = env => env.IORI_OPERATION === 'source' ? sourceInvocation(env) : parseWorkflowInvocation(env);
+const invocation = (env, deferIdentity = false) =>
+  env.IORI_OPERATION === 'source' ? sourceInvocation(env) : parseWorkflowInvocation(env, { deferIdentity });
 const privateBase = async env => {
   const root = env.IORI_PRIVATE_DIRECTORY;
   const stat = await lstat(root);
@@ -51,7 +52,7 @@ const privateBase = async env => {
   return root;
 };
 export const initializeHostedWorkflow = async env => {
-  invocation(env);
+  invocation(env, true);
   workflowTimeBudget(Number(env.IORI_JOB_STARTED_AT));
   const paths = await createWorkflowDirectory(env.RUNNER_TEMP);
   const values = {
@@ -73,10 +74,13 @@ export const initializeHostedWorkflow = async env => {
   }
 };
 export const materializeHostedValues = async env => {
-  const { operation, migrationSha } = invocation(env);
+  const { operation, migrationSha, generation, runId } = invocation(env);
   const base = await privateBase(env);
   const mapped = {
     ...env,
+    ...(env.GITHUB_EVENT_NAME === 'push'
+      ? { IORI_GENERATION: generation, IORI_MIGRATION_RUN_ID: runId, IORI_MIGRATION_MAIN_SHA: migrationSha }
+      : {}),
     IORI_MIGRATION_ROOT: join(base, 'root'),
     IORI_MIGRATION_EXPECTED_TARGET_PATH: join(base, 'config/expected-target.json'),
     ...(operation === 'purge-rehearsal-target' ? { MAIN_SHA: migrationSha } : {}),
@@ -271,7 +275,7 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
   let selected;
   let remainingMs;
   await stage('invocation', () => {
-    selected = invocation(env);
+    selected = invocation(env, phase !== 'operate');
     ({ remainingMs } = workflowTimeBudget(Number(env.IORI_JOB_STARTED_AT)));
   });
   const signal = AbortSignal.any([parentSignal, AbortSignal.timeout(remainingMs)]);

@@ -310,6 +310,128 @@ it.each([
     }
   }
 });
+const pushIdentity = {
+  environment: 'production',
+  generation: 'prd20261102a',
+  mainSha: 'c'.repeat(40),
+  runId: 'prd20261102a-20261102a',
+  hostname: 'iori.example.invalid',
+  workerHostname: 'iori-production-prd20261102a.example.workers.dev',
+  smoke: { username: 'smoke', uploadFilename: 'x.png', articleId: 'y' },
+};
+const pushEnv = {
+  GITHUB_EVENT_NAME: 'push',
+  GITHUB_REF: 'refs/heads/main',
+  GITHUB_SHA: 'a'.repeat(40),
+  MAIN_SHA: 'a'.repeat(40),
+  IORI_ENVIRONMENT: 'production',
+  IORI_OPERATION: 'deploy-worker',
+  IORI_ADMISSION_IDENTITY: JSON.stringify(pushIdentity),
+};
+it('builds the deploy-worker inputs of a main push from the admission identity', () => {
+  expect(parseWorkflowInvocation(pushEnv)).toEqual({
+    operation: 'deploy-worker',
+    codeSha: 'a'.repeat(40),
+    migrationSha: 'c'.repeat(40),
+    environment: 'production',
+    generation: 'prd20261102a',
+    runId: 'prd20261102a-20261102a',
+  });
+  expect(parseWorkflowInvocation({
+    ...pushEnv,
+    IORI_GENERATION: 'prd20261102a',
+    IORI_MIGRATION_RUN_ID: 'prd20261102a-20261102a',
+    IORI_MIGRATION_MAIN_SHA: 'c'.repeat(40),
+  })).toMatchObject({ generation: 'prd20261102a' });
+});
+it('checks only the event, ref, SHA and operation of a push while the identity is deferred', () => {
+  const { IORI_ADMISSION_IDENTITY: _identity, ...withoutIdentity } = pushEnv;
+  expect(parseWorkflowInvocation(withoutIdentity, { deferIdentity: true })).toMatchObject({
+    operation: 'deploy-worker',
+    codeSha: 'a'.repeat(40),
+  });
+  expect(() => parseWorkflowInvocation(withoutIdentity)).toThrow('Protected workflow invocation is invalid.');
+  expect(() =>
+    parseWorkflowInvocation({ ...withoutIdentity, IORI_OPERATION: 'cutover-route' }, { deferIdentity: true })
+  )
+    .toThrow('Protected workflow invocation is invalid.');
+});
+it.each(['prepare-target', 'migrate-data', 'cutover-route', 'adopt-cutover-state', 'resume-source', 'source', ''])(
+  'rejects a main push for the operation %j',
+  operation => {
+    expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: operation })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  },
+);
+it('rejects a push with a wrong ref, SHA, environment, recovery value or conflicting inputs', () => {
+  const invalid = [
+    { GITHUB_REF: 'refs/heads/feature' },
+    { GITHUB_SHA: 'b'.repeat(40) },
+    { MAIN_SHA: '' },
+    { IORI_ENVIRONMENT: 'staging' },
+    { IORI_ENVIRONMENT: '' },
+    { IORI_RECOVERY: 'destination_writes_reconciled' },
+    { IORI_ALLOWED_MISSING_UPLOADS: '1' },
+    { IORI_GENERATION: 'other2026110' },
+    { IORI_MIGRATION_RUN_ID: 'other' },
+    { IORI_MIGRATION_MAIN_SHA: 'd'.repeat(40) },
+  ];
+  for (const given of invalid) {
+    expect(() => parseWorkflowInvocation({ ...pushEnv, ...given })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+  expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: 'replace-queue-consumer' })).toThrow(
+    'Maintenance operation requires a separate review.',
+  );
+});
+it('rejects a push when the admission identity is missing, malformed or not for production', () => {
+  const identities = [
+    undefined,
+    '',
+    'not json',
+    'null',
+    '[]',
+    JSON.stringify({ ...pushIdentity, environment: 'staging' }),
+    JSON.stringify({ ...pushIdentity, generation: 'Upper_Case' }),
+    JSON.stringify({ ...pushIdentity, generation: undefined }),
+    JSON.stringify({ ...pushIdentity, runId: '../bad' }),
+    JSON.stringify({ ...pushIdentity, runId: undefined }),
+    JSON.stringify({ ...pushIdentity, mainSha: 'c'.repeat(39) }),
+    JSON.stringify({ ...pushIdentity, mainSha: undefined }),
+  ];
+  for (const identity of identities) {
+    expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_ADMISSION_IDENTITY: identity })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
+it('keeps rejecting the push event for every dispatch-only route even with an admission identity', () => {
+  for (
+    const operation of [
+      'prepare-target',
+      'rehearse-migration',
+      'migrate-data',
+      'verify-import',
+      'cutover-route',
+      'adopt-cutover-state',
+      'resume-source',
+    ]
+  ) {
+    expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, GITHUB_EVENT_NAME: 'push' })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+  expect(() =>
+    parseWorkflowInvocation({
+      ...env,
+      IORI_OPERATION: 'deploy-worker',
+      GITHUB_EVENT_NAME: 'schedule',
+      IORI_ADMISSION_IDENTITY: pushEnv.IORI_ADMISSION_IDENTITY,
+    })
+  ).toThrow('Protected workflow invocation is invalid.');
+});
 it('reserves activation and cleanup within the whole hosted job deadline', () => {
   expect(workflowTimeBudget(1_000, 61_000)).toMatchObject({ remainingMs: 344 * 60_000, verificationMs: 329 * 60_000 });
   expect(() => workflowTimeBudget(1_000, 331 * 60_000 + 1_000)).toThrow();

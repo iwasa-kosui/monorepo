@@ -77,7 +77,11 @@ gh api "repos/$iori_repo/branches/main" --jq '{name, protected}'
 
 Environment は保護されたブランチを許可し、`main` だけに限定するものではありません。対象を `main` に固定するのは、source/Worker workflow の `GITHUB_REF=refs/heads/main` と最新 main SHA の一致検査です。この2つの制御を維持します。repository に branch protection rule が1件もない場合、Protected branches only でも全ブランチが許可されるため、Environment の設定だけで完了としません。[GitHub の deployment branch 制限](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)
 
-source deploy は対象 path の `main` push でも起動します。この保護は 2026-10-31 の読み戻しで有効を確認しました。**source credential の供給と merge より前に、この保護が維持されていることを再確認してください。** Ready 化・merge は明示承認後に行い、merge により起動した source job は第4節の前提が揃うまで承認しません。
+`main` への push で起動する配備は、Worker 配備の `.github/workflows/deploy-iori-worker-main.yml`（`Deploy iori Worker (main)`）です。この workflow は `apps/iori/**`、`packages/**` と自身の変更を含む push で `deploy-worker` を実行します。environment は `production` 固定なので、push で起動した job も production の承認待ちになります。source 配備の `deploy-iori.yml` は push では起動せず、手動の dispatch だけで実行します。
+
+3つの workflow（`Deploy iori`、`Deploy iori Worker`、`Deploy iori Worker (main)`）は、concurrency group `deploy-iori-worker-production` を共有します。push で起動した `deploy-worker` が production の承認待ちの間は、その run がこの group を占有します。このため、dispatch の操作は、push で起動した run が終わるまで待たされます。dispatch の操作は、`Deploy iori` のロールバックと、`deploy-iori-worker.yml` の各 operation です。GitHub は group ごとに待ちの run を1件しか保ちません。後から来た push の run が、待っている dispatch の run を取り消すことがあります。承認者は、push で起動した run を承認するか却下するかを速やかに決めます。dispatch の操作を先に通したいときは、承認者が push で起動した run を却下します。作業者は、dispatch した後に、その run が取り消されずに残っているかを確かめます。
+
+Environment と `main` の保護は、2026-10-31 の読み戻しで有効を確認しました。**source credential の供給と merge より前に、この保護が維持されていることを再確認してください。** Ready 化・merge は明示承認後に行い、承認者は、merge により起動した Worker 配備の job を、merge した変更を本番に出してよいと確かめてから承認します。
 
 ## 3. 移行先と Environment inputs の準備
 
@@ -528,7 +532,7 @@ fixture のゼロ UUID や仮の hostname を本番へ登録しません。初�
 | Private control | `.iori-migration` の mode、owner、`control.sock`、control CLI                                                                                                               | 同じ service user、所定の private 配置。初回未配備ならその事実を記録             |
 | 容量            | source export 先と runner の空き容量、実データ量。export 先が home と同じファイルシステムにある場合は、export 先の空き容量を `diagnose-source` の `disk_free_mb` で確認する | [容量・時間の条件](./cloudflare-data-migration.md)を満たす                       |
 
-本番 source の事前配備は、環境保護・固定 runtime・既存 DB/TLS 設定の保持・最新 main のレビューと明示承認が揃ってから `deploy-iori.yml` で行います。配備は env.conf の `UPLOAD_DIR` が dist の外にある既存のディレクトリを指していることを確認し、満たさなければ止まります。merge で同じ SHA の source job が起動済みなら、それを確認し、重複 dispatch しません。DB schema の push はこの事前配備に含みません。
+本番 source の事前配備は、環境保護・固定 runtime・既存 DB/TLS 設定の保持・最新 main のレビューと明示承認が揃ってから `deploy-iori.yml` で行います。配備は env.conf の `UPLOAD_DIR` が dist の外にある既存のディレクトリを指していることを確認し、満たさなければ止まります。`deploy-iori.yml` は merge では起動しないので、作業者は次の dispatch で実行します。DB schema の push はこの事前配備に含みません。
 
 ```bash
 gh workflow run deploy-iori.yml --repo "$iori_repo" --ref main
@@ -610,11 +614,11 @@ mode を元に戻す必要があるかどうかは、管理役が判断します
 Deploy iori（`deploy-iori.yml`）は、配備する SHA が最新の main であることを要求します。作業者は旧版へ戻すとき、旧環境に直接入って操作しません。手順は次のとおりです。
 
 1. 作業者は、戻したい変更を main で revert する PR を作り、レビューを経て merge します。
-2. main への push で Deploy iori が走ります。production environment の承認者が実行を承認します。
+2. 作業者は、merge の後に `gh workflow run deploy-iori.yml --repo "$iori_repo" --ref main` で Deploy iori を dispatch します。production environment の承認者が実行を承認します。Deploy iori は push では起動しません。この merge の push では Worker 配備の `Deploy iori Worker (main)` が起動し、production の承認待ちになります。
 3. 作業者は、step「Deploy guarded exact source revision」が成功したことと、`IORI_DIAG` 行が出ていないことを確認します。
 4. 作業者は、本番の応答を確認します。
 
-配備が `status` 段階より前で失敗した場合、旧環境の dist、unit、nginx.conf は途中まで更新されている可能性があります。配備は退避を作りません。作業者は、revert した main で Deploy iori をもう一度実行し、旧版の内容で上書きします。
+配備が `status` 段階より前で失敗した場合、旧環境の dist、unit、nginx.conf は途中まで更新されている可能性があります。配備は退避を作りません。作業者は、revert した main で Deploy iori をもう一度 dispatch し、旧版の内容で上書きします。
 
 凍結（`~/.iori-migration/freeze.json` または `freeze.pending`）が残っている場合、配備はすべての段階で `reason=source-deploy-blocked` で止まります。作業者は、凍結の復旧を先に行います。`freeze.json` が残っている場合、作業者は `resume-source` を使います。手順は [7.1 節の `freeze.json` が残った場合](#freezejson-が残った場合)に書いてあります。`freeze.pending` が残っている場合、作業者は `release-pending-freeze` を使います。手順は [7.1 節の `freeze.pending` が残った場合](#freezepending-が残った場合)に書いてあります。
 
@@ -828,7 +832,7 @@ PostgreSQL の接続の切断は、`estimate-connect` か `estimate-query` に�
 - source にデプロイ済みの revision と一致する。一致しない場合、source は `revision_mismatch` で拒否する
 - 現在の main の先頭と一致する。一致しない場合、workflow は `assertReviewedMain` で拒否する
 
-source の配備 workflow (`deploy-iori.yml`) は、`apps/iori/**`、`packages/**`、`.github/workflows/deploy-iori.yml` の変更を含む push で起動します。この3つの path の外の変更だけが main に入ると、main の先頭は進み、source は再配備されません。この場合、2つの条件を同時に満たせません。作業者は、先に第4節の `deploy-iori.yml` を手動で dispatch して source を配備し直し、その後に `estimate-source` を実行します。
+source の配備 workflow (`deploy-iori.yml`) は push では起動せず、手動の dispatch だけで実行します。main に変更が入ると main の先頭は進みますが、source は再配備されません。この場合、2つの条件を同時に満たせません。作業者は、先に第4節の `deploy-iori.yml` を手動で dispatch して source を配備し直し、その後に `estimate-source` を実行します。
 
 ### 5.2 rehearse-migration の処理
 
@@ -1145,7 +1149,7 @@ gh run view "$iori_actions_run_id" --repo "$iori_repo" \
 
 HTTP body や raw log を取得・公開せず、各 job の sanitized status を確認します。dispatch が成功しただけでは移行成功ではありません。失敗・timeout・結果不明なら、新しい操作や再実行を始める前に第7節へ進みます。
 
-staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。
+staging を使う場合、作業者は staging の完了後に production に異なる generation・リソース・source・identity を用意し、同じ順序を実施します。production のメンテナンス告知は担当者と内容を決め、送信承認後に行います。`deploy-worker` は active generation の通常更新用で、初回移行には使いません。`deploy-worker` は `main` への push でも `Deploy iori Worker (main)` として起動します。この起動では、generation、`migration_run_id`、`migration_main_sha` を入力で受け取らず、Environment secret の `IORI_ADMISSION_IDENTITY` から Node の処理が取り出します。取り出した値は公開ログに出しません。この workflow に `workflow_dispatch` はありません。手動で Worker を配備するときは、従来どおり `deploy-iori-worker.yml` の `deploy-worker` を dispatch します。dispatch 版と同じく、`deploy-worker` は smoke を実行しません。push 版では、この workflow が generation、`migration_run_id`、`migration_main_sha` を同じ secret `IORI_ADMISSION_IDENTITY` から取り出します。このため、admission の照合は自己比較になり、dispatch 版にある「操作者の入力と secret の突き合わせ」は働きません。安全性は、identity の中身の検査と、active な Worker と準備記録の照合に頼ります。
 
 **OGP 画像の生成:** 移行時に存在する記事の OGP 画像は、データ移行の backfill が Node で生成して R2 に保存します。切替後に公開した記事の OGP 画像は、Worker が `/api/og/articles/<article-id>` への要求で生成します。Worker はこの要求で R2 の `og/<article-id>.png` を探し、あれば返します。無ければ、公開済みの記事に限り Worker が PNG を生成し、R2 の `og/<article-id>.png` に保存して返します。記事の公開時には生成しません。次の点に注意してください。
 
@@ -1298,7 +1302,7 @@ smoke token の値が Worker に登録した値と食い違っている場合も
 
 ### 6.4 verify-import、rehearse-migration、migrate-data、deploy-worker の失敗の行
 
-次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。
+次の4つの operation が失敗すると、公開ログの `stage=hosted-operation` の行の前に、`IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行が出ます。読み取りが `state-mismatch` で止まったときは、外れた条件を示す `resource-` で始まる行が最大8行出て、最後に分類の行が1行出ます。行には固定の語だけが入り、メッセージの本文や ID は入りません。`main` への push で起動する `Deploy iori Worker (main)` も同じ `deploy-worker` の処理を実行するので、失敗したときに同じ `deploy-worker-*` の行を出します。この起動では generation、`migration_run_id`、`migration_main_sha` を `IORI_ADMISSION_IDENTITY` から取り出し、行にも出しません。
 
 | `stage`                | operation と時点                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -1454,7 +1458,7 @@ IORI_DIAG stage=adopt-final-plan program=none exit=none signal=none reason=diff-
 
 ### 7.1 凍結が残った場合の復旧
 
-凍結の前に失敗した場合、作業者は Deploy iori を同じ SHA で再実行します。
+凍結の前に失敗した場合、作業者は Deploy iori を同じ SHA で dispatch し直します。
 
 凍結が残る状態は2つあります。
 

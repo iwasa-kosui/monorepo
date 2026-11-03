@@ -319,7 +319,7 @@ export const deploySource = async (options, {
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const env = process.env;
-  const valid = ['push', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)
+  const valid = env.GITHUB_EVENT_NAME === 'workflow_dispatch'
     && env.GITHUB_REF === 'refs/heads/main' && env.MAIN_SHA === env.GITHUB_SHA;
   withCliSignal(async (signal) => {
     if (!valid) throw new Error('Invalid source deployment event.');

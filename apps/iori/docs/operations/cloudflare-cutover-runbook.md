@@ -31,7 +31,9 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 旧 deploy と移行 workflow は同じ source concurrency を共有し、setup 後にも marker を再検査します。これは管理対象の workflow の競合を防ぐための制御です。operator が同時に別経路から freeze/deploy を実行する場合の原子的な lock ではないため、手動操作を競合させない運用を守ります。
 
-source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push と手動実行の入口を保持します。PR の merge で job が起動し得るため、source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替と、merge を契機に起動する source 配備を区別して承認します。
+source 用 `.github/workflows/deploy-iori.yml` は手動実行の入口だけを保持します。push のトリガーは外しているので、PR を merge しても `deploy-iori.yml` は起動しません。merge で起動するのは、Worker 配備の `.github/workflows/deploy-iori-worker-main.yml` です。この workflow は `production` の承認待ちになります。source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替、merge を契機に起動する Worker 配備、手動で dispatch する source 配備を区別して承認します。
+
+3つの workflow（`Deploy iori`、`Deploy iori Worker`、`Deploy iori Worker (main)`）は、concurrency group `deploy-iori-worker-production` を共有します。push で起動した `deploy-worker` が production の承認待ちの間は、その run がこの group を占有します。このため、dispatch の操作は、push で起動した run が終わるまで待たされます。dispatch の操作は、`Deploy iori` のロールバックと、`deploy-iori-worker.yml` の各 operation です。GitHub は group ごとに待ちの run を1件しか保ちません。後から来た push の run が、待っている dispatch の run を取り消すことがあります。承認者は、push で起動した run を承認するか却下するかを速やかに決めます。dispatch の操作を先に通したいときは、承認者が push で起動した run を却下します。作業者は、dispatch した後に、その run が取り消されずに残っているかを確かめます。
 
 ### blog.kosui.me の DNS を proxied にする
 
@@ -43,7 +45,7 @@ source 用 `.github/workflows/deploy-iori.yml` は対象 path の `main` push �
 
 旧環境の証明書は `certbot --nginx` で取得したもので、更新は cron の `certbot renew` が行います。設定は `ansible/enable-https.yaml` と `ansible/auto-renewal-cert.yaml` にあります。
 
-0. secret `IORI_SOURCE_SSH_HOST` の値が `blog.kosui.me` でないことを確かめます。`blog.kosui.me` を proxied にすると、旧環境への SSH が Cloudflare に向かいます。その結果、`Deploy iori Worker` workflow の `migrate-data`、`cutover-route` の gate、`resume-source` と、`Deploy iori` workflow が止まります。値が `blog.kosui.me` の場合は、旧環境の IP アドレスに替えます。あわせて `IORI_SOURCE_SSH_KNOWN_HOSTS` も、その IP アドレスの行に替えます。
+0. secret `IORI_SOURCE_SSH_HOST` の値が `blog.kosui.me` でないことを確かめます。`blog.kosui.me` を proxied にすると、旧環境への SSH が Cloudflare に向かいます。その結果、`Deploy iori Worker` workflow の `migrate-data`、`cutover-route` の gate、`resume-source` と、手動で dispatch する `Deploy iori` workflow が止まります。値が `blog.kosui.me` の場合は、旧環境の IP アドレスに替えます。あわせて `IORI_SOURCE_SSH_KNOWN_HOSTS` も、その IP アドレスの行に替えます。
 1. 現在の A レコードの TTL を確かめます。2026-11-02 時点の値は 60 秒です。
 2. Cloudflare の Edge Certificates で、Universal SSL が `blog.kosui.me` を含み、状態が Active であることを確かめます。
 3. Configuration Rule で `blog.kosui.me` だけを Full (strict) にします。zone の SSL/TLS の暗号化モードは変えません。Flexible は使いません。
@@ -180,13 +182,13 @@ cutover 後 14 日間は Lightsail、PostgreSQL、upload backup、AWS state を�
 
 移行時の count/checksum の完全一致は、通常書き込みを有効にする前の受入れ条件です。cutover 後の投稿・画像追加・削除は live data を変更するため、日次確認で移行時の manifest との完全一致を要求しません。保存した移行 bundle の完全性と保持状態は、現在のアプリデータの監視とは別に確認します。日次 backup や alert が設定済みとは扱わず、担当者と実際の設定を cutover 前に確認します。
 
-14 日分の evidence が完了し、destroy plan が reviewed・明示承認された場合だけ、AWS retirement を承認する。承認前に Lightsail workflow、AWS state、backup、secret reference を削除・破棄してはいけない。この変更は retention evidence や destroy approval を記録するものではないため、旧 deploy path は保持する。
+14 日分の evidence が完了し、destroy plan が reviewed・明示承認された場合だけ、AWS retirement を承認する。承認前に Lightsail workflow、AWS state、backup、secret reference を削除・破棄してはいけない。この変更は retention evidence や destroy approval を記録するものではないため、旧 deploy path は保持する。保持する対象は、push のトリガーを外して手動の dispatch だけを残した `deploy-iori.yml` である。merge では旧環境へ配備されない。
 
 承認後の cleanup は次の独立した reviewed change で実施する。
 
 1. evidence の 14 日分と destroy plan の承認を確認し、public summary には pass/fail と日付だけを残す。
 2. Lightsail が public traffic、write path、background delivery path のいずれにも入っていないことを smoke と aggregate metrics で確認する。
-3. `.github/workflows/deploy-iori.yml`、Lightsail deploy scripts、AWS resource definitions、SSH/database/Node production secret references を削除する。local Node/PostgreSQL development が Worker deploy graph から到達不能なら残してよい。
+3. 旧環境向けの `.github/workflows/deploy-iori.yml`、Lightsail deploy scripts、AWS resource definitions、SSH/database/Node production secret references を削除する。local Node/PostgreSQL development が Worker deploy graph から到達不能なら残してよい。Worker の配備に使う `.github/workflows/deploy-iori-worker.yml` と `.github/workflows/deploy-iori-worker-main.yml` は削除しない。
 4. backup は別途 retention approval がない限り削除しない。
 5. `cloudflare:public-artifacts:check` と repository quality suite を実行し、旧 path を消した commit を reviewed する。
 

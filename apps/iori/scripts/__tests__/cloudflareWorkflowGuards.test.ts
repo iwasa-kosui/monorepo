@@ -257,6 +257,61 @@ it('shares exact production source serialization and delegates to early guarded 
   expect(sourceScript.indexOf('remote(\'check\')')).toBeLessThan(sourceScript.indexOf('remote(\'checkout\')'));
   expect(sourceScript.indexOf('remote(\'dist-check\')')).toBeLessThan(sourceScript.indexOf('execute(\'rsync\''));
 });
+it('deploys the Worker on a main push through a fixed deploy-worker job holding only the read-only Terraform key and the deploy token', async () => {
+  const [worker, source, main] = await Promise.all([
+    readWorkflow('deploy-iori-worker.yml'),
+    readWorkflow('deploy-iori.yml'),
+    readWorkflow('deploy-iori-worker-main.yml'),
+  ]);
+  expect(main.on).toEqual({
+    push: {
+      branches: ['main'],
+      paths: ['apps/iori/**', 'packages/**', '.github/workflows/deploy-iori-worker-main.yml'],
+    },
+  });
+  expect(main.concurrency).toEqual({ group: 'deploy-iori-worker-production', 'cancel-in-progress': false });
+  expect(main.concurrency.group).toBe(worker.concurrency.group);
+  expect(main.env).toMatchObject({
+    MAIN_SHA: '${{ github.sha }}',
+    IORI_OPERATION: 'deploy-worker',
+    IORI_ENVIRONMENT: 'production',
+  });
+  expect(Object.keys(main.jobs)).toEqual(['public-artifact-gate', 'deploy-worker']);
+  for (const job of Object.values(main.jobs)) {
+    expect(job.steps[0].run).toContain('test "$GITHUB_EVENT_NAME" = push');
+    expect(job.steps[0].run).toContain('test "$GITHUB_REF" = refs/heads/main');
+    expect(job.steps[0].run).not.toContain('workflow_dispatch');
+    expect(job.steps.at(-1)?.if).toBe('always() && env.IORI_PRIVATE_DIRECTORY != \'\'');
+  }
+  const job = main.jobs['deploy-worker'];
+  expect(job.environment).toBe('production');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.if).toBeUndefined();
+  expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(
+    false,
+  );
+  const deploy = operation(job).env!;
+  expect(deploy).toEqual(operation(worker.jobs['deploy-worker']).env);
+  expect(deploy.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
+  expect(deploy.AWS_SECRET_ACCESS_KEY).toContain('READ_ONLY');
+  expect(deploy.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}');
+  expect(JSON.stringify(main)).not.toMatch(
+    /SSH|RECEIPT|WRITE|SMOKE_QUEUE_TOKEN|IORI_MIGRATION_REHEARSAL|VAPID_(?:PUBLIC|PRIVATE)|STAGING_ACCESS_TOKEN|MIGRATE_API_TOKEN|CUTOVER_API_TOKEN|inputs\.|workflow_dispatch/,
+  );
+  expect(JSON.stringify(main.jobs['public-artifact-gate'])).not.toContain('secrets.');
+  const comparable = (steps: Step[]) =>
+    steps.map(({ name, uses, with: inputs, run, env }) => ({ name, uses, with: inputs, run, env }));
+  for (const name of ['public-artifact-gate', 'deploy-worker']) {
+    const [pushFirst, ...pushRest] = comparable(main.jobs[name].steps);
+    const [dispatchFirst, ...dispatchRest] = comparable(worker.jobs[name].steps);
+    expect(pushRest).toEqual(dispatchRest);
+    expect(pushFirst.name).toBe(dispatchFirst.name);
+    expect(pushFirst.run).toBe(dispatchFirst.run!.replace('= workflow_dispatch', '= push'));
+  }
+  expect(source.on).toEqual({ workflow_dispatch: null });
+  expect(source.jobs['build-and-deploy'].steps[0].run).toContain('test "$GITHUB_EVENT_NAME" = workflow_dispatch');
+  expect(source.jobs['build-and-deploy'].steps[0].run).not.toContain('= push');
+});
 it('keeps restarting the source unit longer than the deployment status wait', async () => {
   const unit = await readFile(resolve(repositoryRoot, 'apps/iori/microblog.service'), 'utf8');
   const sections = new Map<string, string>();
