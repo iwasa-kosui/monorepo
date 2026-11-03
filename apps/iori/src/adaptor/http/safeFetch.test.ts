@@ -213,4 +213,23 @@ describe('createSafeFetcher timeout', () => {
     await vi.advanceTimersByTimeAsync(60);
     expect(await pending).toMatchObject({ ok: false, err: { reason: 'timeout' } });
   });
+
+  it('counts the time across redirects against timeoutMs', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string, init: RequestInit) => {
+      if (url === 'https://example.com/feed') {
+        return new Promise<Response>((resolve) => setTimeout(() => resolve(redirect('/moved')), 40));
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const pending = createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
+      'https://example.com/feed',
+      { ...options, timeoutMs: 50 },
+    );
+    await vi.advanceTimersByTimeAsync(60);
+    expect(await pending).toMatchObject({ ok: false, err: { reason: 'timeout' } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

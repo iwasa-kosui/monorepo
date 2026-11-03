@@ -23,7 +23,7 @@ import type { UseCase } from './useCase.ts';
 
 export const FEED_FETCH_CONCURRENCY = 4;
 export const FEED_RETENTION_DAYS = 90;
-const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 5 * 1024 * 1024, maxRedirects: 3 } as const;
+const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 2 * 1024 * 1024, maxRedirects: 3 } as const;
 const EXPIRE_BATCH_SIZE = 100;
 const EXPIRE_MAX_BATCHES = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,7 +102,10 @@ const create = ({
     }
     const parsed = parseFeed(body);
     if (!parsed.ok) throw new Error(parsed.err.message);
-    const items = uniqueByGuid(parsed.val);
+    const retentionStart = Instant.addDuration(now(), -FEED_RETENTION_DAYS * DAY_MS);
+    const items = uniqueByGuid(parsed.val).filter((item) =>
+      item.publishedAt === null || item.publishedAt.getTime() >= retentionStart
+    );
     const existing = await feedEntriesResolverByFeedSourceIdAndGuids.resolve({
       feedSourceId: source.feedSourceId,
       guids: items.map((item) => item.guid),

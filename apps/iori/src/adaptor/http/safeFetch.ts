@@ -51,6 +51,7 @@ const safeFetchError = (
 const IPV4_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 const BLOCKED_SUFFIXES = ['.localhost', '.local', '.internal'];
 
+// DNS で内部アドレスに解決される名前は検査しない（Workers の fetch はプライベートなアドレスに届かないため）
 const blockedReason = (url: URL): string | undefined => {
   if (url.protocol !== 'https:') return 'only https is allowed';
   const host = url.hostname.toLowerCase().replace(/\.$/, '');

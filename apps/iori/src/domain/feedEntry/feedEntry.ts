@@ -9,13 +9,14 @@ import { Instant } from '../instant/instant.ts';
 import { FeedEntryId } from './feedEntryId.ts';
 
 export const FEED_ENTRY_DESCRIPTION_MAX_CHARS = 1000;
+export const FEED_ENTRY_KEY_MAX_CHARS = 2048;
 
 const zodType = z
   .object({
     feedEntryId: FeedEntryId.zodType,
     feedSourceId: FeedSourceId.zodType,
-    guid: z.string().min(1),
-    url: z.string().min(1),
+    guid: z.string().min(1).max(FEED_ENTRY_KEY_MAX_CHARS),
+    url: z.string().min(1).max(FEED_ENTRY_KEY_MAX_CHARS),
     title: z.string().min(1),
     description: z.string().refine(
       (value) => Array.from(value).length <= FEED_ENTRY_DESCRIPTION_MAX_CHARS,

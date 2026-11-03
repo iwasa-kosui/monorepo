@@ -1,6 +1,7 @@
 import { Result } from '@iwasa-kosui/result';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
+import { FEED_ENTRY_KEY_MAX_CHARS } from '../../domain/feedEntry/feedEntry.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 
@@ -91,33 +92,52 @@ const toBookmarkCount = (value: string | undefined): number | null => {
   return Number.isSafeInteger(count) ? count : null;
 };
 
-const toItem = (
+type Candidate = Readonly<{
+  node: Node;
+  guid: string;
+  url: string;
+  publishedAt: Date | null;
+}>;
+
+const toCandidate = (
   node: Node,
   link: string | undefined,
   guid: string | undefined,
-): ParsedFeedItem | undefined => {
+): Candidate | undefined => {
   const url = safeAbsoluteUrl(link);
+  if (url === undefined) return undefined;
+  const resolvedGuid = guid === undefined || guid === '' ? url : guid;
+  if (url.length > FEED_ENTRY_KEY_MAX_CHARS || resolvedGuid.length > FEED_ENTRY_KEY_MAX_CHARS) return undefined;
+  return {
+    node,
+    guid: resolvedGuid,
+    url,
+    publishedAt: toDate(firstText(node, ['pubDate', 'dc:date', 'published', 'updated'])),
+  };
+};
+
+const toItem = ({ node, guid, url, publishedAt }: Candidate): ParsedFeedItem | undefined => {
   const rawTitle = textOf(node['title']);
-  if (url === undefined || rawTitle === undefined) return undefined;
+  if (rawTitle === undefined) return undefined;
   const title = htmlToPlainText(rawTitle, MAX_TITLE_CHARS).replace(/\s+/g, ' ').trim();
   if (title === '') return undefined;
   return {
-    guid: guid === undefined || guid === '' ? url : guid,
+    guid,
     url,
     title,
     description: plainDescription(node),
-    publishedAt: toDate(firstText(node, ['pubDate', 'dc:date', 'published', 'updated'])),
+    publishedAt,
     hatenaBookmarkCount: toBookmarkCount(textOf(node['hatena:bookmarkcount'])),
   };
 };
 
-const collectItems = (root: Node): ParsedFeedItem[] | undefined => {
+const collectCandidates = (root: Node): Candidate[] | undefined => {
   const rdf = root['rdf:RDF'];
   if (isNode(rdf)) {
     return toArray(rdf['item']).filter(isNode).flatMap((node) => {
       const link = textOf(node['link']);
-      const item = toItem(node, link, attributeOf(node, 'rdf:about') ?? link);
-      return item === undefined ? [] : [item];
+      const candidate = toCandidate(node, link, attributeOf(node, 'rdf:about') ?? link);
+      return candidate === undefined ? [] : [candidate];
     });
   }
   const rss = root['rss'];
@@ -125,22 +145,22 @@ const collectItems = (root: Node): ParsedFeedItem[] | undefined => {
     return toArray(rss['channel']).filter(isNode).flatMap((channel) =>
       toArray(channel['item']).filter(isNode).flatMap((node) => {
         const link = textOf(node['link']);
-        const item = toItem(node, link, textOf(node['guid']) ?? link);
-        return item === undefined ? [] : [item];
+        const candidate = toCandidate(node, link, textOf(node['guid']) ?? link);
+        return candidate === undefined ? [] : [candidate];
       })
     );
   }
   const feed = root['feed'];
   if (isNode(feed)) {
     return toArray(feed['entry']).filter(isNode).flatMap((node) => {
-      const item = toItem(node, atomLink(node), textOf(node['id']));
-      return item === undefined ? [] : [item];
+      const candidate = toCandidate(node, atomLink(node), textOf(node['id']));
+      return candidate === undefined ? [] : [candidate];
     });
   }
   return undefined;
 };
 
-const byNewest = (a: ParsedFeedItem, b: ParsedFeedItem): number => {
+const byNewest = (a: Candidate, b: Candidate): number => {
   if (a.publishedAt === null && b.publishedAt === null) return 0;
   if (a.publishedAt === null) return 1;
   if (b.publishedAt === null) return -1;
@@ -148,6 +168,7 @@ const byNewest = (a: ParsedFeedItem, b: ParsedFeedItem): number => {
 };
 
 export const parseFeed = (xml: string): Result<ParsedFeedItem[], FeedParseError> => {
+  if (/<!ENTITY/i.test(xml)) return Result.err(feedParseError('Invalid XML: entity declarations are not supported'));
   const validation = XMLValidator.validate(xml);
   if (validation !== true) return Result.err(feedParseError(`Invalid XML: ${validation.err.msg}`));
   let root: unknown;
@@ -156,7 +177,12 @@ export const parseFeed = (xml: string): Result<ParsedFeedItem[], FeedParseError>
   } catch (error) {
     return Result.err(feedParseError(`Invalid XML: ${error instanceof Error ? error.message : String(error)}`));
   }
-  const items = isNode(root) ? collectItems(root) : undefined;
-  if (items === undefined) return Result.err(feedParseError('Unsupported feed format.'));
-  return Result.ok(items.toSorted(byNewest).slice(0, MAX_FEED_ITEMS));
+  const candidates = isNode(root) ? collectCandidates(root) : undefined;
+  if (candidates === undefined) return Result.err(feedParseError('Unsupported feed format.'));
+  return Result.ok(
+    candidates.toSorted(byNewest).slice(0, MAX_FEED_ITEMS).flatMap((candidate) => {
+      const item = toItem(candidate);
+      return item === undefined ? [] : [item];
+    }),
+  );
 };

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { FEED_ENTRY_KEY_MAX_CHARS } from '../../domain/feedEntry/feedEntry.ts';
 import { MAX_FEED_ITEMS, parseFeed } from './parseFeed.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8');
@@ -104,5 +105,35 @@ describe('parseFeed errors and limits', () => {
     expect(parsed).toHaveLength(MAX_FEED_ITEMS);
     expect(parsed[0]?.title).toBe('t39');
     expect(Array.from(parsed[0]?.description ?? '')).toHaveLength(1000);
+  });
+
+  it('drops items whose guid or url is longer than the limit and keeps the rest', () => {
+    const longUrl = `https://e.test/${'a'.repeat(FEED_ENTRY_KEY_MAX_CHARS)}`;
+    const exactUrl = `https://e.test/${'b'.repeat(FEED_ENTRY_KEY_MAX_CHARS - 'https://e.test/'.length)}`;
+    const xml = `<rss version="2.0"><channel>`
+      + `<item><title>long url</title><link>${longUrl}</link></item>`
+      + `<item><title>long guid</title><link>https://e.test/ok</link><guid>${
+        'g'.repeat(FEED_ENTRY_KEY_MAX_CHARS + 1)
+      }</guid></item>`
+      + `<item><title>exact</title><link>${exactUrl}</link></item>`
+      + `<item><title>short</title><link>https://e.test/short</link></item>`
+      + `</channel></rss>`;
+    expect(parsedItems(xml).map((item) => item.title)).toEqual(['exact', 'short']);
+  });
+
+  it('returns an error for a billion-laughs style internal entity expansion', () => {
+    const entities = Array.from(
+      { length: 6 },
+      (_, index) => `<!ENTITY e${index} "${index === 0 ? 'a'.repeat(10) : `&e${index - 1};`.repeat(10)}">`,
+    ).join('');
+    const xml = `<?xml version="1.0"?><!DOCTYPE rss [${entities}]>`
+      + `<rss version="2.0"><channel><item><title>&e5;</title><link>https://e.test/1</link></item></channel></rss>`;
+    expect(parseFeed(xml)).toMatchObject({ ok: false, err: { type: 'FeedParseError' } });
+  });
+
+  it('returns an error for a SYSTEM external entity', () => {
+    const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]>`
+      + `<rss version="2.0"><channel><item><title>&x;</title><link>https://e.test/1</link></item></channel></rss>`;
+    expect(parseFeed(xml)).toMatchObject({ ok: false, err: { type: 'FeedParseError' } });
   });
 });

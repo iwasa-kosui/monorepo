@@ -123,7 +123,7 @@ const recordFetchFailed = (feedSource: FeedSource, lastError: string, now: Insta
 export type FeedSourceCreatedStore = Agg.Store<FeedSourceCreated>;
 export type FeedSourceFetchedStore = Agg.Store<FeedSourceFetched>;
 export type FeedSourceFetchFailedStore = Agg.Store<FeedSourceFetchFailed>;
-export type FeedSourceResolverByUrl = Agg.Resolver<{ url: string }, FeedSource | undefined>;
+export type AllFeedSourcesResolver = Agg.Resolver<void, ReadonlyArray<FeedSource>>;
 export type FeedSourcesResolverByEnabled = Agg.Resolver<{ enabled: boolean }, ReadonlyArray<FeedSource>>;
 
 export const FeedSource = {

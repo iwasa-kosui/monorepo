@@ -10,10 +10,10 @@ import { createD1FeedEntriesResolverByFetchedBefore } from '../../adaptor/d1/fee
 import { createD1FeedEntryBookmarkCountUpdatedStore } from '../../adaptor/d1/feedEntry/feedEntryBookmarkCountUpdatedStore.ts';
 import { createD1FeedEntryCollectedStore } from '../../adaptor/d1/feedEntry/feedEntryCollectedStore.ts';
 import { createD1FeedEntryExpiredStore } from '../../adaptor/d1/feedEntry/feedEntryExpiredStore.ts';
+import { createD1AllFeedSourcesResolver } from '../../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceFetchedStore } from '../../adaptor/d1/feedSource/feedSourceFetchedStore.ts';
 import { createD1FeedSourceFetchFailedStore } from '../../adaptor/d1/feedSource/feedSourceFetchFailedStore.ts';
-import { createD1FeedSourceResolverByUrl } from '../../adaptor/d1/feedSource/feedSourceResolverByUrl.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { domainEventsTable, feedEntriesTable, feedSourcesTable } from '../../adaptor/d1/schema.ts';
 import type { SafeFetcher, SafeFetchError, SafeFetchResult } from '../../adaptor/http/safeFetch.ts';
@@ -54,12 +54,12 @@ const createSerializedDb = () => {
   return createD1Db(serialized as unknown as D1Database);
 };
 
-const setup = (fetchText: SafeFetcher['fetchText'], now = NOW) => {
+const setup = (fetchText: SafeFetcher['fetchText'], now: () => Instant = () => NOW) => {
   const db = createSerializedDb();
   const ensure = EnsureDefaultFeedSourcesUseCase.create({
-    feedSourceResolverByUrl: createD1FeedSourceResolverByUrl(db),
+    allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
     feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
-    now: () => now,
+    now,
   });
   const collect = CollectFeedEntriesUseCase.create({
     feedSourcesResolverByEnabled: createD1FeedSourcesResolverByEnabled(db),
@@ -71,7 +71,7 @@ const setup = (fetchText: SafeFetcher['fetchText'], now = NOW) => {
     feedEntryBookmarkCountUpdatedStore: createD1FeedEntryBookmarkCountUpdatedStore(db),
     feedEntryExpiredStore: createD1FeedEntryExpiredStore(db),
     safeFetcher: { fetchText },
-    now: () => now,
+    now,
   });
   return { db, ensure, collect };
 };
@@ -148,7 +148,7 @@ describe('CollectFeedEntriesUseCase', () => {
       'https://zenn.dev/feed',
       expect.objectContaining({
         timeoutMs: 10_000,
-        maxBytes: 5 * 1024 * 1024,
+        maxBytes: 2 * 1024 * 1024,
         maxRedirects: 3,
         headers: { 'If-None-Match': '"v1"', 'If-Modified-Since': 'LM' },
       }),
@@ -207,7 +207,7 @@ describe('CollectFeedEntriesUseCase', () => {
       );
       return {
         ensure: EnsureDefaultFeedSourcesUseCase.create({
-          feedSourceResolverByUrl: createD1FeedSourceResolverByUrl(db),
+          allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
           feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
           now: current,
         }),
@@ -235,5 +235,42 @@ describe('CollectFeedEntriesUseCase', () => {
     expect(await db.select({ n: count() }).from(feedEntriesTable)).toEqual([{ n: 0 }]);
     const events = await db.select({ name: domainEventsTable.eventName }).from(domainEventsTable);
     expect(events.filter((event) => event.name === 'feedEntry.expired')).toHaveLength(1);
+  });
+
+  it('does not collect items older than the retention period and does not recollect expired ones', async () => {
+    const oldDate = new Date(NOW - 100 * DAY).toUTCString();
+    const recentDate = new Date(NOW - 10 * DAY).toUTCString();
+    const body = `<rss version="2.0"><channel>`
+      + `<item><title>old</title><link>https://e.test/old</link><pubDate>${oldDate}</pubDate></item>`
+      + `<item><title>recent</title><link>https://e.test/recent</link><pubDate>${recentDate}</pubDate></item>`
+      + `</channel></rss>`;
+    const fetchText = vi.fn(async (url: string) =>
+      url === 'https://zenn.dev/feed' ? ok({ body }) : ok({ body: rss([]) })
+    );
+    const { db, ensure, collect } = setup(fetchText);
+    await ensure.run();
+    const first = await collect.run();
+    expect(first.val).toMatchObject({ collected: 1, expired: 0 });
+    expect(await db.select({ title: feedEntriesTable.title }).from(feedEntriesTable)).toEqual([{ title: 'recent' }]);
+  });
+
+  it('expires by publishedAt and does not collect an expired entry again while the feed still lists it', async () => {
+    const published = NOW - 95 * DAY;
+    let now = Instant.orThrow(published + 10 * DAY);
+    const body = `<rss version="2.0"><channel>`
+      + `<item><title>stale</title><link>https://e.test/stale</link><pubDate>${
+        new Date(published).toUTCString()
+      }</pubDate></item>`
+      + `</channel></rss>`;
+    const fetchText = vi.fn(async (url: string) =>
+      url === 'https://zenn.dev/feed' ? ok({ body }) : ok({ body: rss([]) })
+    );
+    const { db, ensure, collect } = setup(fetchText, () => now);
+    await ensure.run();
+    expect((await collect.run()).val).toMatchObject({ collected: 1, expired: 0 });
+    now = NOW;
+    expect((await collect.run()).val).toMatchObject({ collected: 0, expired: 1 });
+    expect((await collect.run()).val).toMatchObject({ collected: 0, expired: 0 });
+    expect(await db.select({ n: count() }).from(feedEntriesTable)).toEqual([{ n: 0 }]);
   });
 });

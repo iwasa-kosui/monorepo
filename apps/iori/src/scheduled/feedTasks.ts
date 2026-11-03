@@ -4,10 +4,10 @@ import { createD1FeedEntriesResolverByFetchedBefore } from '../adaptor/d1/feedEn
 import { createD1FeedEntryBookmarkCountUpdatedStore } from '../adaptor/d1/feedEntry/feedEntryBookmarkCountUpdatedStore.ts';
 import { createD1FeedEntryCollectedStore } from '../adaptor/d1/feedEntry/feedEntryCollectedStore.ts';
 import { createD1FeedEntryExpiredStore } from '../adaptor/d1/feedEntry/feedEntryExpiredStore.ts';
+import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceFetchedStore } from '../adaptor/d1/feedSource/feedSourceFetchedStore.ts';
 import { createD1FeedSourceFetchFailedStore } from '../adaptor/d1/feedSource/feedSourceFetchFailedStore.ts';
-import { createD1FeedSourceResolverByUrl } from '../adaptor/d1/feedSource/feedSourceResolverByUrl.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -21,7 +21,7 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
   const now = Instant.now;
   return {
     ensureDefaultFeedSources: EnsureDefaultFeedSourcesUseCase.create({
-      feedSourceResolverByUrl: createD1FeedSourceResolverByUrl(db),
+      allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
       feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
       now,
     }),
