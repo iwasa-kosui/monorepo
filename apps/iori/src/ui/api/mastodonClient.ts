@@ -5,6 +5,8 @@ import type {
   Relationship,
   Status,
 } from '../../adaptor/mastodon/entities.ts';
+import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
+import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -24,7 +26,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -58,12 +60,26 @@ export const parseLinkHeader = (header: string | null): PageCursors => {
   return { nextMaxId, prevMinId };
 };
 
+export const parseRetryAfter = (header: string | null, now: Date): number | undefined => {
+  if (header === null) return undefined;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value);
+  if (!/^[A-Za-z]/.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : Math.max(0, Math.ceil((time - now.getTime()) / 1000));
+};
+
 const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const body: unknown = await res.json().catch(() => undefined);
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
-  return Object.assign(new Error(message), { status: res.status });
+  const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
+  return Object.assign(
+    new Error(message),
+    { status: res.status },
+    retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+  );
 };
 
 type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
@@ -178,4 +194,24 @@ export const saveNotificationsMarker = async (lastReadId: string): Promise<void>
     body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
   });
   if (!res.ok) throw await toApiError(res);
+};
+
+export type SearchStatusesResult = IoriSearchStatusesResponse;
+
+export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
+  (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
+
+export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
+
+export type TimelineSummary = IoriTimelineSummaryResponse;
+
+export const summarizeTimeline = async (body: SummarizeTimelineBody): Promise<TimelineSummary> => {
+  const res = await fetch('/api/iori/v1/timeline/summaries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as TimelineSummary;
 };
