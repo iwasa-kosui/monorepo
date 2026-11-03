@@ -83,7 +83,7 @@ Cloudflare REST API token の実際の permission と readback API の適合も�
 | 用途          | Secret 名                                                                                                    | 値の準備元                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | 移行先        | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `ORIGIN`                                                      | 確認済み account・zone・canonical origin                                   |
-| 実行 identity | `IORI_ADMISSION_IDENTITY`                                                                                    | 次項の同じ environment/generation/SHA/run と smoke 対象                    |
+| 実行 identity | `IORI_ADMISSION_IDENTITY`                                                                                    | 次項の同じ environment/generation/SHA/run と smoke の項目                  |
 | API role      | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`                                                                           | 第3.1節の token                                                            |
 | Source SSH    | `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, `IORI_SOURCE_SSH_KNOWN_HOSTS` | 許可された source と信頼済み host key                                      |
 | Smoke         | `SMOKE_QUEUE_TOKEN`                                                                                          | 16〜1,024文字のランダム ASCII。`put-worker-secrets` が入口で形を検査します |
@@ -122,15 +122,15 @@ gh secret list --repo "$iori_repo" --env "$iori_environment"
 
 `IORI_ADMISSION_IDENTITY` は JSON 内容を登録します。値は実データ・実リソースから選び、次の対応を検査します。
 
-| JSON field                                                  | 対応する値                                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `environment`, `generation`, `runId`                        | workflow の `environment`, `generation`, `migration_run_id`                   |
-| `mainSha`                                                   | 移行に使うレビュー済み最新 main の40桁 SHA                                    |
-| `hostname`                                                  | `ORIGIN` の canonical hostname                                                |
-| `workerHostname`                                            | 新 generation の確認済み workers.dev hostname                                 |
-| `smoke.username`, `smoke.uploadFilename`, `smoke.articleId` | 移行対象に存在し、完全な smoke checklist を実行できるユーザー・画像・公開記事 |
+| JSON field                                                  | 対応する値                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `environment`, `generation`, `runId`                        | workflow の `environment`, `generation`, `migration_run_id`             |
+| `mainSha`                                                   | 移行に使うレビュー済み最新 main の40桁 SHA                              |
+| `hostname`                                                  | `ORIGIN` の canonical hostname                                          |
+| `workerHostname`                                            | 新 generation の確認済み workers.dev hostname                           |
+| `smoke.username`, `smoke.uploadFilename`, `smoke.articleId` | schema が必須にしている項目。いまはどの operation も smoke を実行しない |
 
-smoke は、`smoke.articleId` の記事の OGP PNG が R2 に backfill 済みであることを前提とします。smoke は Worker の OGP 生成の経路を検証しません。作業者は、その経路を第5.2節の「production での OGP 確認」で確かめます。
+`smoke.*` の項目は `IORI_ADMISSION_IDENTITY` の schema が必須にしていますが、いまはどの operation も smoke を実行しません。どの operation も Worker の OGP 生成の経路を検証しません。作業者は、その経路を第5.2節の「production での OGP 確認」で確かめます。
 
 fixture のゼロ UUID や仮の hostname を本番へ登録しません。identity は、稼働中の generation の途中で差し替えません。
 

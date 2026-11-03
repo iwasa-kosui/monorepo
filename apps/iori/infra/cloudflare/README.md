@@ -8,9 +8,9 @@ Use the protected hosted workflow for Worker updates. The [operator execution gu
 
 ## Protected inputs and outputs
 
-The workflow supplies account, zone, environment, generation, reviewed hostname and backend connection settings. The Worker name is derived from the generation. `attach_queue_consumer` defaults to false and `queue_delivery_paused` defaults to true. The protected orchestration controls their transitions; the route remains absent until verification and smoke succeed. Queue delivery resumes last.
+Terraform runs only in the CI validate steps (`terraform fmt`, `terraform init -backend=false` and `terraform validate` in `.github/workflows/ci.yml`). The protected workflows do not run Terraform. The workflow supplies account, zone, environment, generation and reviewed hostname to the Worker operations. The Worker name is derived from the generation. `attach_queue_consumer` defaults to false and `queue_delivery_paused` defaults to true.
 
-Keep backend configuration, `TF_DATA_DIR`, state/output/plan files, generated Wrangler configuration and diagnostics under each job's new mode `0700` private root. Files use mode `0600`. Do not print them or send them to GitHub artifacts, caches, outputs or summaries. Disable the `setup-terraform` wrapper in protected jobs so raw command output is not copied into GitHub step outputs.
+Keep generated Wrangler configuration and diagnostics under each job's new mode `0700` private root. Files use mode `0600`. Do not print them or send them to GitHub artifacts, caches, outputs or summaries.
 
 ## Environment references
 
@@ -40,4 +40,4 @@ terraform init -backend=false -input=false
 terraform validate
 ```
 
-Use the pinned provider and lockfile. Real plans are captured privately and validated for the specific operation before applying the same saved plan. Public output contains only sanitized status and action counts. See the [migration design](../../../../docs/superpowers/specs/2026-08-16-iori-cloudflare-complete-migration-design.md) for ownership and acceptance conditions.
+Use the pinned provider and lockfile. CI runs the same three commands as its Terraform validate step. See the [migration design](../../../../docs/superpowers/specs/2026-08-16-iori-cloudflare-complete-migration-design.md) for ownership and acceptance conditions.

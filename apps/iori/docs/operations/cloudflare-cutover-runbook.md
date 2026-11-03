@@ -15,7 +15,7 @@
 | Fedify の再構築できる一時状態 | Workers KV                               |
 | 非同期配送と失敗配送          | Queues と dead-letter queue              |
 
-公開リポジトリ、workflow summary、Issue、PR、terminal log に残す証跡は、論理リソース名、件数、timestamp、pass/fail、および Terraform action summary に限定します。account ID、database ID、namespace ID、Workers URL、secret、Terraform state、rendered Wrangler config、export/SQL/manifest の内容、HTTP response body は公開しません。
+公開リポジトリ、workflow summary、Issue、PR、terminal log に残す証跡は、論理リソース名、件数、timestamp、pass/fail に限定します。account ID、database ID、namespace ID、Workers URL、secret、Terraform state、rendered Wrangler config、export/SQL/manifest の内容、HTTP response body は公開しません。
 
 ## 1. Rollback
 
@@ -29,7 +29,7 @@ route を作った後に、公開先を旧環境へ戻す場合は、次の順�
 
 1. Cloudflare の Workers Routes から `blog.kosui.me/*` の route を削除します。DNS は proxied のままにします。この削除は Cloudflare Dashboard で行う緊急の戻しです。第3節の「route rollback は production environment approval を必要とする」が指す操作とは別の操作です。
 2. Worker が `active` に達していた場合は、その generation の配送 Queue の delivery を pause します。
-3. Terraform の state は修正しません。その generation では `terraform apply` を実行しません。`infra/cloudflare/main.tf` の route resource は `prevent_destroy = true` を指定しています。
+3. Terraform の state は修正しません。workflow に `terraform apply` を呼ぶ経路はありません。`infra/cloudflare/main.tf` の route resource は `prevent_destroy = true` を指定しています。
 4. `resume-source` で旧環境の凍結を解きます。入力 `recovery` には次の値を指定します。手順は[実行手順の第6.1節](./cloudflare-execution-guide.md#61-凍結が残った場合の復旧)に従います。
    - Worker が `active` に達する前は、`destination_writes_not_enabled` を指定します。
    - Worker が `active` に達した後は、移行先の書き込みの扱いを決めてから、`destination_writes_reconciled` を指定します。第1節の冒頭の2段落が、この指定の条件を定めています。
@@ -43,11 +43,11 @@ route を作った後に、公開先を旧環境へ戻す場合は、次の順�
 
 cutover 後 14 日間は Lightsail、PostgreSQL、upload backup、AWS state を保持します。
 
-移行時に保存した bundle は、非公開 R2 に残っています。bundle を検証する operation と削除する operation は、現在ありません。bundle は cutover 完了から少なくとも 14 日間保持し、削除は承認後に行います。
+移行時に保存した bundle は、非公開 R2 に残っています。bundle を検証する operation と削除する operation は、現在ありません。bundle は cutover 完了から少なくとも 14 日間保持し、削除は承認後に行います。削除してよいのは bundle の object だけです。transfer bucket は、`deploy-worker` が readback で名前を検査するので残します。
 
 この期間は毎日、次を記録します。
 
-- public smoke result（`/readyz` を含む）
+- `/readyz` を含む公開先の確認結果
 - 現在の D1/R2 件数と object retrieval の結果、および正常な投稿・削除で説明できない変化
 - Fediverse delivery と Web Push の成功/失敗 aggregate
 - Queue retry/DLQ status と consumer failure aggregate
@@ -62,7 +62,7 @@ cutover 後 14 日間は Lightsail、PostgreSQL、upload backup、AWS state を�
 承認後の cleanup は次の独立した reviewed change で実施する。
 
 1. evidence の 14 日分と destroy plan の承認を確認し、public summary には pass/fail と日付だけを残す。
-2. Lightsail が public traffic、write path、background delivery path のいずれにも入っていないことを smoke と aggregate metrics で確認する。
+2. Lightsail が public traffic、write path、background delivery path のいずれにも入っていないことを `/readyz` の確認と aggregate metrics で確認する。
 3. 旧環境向けの `.github/workflows/deploy-iori.yml`、Lightsail deploy scripts、AWS resource definitions、SSH/database/Node production secret references を削除する。local Node/PostgreSQL development が Worker deploy graph から到達不能なら残してよい。Worker の配備に使う `.github/workflows/deploy-iori-worker.yml` と `.github/workflows/deploy-iori-worker-main.yml` は削除しない。
 4. backup は別途 retention approval がない限り削除しない。
 5. `cloudflare:public-artifacts:check` と repository quality suite を実行し、旧 path を消した commit を reviewed する。
@@ -85,7 +85,7 @@ cutover 後 14 日間は Lightsail、PostgreSQL、upload backup、AWS state を�
 
 ## 4. Terraform/Wrangler ownership と最終受入れ
 
-Terraform の管理対象は D1、R2、KV、Queue、DLQ、Queue consumer、route に限定します。Worker version/deployment/binding/secret は state に含めず、Wrangler が Worker version と producer binding を管理します。Wrangler config に Queue consumer 定義を置きません。本番の Terraform 操作には `TF_VAR_public_hostname` を渡します。state/plan/config の生データは公開しません。
+Terraform の管理対象は D1、R2、KV、Queue、DLQ、Queue consumer、route に限定します。Worker version/deployment/binding/secret は state に含めず、Wrangler が Worker version と producer binding を管理します。Wrangler config に Queue consumer 定義を置きません。Terraform は CI の validate（`terraform fmt`、`terraform init -backend=false`、`terraform validate`）だけで使い、保護 workflow は Terraform を実行しません。state/plan/config の生データは公開しません。
 
 以下の CLI は Node 24.12.0 で `apps/iori` から実行します。workflow が各 job の private input と権限を用意し、任意の module や remote command は受け付けません。
 
@@ -98,7 +98,7 @@ Terraform の管理対象は D1、R2、KV、Queue、DLQ、Queue consumer、route
 
 各 job の最初の step で記録する `IORI_JOB_STARTED_AT` を期限の起点とし、checkout・setup・build も 5 時間 45 分の予算に含めます。期限や OS signal による中断は内部の command に伝え、その終了と cleanup を待ちます。
 
-Terraform/Wrangler/SSH の raw output は private file に捕捉します。Terraform の setup wrapper は無効にし、private plan は意味を検査してから固定の status/action count だけを公開します。公開出力の guard と実コマンドの終了 status を別々に確認し、失敗を成功へ変換しません。
+Wrangler と SSH の raw output は private file に捕捉します。公開出力の guard と実コマンドの終了 status を別々に確認し、失敗を成功へ変換しません。
 
 各 job に渡す権限は役割ごとに分けます。API token は用途を限定し、存在する Environment 名だけを保護設定の完了とみなしません。
 
@@ -109,9 +109,9 @@ Terraform/Wrangler/SSH の raw output は private file に捕捉します。Terr
 
 現行 tracked tree は public artifact gate で安全化する。過去の公開 history に残る旧 production identifier は credential として扱わないが、必要に応じて credential rotation と approved history purge を別途 reviewed change で実施する。この移行変更では destructive history rewrite を実行しない。
 
-workers.dev と切替後の custom-domain smoke は、protected queue token を必須とする完全な checklist を使います。health/healthz/readyz、asset/auth/ActivityPub、R2/OGP、Queue enqueue、Web Push の検査は省略できません。ユーザー、画像、記事の検査対象は、その環境に存在するデータへ変更します。fixture のユーザー名やゼロ UUID のまま本番検証を開始しません。
+`IORI_ADMISSION_IDENTITY` の schema は smoke の項目を必須にしていますが、smoke を実行する operation は現在ありません。`deploy-worker` も smoke を実行しません。作業者は、公開先の確認を `/readyz` などの手動の確認で行います。fixture のユーザー名やゼロ UUID は `IORI_ADMISSION_IDENTITY` に登録しません。
 
-切替前の workers.dev と切替後の custom domain は別々の確認済み hostname として管理します。smoke は admission identity と対応する hostname だけに送信し、route 作成後は canonical hostname でも全 checklist を確認します。
+切替前の workers.dev と切替後の custom domain は、別々の確認済み hostname として管理します。作業者は、`IORI_ADMISSION_IDENTITY` の `workerHostname` と `hostname` に、それぞれの hostname を登録します。
 
 切替後の `deploy-worker` は、現在 `active` の同じ generation への通常更新に限定します。`MAIN_SHA` は今回の checkout/build を制御する reviewed current-main SHA、`IORI_MIGRATION_MAIN_SHA` は移行時から不変の admission `mainSha` です。run ID と generation も元の移行から保持します。準備記録や署名済み target を新しいコード SHA に合わせて書き換えず、更新後の live data を移行時の manifest と比較しません。
 
@@ -124,7 +124,7 @@ workers.dev と切替後の custom-domain smoke は、protected queue token を�
 final acceptance は次をすべて満たすまで完了としない。
 
 - public tracked files、workflow logs、workflow summaries、artifacts が secret、ID、state、export、SQL、manifest、payload を含まない。`cloudflare:public-artifacts:check` を通す。
-- Worker graph が Cloudflare-safe で、`/readyz`、custom-domain smoke、D1/R2/OGP aggregate count が pass する。
+- Worker graph が Cloudflare-safe で、`/readyz` と custom domain の手動の確認、D1/R2/OGP aggregate count が pass する。
 - ActivityPub と Web Push が機能し、Queue retry/DLQ、D1/R2 failure、delivery failure を上記 signal で観測できる。
 - Terraform/Wrangler ownership boundary が確認済みである。
 - 14 日の日次記録が reviewed されるまでは AWS paths を retirement 済みと扱わない。承認後にのみ別 change で cleanup を実施する。
