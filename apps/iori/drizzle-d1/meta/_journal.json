@@ -50,6 +50,13 @@
       "when": 1793730924056,
       "tag": "0006_article_bodies",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793733185141,
+      "tag": "0007_digests",
+      "breakpoints": true
     }
   ]
 }
