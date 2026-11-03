@@ -107,6 +107,17 @@ describe('parseFeed errors and limits', () => {
     expect(Array.from(parsed[0]?.description ?? '')).toHaveLength(1000);
   });
 
+  it('limits the result to maxItems when it is given', () => {
+    const items = Array.from({ length: 120 }, (_, index) => {
+      const published = new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString();
+      return `<item><title>t${index}</title><link>https://e.test/${index}</link><pubDate>${published}</pubDate></item>`;
+    }).join('');
+    const xml = `<rss version="2.0"><channel>${items}</channel></rss>`;
+    const parsed = parseFeed(xml, { maxItems: 100 });
+    expect(parsed.ok && parsed.val).toHaveLength(100);
+    expect(parsed.ok && parsed.val[0]?.title).toBe('t119');
+  });
+
   it('drops items whose guid or url is longer than the limit and keeps the rest', () => {
     const longUrl = `https://e.test/${'a'.repeat(FEED_ENTRY_KEY_MAX_CHARS)}`;
     const exactUrl = `https://e.test/${'b'.repeat(FEED_ENTRY_KEY_MAX_CHARS - 'https://e.test/'.length)}`;
