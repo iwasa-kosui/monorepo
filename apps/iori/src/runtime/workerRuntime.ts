@@ -9,6 +9,7 @@ import { createD1ActorsResolverByFollowingId } from '../adaptor/d1/actor/actorsR
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../adaptor/d1/actor/remoteActorCreatedStore.ts';
+import { createD1AiSummaryUsageRecorder } from '../adaptor/d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1ArticleCreatedStore } from '../adaptor/d1/article/articleCreatedStore.ts';
 import { createD1ArticleDeletedStore } from '../adaptor/d1/article/articleDeletedStore.ts';
 import { createD1ArticlePublishedStore } from '../adaptor/d1/article/articlePublishedStore.ts';
@@ -92,6 +93,7 @@ import { createD1RepostResolverById } from '../adaptor/d1/repost/repostResolverB
 import { createD1SessionResolver } from '../adaptor/d1/session/sessionResolver.ts';
 import { createD1SessionStartedStore } from '../adaptor/d1/session/sessionStartedStore.ts';
 import { createD1SessionWithUserAndActorResolver } from '../adaptor/d1/session/sessionWithUserAndActorResolver.ts';
+import { createD1HomePostsResolverByPeriod } from '../adaptor/d1/timeline/homePostsResolverByPeriod.ts';
 import { createD1TimelineItemCreatedStore } from '../adaptor/d1/timeline/timelineItemCreatedStore.ts';
 import { createD1TimelineItemDeletedStore } from '../adaptor/d1/timeline/timelineItemDeletedStore.ts';
 import { createD1TimelineItemResolverByRepostId } from '../adaptor/d1/timeline/timelineItemResolverByRepostId.ts';
@@ -140,6 +142,7 @@ import { createSignInUseCase } from '../useCase/signIn.ts';
 import { createSignUpUseCase } from '../useCase/signUp.ts';
 import { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
+import { createSummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
 import { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
@@ -170,6 +173,14 @@ export const createWorkerRuntimePorts = async (
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const searchTimeline = createSearchTimelineUseCase({
+    actorResolverByUserId,
+    actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    textGenerator,
+    timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+    htmlToPlainText,
+  });
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -278,12 +289,16 @@ export const createWorkerRuntimePorts = async (
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
       }),
-      searchTimeline: createSearchTimelineUseCase({
+      searchTimeline,
+      summarizeTimeline: createSummarizeTimelineUseCase({
         actorResolverByUserId,
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
         mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+        searchTimeline,
+        homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
+        postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+        aiSummaryUsageRecorder: createD1AiSummaryUsageRecorder(db),
         textGenerator,
-        timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
         htmlToPlainText,
       }),
       notificationsResolverByPage: createD1NotificationsResolverByPage(db),

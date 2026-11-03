@@ -170,6 +170,14 @@ export const mastodonMarkersTable = sqliteTable('mastodon_markers', {
   primaryKey({ columns: [table.userId, table.timeline] }),
 ]);
 
+export const aiSummaryUsagesTable = sqliteTable('ai_summary_usages', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  day: text('day').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.day] }),
+]);
+
 export const notificationLikesTable = sqliteTable('notification_likes', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
   likerActorId: text('likerActorId').notNull().references(() => actorsTable.actorId),
@@ -419,6 +427,7 @@ export const schema = {
   postImagesTable,
   notificationsTable,
   mastodonMarkersTable,
+  aiSummaryUsagesTable,
   notificationLikesTable,
   notificationFollowsTable,
   pushSubscriptionsTable,
