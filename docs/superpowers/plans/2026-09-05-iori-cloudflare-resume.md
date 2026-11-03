@@ -130,7 +130,7 @@ df -Pk "$RUNNER_TEMP"
 
 **事前条件:** 実装と fixture 検証は本番接続なしで進めます。staging 実行前に手順 2 の保護設定・既存接続と匿名データを用意し、本項の Terraform 変更で移行用 bucket を作成して接続を検証します。次のファイル変更をレビューしてから本番へ適用します。
 
-**変更対象と実装:** 次の固定 CLI と adapter を接続します。操作条件と正確な入力は [データ移行手順](../../../apps/iori/docs/operations/cloudflare-data-migration.md)と [cutover runbook](../../../apps/iori/docs/operations/cloudflare-cutover-runbook.md)で管理します。
+**変更対象と実装:** 次の固定 CLI と adapter を接続します。操作条件と正確な入力は [cutover runbook](../../../apps/iori/docs/operations/cloudflare-cutover-runbook.md)で管理します。
 
 - `.github/workflows/deploy-iori-worker.yml` と `apps/iori/scripts/hosted-workflow.mjs`: hosted runner、手動実行と Environment の検査、操作別の入力・非公開ログ、bundle 保存・復元、期限と cleanup を接続します。
 - `apps/iori/infra/cloudflare/{main.tf,variables.tf,outputs.tf}` と `apps/iori/scripts/validate-cloudflare-plan.mjs`: 新しい generation の分離、consumer の段階的な作成、Queue の停止・再開を管理します。state・アプリ画像用とは別の移行用 R2 bucket は追加済みです。新規作成したリソースの実 ID と状態を検査し、参照は sensitive output として job 内で受け取ります。旧 import CLI は新しい移行経路から呼びません。
@@ -180,7 +180,7 @@ executor は source の停止や application data の変更前に、準備済み
 
 ## 5. 使い捨て generation のリソースの削除手順を整備する
 
-**状態:** データの削除は、hosted operation `purge-rehearsal-target` で整備済みです。`purge-rehearsal-target` は、使い捨て generation の D1 の application table と application R2 の全 object を削除します。残る作業は、リソースの削除です。リソースの削除は手作業で、手順はリポジトリにありません。手順は[実行手順の第5.5節](../../../apps/iori/docs/operations/cloudflare-execution-guide.md#55-使い捨て-generation-の後片付け)に書いています。
+**状態:** データの削除は、hosted operation `purge-rehearsal-target` で整備済みです。`purge-rehearsal-target` は、使い捨て generation の D1 の application table と application R2 の全 object を削除します。残る作業は、リソースの削除です。リソースの削除は手作業で、手順はリポジトリにありません。
 
 **事前条件:** 手順 4 のリハーサルで使い捨て generation を作り、`IORI_MIGRATION_REHEARSAL` への profile の登録を済ませています。さらに、`purge-rehearsal-target` を実行し、D1 の全 table と application R2 の uploads bucket が空になっています。
 
