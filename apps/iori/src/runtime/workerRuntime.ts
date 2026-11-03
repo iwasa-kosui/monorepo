@@ -23,10 +23,15 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
+import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
+import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
+import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -41,6 +46,7 @@ import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../adaptor/d1/like/localLikeDeletedStore.ts';
 import { createD1LinkPreviewCreatedStore } from '../adaptor/d1/linkPreview/linkPreviewCreatedStore.ts';
+import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../adaptor/d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../adaptor/d1/marker/markersResolverByUserId.ts';
 import { createD1MuteCreatedStore } from '../adaptor/d1/mute/muteCreatedStore.ts';
@@ -130,6 +136,7 @@ import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
@@ -171,6 +178,8 @@ export const createWorkerRuntimePorts = async (
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
+  const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -294,6 +303,17 @@ export const createWorkerRuntimePorts = async (
       saveMarkersUseCase: SaveMarkersUseCase.create({
         markersResolverByUserId,
         markerSavedStore: createD1MarkerSavedStore(db),
+      }),
+    },
+    digest: {
+      digestResolverByUserIdAndDigestDate,
+      digestResolverByUserId: createD1DigestResolverByUserId(db),
+      timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+      hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
+      digestSubscriptionResolverByUserId,
+      saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
+        digestSubscriptionResolverByUserId,
+        digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
       }),
     },
     timeline: {

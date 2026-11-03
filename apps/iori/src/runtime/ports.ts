@@ -18,6 +18,12 @@ import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domai
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
+import type { DigestResolverByUserId, DigestResolverByUserIdAndDigestDate } from '../domain/digest/digest.ts';
+import type {
+  HatenaTrendsResolverByFetchedSince,
+  TimelineLinkTrendsResolverByUserId,
+} from '../domain/digest/digestMaterial.ts';
+import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
@@ -57,6 +63,7 @@ import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizatio
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import type { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import type { SearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
@@ -128,6 +135,14 @@ export type IoriMastodonRuntimePorts = Readonly<{
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
 }>;
+export type IoriDigestRuntimePorts = Readonly<{
+  digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
+  digestResolverByUserId: DigestResolverByUserId;
+  timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
+  hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
+  digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
+  saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
+}>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
 }>;
@@ -180,6 +195,7 @@ export type IoriRuntimePorts = Readonly<{
   auth: IoriAuthRuntimePorts;
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
+  digest: IoriDigestRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
