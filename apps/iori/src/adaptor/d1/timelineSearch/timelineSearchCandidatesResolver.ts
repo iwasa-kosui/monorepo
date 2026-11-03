@@ -25,9 +25,19 @@ export const createD1TimelineSearchCandidatesResolver = (
       .where(and(
         isNull(postsTable.deletedAt),
         inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
-        or(...terms.map((term) => like(postsTable.content, `%${term}%`))),
+        or(...terms.map(({ pattern }) => like(postsTable.content, `%${pattern}%`))),
       ))
-      .orderBy(desc(postsTable.createdAt))
+      .orderBy(
+        desc(sql`(${
+          sql.join(
+            terms.map(({ pattern, weight }) =>
+              sql`case when ${postsTable.content} like ${`%${pattern}%`} then ${weight} else 0 end`
+            ),
+            sql` + `,
+          )
+        })`),
+        desc(postsTable.createdAt),
+      )
       .limit(limit);
 
     return RA.ok(rows.map((row) => ({

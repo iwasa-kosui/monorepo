@@ -34,6 +34,7 @@ type Ok = Readonly<{
     original: ReadonlyArray<SearchTerm>;
     expanded: ReadonlyArray<SearchTerm>;
   }>;
+  droppedOriginal: ReadonlyArray<string>;
   expansion: TimelineSearchExpansion;
 }>;
 
@@ -50,13 +51,16 @@ type Deps = Readonly<{
   htmlToPlainText: (html: string, maxChars: number) => string;
 }>;
 
-const splitQuery = (text: string): SearchTerm[] =>
-  text
-    .split(/\s+/)
-    .flatMap((word) => {
-      const term = SearchTerm.of(word);
-      return term.ok ? [term.val] : [];
-    });
+const splitQuery = (text: string): Readonly<{ terms: SearchTerm[]; dropped: string[] }> => {
+  const terms: SearchTerm[] = [];
+  const dropped: string[] = [];
+  for (const word of text.split(/\s+/).filter((value) => value.length > 0)) {
+    const term = SearchTerm.of(word);
+    if (term.ok) terms.push(term.val);
+    else dropped.push(word.trim());
+  }
+  return { terms, dropped };
+};
 
 const create = ({
   actorResolverByUserId,
@@ -83,7 +87,8 @@ const create = ({
     terms: SearchTerms,
     limit: number,
   ): PostId[] => {
-    const keysOf = (list: ReadonlyArray<SearchTerm>) => list.map((term) => SearchTerm.normalizeForMatch(term));
+    const keysOf = (list: ReadonlyArray<SearchTerm>) =>
+      list.map((term) => SearchTerm.normalizeForMatch(term.normalized));
     const originalKeys = keysOf(terms.original);
     const expandedKeys = keysOf(terms.expanded);
     return candidates
@@ -120,20 +125,23 @@ const create = ({
       }),
       RA.andThen(async (actorIds) => {
         const { expansion, terms: expandedTerms } = await expand(input.query.text);
+        const { terms: originalTerms, dropped: droppedOriginal } = splitQuery(input.query.text);
         const terms = SearchTerms.create({
-          original: splitQuery(input.query.text),
+          original: originalTerms,
           expanded: expandedTerms,
         });
+        const patterns = SearchTerms.toPatterns(terms);
         const output = (postIds: ReadonlyArray<PostId>): Ok => ({
           postIds,
           terms: { original: terms.original, expanded: terms.expanded },
+          droppedOriginal,
           expansion,
         });
-        if (SearchTerms.isEmpty(terms)) return RA.ok(output([]));
+        if (patterns.length === 0) return RA.ok(output([]));
         return RA.flow(
           timelineSearchCandidatesResolver.resolve({
             actorIds,
-            terms: SearchTerms.toArray(terms),
+            terms: patterns,
             limit: CANDIDATE_LIMIT,
           }),
           RA.map((candidates) => output(rank(candidates, terms, input.query.limit))),

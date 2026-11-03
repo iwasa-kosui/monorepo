@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import { SearchTerm } from '../../../domain/timelineSearch/searchTerm.ts';
+import { SearchTerms } from '../../../domain/timelineSearch/searchTerms.ts';
 import { createD1TimelineSearchCandidatesResolver } from '../timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -11,7 +12,12 @@ afterEach(() => {
 });
 
 const id = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
-const terms = (...values: string[]) => values.map((value) => SearchTerm.orThrow(value));
+const terms = (...values: string[]) => values.map((pattern) => ({ pattern, weight: 1 }));
+const queryTerms = (...values: string[]) =>
+  SearchTerms.toPatterns(SearchTerms.create({
+    original: values.map((value) => SearchTerm.orThrow(value)),
+    expanded: [],
+  }));
 
 const setup = () => {
   const fixture = createSqliteD1Fixture();
@@ -117,6 +123,80 @@ describe('createD1TimelineSearchCandidatesResolver', () => {
     const expected = [...posts].sort((x, y) => y.time - x.time).slice(0, 3).map((post) => post.postId);
     expect(result.ok && result.val.map((row) => row.postId)).toEqual(expected);
     expect(queries.at(-1)?.params).toContain('%旅行%');
+  });
+
+  it('点数の高い投稿を、新しい投稿が limit を埋めても残す', async () => {
+    const { db, actors, addPost } = setup();
+    const expandedOnly = [2000, 3000, 4000, 5000, 6000].map((time) => addPost(actors[0], 'trip memo', time));
+    const originalOld = addPost(actors[0], '旅行の記録', 1000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: [{ pattern: '旅行', weight: 2 }, { pattern: 'trip', weight: 1 }],
+      limit: 3,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([
+      originalOld,
+      expandedOnly[4],
+      expandedOnly[3],
+    ]);
+  });
+
+  it('点数が同じ投稿は createdAt の降順に並べる', async () => {
+    const { db, actors, addPost } = setup();
+    const old = addPost(actors[0], '旅行 trip', 1000);
+    const recent = addPost(actors[0], '旅行 trip', 2000);
+    const onlyExpanded = addPost(actors[0], 'trip', 3000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: [{ pattern: '旅行', weight: 2 }, { pattern: 'trip', weight: 1 }],
+      limit: 20,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([recent, old, onlyExpanded]);
+  });
+
+  it('全角の語が全角の本文に一致する', async () => {
+    const { db, actors, addPost } = setup();
+    const hit = addPost(actors[0], '<p>ＴＲＩＰ memo</p>', 1000);
+    addPost(actors[0], '<p>関係ない投稿</p>', 2000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: queryTerms('ＴＲＩＰ'),
+      limit: 20,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
+  });
+
+  it('半角の語が半角の本文に大文字と小文字を区別せず一致する', async () => {
+    const { db, actors, addPost } = setup();
+    const hit = addPost(actors[0], '<p>Trip memo</p>', 1000);
+    addPost(actors[0], '<p>関係ない投稿</p>', 2000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: queryTerms('trip'),
+      limit: 20,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
+  });
+
+  it('全角の語が半角の本文に一致する', async () => {
+    const { db, actors, addPost } = setup();
+    const hit = addPost(actors[0], '<p>Trip memo</p>', 1000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: queryTerms('ＴＲＩＰ'),
+      limit: 20,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
   });
 
   it('terms が空のときは DB を呼ばずに空の配列を返す', async () => {

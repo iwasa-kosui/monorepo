@@ -4,13 +4,14 @@ import { SearchTerm } from '../searchTerm.ts';
 import { MAX_SEARCH_TERMS, SearchTerms } from '../searchTerms.ts';
 
 const terms = (...values: string[]) => values.map((value) => SearchTerm.orThrow(value));
+const normalized = (list: ReadonlyArray<SearchTerm>) => list.map((term) => term.normalized);
 
 describe('SearchTerms', () => {
   it('original を先に並べる', () => {
     const result = SearchTerms.create({ original: terms('旅行'), expanded: terms('トラベル', 'trip') });
-    expect(result.original).toEqual(['旅行']);
-    expect(result.expanded).toEqual(['トラベル', 'trip']);
-    expect(SearchTerms.toArray(result)).toEqual(['旅行', 'トラベル', 'trip']);
+    expect(normalized(result.original)).toEqual(['旅行']);
+    expect(normalized(result.expanded)).toEqual(['トラベル', 'trip']);
+    expect(normalized(SearchTerms.toArray(result))).toEqual(['旅行', 'トラベル', 'trip']);
   });
 
   it('小文字にした値で重複を除く', () => {
@@ -18,8 +19,8 @@ describe('SearchTerms', () => {
       original: terms('Trip', 'trip'),
       expanded: terms('TRIP', 'Travel', 'travel'),
     });
-    expect(result.original).toEqual(['Trip']);
-    expect(result.expanded).toEqual(['Travel']);
+    expect(normalized(result.original)).toEqual(['Trip']);
+    expect(normalized(result.expanded)).toEqual(['Travel']);
   });
 
   it('合計 10 語までにし、original を優先する', () => {
@@ -42,5 +43,33 @@ describe('SearchTerms', () => {
   it('語がなければ isEmpty が true', () => {
     expect(SearchTerms.isEmpty(SearchTerms.create({ original: [], expanded: [] }))).toBe(true);
     expect(SearchTerms.isEmpty(SearchTerms.create({ original: terms('a'), expanded: [] }))).toBe(false);
+  });
+
+  it('original の pattern は weight 2、expanded の pattern は weight 1 にする', () => {
+    const result = SearchTerms.create({ original: terms('旅行'), expanded: terms('trip') });
+    expect(SearchTerms.toPatterns(result)).toEqual([
+      { pattern: '旅行', weight: 2 },
+      { pattern: 'trip', weight: 1 },
+    ]);
+  });
+
+  it('正規化の前後の値をどちらも pattern にする', () => {
+    const result = SearchTerms.create({ original: terms('ＴＲＩＰ'), expanded: [] });
+    expect(SearchTerms.toPatterns(result)).toEqual([
+      { pattern: 'ＴＲＩＰ', weight: 2 },
+      { pattern: 'TRIP', weight: 2 },
+    ]);
+  });
+
+  it('同じ pattern が original と expanded に出たら大きい weight を残す', () => {
+    const result = SearchTerms.create({ original: terms('Ｔｒｉｐ'), expanded: terms('Trip') });
+    expect(SearchTerms.toPatterns(result)).toEqual([
+      { pattern: 'Ｔｒｉｐ', weight: 2 },
+      { pattern: 'Trip', weight: 2 },
+    ]);
+  });
+
+  it('語がなければ pattern も空になる', () => {
+    expect(SearchTerms.toPatterns(SearchTerms.create({ original: [], expanded: [] }))).toEqual([]);
   });
 });

@@ -55,7 +55,7 @@ const setup = (options: { textGenerator?: TextGenerator } = {}) => {
     RA.ok(
       posts
         .filter((post) => actorIds.includes(post.actorId))
-        .filter((post) => terms.some((term) => post.content.toLowerCase().includes(term.toLowerCase())))
+        .filter((post) => terms.some(({ pattern }) => post.content.toLowerCase().includes(pattern.toLowerCase())))
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, limit)
         .map(({ postId, content, createdAt }) => ({ postId, content, createdAt })),
@@ -89,6 +89,8 @@ const setup = (options: { textGenerator?: TextGenerator } = {}) => {
   };
 };
 
+const normalizedOf = (list: ReadonlyArray<{ normalized: string }>) => list.map((term) => term.normalized);
+
 const expectOk = async <T, E>(result: Promise<{ ok: true; val: T } | { ok: false; err: E }>): Promise<T> => {
   const awaited = await result;
   if (!awaited.ok) throw new Error(`Expected ok but got ${JSON.stringify(awaited.err)}`);
@@ -110,8 +112,8 @@ describe('SearchTimelineUseCase', () => {
     const result = await expectOk(search('たび'));
 
     expect(result.expansion).toBe('expanded');
-    expect(result.terms.original).toEqual(['たび']);
-    expect(result.terms.expanded).toEqual(['旅行', 'trip']);
+    expect(normalizedOf(result.terms.original)).toEqual(['たび']);
+    expect(normalizedOf(result.terms.expanded)).toEqual(['旅行', 'trip']);
     expect(result.postIds).toEqual([theirs, mine]);
   });
 
@@ -124,7 +126,11 @@ describe('SearchTimelineUseCase', () => {
     const result = await expectOk(search('旅行'));
 
     expect(result.postIds).toEqual([theirs, mine]);
-    expect(resolve).toHaveBeenCalledWith({ actorIds: [me.id, followed.id], terms: ['旅行'], limit: 200 });
+    expect(resolve).toHaveBeenCalledWith({
+      actorIds: [me.id, followed.id],
+      terms: [{ pattern: '旅行', weight: 2 }],
+      limit: 200,
+    });
   });
 
   it('展開がエラーのときは expansion が failed になり、original だけで検索する', async () => {
@@ -134,9 +140,10 @@ describe('SearchTimelineUseCase', () => {
     const result = await expectOk(search('旅行'));
 
     expect(result.expansion).toBe('failed');
-    expect(result.terms).toEqual({ original: ['旅行'], expanded: [] });
+    expect(normalizedOf(result.terms.original)).toEqual(['旅行']);
+    expect(result.terms.expanded).toEqual([]);
     expect(result.postIds).toEqual([hit]);
-    expect(resolve.mock.calls[0][0].terms).toEqual(['旅行']);
+    expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '旅行', weight: 2 }]);
   });
 
   it('展開の出力を解釈できないときも failed になる', async () => {
@@ -177,20 +184,21 @@ describe('SearchTimelineUseCase', () => {
 
     const result = await expectOk(search('ＴＲＩＰ'));
 
-    expect(result.terms.original).toEqual(['TRIP']);
+    expect(normalizedOf(result.terms.original)).toEqual(['TRIP']);
     expect(result.postIds).toEqual([hit]);
   });
 
-  it('投稿の全角と半角、大文字と小文字をそろえて一致を確かめる', async () => {
+  it('入力と同じ全角の語が全角の本文に一致する', async () => {
     const { me, addPost, resolve, search } = setup();
     const hit = addPost(me, '<p>ＴＲＩＰ memo</p>', 1000);
-    resolve.mockImplementationOnce(async () =>
-      RA.ok([{ postId: hit, content: '<p>ＴＲＩＰ memo</p>', createdAt: 1000 as Instant }])
-    );
 
-    const result = await expectOk(search('trip'));
+    const result = await expectOk(search('ＴＲＩＰ'));
 
     expect(result.postIds).toEqual([hit]);
+    expect(resolve.mock.calls[0][0].terms).toEqual([
+      { pattern: 'ＴＲＩＰ', weight: 2 },
+      { pattern: 'TRIP', weight: 2 },
+    ]);
   });
 
   it('点数の降順、同点は createdAt の降順に並べる', async () => {
@@ -214,9 +222,9 @@ describe('SearchTimelineUseCase', () => {
   });
 
   it('original の一致は expanded の一致の 2 倍に数える', async () => {
-    const { generator } = createStubTextGenerator(() => '["trip", "旅"]');
+    const { generator } = createStubTextGenerator(() => '["trip", "旅行"]');
     const { me, addPost, search } = setup({ textGenerator: generator });
-    const twoExpanded = addPost(me, 'trip 旅', 3000);
+    const twoExpanded = addPost(me, 'trip 旅行', 3000);
     const oneOriginal = addPost(me, 'たび', 1000);
     const oneExpanded = addPost(me, 'trip', 2000);
 
@@ -263,8 +271,61 @@ describe('SearchTimelineUseCase', () => {
 
     const result = await expectOk(search(`${words.join('　')} W0`));
 
-    expect(result.terms.original).toEqual(words.slice(0, 10));
-    expect(resolve.mock.calls[0][0].terms).toEqual(words.slice(0, 10));
+    expect(normalizedOf(result.terms.original)).toEqual(words.slice(0, 10));
+    expect(resolve.mock.calls[0][0].terms).toEqual(words.slice(0, 10).map((pattern) => ({ pattern, weight: 2 })));
+  });
+
+  it('元の語がすべて使えなくても、展開に成功すると展開語で検索し、元の語を droppedOriginal に入れる', async () => {
+    const sentence = '先月行った京都旅行で食べたものの話をまとめて';
+    const { generator, calls } = createStubTextGenerator(() => '["京都旅行", "グルメ"]');
+    const { me, addPost, resolve, search } = setup({ textGenerator: generator });
+    const hit = addPost(me, '京都旅行の写真', 1000);
+    addPost(me, '関係ない投稿', 2000);
+
+    const result = await expectOk(search(sentence));
+
+    expect(calls[0]).toMatchObject({ input: sentence });
+    expect(result.expansion).toBe('expanded');
+    expect(result.terms.original).toEqual([]);
+    expect(result.droppedOriginal).toEqual([sentence]);
+    expect(resolve.mock.calls[0][0].terms).toEqual([
+      { pattern: '京都旅行', weight: 1 },
+      { pattern: 'グルメ', weight: 1 },
+    ]);
+    expect(result.postIds).toEqual([hit]);
+  });
+
+  it('元の語がすべて使えず展開も失敗すると、DB を呼ばずに空の結果と droppedOriginal を返す', async () => {
+    const sentence = '先月行った京都旅行で食べたものの話をまとめて';
+    const { me, addPost, resolve, search } = setup({ textGenerator: errorGenerator });
+    addPost(me, '京都旅行の写真', 1000);
+
+    const result = await expectOk(search(sentence));
+
+    expect(result.postIds).toEqual([]);
+    expect(result.expansion).toBe('failed');
+    expect(result.droppedOriginal).toEqual([sentence]);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('有効な語と不正な語が混ざると、有効な語で検索し、不正な語を droppedOriginal に入れる', async () => {
+    const { me, addPost, resolve, search } = setup();
+    const hit = addPost(me, '京都に行った', 1000);
+
+    const result = await expectOk(search('京都 %'));
+
+    expect(result.postIds).toEqual([hit]);
+    expect(result.droppedOriginal).toEqual(['%']);
+    expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '京都', weight: 2 }]);
+  });
+
+  it('すべての語が有効なら droppedOriginal は空の配列', async () => {
+    const { me, addPost, search } = setup();
+    addPost(me, '京都に行った', 1000);
+
+    const result = await expectOk(search('京都 旅行'));
+
+    expect(result.droppedOriginal).toEqual([]);
   });
 
   it('ローカルのアクターが見つからなければ UserNotFoundError を返す', async () => {

@@ -9,7 +9,7 @@ import { expandQuery, parseExpandedTerms, QUERY_EXPANSION_MODEL } from '../query
 const parsedValues = (output: string) => {
   const result = parseExpandedTerms(output);
   if (!result.ok) throw new Error(result.err.message);
-  return [...result.val];
+  return result.val.map((term) => term.normalized);
 };
 
 describe('parseExpandedTerms', () => {
@@ -29,13 +29,21 @@ describe('parseExpandedTerms', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('開きタグのない </think> より前を捨てる', () => {
+    expect(parsedValues('推論の中に [ と ] がある文</think>["語1","語2"]')).toEqual(['語1', '語2']);
+  });
+
+  it('最後の </think> より前を捨てる', () => {
+    expect(parsedValues('["x"]</think>考える</think>["語1"]')).toEqual(['語1']);
+  });
+
   it('コードフェンスを除く', () => {
     expect(parsedValues('```json\n["旅行", "トラベル"]\n```')).toEqual(['旅行', 'トラベル']);
-    expect(parsedValues('```\n["a"]\n```')).toEqual(['a']);
+    expect(parsedValues('```\n["ab"]\n```')).toEqual(['ab']);
   });
 
   it('配列の前後の説明を無視する', () => {
-    expect(parsedValues('結果: ["a", "b"] 以上です')).toEqual(['a', 'b']);
+    expect(parsedValues('結果: ["ab", "cd"] 以上です')).toEqual(['ab', 'cd']);
   });
 
   it.each([
@@ -55,12 +63,17 @@ describe('parseExpandedTerms', () => {
     expect(parsedValues(output)).toEqual(['旅行', 'ABC', 'trip']);
   });
 
+  it('NFKC 後に 1 文字の語を捨てる', () => {
+    expect(parsedValues('["旅", "Ａ", "ab", "㌔"]')).toEqual(['ab', 'キロ']);
+  });
+
   it('11 語以上は全て返し、SearchTerms が 10 語に絞る', () => {
     const values = Array.from({ length: 12 }, (_, i) => `語${i}`);
-    const terms = parsedValues(JSON.stringify(values));
-    expect(terms).toHaveLength(12);
-    const merged = SearchTerms.create({ original: [], expanded: terms });
-    expect(merged.expanded).toEqual(values.slice(0, 10));
+    const result = parseExpandedTerms(JSON.stringify(values));
+    if (!result.ok) throw new Error(result.err.message);
+    expect(result.val).toHaveLength(12);
+    const merged = SearchTerms.create({ original: [], expanded: result.val });
+    expect(merged.expanded.map((term) => term.normalized)).toEqual(values.slice(0, 10));
   });
 });
 
@@ -69,7 +82,7 @@ describe('expandQuery', () => {
     const { generator, calls } = createStubTextGenerator(() => '["旅行", "trip"]');
     const result = await expandQuery(generator, 'たび');
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.val).toEqual(['旅行', 'trip']);
+    if (result.ok) expect(result.val.map((term) => term.normalized)).toEqual(['旅行', 'trip']);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ model: QUERY_EXPANSION_MODEL, input: 'たび', maxOutputTokens: 256 });
     expect(QUERY_EXPANSION_MODEL).toBe('@cf/qwen/qwen3-30b-a3b-fp8');

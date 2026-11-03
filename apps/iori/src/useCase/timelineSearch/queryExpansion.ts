@@ -8,6 +8,7 @@ import type { TextGenerator } from '../../ports/textGenerator.ts';
 export const QUERY_EXPANSION_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 
 const MAX_OUTPUT_TOKENS = 256;
+const MIN_EXPANDED_TERM_CHARS = 2;
 
 const INSTRUCTION = 'あなたは検索語を展開します。入力は、ユーザーが自分のタイムラインの投稿を探すための問い合わせです。'
   + '問い合わせと同じ意味で投稿に現れそうな語を最大10個挙げてください。'
@@ -27,7 +28,9 @@ export type QueryExpansionError = AiError | QueryExpansionParseError;
 const stringArray = z.array(z.string());
 
 export const parseExpandedTerms = (output: string): Result<SearchTerm[], QueryExpansionParseError> => {
-  const text = output
+  const lastThinkClose = [...output.matchAll(/<\/think>/gi)].at(-1);
+  const answer = lastThinkClose === undefined ? output : output.slice(lastThinkClose.index + lastThinkClose[0].length);
+  const text = answer
     .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
     .replace(/```[A-Za-z0-9_-]*/g, '');
   const start = text.indexOf('[');
@@ -48,7 +51,7 @@ export const parseExpandedTerms = (output: string): Result<SearchTerm[], QueryEx
   const terms: SearchTerm[] = [];
   for (const value of parsed.data) {
     const term = SearchTerm.of(value);
-    if (term.ok) terms.push(term.val);
+    if (term.ok && Array.from(term.val.normalized).length >= MIN_EXPANDED_TERM_CHARS) terms.push(term.val);
   }
   return Result.ok(terms);
 };

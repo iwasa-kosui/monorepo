@@ -2,7 +2,7 @@ import type { ActorId } from '../actor/actorId.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
 import type { PostId } from '../post/postId.ts';
-import type { SearchTerm } from './searchTerm.ts';
+import type { WeightedPattern } from './searchTerms.ts';
 
 export type TimelineSearchCandidate = Readonly<{
   postId: PostId;
@@ -13,7 +13,7 @@ export type TimelineSearchCandidate = Readonly<{
 export type TimelineSearchCandidatesResolver = Agg.Resolver<
   {
     actorIds: ReadonlyArray<ActorId>;
-    terms: ReadonlyArray<SearchTerm>;
+    terms: ReadonlyArray<WeightedPattern>;
     limit: number;
   },
   ReadonlyArray<TimelineSearchCandidate>
