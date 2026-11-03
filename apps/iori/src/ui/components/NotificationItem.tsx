@@ -229,7 +229,7 @@ const MentionNotificationItem = ({ notification, recipientUsername }: Props) => 
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  // The link goes to the replied-to post, not to the reply itself, as in the old UI.
+  // 旧 UI と同じく、返信そのものではなく返信先の投稿へリンクする
   const postUrl = `/users/${recipientUsername}/posts/${status?.in_reply_to_id ?? status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 

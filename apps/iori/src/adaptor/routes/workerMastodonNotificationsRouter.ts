@@ -152,7 +152,7 @@ export const createWorkerMastodonNotificationsRouter = ({
   const countUnread = async (c: Context<MastodonAuthEnv>, userId: UserId) => {
     const count = await notificationCountResolverSinceMarker.resolve({
       userId,
-      types: selectDomainTypes({ types: [], excludeTypes: [] }),
+      types: selectDomainTypes({ types: queryList(c, 'types'), excludeTypes: queryList(c, 'exclude_types') }),
       limit: parseLimit(c.req.query('limit'), unreadCountLimits),
     });
     return count.ok ? c.json({ count: count.val }) : c.json(internalServerError, 500);

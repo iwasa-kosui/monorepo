@@ -192,6 +192,13 @@ describe('createD1NotificationCountResolverSinceMarker', () => {
     expect(await count(t)).toEqual({ ok: true, val: 3, err: undefined });
   });
 
+  it('他人の通知を指すマーカーは、存在しない ID と同じく全件を数える', async () => {
+    const t = seedNotifications();
+    t.seed.setMarker(t.me.userId, 'notifications', t.ids.others);
+
+    expect(await count(t)).toEqual({ ok: true, val: 3, err: undefined });
+  });
+
   it('limit で件数を頭打ちにする', async () => {
     const t = seedNotifications();
 

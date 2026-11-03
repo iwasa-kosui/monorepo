@@ -315,6 +315,14 @@ describe('unread_count と markers', () => {
     expect(await unread(t)).toEqual([{ count: 3 }, { count: 3 }]);
   });
 
+  it.each(['v1', 'v2'])('%s の unread_count は exclude_types[] で除いた type を数えない', async (version) => {
+    const t = await seedNotifications();
+
+    const response = await t.get(`/api/${version}/notifications/unread_count?exclude_types[]=follow`);
+
+    expect(await response.json()).toEqual({ count: 2 });
+  });
+
   it('limit で件数を頭打ちにする', async () => {
     const t = await seedNotifications();
 
