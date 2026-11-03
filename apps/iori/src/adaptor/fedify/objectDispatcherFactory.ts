@@ -5,12 +5,14 @@ import { getLogger } from '@logtape/logtape';
 
 import type { ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
 import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
 import type { PostResolver, PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
   origin: string;
@@ -18,6 +20,7 @@ export type ObjectDispatcherDeps = Readonly<{
   postImagesResolver: PostImagesResolverByPostId;
   articleResolver?: ArticleResolver;
   threadResolver?: ThreadResolver;
+  articleBodyResolver: ArticleBodyResolver;
 }>;
 
 export const createObjectDispatcher = ({
@@ -26,6 +29,7 @@ export const createObjectDispatcher = ({
   postImagesResolver,
   articleResolver,
   threadResolver,
+  articleBodyResolver,
 }: ObjectDispatcherDeps) => {
   const useCase = GetPostUseCase.create({ postResolver, postImagesResolver });
   const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) =>
@@ -55,14 +59,14 @@ export const createObjectDispatcher = ({
       }),
     );
   const articleUseCase = articleResolver !== undefined && threadResolver !== undefined
-    ? GetArticleWithThreadUseCase.create({ articleResolver, threadResolver })
+    ? GetArticleWithThreadUseCase.create({ articleResolver, threadResolver, articleBodyResolver })
     : undefined;
   const ofArticle = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
     if (articleUseCase === undefined) return null;
     return RA.flow(
       articleUseCase.run({ articleId: ArticleId.orThrow(values.id) }),
       RA.match({
-        ok: ({ article, thread }) => {
+        ok: ({ article, thread, body }) => {
           if (article.status !== 'published') return null;
           return new FedifyArticle({
             id: ctx.getObjectUri(FedifyArticle, values),
@@ -70,7 +74,7 @@ export const createObjectDispatcher = ({
             to: PUBLIC_COLLECTION,
             cc: ctx.getFollowersUri(values.identifier),
             name: article.title,
-            content: formatThreadAsHtml(thread),
+            content: body === undefined ? formatThreadAsHtml(thread) : sanitizeArticleBody(body.html),
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(article.publishedAt ?? article.createdAt),
             url: ctx.getObjectUri(FedifyArticle, values),

@@ -9,6 +9,7 @@ import { postToStatus } from '../legacyConversion.ts';
 type ArticleData = {
   article: Article;
   thread: PostWithAuthor[];
+  body?: { html: string };
 };
 
 const getIsLoggedIn = (): boolean => {
@@ -163,7 +164,7 @@ const ArticleDetailPage = () => {
     );
   }
 
-  const { article, thread } = data;
+  const { article, thread, body } = data;
 
   return (
     <div class='flex flex-col h-full'>
@@ -222,7 +223,14 @@ const ArticleDetailPage = () => {
 
       {/* Thread Content */}
       <div class='flex-1'>
-        {thread.length === 0
+        {body !== undefined
+          ? (
+            <div
+              class='text-charcoal dark:text-gray-200 prose dark:prose-invert max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
+              dangerouslySetInnerHTML={{ __html: body.html }}
+            />
+          )
+          : thread.length === 0
           ? (
             <p class='text-charcoal-light dark:text-gray-400 text-center py-8'>
               スレッドが見つかりませんでした

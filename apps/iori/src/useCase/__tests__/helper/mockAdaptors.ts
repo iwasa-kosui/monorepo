@@ -669,7 +669,9 @@ export const createMockArticleResolverByRootPostId = (
   articles: Map<PostId, Article> = new Map(),
 ): ArticleResolverByRootPostId & { setArticle: (article: Article) => void } => ({
   resolve: vi.fn(({ rootPostId }: { rootPostId: PostId }) => RAImpl.ok(articles.get(rootPostId))),
-  setArticle: (article: Article) => articles.set(article.rootPostId, article),
+  setArticle: (article: Article) => {
+    if (article.rootPostId !== null) articles.set(article.rootPostId, article);
+  },
 });
 
 export const createMockArticleDeletedStore = (): ArticleDeletedStore & InMemoryStore<ArticleDeleted> => {

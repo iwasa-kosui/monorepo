@@ -22,6 +22,7 @@ import { WorkersKvStore, WorkersMessageQueue } from '@fedify/fedify/x/cfworkers'
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowingId } from './adaptor/d1/actor/actorsResolverByFollowingId.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
+import { createD1ArticleBodyResolver } from './adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1Db } from './adaptor/d1/client.ts';
 import { createD1PostImagesResolverByPostId } from './adaptor/d1/image/postImagesResolver.ts';
 import { createD1InstanceActorKeyPairsResolver } from './adaptor/d1/key/instanceActorKeyPairsResolver.ts';
@@ -183,6 +184,7 @@ export const createCloudflareFederationRuntime = async (
     postImagesResolver: createD1PostImagesResolverByPostId(db),
     articleResolver: createD1ArticleResolver(db),
     threadResolver: createD1ThreadResolver(db, env.ORIGIN),
+    articleBodyResolver: createD1ArticleBodyResolver(db),
   });
   const keyPairsDispatcher = createKeyPairsDispatcher({
     keyGenerator: FedifyKeyGenerator.getInstance(),
