@@ -234,7 +234,7 @@ describe('Worker fixture', () => {
     const env = makeEnv(new FixtureD1(await makeSeed()), { smokeQueueToken: 'fixture-smoke-token', send });
     const context = {} as ExecutionContext;
 
-    const [disabled, unauthorized, accepted] = await Promise.all([
+    const [disabled, unauthorized, accepted, acceptedWithZeroLength] = await Promise.all([
       worker.fetch(
         new Request(`${origin}/__smoke__/queue-enqueue`, { method: 'POST' }),
         makeEnv(new FixtureD1(await makeSeed())),
@@ -256,12 +256,25 @@ describe('Worker fixture', () => {
         env,
         context,
       ),
+      worker.fetch(
+        new Request(`${origin}/__smoke__/queue-enqueue`, {
+          method: 'POST',
+          headers: { 'x-iori-smoke-token': 'fixture-smoke-token', 'content-length': '0' },
+          body: new ReadableStream({ start: (controller) => controller.close() }),
+          duplex: 'half',
+        } as RequestInit),
+        env,
+        context,
+      ),
     ]);
 
     expect(disabled.status).toBe(503);
     expect(unauthorized.status).toBe(503);
     expect(accepted.status).toBe(200);
+    expect(acceptedWithZeroLength.status).toBe(200);
     await expect(accepted.json()).resolves.toEqual({ accepted: true, queue: { enqueued: 1 } });
+    await expect(acceptedWithZeroLength.json()).resolves.toEqual({ accepted: true, queue: { enqueued: 1 } });
+    expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledWith({
       type: 'iori-smoke',
       schema: 1,

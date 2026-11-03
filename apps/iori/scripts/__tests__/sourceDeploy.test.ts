@@ -82,10 +82,14 @@ it('uses the fixed Node bootstrap before exact checkout, dependency delay, dist 
   const rsync = calls.findIndex(call => call.program === 'rsync');
   expect(rsync).toBe(4);
   expect(calls[0].args.slice(-3)).toEqual(['"$HOME/.nvm/versions/node/v24.12.0/bin/node"', '--input-type=module', '-']);
+  expect(calls[0].args).toContain('ServerAliveInterval=30');
+  expect(calls[0].args).toContain('ServerAliveCountMax=4');
   expect(calls[rsync].args.at(-1)).toBe('source.invalid:monorepo/apps/iori/dist/');
   expect(calls[rsync].args).toContain('--delete');
   expect(calls[rsync].args).toContain('--exclude=/uploads');
   expect(calls[rsync].args.join(' ')).toContain('StrictHostKeyChecking=yes');
+  expect(calls[rsync].args.join(' ')).toContain('ServerAliveInterval=30');
+  expect(calls[rsync].args.join(' ')).toContain('ServerAliveCountMax=4');
   expect(calls.at(-1)?.input).toContain('"restart"');
   expect(calls[0].input).toContain('captureOutput: captureSourceCommandOutput');
   expect(calls.every(call => !call.args.some(arg => /env\.conf|DATABASE|ssh-keyscan/.test(arg)))).toBe(true);

@@ -6,6 +6,7 @@ import type { Actor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import type { User } from '../../domain/user/user.ts';
+import { stateAfterFetchFailure } from './timelineFailure.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -17,7 +18,7 @@ export type TimelineData = Readonly<{
   following: readonly Actor[];
 }>;
 
-type TimelineState =
+export type TimelineState =
   | { status: 'loading' }
   | { status: 'error'; error: string }
   | { status: 'success'; data: TimelineData };
@@ -42,28 +43,38 @@ export const useTimeline = (): UseTimelineReturn => {
 
   const fetchMore = useCallback(
     async (createdAt: Instant | undefined) => {
-      const res = await client.v1.home.$get({
-        query: { createdAt: createdAt ? String(createdAt) : undefined },
-      });
-      const latest = await res.json();
+      try {
+        const res = await client.v1.home.$get({
+          query: { createdAt: createdAt ? String(createdAt) : undefined },
+        });
+        const latest = await res.json();
 
-      if ('error' in latest) {
-        setState({ status: 'error', error: latest.error });
-        return;
-      }
-
-      setState((prev) => {
-        if (prev.status === 'success' && createdAt !== undefined) {
-          return {
-            status: 'success',
-            data: {
-              ...latest,
-              timelineItems: [...prev.data.timelineItems, ...latest.timelineItems],
-            },
-          };
+        if ('error' in latest) {
+          setState((prev) => stateAfterFetchFailure(prev, createdAt, latest.error));
+          return;
         }
-        return { status: 'success', data: latest };
-      });
+
+        if (!res.ok) {
+          setState((prev) => stateAfterFetchFailure(prev, createdAt, `HTTP ${res.status}`));
+          return;
+        }
+
+        setState((prev) => {
+          if (prev.status === 'success' && createdAt !== undefined) {
+            return {
+              status: 'success',
+              data: {
+                ...latest,
+                timelineItems: [...prev.data.timelineItems, ...latest.timelineItems],
+              },
+            };
+          }
+          return { status: 'success', data: latest };
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setState((prev) => stateAfterFetchFailure(prev, createdAt, message));
+      }
     },
     [],
   );
