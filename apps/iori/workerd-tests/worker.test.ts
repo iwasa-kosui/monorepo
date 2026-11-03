@@ -330,6 +330,30 @@ describe('iori Worker on workerd', () => {
         expectNotFoundVaryingOnAccept(response);
       });
     });
+
+    describe('article objects under another identifier', () => {
+      const otherUsername = 'someone';
+
+      it('returns 404 for a published article requested under another existing user', async () => {
+        const response = await SELF.fetch(`${origin}/users/${otherUsername}/articles/${publishedId}`, {
+          headers: activityJson,
+        });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns 404 for a published article requested under an unknown user', async () => {
+        const response = await SELF.fetch(`${origin}/users/nobody/articles/${publishedId}`, {
+          headers: activityJson,
+        });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns the Article for a published article with the author identifier', async () => {
+        const response = await SELF.fetch(articlePath(publishedId), { headers: activityJson });
+        expect(response.status).toBe(200);
+        expect((await response.json<{ type: string }>()).type).toBe('Article');
+      });
+    });
   });
 
   it('verifies a stored @noble/hashes password hash with the WASM Argon2id', async () => {
