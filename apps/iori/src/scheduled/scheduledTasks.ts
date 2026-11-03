@@ -1,4 +1,5 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
 import { collectFeedsTask, detectRadarVolumeTask } from './feedTasks.ts';
 
 export type ScheduledTaskContext = Readonly<{
@@ -13,6 +14,7 @@ export type ScheduledTaskTable = Readonly<Record<string, readonly ScheduledTask[
 export const scheduledTasks: ScheduledTaskTable = {
   '0 0,3,6,9,12,15,18,21 * * *': [collectFeedsTask],
   '15 20 * * 1': [detectRadarVolumeTask],
+  '30 21 * * *': [createDailyDigestTask, expireDigestsTask],
 };
 
 export const dispatchScheduled = async (
