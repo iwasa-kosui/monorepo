@@ -1,4 +1,4 @@
-import type { D1Database, Fetcher, KVNamespace, Queue, R2Bucket } from '@cloudflare/workers-types';
+import type { Ai, D1Database, Fetcher, KVNamespace, Queue, R2Bucket } from '@cloudflare/workers-types';
 
 export type IoriWorkerEnv = Readonly<{
   DB: D1Database;
@@ -6,6 +6,7 @@ export type IoriWorkerEnv = Readonly<{
   FEDIFY_KV: KVNamespace;
   FEDIFY_QUEUE: Queue;
   ASSETS?: Fetcher;
+  AI?: Ai;
   ORIGIN: string;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;

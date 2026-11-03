@@ -13,6 +13,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import { PostId } from '../../../domain/post/postId.ts';
 import type { RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
 
@@ -146,6 +147,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       remotePostIdentity: {
         uri: note.id.href,
         content: contentText,
+        visibility: extractVisibility(note, author.followersId),
         attachments,
         authorIdentity: {
           uri: author.id.href,
@@ -221,6 +223,7 @@ const processRelayAnnounce = async (
   const postResult = await deps.remotePostUpserter.resolve({
     uri: note.id.href,
     content: contentText,
+    visibility: extractVisibility(note, author.followersId),
     attachments,
     authorIdentity: {
       uri: author.id.href,

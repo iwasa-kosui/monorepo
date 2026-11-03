@@ -43,6 +43,7 @@ const FIXED_REASONS = new Set([
   'command-failed',
   'd1-baseline-mismatch',
   'aborted',
+  'result-invalid',
   'identity-mismatch',
   'mismatch',
   'config-invalid',

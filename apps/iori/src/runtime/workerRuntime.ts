@@ -103,8 +103,12 @@ import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPas
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
+import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
+import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
+import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
+import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
@@ -159,6 +163,7 @@ export const createWorkerRuntimePorts = async (
 ): Promise<WorkerRuntimePorts> => {
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const db = createD1Db(env.DB);
+  const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const sessionResolver = createD1SessionResolver(db);
   const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
@@ -173,6 +178,7 @@ export const createWorkerRuntimePorts = async (
   const emojiReactResolverByActorAndPostAndEmoji = createD1EmojiReactResolverByActorAndPostAndEmoji(db);
   const threadResolver = createD1ThreadResolver(db, env.ORIGIN);
   const uploads = createPostImageR2ObjectStore({ bucket: env.UPLOADS });
+  const ogImageStore = createR2OgImageStore(env.UPLOADS);
   const pushSubscriptionsResolver = createD1PushSubscriptionsResolverByUserId(db);
   const webPushSender = createCloudflareWebPushSender({
     subject: env.VAPID_SUBJECT,
@@ -404,8 +410,10 @@ export const createWorkerRuntimePorts = async (
         articleDeletedStore: createD1ArticleDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
+      sessionResolver,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,
+      deleteOgImage: (articleId) => ogImageStore.delete(articleId),
     },
     mutesRelays: {
       getMutesUseCase: GetMutesUseCase.create({
@@ -506,5 +514,7 @@ export const createWorkerRuntimePorts = async (
     },
     uploads,
     federation: federationRuntime.federation,
+    textGenerator: workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi),
+    textEmbedder: workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi),
   };
 };

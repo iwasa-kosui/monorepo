@@ -70,6 +70,7 @@ const create = ({
       uri: identity.uri,
       actorId: authorResult.val.id,
       inReplyToUri: identity.inReplyToUri,
+      visibility: identity.visibility,
     });
     await postCreatedStore.store(createPost);
     const attachments = identity.attachments ?? [];

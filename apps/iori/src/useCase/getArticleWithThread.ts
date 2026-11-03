@@ -4,11 +4,13 @@ import z from 'zod/v4';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { PostWithAuthor, ThreadResolver } from '../domain/post/post.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   articleId: ArticleId;
+  viewerUserId?: UserId;
 }>;
 
 const Ok = Schema.create(
@@ -35,12 +37,15 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('article', async ({ articleId }) => {
+      RA.andBind('article', async ({ articleId, viewerUserId }) => {
         const article = await articleResolver.resolve(articleId);
         if (!article.ok) {
           return article;
         }
         if (article.val === undefined) {
+          return RA.err(ArticleNotFoundError.create(articleId));
+        }
+        if (article.val.status !== 'published' && article.val.authorUserId !== viewerUserId) {
           return RA.err(ArticleNotFoundError.create(articleId));
         }
         return RA.ok(article.val);

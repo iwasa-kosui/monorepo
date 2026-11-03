@@ -14,6 +14,7 @@ import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domai
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
+import type { ArticleId } from '../domain/article/articleId.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
@@ -37,6 +38,8 @@ import type { SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { TimelineItemsResolverByActorIds } from '../domain/timeline/timelineItem.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
+import type { TextEmbedder } from '../ports/textEmbedder.ts';
+import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
@@ -143,7 +146,9 @@ export type IoriArticlesRuntimePorts = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  sessionResolver: SessionResolver;
   publishOgImage: (article: Article) => Promise<void>;
+  deleteOgImage: (articleId: ArticleId) => Promise<void>;
 }>;
 export type IoriMutesRelaysRuntimePorts = Readonly<{
   getMutesUseCase: GetMutesUseCase;
@@ -196,6 +201,8 @@ export type IoriRuntimePorts = Readonly<{
   core: IoriCoreRuntimePorts;
   uploads: UploadObjectStore;
   federation: Federation<void>;
+  textGenerator?: TextGenerator;
+  textEmbedder?: TextEmbedder;
 }>;
 
 /** Worker-facing alias used to make the runtime boundary explicit. */

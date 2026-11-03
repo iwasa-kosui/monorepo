@@ -1,4 +1,5 @@
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import type { Account, MediaAttachment, PreviewCard, Status } from './entities.ts';
@@ -79,6 +80,9 @@ const toPostUrls = (
   };
 };
 
+const toVisibility = (post: PostWithAuthor): Visibility =>
+  post.type === 'local' ? 'public' : post.visibility ?? 'private';
+
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
   const { uri, url } = toPostUrls(post, options);
   return {
@@ -87,7 +91,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     created_at: toIsoString(post.createdAt),
     account: options.account,
     content: sanitizeStatusContent(post.content),
-    visibility: 'public',
+    visibility: toVisibility(post),
     sensitive: false,
     spoiler_text: '',
     media_attachments: toMediaAttachments(post, options.mediaAttachmentIds, options.baseUrl),

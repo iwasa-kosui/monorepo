@@ -43,6 +43,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.articles.deleteArticleUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.publishedArticlesResolver.resolve).toBeTypeOf('function');
     expect(runtime.articles.publishOgImage).toBeTypeOf('function');
+    expect(runtime.articles.deleteOgImage).toBeTypeOf('function');
     expect(runtime.mutesRelays.getMutesUseCase.run).toBeTypeOf('function');
     expect(runtime.mutesRelays.createMuteUseCase.run).toBeTypeOf('function');
     expect(runtime.mutesRelays.deleteMuteUseCase.run).toBeTypeOf('function');

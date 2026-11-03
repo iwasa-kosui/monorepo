@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2f2735bc-8ac0-4a8a-9131-c064fd9c81ac",
+  "id": "c71e6151-2210-43a3-a43e-90c370611903",
   "prevId": "aadd1b38-9a3e-489c-a043-d7ccfd8080d9",
   "tables": {
     "actors": {
@@ -970,73 +970,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "mastodon_markers": {
-      "name": "mastodon_markers",
-      "columns": {
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "timeline": {
-          "name": "timeline",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "lastReadId": {
-          "name": "lastReadId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "mastodon_markers_userId_users_userId_fk": {
-          "name": "mastodon_markers_userId_users_userId_fk",
-          "tableFrom": "mastodon_markers",
-          "tableTo": "users",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "userId"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "mastodon_markers_userId_timeline_pk": {
-          "columns": [
-            "userId",
-            "timeline"
-          ],
-          "name": "mastodon_markers_userId_timeline_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "mutes": {
       "name": "mutes",
       "columns": {
@@ -1426,17 +1359,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "notifications_recipient_user_id_created_at_notification_id_idx": {
-          "name": "notifications_recipient_user_id_created_at_notification_id_idx",
-          "columns": [
-            "recipientUserId",
-            "createdAt",
-            "notificationId"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "notifications_recipientUserId_users_userId_fk": {
           "name": "notifications_recipientUserId_users_userId_fk",
@@ -2153,6 +2076,13 @@
         },
         "inReplyToUri": {
           "name": "inReplyToUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "visibility": {
+          "name": "visibility",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
