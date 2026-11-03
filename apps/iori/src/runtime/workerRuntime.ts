@@ -17,11 +17,12 @@ import { createD1ArticleResolverByRootPostId } from '../adaptor/d1/article/artic
 import { createD1ArticlesResolverByAuthorActorId } from '../adaptor/d1/article/articlesResolverByAuthorActorId.ts';
 import { createD1ArticleUnpublishedStore } from '../adaptor/d1/article/articleUnpublishedStore.ts';
 import { createD1ArticleWithBodyCreatedStore } from '../adaptor/d1/article/articleWithBodyCreatedStore.ts';
+import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article/articleWithDependentsDeletedStore.ts';
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
-import { createD1ArticleBodyDeletedStore } from '../adaptor/d1/articleBody/articleBodyDeletedStore.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
+import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
@@ -423,9 +424,9 @@ export const createWorkerRuntimePorts = async (
         userResolver,
         actorResolverByUserId,
         articleResolver,
-        articleDeletedStore: createD1ArticleDeletedStore(db),
         articleBodyResolver,
-        articleBodyDeletedStore: createD1ArticleBodyDeletedStore(db),
+        digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
+        articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
       sessionResolver,

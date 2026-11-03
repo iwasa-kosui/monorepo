@@ -5,7 +5,8 @@ import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
-import type { ArticleBodyWritten } from '../articleBody/articleBody.ts';
+import type { ArticleBodyDeleted, ArticleBodyWritten } from '../articleBody/articleBody.ts';
+import type { DigestExpired } from '../digest/digest.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
@@ -117,6 +118,13 @@ export type ArticleUnpublishedStore = Agg.Store<ArticleUnpublished>;
 export type ArticleDeletedStore = Agg.Store<ArticleDeleted>;
 export type ArticleWithBodyCreatedStore = Readonly<{
   store: (articleCreated: ArticleCreated, bodyWritten: ArticleBodyWritten) => RA<void, never>;
+}>;
+export type ArticleWithDependentsDeletedStore = Readonly<{
+  store: (
+    articleDeleted: ArticleDeleted,
+    bodyDeleted: ArticleBodyDeleted | undefined,
+    digestExpired: DigestExpired | undefined,
+  ) => RA<void, never>;
 }>;
 
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;
