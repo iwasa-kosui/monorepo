@@ -47,10 +47,19 @@ export const isReviewedSmokeSelect = (sql: string) => {
   if (!tokens || tokens.join('') !== sql) return false;
   const significant = tokens.filter((token) => !/^\s+$/.test(token)).map((token) => token.toLowerCase());
   if (significant[0] !== 'select' || significant.slice(1).includes('select')) return false;
+  let inFromClause = false;
+  let depth = 0;
   for (let index = 0; index < significant.length; index++) {
     const token = significant[index]!;
     if (/^[a-z]/.test(token) && !words.has(token)) return false;
-    if (['from', 'join'].includes(token) && !tables.has(significant[index + 1]?.replaceAll('"', '') ?? '')) {
+    if (token === '(') depth++;
+    if (token === ')') depth--;
+    if (token === 'from') inFromClause = true;
+    if (depth === 0 && ['where', 'order', 'limit', 'offset'].includes(token)) inFromClause = false;
+    if (
+      (['from', 'join'].includes(token) || (token === ',' && inFromClause && depth === 0))
+      && !tables.has(significant[index + 1]?.replaceAll('"', '') ?? '')
+    ) {
       return false;
     }
     if (
