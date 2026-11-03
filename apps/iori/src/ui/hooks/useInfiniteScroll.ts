@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'hono/jsx';
 
 import type { Instant } from '../../domain/instant/instant.ts';
+import { isNearDocumentEnd } from './infiniteScrollPosition.ts';
 
 type UseInfiniteScrollProps = Readonly<{
   items: readonly { createdAt: Instant }[];
@@ -32,11 +33,7 @@ export const useInfiniteScroll = ({
     const handleScroll = () => {
       if (items.length === 0) return;
 
-      const scrollHeight = document.body.scrollHeight;
-      const scrollTop = document.body.scrollTop;
-      const clientHeight = document.body.clientHeight;
-
-      if (scrollTop + clientHeight >= scrollHeight - 10) {
+      if (isNearDocumentEnd()) {
         const oldest = items.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
         debouncedLoadMore(oldest.createdAt);
       }

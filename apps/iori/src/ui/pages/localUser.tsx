@@ -1,5 +1,5 @@
 import { hc } from 'hono/client';
-import { useEffect, useState } from 'hono/jsx';
+import { useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
@@ -10,6 +10,8 @@ import type { User } from '../../domain/user/user.ts';
 import { debounce } from '../../helper/debounce.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
+import { appendUniquePosts } from '../hooks/postsMerge.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -38,10 +40,7 @@ export const LocalUserPage = ({
     if (posts.length === 0) return;
 
     const handleScroll = () => {
-      const scrollHeight = document.body.scrollHeight;
-      const scrollTop = document.body.scrollTop;
-      const clientHeight = document.body.clientHeight;
-      if (scrollTop + clientHeight >= scrollHeight - 10) {
+      if (isNearDocumentEnd()) {
         const oldest = posts.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
         debouncedFetchData(oldest.createdAt);
       }
@@ -279,6 +278,7 @@ export const LocalUserPage = ({
 
 const App = () => {
   const [init, setInit] = useState(false);
+  const isFetchingMoreRef = useRef(false);
   const [data, setData] = useState<
     | { error: string }
     | {
@@ -301,20 +301,29 @@ const App = () => {
   const fetchData = async (createdAt: Instant | undefined) => {
     const username = getUsernameFromUrl();
     if (!username) return;
-
-    const res = await client.v1.users[':username'].posts.$get({
-      param: { username },
-      query: { createdAt: createdAt ? String(createdAt) : undefined },
-    });
-    const latest = await res.json();
-
-    if (latest && !('error' in latest) && data && !('error' in data)) {
-      setData({
-        ...latest,
-        posts: [...data.posts, ...latest.posts],
+    if (createdAt !== undefined) {
+      if (isFetchingMoreRef.current) return;
+      isFetchingMoreRef.current = true;
+    }
+    try {
+      const res = await client.v1.users[':username'].posts.$get({
+        param: { username },
+        query: { createdAt: createdAt ? String(createdAt) : undefined },
       });
-    } else {
-      setData(latest);
+      const latest = await res.json();
+
+      if (latest && !('error' in latest) && data && !('error' in data)) {
+        setData({
+          ...latest,
+          posts: appendUniquePosts(data.posts, latest.posts),
+        });
+      } else {
+        setData(latest);
+      }
+    } finally {
+      if (createdAt !== undefined) {
+        isFetchingMoreRef.current = false;
+      }
     }
   };
 

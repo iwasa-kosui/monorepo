@@ -1,5 +1,5 @@
 import { hc } from 'hono/client';
-import { useCallback, useEffect, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
 import type { Actor } from '../../domain/actor/actor.ts';
@@ -7,6 +7,7 @@ import type { Instant } from '../../domain/instant/instant.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import type { User } from '../../domain/user/user.ts';
 import { stateAfterFetchFailure } from './timelineFailure.ts';
+import { appendUniqueTimelineItems } from './timelineItemsMerge.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -40,9 +41,14 @@ export type UseTimelineReturn = Readonly<{
 export const useTimeline = (): UseTimelineReturn => {
   const [state, setState] = useState<TimelineState>({ status: 'loading' });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const isFetchingMoreRef = useRef(false);
 
   const fetchMore = useCallback(
     async (createdAt: Instant | undefined) => {
+      if (createdAt !== undefined) {
+        if (isFetchingMoreRef.current) return;
+        isFetchingMoreRef.current = true;
+      }
       try {
         const res = await client.v1.home.$get({
           query: { createdAt: createdAt ? String(createdAt) : undefined },
@@ -65,7 +71,7 @@ export const useTimeline = (): UseTimelineReturn => {
               status: 'success',
               data: {
                 ...latest,
-                timelineItems: [...prev.data.timelineItems, ...latest.timelineItems],
+                timelineItems: appendUniqueTimelineItems(prev.data.timelineItems, latest.timelineItems),
               },
             };
           }
@@ -74,6 +80,10 @@ export const useTimeline = (): UseTimelineReturn => {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setState((prev) => stateAfterFetchFailure(prev, createdAt, message));
+      } finally {
+        if (createdAt !== undefined) {
+          isFetchingMoreRef.current = false;
+        }
       }
     },
     [],
