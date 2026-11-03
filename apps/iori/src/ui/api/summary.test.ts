@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { buildSummaryRequest, splitSummaryCitations, summaryErrorMessage } from './summary.ts';
+import { buildSummaryRequest, splitSummaryCitations, summaryErrorMessage, summaryTargetLabel } from './summary.ts';
 
 const s1 = { id: 's1' } as Status;
 const s3 = { id: 's3' } as Status;
@@ -143,6 +143,17 @@ describe('buildSummaryRequest', () => {
 
   it('rejects a date that cannot be read', () => {
     expect(buildSummaryRequest({ query: '猫', since: 'not a date', until: '' }).ok).toBe(false);
+  });
+});
+
+describe('summaryTargetLabel', () => {
+  it('names the search term when there is a searched query', () => {
+    expect(summaryTargetLabel('猫')).toBe('検索語『猫』の結果を要約します');
+  });
+
+  it('names the period when the searched query is empty', () => {
+    expect(summaryTargetLabel('')).toBe('開始から終了までの期間を要約します');
+    expect(summaryTargetLabel('  ')).toBe('開始から終了までの期間を要約します');
   });
 });
 

@@ -9,7 +9,7 @@ import {
   summarizeTimeline,
   type TimelineSummary,
 } from '../api/mastodonClient.ts';
-import { buildSummaryRequest, summaryErrorMessage } from '../api/summary.ts';
+import { buildSummaryRequest, summaryErrorMessage, summaryTargetLabel } from '../api/summary.ts';
 import { PostView } from '../components/PostView.tsx';
 import { SummaryText } from '../components/SummaryText.tsx';
 
@@ -42,6 +42,8 @@ const SearchPage = () => {
     if (isSearchingRef.current) return;
     const q = query.trim();
     if (q === '') {
+      setSearched(null);
+      setSearchedQuery('');
       setSearchError('検索語を入力してください。');
       return;
     }
@@ -65,6 +67,11 @@ const SearchPage = () => {
       isSearchingRef.current = false;
       setIsSearching(false);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearched(null);
+    setSearchedQuery('');
   };
 
   const handleSummarize = async () => {
@@ -134,9 +141,15 @@ const SearchPage = () => {
             />
           </label>
         </div>
+        <p class='text-charcoal dark:text-gray-100'>{summaryTargetLabel(searchedQuery)}</p>
+        {searchedQuery !== '' && (
+          <button type='button' class={buttonClass} onClick={handleClearSearch}>
+            検索結果を消して期間の要約に戻る
+          </button>
+        )}
         <p class={noticeClass}>
-          検索したあとに押すと、その検索の結果を要約します。検索していないときは、開始から終了までの期間を要約します。期間は
-          7 日以内です。
+          検索したあとに押すと、その検索の結果を要約します。期間の要約に戻すには、検索結果を消してください。期間は 7
+          日以内です。
         </p>
         <button type='button' class={buttonClass} disabled={isSummarizing} onClick={handleSummarize}>
           {isSummarizing ? '要約しています' : '要約する'}

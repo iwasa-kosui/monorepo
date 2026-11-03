@@ -86,6 +86,11 @@ export const buildSummaryRequest = ({ query, since, until }: SummaryRequestInput
   return { ok: true, body: { since: sinceIso, until: untilIso } };
 };
 
+export const summaryTargetLabel = (searchedQuery: string): string => {
+  const q = searchedQuery.trim();
+  return q === '' ? '開始から終了までの期間を要約します' : `検索語『${q}』の結果を要約します`;
+};
+
 export const SUMMARY_DAILY_LIMIT = 20;
 
 const jstDateTime = new Intl.DateTimeFormat('ja-JP', {
