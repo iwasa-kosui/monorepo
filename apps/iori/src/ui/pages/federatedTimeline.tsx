@@ -174,7 +174,7 @@ const FederatedTimelinePage = () => {
 
       {items.length > 0
         ? (
-          items.map((status) => <PostView key={status.id} status={status} />)
+          items.map((status) => <PostView key={status.id} status={status} isLoggedIn={isLoggedIn} />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>

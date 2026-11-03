@@ -1,7 +1,9 @@
+import { containsKana } from '../../domain/aiTranslation/isJapanese.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
+import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import type { Account, MediaAttachment, PreviewCard, Status } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
 import { sanitizeStatusContent } from './sanitizeContent.ts';
@@ -80,6 +82,12 @@ const toPostUrls = (
   };
 };
 
+const toLanguage = (html: string): string | null => {
+  const text = htmlToPlainText(html, Number.MAX_SAFE_INTEGER);
+  if (text === '') return null;
+  return containsKana(text) ? 'ja' : 'und';
+};
+
 const toVisibility = (post: PostWithAuthor): Visibility =>
   post.type === 'local' ? 'public' : post.visibility ?? 'private';
 
@@ -107,7 +115,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     reblog: null,
     poll: null,
     card: toCard(post.linkPreviews, options.baseUrl),
-    language: null,
+    language: toLanguage(post.content),
     edited_at: null,
     favourited: post.liked,
     reblogged: post.reposted,
@@ -167,7 +175,7 @@ export const toReblogStatus = (
   reblog: options.reblog,
   poll: null,
   card: null,
-  language: null,
+  language: options.reblog.language,
   edited_at: null,
   favourited: options.reblog.favourited,
   reblogged: options.reblog.reblogged,

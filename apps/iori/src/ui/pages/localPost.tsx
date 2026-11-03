@@ -228,6 +228,7 @@ const LocalPostPage = () => {
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}
@@ -241,6 +242,7 @@ const LocalPostPage = () => {
                 onDelete={isLoggedIn ? handleDelete : undefined}
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
+                isLoggedIn={isLoggedIn}
               />
             </div>
           )}
@@ -254,6 +256,7 @@ const LocalPostPage = () => {
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}

@@ -31,6 +31,7 @@ import {
   searchAccount,
   searchStatuses,
   summarizeTimeline,
+  translate,
   unfavourite,
   unfollow,
   unmute,
@@ -518,6 +519,35 @@ describe('mastodon client requests', () => {
     expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
     expect(JSON.parse(String(init.body))).toEqual({ q: '猫', since: '2026-01-01T00:00:00.000Z' });
     expect(result).toEqual(payload);
+  });
+
+  it('posts a translate request for the status and returns the Translation', async () => {
+    const payload = {
+      content: '<p>こんにちは</p>',
+      spoiler_text: '',
+      language: 'ja',
+      detected_source_language: 'en',
+      provider: 'Workers AI (Llama 4 Scout)',
+      media_attachments: [],
+      poll: null,
+    };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await translate('post/1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/statuses/post%2F1/translate');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('carries the status of a failed translate request', async () => {
+    stubFetch(jsonResponse({ error: 'Service Unavailable' }, { status: 503 }));
+
+    const error = await translate('post-1').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(503);
   });
 
   it('carries Retry-After on a 429 from the summary request', async () => {
