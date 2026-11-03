@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, notInArray, or, sql } from 'd
 
 import type { TimelineLinkTrendsResolverByUserId } from '../../../domain/digest/digestMaterial.ts';
 import type { IoriD1Db } from '../client.ts';
-import { followsTable, linkPreviewsTable, localActorsTable, mutesTable, postsTable } from '../schema.ts';
+import { followsTable, linkPreviewsTable, localActorsTable, mutesTable, postsTable, remotePostsTable } from '../schema.ts';
 
 export const createD1TimelineLinkTrendsResolverByUserId = (
   db: IoriD1Db,
@@ -23,9 +23,11 @@ export const createD1TimelineLinkTrendsResolverByUserId = (
     })
       .from(linkPreviewsTable)
       .innerJoin(postsTable, eq(linkPreviewsTable.postId, postsTable.postId))
+      .leftJoin(remotePostsTable, eq(remotePostsTable.postId, postsTable.postId))
       .where(and(
         gte(linkPreviewsTable.createdAt, new Date(createdSince)),
         isNull(postsTable.deletedAt),
+        or(isNull(remotePostsTable.visibility), notInArray(remotePostsTable.visibility, ['private', 'direct'])),
         or(inArray(postsTable.actorId, ownActorIds), inArray(postsTable.actorId, followingActorIds)),
         notInArray(postsTable.actorId, mutedActorIds),
       ))
