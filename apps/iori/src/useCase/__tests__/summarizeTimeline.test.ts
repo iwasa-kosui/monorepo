@@ -439,7 +439,12 @@ describe('SummarizeTimelineUseCase', () => {
 
     const result = await expectOk(t.summarize(periodOf(since, until)));
 
-    expect(t.periodResolve).toHaveBeenCalledWith({ actorIds: [t.me.id, t.followed.id], since, until });
+    expect(t.periodResolve).toHaveBeenCalledWith({
+      actorIds: [t.me.id, t.followed.id],
+      currentActorId: t.me.id,
+      since,
+      until,
+    });
     expect(t.searchRun).not.toHaveBeenCalled();
     expect(result.usedPostCount).toBe(1);
     expect(t.postsResolve).toHaveBeenCalledWith({ postIds: expect.any(Array), currentActorId: t.me.id });

@@ -170,6 +170,7 @@ const create = ({
           .filter((id) => !mutedActorIdSet.has(id));
         const postIds = await homePostsResolverByPeriod.resolve({
           actorIds,
+          currentActorId: actor.id,
           since: target.since,
           until: target.until,
         });

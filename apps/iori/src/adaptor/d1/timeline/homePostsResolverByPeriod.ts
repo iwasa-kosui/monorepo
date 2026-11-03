@@ -8,10 +8,11 @@ import {
 } from '../../../domain/timeline/homePostsResolverByPeriod.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
+import { visibleToViewer } from '../post/visibleToViewer.ts';
 import { postsTable } from '../schema.ts';
 
 export const createD1HomePostsResolverByPeriod = (db: IoriD1Db): HomePostsResolverByPeriod => ({
-  resolve: async ({ actorIds, since, until }) => {
+  resolve: async ({ actorIds, currentActorId, since, until }) => {
     if (actorIds.length === 0) {
       return RA.ok([]);
     }
@@ -20,6 +21,7 @@ export const createD1HomePostsResolverByPeriod = (db: IoriD1Db): HomePostsResolv
       .from(postsTable)
       .where(and(
         isNull(postsTable.deletedAt),
+        visibleToViewer({ currentActorId, onlyVisibleToViewer: true }),
         inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         gte(postsTable.createdAt, new Date(since)),
         lt(postsTable.createdAt, new Date(until)),

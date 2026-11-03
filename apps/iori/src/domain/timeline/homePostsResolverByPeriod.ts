@@ -8,6 +8,7 @@ export const HOME_POSTS_BY_PERIOD_LIMIT = 300;
 export type HomePostsResolverByPeriod = Agg.Resolver<
   {
     actorIds: ReadonlyArray<ActorId>;
+    currentActorId: ActorId;
     since: Instant;
     until: Instant;
   },

@@ -6,7 +6,7 @@ import { HOME_POSTS_BY_PERIOD_LIMIT } from '../../../domain/timeline/homePostsRe
 import { UserId } from '../../../domain/user/userId.ts';
 import { createD1AiSummaryUsageRecorder } from '../aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1HomePostsResolverByPeriod } from '../timeline/homePostsResolverByPeriod.ts';
-import { createMastodonSeed } from './mastodonSeed.ts';
+import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -28,12 +28,14 @@ describe('createD1HomePostsResolverByPeriod', () => {
     const me = seed.addLocalActor('kosui');
     const alice = seed.addRemoteActor('alice');
     const bob = seed.addRemoteActor('bob');
+    seed.addFollow(me.actorId, alice.actorId);
     const mine = seed.addLocalPost(me, 1_000);
     const fromAlice = seed.addRemotePost(alice, 3_000);
     seed.addRemotePost(bob, 2_000);
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId), ActorId.orThrow(alice.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
@@ -48,6 +50,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
@@ -68,6 +71,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(alice.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
@@ -83,6 +87,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
@@ -100,6 +105,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(1_000),
       until: instant(2_000),
     });
@@ -116,6 +122,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
@@ -131,11 +138,36 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(10_000),
     });
 
     expect(result).toEqual({ ok: true, val: [second.postId, first.postId] });
+  });
+
+  it('宛先外の direct は返さず、宛先の direct は返す', async () => {
+    const { db, seed } = setup();
+    const me = seed.addLocalActor('kosui');
+    const alice = seed.addRemoteActor('alice');
+    seed.addFollow(me.actorId, alice.actorId);
+    const toMe = seed.addRemotePost(alice, 1_000, {
+      visibility: 'direct',
+      recipientActorUris: [`${SEED_ORIGIN}/users/kosui`],
+    });
+    seed.addRemotePost(alice, 2_000, {
+      visibility: 'direct',
+      recipientActorUris: ['https://remote.example/users/other'],
+    });
+
+    const result = await createD1HomePostsResolverByPeriod(db).resolve({
+      actorIds: [ActorId.orThrow(me.actorId), ActorId.orThrow(alice.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
+      since: instant(0),
+      until: instant(10_000),
+    });
+
+    expect(result).toEqual({ ok: true, val: [toMe.postId] });
   });
 
   it('最大 300 件の新しい投稿だけを返す', async () => {
@@ -148,6 +180,7 @@ describe('createD1HomePostsResolverByPeriod', () => {
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
       since: instant(0),
       until: instant(100_000),
     });
