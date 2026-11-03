@@ -1,9 +1,6 @@
-import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-
-const client = hc<APIRouterType>('/api');
+import { createStatus, failureMessage } from '../api/mastodonClient.ts';
 
 export type UseReplyDialogReturn = Readonly<{
   replyingToPostId: string | null;
@@ -40,24 +37,14 @@ export const useReplyDialog = ({
     async (postId: string, content: string): Promise<boolean> => {
       setIsSendingReply(true);
       try {
-        const res = await client.v1.reply.$post({
-          json: { postId, content },
-        });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          setReplyingToPostId(null);
-          setReplyContent('');
-          onReplySent?.();
-          return true;
-        }
-        if ('error' in result) {
-          console.error('Failed to send reply:', result.error);
-          alert(`Failed to send reply: ${result.error}`);
-        }
-        return false;
+        await createStatus({ status: content, in_reply_to_id: postId, content_type: 'text/markdown' });
+        setReplyingToPostId(null);
+        setReplyContent('');
+        onReplySent?.();
+        return true;
       } catch (error) {
         console.error('Failed to send reply:', error);
-        alert('Failed to send reply. Please try again.');
+        alert(failureMessage('send reply', error));
         return false;
       } finally {
         setIsSendingReply(false);

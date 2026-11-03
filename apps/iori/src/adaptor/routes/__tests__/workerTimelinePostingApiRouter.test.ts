@@ -9,13 +9,11 @@ import { PostId } from '../../../domain/post/postId.ts';
 import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { Username } from '../../../domain/user/username.ts';
-import { createMockRequestContext } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
-import type { CreatePostUseCase } from '../../../useCase/createPost.ts';
 import type { GetTimelineUseCase } from '../../../useCase/getTimeline.ts';
 import { createWorkerTimelinePostingApiRouter } from '../workerTimelinePostingApiRouter.ts';
 
 describe('createWorkerTimelinePostingApiRouter', () => {
-  it('serves health, home timeline, and post creation through the Worker app', async () => {
+  it('serves health and home timeline through the Worker app', async () => {
     const user = { id: UserId.generate(), username: Username.orThrow('kosui') };
     const actor: Actor = {
       id: ActorId.generate(),
@@ -57,9 +55,6 @@ describe('createWorkerTimelinePostingApiRouter', () => {
           }],
         }),
     };
-    const createPostUseCase: CreatePostUseCase = {
-      run: async () => RA.ok({ post, user }),
-    };
     const app = createIoriApp({
       federationMiddleware: undefined,
       registerRoutes: (router) => {
@@ -67,8 +62,6 @@ describe('createWorkerTimelinePostingApiRouter', () => {
           '/api',
           createWorkerTimelinePostingApiRouter({
             getTimelineUseCase,
-            createPostUseCase,
-            createContext: () => createMockRequestContext(),
           }),
         );
       },
@@ -82,18 +75,12 @@ describe('createWorkerTimelinePostingApiRouter', () => {
     const health = await app.request('https://worker.test/health');
     const home = await app.request('https://worker.test/');
     const timeline = await app.request('https://worker.test/api/v1/home', { headers: { Cookie: cookie } });
-    const created = await app.request('https://worker.test/api/v1/posts', {
-      method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: 'Created from Worker', imageUrls: [] }),
-    });
 
     expect(await health.text()).toBe('OK');
     expect(home.headers.get('content-type')).toContain('text/html');
     await expect(timeline.json()).resolves.toMatchObject({
       timelineItems: [{ post: { content: '<p>Timeline post</p>' } }],
     });
-    await expect(created.json()).resolves.toEqual({ success: true });
   });
 
   it('renders sanitized Markdown preview without a session', async () => {
@@ -104,8 +91,6 @@ describe('createWorkerTimelinePostingApiRouter', () => {
           '/api',
           createWorkerTimelinePostingApiRouter({
             getTimelineUseCase: { run: async () => RA.ok({} as never) },
-            createPostUseCase: { run: async () => RA.ok({} as never) },
-            createContext: () => createMockRequestContext(),
           }),
         );
       },

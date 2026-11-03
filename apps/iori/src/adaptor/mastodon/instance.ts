@@ -16,8 +16,10 @@ const languages = (): string[] => ['ja', 'en'];
 
 const toVersion = (ioriVersion: string): string => `4.3.0 (compatible; iori ${ioriVersion})`;
 
+export const MAX_STATUS_CHARACTERS = 10000;
+
 const statuses = {
-  max_characters: 10000,
+  max_characters: MAX_STATUS_CHARACTERS,
   max_media_attachments: 4,
   characters_reserved_per_url: 23,
 } as const;
@@ -88,4 +90,5 @@ export const buildInstanceV1 = (props: BuildInstanceProps): InstanceV1 => ({
   },
   contact_account: props.contactAccount,
   rules: [],
+  pleroma: { metadata: { post_formats: ['text/plain', 'text/markdown'] } },
 });

@@ -173,6 +173,7 @@ export const StatusSchema = z.object({
   muted: z.boolean(),
   bookmarked: z.boolean(),
   pinned: z.boolean(),
+  text: z.string().optional(),
   iori: IoriStatusExtensionSchema.optional(),
 });
 export type Status = z.infer<typeof StatusSchema>;
@@ -385,6 +386,11 @@ export const InstanceV1Schema = z.object({
   }),
   contact_account: AccountSchema.nullable(),
   rules: z.array(InstanceRuleSchema),
+  pleroma: z.object({
+    metadata: z.object({
+      post_formats: z.array(z.string()),
+    }),
+  }),
 });
 export type InstanceV1 = z.infer<typeof InstanceV1Schema>;
 

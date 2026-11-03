@@ -391,6 +391,14 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
     });
 
+    it('v1 に pleroma.metadata.post_formats を足し、version は Mastodon 互換のままにする', async () => {
+      const response = await setup().request('/api/v1/instance');
+
+      const body = InstanceV1Schema.parse(await response.json());
+      expect(body.pleroma).toEqual({ metadata: { post_formats: ['text/plain', 'text/markdown'] } });
+      expect(body.version).toMatch(/^4\.3\.0 \(compatible; iori \S+\)$/);
+    });
+
     it('連絡先の利用者がいなければ contact_account を null にする', async () => {
       const h = setup();
 

@@ -189,8 +189,6 @@ export default {
           '/api',
           createWorkerTimelinePostingApiRouter({
             getTimelineUseCase: runtime.timeline.getTimelineUseCase,
-            createPostUseCase: runtime.posting.createPostUseCase,
-            createContext: (timelineRequest) => runtime.federation.createContext(timelineRequest, undefined),
           }),
         );
         app.route(
@@ -246,7 +244,15 @@ export default {
           runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
-          createWorkerMastodonStatusesRouter({ ...runtime.mastodon, ...runtime.socialActions, authn, createContext }),
+          createWorkerMastodonStatusesRouter({
+            ...runtime.mastodon,
+            ...runtime.socialActions,
+            createPostUseCase: runtime.posting.createPostUseCase,
+            sendReplyUseCase: runtime.core.sendReplyUseCase,
+            deletePostUseCase: runtime.core.deletePostUseCase,
+            authn,
+            createContext,
+          }),
         );
         app.route(
           '/api',

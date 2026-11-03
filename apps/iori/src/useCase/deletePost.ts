@@ -8,17 +8,17 @@ import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    postId: PostId;
+    ctx: RequestContext<unknown>;
+  }>;
 
 const Ok = Schema.create(
   z.object({
@@ -64,15 +64,13 @@ const create = ({
   articleDeletedStore,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       RA.andBind('post', async ({ postId }) => {
         const post = await postResolver.resolve(postId);

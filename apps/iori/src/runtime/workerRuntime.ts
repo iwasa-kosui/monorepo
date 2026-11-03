@@ -354,6 +354,7 @@ export const createWorkerRuntimePorts = async (
         mediaUploadCreatedStore: createD1MediaUploadCreatedStore(db),
         origin: env.ORIGIN,
       }),
+      mediaUploadResolver,
       getMediaUploadUseCase: GetMediaUploadUseCase.create({ mediaUploadResolver }),
       updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase.create({
         mediaUploadResolver,
