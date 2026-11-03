@@ -54,7 +54,7 @@ describe('createWorkerPageFallback', () => {
     expect(loggedIn).toContain('<aside class="hidden md:flex fixed left-0 top-0 h-full flex-col p-4">');
     expect(loggedIn).toContain('md:hidden fixed bottom-0 left-0 right-0');
     expect(loggedIn).toContain('id="post-modal"');
-    expect(loggedIn).toContain('pb-16 md:pb-0 md:px-16');
+    expect(loggedIn).toContain('pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16');
     expect(loggedOut).not.toContain('<aside');
     expect(loggedOut).not.toContain('md:hidden fixed bottom-0');
     expect(loggedOut).not.toContain('post-modal');
