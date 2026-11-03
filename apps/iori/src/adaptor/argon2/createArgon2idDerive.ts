@@ -47,8 +47,11 @@ export const createArgon2idDerive = ({ loadModule, setup = setupWasm }: Deps): A
     }
   };
 
-  return async (params) => {
-    const computeHash = await setupForSimdSupport();
-    return computeHash(params);
+  let queue: Promise<unknown> = Promise.resolve();
+
+  return (params) => {
+    const run = queue.then(async () => (await setupForSimdSupport())(params));
+    queue = run.catch(() => undefined);
+    return run;
   };
 };

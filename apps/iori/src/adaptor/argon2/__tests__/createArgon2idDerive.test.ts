@@ -83,4 +83,41 @@ describe('createArgon2idDerive', () => {
 
     expect(setup).toHaveBeenCalledTimes(2);
   });
+
+  it('starts the next setup only after the previous computeHash has finished', async () => {
+    const realSetup = (await import('argon2id/lib/setup.js')).default;
+    const events: string[] = [];
+    let calls = 0;
+    const setup = vi.fn<typeof realSetup>(async (...args) => {
+      const id = ++calls;
+      events.push(`setup-${id}`);
+      const computeHash = await realSetup(...args);
+      return (hashParams) => {
+        const tag = computeHash(hashParams);
+        events.push(`compute-${id}`);
+        return tag;
+      };
+    });
+    const derive = createArgon2idDerive({ loadModule: compileWasm, setup });
+
+    const results = await Promise.all([derive(params), derive(params)]);
+
+    expect(events).toEqual(['setup-1', 'compute-1', 'setup-2', 'compute-2']);
+    expect(results[0]).toEqual(await nobleArgon2idDerive(params));
+    expect(results[1]).toEqual(await nobleArgon2idDerive(params));
+  });
+
+  it('runs a concurrent call even when the previous call rejected', async () => {
+    const realSetup = (await import('argon2id/lib/setup.js')).default;
+    const setup = vi.fn<typeof realSetup>()
+      .mockRejectedValueOnce(new Error('setup failed'))
+      .mockImplementation(realSetup);
+    const derive = createArgon2idDerive({ loadModule: compileWasm, setup });
+
+    const first = derive(params);
+    const second = derive(params);
+
+    await expect(first).rejects.toThrow('setup failed');
+    await expect(second).resolves.toEqual(await nobleArgon2idDerive(params));
+  });
 });
