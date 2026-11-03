@@ -95,6 +95,7 @@ import { createD1TimelineItemsResolverByActorIds } from '../adaptor/d1/timeline/
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
+import { createD1UserWithLocalActorResolverByUsername } from '../adaptor/d1/user/userWithLocalActorResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
@@ -476,8 +477,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
       getUserPostsUseCase: createWorkerGetUserPostsUseCase({
-        userResolverByUsername: createD1UserResolverByUsername(db),
-        actorResolverByUserId,
+        userWithLocalActorResolverByUsername: createD1UserWithLocalActorResolverByUsername(db),
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
         actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(db),
         postsResolverByActorIds: createD1PostsResolverByActorIds(db, env.ORIGIN),

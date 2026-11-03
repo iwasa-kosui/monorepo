@@ -12,13 +12,10 @@ import {
   parseInitialMigrationTables,
 } from '../deploy-reviewed-worker-version.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
-import { targetIdentity } from '../migration-target-contract.mjs';
 import { OPERATION_STAGES, operationFailureLines } from '../operation-diagnostics.mjs';
-import { readSealedMigrationTarget } from '../read-sealed-migration-target.mjs';
 import { createSourceSshAdapter } from '../source-control-ssh.mjs';
 import { createTargetControlPlane } from '../target-control-plane.mjs';
 import { createFixtureDirectory } from './fixtureTemp.ts';
-import { expectedTargetFixture, preparationFixture } from './migrationTargetFixture.js';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn() }));
 vi.mock('../temporary-worker-config.mjs', () => ({ createDeploymentWorkerConfig: mocks.config }));
@@ -36,14 +33,14 @@ const operationFailure = (reason?: string, details?: unknown, message = 'fixture
   );
 it('pins the operation stage vocabulary', () => {
   expect(OPERATION_STAGES).toEqual([
-    'verify-import',
-    'rehearse-migration',
-    'migrate-data',
     'deploy-worker-before',
     'deploy-worker-resolve',
     'deploy-worker-migrate',
     'deploy-worker-deploy',
     'deploy-worker-after',
+    'put-worker-secrets',
+    'put-worker-secrets-read',
+    'put-worker-secrets-put',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });
@@ -57,13 +54,13 @@ it('keeps every operation stage line within the public relay pattern and the wor
 });
 it('prints the allowed details first and the classification last', () => {
   const lines = operationFailureLines(
-    'verify-import',
+    'deploy-worker-before',
     operationFailure('state-mismatch', ['resource-consumer-script', 'resource-d1']),
   );
   expect(lines).toEqual([
-    operationLine('verify-import', 'resource-consumer-script'),
-    operationLine('verify-import', 'resource-d1'),
-    operationLine('verify-import', 'state-mismatch'),
+    operationLine('deploy-worker-before', 'resource-consumer-script'),
+    operationLine('deploy-worker-before', 'resource-d1'),
+    operationLine('deploy-worker-before', 'state-mismatch'),
   ]);
   expect(lines.join('\n')).not.toContain('fixture-secret-message');
 });
@@ -80,7 +77,7 @@ it('removes duplicate details and keeps at most eight', () => {
     'resource-dlq-attached',
     'resource-consumer-count',
   ];
-  const lines = operationFailureLines('migrate-data', operationFailure('state-mismatch', details));
+  const lines = operationFailureLines('deploy-worker-migrate', operationFailure('state-mismatch', details));
   expect(lines).toHaveLength(9);
   expect(lines.slice(0, 8).map(line => line.split('reason=')[1])).toEqual([
     'resource-d1',
@@ -92,38 +89,41 @@ it('removes duplicate details and keeps at most eight', () => {
     'resource-queue-created',
     'resource-dlq-attached',
   ]);
-  expect(lines[8]).toBe(operationLine('migrate-data', 'state-mismatch'));
+  expect(lines[8]).toBe(operationLine('deploy-worker-migrate', 'state-mismatch'));
 });
 it('drops details outside the allowed vocabulary', () => {
   const lines = operationFailureLines(
-    'migrate-data',
+    'deploy-worker-migrate',
     operationFailure('mismatch', ['https://secret.invalid', 'Resource D1', 7, null, 'resource-d1']),
   );
-  expect(lines).toEqual([operationLine('migrate-data', 'resource-d1'), operationLine('migrate-data', 'mismatch')]);
-  expect(operationFailureLines('migrate-data', operationFailure('mismatch', 'resource-d1'))).toEqual([
-    operationLine('migrate-data', 'mismatch'),
+  expect(lines).toEqual([
+    operationLine('deploy-worker-migrate', 'resource-d1'),
+    operationLine('deploy-worker-migrate', 'mismatch'),
+  ]);
+  expect(operationFailureLines('deploy-worker-migrate', operationFailure('mismatch', 'resource-d1'))).toEqual([
+    operationLine('deploy-worker-migrate', 'mismatch'),
   ]);
 });
 it('classifies by diagnostic reason, then abort names, then unclassified', () => {
-  expect(operationFailureLines('rehearse-migration', operationFailure('plan-rejected'))).toEqual([
-    operationLine('rehearse-migration', 'plan-rejected'),
+  expect(operationFailureLines('deploy-worker-resolve', operationFailure('plan-rejected'))).toEqual([
+    operationLine('deploy-worker-resolve', 'plan-rejected'),
   ]);
-  expect(operationFailureLines('rehearse-migration', operationFailure('https://secret.invalid'))).toEqual([
-    operationLine('rehearse-migration', 'unclassified'),
+  expect(operationFailureLines('deploy-worker-resolve', operationFailure('https://secret.invalid'))).toEqual([
+    operationLine('deploy-worker-resolve', 'unclassified'),
   ]);
   for (const name of ['AbortError', 'TimeoutError']) {
-    expect(operationFailureLines('rehearse-migration', Object.assign(new Error('x'), { name }))).toEqual([
-      operationLine('rehearse-migration', 'aborted'),
+    expect(operationFailureLines('deploy-worker-resolve', Object.assign(new Error('x'), { name }))).toEqual([
+      operationLine('deploy-worker-resolve', 'aborted'),
     ]);
   }
-  expect(operationFailureLines('rehearse-migration', new Error('x'))).toEqual([
-    operationLine('rehearse-migration', 'unclassified'),
+  expect(operationFailureLines('deploy-worker-resolve', new Error('x'))).toEqual([
+    operationLine('deploy-worker-resolve', 'unclassified'),
   ]);
-  expect(operationFailureLines('rehearse-migration', undefined)).toEqual([
-    operationLine('rehearse-migration', 'unclassified'),
+  expect(operationFailureLines('deploy-worker-resolve', undefined)).toEqual([
+    operationLine('deploy-worker-resolve', 'unclassified'),
   ]);
-  expect(operationFailureLines('rehearse-migration', 'text')).toEqual([
-    operationLine('rehearse-migration', 'unclassified'),
+  expect(operationFailureLines('deploy-worker-resolve', 'text')).toEqual([
+    operationLine('deploy-worker-resolve', 'unclassified'),
   ]);
 });
 it('uses stage=unclassified for a stage outside the vocabulary', () => {
@@ -136,19 +136,21 @@ it('uses stage=unclassified for a stage outside the vocabulary', () => {
 it('reads the first inner error of an AggregateError that has no diagnostic', () => {
   const inner = operationFailure('state-mismatch', ['resource-consumer-script']);
   const aggregate = new AggregateError([inner, new Error('resume')], 'fixture-secret-message');
-  expect(operationFailureLines('rehearse-migration', aggregate)).toEqual([
-    operationLine('rehearse-migration', 'resource-consumer-script'),
-    operationLine('rehearse-migration', 'state-mismatch'),
+  expect(operationFailureLines('deploy-worker-resolve', aggregate)).toEqual([
+    operationLine('deploy-worker-resolve', 'resource-consumer-script'),
+    operationLine('deploy-worker-resolve', 'state-mismatch'),
   ]);
   const aborted = new AggregateError([Object.assign(new Error('x'), { name: 'AbortError' })], 'x');
-  expect(operationFailureLines('rehearse-migration', aborted)).toEqual([
-    operationLine('rehearse-migration', 'aborted'),
+  expect(operationFailureLines('deploy-worker-resolve', aborted)).toEqual([
+    operationLine('deploy-worker-resolve', 'aborted'),
   ]);
-  expect(operationFailureLines('rehearse-migration', new AggregateError([], 'x'))).toEqual([
-    operationLine('rehearse-migration', 'unclassified'),
+  expect(operationFailureLines('deploy-worker-resolve', new AggregateError([], 'x'))).toEqual([
+    operationLine('deploy-worker-resolve', 'unclassified'),
   ]);
   const own = Object.assign(new AggregateError([inner], 'x'), { diagnostic: { reason: 'mismatch' } });
-  expect(operationFailureLines('rehearse-migration', own)).toEqual([operationLine('rehearse-migration', 'mismatch')]);
+  expect(operationFailureLines('deploy-worker-resolve', own)).toEqual([
+    operationLine('deploy-worker-resolve', 'mismatch'),
+  ]);
 });
 const sshOptions = async () => {
   const root = await createFixtureDirectory('iori-operation-ssh-');
@@ -186,7 +188,9 @@ it.each([
 ])('prints the source word of a real adapter failure that ends with exit code %d', async (code, reason) => {
   const adapter = await createSourceSshAdapter(await sshOptions(), { spawnProcess: exitingSpawn(code) as never });
   const failure = await adapter.freeze().catch((error: unknown) => error);
-  expect(operationFailureLines('migrate-data', failure)).toEqual([operationLine('migrate-data', reason)]);
+  expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
+    operationLine('deploy-worker-migrate', reason),
+  ]);
 });
 it.each([
   ['{"ok":false,"error":"control_rejected"}\n', 'rejected'],
@@ -196,7 +200,9 @@ it.each([
     spawnProcess: exitingSpawn(1, stdout) as never,
   });
   const failure = await adapter.freeze().catch((error: unknown) => error);
-  expect(operationFailureLines('migrate-data', failure)).toEqual([operationLine('migrate-data', reason)]);
+  expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
+    operationLine('deploy-worker-migrate', reason),
+  ]);
 });
 const identity = createTargetIdentity({
   environment: 'staging',
@@ -246,9 +252,9 @@ it('prints the consumer script detail and state-mismatch of a real readResources
     dlqId: 'dlq-id',
     consumerAttached: true,
   }).catch((error: unknown) => error);
-  expect(operationFailureLines('verify-import', failure)).toEqual([
-    operationLine('verify-import', 'resource-consumer-script'),
-    operationLine('verify-import', 'state-mismatch'),
+  expect(operationFailureLines('deploy-worker-before', failure)).toEqual([
+    operationLine('deploy-worker-before', 'resource-consumer-script'),
+    operationLine('deploy-worker-before', 'state-mismatch'),
   ]);
 });
 it('prints deploy-failed for a real deployment that the command reports as failed', async () => {
@@ -583,7 +589,7 @@ INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
     },
   );
 });
-it('prints config-invalid for the configuration messages of the four operation scripts', () => {
+it('prints config-invalid for the configuration messages of the two operation scripts', () => {
   for (
     const message of [
       'Independent expected target is required.',
@@ -592,68 +598,8 @@ it('prints config-invalid for the configuration messages of the four operation s
       'Invalid zone.',
     ]
   ) {
-    expect(operationFailureLines('migrate-data', new Error(message))).toEqual([
-      operationLine('migrate-data', 'config-invalid'),
+    expect(operationFailureLines('deploy-worker-migrate', new Error(message))).toEqual([
+      operationLine('deploy-worker-migrate', 'config-invalid'),
     ]);
   }
-});
-describe('a real readSealedMigrationTarget failure', () => {
-  const target = expectedTargetFixture();
-  const sealedIdentity = targetIdentity(target);
-  const readbackResponses = (consumerId: string): Record<string, unknown> => ({
-    '/d1/database/db': { uuid: 'db', name: sealedIdentity.names.d1 },
-    '/storage/kv/namespaces/kv': { id: 'kv', title: sealedIdentity.names.kv },
-    [`/r2/buckets/${sealedIdentity.names.uploads}`]: { name: sealedIdentity.names.uploads },
-    [`/r2/buckets/${sealedIdentity.names.transfer}`]: { name: sealedIdentity.names.transfer },
-    [`/r2/buckets/${sealedIdentity.names.transfer}/domains/managed`]: { enabled: false },
-    '/queues/queue': queueResponse('queue', sealedIdentity.names.queue, [{
-      type: 'worker',
-      script: sealedIdentity.workerName,
-      dead_letter_queue: sealedIdentity.names.dlq,
-      consumer_id: consumerId,
-      settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
-    }]),
-    '/queues/dlq': queueResponse('dlq', sealedIdentity.names.dlq, []),
-  });
-  const read = (record: unknown, consumerId = 'consumer') =>
-    readSealedMigrationTarget({
-      expectedTarget: target,
-      record,
-      token: 'private-token',
-      zoneId: 'b'.repeat(32),
-      fetchRequest: (async (url: URL) => {
-        const result = readbackResponses(consumerId)[
-          url.pathname.replace(`/client/v4/accounts/${sealedIdentity.accountId}`, '')
-        ];
-        return Response.json(result === undefined ? { success: false } : { success: true, result });
-      }) as never,
-    }).catch((error: unknown) => error);
-  it('prints resource-consumer-id and state-mismatch for a consumer id that differs from the record', async () => {
-    const failure = await read(preparationFixture(), 'other-consumer');
-    expect(failure).toHaveProperty('message', 'Prepared consumer mismatch.');
-    expect(operationFailureLines('verify-import', failure)).toEqual([
-      operationLine('verify-import', 'resource-consumer-id'),
-      operationLine('verify-import', 'state-mismatch'),
-    ]);
-  });
-  it('prints identity-mismatch for a record that differs from the expected target', async () => {
-    const record = preparationFixture();
-    record.identity.run_id = 'production-run-002';
-    const failure = await read(record);
-    expect(failure).toHaveProperty('message', 'Migration target evidence is invalid.');
-    expect(operationFailureLines('verify-import', failure)).toEqual([
-      operationLine('verify-import', 'identity-mismatch'),
-    ]);
-  });
-  it('prints config-invalid for a missing token', async () => {
-    const failure = await readSealedMigrationTarget({
-      expectedTarget: target,
-      record: preparationFixture(),
-      token: '',
-      zoneId: 'b'.repeat(32),
-    }).catch((error: unknown) => error);
-    expect(operationFailureLines('verify-import', failure)).toEqual([
-      operationLine('verify-import', 'config-invalid'),
-    ]);
-  });
 });

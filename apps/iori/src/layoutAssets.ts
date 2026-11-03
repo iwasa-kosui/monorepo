@@ -116,27 +116,26 @@ export const layoutStyle = `
             .bg-blob {
               position: absolute;
               border-radius: 50%;
-              filter: blur(80px);
               opacity: 0.35;
             }
             .bg-blob-1 {
               width: 400px;
               height: 400px;
-              background: #D49A82;
+              background: radial-gradient(circle, #D49A82 0%, transparent 70%);
               top: -100px;
               right: -100px;
             }
             .bg-blob-2 {
               width: 300px;
               height: 300px;
-              background: #D4C4A8;
+              background: radial-gradient(circle, #D4C4A8 0%, transparent 70%);
               bottom: 10%;
               left: -50px;
             }
             .bg-blob-3 {
               width: 200px;
               height: 200px;
-              background: #8FA88B;
+              background: radial-gradient(circle, #8FA88B 0%, transparent 70%);
               bottom: 30%;
               right: 10%;
               opacity: 0.2;

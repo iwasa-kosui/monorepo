@@ -1,4 +1,4 @@
-import { appendFile, lstat, realpath, writeFile } from 'node:fs/promises';
+import { appendFile, lstat, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,15 +16,8 @@ import {
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = Object.freeze({
-  'prepare-target': 'prepare-migration-target.mjs',
-  'rehearse-migration': 'rehearse-protected-migration.mjs',
-  'migrate-data': 'execute-protected-migration.mjs',
-  'verify-import': 'restore-protected-migration.mjs',
-  'cutover-route': 'cutover-migration.mjs',
   'deploy-worker': 'deploy-active-worker.mjs',
-  'adopt-cutover-state': 'adopt-cutover-state.mjs',
-  'estimate-source': 'estimate-source.mjs',
-  'purge-rehearsal-target': 'purge-rehearsal-target.mjs',
+  'put-worker-secrets': 'worker-bindings-put.mjs',
   source: 'deploy-source.mjs',
   'resume-source': 'resume-source.mjs',
   'release-pending-freeze': 'release-pending-freeze.mjs',
@@ -81,9 +74,6 @@ export const materializeHostedValues = async env => {
     ...(env.GITHUB_EVENT_NAME === 'push'
       ? { IORI_GENERATION: generation, IORI_MIGRATION_RUN_ID: runId, IORI_MIGRATION_MAIN_SHA: migrationSha }
       : {}),
-    IORI_MIGRATION_ROOT: join(base, 'root'),
-    IORI_MIGRATION_EXPECTED_TARGET_PATH: join(base, 'config/expected-target.json'),
-    ...(operation === 'purge-rehearsal-target' ? { MAIN_SHA: migrationSha } : {}),
   };
   const put = async (input, output, name, normalize = value => value) => {
     mapped[output] = await writePrivateValue(join(base, 'keys'), name, normalize(env[input]));
@@ -92,10 +82,6 @@ export const materializeHostedValues = async env => {
   if (
     [
       'source',
-      'rehearse-migration',
-      'migrate-data',
-      'cutover-route',
-      'estimate-source',
       'resume-source',
       'release-pending-freeze',
       'restart-failed-source',
@@ -110,27 +96,10 @@ export const materializeHostedValues = async env => {
     );
     await put('IORI_SOURCE_SSH_KNOWN_HOSTS', 'IORI_SOURCE_SSH_KNOWN_HOSTS_FILE', 'source-known-hosts');
   }
-  if (['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route'].includes(operation)) {
-    await put('IORI_MIGRATION_RECEIPT_PUBLIC_KEY', 'IORI_MIGRATION_RECEIPT_PUBLIC_KEY_PATH', 'receipt-public.pem');
-  }
-  if (['rehearse-migration', 'migrate-data'].includes(operation)) {
-    await put('IORI_MIGRATION_RECEIPT_PRIVATE_KEY', 'IORI_MIGRATION_RECEIPT_PRIVATE_KEY_PATH', 'receipt-private.pem');
-  }
-  if (operation === 'migrate-data') {
-    mapped.IORI_MIGRATION_REHEARSAL_PATH = await writePrivateValue(
-      join(base, 'config'),
-      'rehearsal.json',
-      env.IORI_MIGRATION_REHEARSAL,
-    );
-    delete mapped.IORI_MIGRATION_REHEARSAL;
-  }
   for (
     const key of [
       'IORI_SOURCE_SSH_PRIVATE_KEY',
       'IORI_SOURCE_SSH_KNOWN_HOSTS',
-      'IORI_MIGRATION_RECEIPT_PUBLIC_KEY',
-      'IORI_MIGRATION_RECEIPT_PRIVATE_KEY',
-      'IORI_MIGRATION_REHEARSAL',
     ]
   ) delete mapped[key];
   return mapped;
@@ -146,32 +115,6 @@ const stoppedNoticeLine = /^IORI_NOTICE stage=release-pending-freeze stopped=1$/
 const restartPrecheckNoticeLine =
   /^IORI_NOTICE stage=restart-precheck ingress_frozen=[01] consumer_paused=[01] queue_failed=[01] drained=[01]$/;
 const restartNoticeLine = /^IORI_NOTICE stage=restart-failed-source (?:recorded|stopped|started)=1$/;
-const estimateCount = '(?:0|[1-9]\\d{0,15})';
-const exportMissingNoticeLine = new RegExp(`^IORI_NOTICE stage=export-missing-uploads count=${estimateCount}$`);
-const estimateLine = new RegExp(
-  `^IORI_ESTIMATE ${
-    [
-      'rows',
-      'upload_count',
-      'upload_duplicate_count',
-      'upload_missing_count',
-      'upload_owner_count',
-      'upload_not_regular_count',
-      'upload_too_large_count',
-      'upload_access_count',
-      'upload_other_count',
-      'upload_ext_webp_count',
-      'upload_ext_png_count',
-      'upload_ext_jpeg_count',
-      'upload_ext_gif_count',
-      'upload_failed_ext_webp_count',
-      'upload_failed_ext_png_count',
-      'upload_failed_ext_jpeg_count',
-      'upload_failed_ext_gif_count',
-      'article_count',
-    ].map((field) => `${field}=${estimateCount}`).join(' ')
-  } sample=(?:ok|insufficient) capacity=(?:ok|insufficient)$`,
-);
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -186,7 +129,6 @@ const hostedReasons = [
   ['Reviewed checkout mismatch.', 'reviewed-checkout-mismatch'],
   ['Tracked checkout is dirty.', 'reviewed-checkout-dirty'],
   ['Reviewed main changed.', 'reviewed-main-changed'],
-  ['Invalid target input.', 'target-input-invalid'],
   ['Migration target evidence is invalid.', 'identity-mismatch'],
   ['Migration command failed; outcome may be uncertain.', 'command-failed'],
   ['Migration command aborted.', 'aborted'],
@@ -202,8 +144,7 @@ const writeDiagnosticLine = async line => {
     if (
       !diagnosticLine.test(line) && !ownerNoticeLine.test(line) && !modeNoticeLine.test(line)
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
-      && !estimateLine.test(line) && !exportMissingNoticeLine.test(line) && !restartPrecheckNoticeLine.test(line)
-      && !restartNoticeLine.test(line)
+      && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
@@ -254,22 +195,8 @@ const execute = async (program, args, env, signal, timeout) => {
     await log.close();
   }
 };
-const stoppedBeforeResources = new WeakSet();
-const preparationStopped = (operation, error) => operation === 'prepare-target' && error?.exitCode === 78;
-export const executeHostedOperation = (name, scriptPath, env, signal, timeout, operation) =>
-  hostedStage(
-    name,
-    async () => {
-      try {
-        return await execute(process.execPath, [scriptPath], env, signal, timeout);
-      } catch (error) {
-        if (preparationStopped(operation, error)) stoppedBeforeResources.add(error);
-        throw error;
-      }
-    },
-    'node',
-    error => preparationStopped(operation, error) ? 'stopped-before-resources' : undefined,
-  );
+export const executeHostedOperation = (name, scriptPath, env, signal, timeout) =>
+  hostedStage(name, () => execute(process.execPath, [scriptPath], env, signal, timeout), 'node');
 export const runHostedWorkflow = async (phase, env, parentSignal) => {
   const stage = (name, operation, program) => phase === 'operate' ? hostedStage(name, operation, program) : operation();
   let selected;
@@ -302,53 +229,18 @@ export const runHostedWorkflow = async (phase, env, parentSignal) => {
     const { assertReviewedMain } = await import('./reviewed-main.mjs');
     return assertReviewedMain(selected.codeSha, { signal });
   });
-  if (
-    ['rehearse-migration', 'migrate-data', 'verify-import', 'cutover-route', 'purge-rehearsal-target'].includes(
-      selected.operation,
-    )
-  ) {
-    await stage(
-      'target-read',
-      () => execute(process.execPath, ['apps/iori/scripts/read-migration-target.mjs'], runtime, signal, remainingMs),
-      'node',
-    );
-    // The fixed target-reader output is private and is also the deployment binding authority.
-    const target = await stage('target-load', async () => {
-      const { loadExpectedTarget } = await import('./migration-target-input.mjs');
-      return loadExpectedTarget(runtime.IORI_MIGRATION_EXPECTED_TARGET_PATH);
-    });
-    const b = {
-      d1_database_id: target.resources.d1.id,
-      r2_bucket_name: target.resources.uploads.name,
-      kv_namespace_id: target.resources.kv.id,
-      queue_name: target.resources.queue.name,
-      worker_name: target.identity.worker_name,
-    };
-    const bindingPath = join(runtime.IORI_PRIVATE_DIRECTORY, 'config/worker-bindings.json');
-    await stage('binding-write', () => writeFile(bindingPath, JSON.stringify(b), { flag: 'wx', mode: 0o600 }));
-    runtime.IORI_WORKER_BINDINGS_PATH = bindingPath;
-    runtime.IORI_REQUIRE_TERRAFORM_BINDINGS = 'true';
-    await stage('main-recheck', async () => {
-      const { assertReviewedMain } = await import('./reviewed-main.mjs');
-      return assertReviewedMain(selected.codeSha, { signal });
-    });
-  }
   await executeHostedOperation(
     selected.operation === 'source' ? 'deploy-source' : 'operation',
     `apps/iori/scripts/${operations[selected.operation]}`,
     runtime,
     signal,
     remainingMs,
-    selected.operation,
   );
 };
-export const hostedFailureMessage = error =>
-  stoppedBeforeResources.has(error)
-    ? 'Target preparation stopped before creating resources; fix the inputs and rerun with the same generation.'
-    : 'Protected workflow step failed; retain remote state for reviewed recovery.';
-const emitStatus = async (success, error) => {
+export const hostedFailureMessage = () => 'Protected workflow step failed; retain remote state for reviewed recovery.';
+const emitStatus = async success => {
   const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
-  const message = success ? 'Protected workflow step completed.' : hostedFailureMessage(error);
+  const message = success ? 'Protected workflow step completed.' : hostedFailureMessage();
   if (assertWorkflowOutput(message).length) {
     process.exitCode = 1;
     return;
@@ -360,10 +252,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   withCliSignal(signal =>
     phase === 'init' ? initializeHostedWorkflow(process.env) : runHostedWorkflow(phase, process.env, signal)
   )
-    .then(() => emitStatus(true)).catch(async error => {
+    .then(() => emitStatus(true)).catch(async () => {
       process.exitCode = 1;
       try {
-        await emitStatus(false, error);
+        await emitStatus(false);
       } catch { /* keep failure without raw diagnostics */ }
     });
 }

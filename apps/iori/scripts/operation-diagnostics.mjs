@@ -2,14 +2,14 @@ import { classifyFailure } from './failure-classification.mjs';
 import { isPreparationReason } from './target-preparation-diagnostics.mjs';
 
 export const OPERATION_STAGES = Object.freeze([
-  'verify-import',
-  'rehearse-migration',
-  'migrate-data',
   'deploy-worker-before',
   'deploy-worker-resolve',
   'deploy-worker-migrate',
   'deploy-worker-deploy',
   'deploy-worker-after',
+  'put-worker-secrets',
+  'put-worker-secrets-read',
+  'put-worker-secrets-put',
 ]);
 export const operationFailureLines = (stage, error) => {
   const stageWord = OPERATION_STAGES.includes(stage) ? stage : 'unclassified';

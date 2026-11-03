@@ -9,7 +9,6 @@ export function parseWorkflowInvocation(
   generation: string;
   runId: string;
 }>;
-export function allowedMissingUploads(env: Record<string, string | undefined>): number;
 export function workflowTimeBudget(startedAt: number, now?: number): { remainingMs: number; verificationMs: number };
 export function createWorkflowDirectory(
   runnerTemp: string,

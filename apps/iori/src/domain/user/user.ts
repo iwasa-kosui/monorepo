@@ -2,6 +2,7 @@ import { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { type InferSchema, Schema } from '../../helper/schema.ts';
+import type { LocalActor } from '../actor/localActor.ts';
 import { Agg } from '../aggregate/index.ts';
 import { createUser } from './createUser.ts';
 import { UserId } from './userId.ts';
@@ -84,3 +85,8 @@ export const UserNotFoundError = {
 
 export type UserResolver = Agg.Resolver<UserId, User | undefined>;
 export type UserResolverByUsername = Agg.Resolver<Username, User | undefined>;
+export type UserWithLocalActor = Readonly<{
+  user: User;
+  actor: LocalActor | undefined;
+}>;
+export type UserWithLocalActorResolverByUsername = Agg.Resolver<Username, UserWithLocalActor | undefined>;

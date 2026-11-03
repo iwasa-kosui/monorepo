@@ -61,7 +61,7 @@ export const createWorkerPageFallback = async (
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <link rel="icon" href="/favicon.ico">
     <link rel="manifest" href="/manifest.json">
@@ -78,7 +78,7 @@ export const createWorkerPageFallback = async (
     <script type="module" src="/static/${page.entry}.js"></script>
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
-    isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''
+    isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16' : ''
   }">
     <div class="bg-decoration" aria-hidden="true">
       <div class="bg-blob bg-blob-1"></div>

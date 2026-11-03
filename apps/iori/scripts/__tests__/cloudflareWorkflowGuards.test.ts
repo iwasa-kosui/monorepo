@@ -29,19 +29,12 @@ const repositoryRoot = resolve(process.cwd(), '..', '..');
 const readWorkflow = async (name: string) =>
   parse(await readFile(resolve(repositoryRoot, '.github/workflows', name), 'utf8')) as Workflow;
 const operation = (job: Job) => job.steps.find(step => step.run?.endsWith('hosted-workflow.mjs operate'))!;
-it('runs every protected role on hosted isolated jobs after the public gate and fresh readonly verify before cutover', async () => {
+it('runs every protected role on hosted isolated jobs after the public gate', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   expect(Object.keys(workflow.jobs)).toEqual([
     'public-artifact-gate',
-    'prepare-target',
-    'estimate-source',
-    'rehearse-migration',
-    'purge-rehearsal-target',
-    'migrate-data',
-    'verify-import',
-    'cutover-route',
     'deploy-worker',
-    'adopt-cutover-state',
+    'put-worker-secrets',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -58,57 +51,13 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     if (name !== 'public-artifact-gate') {
       expect([job.needs].flat()).toContain('public-artifact-gate');
       expect(job.environment).toBe('${{ inputs.environment }}');
-      if (name === 'recover-source' || name === 'deploy-worker') {
-        expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
-      } else {
-        expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper)
-          .toBe(false);
-      }
+      expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
     }
   }
-  expect(workflow.jobs['cutover-route'].needs).toEqual(['public-artifact-gate', 'verify-import']);
-  expect(workflow.jobs['verify-import'].if).toContain('inputs.operation == \'cutover-route\'');
-  expect(operation(workflow.jobs['verify-import']).env?.IORI_OPERATION).toBe('verify-import');
 });
-it('scopes signing and write credentials to the exact roles, without mounted secret paths or public caches', async () => {
+it('keeps the deploy-worker role without SSH or Terraform credentials, mounted secret paths or public caches', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
-  const prepare = operation(workflow.jobs['prepare-target']).env!;
-  const migrate = operation(workflow.jobs['migrate-data']).env!;
-  const rehearse = operation(workflow.jobs['rehearse-migration']).env!;
-  const verify = operation(workflow.jobs['verify-import']).env!;
-  const cutover = operation(workflow.jobs['cutover-route']).env!;
   const deploy = operation(workflow.jobs['deploy-worker']).env!;
-  expect(prepare.SMOKE_QUEUE_TOKEN).toBe('${{ secrets.SMOKE_QUEUE_TOKEN }}');
-  expect(prepare.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
-  expect(migrate.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
-  expect(migrate.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe('${{ secrets.IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID }}');
-  expect(migrate.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe('${{ secrets.IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY }}');
-  expect(rehearse.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBe('${{ secrets.IORI_MIGRATION_RECEIPT_PRIVATE_KEY }}');
-  expect(rehearse.IORI_MIGRATION_REHEARSAL).toBeUndefined();
-  expect(migrate.IORI_MIGRATION_REHEARSAL).toBe('${{ secrets.IORI_MIGRATION_REHEARSAL }}');
-  expect(
-    Object.entries(workflow.jobs).filter(([, job]) =>
-      job.steps.some(step => step.env && 'IORI_MIGRATION_REHEARSAL' in step.env)
-    ).map(([name]) => name),
-  ).toEqual(['migrate-data']);
-  expect(JSON.stringify(workflow.jobs['rehearse-migration'])).not.toContain('IORI_MIGRATION_REHEARSAL');
-  expect({ ...rehearse, IORI_MIGRATION_REHEARSAL: migrate.IORI_MIGRATION_REHEARSAL }).toEqual(migrate);
-  expect({ ...workflow.jobs['rehearse-migration'], if: undefined, steps: undefined }).toEqual({
-    ...workflow.jobs['migrate-data'],
-    if: undefined,
-    steps: undefined,
-  });
-  expect(workflow.jobs['rehearse-migration'].if).toBe('inputs.operation == \'rehearse-migration\'');
-  for (const role of [verify, cutover]) {
-    expect(role.IORI_MIGRATION_RECEIPT_PRIVATE_KEY).toBeUndefined();
-    expect(role.IORI_APPLICATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
-    expect(role.IORI_MIGRATION_R2_ACCESS_KEY_ID).toContain('READ_ONLY');
-  }
-  expect(verify.CLOUDFLARE_API_TOKEN).toContain('VERIFY_API_TOKEN');
-  expect(verify.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
-  expect(verify.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
-  expect(cutover.CLOUDFLARE_API_TOKEN).toContain('CUTOVER_API_TOKEN');
-  expect(cutover.AWS_ACCESS_KEY_ID).toContain('WRITE');
   expect(deploy.VAPID_PRIVATE_KEY).toBeUndefined();
   expect(deploy.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
   expect(Object.keys(deploy).filter(key => /AWS_|TERRAFORM|IORI_MIGRATION_R2/.test(key))).toEqual([]);
@@ -147,93 +96,50 @@ it('exposes the recovery operations and inputs without a default recovery value'
   };
   const inputs = workflow.on.workflow_dispatch.inputs;
   expect(inputs.operation.options).toEqual(
-    expect.arrayContaining(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'diagnose-source']),
+    expect.arrayContaining([
+      'resume-source',
+      'release-pending-freeze',
+      'restart-failed-source',
+      'diagnose-source',
+      'reconcile-resources',
+      'replace-queue-consumer',
+    ]),
   );
   expect(inputs.recovery).toEqual({ description: expect.any(String), required: false, type: 'string' });
   expect(inputs.recovery.default).toBeUndefined();
-  expect(inputs.allowed_missing_uploads).toEqual({ description: expect.any(String), required: false, type: 'string' });
-  expect(inputs.allowed_missing_uploads.default).toBeUndefined();
   expect(inputs.migration_main_sha.required).toBe(false);
   expect(inputs.migration_run_id.required).toBe(false);
   expect(workflow.env.IORI_RECOVERY).toBe('${{ inputs.recovery }}');
-  expect(workflow.env.IORI_ALLOWED_MISSING_UPLOADS).toBe('${{ inputs.allowed_missing_uploads }}');
   expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
   expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
 });
-it('gives estimate-source only the four SSH secrets and nothing that signs, writes or reaches Cloudflare', async () => {
+it('gives put-worker-secrets only the deploy token, the account and admission identity, and the three values to put', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
-  const job = workflow.jobs['estimate-source'];
-  expect(job.if).toBe('inputs.operation == \'estimate-source\'');
-  expect(Object.keys(operation(job).env!)).toEqual([
-    'IORI_SOURCE_SSH_HOST',
-    'IORI_SOURCE_SSH_USER',
-    'IORI_SOURCE_SSH_PRIVATE_KEY',
-    'IORI_SOURCE_SSH_KNOWN_HOSTS',
-  ]);
-  for (const [key, value] of Object.entries(operation(job).env!)) expect(value).toBe(`\${{ secrets.${key} }}`);
-  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
-  expect(JSON.stringify(job)).not.toMatch(
-    /CLOUDFLARE|R2|RECEIPT|IORI_MIGRATION_REHEARSAL|TERRAFORM|ADMISSION|VAPID|read-migration-target/,
-  );
-});
-it('gives purge-rehearsal-target target read credentials and application R2 write, without SSH, signing or the rehearsal profile', async () => {
-  const workflow = await readWorkflow('deploy-iori-worker.yml');
-  const job = workflow.jobs['purge-rehearsal-target'];
-  const purge = operation(job).env!;
-  expect(job.if).toBe('inputs.operation == \'purge-rehearsal-target\'');
+  const job = workflow.jobs['put-worker-secrets'];
   const secret = (name: string) => `\${{ secrets.${name} }}`;
-  expect(purge.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_MIGRATE_API_TOKEN'));
-  expect(purge.IORI_APPLICATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_WRITE_ACCESS_KEY_ID'));
-  expect(purge.IORI_APPLICATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_WRITE_SECRET_ACCESS_KEY'));
-  expect(purge.IORI_MIGRATION_R2_ACCESS_KEY_ID).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID'));
-  expect(purge.IORI_MIGRATION_R2_SECRET_ACCESS_KEY).toBe(secret('IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY'));
-  expect(purge.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID'));
-  expect(purge.AWS_SECRET_ACCESS_KEY).toBe(secret('IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY'));
-  expect(purge.IORI_ADMISSION_MODE).toBe('sealed');
-  expect(Object.keys(purge).filter(key => /SSH|RECEIPT|REHEARSAL|SMOKE|VAPID_(?:PUBLIC|PRIVATE)/.test(key))).toEqual(
-    [],
-  );
-  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|IORI_MIGRATION_REHEARSAL/);
-});
-it('gives adopt-cutover-state the cutover token and the Terraform state write keys without SSH, receipt, R2 or smoke secrets', async () => {
-  const workflow = await readWorkflow('deploy-iori-worker.yml');
-  const job = workflow.jobs['adopt-cutover-state'];
-  const adopt = operation(job).env!;
-  const secret = (name: string) => `\${{ secrets.${name} }}`;
-  expect(job.if).toBe('inputs.operation == \'adopt-cutover-state\'');
+  expect(job.if).toBe('inputs.operation == \'put-worker-secrets\'');
   expect(job.needs).toBe('public-artifact-gate');
   expect(job.environment).toBe('${{ inputs.environment }}');
-  expect(adopt.IORI_ADMISSION_MODE).toBe('sealed');
-  expect(adopt.CLOUDFLARE_API_TOKEN).toBe(secret('IORI_CLOUDFLARE_CUTOVER_API_TOKEN'));
-  expect(adopt.AWS_ACCESS_KEY_ID).toBe(secret('IORI_TERRAFORM_WRITE_ACCESS_KEY_ID'));
-  expect(adopt.AWS_SECRET_ACCESS_KEY).toBe(secret('IORI_TERRAFORM_WRITE_SECRET_ACCESS_KEY'));
-  expect(Object.keys(adopt)).toEqual([
-    'IORI_ADMISSION_MODE',
-    'CLOUDFLARE_ACCOUNT_ID',
-    'CLOUDFLARE_ZONE_ID',
-    'IORI_TERRAFORM_BACKEND_BUCKET',
-    'IORI_ADMISSION_IDENTITY',
-    'ORIGIN',
-    'VAPID_SUBJECT',
-    'CLOUDFLARE_API_TOKEN',
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-  ]);
-  expect(JSON.stringify(job)).not.toMatch(
-    /SSH|RECEIPT|R2|SMOKE_QUEUE_TOKEN|IORI_MIGRATION_REHEARSAL|VAPID_(?:PUBLIC|PRIVATE)|STAGING_ACCESS_TOKEN|READ_ONLY/,
-  );
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    IORI_ADMISSION_IDENTITY: secret('IORI_ADMISSION_IDENTITY'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
+    VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
+    SMOKE_QUEUE_TOKEN: secret('SMOKE_QUEUE_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
   const inputs =
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
-  expect(inputs.operation.options).toEqual(
-    expect.arrayContaining(['adopt-cutover-state', 'reconcile-resources', 'replace-queue-consumer']),
-  );
+  expect(inputs.operation.options).toContain('put-worker-secrets');
 });
-it('lets estimate-source start without generation or run ID while keeping them selectable for the other operations', async () => {
+it('lets diagnose-source start without generation or run ID', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const inputs =
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { required: boolean; options?: string[] }> } })
       .workflow_dispatch.inputs;
-  expect(inputs.operation.options).toEqual(expect.arrayContaining(['estimate-source', 'purge-rehearsal-target']));
+  expect(inputs.operation.options).toEqual(expect.arrayContaining(['diagnose-source']));
   expect(inputs.generation.required).toBe(false);
   expect(inputs.migration_run_id.required).toBe(false);
 });
@@ -411,25 +317,20 @@ it('keeps restarting the source unit longer than the deployment status wait', as
   expect(sections.get('Service')).not.toMatch(/StartLimit/);
   expect(sections.get('Unit')).not.toMatch(/RestartSec/);
 });
-it('wires real credential-free fixture execution, explicit portable PostgreSQL opt-in and sealed CI identity', async () => {
+it('wires the test step, Terraform setup and sealed CI identity', async () => {
   const ci = await readWorkflow('ci.yml');
   const steps = ci.jobs.iori.steps;
   expect(steps.find(step => step.name === 'Test')?.run).toBe(
     'pnpm --filter iori run test:ci --maxWorkers=1 --no-file-parallelism',
   );
   expect(steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(false);
-  expect(steps.some(step => step.run === 'node apps/iori/scripts/run-migration-fixture.mjs')).toBe(true);
-  expect(steps.some(step => step.run?.includes('docker pull postgres:16'))).toBe(true);
-  expect(steps.find(step => step.env?.IORI_RUN_POSTGRES_FIXTURE === '1')?.run).toContain(
-    'sourcePostgresIntegration.test.ts',
-  );
   const guard = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
   expect(guard).toContain('IORI_ADMISSION_MODE=sealed');
   expect(guard).toContain('iori-staging-fixture1');
   expect(guard).toContain('IORI_ADMISSION_IDENTITY=');
   expect(guard).toContain('assert-workflow-output.mjs');
 });
-it('runs readonly Terraform init and validate in CI and fails when init changes the lock file on linux', async () => {
+it('runs readonly Terraform init and validate in CI', async () => {
   const ci = await readWorkflow('ci.yml');
   const steps = ci.jobs.iori.steps;
   const lines = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
@@ -440,13 +341,6 @@ it('runs readonly Terraform init and validate in CI and fails when init changes 
   expect(init).toBeGreaterThan(-1);
   expect(lines[init + 1]).toBe('run_guarded terraform -chdir=apps/iori/infra/cloudflare validate');
   expect(lines.some(line => line.includes('git diff --exit-code'))).toBe(false);
-  const schema = steps.find(step => step.name === 'Generate Cloudflare provider schema')!.run!
-    .split('\n').map(line => line.trim());
-  const schemaInit = schema.indexOf('terraform -chdir="$schema_dir" init -input=false');
-  expect(schemaInit).toBeGreaterThan(-1);
-  expect(schema[schemaInit + 1]).toBe(
-    `cmp -s apps/iori/infra/cloudflare/.terraform.lock.hcl "$schema_dir/.terraform.lock.hcl" || { echo 'Terraform init changed the lock file on linux_amd64'; exit 1; }`,
-  );
 });
 it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
   const { spawnSync } = await import('node:child_process');
