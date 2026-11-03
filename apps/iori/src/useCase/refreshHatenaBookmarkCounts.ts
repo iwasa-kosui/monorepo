@@ -88,7 +88,9 @@ const create = ({
     for (const entry of resolved.val) {
       entriesByUrl.set(entry.url, [...(entriesByUrl.get(entry.url) ?? []), entry]);
     }
-    const targetUrls = [...entriesByUrl.keys()].filter((url) => encodedLength(url) <= BOOKMARK_COUNT_MAX_TARGET_URL_LENGTH);
+    const targetUrls = [...entriesByUrl.keys()].filter((url) =>
+      encodedLength(url) <= BOOKMARK_COUNT_MAX_TARGET_URL_LENGTH
+    );
     const batches = splitIntoBatches(targetUrls).slice(0, BOOKMARK_COUNT_MAX_REQUESTS_PER_RUN);
     const requested = batches.reduce((total, urls) => total + urls.length, 0);
     let updated = 0;
