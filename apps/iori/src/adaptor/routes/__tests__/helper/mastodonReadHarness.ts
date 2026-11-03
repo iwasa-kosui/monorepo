@@ -2,6 +2,7 @@ import { afterEach } from 'vitest';
 
 import { createIoriApp } from '../../../../appFactory.tsx';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
+import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
@@ -14,7 +15,12 @@ import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../../../d1/follow/actorIdsResolverByFollowsWithPagination.ts';
+import { createD1MarkerSavedStore } from '../../../d1/marker/markerSavedStore.ts';
+import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResolverByUserId.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
+import { createD1NotificationCountResolverSinceMarker } from '../../../d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
+import { createD1NotificationsResolverByPage } from '../../../d1/notification/notificationsResolverByPage.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
@@ -29,6 +35,8 @@ import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
+import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
+import { createWorkerMastodonNotificationsRouter } from '../../workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from '../../workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from '../../workerMastodonTimelinesRouter.ts';
 import { createOAuthHarness, ORIGIN } from './oauthHarness.ts';
@@ -54,6 +62,7 @@ export const setupReadApi = (
     sessionResolver: harness.memory.sessionResolver as never,
   });
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
+  const markersResolverByUserId = createD1MarkersResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
@@ -114,6 +123,29 @@ export const setupReadApi = (
           statusAssembler,
         }),
       );
+      root.route(
+        '/api',
+        createWorkerMastodonNotificationsRouter({
+          authn,
+          actorResolverByUserId,
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
+          notificationsResolverByPage: createD1NotificationsResolverByPage(db),
+          notificationResolverByUserIdAndId: createD1NotificationResolverByUserIdAndId(db),
+          notificationCountResolverSinceMarker: createD1NotificationCountResolverSinceMarker(db),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerMastodonMarkersRouter({
+          authn,
+          markersResolverByUserId,
+          saveMarkersUseCase: SaveMarkersUseCase.create({
+            markersResolverByUserId,
+            markerSavedStore: createD1MarkerSavedStore(db),
+          }),
+        }),
+      );
       root.route('/api', createWorkerMastodonFallbackRouter());
     },
     serveAsset: async () => undefined,
@@ -137,7 +169,7 @@ export const setupReadApi = (
     Authorization: `Bearer ${(await harness.issueUserToken(scope)).token}`,
   });
 
-  return { ...harness, seed, request, signIn, bearerFor, queries: fixture.queries };
+  return { ...harness, seed, request, signIn, bearerFor, queries: fixture.queries, sqlite: fixture.sqlite };
 };
 
 export const idsOf = (body: unknown): string[] => (body as ReadonlyArray<{ id: string }>).map((item) => item.id);

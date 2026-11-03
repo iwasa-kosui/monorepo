@@ -1,10 +1,10 @@
 import type { ExecutionContext, MessageBatch, ScheduledController } from '@cloudflare/workers-types';
-import { federation } from '@fedify/hono';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1SessionResolver } from './adaptor/d1/session/sessionResolver.ts';
+import { federationWithArticleNotFound } from './adaptor/fedify/activityPubArticleNotFound.ts';
 import { generateOgImageOnDemand, type OgImageFailureLog } from './adaptor/ogImage/generateOgImageOnDemand.ts';
 import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
 import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
@@ -19,6 +19,8 @@ import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMasto
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMastodonFallbackRouter.ts';
+import { createWorkerMastodonMarkersRouter } from './adaptor/routes/workerMastodonMarkersRouter.ts';
+import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
@@ -130,7 +132,7 @@ export default {
     return createIoriApp({
       federationMiddleware: async (c, next) => {
         if (c.req.path === '/inbox' && c.req.method === 'GET') return c.json({ error: 'Method Not Allowed' }, 405);
-        return federation(runtime.federation, () => undefined)(c, next);
+        return federationWithArticleNotFound(runtime.federation, () => undefined)(c, next);
       },
       registerRoutes: (app) => {
         app.get('/readyz', async (c) => {
@@ -270,6 +272,8 @@ export default {
         app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),

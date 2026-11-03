@@ -34,15 +34,17 @@ import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../adaptor/d1/like/localLikeDeletedStore.ts';
 import { createD1LinkPreviewCreatedStore } from '../adaptor/d1/linkPreview/linkPreviewCreatedStore.ts';
+import { createD1MarkerSavedStore } from '../adaptor/d1/marker/markerSavedStore.ts';
+import { createD1MarkersResolverByUserId } from '../adaptor/d1/marker/markersResolverByUserId.ts';
 import { createD1MuteCreatedStore } from '../adaptor/d1/mute/muteCreatedStore.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../adaptor/d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MuteDeletedStore } from '../adaptor/d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../adaptor/d1/mute/muteResolver.ts';
 import { createD1MutesResolverByUserId } from '../adaptor/d1/mute/mutesResolverByUserId.ts';
 import { createD1ReplyNotificationCreatedStore } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
-import { createD1NotificationsReadStore } from '../adaptor/d1/notification/notificationsReadStore.ts';
-import { createD1NotificationsResolverByUserId } from '../adaptor/d1/notification/notificationsResolverByUserId.ts';
-import { createD1UnreadNotificationCountResolverByUserId } from '../adaptor/d1/notification/unreadNotificationCountResolverByUserId.ts';
+import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
+import { createD1NotificationsResolverByPage } from '../adaptor/d1/notification/notificationsResolverByPage.ts';
 import { createD1AccessTokenIssuedStore } from '../adaptor/d1/oauth/accessTokenIssuedStore.ts';
 import {
   createD1AccessTokenResolverByTokenHash,
@@ -122,13 +124,12 @@ import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
 import { GetMutesUseCase } from '../useCase/getMutes.ts';
-import { GetNotificationsUseCase } from '../useCase/getNotifications.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
-import { createGetUnreadNotificationCountUseCase } from '../useCase/getUnreadNotificationCount.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
@@ -171,6 +172,7 @@ export const createWorkerRuntimePorts = async (
   const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
+  const markersResolverByUserId = createD1MarkersResolverByUserId(db);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -281,6 +283,14 @@ export const createWorkerRuntimePorts = async (
         timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
         htmlToPlainText,
       }),
+      notificationsResolverByPage: createD1NotificationsResolverByPage(db),
+      notificationResolverByUserIdAndId: createD1NotificationResolverByUserIdAndId(db),
+      notificationCountResolverSinceMarker: createD1NotificationCountResolverSinceMarker(db),
+      markersResolverByUserId,
+      saveMarkersUseCase: SaveMarkersUseCase.create({
+        markersResolverByUserId,
+        markerSavedStore: createD1MarkerSavedStore(db),
+      }),
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({
@@ -363,19 +373,6 @@ export const createWorkerRuntimePorts = async (
       }),
     },
     notifications: {
-      getUnreadNotificationCountUseCase: createGetUnreadNotificationCountUseCase({
-        sessionResolver,
-        userResolver,
-        sessionWithUserAndActorResolver,
-        unreadNotificationCountResolverByUserId: createD1UnreadNotificationCountResolverByUserId(db),
-      }),
-      getNotificationsUseCase: GetNotificationsUseCase.create({
-        sessionResolver,
-        userResolver,
-        sessionWithUserAndActorResolver,
-        notificationsResolver: createD1NotificationsResolverByUserId(db),
-        notificationsReadStore: createD1NotificationsReadStore(db),
-      }),
       getLikedPostsUseCase: GetLikedPostsUseCase.create({
         sessionResolver,
         userResolver,

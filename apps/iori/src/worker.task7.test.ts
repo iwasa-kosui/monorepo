@@ -33,7 +33,6 @@ const runtime = vi.hoisted(() => ({
   },
   notifications: {
     getUnreadNotificationCountUseCase: {},
-    getNotificationsUseCase: {},
     getLikedPostsUseCase: {},
   },
   articles: {
@@ -72,8 +71,8 @@ const runtime = vi.hoisted(() => ({
 vi.mock('./runtime/workerRuntime.ts', () => ({
   createWorkerRuntimePorts: async () => runtime,
 }));
-vi.mock('@fedify/hono', () => ({
-  federation: () => async (_context: unknown, next: () => Promise<void>) => next(),
+vi.mock('./adaptor/fedify/activityPubArticleNotFound.ts', () => ({
+  federationWithArticleNotFound: () => async (_context: unknown, next: () => Promise<void>) => next(),
 }));
 
 import worker from './worker.ts';
@@ -92,12 +91,14 @@ describe('Task 7 Worker route mounting', () => {
         env,
         executionContext,
       ),
+      worker.fetch(new Request('https://worker.test/api/v1/liked-posts'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/notifications'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/articles/not-an-id'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/mutes'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/relays'), env, executionContext),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 400, 401, 401]);
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 400, 401, 401]);
+    expect(await responses[2]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });

@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const timestamp = () => integer({ mode: 'timestamp_ms' });
 
@@ -152,7 +152,23 @@ export const notificationsTable = sqliteTable('notifications', {
   type: text('type').notNull(),
   isRead: integer('isRead').notNull().default(0),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  index('notifications_recipient_user_id_created_at_notification_id_idx').on(
+    table.recipientUserId,
+    table.createdAt,
+    table.notificationId,
+  ),
+]);
+
+export const mastodonMarkersTable = sqliteTable('mastodon_markers', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  timeline: text('timeline', { enum: ['home', 'notifications'] }).notNull(),
+  lastReadId: text('lastReadId').notNull(),
+  version: integer('version').notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.timeline] }),
+]);
 
 export const notificationLikesTable = sqliteTable('notification_likes', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
@@ -345,6 +361,38 @@ export const oauthAccessTokensTable = sqliteTable('oauth_access_tokens', {
   index('oauth_access_tokens_authorization_code_hash_idx').on(table.authorizationCodeHash),
 ]);
 
+export const feedSourcesTable = sqliteTable('feed_sources', {
+  feedSourceId: text('feedSourceId').primaryKey(),
+  kind: text('kind').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  etag: text('etag'),
+  lastModified: text('lastModified'),
+  lastFetchedAt: timestamp(),
+  lastError: text('lastError'),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('feed_sources_url_unique').on(table.url),
+]);
+
+export const feedEntriesTable = sqliteTable('feed_entries', {
+  feedEntryId: text('feedEntryId').primaryKey(),
+  feedSourceId: text('feedSourceId').notNull().references(() => feedSourcesTable.feedSourceId),
+  guid: text('guid').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  publishedAt: timestamp(),
+  hatenaBookmarkCount: integer('hatenaBookmarkCount'),
+  fetchedAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('feed_entries_feed_source_guid_unique').on(table.feedSourceId, table.guid),
+  index('feed_entries_url_idx').on(table.url),
+  index('feed_entries_published_at_idx').on(table.publishedAt),
+  index('feed_entries_fetched_at_idx').on(table.fetchedAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -363,6 +411,7 @@ export const schema = {
   remoteLikesTable,
   postImagesTable,
   notificationsTable,
+  mastodonMarkersTable,
   notificationLikesTable,
   notificationFollowsTable,
   pushSubscriptionsTable,
@@ -380,4 +429,6 @@ export const schema = {
   oauthApplicationsTable,
   oauthAuthorizationCodesTable,
   oauthAccessTokensTable,
+  feedSourcesTable,
+  feedEntriesTable,
 } as const;

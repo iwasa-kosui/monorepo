@@ -342,68 +342,6 @@ describe('createWorkerMastodonCoreRouter', () => {
     });
   });
 
-  describe('markers', () => {
-    it('GET は空のオブジェクトを返す', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read:statuses');
-
-      const response = await h.request('/api/v1/markers?timeline[]=home', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      expect(await response.json()).toEqual({});
-    });
-
-    it('POST は受け取った値を version 0 で返し、保存しない', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('write:statuses');
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-      const response = await h.request('/api/v1/markers', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ home: { last_read_id: 'a' }, notifications: { last_read_id: 'b' } }),
-      });
-
-      const body = await response.json() as Record<
-        string,
-        { last_read_id: string; version: number; updated_at: string }
-      >;
-      expect(response.status).toBe(200);
-      expect(body['home']).toMatchObject({ last_read_id: 'a', version: 0 });
-      expect(body['notifications']).toMatchObject({ last_read_id: 'b', version: 0 });
-      expect(new Date(body['home']!.updated_at).toISOString()).toBe(body['home']!.updated_at);
-    });
-
-    it('POST は form の home[last_read_id] も受け取り、指定のない側は返さない', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('write:statuses');
-
-      const response = await h.request('/api/v1/markers', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'home[last_read_id]=123',
-      });
-
-      const body = await response.json() as Record<string, unknown>;
-      expect(Object.keys(body)).toEqual(['home']);
-      expect(body['home']).toMatchObject({ last_read_id: '123', version: 0 });
-    });
-
-    it('POST は write:statuses がなければ 403 にする', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read');
-
-      const response = await h.request('/api/v1/markers', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-
-      expect(response.status).toBe(403);
-    });
-  });
-
   describe('未実装のパスの受け皿', () => {
     it('/api/v1 と /api/v2 の未実装のパスに 404 を返し、認証付きの要求だけメソッドとパスをログに出す', async () => {
       const h = setup();
