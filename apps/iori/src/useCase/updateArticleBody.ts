@@ -1,8 +1,8 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { sanitizeArticleBody } from '../adaptor/routes/helper/sanitizeArticleBody.ts';
-import { ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
+import { ArticleInvalidStatusError, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import { ArticleBody, type ArticleBodyWrittenStore } from '../domain/articleBody/articleBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -22,7 +22,7 @@ const Ok = Schema.create(
 );
 type Ok = z.infer<typeof Ok.zodType>;
 
-type Err = ArticleNotFoundError;
+type Err = ArticleNotFoundError | ArticleInvalidStatusError;
 
 export type UpdateArticleBodyUseCase = UseCase<Input, Ok, Err>;
 
@@ -48,7 +48,12 @@ const create = ({
         }
         return RA.ok(article.val);
       }),
-      RA.andThen(async ({ article, privateHtml, publicHtml }) => {
+      RA.andThen(async ({ article, privateHtml, publicHtml }): Promise<Result<Ok, Err>> => {
+        if (article.status === 'published') {
+          return RA.err(
+            ArticleInvalidStatusError.create(article.articleId, article.status, ['draft', 'unpublished']),
+          );
+        }
         const event = ArticleBody.writeArticleBody(Instant.now())({
           articleId: article.articleId,
           privateHtml: sanitizeArticleBody(privateHtml),

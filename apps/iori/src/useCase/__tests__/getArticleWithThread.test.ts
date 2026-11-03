@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
@@ -23,7 +23,7 @@ const createArticle = (status: ArticleStatus, authorUserId: UserId): Article => 
   unpublishedAt: status === 'unpublished' ? Instant.orThrow(Date.parse('2026-08-07T00:00:00.000Z')) : null,
 });
 
-const createDeps = (article: Article | undefined) => {
+const createDeps = (article: Article | undefined, body?: ArticleBody) => {
   const articleResolver: ArticleResolver = {
     resolve: vi.fn(async (articleId: ArticleId) =>
       RA.ok(article?.articleId === articleId ? article : undefined)
@@ -31,7 +31,11 @@ const createDeps = (article: Article | undefined) => {
   };
   const resolveThread = vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }));
   const threadResolver: ThreadResolver = { resolve: resolveThread as unknown as ThreadResolver['resolve'] };
-  return { articleResolver, threadResolver, resolveThread };
+  const resolveBody = vi.fn(async () => RA.ok(body));
+  const articleBodyResolver: ArticleBodyResolver = {
+    resolve: resolveBody as unknown as ArticleBodyResolver['resolve'],
+  };
+  return { articleResolver, threadResolver, resolveThread, articleBodyResolver, resolveBody };
 };
 
 describe('GetArticleWithThreadUseCase', () => {
@@ -124,13 +128,7 @@ describe('GetArticleWithThreadUseCase', () => {
       publicHtml: '<p>public</p>',
       updatedAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
     });
-    const createBodyDeps = (article: Article, body: ArticleBody | undefined) => {
-      const resolveBody = vi.fn(async () => RA.ok(body));
-      const articleBodyResolver: ArticleBodyResolver = {
-        resolve: resolveBody as unknown as ArticleBodyResolver['resolve'],
-      };
-      return { ...createDeps(article), articleBodyResolver, resolveBody };
-    };
+    const createBodyDeps = (article: Article, body: ArticleBody | undefined) => createDeps(article, body);
 
     it('作者は draft の private_html を取得し、thread を取得しない', async () => {
       const article = createBodyArticle('draft');
@@ -199,15 +197,11 @@ describe('GetArticleWithThreadUseCase', () => {
       if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
     });
 
-    it('articleBodyResolver が無ければ ArticleNotFoundError を返す', async () => {
-      const article = createBodyArticle('published');
-      const deps = createDeps(article);
+    it('articleBodyResolver が欠けると型エラーになる', () => {
+      const { articleBodyResolver: _resolver, ...withoutResolver } = createDeps(undefined);
+      type CreateDeps = Parameters<typeof GetArticleWithThreadUseCase.create>[0];
 
-      const result = await GetArticleWithThreadUseCase.create(deps).run({ articleId: article.articleId });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-      expect(deps.resolveThread).not.toHaveBeenCalled();
+      expectTypeOf(withoutResolver).not.toExtend<CreateDeps>();
     });
 
     it('rootPostId がある article は従来どおり thread を返し、body を返さない', async () => {

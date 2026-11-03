@@ -15,6 +15,7 @@ import { createD1ArticleResolver } from '../adaptor/d1/article/articleResolver.t
 import { createD1ArticleResolverByRootPostId } from '../adaptor/d1/article/articleResolverByRootPostId.ts';
 import { createD1ArticlesResolverByAuthorActorId } from '../adaptor/d1/article/articlesResolverByAuthorActorId.ts';
 import { createD1ArticleUnpublishedStore } from '../adaptor/d1/article/articleUnpublishedStore.ts';
+import { createD1ArticleWithBodyCreatedStore } from '../adaptor/d1/article/articleWithBodyCreatedStore.ts';
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyDeletedStore } from '../adaptor/d1/articleBody/articleBodyDeletedStore.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
@@ -398,8 +399,7 @@ export const createWorkerRuntimePorts = async (
       }),
       createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
         actorResolverByUserId,
-        articleCreatedStore: createD1ArticleCreatedStore(db),
-        articleBodyWrittenStore,
+        articleWithBodyCreatedStore: createD1ArticleWithBodyCreatedStore(db),
       }),
       updateArticleBodyUseCase: UpdateArticleBodyUseCase.create({
         articleResolver,
@@ -411,6 +411,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUserId,
         articleResolver,
         articlePublishedStore: createD1ArticlePublishedStore(db),
+        articleBodyResolver,
       }),
       unpublishArticleUseCase: UnpublishArticleUseCase.create({
         sessionResolver,

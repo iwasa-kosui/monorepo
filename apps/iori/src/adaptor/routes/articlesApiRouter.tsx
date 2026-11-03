@@ -18,6 +18,8 @@ import { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
 import { UnpublishArticleUseCase } from '../../useCase/unpublishArticle.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
+import { PgArticleBodyDeletedStore } from '../pg/article/articleBodyDeletedStore.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleCreatedStore } from '../pg/article/articleCreatedStore.ts';
 import { PgArticleDeletedStore } from '../pg/article/articleDeletedStore.ts';
 import { PgArticlePublishedStore } from '../pg/article/articlePublishedStore.ts';
@@ -45,6 +47,7 @@ app.get('/articles/:articleId', async (c) => {
   const useCase = GetArticleWithThreadUseCase.create({
     articleResolver: PgArticleResolver.getInstance(),
     threadResolver: PgThreadResolver.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   });
 
   const result = await useCase.run({
@@ -188,6 +191,7 @@ app.post('/articles/:articleId/publish', async (c) => {
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
     articleResolver: PgArticleResolver.getInstance(),
     articlePublishedStore: PgArticlePublishedStore.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   });
 
   const result = await useCase.run({
@@ -286,6 +290,8 @@ app.delete('/articles/:articleId', async (c) => {
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
     articleResolver: PgArticleResolver.getInstance(),
     articleDeletedStore: PgArticleDeletedStore.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
+    articleBodyDeletedStore: PgArticleBodyDeletedStore.getInstance(),
   });
 
   const result = await useCase.run({

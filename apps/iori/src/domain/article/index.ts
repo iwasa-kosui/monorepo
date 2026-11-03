@@ -1,6 +1,7 @@
 export {
   Article,
   ArticleAlreadyExistsError,
+  ArticleBodyMissingError,
   type ArticleCreated,
   type ArticleCreatedStore,
   type ArticleDeleted,
@@ -16,5 +17,6 @@ export {
   type ArticleStatus,
   type ArticleUnpublished,
   type ArticleUnpublishedStore,
+  type ArticleWithBodyCreatedStore,
 } from './article.ts';
 export { ArticleId, ArticleIdSym } from './articleId.ts';

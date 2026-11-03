@@ -2,8 +2,8 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { ArticleCreated, ArticleCreatedStore } from '../../domain/article/article.ts';
-import type { ArticleBodyWritten, ArticleBodyWrittenStore } from '../../domain/articleBody/articleBody.ts';
+import type { ArticleCreated, ArticleWithBodyCreatedStore } from '../../domain/article/article.ts';
+import type { ArticleBodyWritten } from '../../domain/articleBody/articleBody.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { CreateArticleWithBodyUseCase } from '../createArticleWithBody.ts';
 import { createMockActorResolverByUserId } from './helper/mockAdaptors.ts';
@@ -23,17 +23,11 @@ const createDeps = () => {
   const calls: string[] = [];
   const articleEvents: ArticleCreated[] = [];
   const bodyEvents: ArticleBodyWritten[] = [];
-  const articleCreatedStore: ArticleCreatedStore = {
-    store: vi.fn(async (...events) => {
-      calls.push('article');
-      articleEvents.push(...events);
-      return RA.ok(undefined);
-    }),
-  };
-  const articleBodyWrittenStore: ArticleBodyWrittenStore = {
-    store: vi.fn(async (...events) => {
-      calls.push('body');
-      bodyEvents.push(...events);
+  const articleWithBodyCreatedStore: ArticleWithBodyCreatedStore = {
+    store: vi.fn(async (articleEvent, bodyEvent) => {
+      calls.push('article+body');
+      articleEvents.push(articleEvent);
+      bodyEvents.push(bodyEvent);
       return RA.ok(undefined);
     }),
   };
@@ -41,8 +35,7 @@ const createDeps = () => {
     userId,
     actor,
     actorResolverByUserId,
-    articleCreatedStore,
-    articleBodyWrittenStore,
+    articleWithBodyCreatedStore,
     calls,
     articleEvents,
     bodyEvents,
@@ -50,7 +43,7 @@ const createDeps = () => {
 };
 
 describe('CreateArticleWithBodyUseCase', () => {
-  it('rootPostId が null の draft の article と本文を、article、本文の順に保存する', async () => {
+  it('rootPostId が null の draft の article と本文を、1回の保存でまとめて保存する', async () => {
     const deps = createDeps();
 
     const result = await CreateArticleWithBodyUseCase.create(deps).run({
@@ -69,7 +62,9 @@ describe('CreateArticleWithBodyUseCase', () => {
       authorUserId: deps.userId,
       authorActorId: deps.actor.id,
     });
-    expect(deps.calls).toEqual(['article', 'body']);
+    expect(deps.calls).toEqual(['article+body']);
+    expect(deps.articleEvents).toHaveLength(1);
+    expect(deps.articleEvents[0]?.aggregateState).toEqual(result.val.article);
     expect(deps.bodyEvents).toHaveLength(1);
     expect(deps.bodyEvents[0]?.eventName).toBe('articleBody.written');
     expect(deps.bodyEvents[0]?.aggregateState).toMatchObject({

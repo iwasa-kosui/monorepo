@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Article, ArticleDeletedStore, ArticleResolver } from '../../domain/article/article.ts';
@@ -21,7 +21,7 @@ import {
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
-const setup = (options: Readonly<{ hasBody: boolean; withBodyDeps?: boolean }>) => {
+const setup = (options: Readonly<{ hasBody: boolean }>) => {
   const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
   const session: Session = {
     sessionId: crypto.randomUUID() as Session['sessionId'],
@@ -84,7 +84,8 @@ const setup = (options: Readonly<{ hasBody: boolean; withBodyDeps?: boolean }>) 
     actorResolverByUserId,
     articleResolver,
     articleDeletedStore,
-    ...(options.withBodyDeps === false ? {} : { articleBodyResolver, articleBodyDeletedStore }),
+    articleBodyResolver,
+    articleBodyDeletedStore,
   };
   return { deps, session, article, calls, articleBodyDeletedStore };
 };
@@ -123,16 +124,14 @@ describe('DeleteArticleUseCase', () => {
     expect(calls).toEqual(['article.deleted']);
   });
 
-  it('本文の resolver が無ければ article だけを消す', async () => {
-    const { deps, session, article, calls } = setup({ hasBody: true, withBodyDeps: false });
+  it('articleBodyResolver と articleBodyDeletedStore のどちらが欠けても型エラーになる', () => {
+    const { deps } = setup({ hasBody: true });
+    const { articleBodyResolver: _resolver, ...withoutResolver } = deps;
+    const { articleBodyDeletedStore: _store, ...withoutStore } = deps;
+    type CreateDeps = Parameters<typeof DeleteArticleUseCase.create>[0];
 
-    const result = await DeleteArticleUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      articleId: article.articleId,
-      ctx: createMockRequestContext(),
-    });
-
-    expect(result.ok).toBe(true);
-    expect(calls).toEqual(['article.deleted']);
+    expectTypeOf(deps).toExtend<CreateDeps>();
+    expectTypeOf(withoutResolver).not.toExtend<CreateDeps>();
+    expectTypeOf(withoutStore).not.toExtend<CreateDeps>();
   });
 });

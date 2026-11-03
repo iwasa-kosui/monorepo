@@ -30,7 +30,7 @@ export type GetArticleWithThreadUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   articleResolver: ArticleResolver;
   threadResolver: ThreadResolver;
-  articleBodyResolver?: ArticleBodyResolver;
+  articleBodyResolver: ArticleBodyResolver;
 }>;
 
 const create = ({
@@ -56,9 +56,6 @@ const create = ({
       }),
       RA.andThen(async ({ article }): Promise<Result<Ok, Err>> => {
         if (article.rootPostId === null) {
-          if (articleBodyResolver === undefined) {
-            return RA.err(ArticleNotFoundError.create(article.articleId));
-          }
           const body = await articleBodyResolver.resolve(article.articleId);
           if (!body.ok) {
             return body;

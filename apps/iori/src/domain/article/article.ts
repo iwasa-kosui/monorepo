@@ -1,9 +1,11 @@
+import type { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { ArticleBodyWritten } from '../articleBody/articleBody.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
@@ -113,6 +115,9 @@ export type ArticleCreatedStore = Agg.Store<ArticleCreated>;
 export type ArticlePublishedStore = Agg.Store<ArticlePublished>;
 export type ArticleUnpublishedStore = Agg.Store<ArticleUnpublished>;
 export type ArticleDeletedStore = Agg.Store<ArticleDeleted>;
+export type ArticleWithBodyCreatedStore = Readonly<{
+  store: (articleCreated: ArticleCreated, bodyWritten: ArticleBodyWritten) => RA<void, never>;
+}>;
 
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;
 export type ArticleResolverByRootPostId = Agg.Resolver<{ rootPostId: PostId }, Article | undefined>;
@@ -175,5 +180,21 @@ export const ArticleInvalidStatusError = {
       expectedStatus.join(', ')
     }.`,
     detail: { articleId, currentStatus, expectedStatus },
+  }),
+} as const;
+
+export type ArticleBodyMissingError = Readonly<{
+  type: 'ArticleBodyMissingError';
+  message: string;
+  detail: {
+    articleId: ArticleId;
+  };
+}>;
+
+export const ArticleBodyMissingError = {
+  create: (articleId: ArticleId): ArticleBodyMissingError => ({
+    type: 'ArticleBodyMissingError',
+    message: `The article with ID "${articleId}" has no body and cannot be published.`,
+    detail: { articleId },
   }),
 } as const;

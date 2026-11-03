@@ -10,6 +10,7 @@ import { PostId } from '../../domain/post/postId.ts';
 import { Env } from '../../env.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
@@ -74,6 +75,7 @@ const ofArticle = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifi
   const useCase = GetArticleWithThreadUseCase.create({
     articleResolver: PgArticleResolver.getInstance(),
     threadResolver: PgThreadResolver.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   });
   return RA.flow(
     RA.ok({

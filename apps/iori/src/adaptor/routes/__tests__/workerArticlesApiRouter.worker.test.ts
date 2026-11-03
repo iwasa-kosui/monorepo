@@ -174,6 +174,7 @@ describe('createWorkerArticlesApiRouter', () => {
       const getArticleWithThreadUseCase = GetArticleWithThreadUseCase.create({
         articleResolver: { resolve: async (id) => RA.ok(id === article.articleId ? article : undefined) },
         threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
+        articleBodyResolver: { resolve: async () => RA.ok(undefined) },
       });
       const unused = { run: async () => RA.err({}) } as never;
       return createIoriApp({

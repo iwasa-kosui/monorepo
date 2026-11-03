@@ -59,8 +59,8 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   articleResolver: ArticleResolver;
   articleDeletedStore: ArticleDeletedStore;
-  articleBodyResolver?: ArticleBodyResolver;
-  articleBodyDeletedStore?: ArticleBodyDeletedStore;
+  articleBodyResolver: ArticleBodyResolver;
+  articleBodyDeletedStore: ArticleBodyDeletedStore;
 }>;
 
 const create = ({
@@ -98,14 +98,12 @@ const create = ({
           return RA.err(UnauthorizedError.create());
         }
 
-        if (articleBodyResolver !== undefined && articleBodyDeletedStore !== undefined) {
-          const body = await articleBodyResolver.resolve(articleId);
-          if (!body.ok) {
-            return body;
-          }
-          if (body.val !== undefined) {
-            await articleBodyDeletedStore.store(ArticleBody.deleteArticleBody(now)(articleId));
-          }
+        const body = await articleBodyResolver.resolve(articleId);
+        if (!body.ok) {
+          return body;
+        }
+        if (body.val !== undefined) {
+          await articleBodyDeletedStore.store(ArticleBody.deleteArticleBody(now)(articleId));
         }
 
         const deleteEvent = Article.deleteArticle(now)(articleId);

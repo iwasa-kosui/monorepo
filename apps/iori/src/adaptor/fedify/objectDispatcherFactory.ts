@@ -12,6 +12,7 @@ import type { PostResolver, PostWithAuthor, ThreadResolver } from '../../domain/
 import { PostId } from '../../domain/post/postId.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
   origin: string;
@@ -19,7 +20,7 @@ export type ObjectDispatcherDeps = Readonly<{
   postImagesResolver: PostImagesResolverByPostId;
   articleResolver?: ArticleResolver;
   threadResolver?: ThreadResolver;
-  articleBodyResolver?: ArticleBodyResolver;
+  articleBodyResolver: ArticleBodyResolver;
 }>;
 
 export const createObjectDispatcher = ({
@@ -73,7 +74,7 @@ export const createObjectDispatcher = ({
             to: PUBLIC_COLLECTION,
             cc: ctx.getFollowersUri(values.identifier),
             name: article.title,
-            content: body === undefined ? formatThreadAsHtml(thread) : body.html,
+            content: body === undefined ? formatThreadAsHtml(thread) : sanitizeArticleBody(body.html),
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(article.publishedAt ?? article.createdAt),
             url: ctx.getObjectUri(FedifyArticle, values),
