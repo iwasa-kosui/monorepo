@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
+import { createIoriApp } from '../../../appFactory.tsx';
+import { createMockRequestContext } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
+import { GetTimelineUseCase } from '../../../useCase/getTimeline.ts';
+import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
+import { createD1ActorsResolverByFollowerId } from '../../d1/actor/actorsResolverByFollowerId.ts';
+import { createD1ActorsResolverByFollowingId } from '../../d1/actor/actorsResolverByFollowingId.ts';
+import { createD1MutedActorIdsResolverByUserId } from '../../d1/mute/mutedActorIdsResolverByUserId.ts';
+import { createD1TimelineItemsResolverByActorIds } from '../../d1/timeline/timelineItemsResolverByActorIds.ts';
+import { createD1UserResolver } from '../../d1/user/userResolver.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
-import { idsOf, setupReadApi } from './helper/mastodonReadHarness.ts';
+import { createWorkerTimelinePostingApiRouter } from '../workerTimelinePostingApiRouter.ts';
+import { idsOf, linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
 
 const kosuiUri = 'https://iori.test/users/kosui';
 
@@ -36,6 +46,50 @@ describe('ログイン中の閲覧者に宛先外の private と direct のリ�
     const response = await t.request('/api/v1/timelines/home', { headers: t.me.bearer });
 
     expect(idsOf(await response.json())).toEqual([privateNote.postId, toMe.postId, publicNote.postId]);
+  });
+
+  it('GET /api/v1/home はフォロー中の相手が別の人に宛てた direct を除き、宛先の direct を返す', async () => {
+    const t = await seedViewer();
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+    const publicNote = t.remote(t.alice, 1_000, { visibility: 'public' });
+    t.remote(t.alice, 2_000, { visibility: 'direct' });
+    const toMe = t.remote(t.alice, 3_000, { visibility: 'direct', recipientActorUris: [kosuiUri] });
+    const app = createIoriApp({
+      federationMiddleware: undefined,
+      registerRoutes: (router) => {
+        router.route(
+          '/api',
+          createWorkerTimelinePostingApiRouter({
+            getTimelineUseCase: GetTimelineUseCase.create({
+              sessionResolver: t.memory.sessionResolver as never,
+              userResolver: createD1UserResolver(t.db),
+              actorResolverByUserId: createD1ActorResolverByUserId(t.db),
+              timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(t.db),
+              actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(t.db),
+              actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(t.db),
+              mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(t.db),
+            }),
+            createPostUseCase: {
+              run: async () => {
+                throw new Error('unused');
+              },
+            },
+            createContext: () => createMockRequestContext(),
+          }),
+        );
+      },
+      serveAsset: async () => undefined,
+      serveUpload: async () => undefined,
+      serveOgImage: async () => new Response('not implemented', { status: 501 }),
+    });
+
+    const response = await app.request('https://iori.test/api/v1/home', {
+      headers: { Cookie: `sessionId=${t.me.sessionId}` },
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { timelineItems: Array<{ post: { postId: string } }> };
+    expect(body.timelineItems.map((item) => item.post.postId)).toEqual([toMe.postId, publicNote.postId]);
   });
 
   it('home はフォローしていないアクターの private を返さない', async () => {
@@ -191,14 +245,35 @@ describe('ログイン中の閲覧者に宛先外の private と direct のリ�
     expect(idsOf(await response.json())).toEqual(visible.map((post) => post.postId).reverse());
   });
 
-  it('notifications の status は宛先外の投稿でも絞らない', async () => {
+  it('notifications は宛先外の direct への通知を一覧から除き、:id は 404 にし、宛先の direct への通知は返す', async () => {
     const t = await seedViewer();
     const direct = t.remote(t.alice, 1_000, { visibility: 'direct' });
-    t.seed.addLikeNotification(t.me.userId, t.alice.actorId, direct.postId, 2_000);
+    const toMe = t.remote(t.alice, 2_000, { visibility: 'direct', recipientActorUris: [kosuiUri] });
+    const hidden = t.seed.addLikeNotification(t.me.userId, t.alice.actorId, direct.postId, 3_000);
+    const shown = t.seed.addLikeNotification(t.me.userId, t.alice.actorId, toMe.postId, 4_000);
 
-    const response = await t.request('/api/v1/notifications', { headers: t.me.bearer });
+    const [list, hiddenOne, shownOne] = await Promise.all([
+      t.request('/api/v1/notifications', { headers: t.me.bearer }),
+      t.request(`/api/v1/notifications/${hidden}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/notifications/${shown}`, { headers: t.me.bearer }),
+    ]);
 
-    const body = await response.json() as Array<{ status?: { id: string } }>;
-    expect(body.map((notification) => notification.status?.id)).toEqual([direct.postId]);
+    const body = await list.json() as Array<{ status?: { id: string } }>;
+    expect(body.map((notification) => notification.status?.id)).toEqual([toMe.postId]);
+    expect(hiddenOne.status).toBe(404);
+    expect(shownOne.status).toBe(200);
+  });
+
+  it('notifications は宛先外の投稿の通知を除いても Link ヘッダーの位置は除く前の行で作る', async () => {
+    const t = await seedViewer();
+    const direct = t.remote(t.alice, 1_000, { visibility: 'direct' });
+    const publicNote = t.remote(t.alice, 2_000, { visibility: 'public' });
+    t.seed.addLikeNotification(t.me.userId, t.alice.actorId, publicNote.postId, 3_000);
+    const hidden = t.seed.addLikeNotification(t.me.userId, t.alice.actorId, direct.postId, 4_000);
+
+    const response = await t.request('/api/v1/notifications?limit=1', { headers: t.me.bearer });
+
+    expect(await response.json()).toEqual([]);
+    expect(linkOf(response, 'next')?.searchParams.get('max_id')).toBe(hidden);
   });
 });

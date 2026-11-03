@@ -16,7 +16,7 @@ const seedNotifications = async () => {
   const alice = t.seed.addRemoteActor('alice');
   const bob = t.seed.addRemoteActor('bob');
   const myPost = t.seed.addLocalPost(me, 1_000);
-  const aliceReply = t.seed.addRemotePost(alice, 1_500, { timeline: false });
+  const aliceReply = t.seed.addRemotePost(alice, 1_500, { timeline: false, visibility: 'public' });
   const ids = {
     like: t.seed.addLikeNotification(me.userId, alice.actorId, myPost.postId, 2_000),
     reply: t.seed.addReplyNotification(me.userId, bob.actorId, aliceReply.postId, myPost.postId, 3_000),

@@ -1,10 +1,11 @@
 import { RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
+import type { ActorId } from '../domain/actor/actorId.ts';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
-import type { PostWithAuthor, ThreadResolver } from '../domain/post/post.ts';
+import { Post, type PostWithAuthor, type ThreadResolver } from '../domain/post/post.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
 import type { UseCase } from './useCase.ts';
@@ -12,6 +13,7 @@ import type { UseCase } from './useCase.ts';
 type Input = Readonly<{
   articleId: ArticleId;
   viewerUserId?: UserId;
+  currentActorId?: ActorId;
 }>;
 
 const Ok = Schema.create(
@@ -54,7 +56,7 @@ const create = ({
         }
         return RA.ok(article.val);
       }),
-      RA.andThen(async ({ article }): Promise<Result<Ok, Err>> => {
+      RA.andThen(async ({ article, currentActorId }): Promise<Result<Ok, Err>> => {
         if (article.rootPostId === null) {
           const body = await articleBodyResolver.resolve(article.articleId);
           if (!body.ok) {
@@ -66,16 +68,20 @@ const create = ({
           const html = article.status === 'published' ? body.val.publicHtml : body.val.privateHtml;
           return RA.ok({ article, thread: [], body: { html } });
         }
-        const threadData = await threadResolver.resolve({ postId: article.rootPostId });
+        const threadData = await threadResolver.resolve({
+          postId: article.rootPostId,
+          ...(currentActorId === undefined ? {} : { currentActorId, onlyVisibleToViewer: true }),
+        });
         if (!threadData.ok) {
           return threadData;
         }
         const { currentPost, ancestors, descendants } = threadData.val;
-        const thread: PostWithAuthor[] = [
+        const posts: PostWithAuthor[] = [
           ...ancestors,
           ...(currentPost ? [currentPost] : []),
           ...descendants,
         ];
+        const thread = currentActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : posts;
         return RA.ok({ article, thread });
       }),
     );

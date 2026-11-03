@@ -187,7 +187,7 @@ export const setupReadApi = (
     Authorization: `Bearer ${(await harness.issueUserToken(scope)).token}`,
   });
 
-  return { ...harness, seed, request, signIn, bearerFor, queries: fixture.queries, sqlite: fixture.sqlite };
+  return { ...harness, seed, db, request, signIn, bearerFor, queries: fixture.queries, sqlite: fixture.sqlite };
 };
 
 export const idsOf = (body: unknown): string[] => (body as ReadonlyArray<{ id: string }>).map((item) => item.id);
