@@ -60,6 +60,16 @@ describe('createWorkerPageFallback', () => {
     expect(loggedOut).not.toContain('post-modal');
   });
 
+  it('shows the digest link in the Sidebar only when logged in and keeps it out of the BottomNav', async () => {
+    const loggedIn = await renderSidebar(true);
+    const loggedOut = await renderSidebar(false);
+
+    expect(loggedIn).toContain('href="/digest"');
+    expect(loggedIn.indexOf('href="/digest"')).toBeLessThan(loggedIn.indexOf('href="/articles"'));
+    expect(loggedOut).not.toContain('href="/digest"');
+    expect(await renderBottomNav(true)).not.toContain('/digest');
+  });
+
   it('orders the BottomNav items as home, notifications, then the post button', async () => {
     const html = await renderBottomNav(true);
     const home = html.indexOf('href="/"');

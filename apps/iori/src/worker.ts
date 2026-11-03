@@ -168,6 +168,12 @@ export default {
           url.pathname = '/follow';
           return c.redirect(url);
         });
+        app.get('/digest', async (c) => {
+          const identity = await pageIdentity(c.req.raw, runtime);
+          if (!identity.isLoggedIn) return c.redirect('/sign-in');
+          const latest = await runtime.digest.digestResolverByUserId.resolve(identity.userId);
+          return c.redirect(latest.ok && latest.val !== undefined ? `/articles/${latest.val.articleId}` : '/articles');
+        });
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(

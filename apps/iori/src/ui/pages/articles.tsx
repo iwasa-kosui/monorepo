@@ -235,6 +235,17 @@ const ArticlesPage = () => {
 
   return (
     <div class='flex flex-col h-full'>
+      {isLoggedIn && (
+        <a
+          href='/digest'
+          class='md:hidden mb-4 px-4 py-3 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm font-medium text-charcoal dark:text-white flex items-center justify-between flex-shrink-0'
+        >
+          最新のダイジェスト
+          <svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7' />
+          </svg>
+        </a>
+      )}
       {/* Header */}
       <div class='flex items-center justify-between mb-6 flex-shrink-0'>
         <h1 class='text-xl font-semibold text-charcoal dark:text-white'>
