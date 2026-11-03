@@ -35,12 +35,19 @@ const createContext = () =>
     getFollowersUri: (identifier: string) => new URL(`https://example.com/users/${identifier}/followers`),
   }) as unknown as RequestContext<unknown>;
 
-const createDispatcher = (article: Article) =>
+const createArticleUserResolver = (article: Article, users: readonly User[] = []) => {
+  const known = [{ id: article.authorUserId, username: Username.orThrow('kosui') }, ...users];
+  return {
+    resolve: vi.fn(async (username: string) => RA.ok(known.find((user) => user.username === username))),
+  } as never;
+};
+
+const createDispatcher = (article: Article, users: readonly User[] = []) =>
   createObjectDispatcher({
     origin: 'https://example.com',
     postResolver: {} as PostResolver,
     postImagesResolver: {} as never,
-    userResolverByUsername: {} as never,
+    userResolverByUsername: createArticleUserResolver(article, users),
     articleResolver: { resolve: vi.fn(async () => RA.ok(article)) } as unknown as ArticleResolver,
     threadResolver: {
       resolve: vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] })),
@@ -80,13 +87,47 @@ describe('createObjectDispatcher ofArticle', () => {
     expect(result).toBeNull();
   });
 
+  it('作者と別のユーザーの identifier なら null を返す', async () => {
+    const article = createArticle('published');
+    const other: User = { id: UserId.generate(), username: Username.orThrow('someone') };
+
+    const result = await createDispatcher(article, [other]).ofArticle(createContext(), {
+      id: article.articleId,
+      identifier: 'someone',
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('存在しないユーザーの identifier なら null を返す', async () => {
+    const article = createArticle('published');
+
+    const result = await createDispatcher(article).ofArticle(createContext(), {
+      id: article.articleId,
+      identifier: 'nobody',
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('identifier の大文字小文字が作者のユーザー名と違えば null を返す', async () => {
+    const article = createArticle('published');
+
+    const result = await createDispatcher(article).ofArticle(createContext(), {
+      id: article.articleId,
+      identifier: 'Kosui',
+    });
+
+    expect(result).toBeNull();
+  });
+
   const createBodyDispatcher = (article: Article, publicHtml: string) => {
     const resolveThread = vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }));
     const dispatcher = createObjectDispatcher({
       origin: 'https://example.com',
       postResolver: {} as PostResolver,
       postImagesResolver: {} as never,
-      userResolverByUsername: {} as never,
+      userResolverByUsername: createArticleUserResolver(article),
       articleResolver: { resolve: vi.fn(async () => RA.ok(article)) } as unknown as ArticleResolver,
       threadResolver: { resolve: resolveThread } as unknown as ThreadResolver,
       articleBodyResolver: {
