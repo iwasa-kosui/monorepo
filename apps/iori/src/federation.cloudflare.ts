@@ -181,6 +181,7 @@ export const createCloudflareFederationRuntime = async (
     origin: env.ORIGIN,
     postResolver: createD1PostResolver(db),
     postImagesResolver: createD1PostImagesResolverByPostId(db),
+    userResolverByUsername,
     articleResolver: createD1ArticleResolver(db),
     threadResolver: createD1ThreadResolver(db, env.ORIGIN),
   });

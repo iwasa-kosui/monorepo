@@ -1,4 +1,4 @@
-import { Article as FedifyArticle, type RequestContext } from '@fedify/fedify';
+import { Article as FedifyArticle, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -6,9 +6,12 @@ import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { PostResolver, ThreadResolver } from '../../domain/post/post.ts';
+import type { LocalPost, Post, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
+import type { User } from '../../domain/user/user.ts';
 import { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { createObjectDispatcher } from './objectDispatcherFactory.ts';
 
 const createArticle = (status: ArticleStatus): Article => ({
@@ -36,6 +39,7 @@ const createDispatcher = (article: Article) =>
     origin: 'https://example.com',
     postResolver: {} as PostResolver,
     postImagesResolver: {} as never,
+    userResolverByUsername: {} as never,
     articleResolver: { resolve: vi.fn(async () => RA.ok(article)) } as unknown as ArticleResolver,
     threadResolver: {
       resolve: vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] })),
@@ -59,6 +63,100 @@ describe('createObjectDispatcher ofArticle', () => {
 
     const result = await createDispatcher(article).ofArticle(createContext(), {
       id: article.articleId,
+      identifier: 'kosui',
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
+const author: User = { id: UserId.generate(), username: Username.orThrow('kosui') };
+
+const createLocalPost = (): LocalPost => ({
+  type: 'local',
+  postId: PostId.generate(),
+  actorId: ActorId.generate(),
+  content: 'hello',
+  createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+  userId: author.id,
+  inReplyToUri: null,
+});
+
+const createRemotePost = (visibility: Visibility | null): RemotePost => ({
+  type: 'remote',
+  postId: PostId.generate(),
+  actorId: ActorId.generate(),
+  content: 'hello',
+  createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+  uri: 'https://remote.example/notes/1',
+  inReplyToUri: null,
+  visibility,
+});
+
+const createNoteDispatcher = (post: Post | undefined, users: readonly User[] = [author]) =>
+  createObjectDispatcher({
+    origin: 'https://example.com',
+    postResolver: { resolve: vi.fn(async () => RA.ok(post)) } as unknown as PostResolver,
+    postImagesResolver: { resolve: vi.fn(async () => RA.ok([])) } as never,
+    userResolverByUsername: {
+      resolve: vi.fn(async (username: string) => RA.ok(users.find((user) => user.username === username))),
+    } as never,
+  });
+
+describe('createObjectDispatcher ofNote', () => {
+  it('ローカルの公開投稿は、作者の identifier なら Note を返す', async () => {
+    const post = createLocalPost();
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    expect(result).toBeInstanceOf(Note);
+  });
+
+  it.each([null, 'public', 'unlisted', 'private', 'direct'] as const)(
+    'リモートの投稿（visibility: %s）は null を返す',
+    async (visibility) => {
+      const post = createRemotePost(visibility);
+
+      const result = await createNoteDispatcher(post).ofNote(createContext(), {
+        id: post.postId,
+        identifier: 'kosui',
+      });
+
+      expect(result).toBeNull();
+    },
+  );
+
+  it('作者と別のユーザーの identifier なら null を返す', async () => {
+    const post = createLocalPost();
+    const other: User = { id: UserId.generate(), username: Username.orThrow('someone') };
+
+    const result = await createNoteDispatcher(post, [author, other]).ofNote(createContext(), {
+      id: post.postId,
+      identifier: 'someone',
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('存在しないユーザーの identifier なら null を返す', async () => {
+    const post = createLocalPost();
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'nobody' });
+
+    expect(result).toBeNull();
+  });
+
+  it('identifier の大文字小文字が作者のユーザー名と違えば null を返す', async () => {
+    const post = createLocalPost();
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'Kosui' });
+
+    expect(result).toBeNull();
+  });
+
+  it('存在しない投稿と削除済みの投稿（resolver が undefined を返す）は null を返す', async () => {
+    const result = await createNoteDispatcher(undefined).ofNote(createContext(), {
+      id: PostId.generate(),
       identifier: 'kosui',
     });
 
