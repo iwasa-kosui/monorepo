@@ -14,6 +14,7 @@ const tables = new Set([
   'posts',
   'local_posts',
   'remote_posts',
+  'articles',
 ]);
 const words = new Set([
   'select',

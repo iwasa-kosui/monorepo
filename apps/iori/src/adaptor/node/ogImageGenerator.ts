@@ -40,4 +40,7 @@ export const createNodeOgImageGenerator = (): OgImageStore => ({
   put: async () => {
     throw new Error('Node OGP generation does not support object writes');
   },
+  delete: async () => {
+    throw new Error('Node OGP generation does not support object deletes');
+  },
 });

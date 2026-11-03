@@ -62,8 +62,9 @@ export const createObjectDispatcher = ({
     return RA.flow(
       articleUseCase.run({ articleId: ArticleId.orThrow(values.id) }),
       RA.match({
-        ok: ({ article, thread }) =>
-          new FedifyArticle({
+        ok: ({ article, thread }) => {
+          if (article.status !== 'published') return null;
+          return new FedifyArticle({
             id: ctx.getObjectUri(FedifyArticle, values),
             attribution: ctx.getActorUri(values.identifier),
             to: PUBLIC_COLLECTION,
@@ -73,7 +74,8 @@ export const createObjectDispatcher = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(article.publishedAt ?? article.createdAt),
             url: ctx.getObjectUri(FedifyArticle, values),
-          }),
+          });
+        },
         err: (error) => {
           getLogger().warn(`Failed to resolve article for federation: ${values.identifier} - ${values.id} - ${error}`);
           return null;

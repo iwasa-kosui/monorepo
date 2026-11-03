@@ -17,7 +17,7 @@ describe('backfillOgImages', () => {
     expect(uploads).toEqual([{
       key: 'og/article-1.png',
       body: new TextEncoder().encode('PNG:Migrated article'),
-      cacheControl: 'public, max-age=31536000, immutable',
+      cacheControl: 'public, max-age=3600',
     }]);
   });
 });

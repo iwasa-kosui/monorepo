@@ -101,6 +101,7 @@ import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPas
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
+import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
@@ -175,6 +176,7 @@ export const createWorkerRuntimePorts = async (
   const emojiReactResolverByActorAndPostAndEmoji = createD1EmojiReactResolverByActorAndPostAndEmoji(db);
   const threadResolver = createD1ThreadResolver(db, env.ORIGIN);
   const uploads = createPostImageR2ObjectStore({ bucket: env.UPLOADS });
+  const ogImageStore = createR2OgImageStore(env.UPLOADS);
   const pushSubscriptionsResolver = createD1PushSubscriptionsResolverByUserId(db);
   const webPushSender = createCloudflareWebPushSender({
     subject: env.VAPID_SUBJECT,
@@ -411,8 +413,10 @@ export const createWorkerRuntimePorts = async (
         articleDeletedStore: createD1ArticleDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
+      sessionResolver,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,
+      deleteOgImage: (articleId) => ogImageStore.delete(articleId),
     },
     mutesRelays: {
       getMutesUseCase: GetMutesUseCase.create({

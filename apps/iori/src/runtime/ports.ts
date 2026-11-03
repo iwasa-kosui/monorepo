@@ -14,6 +14,7 @@ import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domai
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActor } from '../domain/actor/remoteActor.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
+import type { ArticleId } from '../domain/article/articleId.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { MutedActorIdsResolverByUserId } from '../domain/mute/mute.ts';
@@ -137,7 +138,9 @@ export type IoriArticlesRuntimePorts = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  sessionResolver: SessionResolver;
   publishOgImage: (article: Article) => Promise<void>;
+  deleteOgImage: (articleId: ArticleId) => Promise<void>;
 }>;
 export type IoriMutesRelaysRuntimePorts = Readonly<{
   getMutesUseCase: GetMutesUseCase;
