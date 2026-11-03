@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const timestamp = () => integer({ mode: 'timestamp_ms' });
 
@@ -152,7 +152,23 @@ export const notificationsTable = sqliteTable('notifications', {
   type: text('type').notNull(),
   isRead: integer('isRead').notNull().default(0),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  index('notifications_recipient_user_id_created_at_notification_id_idx').on(
+    table.recipientUserId,
+    table.createdAt,
+    table.notificationId,
+  ),
+]);
+
+export const mastodonMarkersTable = sqliteTable('mastodon_markers', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  timeline: text('timeline', { enum: ['home', 'notifications'] }).notNull(),
+  lastReadId: text('lastReadId').notNull(),
+  version: integer('version').notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.timeline] }),
+]);
 
 export const notificationLikesTable = sqliteTable('notification_likes', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
@@ -395,6 +411,7 @@ export const schema = {
   remoteLikesTable,
   postImagesTable,
   notificationsTable,
+  mastodonMarkersTable,
   notificationLikesTable,
   notificationFollowsTable,
   pushSubscriptionsTable,

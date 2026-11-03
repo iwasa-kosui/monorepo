@@ -6,6 +6,7 @@ import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { PageRequest } from '../page/page.ts';
 import type { Post } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
@@ -408,3 +409,23 @@ export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWit
 
 // 未読通知数を取得するリゾルバ
 export type UnreadNotificationCountResolverByUserId = Agg.Resolver<UserId, number>;
+
+export type NotificationItem = Readonly<{
+  notification: Notification;
+  createdAt: Instant;
+}>;
+
+export type NotificationsResolverByPage = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; page: PageRequest; types: ReadonlyArray<Notification['type']> }>,
+  NotificationItem[]
+>;
+
+export type NotificationResolverByUserIdAndId = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; notificationId: NotificationId }>,
+  NotificationItem | undefined
+>;
+
+export type NotificationCountResolverSinceMarker = Agg.Resolver<
+  Readonly<{ userId: UserId; types: ReadonlyArray<Notification['type']>; limit: number }>,
+  number
+>;

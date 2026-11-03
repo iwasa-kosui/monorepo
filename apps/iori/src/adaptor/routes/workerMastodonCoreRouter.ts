@@ -2,18 +2,15 @@ import { Hono } from 'hono';
 
 import type { AccountStatsResolverByActorId } from '../../domain/actor/accountStats.ts';
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
-import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { User, UserResolver, UserResolverByUsername } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { defaultImageUrls } from '../mastodon/defaultImages.ts';
-import type { Account, CredentialAccount, Marker, Preferences } from '../mastodon/entities.ts';
+import type { Account, CredentialAccount, Preferences } from '../mastodon/entities.ts';
 import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
-import { toIsoString } from '../mastodon/time.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerMastodonCoreRouterDeps = Readonly<{
@@ -49,7 +46,6 @@ const readFollows = scope('read:follows');
 const readLists = scope('read:lists');
 const readSearch = scope('read:search');
 const readStatuses = scope('read:statuses');
-const writeStatuses = scope('write:statuses');
 const profileScope = scope('profile');
 const pushScope = scope('push');
 
@@ -62,18 +58,6 @@ const preferences: Preferences = {
 };
 
 const languages = [{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }] as const;
-
-const markerKeys = ['home', 'notifications'] as const;
-
-const readLastReadId = (body: RequestBody, key: string): string | undefined => {
-  const nested = body[key];
-  if (typeof nested === 'object' && nested !== null && !Array.isArray(nested)) {
-    const lastReadId = Reflect.get(nested, 'last_read_id');
-    return typeof lastReadId === 'string' ? lastReadId : undefined;
-  }
-  const flat = body[`${key}[last_read_id]`];
-  return typeof flat === 'string' ? flat : undefined;
-};
 
 export const createWorkerMastodonCoreRouter = ({
   authn,
@@ -171,19 +155,6 @@ export const createWorkerMastodonCoreRouter = ({
     .get('/v1/trends/tags', (c) => c.json([]))
     .get('/v1/trends/links', (c) => c.json([]))
     .get('/v1/preferences', authn.requireUser(readAccounts), (c) => c.json(preferences))
-    .get('/v1/markers', authn.requireUser(readStatuses), (c) => c.json({}))
-    .post('/v1/markers', authn.requireUser(writeStatuses), async (c) => {
-      const body = await readRequestBody(c);
-      const updatedAt = toIsoString(Instant.now());
-      const markers: Partial<Record<(typeof markerKeys)[number], Marker>> = {};
-      for (const key of markerKeys) {
-        const lastReadId = readLastReadId(body, key);
-        if (lastReadId !== undefined) {
-          markers[key] = { last_read_id: lastReadId, version: 0, updated_at: updatedAt };
-        }
-      }
-      return c.json(markers);
-    })
     .get('/v1/push/subscription', authn.requireUser(pushScope), (c) => c.json(recordNotFound, 404))
     .get('/v2/search', authn.requireUser(readSearch), (c) => c.json({ accounts: [], statuses: [], hashtags: [] }));
 

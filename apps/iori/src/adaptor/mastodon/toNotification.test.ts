@@ -7,7 +7,7 @@ import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { type Account, NotificationSchema, RelationshipSchema } from './entities.ts';
-import { toNotification } from './toNotification.ts';
+import { selectDomainTypes, toNotification } from './toNotification.ts';
 import { toRelationship } from './toRelationship.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
@@ -81,17 +81,47 @@ describe('toNotification', () => {
     expect(result).not.toHaveProperty('status');
   });
 
-  it('returns undefined for emojiReact', () => {
+  it('maps emojiReact to iori:emoji_reaction with the emoji in the iori extension', () => {
     const result = toNotification({
       ...base,
       type: 'emojiReact',
       reactorActorId: ActorId.generate(),
       reactedPostId: PostId.generate(),
-      emoji: '🎉',
-      emojiImageUrl: null,
+      emoji: ':wave:',
+      emojiImageUrl: 'https://iori.example/emoji/wave.png',
     }, options);
 
-    expect(result).toBeUndefined();
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'iori:emoji_reaction',
+      iori: { emoji: ':wave:', url: 'https://iori.example/emoji/wave.png' },
+    });
+  });
+
+  it('omits the iori extension for the other types', () => {
+    const result = toNotification({ ...base, type: 'follow', followerActorId: ActorId.generate() }, options);
+
+    expect(result).not.toHaveProperty('iori');
+  });
+});
+
+describe('selectDomainTypes', () => {
+  const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
+
+  it('returns like, reply and follow by default and leaves emojiReact out', () => {
+    expect(select([])).toEqual(['like', 'reply', 'follow']);
+  });
+
+  it('returns emojiReact only when iori:emoji_reaction is named', () => {
+    expect(select(['iori:emoji_reaction'])).toEqual(['emojiReact']);
+    expect(select(['favourite', 'iori:emoji_reaction'])).toEqual(['like', 'emojiReact']);
+  });
+
+  it('ignores unknown values and applies the exclusions', () => {
+    expect(select(['bogus'])).toEqual(['like', 'reply', 'follow']);
+    expect(select(['favourite', 'bogus'])).toEqual(['like']);
+    expect(select([], ['follow', 'bogus'])).toEqual(['like', 'reply']);
+    expect(select(['reblog'])).toEqual([]);
   });
 });
 

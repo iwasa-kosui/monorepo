@@ -39,7 +39,6 @@ const runtime = vi.hoisted(() => ({
   },
   notifications: {
     getUnreadNotificationCountUseCase: {},
-    getNotificationsUseCase: {},
     getLikedPostsUseCase: {},
   },
   articles: {
