@@ -155,6 +155,7 @@ export type IoriArticlesRuntimePorts = Readonly<{
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
   sessionResolver: SessionResolver;
+  actorResolverByUserId: ActorResolverByUserId;
   publishOgImage: (article: Article) => Promise<void>;
   deleteOgImage: (articleId: ArticleId) => Promise<void>;
 }>;

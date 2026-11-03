@@ -78,6 +78,7 @@ export const createWorkerMastodonTimelinesRouter = ({
         createdAt: undefined,
         mutedActorIds: mutedActorIds.val,
         page,
+        onlyVisibleToViewer: true,
       });
       if (!items.ok) {
         return c.json(internalServerError, 500);
@@ -115,6 +116,7 @@ export const createWorkerMastodonTimelinesRouter = ({
             page,
             mutedActorIds: muted,
             currentActorId: viewerActorId,
+            onlyVisibleToViewer: true,
           });
           return items.ok
             ? toNewestFirst(items.val, page).map((item): StatusSource => ({ type: 'post', post: item.post }))

@@ -2,10 +2,12 @@ import { RA } from '@iwasa-kosui/result';
 import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { ThreadResolver } from '../../../domain/post/post.ts';
+import { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
 import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 import { enrichPostRows, type PostRow, postRowsQuery } from './postWithAuthorBatch.ts';
+import { selectVisiblePostIds } from './visibleToViewer.ts';
 
 const MAX_ANCESTOR_DEPTH = 40;
 const MAX_DESCENDANT_DEPTH = 20;
@@ -92,18 +94,32 @@ export const createD1ThreadResolver = (db: IoriD1Db, origin: string): ThreadReso
     return ancestors;
   };
   return {
-    resolve: async ({ postId, currentActorId }) => {
+    resolve: async ({ postId, currentActorId, onlyVisibleToViewer }) => {
       const currentRow = await byId(postId);
       if (currentRow === undefined) return RA.ok({ currentPost: null, ancestors: [], descendants: [] });
       const [ancestorRows, descendantRows] = await Promise.all([
         ancestorRowsOf(currentRow),
         descendantRowsOf(currentRow),
       ]);
-      const posts = await enrichPostRows(db, [...ancestorRows, currentRow, ...descendantRows], currentActorId);
+      const visiblePostIds = onlyVisibleToViewer === true && currentActorId !== undefined
+        ? await selectVisiblePostIds(
+          db,
+          [...ancestorRows, currentRow, ...descendantRows].map((row) => PostId.orThrow(row.posts.postId)),
+          currentActorId,
+        )
+        : undefined;
+      const isVisible = (row: PostRow): boolean => visiblePostIds?.has(row.posts.postId) ?? true;
+      if (!isVisible(currentRow)) return RA.ok({ currentPost: null, ancestors: [], descendants: [] });
+      const visibleAncestorRows = ancestorRows.filter(isVisible);
+      const posts = await enrichPostRows(
+        db,
+        [...visibleAncestorRows, currentRow, ...descendantRows.filter(isVisible)],
+        currentActorId,
+      );
       return RA.ok({
-        currentPost: posts[ancestorRows.length],
-        ancestors: posts.slice(0, ancestorRows.length),
-        descendants: posts.slice(ancestorRows.length + 1),
+        currentPost: posts[visibleAncestorRows.length],
+        ancestors: posts.slice(0, visibleAncestorRows.length),
+        descendants: posts.slice(visibleAncestorRows.length + 1),
       });
     },
   };

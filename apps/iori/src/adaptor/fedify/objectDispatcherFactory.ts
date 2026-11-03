@@ -85,10 +85,22 @@ export const createObjectDispatcher = ({
       RA.ok(values.id),
       RA.andThen(ArticleId.parse),
       RA.andThen((articleId) => articleUseCase.run({ articleId })),
+      RA.andThen(({ article, thread, body }) => {
+        if (article.status !== 'published') return RA.err(new Error('Article is not published'));
+        return RA.flow(
+          RA.ok(values.identifier),
+          RA.andThen(Username.parse),
+          RA.andThen((username) => userResolverByUsername.resolve(username)),
+          RA.andThen((user) =>
+            user?.id === article.authorUserId
+              ? RA.ok({ article, thread, body })
+              : RA.err(new Error('Article author does not match'))
+          ),
+        );
+      }),
       RA.match({
-        ok: ({ article, thread, body }) => {
-          if (article.status !== 'published') return null;
-          return new FedifyArticle({
+        ok: ({ article, thread, body }) =>
+          new FedifyArticle({
             id: ctx.getObjectUri(FedifyArticle, values),
             attribution: ctx.getActorUri(values.identifier),
             to: PUBLIC_COLLECTION,
@@ -98,8 +110,7 @@ export const createObjectDispatcher = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(article.publishedAt ?? article.createdAt),
             url: ctx.getObjectUri(FedifyArticle, values),
-          });
-        },
+          }),
         err: (error) => {
           getLogger().warn(`Failed to resolve article for federation: ${values.identifier} - ${values.id} - ${error}`);
           return null;

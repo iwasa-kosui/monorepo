@@ -4,6 +4,8 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
+import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
+import type { ActorId } from '../../domain/actor/actorId.ts';
 import type { PublishedArticlesWithAuthorResolver } from '../../domain/article/article.ts';
 import type { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
@@ -31,6 +33,7 @@ export type WorkerArticlesApiRouterDeps = Readonly<{
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
   sessionResolver: SessionResolver;
+  actorResolverByUserId?: ActorResolverByUserId;
   publishOgImage?: (article: Article) => Promise<void>;
   deleteOgImage?: (articleId: ArticleId) => Promise<void>;
   createContext: (request: Request) => RequestContext<unknown>;
@@ -60,9 +63,19 @@ export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps)
         viewerUserId = undefined;
       }
     }
+    let currentActorId: ActorId | undefined;
+    if (viewerUserId !== undefined && deps.actorResolverByUserId !== undefined) {
+      try {
+        const actor = await deps.actorResolverByUserId.resolve(viewerUserId);
+        currentActorId = actor.ok ? actor.val?.id : undefined;
+      } catch {
+        currentActorId = undefined;
+      }
+    }
     const result = await deps.getArticleWithThreadUseCase.run({
       articleId: articleId.val,
       viewerUserId,
+      currentActorId,
     });
     if (!result.ok) {
       return result.err.type === 'ArticleNotFoundError'

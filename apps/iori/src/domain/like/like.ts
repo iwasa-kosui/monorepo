@@ -127,7 +127,7 @@ export type RemoteLikeResolverByActivityUri = Agg.Resolver<
   RemoteLike | undefined
 >;
 export type LikedPostIdsResolverByActorIdWithPagination = Agg.Resolver<
-  Readonly<{ actorId: ActorId; page: PageRequest }>,
+  Readonly<{ actorId: ActorId; page: PageRequest; onlyVisibleToViewer?: boolean }>,
   ReadonlyArray<Readonly<{ likeId: LikeId; postId: PostId }>>
 >;
 

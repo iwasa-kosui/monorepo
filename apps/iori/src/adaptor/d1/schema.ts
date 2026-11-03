@@ -109,6 +109,14 @@ export const remotePostsTable = sqliteTable('remote_posts', {
   index('remote_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);
 
+export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
+  postId: text('postId').notNull().references(() => postsTable.postId),
+  actorUri: text('actorUri').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.postId, table.actorUri] }),
+  index('remote_post_recipients_actor_uri_idx').on(table.actorUri),
+]);
+
 export const localPostsTable = sqliteTable('local_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -420,6 +428,7 @@ export const schema = {
   sessionsTable,
   postsTable,
   remotePostsTable,
+  remotePostRecipientsTable,
   localPostsTable,
   likesTable,
   localLikesTable,

@@ -22,6 +22,7 @@ import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
 import { toVisibility } from '../post/toVisibility.ts';
+import { visibleToViewer } from '../post/visibleToViewer.ts';
 import {
   actorsTable,
   emojiReactsTable,
@@ -50,7 +51,7 @@ const cursorOf = (id: string) =>
 export const createD1TimelineItemsResolverByActorIds = (
   db: IoriD1Db,
 ): TimelineItemsResolverByActorIds => ({
-  resolve: async ({ actorIds, currentActorId, createdAt, mutedActorIds, page }) => {
+  resolve: async ({ actorIds, currentActorId, createdAt, mutedActorIds, page, onlyVisibleToViewer }) => {
     if (actorIds.length === 0) {
       return RA.ok([]);
     }
@@ -75,6 +76,7 @@ export const createD1TimelineItemsResolverByActorIds = (
       .where(and(
         inArray(timelineItemsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         isNull(timelineItemsTable.deletedAt),
+        visibleToViewer({ currentActorId, onlyVisibleToViewer }),
         page === undefined || mutedActorIds.length === 0
           ? undefined
           : notInArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson([...mutedActorIds])}))`),

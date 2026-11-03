@@ -23,6 +23,7 @@ export type AccountStatusItemsResolverByActorId = Agg.Resolver<
     excludeReplies: boolean;
     excludeReblogs: boolean;
     onlyMedia: boolean;
+    onlyVisibleToViewer?: boolean;
   }>,
   AccountStatusItem[]
 >;
