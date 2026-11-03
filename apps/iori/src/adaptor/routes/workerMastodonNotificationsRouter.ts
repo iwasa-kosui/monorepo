@@ -109,7 +109,11 @@ export const createWorkerMastodonNotificationsRouter = ({
     ];
     const posts = postIds.length === 0
       ? undefined
-      : await postsWithAuthorResolverByPostIds.resolve({ postIds, currentActorId: viewerActorId });
+      : await postsWithAuthorResolverByPostIds.resolve({
+        postIds,
+        currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
+      });
     if (posts !== undefined && !posts.ok) {
       throw new Error('Failed to resolve notification posts');
     }

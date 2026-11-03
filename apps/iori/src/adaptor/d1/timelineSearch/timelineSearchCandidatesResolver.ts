@@ -6,12 +6,13 @@ import { PostId } from '../../../domain/post/postId.ts';
 import type { TimelineSearchCandidatesResolver } from '../../../domain/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
+import { visibleToViewer } from '../post/visibleToViewer.ts';
 import { postsTable } from '../schema.ts';
 
 export const createD1TimelineSearchCandidatesResolver = (
   db: IoriD1Db,
 ): TimelineSearchCandidatesResolver => ({
-  resolve: async ({ actorIds, terms, limit }) => {
+  resolve: async ({ actorIds, currentActorId, terms, limit }) => {
     if (terms.length === 0) {
       return RA.ok([]);
     }
@@ -24,6 +25,7 @@ export const createD1TimelineSearchCandidatesResolver = (
       .from(postsTable)
       .where(and(
         isNull(postsTable.deletedAt),
+        visibleToViewer({ currentActorId, onlyVisibleToViewer: true }),
         inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         // content は HTML のままなので、タグ名や属性名に当たる語は本文以外にも一致し、本文に一致する古い投稿が候補の上限から外れることがある
         or(...terms.map(({ pattern }) => like(postsTable.content, `%${pattern}%`))),

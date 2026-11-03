@@ -319,6 +319,7 @@ export const createWorkerMastodonAccountsRouter = ({
             excludeReplies: isTrue(c.req.query('exclude_replies')),
             excludeReblogs: isTrue(c.req.query('exclude_reblogs')),
             onlyMedia: isTrue(c.req.query('only_media')),
+            onlyVisibleToViewer: true,
           }),
       ]);
       if (owner[0] === undefined) {

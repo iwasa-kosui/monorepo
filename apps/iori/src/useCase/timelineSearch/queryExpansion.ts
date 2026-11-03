@@ -5,7 +5,7 @@ import { SearchTerm } from '../../domain/timelineSearch/searchTerm.ts';
 import type { AiError } from '../../ports/aiError.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
 
-export const QUERY_EXPANSION_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
+export const QUERY_EXPANSION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
 const MAX_OUTPUT_TOKENS = 256;
 const MIN_EXPANDED_TERM_CHARS = 2;

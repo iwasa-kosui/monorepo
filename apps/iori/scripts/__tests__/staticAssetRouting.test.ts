@@ -119,7 +119,9 @@ describe('ai', () => {
 
 describe('triggers', () => {
   it('declares the cron expressions in the deployment config built from the template', async () => {
-    expect((await readDeployedConfig()).triggers).toEqual({ crons: ['0 0,3,6,9,12,15,18,21 * * *'] });
+    expect((await readDeployedConfig()).triggers).toEqual({
+      crons: ['0 0,3,6,9,12,15,18,21 * * *', '15 20 * * 1'],
+    });
   });
 
   it('registers a task for exactly the cron expressions in the template', async () => {

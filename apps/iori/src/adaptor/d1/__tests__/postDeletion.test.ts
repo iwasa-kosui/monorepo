@@ -12,6 +12,7 @@ import {
   localPostsTable,
   postImagesTable,
   postsTable,
+  remotePostRecipientsTable,
   remotePostsTable,
   timelineItemsTable,
 } from '../schema.ts';
@@ -30,6 +31,7 @@ const createRecordingDb = () => {
     [localPostsTable, 'local_posts'],
     [postImagesTable, 'post_images'],
     [postsTable, 'posts'],
+    [remotePostRecipientsTable, 'remote_post_recipients'],
     [remotePostsTable, 'remote_posts'],
     [timelineItemsTable, 'timeline_items'],
   ]);
@@ -74,6 +76,7 @@ describe('D1 post deletion stores', () => {
     expect(operations.map(({ kind, table }) => `${kind}:${table}`)).toEqual([
       'delete:post_images',
       'delete:local_posts',
+      'delete:remote_post_recipients',
       'delete:remote_posts',
       'delete:posts',
       'insert:domain_events',

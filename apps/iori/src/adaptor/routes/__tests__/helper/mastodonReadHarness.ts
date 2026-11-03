@@ -188,6 +188,7 @@ export const setupReadApi = (
             postResolver,
           }),
           sendRepostUseCase: SendRepostUseCase.create({
+            origin: ORIGIN,
             sessionResolver,
             userResolver,
             actorResolverByUserId,
@@ -339,6 +340,7 @@ export const setupReadApi = (
   return {
     ...harness,
     seed,
+    db,
     request,
     signIn,
     bearerFor,

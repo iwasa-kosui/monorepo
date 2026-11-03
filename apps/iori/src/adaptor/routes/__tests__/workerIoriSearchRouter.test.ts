@@ -137,6 +137,28 @@ describe('GET /api/iori/v1/search/statuses', () => {
     expect(ids).not.toContain(t.fromCarol.postId);
   });
 
+  it('フォロー中の相手の宛先外の direct を返さず、宛先の direct は返す', async () => {
+    const t = await seedTimeline();
+    const toOther = t.seed.addRemotePost(t.alice, 6_000, {
+      content: '<p>京都 other</p>',
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/other'],
+    });
+    const toMe = t.seed.addRemotePost(t.alice, 7_000, {
+      content: '<p>京都 me</p>',
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+
+    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
+      headers: t.me.bearer,
+    });
+
+    const ids = parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses).map((status) => status.id);
+    expect(ids).not.toContain(toOther.postId);
+    expect(ids).toContain(toMe.postId);
+  });
+
   it('limit で件数を絞る', async () => {
     const t = await seedTimeline();
 

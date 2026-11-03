@@ -3,7 +3,31 @@ import { RA } from '@iwasa-kosui/result';
 import type { PostCreated, PostCreatedStore, RemotePostCreated } from '../../../domain/post/post.ts';
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
-import { domainEventsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
+import {
+  domainEventsTable,
+  localPostsTable,
+  postsTable,
+  remotePostRecipientsTable,
+  remotePostsTable,
+} from '../schema.ts';
+
+// D1 の束縛上限 100 に収まるよう、1 文あたり 2 列 × 40 行に分ける
+const RECIPIENT_ROWS_PER_INSERT = 40;
+
+const recipientInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
+  if (event.eventName !== 'post.remotePostCreated') return [];
+  const { postId } = event.aggregateState;
+  const { recipientActorUris } = event.eventPayload;
+  const inserts = [];
+  for (let i = 0; i < recipientActorUris.length; i += RECIPIENT_ROWS_PER_INSERT) {
+    inserts.push(
+      db.insert(remotePostRecipientsTable).values(
+        recipientActorUris.slice(i, i + RECIPIENT_ROWS_PER_INSERT).map((actorUri) => ({ postId, actorUri })),
+      ),
+    );
+  }
+  return inserts;
+};
 
 export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
   store: (event: PostCreated | RemotePostCreated) =>
@@ -33,6 +57,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
         await db.batch([
           postInsert,
           subtypeInsert,
+          ...recipientInserts(db, event),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,
             aggregateId: event.aggregateId,

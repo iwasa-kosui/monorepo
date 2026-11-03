@@ -102,6 +102,20 @@ describe('POST /api/v1/statuses/:id/favourite と /unfavourite', () => {
     expect(await response.json()).toEqual({ error: 'The remote server could not be reached' });
   });
 
+  it('閲覧者に見えないリモートの投稿は 404 にして likes を増やさない', async () => {
+    const t = await seedActions();
+    const hidden = [
+      t.seed.addRemotePost(t.alice, 2_100, { visibility: 'private', timeline: false }),
+      t.seed.addRemotePost(t.alice, 2_200, { visibility: 'direct', timeline: false }),
+    ];
+
+    const responses = await Promise.all(hidden.map((note) => t.post(`/api/v1/statuses/${note.postId}/favourite`)));
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404]);
+    expect(await responses[0]!.json()).toEqual(notFound);
+    expect(t.count('likes')).toBe(0);
+  });
+
   it('存在しない投稿、削除済みの投稿、不正な ID は 404 にする', async () => {
     const t = await seedActions();
     const deleted = t.seed.addLocalPost(t.me, 3_000, { deletedAt: 4_000 });
@@ -220,9 +234,14 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
 
   it('リモートの private、direct、公開範囲の記録がない投稿は 422 にして何も作らない', async () => {
     const t = await seedActions();
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
     const hidden = [
       t.seed.addRemotePost(t.alice, 2_100, { visibility: 'private', timeline: false }),
-      t.seed.addRemotePost(t.alice, 2_200, { visibility: 'direct', timeline: false }),
+      t.seed.addRemotePost(t.alice, 2_200, {
+        visibility: 'direct',
+        timeline: false,
+        recipientActorUris: [`${ORIGIN}/users/${t.me.username}`],
+      }),
       t.seed.addRemotePost(t.alice, 2_300, { visibility: null, timeline: false }),
     ];
 
