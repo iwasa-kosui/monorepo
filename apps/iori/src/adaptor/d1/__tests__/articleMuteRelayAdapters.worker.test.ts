@@ -20,7 +20,6 @@ import type { IoriD1Db } from '../client.ts';
 import { createD1MuteCreatedStore } from '../mute/muteCreatedStore.ts';
 import { createD1MuteDeletedStore } from '../mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../mute/muteResolver.ts';
-import { createD1MutesResolverByUserId } from '../mute/mutesResolverByUserId.ts';
 import { createD1AllRelaysResolver } from '../relay/allRelaysResolver.ts';
 import { createD1RelayResolver } from '../relay/relayResolver.ts';
 import { createD1RelaySubscriptionRequestedStore } from '../relay/relaySubscriptionRequestedStore.ts';
@@ -87,7 +86,6 @@ describe('D1 article, mute, and relay adapters', () => {
       { article: { ...articleRow, status: 'published' }, username: 'kosui' },
     ]])).resolve();
     const mute = await createD1MuteResolver(queryDb([[muteRow]])).resolve({ userId, mutedActorId: actorId });
-    const mutes = await createD1MutesResolverByUserId(queryDb([[muteRow]])).resolve(userId);
     const relay = await createD1RelayResolver(queryDb([[relayRow]])).resolve({ relayId: relayRow.relayId });
     const relays = await createD1AllRelaysResolver(queryDb([[relayRow]])).resolve();
 
@@ -98,7 +96,6 @@ describe('D1 article, mute, and relay adapters', () => {
       val: { authorUsername: 'kosui', articles: [{ status: 'published' }] },
     });
     expect(mute).toMatchObject({ ok: true, val: { mutedActorId: actorId } });
-    expect(mutes).toMatchObject({ ok: true, val: [{ mutedActorId: actorId }] });
     expect(relay).toMatchObject({ ok: true, val: { actorUri: relayRow.actorUri } });
     expect(relays).toMatchObject({ ok: true, val: [{ relayId: relayRow.relayId }] });
   });

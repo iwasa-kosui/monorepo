@@ -10,11 +10,9 @@ import type { AllRelaysResolver } from '../../domain/relay/relay.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import type { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import type { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
-import type { GetMutesUseCase } from '../../useCase/getMutes.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 
 export type WorkerMutesRelaysApiRouterDeps = Readonly<{
-  getMutesUseCase: GetMutesUseCase;
   createMuteUseCase: CreateMuteUseCase;
   deleteMuteUseCase: DeleteMuteUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
@@ -28,14 +26,6 @@ export const createWorkerMutesRelaysApiRouter = (
   deps: WorkerMutesRelaysApiRouterDeps,
 ): Hono =>
   new Hono()
-    .get('/v1/mutes', async (c) => {
-      const sessionId = SessionId.parse(getCookie(c, 'sessionId'));
-      if (!sessionId.ok) return c.json({ error: getCookie(c, 'sessionId') ? 'Invalid session' : 'Unauthorized' }, 401);
-      return RA.match({
-        ok: (mutes) => c.json({ mutes }),
-        err: (err) => c.json({ error: `Failed to get mutes: ${JSON.stringify(err)}` }, 400),
-      })(await deps.getMutesUseCase.run({ sessionId: sessionId.val }));
-    })
     .post('/v1/mute', sValidator('json', muteSchema), async (c) => {
       const sessionId = SessionId.parse(getCookie(c, 'sessionId'));
       if (!sessionId.ok) return c.json({ error: 'Invalid session' }, 401);

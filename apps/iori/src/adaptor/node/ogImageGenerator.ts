@@ -1,6 +1,7 @@
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { OgImageStore } from '../../ports/ogImageStore.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { loadNodeOgFont } from './ogImageFont.ts';
@@ -22,6 +23,7 @@ export const createNodeOgImageGenerator = (): OgImageStore => ({
     const useCase = GetArticleWithThreadUseCase.create({
       articleResolver: PgArticleResolver.getInstance(),
       threadResolver: PgThreadResolver.getInstance(),
+      articleBodyResolver: PgArticleBodyResolver.getInstance(),
     });
     const result = await useCase.run({ articleId: articleIdResult.val });
     if (!result.ok) {

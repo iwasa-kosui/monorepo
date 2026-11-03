@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b33cb117-c036-44d9-8bd0-43a3ecf2487e",
+  "id": "476787ce-5c86-4441-bbfc-1b9d9a424013",
   "prevId": "c98d8f8f-4222-4eea-b4e7-106c43fe3ca8",
   "tables": {
     "actors": {
@@ -64,6 +64,58 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "article_bodies": {
+      "name": "article_bodies",
+      "columns": {
+        "articleId": {
+          "name": "articleId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "privateHtml": {
+          "name": "privateHtml",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "publicHtml": {
+          "name": "publicHtml",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "article_bodies_articleId_articles_articleId_fk": {
+          "name": "article_bodies_articleId_articles_articleId_fk",
+          "tableFrom": "article_bodies",
+          "tableTo": "articles",
+          "columnsFrom": [
+            "articleId"
+          ],
+          "columnsTo": [
+            "articleId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "articles": {
       "name": "articles",
       "columns": {
@@ -92,7 +144,7 @@
           "name": "rootPostId",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "title": {
@@ -2336,60 +2388,6 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "remote_post_recipients": {
-      "name": "remote_post_recipients",
-      "columns": {
-        "postId": {
-          "name": "postId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "actorUri": {
-          "name": "actorUri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "remote_post_recipients_actor_uri_idx": {
-          "name": "remote_post_recipients_actor_uri_idx",
-          "columns": [
-            "actorUri"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "remote_post_recipients_postId_posts_postId_fk": {
-          "name": "remote_post_recipients_postId_posts_postId_fk",
-          "tableFrom": "remote_post_recipients",
-          "tableTo": "posts",
-          "columnsFrom": [
-            "postId"
-          ],
-          "columnsTo": [
-            "postId"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "remote_post_recipients_postId_actorUri_pk": {
-          "columns": [
-            "postId",
-            "actorUri"
-          ],
-          "name": "remote_post_recipients_postId_actorUri_pk"
-        }
-      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

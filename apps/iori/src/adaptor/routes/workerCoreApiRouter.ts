@@ -1,51 +1,28 @@
 import type { RequestContext } from '@fedify/fedify';
 import { sValidator } from '@hono/standard-validator';
-import type { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
-import { ActorId } from '../../domain/actor/actorId.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
-import { Instant } from '../../domain/instant/instant.ts';
 import { Password } from '../../domain/password/password.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
-import type { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import type { SendFollowRequestUseCase } from '../../useCase/sendFollowRequest.ts';
 import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { createSignUpUseCase } from '../../useCase/signUp.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { UnsubscribePushUseCase } from '../../useCase/unsubscribePush.ts';
-import { sanitize } from './helper/sanitize.ts';
-
-type RemoteActorPostsResult = Readonly<{
-  remoteActor: unknown;
-  isFollowing: boolean;
-  isMuted: boolean;
-  posts: readonly PostWithAuthor[];
-}>;
 
 export type WorkerCoreApiRouterDeps = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   sendFollowRequestUseCase: SendFollowRequestUseCase;
-  getUserPostsUseCase: GetUserPostsUseCase;
-  getRemoteActorPostsUseCase: Readonly<{
-    run: (
-      input: Readonly<{
-        sessionId: SessionId;
-        actorId: ActorId;
-        createdAt: Instant | undefined;
-      }>,
-    ) => RA<RemoteActorPostsResult, { message: string }>;
-  }>;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   uploads: PostImageObjectStore;
@@ -57,11 +34,6 @@ const sessionFrom = (cookie: string | undefined): SessionId | undefined => {
   const result = SessionId.parse(cookie);
   return result.ok ? result.val : undefined;
 };
-
-const sanitizePost = (post: PostWithAuthor): PostWithAuthor => ({
-  ...post,
-  content: sanitize(post.content),
-});
 
 export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono => {
   const app = new Hono();
@@ -158,43 +130,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
       return result.ok
         ? c.json({ success: true })
         : c.json({ error: `Failed to follow: ${JSON.stringify(result.err)}` }, 400);
-    },
-  );
-
-  app.get(
-    '/v1/users/:username/posts',
-    sValidator('param', z.object({ username: Username.zodType })),
-    sValidator('query', z.object({ createdAt: z.optional(z.coerce.number().pipe(Instant.zodType)) })),
-    async (c) => {
-      const result = await deps.getUserPostsUseCase.run({
-        username: c.req.valid('param').username,
-        createdAt: c.req.valid('query').createdAt,
-      });
-      if (!result.ok) return c.json({ error: result.err.message }, 400);
-      const url = new URL(c.req.url);
-      return c.json({
-        ...result.val,
-        handle: `@${result.val.user.username}@${url.host}`,
-        posts: result.val.posts.map(sanitizePost),
-      });
-    },
-  );
-
-  app.get(
-    '/v1/remote-users/:actorId/posts',
-    sValidator('param', z.object({ actorId: ActorId.zodType })),
-    sValidator('query', z.object({ createdAt: z.optional(z.coerce.number().pipe(Instant.zodType)) })),
-    async (c) => {
-      const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-      if (sessionId === undefined) return c.json({ error: 'Unauthorized' }, 401);
-      const result = await deps.getRemoteActorPostsUseCase.run({
-        sessionId,
-        actorId: c.req.valid('param').actorId,
-        createdAt: c.req.valid('query').createdAt,
-      });
-      return result.ok
-        ? c.json({ ...result.val, isLoggedIn: true, posts: result.val.posts.map(sanitizePost) })
-        : c.json({ error: result.err.message }, 400);
     },
   );
 

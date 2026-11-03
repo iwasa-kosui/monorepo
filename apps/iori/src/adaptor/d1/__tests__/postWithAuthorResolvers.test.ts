@@ -1,30 +1,11 @@
-import { RA } from '@iwasa-kosui/result';
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { createWorkerCoreApiRouter } from '../../../adaptor/routes/workerCoreApiRouter.ts';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
-import { Username } from '../../../domain/user/username.ts';
-import { createWorkerGetUserPostsUseCase } from '../../../runtime/workerCoreUseCases.ts';
-import { resolveLocalActorWith, resolveUserByUsernameWith } from '../../../useCase/helper/resolve.ts';
-import { createD1ActorResolverByUserId } from '../actor/actorResolverByUserId.ts';
-import { createD1ActorsResolverByFollowerId } from '../actor/actorsResolverByFollowerId.ts';
-import { createD1ActorsResolverByFollowingId } from '../actor/actorsResolverByFollowingId.ts';
-import { actorIdsJson } from '../actorIdsJson.ts';
-import type { IoriD1Db } from '../client.ts';
 import { createD1FederatedTimelineItemsResolver } from '../federatedTimeline/federatedTimelineItemsResolver.ts';
 import { resolvePostsWithAuthorByIds } from '../post/postWithAuthorBatch.ts';
-import {
-  createD1PostsResolverByActorIds,
-  createD1PostsResolverByActorIdWithPagination,
-} from '../post/postWithAuthorResolvers.ts';
 import { createD1ThreadResolver } from '../post/threadResolver.ts';
-import { likesTable, localPostsTable, postsTable, repostsTable } from '../schema.ts';
-import { createD1UserResolverByUsername } from '../user/userResolverByUsername.ts';
-import { createD1UserWithLocalActorResolverByUsername } from '../user/userWithLocalActorResolverByUsername.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const ORIGIN = 'https://iori.test';
@@ -197,80 +178,17 @@ const setup = () => {
   return fixture;
 };
 
-type Input = Readonly<{
-  actorIds?: readonly ActorId[];
-  currentActorId?: ActorId;
-  createdAt: Instant | undefined;
-}>;
-
-// Implementation before batching: one id query, then threadResolver.resolve per post.
-const legacyResolvePosts = async (db: IoriD1Db, origin: string, input: Input): Promise<PostWithAuthor[]> => {
-  if (input.actorIds?.length === 0) return [];
-  const liked = input.currentActorId === undefined ? sql<number>`0` : sql<number>`exists (
-    select 1 from ${likesTable} where ${likesTable.postId} = ${postsTable.postId}
-      and ${likesTable.actorId} = ${input.currentActorId}
-  )`;
-  const reposted = input.currentActorId === undefined ? sql<number>`0` : sql<number>`exists (
-    select 1 from ${repostsTable} where ${repostsTable.postId} = ${postsTable.postId}
-      and ${repostsTable.actorId} = ${input.currentActorId}
-  )`;
-  const rows = await db.select({
-    postId: postsTable.postId,
-    liked: liked.mapWith(value => value === 1),
-    reposted: reposted.mapWith(value => value === 1),
-  })
-    .from(postsTable)
-    .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
-    .where(and(
-      isNull(postsTable.deletedAt),
-      input.actorIds === undefined
-        ? undefined
-        : inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(input.actorIds)}))`),
-      input.createdAt === undefined ? undefined : lt(postsTable.createdAt, new Date(input.createdAt)),
-    ))
-    .orderBy(desc(postsTable.createdAt))
-    .limit(20);
-  const threadResolver = createD1ThreadResolver(db, origin);
-  const resolved = await Promise.all(rows.map((row) => threadResolver.resolve({ postId: row.postId as never })));
-  return resolved.flatMap((result, index) =>
-    result.ok && result.val.currentPost !== null
-      ? [{ ...result.val.currentPost, liked: rows[index].liked, reposted: rows[index].reposted }]
-      : []
-  );
-};
-
 const unwrap = <T>(result: { ok: boolean; val?: T }): T => {
   if (!result.ok) throw new Error('Expected ok');
   return result.val as T;
 };
 
-const cursors = [undefined, Instant.orThrow(20_000)];
-const viewers = [undefined, viewerActorId, remoteActorId];
-
 describe('D1 post resolvers batch the enrichment queries', () => {
-  it('returns the same posts as the per-post threadResolver for /api/v1/users/:username/posts (by actor IDs)', async () => {
-    const { db } = setup();
-    const resolver = createD1PostsResolverByActorIds(db, ORIGIN);
-    for (const createdAt of cursors) {
-      for (const currentActorId of viewers) {
-        const actual = unwrap(await resolver.resolve({ actorIds: [localActorId], currentActorId, createdAt }));
-        const expected = await legacyResolvePosts(db, ORIGIN, { actorIds: [localActorId], currentActorId, createdAt });
-        expect(actual.length).toBe(createdAt === undefined ? 20 : 19);
-        expect(actual).toEqual(expected);
-        expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
-      }
-    }
-  });
-
   it('keeps the enrichment values of a post with images, likes, reposts, reactions, link previews and replies', async () => {
     const { db } = setup();
-    const [first] = unwrap(
-      await createD1PostsResolverByActorIds(db, ORIGIN).resolve({
-        actorIds: [localActorId],
-        currentActorId: viewerActorId,
-        createdAt: undefined,
-      }),
-    );
+    const first = (await resolvePostsWithAuthorByIds(db, [postIdOf(richIndex) as PostId], viewerActorId))
+      .get(postIdOf(richIndex) as PostId);
+    if (first === undefined) throw new Error('Expected the post');
     expect(first).toMatchObject({
       postId: postIdOf(richIndex),
       type: 'local',
@@ -297,22 +215,6 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     const thread = unwrap(await createD1ThreadResolver(db, ORIGIN).resolve({ postId: postIdOf(replyIndex) as never }));
     expect(thread.ancestors.map(post => post.postId)).toEqual([remoteReplyTargetId]);
     expect(thread.descendants.map(post => post.postId)).toEqual([postIdOf(richIndex), postIdOf(parentIndex)]);
-  });
-
-  it('returns the same posts as the per-post threadResolver for remote-users posts (with pagination)', async () => {
-    const { db } = setup();
-    const resolver = createD1PostsResolverByActorIdWithPagination(db, ORIGIN);
-    for (const actorId of [remoteActorId, localActorId]) {
-      for (const createdAt of cursors) {
-        for (const currentActorId of viewers) {
-          const actual = unwrap(await resolver.resolve({ actorId, currentActorId, createdAt }));
-          const expected = await legacyResolvePosts(db, ORIGIN, { actorIds: [actorId], currentActorId, createdAt });
-          expect(actual.length).toBeGreaterThan(0);
-          expect(actual).toEqual(expected);
-          expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
-        }
-      }
-    }
   });
 
   it('keeps the federated timeline resolver posts identical to the thread resolver result', async () => {
@@ -348,26 +250,7 @@ describe('D1 post resolvers batch the enrichment queries', () => {
       expect(new Map(visibilities)).toEqual(new Map(postIds.map((postId) => [postId, expected.get(postId)])));
     };
     const allIds = [id(3001), id(3002), id(3003)];
-    expectVisibilities(
-      unwrap(
-        await createD1PostsResolverByActorIdWithPagination(db, ORIGIN).resolve({
-          actorId: remoteActorId,
-          currentActorId: undefined,
-          createdAt: undefined,
-        }),
-      ),
-      allIds,
-    );
-    expectVisibilities(
-      unwrap(
-        await createD1PostsResolverByActorIds(db, ORIGIN).resolve({
-          actorIds: [remoteActorId],
-          currentActorId: undefined,
-          createdAt: undefined,
-        }),
-      ),
-      allIds,
-    );
+    expectVisibilities([...(await resolvePostsWithAuthorByIds(db, allIds as PostId[], undefined)).values()], allIds);
     expectVisibilities(
       unwrap(
         await createD1FederatedTimelineItemsResolver(db).resolve({
@@ -387,17 +270,10 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     expectVisibilities(threads.flatMap((post) => post === null ? [] : [post]), allIds);
   });
 
-  it('returns an empty page with one query when no post matches', async () => {
+  it('returns no posts without a query when no post ID is given', async () => {
     const { db, queries } = setup();
-    const result = unwrap(
-      await createD1PostsResolverByActorIds(db, ORIGIN).resolve({
-        actorIds: [localActorId],
-        currentActorId: undefined,
-        createdAt: Instant.orThrow(1),
-      }),
-    );
-    expect(result).toEqual([]);
-    expect(queries).toHaveLength(1);
+    expect(await resolvePostsWithAuthorByIds(db, [], undefined)).toEqual(new Map());
+    expect(queries).toHaveLength(0);
   });
 });
 
@@ -461,22 +337,18 @@ describe('D1 query counts for a page of 20 posts', () => {
     ]);
   });
 
-  it('runs 6 queries for /api/v1/users/:username/posts without a viewer and 8 with a viewer', async () => {
+  it('runs 6 queries for resolvePostsWithAuthorByIds without a viewer and 8 with a viewer', async () => {
     const { db, queries } = setup();
-    const resolver = createD1PostsResolverByActorIds(db, ORIGIN);
-    const anonymous = unwrap(
-      await resolver.resolve({ actorIds: [localActorId], currentActorId: undefined, createdAt: undefined }),
-    );
+    const postIds = Array.from({ length: 20 }, (_, index) => postIdOf(LOCAL_POST_COUNT - index) as PostId);
+    const anonymous = [...(await resolvePostsWithAuthorByIds(db, postIds, undefined)).values()];
     expect(anonymous).toHaveLength(20);
     expect(anonymous.every(post => !post.liked && !post.reposted)).toBe(true);
     expect(queries).toHaveLength(6);
 
     queries.length = 0;
-    const asViewer = unwrap(
-      await resolver.resolve({ actorIds: [localActorId], currentActorId: viewerActorId, createdAt: undefined }),
-    );
-    expect(asViewer).toHaveLength(20);
-    expect(asViewer[0]).toMatchObject({ postId: postIdOf(richIndex), liked: true, reposted: true });
+    const asViewer = await resolvePostsWithAuthorByIds(db, postIds, viewerActorId);
+    expect(asViewer).toHaveProperty('size', 20);
+    expect(asViewer.get(postIdOf(richIndex) as PostId)).toMatchObject({ liked: true, reposted: true });
     expect(queries).toHaveLength(8);
   });
 });
@@ -585,166 +457,5 @@ describe('resolvePostsWithAuthorByIds with more than 100 post IDs', () => {
     const beyondFirst100 = postIds.slice(100).map(postId => posts.get(postId));
     expect(new Set(beyondFirst100.map(post => post?.liked))).toEqual(new Set([true, false]));
     expect(new Set(beyondFirst100.map(post => post?.reposted))).toEqual(new Set([true, false]));
-  });
-});
-
-describe('getUserPosts resolves the user and the local actor in one query', () => {
-  const legacyGetUserPosts = (db: IoriD1Db, username: Username, createdAt: Instant | undefined) =>
-    createLegacyUseCase(db).run({ username, createdAt });
-
-  const createLegacyUseCase = (db: IoriD1Db) => ({
-    run: async ({ username, createdAt }: { username: Username; createdAt: Instant | undefined }) => {
-      const user = await resolveUserByUsernameWith(createD1UserResolverByUsername(db))(username);
-      if (!user.ok) return user;
-      const actor = await resolveLocalActorWith(createD1ActorResolverByUserId(db))(user.val.id);
-      if (!actor.ok) return actor;
-      const [following, followers, posts] = await Promise.all([
-        createD1ActorsResolverByFollowerId(db).resolve(actor.val.id),
-        createD1ActorsResolverByFollowingId(db).resolve(actor.val.id),
-        RA.ok(await legacyResolvePosts(db, ORIGIN, { actorIds: [actor.val.id], currentActorId: undefined, createdAt })),
-      ]);
-      if (!following.ok) return following;
-      if (!followers.ok) return followers;
-      return RA.ok({
-        user: user.val,
-        actor: actor.val,
-        following: following.val,
-        followers: followers.val,
-        posts: posts.val,
-      });
-    },
-  });
-
-  const createUseCase = (db: IoriD1Db) =>
-    createWorkerGetUserPostsUseCase({
-      userWithLocalActorResolverByUsername: createD1UserWithLocalActorResolverByUsername(db),
-      actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-      actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(db),
-      postsResolverByActorIds: createD1PostsResolverByActorIds(db, ORIGIN),
-    });
-
-  it('returns the same use case result and the same JSON response as before, with fewer D1 queries', async () => {
-    const legacyFixture = setup();
-    const legacyResult = await legacyGetUserPosts(legacyFixture.db, Username.orThrow('kosui'), undefined);
-    const legacyQueryCount = legacyFixture.queries.length;
-
-    const { db, queries } = setup();
-    const result = await createUseCase(db).run({ username: Username.orThrow('kosui'), createdAt: undefined });
-    expect(result).toEqual(legacyResult);
-    expect(unwrap(result).posts).toHaveLength(20);
-    expect(unwrap(result).following.map(actor => actor.id)).toEqual([remoteActorId]);
-    expect(unwrap(result).followers.map(actor => actor.id)).toEqual([viewerActorId]);
-    expect(legacyQueryCount).toBeGreaterThan(100);
-    expect(queries).toHaveLength(9);
-
-    const router = createWorkerCoreApiRouter({ getUserPostsUseCase: createUseCase(db) } as never);
-    const legacyRouter = createWorkerCoreApiRouter({ getUserPostsUseCase: createLegacyUseCase(db) } as never);
-    const response = await router.request('/v1/users/kosui/posts');
-    const legacyResponse = await legacyRouter.request('/v1/users/kosui/posts');
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe(await legacyResponse.text());
-  });
-
-  it('does not mix posts of other actors into the /api/v1/users/:username/posts response', async () => {
-    const { db } = setup();
-    const router = createWorkerCoreApiRouter({ getUserPostsUseCase: createUseCase(db) } as never);
-    const response = await router.request('/v1/users/kosui/posts?createdAt=5000');
-    const { posts } = await response.json() as { posts: PostWithAuthor[] };
-    expect(response.status).toBe(200);
-    expect(posts.map(post => post.postId)).toEqual([postIdOf(4), postIdOf(3), postIdOf(2), postIdOf(1)]);
-    expect(posts.every(post => post.type === 'local' && post.actorId === localActorId)).toBe(true);
-  });
-
-  it('returns the same page for a cursor', async () => {
-    const { db } = setup();
-    const createdAt = Instant.orThrow(20_000);
-    expect(await createUseCase(db).run({ username: Username.orThrow('kosui'), createdAt })).toEqual(
-      await legacyGetUserPosts(db, Username.orThrow('kosui'), createdAt),
-    );
-  });
-
-  it('returns the same UserNotFoundError when the user does not exist', async () => {
-    const { db } = setup();
-    const username = Username.orThrow('nobody');
-    const result = await createUseCase(db).run({ username, createdAt: undefined });
-    expect(result).toEqual(await legacyGetUserPosts(db, username, undefined));
-    expect(result).toMatchObject({
-      ok: false,
-      err: {
-        type: 'UserNotFoundError',
-        message: 'The user with username "nobody" was not found.',
-        detail: { username },
-      },
-    });
-    const response = await createWorkerCoreApiRouter({ getUserPostsUseCase: createUseCase(db) } as never).request(
-      '/v1/users/nobody/posts',
-    );
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'The user with username "nobody" was not found.' });
-  });
-
-  it('returns the same UserNotFoundError with the user ID when the user has no local actor', async () => {
-    const { sqlite, db } = setup();
-    const orphanId = id(7);
-    sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(orphanId, 'orphan');
-    const username = Username.orThrow('orphan');
-    const result = await createUseCase(db).run({ username, createdAt: undefined });
-    expect(result).toEqual(await legacyGetUserPosts(db, username, undefined));
-    expect(result).toMatchObject({
-      ok: false,
-      err: {
-        type: 'UserNotFoundError',
-        message: `The user with ID "${orphanId}" was not found.`,
-        detail: { userId: orphanId },
-      },
-    });
-  });
-});
-
-describe('/v1/remote-users/:actorId/posts', () => {
-  it('returns 401 without a session cookie and does not run the use case', async () => {
-    const run = vi.fn();
-    const router = createWorkerCoreApiRouter({ getRemoteActorPostsUseCase: { run } } as never);
-    const response = await router.request(`/v1/remote-users/${remoteActorId}/posts`);
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: 'Unauthorized' });
-    expect(run).not.toHaveBeenCalled();
-  });
-});
-
-describe('createD1UserWithLocalActorResolverByUsername', () => {
-  it('returns the user and local actor from a single query', async () => {
-    const { db, queries } = setup();
-    const result = await createD1UserWithLocalActorResolverByUsername(db).resolve(Username.orThrow('kosui'));
-    expect(result).toEqual({
-      ok: true,
-      val: {
-        user: { id: userId, username: 'kosui' },
-        actor: {
-          id: localActorId,
-          uri: `${ORIGIN}/users/kosui`,
-          inboxUrl: `${ORIGIN}/users/kosui/inbox`,
-          type: 'local',
-          userId,
-          logoUri: 'https://iori.test/logo.png',
-        },
-      },
-      err: undefined,
-    });
-    expect(queries).toHaveLength(1);
-  });
-
-  it('returns undefined for an unknown user and an undefined actor for a user without one', async () => {
-    const { sqlite, db } = setup();
-    sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(id(7), 'orphan');
-    const resolver = createD1UserWithLocalActorResolverByUsername(db);
-    const unknown = await resolver.resolve(Username.orThrow('nobody'));
-    const orphan = await resolver.resolve(Username.orThrow('orphan'));
-    expect(unknown.ok && unknown.val).toBeUndefined();
-    expect(orphan).toEqual({
-      ok: true,
-      val: { user: { id: id(7), username: 'orphan' }, actor: undefined },
-      err: undefined,
-    });
   });
 });

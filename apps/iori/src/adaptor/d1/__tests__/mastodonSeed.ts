@@ -127,22 +127,28 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
   const addFollow = (followerId: string, followingId: string) =>
     sqlite.prepare('INSERT INTO follows(followerId,followingId) VALUES (?,?)').run(followerId, followingId);
 
-  const addMute = (userId: string, mutedActorId: string) =>
+  const addMute = (userId: string, mutedActorId: string, createdAt = 1) => {
+    const muteId = uuid();
     sqlite.prepare('INSERT INTO mutes(muteId,userId,mutedActorId,createdAt) VALUES (?,?,?,?)').run(
-      uuid(),
+      muteId,
       userId,
       mutedActorId,
-      1,
+      createdAt,
     );
+    return { muteId };
+  };
 
-  const addLike = (actorId: string, postId: string) =>
+  const addLike = (actorId: string, postId: string, createdAt = 1) => {
+    const likeId = uuid();
     sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
-      uuid(),
+      likeId,
       actorId,
       postId,
       'local',
-      1,
+      createdAt,
     );
+    return { likeId };
+  };
 
   const addEmojiReact = (actorId: string, postId: string, emoji: string, emojiImageUrl: string | null = null) =>
     sqlite.prepare(

@@ -4,15 +4,22 @@ import type {
   ActorIdsResolverByFollowerIdWithPagination,
   ActorIdsResolverByFollowingIdWithPagination,
 } from '../../domain/actor/accountProfile.ts';
+import type {
+  AccountRelationshipsResolverByActorIds,
+  AcctLookup,
+  ActorIdResolverByAcct,
+} from '../../domain/actor/accountRelationship.ts';
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { PageRequest } from '../../domain/page/page.ts';
 import type { AccountStatusItemsResolverByActorId } from '../../domain/post/accountStatusItem.ts';
+import { Username } from '../../domain/user/username.ts';
 import type { ActorResolverById } from '../d1/actor/actorResolverById.ts';
 import type { Account } from '../mastodon/entities.ts';
 import { isSourceVisibleToAnonymous, type StatusAssembler, statusSourceId } from '../mastodon/statusAssembler.ts';
-import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
+import { toRelationship } from '../mastodon/toRelationship.ts';
+import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import {
   accountListLimits,
   isTrue,
@@ -36,6 +43,8 @@ export type WorkerMastodonAccountsRouterDeps = Readonly<{
   accountStatusItemsResolverByActorId: AccountStatusItemsResolverByActorId;
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
+  actorIdResolverByAcct: ActorIdResolverByAcct;
+  accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   statusAssembler: StatusAssembler;
 }>;
 
@@ -45,9 +54,23 @@ type ActorIdsPageResolver = Readonly<{
   >;
 }>;
 
+const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
 const readAccounts = Scope.orThrow('read:accounts');
+const readFollows = Scope.orThrow('read:follows');
 const readStatuses = Scope.orThrow('read:statuses');
+
+const parseAcct = (acct: string, localHost: string): AcctLookup | undefined => {
+  const [username, host, ...rest] = (acct.startsWith('@') ? acct.slice(1) : acct).split('@');
+  if (username === undefined || username.length === 0 || rest.length > 0 || host === '') {
+    return undefined;
+  }
+  if (host === undefined || host.toLowerCase() === localHost.toLowerCase()) {
+    const parsed = Username.parse(username);
+    return parsed.ok ? { type: 'local', username: parsed.val } : undefined;
+  }
+  return { type: 'remote', username, host: host.toLowerCase() };
+};
 
 const accountIdPattern = '[0-9a-fA-F-]+';
 
@@ -58,6 +81,8 @@ export const createWorkerMastodonAccountsRouter = ({
   accountStatusItemsResolverByActorId,
   actorIdsResolverByFollowerId,
   actorIdsResolverByFollowingId,
+  actorIdResolverByAcct,
+  accountRelationshipsResolverByActorIds,
   statusAssembler,
 }: WorkerMastodonAccountsRouterDeps): Hono<MastodonAuthEnv> => {
   const listAccounts = (resolver: ActorIdsPageResolver) => async (c: Parameters<typeof respondWithPage>[0]) => {
@@ -87,6 +112,63 @@ export const createWorkerMastodonAccountsRouter = ({
 
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
+    .get('/v1/accounts/lookup', authn.optionalAuth, async (c) => {
+      const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
+      const lookup = parseAcct(c.req.query('acct') ?? '', new URL(c.req.url).host);
+      if (lookup === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const actorId = await actorIdResolverByAcct.resolve(lookup);
+      if (!actorId.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (actorId.val === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const [account] = await statusAssembler.assembleAccounts({ actorIds: [actorId.val], requestUrl: c.req.url });
+      return account === undefined ? c.json(recordNotFound, 404) : c.json(account);
+    })
+    .get('/v1/accounts/relationships', authn.requireUser(readFollows), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const ids = [...(c.req.queries('id[]') ?? []), ...(c.req.queries('id') ?? [])];
+      const actorIds = [...new Set(ids)].flatMap((id) => {
+        const parsed = ActorId.parse(id);
+        return parsed.ok ? [parsed.val] : [];
+      });
+      const relationships = await accountRelationshipsResolverByActorIds.resolve({
+        viewerActorId: viewer.val.id,
+        viewerUserId: userId,
+        actorIds,
+      });
+      if (!relationships.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const byActorId = new Map(relationships.val.map((relationship) => [relationship.actorId, relationship]));
+      return c.json(actorIds.flatMap((actorId) => {
+        const relationship = byActorId.get(actorId);
+        return relationship === undefined
+          ? []
+          : [toRelationship({
+            id: actorId,
+            following: relationship.following,
+            followedBy: relationship.followedBy,
+            muting: relationship.muting,
+          })];
+      }));
+    })
     .get(`/v1/accounts/:id{${accountIdPattern}}`, authn.optionalAuth, async (c) => {
       const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);
       if (rejection !== undefined) {

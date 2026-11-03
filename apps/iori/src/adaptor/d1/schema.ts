@@ -279,7 +279,7 @@ export const articlesTable = sqliteTable('articles', {
   articleId: text('articleId').primaryKey(),
   authorActorId: text('authorActorId').notNull().references(() => actorsTable.actorId),
   authorUserId: text('authorUserId').notNull().references(() => usersTable.userId),
-  rootPostId: text('rootPostId').notNull().references(() => postsTable.postId),
+  rootPostId: text('rootPostId').references(() => postsTable.postId),
   title: text('title').notNull(),
   status: text('status').notNull(),
   createdAt: timestamp().notNull(),
@@ -290,6 +290,13 @@ export const articlesTable = sqliteTable('articles', {
   index('articles_root_post_id_idx').on(table.rootPostId),
   uniqueIndex('article_root_post_unique').on(table.rootPostId),
 ]);
+
+export const articleBodiesTable = sqliteTable('article_bodies', {
+  articleId: text('articleId').primaryKey().references(() => articlesTable.articleId),
+  privateHtml: text('privateHtml').notNull(),
+  publicHtml: text('publicHtml').notNull(),
+  updatedAt: timestamp().notNull(),
+});
 
 export const linkPreviewsTable = sqliteTable('link_previews', {
   linkPreviewId: text('linkPreviewId').primaryKey(),
@@ -432,6 +439,7 @@ export const schema = {
   notificationRepliesTable,
   mutesTable,
   articlesTable,
+  articleBodiesTable,
   linkPreviewsTable,
   relaysTable,
   federatedTimelineItemsTable,

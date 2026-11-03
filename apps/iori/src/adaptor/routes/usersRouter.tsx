@@ -17,6 +17,7 @@ import { GetPostUseCase } from '../../useCase/getPost.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../pg/actor/logoUriUpdatedStore.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
@@ -265,6 +266,7 @@ app.get(
     const useCase = GetArticleWithThreadUseCase.create({
       articleResolver: PgArticleResolver.getInstance(),
       threadResolver: PgThreadResolver.getInstance(),
+      articleBodyResolver: PgArticleBodyResolver.getInstance(),
     });
 
     const result = await useCase.run({ articleId });

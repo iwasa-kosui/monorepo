@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
 import { Username } from '../../../domain/user/username.ts';
-import { AccountSchema, StatusSchema } from '../../mastodon/entities.ts';
+import { AccountSchema, RelationshipSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonAccountsRouter } from '../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
@@ -135,13 +135,236 @@ describe('GET /api/v1/accounts/:id', () => {
   it('UUID でない ID は :id に取らせず受け皿の 404 にする', async () => {
     const t = setupReadApi();
 
-    const responses = await Promise.all([
-      t.request('/api/v1/accounts/not-an-id'),
-      t.request('/api/v1/accounts/relationships?id[]=a'),
+    const response = await t.request('/api/v1/accounts/not-an-id');
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Record not found' });
+  });
+});
+
+describe('GET /api/v1/accounts/lookup', () => {
+  const lookup = (t: ReturnType<typeof setupReadApi>, acct: string, init?: RequestInit) =>
+    t.request(`/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`, init);
+
+  it('username と @username と自分のドメインの host 付きでローカルのアカウントを未認証で返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+
+    const responses = await Promise.all(
+      ['kosui', '@kosui', 'kosui@iori.test', '@kosui@IORI.test'].map((acct) => lookup(t, acct)),
+    );
+
+    for (const response of responses) {
+      expect(response.status).toBe(200);
+      expect(AccountSchema.parse(await response.json())).toMatchObject({
+        id: me.actorId,
+        username: 'kosui',
+        acct: 'kosui',
+      });
+    }
+  });
+
+  it('リモートのアカウントを username と host で引く', async () => {
+    const t = setupReadApi();
+    const alice = t.seed.addRemoteActor('alice');
+    const otherAlice = t.seed.addRemoteActor('alice', 'other.example');
+
+    const [first, second, withAt] = await Promise.all([
+      lookup(t, 'alice@remote.example'),
+      lookup(t, 'alice@other.example'),
+      lookup(t, '@alice@remote.example'),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([404, 404]);
+    expect(AccountSchema.parse(await first.json())).toMatchObject({ id: alice.actorId, acct: 'alice@remote.example' });
+    expect(AccountSchema.parse(await second.json())).toMatchObject({
+      id: otherAlice.actorId,
+      acct: 'alice@other.example',
+    });
+    expect(AccountSchema.parse(await withAt.json()).id).toBe(alice.actorId);
+  });
+
+  it('url がないリモートのアカウントは uri の host で引く', async () => {
+    const t = setupReadApi();
+    const alice = t.seed.addRemoteActor('alice');
+    t.sqlite.prepare('UPDATE remote_actors SET url=NULL WHERE actorId=?').run(alice.actorId);
+
+    const response = await lookup(t, 'alice@remote.example');
+
+    expect(AccountSchema.parse(await response.json()).id).toBe(alice.actorId);
+  });
+
+  it('見つからない acct は 404 にする', async () => {
+    const t = setupReadApi();
+    await t.signIn();
+    t.seed.addRemoteActor('alice');
+
+    const responses = await Promise.all([
+      lookup(t, 'nobody'),
+      lookup(t, 'alice'),
+      lookup(t, 'alice@other.example'),
+      lookup(t, 'nobody@iori.test'),
+      lookup(t, 'kosui@remote.example'),
+      lookup(t, 'a@b@c'),
+      lookup(t, 'alice@'),
+      lookup(t, '@'),
+      lookup(t, ''),
+      t.request('/api/v1/accounts/lookup'),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual(Array(10).fill(404));
     expect(await responses[0]!.json()).toEqual({ error: 'Record not found' });
+  });
+
+  it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const statusesOnly = await t.bearerFor('read:statuses');
+
+    const [forbidden, cookie] = await Promise.all([
+      lookup(t, 'kosui', { headers: statusesOnly }),
+      lookup(t, 'kosui', { headers: { Cookie: `sessionId=${me.sessionId}` } }),
+    ]);
+
+    expect([forbidden.status, cookie.status]).toEqual([403, 200]);
+  });
+});
+
+describe('GET /api/v1/accounts/relationships', () => {
+  const seedRelationships = async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    const carol = t.seed.addRemoteActor('carol');
+    const dave = t.seed.addRemoteActor('dave');
+    const other = t.seed.addLocalActor('other');
+    t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addFollow(bob.actorId, me.actorId);
+    t.seed.addFollow(me.actorId, carol.actorId);
+    t.seed.addFollow(carol.actorId, me.actorId);
+    t.seed.addMute(me.userId, dave.actorId);
+    t.seed.addMute(other.userId, alice.actorId);
+    t.seed.addFollow(other.actorId, bob.actorId);
+    return { ...t, me, alice, bob, carol, dave, other };
+  };
+
+  const flagsOf = (body: unknown) =>
+    (body as unknown[]).map((item) => {
+      const { id, following, followed_by, muting } = RelationshipSchema.parse(item);
+      return { id, following, followed_by, muting };
+    });
+
+  it('following と followed_by と muting を viewer から見て返す', async () => {
+    const t = await seedRelationships();
+    const query = [t.alice, t.bob, t.carol, t.dave].map((actor) => `id[]=${actor.actorId}`).join('&');
+
+    const response = await t.request(`/api/v1/accounts/relationships?${query}`, { headers: t.me.bearer });
+
+    expect(response.status).toBe(200);
+    expect(flagsOf(await response.json())).toEqual([
+      { id: t.alice.actorId, following: true, followed_by: false, muting: false },
+      { id: t.bob.actorId, following: false, followed_by: true, muting: false },
+      { id: t.carol.actorId, following: true, followed_by: true, muting: false },
+      { id: t.dave.actorId, following: false, followed_by: false, muting: true },
+    ]);
+  });
+
+  it('入力の順に返し、存在しない ID と不正な ID を除き、重複を 1 件にする', async () => {
+    const t = await seedRelationships();
+    const query = [
+      `id[]=${t.dave.actorId}`,
+      `id[]=${t.seed.uuid()}`,
+      'id[]=not-an-id',
+      `id[]=${t.alice.actorId}`,
+      `id=${t.bob.actorId}`,
+      `id[]=${t.dave.actorId}`,
+    ].join('&');
+
+    const response = await t.request(`/api/v1/accounts/relationships?${query}`, { headers: t.me.bearer });
+
+    expect((await response.json() as Array<{ id: string }>).map((item) => item.id)).toEqual([
+      t.dave.actorId,
+      t.alice.actorId,
+      t.bob.actorId,
+    ]);
+  });
+
+  it('id がなければ空配列を返し、自分自身には何も付けない', async () => {
+    const t = await seedRelationships();
+
+    const [empty, self] = await Promise.all([
+      t.request('/api/v1/accounts/relationships', { headers: t.me.bearer }),
+      t.request(`/api/v1/accounts/relationships?id[]=${t.me.actorId}`, { headers: t.me.bearer }),
+    ]);
+
+    expect(await empty.json()).toEqual([]);
+    expect(flagsOf(await self.json())).toEqual([
+      { id: t.me.actorId, following: false, followed_by: false, muting: false },
+    ]);
+  });
+
+  it('他のユーザーのフォローとミュートを自分の関係に混ぜない', async () => {
+    const t = await seedRelationships();
+
+    const response = await t.request(`/api/v1/accounts/relationships?id[]=${t.alice.actorId}&id[]=${t.bob.actorId}`, {
+      headers: t.me.bearer,
+    });
+
+    expect(flagsOf(await response.json())).toEqual([
+      { id: t.alice.actorId, following: true, followed_by: false, muting: false },
+      { id: t.bob.actorId, following: false, followed_by: true, muting: false },
+    ]);
+  });
+
+  it('ID の数に関わらず D1 へのクエリ数を変えない', async () => {
+    const t = await seedRelationships();
+    const count = async (actors: ReadonlyArray<{ actorId: string }>) => {
+      t.queries.length = 0;
+      await t.request(`/api/v1/accounts/relationships?${actors.map((actor) => `id[]=${actor.actorId}`).join('&')}`, {
+        headers: t.me.bearer,
+      });
+      return t.queries.length;
+    };
+    const many = Array.from({ length: 30 }, (_, n) => t.seed.addRemoteActor(`many${n}`));
+
+    const single = await count([t.alice]);
+    const all = await count([t.alice, t.bob, t.carol, t.dave, ...many]);
+
+    expect(all).toBe(single);
+  });
+
+  it('/accounts/:id に取らせない', async () => {
+    const t = await seedRelationships();
+
+    const response = await t.request('/api/v1/accounts/relationships?id[]=a', { headers: t.me.bearer });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+  });
+
+  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
+    const t = await seedRelationships();
+    const accountsOnly = await t.bearerFor('read:accounts');
+    const path = `/api/v1/accounts/relationships?id[]=${t.alice.actorId}`;
+
+    const [anonymous, forbidden, cookie] = await Promise.all([
+      t.request(path),
+      t.request(path, { headers: accountsOnly }),
+      t.request(path, { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
+    ]);
+
+    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
+  });
+
+  it('アクターを持たない利用者は 422 にする', async () => {
+    const t = await seedRelationships();
+
+    const response = await t.request(`/api/v1/accounts/relationships?id[]=${t.alice.actorId}`, {
+      headers: await t.bearerFor('read:follows'),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 });
 
@@ -471,6 +694,8 @@ describe('アカウントのルーターの登録順', () => {
             accountStatusItemsResolverByActorId: {} as never,
             actorIdsResolverByFollowerId: {} as never,
             actorIdsResolverByFollowingId: {} as never,
+            actorIdResolverByAcct: {} as never,
+            accountRelationshipsResolverByActorIds: {} as never,
             statusAssembler: { assemble: async () => [], assembleAccounts: async () => [] },
           }),
         );

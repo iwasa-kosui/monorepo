@@ -1,5 +1,6 @@
 import { createD1AccountProfilesResolverByActorIds } from '../adaptor/d1/actor/accountProfilesResolverByActorIds.ts';
 import { createD1AccountStatsResolverByActorId } from '../adaptor/d1/actor/accountStatsResolverByActorId.ts';
+import { createD1ActorIdResolverByAcct } from '../adaptor/d1/actor/actorIdResolverByAcct.ts';
 import { createD1ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../adaptor/d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolverByUserId.ts';
@@ -15,12 +16,17 @@ import { createD1ArticleResolver } from '../adaptor/d1/article/articleResolver.t
 import { createD1ArticleResolverByRootPostId } from '../adaptor/d1/article/articleResolverByRootPostId.ts';
 import { createD1ArticlesResolverByAuthorActorId } from '../adaptor/d1/article/articlesResolverByAuthorActorId.ts';
 import { createD1ArticleUnpublishedStore } from '../adaptor/d1/article/articleUnpublishedStore.ts';
+import { createD1ArticleWithBodyCreatedStore } from '../adaptor/d1/article/articleWithBodyCreatedStore.ts';
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
+import { createD1ArticleBodyDeletedStore } from '../adaptor/d1/articleBody/articleBodyDeletedStore.ts';
+import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
+import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
@@ -29,7 +35,7 @@ import { createD1FollowRequestedStore } from '../adaptor/d1/follow/followRequest
 import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../adaptor/d1/image/postImageCreatedStore.ts';
-import { createD1LikedPostsResolverByActorId } from '../adaptor/d1/like/likedPostsResolverByActorId.ts';
+import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../adaptor/d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
 import { createD1LocalLikeDeletedStore } from '../adaptor/d1/like/localLikeDeletedStore.ts';
@@ -38,9 +44,9 @@ import { createD1MarkerSavedStore } from '../adaptor/d1/marker/markerSavedStore.
 import { createD1MarkersResolverByUserId } from '../adaptor/d1/marker/markersResolverByUserId.ts';
 import { createD1MuteCreatedStore } from '../adaptor/d1/mute/muteCreatedStore.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../adaptor/d1/mute/mutedActorIdsResolverByUserId.ts';
+import { createD1MutedActorsResolverByUserIdWithPagination } from '../adaptor/d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../adaptor/d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../adaptor/d1/mute/muteResolver.ts';
-import { createD1MutesResolverByUserId } from '../adaptor/d1/mute/mutesResolverByUserId.ts';
 import { createD1ReplyNotificationCreatedStore } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
@@ -69,10 +75,6 @@ import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtras
 import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
-import {
-  createD1PostsResolverByActorIds,
-  createD1PostsResolverByActorIdWithPagination,
-} from '../adaptor/d1/post/postWithAuthorResolvers.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
@@ -97,7 +99,6 @@ import { createD1TimelineItemsResolverByActorIds } from '../adaptor/d1/timeline/
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
-import { createD1UserWithLocalActorResolverByUsername } from '../adaptor/d1/user/userWithLocalActorResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
@@ -112,6 +113,7 @@ import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiText
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
+import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
 import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
@@ -120,8 +122,6 @@ import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
-import { GetLikedPostsUseCase } from '../useCase/getLikedPosts.ts';
-import { GetMutesUseCase } from '../useCase/getMutes.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
@@ -142,15 +142,12 @@ import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
+import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
-import {
-  createWorkerGetRemoteActorPostsUseCase,
-  createWorkerGetUserPostsUseCase,
-  createWorkerRemoteActorActions,
-} from './workerCoreUseCases.ts';
+import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
 
 const lazyWorkerArgon2idDerive: Argon2idDerive = async (params) => {
   const { workerArgon2idDerive } = await import('../adaptor/argon2/workerArgon2idDerive.ts');
@@ -173,6 +170,8 @@ export const createWorkerRuntimePorts = async (
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
+  const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
   const emojiReactResolverByActorAndPostAndEmoji = createD1EmojiReactResolverByActorAndPostAndEmoji(db);
@@ -267,6 +266,10 @@ export const createWorkerRuntimePorts = async (
       threadResolver,
       actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
       actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
+      actorIdResolverByAcct: createD1ActorIdResolverByAcct(db),
+      accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
+      likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
+      mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
@@ -361,19 +364,11 @@ export const createWorkerRuntimePorts = async (
         postResolver,
       }),
     },
-    notifications: {
-      getLikedPostsUseCase: GetLikedPostsUseCase.create({
-        sessionResolver,
-        userResolver,
-        actorResolverByUserId,
-        sessionWithUserAndActorResolver,
-        likedPostsResolver: createD1LikedPostsResolverByActorId(db),
-      }),
-    },
     articles: {
       getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
+        articleBodyResolver,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,
@@ -389,12 +384,21 @@ export const createWorkerRuntimePorts = async (
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleCreatedStore: createD1ArticleCreatedStore(db),
       }),
+      createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
+        actorResolverByUserId,
+        articleWithBodyCreatedStore: createD1ArticleWithBodyCreatedStore(db),
+      }),
+      updateArticleBodyUseCase: UpdateArticleBodyUseCase.create({
+        articleResolver,
+        articleBodyWrittenStore,
+      }),
       publishArticleUseCase: PublishArticleUseCase.create({
         sessionResolver,
         userResolver,
         actorResolverByUserId,
         articleResolver,
         articlePublishedStore: createD1ArticlePublishedStore(db),
+        articleBodyResolver,
       }),
       unpublishArticleUseCase: UnpublishArticleUseCase.create({
         sessionResolver,
@@ -409,6 +413,8 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUserId,
         articleResolver,
         articleDeletedStore: createD1ArticleDeletedStore(db),
+        articleBodyResolver,
+        articleBodyDeletedStore: createD1ArticleBodyDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
       sessionResolver,
@@ -417,11 +423,6 @@ export const createWorkerRuntimePorts = async (
       deleteOgImage: (articleId) => ogImageStore.delete(articleId),
     },
     mutesRelays: {
-      getMutesUseCase: GetMutesUseCase.create({
-        sessionResolver,
-        userResolver,
-        mutesResolverByUserId: createD1MutesResolverByUserId(db),
-      }),
       createMuteUseCase: CreateMuteUseCase.create({
         sessionResolver,
         userResolver,
@@ -481,22 +482,6 @@ export const createWorkerRuntimePorts = async (
         remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
         logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
-      }),
-      getUserPostsUseCase: createWorkerGetUserPostsUseCase({
-        userWithLocalActorResolverByUsername: createD1UserWithLocalActorResolverByUsername(db),
-        actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-        actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(db),
-        postsResolverByActorIds: createD1PostsResolverByActorIds(db, env.ORIGIN),
-      }),
-      getRemoteActorPostsUseCase: createWorkerGetRemoteActorPostsUseCase({
-        sessionResolver,
-        userResolver,
-        actorResolverByUserId,
-        sessionWithUserAndActorResolver,
-        actorResolverById: createD1ActorResolverById(db),
-        followResolver: createD1FollowResolver(db),
-        muteResolver: createD1MuteResolver(db),
-        postsResolverByActorIdWithPagination: createD1PostsResolverByActorIdWithPagination(db, env.ORIGIN),
       }),
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,

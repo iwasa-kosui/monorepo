@@ -22,8 +22,8 @@ import { createWorkerMastodonMarkersRouter } from './adaptor/routes/workerMastod
 import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
+import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
-import { createWorkerNotificationsApiRouter } from './adaptor/routes/workerNotificationsApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import {
   createWorkerPageActionsRouter,
@@ -223,10 +223,6 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerNotificationsApiRouter(runtime.notifications),
-        );
-        app.route(
-          '/api',
           createWorkerArticlesApiRouter({
             ...runtime.articles,
             createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
@@ -270,6 +266,7 @@ export default {
         app.route('/api', createWorkerMastodonTimelinesRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());
