@@ -13,7 +13,7 @@
   },
   "assets": {
     "binding": "ASSETS",
-    "run_worker_first": true,
+    "run_worker_first": ["/*", "!/static/*", "!/manifest.json", "!/favicon.ico", "!/icon-192.png", "!/icon-512.png"],
     "directory": "../../dist",
   },
   "vars": {
