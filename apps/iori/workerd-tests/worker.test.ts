@@ -129,6 +129,7 @@ describe('iori Worker on workerd', () => {
       expect(response.headers.get('Vary')).toContain('Accept');
     };
     const articlePath = (id: string) => `${origin}/users/${username}/articles/${id}`;
+    const postPath = (user: string, id: string) => `${origin}/users/${user}/posts/${id}`;
 
     it('seeds a published, a draft, and an unpublished article', async () => {
       const cookie = requireSession();
@@ -184,6 +185,11 @@ describe('iori Worker on workerd', () => {
       expectNotFoundVaryingOnAccept(response);
     });
 
+    it('returns 404 for an article whose id is not a UUID with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath('abc'), { headers: activityJson });
+      expectNotFoundVaryingOnAccept(response);
+    });
+
     it('returns 404 for a draft article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(draftId), { headers: activityJson });
       expectNotFoundVaryingOnAccept(response);
@@ -221,10 +227,108 @@ describe('iori Worker on workerd', () => {
       expect((await actor.json<{ type: string }>()).type).toBe('Person');
     });
 
-    it('keeps passing a missing post through to the page route for application/activity+json', async () => {
-      const post = await SELF.fetch(`${origin}/users/${username}/posts/${missingId}`, { headers: activityJson });
+    it('returns 404 for a missing post with application/activity+json', async () => {
+      const post = await SELF.fetch(postPath(username, missingId), { headers: activityJson });
+      expectNotFoundVaryingOnAccept(post);
+    });
+
+    it('keeps serving the HTML shell for a missing post with text/html', async () => {
+      const post = await SELF.fetch(postPath(username, missingId), { headers: { Accept: 'text/html' } });
       expect(post.status).toBe(200);
       expect(post.headers.get('Content-Type')).toContain('text/html');
+    });
+
+    describe('post objects', () => {
+      const otherUserId = 'c4d7a152-96e8-4b7c-8c0f-5a3e8d6b1c54';
+      const otherUsername = 'someone';
+      const remoteActorId = 'd5e8b263-a7f9-4c8d-9d1a-6b4f9e7c2d65';
+      const deletedId = 'e6f9c374-b8a0-4d9e-8e2b-7c5a0f8d3e76';
+      const remoteIds = {
+        public: 'f70ad485-c9b1-4eaf-9f3c-8d6b1a9e4f87',
+        unlisted: '081be596-dac2-4fb0-8a4d-9e7c2b0f5a98',
+        private: '192cf6a7-ebd3-40c1-9b5e-0f8d3c1a6ba9',
+        direct: '2a3d07b8-fce4-41d2-8c6f-1a9e4d2b7cba',
+        unknown: '3b4e18c9-0df5-42e3-9d7a-2b0f5e3c8dcb',
+      } as const;
+      let localPostId: string;
+
+      it('seeds a local post, a deleted post, and remote posts of each visibility', async () => {
+        const author = await env.DB.prepare('SELECT actorId, userId FROM local_actors LIMIT 1').first<
+          { actorId: string; userId: string }
+        >();
+        const local = await env.DB.prepare(
+          'SELECT p.postId AS postId FROM posts p JOIN local_posts l ON l.postId = p.postId WHERE p.deletedAt IS NULL LIMIT 1',
+        ).first<{ postId: string }>();
+        localPostId = local!.postId;
+        const insertPost = env.DB.prepare(
+          'INSERT INTO posts (postId, actorId, content, createdAt, type, deletedAt) VALUES (?, ?, ?, ?, ?, ?)',
+        );
+        const insertRemote = env.DB.prepare(
+          'INSERT INTO remote_posts (postId, uri, inReplyToUri, visibility) VALUES (?, ?, NULL, ?)',
+        );
+        const remotes: [string, string | null][] = [
+          [remoteIds.public, 'public'],
+          [remoteIds.unlisted, 'unlisted'],
+          [remoteIds.private, 'private'],
+          [remoteIds.direct, 'direct'],
+          [remoteIds.unknown, null],
+        ];
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO users (userId, username) VALUES (?, ?)').bind(otherUserId, otherUsername),
+          env.DB.prepare('INSERT INTO actors (actorId, uri, logoUri, inboxUrl, type) VALUES (?, ?, NULL, ?, ?)').bind(
+            remoteActorId,
+            'https://remote.example/users/alice',
+            'https://remote.example/users/alice/inbox',
+            'Person',
+          ),
+          insertPost.bind(deletedId, author!.actorId, 'deleted post', 1, 'local', 2),
+          env.DB.prepare('INSERT INTO local_posts (postId, userId, inReplyToUri) VALUES (?, ?, NULL)').bind(
+            deletedId,
+            author!.userId,
+          ),
+          ...remotes.flatMap(([id, visibility]) => [
+            insertPost.bind(id, remoteActorId, `remote ${visibility}`, 1, 'remote', null),
+            insertRemote.bind(id, `https://remote.example/notes/${id}`, visibility),
+          ]),
+        ]);
+      });
+
+      it('returns the Note for a public local post with the author identifier', async () => {
+        const response = await SELF.fetch(postPath(username, localPostId), { headers: activityJson });
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Content-Type')).toContain('application/activity+json');
+        const note = await response.json<{ type: string; id: string }>();
+        expect(note.type).toBe('Note');
+        expect(note.id).toBe(postPath(username, localPostId));
+      });
+
+      it.each(['public', 'unlisted', 'private', 'direct', 'unknown'] as const)(
+        'returns 404 for a remote post whose visibility is %s',
+        async (visibility) => {
+          const response = await SELF.fetch(postPath(username, remoteIds[visibility]), { headers: activityJson });
+          expectNotFoundVaryingOnAccept(response);
+        },
+      );
+
+      it('returns 404 for a local post requested under another existing user', async () => {
+        const response = await SELF.fetch(postPath(otherUsername, localPostId), { headers: activityJson });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns 404 for a local post requested under an unknown user', async () => {
+        const response = await SELF.fetch(postPath('nobody', localPostId), { headers: activityJson });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns 404 for a post whose id is not a UUID with application/activity+json', async () => {
+        const response = await SELF.fetch(postPath(username, 'abc'), { headers: activityJson });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns 404 for a deleted post with application/activity+json', async () => {
+        const response = await SELF.fetch(postPath(username, deletedId), { headers: activityJson });
+        expectNotFoundVaryingOnAccept(response);
+      });
     });
   });
 

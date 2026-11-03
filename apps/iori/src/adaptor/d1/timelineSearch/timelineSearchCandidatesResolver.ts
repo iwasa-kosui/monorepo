@@ -25,6 +25,7 @@ export const createD1TimelineSearchCandidatesResolver = (
       .where(and(
         isNull(postsTable.deletedAt),
         inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
+        // content は HTML のままなので、タグ名や属性名に当たる語は本文以外にも一致し、本文に一致する古い投稿が候補の上限から外れることがある
         or(...terms.map(({ pattern }) => like(postsTable.content, `%${pattern}%`))),
       ))
       .orderBy(

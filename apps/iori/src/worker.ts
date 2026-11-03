@@ -4,7 +4,7 @@ import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverB
 import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1SessionResolver } from './adaptor/d1/session/sessionResolver.ts';
-import { federationWithArticleNotFound } from './adaptor/fedify/activityPubArticleNotFound.ts';
+import { federationWithObjectNotFound } from './adaptor/fedify/activityPubObjectNotFound.ts';
 import { generateOgImageOnDemand, type OgImageFailureLog } from './adaptor/ogImage/generateOgImageOnDemand.ts';
 import { fetchOgFont } from './adaptor/ogImage/ogImageFont.ts';
 import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts';
@@ -14,6 +14,7 @@ import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
+import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
@@ -131,7 +132,7 @@ export default {
     return createIoriApp({
       federationMiddleware: async (c, next) => {
         if (c.req.path === '/inbox' && c.req.method === 'GET') return c.json({ error: 'Method Not Allowed' }, 405);
-        return federationWithArticleNotFound(runtime.federation, () => undefined)(c, next);
+        return federationWithObjectNotFound(runtime.federation, () => undefined)(c, next);
       },
       registerRoutes: (app) => {
         app.get('/readyz', async (c) => {
@@ -267,6 +268,7 @@ export default {
         app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());

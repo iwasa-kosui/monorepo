@@ -2,7 +2,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { federationWithArticleNotFound } from './adaptor/fedify/activityPubArticleNotFound.ts';
+import { federationWithObjectNotFound } from './adaptor/fedify/activityPubObjectNotFound.ts';
 import { createNodeOgImageGenerator } from './adaptor/node/ogImageGenerator.ts';
 import { AboutRouter } from './adaptor/routes/aboutRouter.tsx';
 import { APIRouter } from './adaptor/routes/apiRouter.tsx';
@@ -26,7 +26,7 @@ import { ImageId } from './domain/image/imageId.ts';
 import { Federation } from './federation.ts';
 
 const app = createIoriApp({
-  federationMiddleware: federationWithArticleNotFound(Federation.getInstance(), () => undefined),
+  federationMiddleware: federationWithObjectNotFound(Federation.getInstance(), () => undefined),
   registerRoutes: (router) => {
     router.use('/static/*', serveStatic({ root: './' }));
     router.use('/favicon.ico', serveStatic({ path: './favicon.ico' }));

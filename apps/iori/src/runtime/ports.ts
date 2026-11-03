@@ -58,6 +58,7 @@ import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
+import type { SearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -120,6 +121,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   statusAssembler: StatusAssembler;
+  searchTimeline: SearchTimelineUseCase;
   notificationsResolverByPage: NotificationsResolverByPage;
   notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;

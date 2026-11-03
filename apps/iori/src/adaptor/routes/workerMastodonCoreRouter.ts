@@ -44,7 +44,6 @@ const readBlocks = scope('read:blocks');
 const readFilters = scope('read:filters');
 const readFollows = scope('read:follows');
 const readLists = scope('read:lists');
-const readSearch = scope('read:search');
 const readStatuses = scope('read:statuses');
 const profileScope = scope('profile');
 const pushScope = scope('push');
@@ -155,8 +154,7 @@ export const createWorkerMastodonCoreRouter = ({
     .get('/v1/trends/tags', (c) => c.json([]))
     .get('/v1/trends/links', (c) => c.json([]))
     .get('/v1/preferences', authn.requireUser(readAccounts), (c) => c.json(preferences))
-    .get('/v1/push/subscription', authn.requireUser(pushScope), (c) => c.json(recordNotFound, 404))
-    .get('/v2/search', authn.requireUser(readSearch), (c) => c.json({ accounts: [], statuses: [], hashtags: [] }));
+    .get('/v1/push/subscription', authn.requireUser(pushScope), (c) => c.json(recordNotFound, 404));
 
   const emptyLists: ReadonlyArray<readonly [string, Scope]> = [
     ['/v1/filters', readFilters],

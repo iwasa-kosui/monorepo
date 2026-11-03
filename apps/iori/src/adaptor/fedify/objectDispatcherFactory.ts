@@ -8,8 +8,10 @@ import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
 import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
-import type { PostResolver, PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
+import { Post, type PostResolver, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { UserResolverByUsername } from '../../domain/user/user.ts';
+import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
 import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
@@ -18,6 +20,7 @@ export type ObjectDispatcherDeps = Readonly<{
   origin: string;
   postResolver: PostResolver;
   postImagesResolver: PostImagesResolverByPostId;
+  userResolverByUsername: UserResolverByUsername;
   articleResolver?: ArticleResolver;
   threadResolver?: ThreadResolver;
   articleBodyResolver: ArticleBodyResolver;
@@ -27,6 +30,7 @@ export const createObjectDispatcher = ({
   origin,
   postResolver,
   postImagesResolver,
+  userResolverByUsername,
   articleResolver,
   threadResolver,
   articleBodyResolver,
@@ -34,8 +38,22 @@ export const createObjectDispatcher = ({
   const useCase = GetPostUseCase.create({ postResolver, postImagesResolver });
   const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) =>
     RA.flow(
-      RA.ok({ postId: PostId.orThrow(values.id) }),
-      RA.andThen((input) => useCase.run(input)),
+      RA.ok(values.id),
+      RA.andThen(PostId.parse),
+      RA.andThen((postId) => useCase.run({ postId })),
+      RA.andThen(({ post, postImages }) => {
+        if (post.type !== 'local' || !Post.isVisibleToAnonymous(post)) {
+          return RA.err(new Error('Post is not a public local post'));
+        }
+        return RA.flow(
+          RA.ok(values.identifier),
+          RA.andThen(Username.parse),
+          RA.andThen((username) => userResolverByUsername.resolve(username)),
+          RA.andThen((user) =>
+            user?.id === post.userId ? RA.ok({ post, postImages }) : RA.err(new Error('Post author does not match'))
+          ),
+        );
+      }),
       RA.match({
         ok: ({ post, postImages }) =>
           new Note({
@@ -47,7 +65,7 @@ export const createObjectDispatcher = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
             url: ctx.getObjectUri(Note, values),
-            replyTarget: post.type === 'local' && post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
+            replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
             attachments: postImages.map((image) =>
               new Document({ url: new URL(image.url, origin), mediaType: getMimeTypeFromUrl(image.url) })
             ),
@@ -64,7 +82,9 @@ export const createObjectDispatcher = ({
   const ofArticle = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
     if (articleUseCase === undefined) return null;
     return RA.flow(
-      articleUseCase.run({ articleId: ArticleId.orThrow(values.id) }),
+      RA.ok(values.id),
+      RA.andThen(ArticleId.parse),
+      RA.andThen((articleId) => articleUseCase.run({ articleId })),
       RA.match({
         ok: ({ article, thread, body }) => {
           if (article.status !== 'published') return null;

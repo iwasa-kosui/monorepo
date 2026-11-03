@@ -331,15 +331,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
     });
 
-    it('search は空の結果を返す', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read:search');
-
-      const response = await h.request('/api/v2/search?q=abc', { headers: { Authorization: `Bearer ${token}` } });
-
-      expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
-    });
-
     it('push の購読がなければ 404 を返す', async () => {
       const h = setup();
       const { token } = await h.issueUserToken('push');

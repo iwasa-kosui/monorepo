@@ -1,7 +1,7 @@
 import type { Federation } from '@fedify/fedify';
 import type { Context, MiddlewareHandler } from 'hono';
 
-const ARTICLE_OBJECT_PATH = /^\/users\/[^/]+\/articles\/[^/]+$/;
+const OBJECT_PATH = /^\/users\/[^/]+\/(?:articles|posts)\/[^/]+$/;
 const MEDIA_TYPE = /^\s*([^\s/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
 
 const preferredMediaTypes = (accept: string): string[] =>
@@ -30,10 +30,10 @@ const prefersActivityPub = (accept: string | null): boolean => {
     || types.includes('application/json');
 };
 
-export const isActivityPubArticleRequest = (request: Request): boolean =>
-  ARTICLE_OBJECT_PATH.test(new URL(request.url).pathname) && prefersActivityPub(request.headers.get('Accept'));
+export const isActivityPubObjectRequest = (request: Request): boolean =>
+  OBJECT_PATH.test(new URL(request.url).pathname) && prefersActivityPub(request.headers.get('Accept'));
 
-export const federationWithArticleNotFound = <TContextData>(
+export const federationWithObjectNotFound = <TContextData>(
   federation: Federation<TContextData>,
   contextDataFactory: (c: Context) => TContextData | Promise<TContextData>,
 ): MiddlewareHandler =>
@@ -41,7 +41,7 @@ async (c, next) =>
   federation.fetch(c.req.raw, {
     contextData: await contextDataFactory(c),
     async onNotFound(request) {
-      if (isActivityPubArticleRequest(request)) {
+      if (isActivityPubObjectRequest(request)) {
         return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain', Vary: 'Accept' } });
       }
       await next();
