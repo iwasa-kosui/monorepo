@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   worker: vi.fn(),
   version: vi.fn(),
-  record: vi.fn(),
   deploy: vi.fn(),
 }));
 vi.mock(
@@ -20,10 +19,10 @@ vi.mock(
     }),
   }),
 );
-vi.mock('../target-preparation-record.mjs', () => ({ readPreparationRecord: mocks.record }));
 vi.mock('../deploy-reviewed-worker-version.mjs', () => ({ deployReviewedWorkerVersion: mocks.deploy }));
 import { expectedTargetFixture } from './migrationTargetFixture.js';
-const target = expectedTargetFixture();
+const { backend_bucket: _backendBucket, ...identityWithoutBackend } = expectedTargetFixture().identity;
+const target = { ...expectedTargetFixture(), identity: identityWithoutBackend };
 const resource = {
   consumerId: target.resources.consumer.id,
   queuePaused: false,
@@ -44,7 +43,6 @@ beforeEach(() => {
 const options = () => ({
   expectedTarget: target,
   currentCodeSha: 'b'.repeat(40),
-  storage: {} as never,
   token: 'fixture',
   zoneId: 'a'.repeat(32),
   signal: new AbortController().signal,
@@ -60,7 +58,6 @@ it('keeps immutable migration identity while recording a different reviewed code
     versionId: 'next',
   });
   expect(target).toEqual(original);
-  expect(mocks.record).toHaveBeenCalledTimes(1);
   expect(mocks.deploy).toHaveBeenCalledWith(
     expect.objectContaining({
       mode: 'active',

@@ -24,6 +24,9 @@ export function createTargetControlPlane(
 ): Readonly<{
   readQueuePause(input: { queueId: string; paused: boolean }): Promise<{ queueId: string; paused: boolean }>;
   assertFresh(): Promise<{ fresh: true; resourceCount: 0 }>;
+  resolveActiveResources(): Promise<
+    { d1Id: string; kvId: string; queueId: string; dlqId: string; consumerId: string }
+  >;
   readActiveResources(
     ids: ResourceIds,
   ): Promise<

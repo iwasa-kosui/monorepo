@@ -9,16 +9,17 @@ export const migrationRunIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
 const id = z.string().regex(migrationRunIdPattern);
 const name = z.string().min(1).max(253);
 const resource = z.object({ id, name }).strict();
-const identity = z.object({
+const identityFields = {
   environment: z.enum(['production', 'staging']),
   generation: name,
   main_sha: z.string().regex(/^[a-f0-9]{40}$/),
   run_id: id,
   account_id: z.string().regex(/^[a-f0-9]{32}$/),
-  backend_bucket: name,
   backend_key: name,
   worker_name: name,
-}).strict();
+};
+const identity = z.object({ ...identityFields, backend_bucket: name }).strict();
+const identityWithoutBackend = z.object(identityFields).strict();
 const resources = z.object({
   d1: resource,
   kv: resource,
@@ -39,6 +40,11 @@ const admission = z.object({
 }).strict();
 const fields = { identity, resources, admission };
 const expectedSchema = z.object({ schema: z.literal('iori-migration-expected-target/v1'), ...fields }).strict();
+const expectedSchemaWithoutBackend = z.object({
+  schema: z.literal('iori-migration-expected-target/v1'),
+  ...fields,
+  identity: identityWithoutBackend,
+}).strict();
 const observed = z.object({
   worker_version_id: id,
   admission_mode: z.literal('sealed'),
@@ -79,10 +85,10 @@ export const admissionEnvironment = (target) => ({
   IORI_ADMISSION_IDENTITY: JSON.stringify(target.admission),
   ORIGIN: `https://${target.admission.hostname}`,
 });
-export const parseExpectedTarget = (input) => {
+export const parseExpectedTarget = (input, { backend = true } = {}) => {
   try {
     if (Buffer.byteLength(JSON.stringify(input)) > TARGET_BYTES) fail();
-    const target = expectedSchema.parse(input);
+    const target = (backend ? expectedSchema : expectedSchemaWithoutBackend).parse(input);
     const derived = targetIdentity(target);
     const { identity: i, resources: r, admission: a } = target;
     if (i.backend_key !== derived.backendKey || i.worker_name !== derived.workerName) fail();
@@ -194,5 +200,35 @@ const expectedAtPause = ({ identity: supplied, mainSha, runId, admission: a, out
   });
 };
 
+export const activeTargetFromResolvedIds = ({ identity: supplied, mainSha, runId, admission, resolved }) => {
+  const derived = createTargetIdentity(supplied);
+  return parseExpectedTarget({
+    schema: 'iori-migration-expected-target/v1',
+    identity: {
+      environment: derived.environment,
+      generation: derived.generation,
+      main_sha: mainSha,
+      run_id: runId,
+      account_id: derived.accountId,
+      backend_key: derived.backendKey,
+      worker_name: derived.workerName,
+    },
+    resources: {
+      d1: { id: resolved.d1Id, name: derived.names.d1 },
+      kv: { id: resolved.kvId, name: derived.names.kv },
+      uploads: { name: derived.names.uploads },
+      transfer: { name: derived.names.transfer },
+      queue: { id: resolved.queueId, name: derived.names.queue },
+      dlq: { id: resolved.dlqId, name: derived.names.dlq },
+      consumer: {
+        id: resolved.consumerId,
+        queue_id: resolved.queueId,
+        worker_name: derived.workerName,
+        dead_letter_queue_id: resolved.dlqId,
+      },
+    },
+    admission,
+  }, { backend: false });
+};
 export const expectedTargetFromOutputs = input => expectedAtPause(input, true);
 export const activeTargetFromOutputs = input => expectedAtPause(input, false);

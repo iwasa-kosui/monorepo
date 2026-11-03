@@ -6,6 +6,7 @@ export const OPERATION_STAGES = Object.freeze([
   'rehearse-migration',
   'migrate-data',
   'deploy-worker-before',
+  'deploy-worker-resolve',
   'deploy-worker-migrate',
   'deploy-worker-deploy',
   'deploy-worker-after',

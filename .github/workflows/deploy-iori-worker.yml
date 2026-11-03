@@ -607,11 +607,6 @@ jobs:
           cache: pnpm
       - name: Create fresh private job directory
         run: node apps/iori/scripts/hosted-workflow.mjs init
-      - name: Setup Terraform without public wrapper outputs
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-          terraform_version: "1.17.1"
       - name: Install and build with private diagnostics
         run: node apps/iori/scripts/hosted-workflow.mjs setup
       - name: Run fixed protected operation
@@ -620,15 +615,10 @@ jobs:
           IORI_ADMISSION_MODE: sealed
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          IORI_TERRAFORM_BACKEND_BUCKET: ${{ secrets.IORI_TERRAFORM_BACKEND_BUCKET }}
           IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
           ORIGIN: ${{ secrets.ORIGIN }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.IORI_TERRAFORM_READ_ONLY_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.IORI_TERRAFORM_READ_ONLY_SECRET_ACCESS_KEY }}
-          IORI_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_ACCESS_KEY_ID }}
-          IORI_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.IORI_TRANSFER_R2_READ_ONLY_SECRET_ACCESS_KEY }}
       - name: Remove this job's private directory
         if: always() && env.IORI_PRIVATE_DIRECTORY != ''
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs

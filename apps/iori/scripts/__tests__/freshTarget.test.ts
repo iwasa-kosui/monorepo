@@ -21,6 +21,15 @@ describe('fresh isolated target', () => {
     expect(() => createTargetIdentity({ ...input, generation: '' })).toThrow();
     expect(() => createTargetIdentity({ ...input, backendBucket: identity.names.uploads })).toThrow();
   });
+  it('builds the same names without a backend bucket but still rejects an invalid one', () => {
+    const { backendBucket: _bucket, ...withoutBucket } = input;
+    const identity = createTargetIdentity(withoutBucket);
+    expect(identity.names).toEqual(createTargetIdentity(input).names);
+    expect(identity.backendBucket).toBeUndefined();
+    for (const backendBucket of ['', 'A', null, 'x']) {
+      expect(() => createTargetIdentity({ ...input, backendBucket: backendBucket as never })).toThrow();
+    }
+  });
   it('rejects existing state, wrong backend and missing state evidence', () => {
     const identity = createTargetIdentity(input);
     expect(() => assertFreshTargetState(identity, { backendKey: identity.backendKey, resources: [] })).not.toThrow();

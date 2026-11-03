@@ -58,7 +58,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     if (name !== 'public-artifact-gate') {
       expect([job.needs].flat()).toContain('public-artifact-gate');
       expect(job.environment).toBe('${{ inputs.environment }}');
-      if (name === 'recover-source') {
+      if (name === 'recover-source' || name === 'deploy-worker') {
         expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
       } else {
         expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper)
@@ -111,7 +111,7 @@ it('scopes signing and write credentials to the exact roles, without mounted sec
   expect(cutover.AWS_ACCESS_KEY_ID).toContain('WRITE');
   expect(deploy.VAPID_PRIVATE_KEY).toBeUndefined();
   expect(deploy.IORI_SOURCE_SSH_PRIVATE_KEY).toBeUndefined();
-  expect(deploy.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
+  expect(Object.keys(deploy).filter(key => /AWS_|TERRAFORM|IORI_MIGRATION_R2/.test(key))).toEqual([]);
   const text = JSON.stringify(workflow);
   expect(text).not.toMatch(
     /self-hosted|upload-artifact|download-artifact|IORI_IMPORT_RUNNER|secrets\.[A-Z_]+_PATH|QUEUE_PRODUCER_REMOVED|ssh-keyscan|DATABASE_URL|DB_PASSWORD/,
@@ -257,7 +257,7 @@ it('shares exact production source serialization and delegates to early guarded 
   expect(sourceScript.indexOf('remote(\'check\')')).toBeLessThan(sourceScript.indexOf('remote(\'checkout\')'));
   expect(sourceScript.indexOf('remote(\'dist-check\')')).toBeLessThan(sourceScript.indexOf('execute(\'rsync\''));
 });
-it('deploys the Worker on a main push through a fixed deploy-worker job holding only the read-only Terraform key and the deploy token', async () => {
+it('deploys the Worker on a main push through a fixed deploy-worker job holding the deploy token and no Terraform or transfer storage credential', async () => {
   const [worker, source, main] = await Promise.all([
     readWorkflow('deploy-iori-worker.yml'),
     readWorkflow('deploy-iori.yml'),
@@ -365,13 +365,18 @@ it('deploys the Worker on a main push through a fixed deploy-worker job holding 
   expect(job.environment).toBe('production');
   expect(job.needs).toBe('public-artifact-gate');
   expect(job.if).toBeUndefined();
-  expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(
-    false,
-  );
+  expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
   const deploy = operation(job).env!;
   expect(deploy).toEqual(operation(worker.jobs['deploy-worker']).env);
-  expect(deploy.AWS_ACCESS_KEY_ID).toContain('READ_ONLY');
-  expect(deploy.AWS_SECRET_ACCESS_KEY).toContain('READ_ONLY');
+  expect(Object.keys(deploy)).toEqual([
+    'IORI_ADMISSION_MODE',
+    'CLOUDFLARE_ACCOUNT_ID',
+    'CLOUDFLARE_ZONE_ID',
+    'IORI_ADMISSION_IDENTITY',
+    'ORIGIN',
+    'VAPID_SUBJECT',
+    'CLOUDFLARE_API_TOKEN',
+  ]);
   expect(deploy.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}');
   expect(JSON.stringify(main)).not.toMatch(
     /SSH|RECEIPT|WRITE|SMOKE_QUEUE_TOKEN|IORI_MIGRATION_REHEARSAL|VAPID_(?:PUBLIC|PRIVATE)|STAGING_ACCESS_TOKEN|MIGRATE_API_TOKEN|CUTOVER_API_TOKEN|inputs\.|workflow_dispatch/,

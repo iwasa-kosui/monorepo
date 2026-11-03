@@ -131,7 +131,7 @@ activitypub.academy はサービスを終了しているため、この確認に
 
 ### 手作業で cutover した後の state の取り込み
 
-`cutover-route` を使わず、手作業で cutover した場合は、Cloudflare の実物が active になっても、Terraform の state は cutover 前のままです。この状態では、`deploy-worker` が state の出力と実物の不一致で止まります。operation `adopt-cutover-state` は、この state を実物に合わせます。この operation は、第3節の手順 1 から 13 の順序に含まれません。
+`cutover-route` を使わず、手作業で cutover した場合は、Cloudflare の実物が active になっても、Terraform の state は cutover 前のままです。`deploy-worker` は state を読まないので、この不一致では止まりません。operation `adopt-cutover-state` は、この state を実物に合わせます。この operation は、第3節の手順 1 から 13 の順序に含まれません。
 
 事前条件は、次の2つです。
 
@@ -244,14 +244,14 @@ executor receipt は Ed25519 の detached signature を必要とします。sign
 
 各 job に渡す権限は役割ごとに分けます。API token と S3 credential は用途と対象 bucket を限定し、存在する Environment 名だけを保護設定の完了とみなしません。
 
-| 役割             | 必要な権限・入力                                                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 準備             | 新規リソース・sealed Worker・secret・停止 consumer の作成、state 更新、準備記録の保存                                                       |
-| 移行             | state 読み取り、D1/R2 import、移行 bundle 保存、source control 用 SSH、実測 profile、署名用秘密鍵と公開鍵の pin                             |
-| 再検証           | state・移行 bundle・D1/R2 と現在の Worker/Queue の読み取り、公開鍵と pin                                                                    |
-| 切替             | job 内の再検証に必要な読み取り、smoke token、source 凍結の照合、Worker/route/Queue と state の更新                                          |
-| 通常 Worker 更新 | 現在の generation と route/Queue/state の読み取り、Worker と既存 Queue producer の deploy。移行時の identity と現在の code SHA を別々に指定 |
-| source 事前配備  | 固定 SSH/rsync、信頼済み host key、reviewed SHA の成果物。既存 source-side DB/TLS 設定を利用                                                |
+| 役割             | 必要な権限・入力                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 準備             | 新規リソース・sealed Worker・secret・停止 consumer の作成、state 更新、準備記録の保存                                                                                                                  |
+| 移行             | state 読み取り、D1/R2 import、移行 bundle 保存、source control 用 SSH、実測 profile、署名用秘密鍵と公開鍵の pin                                                                                        |
+| 再検証           | state・移行 bundle・D1/R2 と現在の Worker/Queue の読み取り、公開鍵と pin                                                                                                                               |
+| 切替             | job 内の再検証に必要な読み取り、smoke token、source 凍結の照合、Worker/route/Queue と state の更新                                                                                                     |
+| 通常 Worker 更新 | Cloudflare API による D1/KV/Queue/DLQ/consumer の id の名前引き、現在の generation の route/Queue の読み取り、Worker と既存 Queue producer の deploy。移行時の identity と現在の code SHA を別々に指定 |
+| source 事前配備  | 固定 SSH/rsync、信頼済み host key、reviewed SHA の成果物。既存 source-side DB/TLS 設定を利用                                                                                                           |
 
 D1 の再検証には `D1 Read` が利用できます。state、移行 bundle、application object の読み取り用 credential を、それぞれの書き込み用 credential から分けます。[D1 query API の権限](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)
 
@@ -262,6 +262,8 @@ workers.dev と切替後の custom-domain smoke は、protected queue token を�
 切替前の workers.dev と切替後の custom domain は別々の確認済み hostname として管理します。smoke は admission identity と対応する hostname だけに送信し、route 作成後は canonical hostname でも全 checklist を確認します。
 
 切替後の `deploy-worker` は、現在 `active` の同じ generation への通常更新に限定します。`MAIN_SHA` は今回の checkout/build を制御する reviewed current-main SHA、`IORI_MIGRATION_MAIN_SHA` は移行時から不変の admission `mainSha` です。run ID と generation も元の移行から保持します。準備記録や署名済み target を新しいコード SHA に合わせて書き換えず、更新後の live data を移行時の manifest と比較しません。
+
+`deploy-worker` は、Terraform の state も準備記録も読みません。`deploy-worker` は、D1、KV、Queue、DLQ、consumer の id を、Cloudflare API で名前から引きます。名前から id を引けないとき、または API が 401 か 403 を返したときは、`deploy-worker` が `stage=deploy-worker-resolve` の `IORI_DIAG` 行を出し、`wrangler deploy` の前に止まります。job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の6つです。
 
 通常更新では backend、binding、canonical route、consumer、main Queue の配送中状態、DLQ の配送停止状態を更新前後で照合します。secret 更新、Terraform apply、データ import、source の再凍結は含めません。Wrangler は producer の Queue API を呼ぶ場合があるため、設定が変わらないことを実 readback で確認します。不確かな失敗後に自動 redeploy や producer 復元は行いません。
 

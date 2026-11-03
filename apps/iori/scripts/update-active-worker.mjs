@@ -4,14 +4,12 @@ import { deployReviewedWorkerVersion } from './deploy-reviewed-worker-version.mj
 import { admissionEnvironment, parseExpectedTarget, targetIdentity } from './migration-target-contract.mjs';
 import { assertReviewedMain } from './reviewed-main.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
-import { readPreparationRecord } from './target-preparation-record.mjs';
 
 /** A normal code update preserves the immutable migration identity and all active routing/Queue configuration. */
 export const updateActiveWorker = async (
   {
     expectedTarget,
     currentCodeSha,
-    storage,
     token,
     zoneId,
     signal,
@@ -21,12 +19,10 @@ export const updateActiveWorker = async (
     onStage = () => {},
   },
 ) => {
-  const target = parseExpectedTarget(expectedTarget);
+  const target = parseExpectedTarget(expectedTarget, { backend: false });
   if (!/^[a-f0-9]{40}$/.test(currentCodeSha ?? '')) throw new Error('Invalid reviewed code revision.');
   signal.throwIfAborted();
   await checkMain(currentCodeSha, { signal });
-  // This checks the immutable record only; it does not rewrite it or recompare historic live data counts.
-  await readPreparationRecord({ storage, expectedTarget: target });
   const identity = targetIdentity(target);
   const control = createTargetControlPlane({ identity, token, signal, fetchRequest });
   const r = target.resources;
