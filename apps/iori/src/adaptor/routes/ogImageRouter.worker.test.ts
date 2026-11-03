@@ -14,7 +14,7 @@ describe('OG image Worker route', () => {
   it('serves an article image from its injected store', async () => {
     const articleId = ArticleId.generate();
     const get = vi.fn(async () => new Response('image'));
-    const app = createOgImageRouter({ get, put: vi.fn() });
+    const app = createOgImageRouter({ get, put: vi.fn(), delete: vi.fn() });
 
     const response = await app.request(`/articles/${articleId}`);
 
@@ -39,12 +39,27 @@ describe('R2 OG image store', () => {
 
     expect(get).toHaveBeenCalledWith('og/article-id.png');
     expect(response?.headers.get('Content-Type')).toBe('image/png');
-    expect(response?.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(response?.headers.get('Cache-Control')).toBe('public, max-age=3600');
+  });
+
+  it('ignores the cache control stored in the object and uses the current value', async () => {
+    const get = vi.fn(async () => ({
+      body: new ReadableStream(),
+      httpMetadata: {
+        contentType: 'image/png',
+        cacheControl: 'public, max-age=31536000, immutable',
+      },
+    }));
+    const store = createR2OgImageStore({ get } as unknown as OgImageR2Bucket);
+
+    const response = await store.get('article-id');
+
+    expect(response?.headers.get('Cache-Control')).toBe('public, max-age=3600');
   });
 
   it('returns 404 for a missing object without writing it', async () => {
     const put = vi.fn();
-    const app = createOgImageRouter({ get: vi.fn(async () => undefined), put });
+    const app = createOgImageRouter({ get: vi.fn(async () => undefined), put, delete: vi.fn() });
 
     const response = await app.request(`/articles/${ArticleId.generate()}`);
 

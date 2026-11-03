@@ -45,6 +45,7 @@ const runtime = vi.hoisted(() => ({
     deleteArticleUseCase: {},
     publishedArticlesResolver: {},
     publishOgImage: async () => undefined,
+    deleteOgImage: async () => undefined,
   },
   core: {
     signUpUseCase: {},
