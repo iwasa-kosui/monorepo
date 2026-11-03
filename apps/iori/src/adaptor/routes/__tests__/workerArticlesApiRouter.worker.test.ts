@@ -371,4 +371,100 @@ describe('createWorkerArticlesApiRouter', () => {
       expect(deleteOgImage).not.toHaveBeenCalled();
     });
   });
+
+  describe('本文を持つ article の GET /v1/articles/:articleId', () => {
+    const authorUserId = UserId.generate();
+    const authorSessionId = SessionId.generate();
+    const createdAt = Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z'));
+
+    const createApp = (status: ArticleStatus) => {
+      const article: Article = {
+        articleId: ArticleId.generate(),
+        authorActorId: ActorId.generate(),
+        authorUserId,
+        rootPostId: null,
+        title: 'Digest',
+        status,
+        createdAt,
+        publishedAt: status === 'draft' ? null : createdAt,
+        unpublishedAt: null,
+      };
+      const sessionResolver = createMockSessionResolver();
+      sessionResolver.setSession({
+        sessionId: authorSessionId,
+        userId: authorUserId,
+        expires: Instant.orThrow(Date.now() + 60_000),
+      });
+      const resolveThread = vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }));
+      const unused = { run: async () => RA.err({}) } as never;
+      const app = createIoriApp({
+        federationMiddleware: undefined,
+        registerRoutes: (router) => {
+          router.route(
+            '/api',
+            createWorkerArticlesApiRouter({
+              getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
+                articleResolver: { resolve: async (id) => RA.ok(id === article.articleId ? article : undefined) },
+                threadResolver: { resolve: resolveThread as never },
+                articleBodyResolver: {
+                  resolve: async () =>
+                    RA.ok({
+                      articleId: article.articleId,
+                      privateHtml: '<p>private</p><script>alert(1)</script>',
+                      publicHtml: '<p>public</p><img src="https://example.com/a.png">',
+                      updatedAt: createdAt,
+                    }),
+                },
+              }),
+              getArticlesUseCase: unused,
+              createArticleUseCase: unused,
+              publishArticleUseCase: unused,
+              unpublishArticleUseCase: unused,
+              deleteArticleUseCase: unused,
+              publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
+              sessionResolver,
+              createContext: () => createMockRequestContext(),
+            }),
+          );
+        },
+        serveAsset: async () => undefined,
+        serveUpload: async () => undefined,
+        serveOgImage: async () => new Response('not implemented', { status: 501 }),
+      });
+      return { app, article, resolveThread };
+    };
+
+    it('作者の draft は private_html を body として返し、出力でもサニタイズする', async () => {
+      const { app, article, resolveThread } = createApp('draft');
+
+      const response = await app.request(`https://worker.test/api/v1/articles/${article.articleId}`, {
+        headers: { Cookie: `sessionId=${authorSessionId}` },
+      });
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        article: { articleId: article.articleId, rootPostId: null },
+        thread: [],
+        body: { html: '<p>private</p>' },
+      });
+      expect(resolveThread).not.toHaveBeenCalled();
+    });
+
+    it('匿名の published は public_html を body として返す', async () => {
+      const { app, article } = createApp('published');
+
+      const response = await app.request(`https://worker.test/api/v1/articles/${article.articleId}`);
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ thread: [], body: { html: '<p>public</p>' } });
+    });
+
+    it('匿名の draft は 404 になる', async () => {
+      const { app, article } = createApp('draft');
+
+      const response = await app.request(`https://worker.test/api/v1/articles/${article.articleId}`);
+
+      expect(response.status).toBe(404);
+    });
+  });
 });

@@ -11,6 +11,11 @@ import {
   type ArticleResolver,
 } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
+import {
+  ArticleBody,
+  type ArticleBodyDeletedStore,
+  type ArticleBodyResolver,
+} from '../domain/articleBody/articleBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
@@ -54,6 +59,8 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   articleResolver: ArticleResolver;
   articleDeletedStore: ArticleDeletedStore;
+  articleBodyResolver?: ArticleBodyResolver;
+  articleBodyDeletedStore?: ArticleBodyDeletedStore;
 }>;
 
 const create = ({
@@ -62,6 +69,8 @@ const create = ({
   actorResolverByUserId,
   articleResolver,
   articleDeletedStore,
+  articleBodyResolver,
+  articleBodyDeletedStore,
 }: Deps): DeleteArticleUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -87,6 +96,16 @@ const create = ({
       RA.andThen(async ({ existingArticle, user, ctx, articleId }) => {
         if (existingArticle.authorUserId !== user.id) {
           return RA.err(UnauthorizedError.create());
+        }
+
+        if (articleBodyResolver !== undefined && articleBodyDeletedStore !== undefined) {
+          const body = await articleBodyResolver.resolve(articleId);
+          if (!body.ok) {
+            return body;
+          }
+          if (body.val !== undefined) {
+            await articleBodyDeletedStore.store(ArticleBody.deleteArticleBody(now)(articleId));
+          }
         }
 
         const deleteEvent = Article.deleteArticle(now)(articleId);

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostResolver, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
@@ -63,5 +64,33 @@ describe('createObjectDispatcher ofArticle', () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  it('本文を持つ published の記事は content に public_html を使う', async () => {
+    const article = { ...createArticle('published'), rootPostId: null };
+    const resolveThread = vi.fn(async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }));
+    const dispatcher = createObjectDispatcher({
+      origin: 'https://example.com',
+      postResolver: {} as PostResolver,
+      postImagesResolver: {} as never,
+      articleResolver: { resolve: vi.fn(async () => RA.ok(article)) } as unknown as ArticleResolver,
+      threadResolver: { resolve: resolveThread } as unknown as ThreadResolver,
+      articleBodyResolver: {
+        resolve: vi.fn(async () =>
+          RA.ok({
+            articleId: article.articleId,
+            privateHtml: '<p>private</p>',
+            publicHtml: '<p>public</p>',
+            updatedAt: article.createdAt,
+          })
+        ),
+      } as unknown as ArticleBodyResolver,
+    });
+
+    const result = await dispatcher.ofArticle(createContext(), { id: article.articleId, identifier: 'kosui' });
+
+    expect(result).toBeInstanceOf(FedifyArticle);
+    expect((result as FedifyArticle).content?.toString()).toBe('<p>public</p>');
+    expect(resolveThread).not.toHaveBeenCalled();
   });
 });

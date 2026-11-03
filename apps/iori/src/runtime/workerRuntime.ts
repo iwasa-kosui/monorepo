@@ -16,6 +16,9 @@ import { createD1ArticleResolverByRootPostId } from '../adaptor/d1/article/artic
 import { createD1ArticlesResolverByAuthorActorId } from '../adaptor/d1/article/articlesResolverByAuthorActorId.ts';
 import { createD1ArticleUnpublishedStore } from '../adaptor/d1/article/articleUnpublishedStore.ts';
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
+import { createD1ArticleBodyDeletedStore } from '../adaptor/d1/articleBody/articleBodyDeletedStore.ts';
+import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
+import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
@@ -107,6 +110,7 @@ import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebP
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
+import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
 import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
@@ -138,6 +142,7 @@ import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
+import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -167,6 +172,8 @@ export const createWorkerRuntimePorts = async (
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
+  const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
   const emojiReactResolverByActorAndPostAndEmoji = createD1EmojiReactResolverByActorAndPostAndEmoji(db);
@@ -372,6 +379,7 @@ export const createWorkerRuntimePorts = async (
       getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
+        articleBodyResolver,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,
@@ -386,6 +394,15 @@ export const createWorkerRuntimePorts = async (
         postResolver,
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleCreatedStore: createD1ArticleCreatedStore(db),
+      }),
+      createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
+        actorResolverByUserId,
+        articleCreatedStore: createD1ArticleCreatedStore(db),
+        articleBodyWrittenStore,
+      }),
+      updateArticleBodyUseCase: UpdateArticleBodyUseCase.create({
+        articleResolver,
+        articleBodyWrittenStore,
       }),
       publishArticleUseCase: PublishArticleUseCase.create({
         sessionResolver,
@@ -407,6 +424,8 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUserId,
         articleResolver,
         articleDeletedStore: createD1ArticleDeletedStore(db),
+        articleBodyResolver,
+        articleBodyDeletedStore: createD1ArticleBodyDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
       sessionResolver,

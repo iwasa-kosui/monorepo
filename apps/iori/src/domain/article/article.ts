@@ -17,7 +17,7 @@ const articleZodType = z.object({
   articleId: ArticleId.zodType,
   authorActorId: ActorId.zodType,
   authorUserId: UserId.zodType,
-  rootPostId: PostId.zodType,
+  rootPostId: z.nullable(PostId.zodType),
   title: z.string().min(1).max(200),
   status: ArticleStatus,
   createdAt: Instant.zodType,
