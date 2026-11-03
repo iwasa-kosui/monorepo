@@ -135,6 +135,7 @@ export type IoriArticlesRuntimePorts = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  sessionResolver: SessionResolver;
   publishOgImage: (article: Article) => Promise<void>;
 }>;
 export type IoriMutesRelaysRuntimePorts = Readonly<{

@@ -14,6 +14,7 @@ const imageId = ImageId.generate();
 const userId = crypto.randomUUID();
 const actorId = crypto.randomUUID();
 const sessionId = crypto.randomUUID();
+const smokeArticleId = '00000000-0000-4000-8000-000000000000';
 const queue = { ack: vi.fn(), retry: vi.fn() };
 
 type FixtureKey = Readonly<{
@@ -24,7 +25,20 @@ type FixtureKey = Readonly<{
   publicKey: string;
 }>;
 
+type FixtureArticle = Readonly<{
+  articleId: string;
+  authorActorId: string;
+  authorUserId: string;
+  rootPostId: string;
+  title: string;
+  status: string;
+  createdAt: number;
+  publishedAt: number | null;
+  unpublishedAt: number | null;
+}>;
+
 type FixtureRows = {
+  article: FixtureArticle;
   actor: { actorId: string; uri: string; logoUri: string | null; inboxUrl: string; type: string };
   domainEvents: unknown[];
   instanceActorKeys: Array<Pick<FixtureKey, 'keyId' | 'type' | 'privateKey' | 'publicKey'>>;
@@ -69,6 +83,9 @@ class FixtureD1 {
   }
 
   private resultRows(query: string, params: unknown[]) {
+    if (query.includes('from "articles"')) {
+      return params[0] === this.rows.article.articleId ? [this.rows.article] : [];
+    }
     if (query.includes('from "sessions"')) {
       return params[0] === this.rows.session.sessionId ? [this.rows.session] : [];
     }
@@ -90,6 +107,22 @@ class FixtureD1 {
   }
 
   private rawRows(query: string, params: unknown[]) {
+    if (query.includes('from "articles"')) {
+      const { article } = this.rows;
+      return params[0] === article.articleId
+        ? [[
+          article.articleId,
+          article.authorActorId,
+          article.authorUserId,
+          article.rootPostId,
+          article.title,
+          article.status,
+          article.createdAt,
+          article.publishedAt,
+          article.unpublishedAt,
+        ]]
+        : [];
+    }
     if (query.includes('from "sessions"')) {
       const { session } = this.rows;
       return params[0] === session.sessionId ? [[session.sessionId, session.userId, session.expires]] : [];
@@ -157,6 +190,17 @@ const makeSeed = async () => {
   keyMaterial ??= generateKeyMaterial();
   const [rsaPrivate, rsaPublic, ed25519Private, ed25519Public] = await keyMaterial;
   return {
+    article: {
+      articleId: smokeArticleId,
+      authorActorId: actorId,
+      authorUserId: userId,
+      rootPostId: crypto.randomUUID(),
+      title: 'Smoke article',
+      status: 'published',
+      createdAt: Date.now(),
+      publishedAt: Date.now(),
+      unpublishedAt: null,
+    },
     actor: {
       actorId,
       uri: `${origin}/users/fixture`,
@@ -298,7 +342,7 @@ describe('Worker fixture', () => {
         smoke: {
           username: 'fixture',
           uploadFilename: `${imageId}.webp`,
-          articleId: '00000000-0000-4000-8000-000000000000',
+          articleId: smokeArticleId,
         },
       }),
       UPLOADS: {

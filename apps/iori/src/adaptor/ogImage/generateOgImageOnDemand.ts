@@ -41,6 +41,19 @@ export const generateOgImageOnDemand = (
   { store, resolvePublishedTitle, loadFont, render, now, failures }: GenerateOgImageOnDemandDeps,
 ) =>
 async (articleId: ArticleId): Promise<GenerateOgImageResult> => {
+  let resolved: PublishedTitleResult;
+  try {
+    resolved = await resolvePublishedTitle(articleId);
+  } catch (error) {
+    console.error('Failed to resolve the article title for the OGP image.', error);
+    return { status: 'failed' };
+  }
+  if (resolved.status === 'notFound') return { status: 'notFound' };
+  if (resolved.status === 'failed') {
+    console.error('Failed to resolve the article title for the OGP image.', resolved.error);
+    return { status: 'failed' };
+  }
+
   let stored: Response | undefined;
   try {
     stored = await store.get(articleId);
@@ -54,19 +67,6 @@ async (articleId: ArticleId): Promise<GenerateOgImageResult> => {
   if (failedAt !== undefined) {
     if (now() - failedAt < OG_IMAGE_FAILURE_WINDOW_MS) return { status: 'failed' };
     failures.delete(articleId);
-  }
-
-  let resolved: PublishedTitleResult;
-  try {
-    resolved = await resolvePublishedTitle(articleId);
-  } catch (error) {
-    console.error('Failed to resolve the article title for the OGP image.', error);
-    return { status: 'failed' };
-  }
-  if (resolved.status === 'notFound') return { status: 'notFound' };
-  if (resolved.status === 'failed') {
-    console.error('Failed to resolve the article title for the OGP image.', resolved.error);
-    return { status: 'failed' };
   }
 
   let png: Uint8Array;

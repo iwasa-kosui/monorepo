@@ -7,12 +7,15 @@ import { z } from 'zod/v4';
 import type { PublishedArticlesWithAuthorResolver } from '../../domain/article/article.ts';
 import type { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { SessionResolver } from '../../domain/session/session.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import type { CreateArticleUseCase } from '../../useCase/createArticle.ts';
 import type { DeleteArticleUseCase } from '../../useCase/deleteArticle.ts';
 import type { GetArticlesUseCase } from '../../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
+import { resolveSessionWith } from '../../useCase/helper/resolve.ts';
 import type { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
 import type { UnpublishArticleUseCase } from '../../useCase/unpublishArticle.ts';
 import { sanitize } from './helper/sanitize.ts';
@@ -25,6 +28,7 @@ export type WorkerArticlesApiRouterDeps = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  sessionResolver: SessionResolver;
   publishOgImage?: (article: Article) => Promise<void>;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
@@ -35,7 +39,14 @@ export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps)
   app.get('/v1/articles/:articleId', async (c) => {
     const articleId = ArticleId.parse(c.req.param('articleId'));
     if (!articleId.ok) return c.json({ error: 'Invalid article ID' }, 400);
-    const result = await deps.getArticleWithThreadUseCase.run({ articleId: articleId.val });
+    const sessionId = SessionId.parse(getCookie(c, 'sessionId'));
+    const session = sessionId.ok
+      ? await resolveSessionWith(deps.sessionResolver, Instant.now())(sessionId.val)
+      : undefined;
+    const result = await deps.getArticleWithThreadUseCase.run({
+      articleId: articleId.val,
+      viewerUserId: session?.ok ? session.val.userId : undefined,
+    });
     if (!result.ok) {
       return result.err.type === 'ArticleNotFoundError'
         ? c.json({ error: result.err.message }, 404)

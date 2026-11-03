@@ -7,6 +7,7 @@ it('permits generated reads and rejects SQL side effects and unsupported syntax'
       'SELECT 1 AS ok',
       'select "user_id", "username" from "users" where "users"."username" = ?',
       'select count(*) from "posts"',
+      'select "articleId", "title", "status" from "articles" where "articles"."articleId" = ? limit ?',
     ]
   ) expect(isReviewedSmokeSelect(sql)).toBe(true);
   for (
@@ -18,6 +19,9 @@ it('permits generated reads and rejects SQL side effects and unsupported syntax'
       'SELECT 1 -- comment',
       'SELECT 1 /* comment */',
       'DELETE FROM users',
+      'INSERT INTO articles (articleId) VALUES (?)',
+      'UPDATE articles SET status = ?',
+      'DELETE FROM articles',
       'SELECT * FROM "unknown"',
       'SELECT \';DELETE FROM users\'',
       'SELECT (SELECT 1)',

@@ -407,6 +407,7 @@ export const createWorkerRuntimePorts = async (
         articleDeletedStore: createD1ArticleDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
+      sessionResolver,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,
     },

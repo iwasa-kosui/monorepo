@@ -58,7 +58,7 @@ describe('generateOgImageOnDemand', () => {
     const { run, resolvePublishedTitle, render, put } = setup({ stored });
 
     expect(await run(articleId)).toEqual({ status: 'found', response: stored });
-    expect(resolvePublishedTitle).not.toHaveBeenCalled();
+    expect(resolvePublishedTitle).toHaveBeenCalledTimes(1);
     expect(render).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
   });
@@ -88,6 +88,24 @@ describe('generateOgImageOnDemand', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it('returns notFound without reading the store when the article is not published', async () => {
+    const stored = new Response('stored');
+    const { run, get, render, put } = setup({ stored, title: { status: 'notFound' } });
+
+    expect(await run(articleId)).toEqual({ status: 'notFound' });
+    expect(get).not.toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('returns failed without reading the store when the title resolution reports a failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { run, get } = setup({ stored: new Response('stored'), title: { status: 'failed', error: new Error('db') } });
+
+    expect(await run(articleId)).toEqual({ status: 'failed' });
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it('returns failed when reading the store throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { run, resolvePublishedTitle, render } = setup({
@@ -97,7 +115,7 @@ describe('generateOgImageOnDemand', () => {
     });
 
     expect(await run(articleId)).toEqual({ status: 'failed' });
-    expect(resolvePublishedTitle).not.toHaveBeenCalled();
+    expect(resolvePublishedTitle).toHaveBeenCalledTimes(1);
     expect(render).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalled();
   });
@@ -179,7 +197,7 @@ describe('generateOgImageOnDemand', () => {
       expect(get).toHaveBeenCalledTimes(2);
       expect(render).toHaveBeenCalledTimes(1);
       expect(loadFont).toHaveBeenCalledTimes(1);
-      expect(resolvePublishedTitle).toHaveBeenCalledTimes(1);
+      expect(resolvePublishedTitle).toHaveBeenCalledTimes(2);
     });
 
     it('serves the stored image within the window if another request has stored it', async () => {
