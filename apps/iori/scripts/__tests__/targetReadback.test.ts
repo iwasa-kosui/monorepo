@@ -811,6 +811,10 @@ describe('a state close to a production wrangler deployment', () => {
     const { api, input } = await wranglerFixture('production', [stagingAccessToken]);
     await expect(api.readSealedWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-extra'));
   });
+  it('accepts an AI binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'ai' }]);
+    await expect(api.readSealedWorker(input)).resolves.toMatchObject({ mode: 'sealed', bindingCount: 13 });
+  });
   it('reads the same thirteen bindings of staging', async () => {
     const { api, input } = await wranglerFixture('staging', [stagingAccessToken]);
     await expect(api.readSealedWorker(input)).resolves.toMatchObject({ mode: 'sealed', bindingCount: 13 });

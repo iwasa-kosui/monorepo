@@ -92,6 +92,9 @@ import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareR
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
+import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
+import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
+import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
@@ -149,6 +152,7 @@ export const createWorkerRuntimePorts = async (
 ): Promise<WorkerRuntimePorts> => {
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const db = createD1Db(env.DB);
+  const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const sessionResolver = createD1SessionResolver(db);
   const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
@@ -495,5 +499,7 @@ export const createWorkerRuntimePorts = async (
     },
     uploads,
     federation: federationRuntime.federation,
+    textGenerator: workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi),
+    textEmbedder: workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi),
   };
 };

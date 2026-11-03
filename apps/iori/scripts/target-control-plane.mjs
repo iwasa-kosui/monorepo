@@ -302,6 +302,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
+      'AI',
       ...(identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
     ]);
     if (

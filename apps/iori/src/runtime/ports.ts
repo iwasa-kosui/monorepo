@@ -15,6 +15,8 @@ import type { AllRelaysResolver } from '../domain/relay/relay.ts';
 import type { SessionResolver } from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
+import type { TextEmbedder } from '../ports/textEmbedder.ts';
+import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
@@ -164,6 +166,8 @@ export type IoriRuntimePorts = Readonly<{
   core: IoriCoreRuntimePorts;
   uploads: UploadObjectStore;
   federation: Federation<void>;
+  textGenerator?: TextGenerator;
+  textEmbedder?: TextEmbedder;
 }>;
 
 /** Worker-facing alias used to make the runtime boundary explicit. */
