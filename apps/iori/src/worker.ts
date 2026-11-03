@@ -16,6 +16,7 @@ import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
+import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
 import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
@@ -281,6 +282,7 @@ export default {
         );
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));

@@ -14,6 +14,7 @@ import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
 import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
+import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
@@ -26,6 +27,7 @@ import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverBy
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1LogoUriUpdatedStore } from '../../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../../d1/actor/remoteActorCreatedStore.ts';
+import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -73,6 +75,7 @@ import { createD1RepostCreatedStore } from '../../../d1/repost/repostCreatedStor
 import { createD1RepostDeletedStore } from '../../../d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../../../d1/repost/repostResolver.ts';
 import { createD1RepostResolverById } from '../../../d1/repost/repostResolverById.ts';
+import { createD1HomePostsResolverByPeriod } from '../../../d1/timeline/homePostsResolverByPeriod.ts';
 import { createD1TimelineItemCreatedStore } from '../../../d1/timeline/timelineItemCreatedStore.ts';
 import { createD1TimelineItemDeletedStore } from '../../../d1/timeline/timelineItemDeletedStore.ts';
 import { createD1TimelineItemResolverByRepostId } from '../../../d1/timeline/timelineItemResolverByRepostId.ts';
@@ -84,6 +87,7 @@ import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
+import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
@@ -153,6 +157,15 @@ export const setupReadApi = (
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
+  });
+  const searchTimeline = createSearchTimelineUseCase({
+    actorResolverByUserId,
+    actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    textGenerator: options.textGenerator,
+    timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+    htmlToPlainText,
+    ...options.searchTimeline,
   });
   const app = createIoriApp({
     federationMiddleware: undefined,
@@ -274,15 +287,7 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriSearchRouter({
           authn,
-          searchTimeline: createSearchTimelineUseCase({
-            actorResolverByUserId,
-            actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-            mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
-            textGenerator: options.textGenerator,
-            timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
-            htmlToPlainText,
-            ...options.searchTimeline,
-          }),
+          searchTimeline,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
           resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase.create({
@@ -292,6 +297,25 @@ export const setupReadApi = (
             logoUriUpdatedStore,
             actorResolverByUri,
           }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriSummaryRouter({
+          authn,
+          summarizeTimeline: createSummarizeTimelineUseCase({
+            actorResolverByUserId,
+            actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+            mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+            searchTimeline,
+            homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
+            postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+            aiSummaryUsageRecorder: createD1AiSummaryUsageRecorder(db),
+            textGenerator: options.textGenerator,
+            htmlToPlainText,
+          }),
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
         }),
       );
       root.route(
