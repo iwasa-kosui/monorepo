@@ -8,6 +8,7 @@ import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { debounce } from '../../helper/debounce.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { PostView } from '../components/PostView.tsx';
 import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
 import { appendUniquePosts } from '../hooks/postsMerge.ts';
@@ -60,16 +61,19 @@ export const RemoteUserPage = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [posts]);
 
+  const logoUrl = safeUrl(remoteActor.logoUri);
+  const profileUrl = safeUrl(remoteActor.url);
+
   return (
     <>
       <section class='mb-8'>
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
-              {remoteActor.logoUri
+              {logoUrl
                 ? (
                   <img
-                    src={remoteActor.logoUri}
+                    src={logoUrl}
                     alt='User Logo'
                     class='w-16 h-16 blob-avatar object-cover'
                   />
@@ -229,9 +233,9 @@ export const RemoteUserPage = ({
                   to follow this user
                 </p>
               )}
-            {remoteActor.url && (
+            {profileUrl && (
               <a
-                href={remoteActor.url}
+                href={profileUrl}
                 target='_blank'
                 rel='noopener noreferrer'
                 class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'

@@ -9,6 +9,7 @@ import type {
   NotificationWithDetails,
   ReplyNotificationWithDetails,
 } from '../../domain/notification/notification.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 
 type Props = Readonly<{
   notification: NotificationWithDetails;
@@ -39,6 +40,8 @@ const LikeNotificationItem = ({
 
   const postUrl = `/users/${recipientUsername}/posts/${likedPost.postId}`;
 
+  const logoUrl = safeUrl(likerActor.logoUri);
+
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
@@ -63,10 +66,10 @@ const LikeNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {likerActor.logoUri
+                {logoUrl
                   ? (
                     <img
-                      src={likerActor.logoUri}
+                      src={logoUrl}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -124,6 +127,8 @@ const FollowNotificationItem = ({
     onRemote: (x) => `/remote-users/${x.id}`,
   })(followerActor);
 
+  const logoUrl = safeUrl(followerActor.logoUri);
+
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
@@ -144,10 +149,10 @@ const FollowNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {followerActor.logoUri
+                {logoUrl
                   ? (
                     <img
-                      src={followerActor.logoUri}
+                      src={logoUrl}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -202,9 +207,12 @@ const EmojiReactNotificationItem = ({
 
   const postUrl = `/users/${recipientUsername}/posts/${reactedPost.postId}`;
 
-  const emojiDisplay = emojiImageUrl
-    ? <img src={emojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
+  const safeEmojiImageUrl = safeUrl(emojiImageUrl);
+  const emojiDisplay = safeEmojiImageUrl
+    ? <img src={safeEmojiImageUrl} alt={emoji} class='w-6 h-6 object-contain' />
     : <span class='text-lg'>{emoji}</span>;
+
+  const logoUrl = safeUrl(reactorActor.logoUri);
 
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
@@ -220,10 +228,10 @@ const EmojiReactNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sand dark:bg-gray-600 flex items-center justify-center text-charcoal text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {reactorActor.logoUri
+                {logoUrl
                   ? (
                     <img
-                      src={reactorActor.logoUri}
+                      src={logoUrl}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />
@@ -287,6 +295,8 @@ const ReplyNotificationItem = ({
 
   const postUrl = `/users/${recipientUsername}/posts/${originalPostId}`;
 
+  const logoUrl = safeUrl(replierActor.logoUri);
+
   return (
     <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
       <div class='flex items-start gap-3'>
@@ -311,10 +321,10 @@ const ReplyNotificationItem = ({
               class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
             >
               <div class='w-6 h-6 blob-avatar bg-sage-dark dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-                {replierActor.logoUri
+                {logoUrl
                   ? (
                     <img
-                      src={replierActor.logoUri}
+                      src={logoUrl}
                       alt='Actor Logo'
                       class='w-6 h-6 rounded-full object-cover'
                     />

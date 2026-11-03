@@ -1,12 +1,15 @@
 import { Actor } from '../../domain/actor/actor.ts';
 import { LocalActor } from '../../domain/actor/localActor.ts';
 import { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 
 export const ActorLink = ({ actor }: { actor: Actor }) => {
   const handle = Actor.match({
     onLocal: LocalActor.getHandle,
     onRemote: (x) => RemoteActor.getHandle(x) ?? actor.uri,
   })(actor);
+
+  const logoUrl = safeUrl(actor.logoUri);
 
   return (
     <a
@@ -17,10 +20,10 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
       class='flex items-center gap-2 p-2 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
     >
       <div class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-        {actor.logoUri
+        {logoUrl
           ? (
             <img
-              src={actor.logoUri}
+              src={logoUrl}
               alt='Actor Logo'
               class='w-8 h-8 rounded-full object-cover'
             />

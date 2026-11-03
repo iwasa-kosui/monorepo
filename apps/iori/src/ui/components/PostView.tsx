@@ -4,6 +4,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
@@ -79,7 +80,7 @@ export const PostView = (
   const postDetailLink = isLocalPost
     ? `/users/${post.username}/posts/${post.postId}`
     : isRemotePost
-    ? post.uri
+    ? safeAbsoluteUrl(post.uri)
     : undefined;
 
   const triggerLike = () => {
@@ -179,6 +180,8 @@ export const PostView = (
 
   const canLike = onLike && !post.liked && !isLiking;
 
+  const logoUrl = safeUrl(post.logoUri);
+
   return (
     <article
       data-post-index={dataIndex}
@@ -240,10 +243,10 @@ export const PostView = (
                 : undefined}
               class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm'
             >
-              {post.logoUri
+              {logoUrl
                 ? (
                   <img
-                    src={post.logoUri}
+                    src={logoUrl}
                     alt='Author Logo'
                     class='w-8 h-8 blob-avatar object-cover'
                   />
@@ -265,8 +268,8 @@ export const PostView = (
             <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
               href={postDetailLink}
-              target={isRemotePost ? '_blank' : undefined}
-              rel={isRemotePost ? 'noopener noreferrer' : undefined}
+              target={isRemotePost && postDetailLink ? '_blank' : undefined}
+              rel={isRemotePost && postDetailLink ? 'noopener noreferrer' : undefined}
               class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
               title={new Date(post.createdAt).toLocaleString()}
             >
@@ -291,22 +294,26 @@ export const PostView = (
                   : 'grid-cols-2 md:grid-cols-3'
               }`}
             >
-              {post.images.map((image, index) => (
-                <a
-                  key={index}
-                  href={image.url}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  class='block overflow-hidden rounded-2xl'
-                >
-                  <img
-                    src={image.url}
-                    alt={image.altText || 'Post image'}
-                    class='w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity'
-                    loading='lazy'
-                  />
-                </a>
-              ))}
+              {post.images.map((image, index) => {
+                const imageUrl = safeUrl(image.url);
+                if (!imageUrl) return null;
+                return (
+                  <a
+                    key={index}
+                    href={imageUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    class='block overflow-hidden rounded-2xl'
+                  >
+                    <img
+                      src={imageUrl}
+                      alt={image.altText || 'Post image'}
+                      class='w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity'
+                      loading='lazy'
+                    />
+                  </a>
+                );
+              })}
             </div>
           )}
           {/* Link previews */}
@@ -520,6 +527,8 @@ export const PostView = (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
               {post.reactions.map((reaction) => {
                 const isMyReaction = myReactions.includes(reaction.emoji);
+                const emojiUrl = safeUrl(reaction.emojiImageUrl);
+
                 return (
                   <button
                     key={reaction.emoji}
@@ -539,10 +548,10 @@ export const PostView = (
                     }`}
                     title={isMyReaction ? 'クリックで取り消す' : 'クリックでリアクション'}
                   >
-                    {reaction.emojiImageUrl
+                    {emojiUrl
                       ? (
                         <img
-                          src={reaction.emojiImageUrl}
+                          src={emojiUrl}
                           alt={reaction.emoji}
                           class='w-4 h-4 object-contain'
                         />

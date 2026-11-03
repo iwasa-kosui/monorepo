@@ -1,5 +1,6 @@
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import { RemoteActor as RemoteActorDomain } from '../../domain/actor/remoteActor.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { Layout } from '../../layout.tsx';
 
 type Props = Readonly<{
@@ -15,6 +16,9 @@ export const GetRemoteUserPage = ({
 }: Props) => {
   const handle = RemoteActorDomain.getHandle(remoteActor) ?? remoteActor.uri;
   const displayName = remoteActor.username ?? handle;
+
+  const logoUrl = safeUrl(remoteActor.logoUri);
+  const profileUrl = safeUrl(remoteActor.url);
 
   return (
     <Layout isLoggedIn={isLoggedIn}>
@@ -33,10 +37,10 @@ export const GetRemoteUserPage = ({
         <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6'>
           <div class='flex items-center gap-4 mb-4'>
             <div class='w-16 h-16 rounded-2xl bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-2xl font-bold flex-shrink-0'>
-              {remoteActor.logoUri
+              {logoUrl
                 ? (
                   <img
-                    src={remoteActor.logoUri}
+                    src={logoUrl}
                     alt='User Logo'
                     class='w-16 h-16 rounded-2xl object-cover'
                   />
@@ -122,9 +126,9 @@ export const GetRemoteUserPage = ({
                   to follow this user
                 </p>
               )}
-            {remoteActor.url && (
+            {profileUrl && (
               <a
-                href={remoteActor.url}
+                href={profileUrl}
                 target='_blank'
                 rel='noopener noreferrer'
                 class='flex items-center justify-center p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
