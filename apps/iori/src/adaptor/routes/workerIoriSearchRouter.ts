@@ -1,10 +1,14 @@
 import { Result } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
-import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
+import { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds } from '../../domain/post/post.ts';
-import { TimelineSearchQuery } from '../../domain/timelineSearch/timelineSearchQuery.ts';
+import {
+  DEFAULT_QUERY_LIMIT,
+  MAX_QUERY_LIMIT,
+  TimelineSearchQuery,
+} from '../../domain/timelineSearch/timelineSearchQuery.ts';
 import type { SearchTimelineUseCase, TimelineSearchExpansion } from '../../useCase/searchTimeline.ts';
 import type { Status } from '../mastodon/entities.ts';
 import type { StatusAssembler, StatusSource } from '../mastodon/statusAssembler.ts';
@@ -13,7 +17,6 @@ import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from '
 
 export type WorkerIoriSearchRouterDeps = Readonly<{
   authn: MastodonAuthn;
-  actorResolverByUserId: ActorResolverByUserId;
   searchTimeline: SearchTimelineUseCase;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   statusAssembler: StatusAssembler;
@@ -47,10 +50,22 @@ const integerPattern = /^-?\d+$/;
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
 
-const parseQuery = (c: Context<MastodonAuthEnv>): Result<TimelineSearchQuery, 'q' | 'limit'> => {
+const strictLimit = (limit: string | undefined): number | undefined => limit === undefined ? undefined : Number(limit);
+
+const clampedLimit = (limit: string | undefined): number | undefined => {
+  if (limit === undefined) {
+    return undefined;
+  }
+  const value = limit.trim() === '' ? Number.NaN : Number(limit);
+  return Number.isNaN(value) ? DEFAULT_QUERY_LIMIT : Math.min(MAX_QUERY_LIMIT, Math.max(1, Math.trunc(value)));
+};
+
+const parseQuery = (
+  c: Context<MastodonAuthEnv>,
+  limitOf: (limit: string | undefined) => number | undefined,
+): Result<TimelineSearchQuery, 'q' | 'limit'> => {
   const text = c.req.query('q') ?? '';
-  const limit = c.req.query('limit');
-  const parsed = TimelineSearchQuery.of({ text, limit: limit === undefined ? undefined : Number(limit) });
+  const parsed = TimelineSearchQuery.of({ text, limit: limitOf(c.req.query('limit')) });
   if (parsed.ok) {
     return parsed;
   }
@@ -62,35 +77,35 @@ const formatTiming = (searchMs: number, assembleMs: number, totalMs: number): st
 
 export const createWorkerIoriSearchRouter = ({
   authn,
-  actorResolverByUserId,
   searchTimeline,
   postsWithAuthorResolverByPostIds,
   statusAssembler,
 }: WorkerIoriSearchRouterDeps): Hono<MastodonAuthEnv> => {
-  const searchStatuses = async (c: Context<MastodonAuthEnv>): Promise<Result<SearchedStatuses, Response>> => {
+  const searchStatuses = async (
+    c: Context<MastodonAuthEnv>,
+    options: Readonly<{
+      limitOf: (limit: string | undefined) => number | undefined;
+      onlyActorId?: ActorId;
+    }>,
+  ): Promise<Result<SearchedStatuses, Response>> => {
     const startedAt = performance.now();
     const userId = getMastodonPrincipal(c)?.userId;
     if (userId === null || userId === undefined) {
       return Result.err(c.json(invalidToken, 401));
     }
-    const query = parseQuery(c);
+    const query = parseQuery(c, options.limitOf);
     if (!query.ok) {
       return Result.err(c.json(validationFailed(query.err), 422));
     }
-    const searched = await searchTimeline.run({ userId, query: query.val });
+    const searched = await searchTimeline.run({ userId, query: query.val, onlyActorId: options.onlyActorId });
     const searchedAt = performance.now();
     if (!searched.ok) {
-      return Result.err(c.json(actorNotFound, 422));
+      if (searched.err.type === 'UserNotFoundError') {
+        return Result.err(c.json(actorNotFound, 422));
+      }
+      throw new Error(`The timeline search failed: ${searched.err.type}`);
     }
-    const actor = await actorResolverByUserId.resolve(userId);
-    if (!actor.ok) {
-      return Result.err(c.json(internalServerError, 500));
-    }
-    if (actor.val === undefined) {
-      return Result.err(c.json(actorNotFound, 422));
-    }
-    const viewerActorId = actor.val.id;
-    const { postIds, terms, droppedOriginal, expansion } = searched.val;
+    const { viewerActorId, postIds, terms, droppedOriginal, expansion } = searched.val;
     const resolved = await postsWithAuthorResolverByPostIds.resolve({ postIds, currentActorId: viewerActorId });
     if (!resolved.ok) {
       return Result.err(c.json(internalServerError, 500));
@@ -120,7 +135,7 @@ export const createWorkerIoriSearchRouter = ({
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .get('/iori/v1/search/statuses', authn.requireUser(readSearch), async (c) => {
-      const searched = await searchStatuses(c);
+      const searched = await searchStatuses(c, { limitOf: strictLimit });
       if (!searched.ok) {
         return searched.err;
       }
@@ -143,14 +158,26 @@ export const createWorkerIoriSearchRouter = ({
       if (offset !== undefined && !integerPattern.test(offset)) {
         return c.json(validationFailed('offset'), 422);
       }
-      if (type === 'accounts' || type === 'hashtags' || (offset !== undefined && Number(offset) >= 1)) {
-        const empty: MastodonSearchResponse = { accounts: [], statuses: [], hashtags: [] };
+      const empty: MastodonSearchResponse = { accounts: [], statuses: [], hashtags: [] };
+      const isPaging = (offset !== undefined && Number(offset) >= 1)
+        || c.req.query('max_id') !== undefined
+        || c.req.query('min_id') !== undefined;
+      if (type === 'accounts' || type === 'hashtags' || isPaging) {
         return c.json(empty);
       }
-      const searched = await searchStatuses(c);
+      if ((c.req.query('q') ?? '').trim() === '') {
+        return c.json(validationFailed('q'), 400);
+      }
+      const accountId = c.req.query('account_id');
+      const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
+      if (onlyActorId !== undefined && !onlyActorId.ok) {
+        return c.json(empty);
+      }
+      const searched = await searchStatuses(c, { limitOf: clampedLimit, onlyActorId: onlyActorId?.val });
       if (!searched.ok) {
         return searched.err;
       }
+      // 配備後に検索1回の遅延を測るために付ける。値は数値だけで、語や本文は入れない
       c.header('Server-Timing', searched.val.serverTiming);
       const body: MastodonSearchResponse = { accounts: [], statuses: searched.val.statuses, hashtags: [] };
       return c.json(body);

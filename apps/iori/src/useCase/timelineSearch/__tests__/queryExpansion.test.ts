@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SearchTerms } from '../../../domain/timelineSearch/searchTerms.ts';
 import type { TextGenerator } from '../../../ports/textGenerator.ts';
@@ -104,5 +104,24 @@ describe('expandQuery', () => {
     const result = await expandQuery(generator, 'たび');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.err).toEqual({ type: 'AiError', message: 'unavailable' });
+  });
+
+  it('期限を過ぎると QueryExpansionTimeoutError にする', async () => {
+    const generator: TextGenerator = {
+      summarize: () => new Promise(() => {}),
+      generate: () => new Promise(() => {}),
+    };
+    const result = await expandQuery(generator, 'たび', 10);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.err.type).toBe('QueryExpansionTimeoutError');
+  });
+
+  it('期限より先に generate が終わると、期限の timer を止める', async () => {
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+    const { generator } = createStubTextGenerator(() => '["旅行"]');
+    const result = await expandQuery(generator, 'たび', 60_000);
+    expect(result.ok).toBe(true);
+    expect(clear).toHaveBeenCalled();
+    clear.mockRestore();
   });
 });

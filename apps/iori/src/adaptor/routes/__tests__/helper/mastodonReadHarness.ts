@@ -38,7 +38,12 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
-export const setupReadApi = (options: Readonly<{ textGenerator?: TextGenerator }> = {}) => {
+export const setupReadApi = (
+  options: Readonly<{
+    textGenerator?: TextGenerator;
+    searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
+  }> = {},
+) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
@@ -96,7 +101,6 @@ export const setupReadApi = (options: Readonly<{ textGenerator?: TextGenerator }
         '/api',
         createWorkerIoriSearchRouter({
           authn,
-          actorResolverByUserId,
           searchTimeline: createSearchTimelineUseCase({
             actorResolverByUserId,
             actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
@@ -104,6 +108,7 @@ export const setupReadApi = (options: Readonly<{ textGenerator?: TextGenerator }
             textGenerator: options.textGenerator,
             timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
             htmlToPlainText,
+            ...options.searchTimeline,
           }),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,

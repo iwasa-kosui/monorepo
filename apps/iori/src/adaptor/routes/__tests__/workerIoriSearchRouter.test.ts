@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { TextGenerator } from '../../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../../testing/aiStubs.ts';
@@ -9,7 +10,12 @@ const parseStatuses = (body: unknown) => (body as unknown[]).map((item) => Statu
 
 const searchUrl = (path: string, params: Record<string, string>) => `${path}?${new URLSearchParams(params).toString()}`;
 
-const seedTimeline = async (options: { textGenerator?: TextGenerator } = {}) => {
+const neverResolvingGenerator: TextGenerator = {
+  summarize: () => new Promise(() => {}),
+  generate: () => new Promise(() => {}),
+};
+
+const seedTimeline = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
   const t = setupReadApi(options);
   const me = await t.signIn('read:search');
   const alice = t.seed.addRemoteActor('alice');
@@ -25,7 +31,7 @@ const seedTimeline = async (options: { textGenerator?: TextGenerator } = {}) => 
   const fromDave = t.seed.addRemotePost(dave, 2_000, { content: '<p>京都の寺</p>' });
   const fromBob = t.seed.addRemotePost(bob, 4_000, { content: '<p>京都旅行</p>' });
   const fromCarol = t.seed.addRemotePost(carol, 5_000, { content: '<p>京都の旅行</p>' });
-  return { ...t, me, mine, fromAlice, fromDave, fromBob, fromCarol };
+  return { ...t, me, alice, bob, mine, fromAlice, fromDave, fromBob, fromCarol };
 };
 
 describe('GET /api/iori/v1/search/statuses', () => {
@@ -185,6 +191,40 @@ describe('GET /api/iori/v1/search/statuses', () => {
     expect(parseStatuses(body.statuses)).toHaveLength(2);
   });
 
+  it('展開が期限を過ぎても 200 で、expansion を failed にして元の語で検索する', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const t = await seedTimeline({
+      textGenerator: neverResolvingGenerator,
+      searchTimeline: { expansionTimeoutMs: 10 },
+    });
+
+    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
+      headers: t.me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { statuses: unknown[]; expansion: string; terms: unknown };
+    expect(body.expansion).toBe('failed');
+    expect(body.terms).toEqual({ original: ['京都'], expanded: [] });
+    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromDave.postId, t.mine.postId]);
+    warn.mockRestore();
+  });
+
+  it('検索の途中で想定外のエラーが起きると 500 にする', async () => {
+    const t = await seedTimeline({
+      searchTimeline: {
+        actorsResolverByFollowerId: { resolve: () => RA.err({ type: 'DatabaseError' }) as never },
+      },
+    });
+
+    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
+      headers: t.me.bearer,
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Internal server error' });
+  });
+
   it('Server-Timing ヘッダーに search、assemble、total を付ける', async () => {
     const t = await seedTimeline();
 
@@ -286,11 +326,105 @@ describe('GET /api/v2/search', () => {
     expect(await response.json()).toEqual({ error: 'Validation failed: offset' });
   });
 
-  it('q がないと 422 にする', async () => {
+  it('q がないか空なら 400 にする', async () => {
     const t = await seedTimeline();
 
-    const response = await t.request('/api/v2/search', { headers: t.me.bearer });
+    const missing = await t.request('/api/v2/search', { headers: t.me.bearer });
+    const empty = await t.request(searchUrl('/api/v2/search', { q: '' }), { headers: t.me.bearer });
+    const blank = await t.request(searchUrl('/api/v2/search', { q: '   ', type: 'statuses' }), {
+      headers: t.me.bearer,
+    });
 
-    expect(response.status).toBe(422);
+    expect(missing.status).toBe(400);
+    expect(empty.status).toBe(400);
+    expect(blank.status).toBe(400);
+    expect(await missing.json()).toEqual({ error: 'Validation failed: q' });
+  });
+
+  it('type が accounts と hashtags のときは、q がなくても 200 で空を返す', async () => {
+    const t = await seedTimeline();
+
+    const accounts = await t.request(searchUrl('/api/v2/search', { type: 'accounts' }), { headers: t.me.bearer });
+    const hashtags = await t.request(searchUrl('/api/v2/search', { type: 'hashtags' }), { headers: t.me.bearer });
+
+    expect(accounts.status).toBe(200);
+    expect(hashtags.status).toBe(200);
+    expect(await accounts.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+  });
+
+  it('account_id でフォロー中の 1 人の投稿に絞る', async () => {
+    const t = await seedTimeline();
+
+    const response = await t.request(searchUrl('/api/v2/search', { q: '京都 旅行', account_id: t.alice.actorId }), {
+      headers: t.me.bearer,
+    });
+
+    const body = (await response.json()) as { statuses: unknown[] };
+    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromAlice.postId]);
+  });
+
+  it('フォローしていない相手の account_id では空の statuses を返す', async () => {
+    const t = await seedTimeline();
+
+    const response = await t.request(searchUrl('/api/v2/search', { q: '京都 旅行', account_id: t.bob.actorId }), {
+      headers: t.me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+  });
+
+  it('解釈できない account_id では空の statuses を返す', async () => {
+    const t = await seedTimeline();
+
+    const response = await t.request(searchUrl('/api/v2/search', { q: '京都 旅行', account_id: 'not-an-id' }), {
+      headers: t.me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+  });
+
+  it('max_id と min_id が指定されたら検索せずに空の statuses を返す', async () => {
+    const t = await seedTimeline();
+
+    const maxId = await t.request(searchUrl('/api/v2/search', { q: '京都', max_id: t.mine.postId }), {
+      headers: t.me.bearer,
+    });
+    const minId = await t.request(searchUrl('/api/v2/search', { q: '京都', min_id: t.mine.postId }), {
+      headers: t.me.bearer,
+    });
+
+    expect(await maxId.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(await minId.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+  });
+
+  it('limit が 41 以上なら 40 件に丸め、0 以下なら 1 件に丸める', async () => {
+    const t = await seedTimeline();
+    for (let i = 0; i < 45; i++) {
+      t.seed.addRemotePost(t.alice, 10_000 + i, { content: `<p>大量の旅行 ${i}</p>` });
+    }
+
+    const over = await t.request(searchUrl('/api/v2/search', { q: '旅行', limit: '41' }), { headers: t.me.bearer });
+    const zero = await t.request(searchUrl('/api/v2/search', { q: '旅行', limit: '0' }), { headers: t.me.bearer });
+
+    expect(over.status).toBe(200);
+    expect(parseStatuses(((await over.json()) as { statuses: unknown[] }).statuses)).toHaveLength(40);
+    expect(zero.status).toBe(200);
+    expect(parseStatuses(((await zero.json()) as { statuses: unknown[] }).statuses)).toHaveLength(1);
+  });
+
+  it('limit が数値でなければ既定の 20 件にする', async () => {
+    const t = await seedTimeline();
+    for (let i = 0; i < 25; i++) {
+      t.seed.addRemotePost(t.alice, 10_000 + i, { content: `<p>大量の旅行 ${i}</p>` });
+    }
+
+    const response = await t.request(searchUrl('/api/v2/search', { q: '旅行', limit: 'abc' }), {
+      headers: t.me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+    expect(parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses)).toHaveLength(20);
   });
 });

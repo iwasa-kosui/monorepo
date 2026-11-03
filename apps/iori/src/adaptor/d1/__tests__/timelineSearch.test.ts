@@ -199,6 +199,20 @@ describe('createD1TimelineSearchCandidatesResolver', () => {
     expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
   });
 
+  it('既知の制約: 新しい投稿のタグ名に語が当たって候補の上限を埋めると、本文に語を含む古い投稿が結果に出ない', async () => {
+    const { db, actors, addPost } = setup();
+    const tagged = [2000, 3000, 4000].map((time) => addPost(actors[0], '<span>旅行</span>', time));
+    addPost(actors[0], '<p>span の使い方</p>', 1000);
+
+    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
+      actorIds: [actors[0]],
+      terms: terms('span'),
+      limit: 3,
+    });
+
+    expect(result.ok && result.val.map((row) => row.postId)).toEqual([tagged[2], tagged[1], tagged[0]]);
+  });
+
   it('terms が空のときは DB を呼ばずに空の配列を返す', async () => {
     const { db, queries, actors, addPost } = setup();
     addPost(actors[0], '旅行', 1000);

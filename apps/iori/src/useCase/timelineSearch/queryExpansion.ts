@@ -1,4 +1,4 @@
-import { RA, Result } from '@iwasa-kosui/result';
+import { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { SearchTerm } from '../../domain/timelineSearch/searchTerm.ts';
@@ -9,6 +9,8 @@ export const QUERY_EXPANSION_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 
 const MAX_OUTPUT_TOKENS = 256;
 const MIN_EXPANDED_TERM_CHARS = 2;
+
+export const QUERY_EXPANSION_TIMEOUT_MS = 5_000;
 
 const INSTRUCTION = 'あなたは検索語を展開します。入力は、ユーザーが自分のタイムラインの投稿を探すための問い合わせです。'
   + '問い合わせと同じ意味で投稿に現れそうな語を最大10個挙げてください。'
@@ -23,7 +25,16 @@ export const QueryExpansionParseError = {
   create: (message: string): QueryExpansionParseError => ({ type: 'QueryExpansionParseError', message }),
 } as const;
 
-export type QueryExpansionError = AiError | QueryExpansionParseError;
+export type QueryExpansionTimeoutError = Readonly<{ type: 'QueryExpansionTimeoutError'; message: string }>;
+
+export const QueryExpansionTimeoutError = {
+  create: (timeoutMs: number): QueryExpansionTimeoutError => ({
+    type: 'QueryExpansionTimeoutError',
+    message: `The query expansion did not finish within ${timeoutMs} ms.`,
+  }),
+} as const;
+
+export type QueryExpansionError = AiError | QueryExpansionParseError | QueryExpansionTimeoutError;
 
 const stringArray = z.array(z.string());
 
@@ -56,16 +67,27 @@ export const parseExpandedTerms = (output: string): Result<SearchTerm[], QueryEx
   return Result.ok(terms);
 };
 
-export const expandQuery = (
+export const expandQuery = async (
   textGenerator: TextGenerator,
   query: string,
-): RA<SearchTerm[], QueryExpansionError> =>
-  RA.flow(
-    textGenerator.generate({
-      model: QUERY_EXPANSION_MODEL,
-      instruction: INSTRUCTION,
-      input: query,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-    }),
-    RA.andThen((output) => parseExpandedTerms(output)),
-  );
+  timeoutMs: number = QUERY_EXPANSION_TIMEOUT_MS,
+): Promise<Result<SearchTerm[], QueryExpansionError>> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<Result<never, QueryExpansionTimeoutError>>((resolve) => {
+    timer = setTimeout(() => resolve(Result.err(QueryExpansionTimeoutError.create(timeoutMs))), timeoutMs);
+  });
+  try {
+    const generated = await Promise.race([
+      textGenerator.generate({
+        model: QUERY_EXPANSION_MODEL,
+        instruction: INSTRUCTION,
+        input: query,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      }),
+      timeout,
+    ]);
+    return generated.ok ? parseExpandedTerms(generated.val) : generated;
+  } finally {
+    clearTimeout(timer);
+  }
+};
