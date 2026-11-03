@@ -9,7 +9,7 @@ import {
   summarizeTimeline,
   type TimelineSummary,
 } from '../api/mastodonClient.ts';
-import { buildSummaryRequest, summaryErrorMessage, summaryTargetLabel } from '../api/summary.ts';
+import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTargetLabel } from '../api/summary.ts';
 import { PostView } from '../components/PostView.tsx';
 import { SummaryText } from '../components/SummaryText.tsx';
 
@@ -33,7 +33,7 @@ const SearchPage = () => {
   const isSummarizingRef = useRef(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [summary, setSummary] = useState<TimelineSummary | null>(null);
+  const [summary, setSummary] = useState<{ result: TimelineSummary; target: string } | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState('');
 
@@ -82,11 +82,12 @@ const SearchPage = () => {
       setSummaryError(request.message);
       return;
     }
+    const target = searchedQuery.trim();
     isSummarizingRef.current = true;
     setIsSummarizing(true);
     setSummaryError('');
     try {
-      setSummary(await summarizeTimeline(request.body));
+      setSummary({ result: await summarizeTimeline(request.body), target });
     } catch (error) {
       if (isUnauthorizedError(error)) {
         redirectToSignIn();
@@ -143,7 +144,7 @@ const SearchPage = () => {
         </div>
         <p class='text-charcoal dark:text-gray-100'>{summaryTargetLabel(searchedQuery)}</p>
         {searchedQuery !== '' && (
-          <button type='button' class={buttonClass} onClick={handleClearSearch}>
+          <button type='button' class={buttonClass} disabled={isSearching} onClick={handleClearSearch}>
             検索結果を消して期間の要約に戻る
           </button>
         )}
@@ -157,19 +158,21 @@ const SearchPage = () => {
         {summaryError !== '' && <p class='text-sm text-red-600 dark:text-red-400'>{summaryError}</p>}
         {summary !== null && (
           <div class='space-y-3'>
-            {summary.summary === null
+            <p class='text-charcoal dark:text-gray-100'>{summaryResultLabel(summary.target)}</p>
+            {summary.result.summary === null
               ? <p class='text-charcoal-light dark:text-gray-400'>要約できる投稿がありません</p>
-              : <SummaryText summary={summary.summary} citations={summary.citations} />}
-            <p class={noticeClass}>今日の残り回数: {summary.remaining_today} 回</p>
-            {summary.truncated && <p class={noticeClass}>投稿が多いため一部だけを要約しました</p>}
-            {summary.excluded_non_public_count >= 1 && (
+              : <SummaryText summary={summary.result.summary} citations={summary.result.citations} />}
+            <p class={noticeClass}>今日の残り回数: {summary.result.remaining_today} 回</p>
+            {summary.result.truncated && <p class={noticeClass}>投稿が多いため一部だけを要約しました</p>}
+            {summary.result.excluded_non_public_count >= 1 && (
               <p class={noticeClass}>
-                ダイレクトメッセージと公開範囲が不明な投稿 {summary.excluded_non_public_count} 件は要約に含めていません
+                ダイレクトメッセージと公開範囲が不明な投稿 {summary.result.excluded_non_public_count}{' '}
+                件は要約に含めていません
               </p>
             )}
-            {summary.citations.length > 0 && (
+            {summary.result.citations.length > 0 && (
               <ol class='space-y-4'>
-                {summary.citations.map((citation) => (
+                {summary.result.citations.map((citation) => (
                   <li key={citation.n}>
                     <p class={noticeClass}>[{citation.n}]</p>
                     <PostView status={citation.status} />

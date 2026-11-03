@@ -91,6 +91,9 @@ export const summaryTargetLabel = (searchedQuery: string): string => {
   return q === '' ? '開始から終了までの期間を要約します' : `検索語『${q}』の結果を要約します`;
 };
 
+export const summaryResultLabel = (target: string): string =>
+  target === '' ? '期間の要約です' : `検索語『${target}』の結果の要約です`;
+
 export const SUMMARY_DAILY_LIMIT = 20;
 
 const jstDateTime = new Intl.DateTimeFormat('ja-JP', {

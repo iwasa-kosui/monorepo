@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { buildSummaryRequest, splitSummaryCitations, summaryErrorMessage, summaryTargetLabel } from './summary.ts';
+import {
+  buildSummaryRequest,
+  splitSummaryCitations,
+  summaryErrorMessage,
+  summaryResultLabel,
+  summaryTargetLabel,
+} from './summary.ts';
 
 const s1 = { id: 's1' } as Status;
 const s3 = { id: 's3' } as Status;
@@ -154,6 +160,16 @@ describe('summaryTargetLabel', () => {
   it('names the period when the searched query is empty', () => {
     expect(summaryTargetLabel('')).toBe('開始から終了までの期間を要約します');
     expect(summaryTargetLabel('  ')).toBe('開始から終了までの期間を要約します');
+  });
+});
+
+describe('summaryResultLabel', () => {
+  it('names the search term when the target is not empty', () => {
+    expect(summaryResultLabel('猫')).toBe('検索語『猫』の結果の要約です');
+  });
+
+  it('names the period when the target is empty', () => {
+    expect(summaryResultLabel('')).toBe('期間の要約です');
   });
 });
 
