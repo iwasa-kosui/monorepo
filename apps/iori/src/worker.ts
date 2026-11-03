@@ -1,4 +1,4 @@
-import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types';
+import type { ExecutionContext, MessageBatch, ScheduledController } from '@cloudflare/workers-types';
 import { federation } from '@fedify/hono';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
@@ -40,6 +40,7 @@ import { SessionId } from './domain/session/sessionId.ts';
 import { Username } from './domain/user/username.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
+import { dispatchScheduled, scheduledTasks } from './scheduled/scheduledTasks.ts';
 import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
 import {
   admissionRejected,
@@ -97,6 +98,11 @@ type IoriWorkerHandler = Readonly<{
   ) => Response | Promise<Response>;
   queue: (
     batch: MessageBatch<unknown>,
+    env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
+  ) => Promise<void>;
+  scheduled: (
+    controller: ScheduledController,
     env: IoriWorkerEnv,
     executionCtx: ExecutionContext,
   ) => Promise<void>;
@@ -357,5 +363,24 @@ export default {
         (promise) => executionCtx.waitUntil(promise),
       );
     }
+  },
+  scheduled: async (
+    controller: ScheduledController,
+    env: IoriWorkerEnv,
+    executionCtx: ExecutionContext,
+  ): Promise<void> => {
+    const identity = parseAdmission(env);
+    if (!identity || identity.mode !== 'active') {
+      console.info('iori scheduled: skipped because admission is not active.', {
+        cron: controller.cron,
+        mode: identity?.mode,
+      });
+      return;
+    }
+    await dispatchScheduled(controller.cron, scheduledTasks, {
+      env,
+      scheduledTime: new Date(controller.scheduledTime),
+      waitUntil: (promise) => executionCtx.waitUntil(promise),
+    });
   },
 } satisfies IoriWorkerHandler;
