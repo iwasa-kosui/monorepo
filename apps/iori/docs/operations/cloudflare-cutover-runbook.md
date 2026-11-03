@@ -33,6 +33,8 @@ source control の事前配備は凍結前に行います。runner 上の Node 2
 
 source 用 `.github/workflows/deploy-iori.yml` は手動実行の入口だけを保持します。push のトリガーは外しているので、PR を merge しても `deploy-iori.yml` は起動しません。merge で起動するのは、Worker 配備の `.github/workflows/deploy-iori-worker-main.yml` です。この workflow は `production` の承認待ちになります。source credential を供給して merge する前に `production` の required reviewer、保護ブランチ制限、repository の `main` 保護が有効であることを確認します。`main` のみで実行する workflow の検査も維持します。Environment 名の追加だけでは実行承認は強制されません。移行 workflow の手動切替、merge を契機に起動する Worker 配備、手動で dispatch する source 配備を区別して承認します。
 
+3つの workflow（`Deploy iori`、`Deploy iori Worker`、`Deploy iori Worker (main)`）は、concurrency group `deploy-iori-worker-production` を共有します。push で起動した `deploy-worker` が production の承認待ちの間は、その run がこの group を占有します。このため、dispatch の操作は、push で起動した run が終わるまで待たされます。dispatch の操作は、`Deploy iori` のロールバックと、`deploy-iori-worker.yml` の各 operation です。GitHub は group ごとに待ちの run を1件しか保ちません。後から来た push の run が、待っている dispatch の run を取り消すことがあります。承認者は、push で起動した run を承認するか却下するかを速やかに決めます。dispatch の操作を先に通したいときは、承認者が push で起動した run を却下します。作業者は、dispatch した後に、その run が取り消されずに残っているかを確かめます。
+
 ### blog.kosui.me の DNS を proxied にする
 
 この repo の Terraform は DNS、proxied、SSL/TLS の暗号化モード、Always Use HTTPS を管理しません。`infra/cloudflare/main.tf` が管理するのは D1、R2、KV、Queue、DLQ、Queue consumer、Workers route と移行用 bucket だけです。`cutover-route` も proxied を変更しません。

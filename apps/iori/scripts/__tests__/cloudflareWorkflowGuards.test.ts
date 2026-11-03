@@ -299,6 +299,15 @@ it('deploys the Worker on a main push through a fixed deploy-worker job holding 
     /SSH|RECEIPT|WRITE|SMOKE_QUEUE_TOKEN|IORI_MIGRATION_REHEARSAL|VAPID_(?:PUBLIC|PRIVATE)|STAGING_ACCESS_TOKEN|MIGRATE_API_TOKEN|CUTOVER_API_TOKEN|inputs\.|workflow_dispatch/,
   );
   expect(JSON.stringify(main.jobs['public-artifact-gate'])).not.toContain('secrets.');
+  const comparable = (steps: Step[]) =>
+    steps.map(({ name, uses, with: inputs, run, env }) => ({ name, uses, with: inputs, run, env }));
+  for (const name of ['public-artifact-gate', 'deploy-worker']) {
+    const [pushFirst, ...pushRest] = comparable(main.jobs[name].steps);
+    const [dispatchFirst, ...dispatchRest] = comparable(worker.jobs[name].steps);
+    expect(pushRest).toEqual(dispatchRest);
+    expect(pushFirst.name).toBe(dispatchFirst.name);
+    expect(pushFirst.run).toBe(dispatchFirst.run!.replace('= workflow_dispatch', '= push'));
+  }
   expect(source.on).toEqual({ workflow_dispatch: null });
   expect(source.jobs['build-and-deploy'].steps[0].run).toContain('test "$GITHUB_EVENT_NAME" = workflow_dispatch');
   expect(source.jobs['build-and-deploy'].steps[0].run).not.toContain('= push');

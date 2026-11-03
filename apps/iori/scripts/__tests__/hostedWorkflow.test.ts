@@ -262,6 +262,15 @@ it.each([
     await rm(runnerTemp, { recursive: true, force: true });
   }
 });
+it('rejects the source operation on a main push', async () => {
+  await expect(
+    materializeHostedValues({
+      ...baseEnv('source'),
+      GITHUB_EVENT_NAME: 'push',
+      IORI_PRIVATE_DIRECTORY: '/not-inspected',
+    }),
+  ).rejects.toThrow('Invalid source invocation.');
+});
 it('rejects a retired operation before even examining any local secret path', async () => {
   await expect(
     materializeHostedValues({ ...baseEnv('replace-queue-consumer'), IORI_PRIVATE_DIRECTORY: '/not-inspected' }),

@@ -77,8 +77,8 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
     || (['estimate-source', 'diagnose-source'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
-      : !/^[a-z][a-z0-9]{7,19}$/.test(env.IORI_GENERATION ?? '')
-        || !/^[A-Za-z0-9_-]{1,80}$/.test(env.IORI_MIGRATION_RUN_ID ?? ''))
+      : !generationPattern.test(env.IORI_GENERATION ?? '')
+        || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))
     || (!['deploy-worker', 'adopt-cutover-state', 'purge-rehearsal-target'].includes(operation) && !recoveryOperation
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))

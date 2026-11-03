@@ -33,7 +33,7 @@ const operations = Object.freeze({
 });
 const sourceInvocation = (env) => {
   if (
-    !['push', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME) || env.GITHUB_REF !== 'refs/heads/main'
+    env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main'
     || !/^[a-f0-9]{40}$/.test(env.MAIN_SHA ?? '') || env.MAIN_SHA !== env.GITHUB_SHA
   ) throw new Error('Invalid source invocation.');
   return { operation: 'source', codeSha: env.MAIN_SHA };
