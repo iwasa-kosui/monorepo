@@ -3,7 +3,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
-import { fetchPublicTimeline } from '../api/mastodonClient.ts';
+import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -557,24 +557,45 @@ const UserProfile = () => {
 };
 
 const UpdateBioModal = () => {
-  const { data } = useTimelineContext();
+  const { data, timeline } = useTimelineContext();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState<string | undefined>(undefined);
 
   if (!data) return null;
 
-  const { me } = data;
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+    const input = (e.currentTarget as HTMLFormElement).elements.namedItem('avatar') as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (file === undefined) {
+      setErrorText('Choose an image');
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorText(undefined);
+    try {
+      timeline.updateMe(await updateAvatar(file));
+      window.location.hash = '';
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Modal id='update-bio' showCloseButton={false}>
-      <form method='post' action={`/users/${me.username}`}>
+      <form onSubmit={handleSubmit}>
         <p class='text-charcoal-light dark:text-gray-400 text-sm mb-3'>
-          Enter a URL for your profile image
+          Choose a profile image (JPEG, PNG, GIF or WebP, up to 5MB)
         </p>
         <input
-          type='url'
-          name='logoUri'
-          placeholder='https://example.com/image.png'
-          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
+          type='file'
+          name='avatar'
+          accept='image/jpeg,image/png,image/gif,image/webp'
+          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
         />
+        {errorText !== undefined && <p class='text-terracotta text-sm mb-3'>{errorText}</p>}
         <div class='flex gap-2 justify-end'>
           <a href='#'>
             <button
@@ -586,9 +607,10 @@ const UpdateBioModal = () => {
           </a>
           <button
             type='submit'
+            disabled={isSubmitting}
             class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
           >
-            Update
+            {isSubmitting ? 'Updating...' : 'Update'}
           </button>
         </div>
       </form>

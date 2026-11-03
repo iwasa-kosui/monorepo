@@ -1,7 +1,5 @@
 import type { ExecutionContext, MessageBatch, ScheduledController } from '@cloudflare/workers-types';
 
-import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
-import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1SessionResolver } from './adaptor/d1/session/sessionResolver.ts';
 import { federationWithObjectNotFound } from './adaptor/fedify/activityPubObjectNotFound.ts';
@@ -22,6 +20,7 @@ import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonA
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from './adaptor/routes/workerMastodonMarkersRouter.ts';
+import { createWorkerMastodonMediaRouter } from './adaptor/routes/workerMastodonMediaRouter.ts';
 import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
@@ -32,9 +31,7 @@ import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerP
 import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
 import { createWorkerSocialActionsApiRouter } from './adaptor/routes/workerSocialActionsApiRouter.ts';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
-import { createWorkerUsersRouter } from './adaptor/routes/workerUsersRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
-import { Actor } from './domain/actor/actor.ts';
 import { ArticleId } from './domain/article/articleId.ts';
 import { Instant } from './domain/instant/instant.ts';
 import { Session } from './domain/session/session.ts';
@@ -175,22 +172,6 @@ export default {
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(
-          '/users',
-          createWorkerUsersRouter({
-            updateLogoUri: async ({ sessionId, logoUri }) => {
-              const session = await createD1SessionResolver(runtime.db).resolve(sessionId);
-              if (!session.ok || session.val === undefined || !Session.verify(session.val, Instant.now())) return false;
-              const actor = await createD1ActorResolverByUserId(runtime.db).resolve(session.val.userId);
-              if (!actor.ok || actor.val === undefined) return false;
-              if (actor.val.logoUri === logoUri) return true;
-              const stored = await createD1LogoUriUpdatedStore(runtime.db).store(
-                Actor.updateLogoUri(Instant.now())(actor.val, logoUri),
-              );
-              return stored.ok;
-            },
-          }),
-        );
-        app.route(
           '/posts',
           createWorkerPostsRouter({
             createPostUseCase: runtime.posting.createPostUseCase,
@@ -237,7 +218,6 @@ export default {
           '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
-            uploads: runtime.uploads,
             createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
           }),
         );
@@ -286,6 +266,7 @@ export default {
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonMarkersRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonMediaRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
@@ -305,6 +286,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': object.contentType,
+            'X-Content-Type-Options': 'nosniff',
             ...(object.cacheControl === undefined
               ? {}
               : { 'Cache-Control': object.cacheControl }),

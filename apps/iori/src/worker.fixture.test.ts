@@ -408,6 +408,7 @@ describe('Worker fixture', () => {
 
     expect([health.status, healthz.status, readyz.status, upload.status]).toEqual([200, 200, 200, 200]);
     expect(upload.headers.get('Content-Type')).toBe('image/webp');
+    expect(upload.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(actor.status).toBe(200);
     expect(actor.headers.get('Content-Type')).toContain('application/activity+json');
     await expect(actor.json()).resolves.toMatchObject({ type: 'Person', id: `${origin}/users/fixture` });
@@ -429,8 +430,9 @@ describe('Worker fixture', () => {
     expect(get).toHaveBeenCalledWith(expect.stringContaining(String(missingImageId)));
   });
 
-  it('updates the seeded D1 actor logo through Worker fetch', async () => {
+  it('no longer updates the actor logo from the replaced profile form', async () => {
     const db = new FixtureD1(await makeSeed());
+    const logoUri = db.rows.actor.logoUri;
     const form = new FormData();
     form.set('logoUri', 'https://assets.example.invalid/fixture-logo.png');
     const response = await worker.fetch(
@@ -443,9 +445,8 @@ describe('Worker fixture', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/users/fixture');
-    expect(db.rows.actor.logoUri).toBe('https://assets.example.invalid/fixture-logo.png');
+    expect(response.status).toBe(404);
+    expect(db.rows.actor.logoUri).toBe(logoUri);
   }, 30_000);
 
   it('acknowledges a valid fanout and retries an invalid outbox through Worker queue', async () => {

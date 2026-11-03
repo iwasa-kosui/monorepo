@@ -65,6 +65,7 @@ import type { DismissNotificationUseCase } from '../useCase/dismissNotification.
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
+import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
@@ -89,6 +90,9 @@ import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import type { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
+import type { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
+import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 
@@ -144,6 +148,10 @@ export type IoriMastodonRuntimePorts = Readonly<{
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
+  uploadMediaUseCase: UploadMediaUseCase;
+  getMediaUploadUseCase: GetMediaUploadUseCase;
+  updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase;
+  updateAvatarUseCase: UpdateAvatarUseCase;
   dismissNotificationUseCase: DismissNotificationUseCase;
   clearNotificationsUseCase: ClearNotificationsUseCase;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;

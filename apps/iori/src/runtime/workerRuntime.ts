@@ -51,6 +51,9 @@ import { createD1LinkPreviewCreatedStore } from '../adaptor/d1/linkPreview/linkP
 import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1MarkerSavedStore } from '../adaptor/d1/marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../adaptor/d1/marker/markersResolverByUserId.ts';
+import { createD1MediaUploadCreatedStore } from '../adaptor/d1/mediaUpload/mediaUploadCreatedStore.ts';
+import { createD1MediaUploadDescriptionUpdatedStore } from '../adaptor/d1/mediaUpload/mediaUploadDescriptionUpdatedStore.ts';
+import { createD1MediaUploadResolver } from '../adaptor/d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1MuteCreatedStore } from '../adaptor/d1/mute/muteCreatedStore.ts';
 import { createD1MutedActorIdsResolverByUserId } from '../adaptor/d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../adaptor/d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
@@ -140,6 +143,7 @@ import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
+import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
@@ -164,6 +168,9 @@ import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
 import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
+import { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
+import { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -224,6 +231,7 @@ export const createWorkerRuntimePorts = async (
     logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
   });
+  const mediaUploadResolver = createD1MediaUploadResolver(db);
   const oauthApplicationResolverByClientId = createD1OAuthApplicationResolverByClientId(db);
   const accessTokenResolverByTokenHash = createD1AccessTokenResolverByTokenHash(db);
   const accessTokenRevokedStore = createD1AccessTokenRevokedStore(db);
@@ -339,6 +347,23 @@ export const createWorkerRuntimePorts = async (
       saveMarkersUseCase: SaveMarkersUseCase.create({
         markersResolverByUserId,
         markerSavedStore: createD1MarkerSavedStore(db),
+      }),
+      uploadMediaUseCase: UploadMediaUseCase.create({
+        userResolver,
+        uploads,
+        mediaUploadCreatedStore: createD1MediaUploadCreatedStore(db),
+        origin: env.ORIGIN,
+      }),
+      getMediaUploadUseCase: GetMediaUploadUseCase.create({ mediaUploadResolver }),
+      updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase.create({
+        mediaUploadResolver,
+        mediaUploadDescriptionUpdatedStore: createD1MediaUploadDescriptionUpdatedStore(db),
+      }),
+      updateAvatarUseCase: UpdateAvatarUseCase.create({
+        actorResolverByUserId,
+        uploads,
+        logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+        origin: env.ORIGIN,
       }),
     },
     digest: {
