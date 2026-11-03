@@ -4,6 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import type { LocalActorCreatedStore } from '../domain/actor/createLocalActor.ts';
 import { LocalActor } from '../domain/actor/localActor.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { type Argon2idDerive, nobleArgon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { Password } from '../domain/password/password.ts';
 import { UserPassword } from '../domain/password/userPassword.ts';
 import type { UserCreatedStore } from '../domain/user/createUser.ts';
@@ -38,6 +39,7 @@ export type SignUpDeps = Readonly<{
   userCreatedStore: UserCreatedStore;
   localActorCreatedStore: LocalActorCreatedStore;
   userPasswordSetStore: UserPasswordSetStore;
+  argon2idDerive?: Argon2idDerive;
 }>;
 
 const create = ({
@@ -45,6 +47,7 @@ const create = ({
   userCreatedStore,
   localActorCreatedStore,
   userPasswordSetStore,
+  argon2idDerive = nobleArgon2idDerive,
 }: SignUpDeps): SignUpUseCase => {
   const errIfUsernameTaken = (
     existingUser: User | undefined,
@@ -67,8 +70,8 @@ const create = ({
       RA.andThrough(({ userCreated }) => userCreatedStore.store(userCreated)),
       RA.bind('user', ({ userCreated }) => userCreated.aggregateState),
       RA.bind('localActorCreated', ({ user, ctx }) => LocalActor.createLocalActor(user, ctx, now)),
-      RA.andThrough(({ user }) => {
-        const hashedPassword = Password.hashPassword(input.password);
+      RA.andThrough(async ({ user }) => {
+        const hashedPassword = await Password.hashPassword(argon2idDerive)(input.password);
         const userPasswordSet = UserPassword.setUserPassword(now)({
           userId: user.id,
           hashedPassword,

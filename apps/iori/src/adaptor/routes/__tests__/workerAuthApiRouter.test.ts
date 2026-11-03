@@ -10,6 +10,7 @@ import {
   createMockUserResolverByUsername,
 } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
 import { createSignInUseCase } from '../../../useCase/signIn.ts';
+import { nodeArgon2idDerive } from '../../argon2/nodeArgon2idDerive.ts';
 import { createWorkerAuthApiRouter } from '../workerAuthApiRouter.ts';
 
 describe('createWorkerAuthApiRouter', () => {
@@ -22,12 +23,13 @@ describe('createWorkerAuthApiRouter', () => {
     const sessionStartedStore = createMockSessionStartedStore();
     const user = { id: UserId.generate(), username };
     userResolverByUsername.setUser(user);
-    userPasswordResolver.setPassword(user.id, Password.hashPassword(password));
+    userPasswordResolver.setPassword(user.id, await Password.hashPassword(nodeArgon2idDerive)(password));
     const app = createWorkerAuthApiRouter({
       signInUseCase: createSignInUseCase({
         userResolverByUsername,
         userPasswordResolver,
         sessionStartedStore,
+        argon2idDerive: nodeArgon2idDerive,
       }),
       createContext: () => createMockFedifyContext(),
     });
