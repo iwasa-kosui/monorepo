@@ -93,7 +93,8 @@ const create = ({
     if (textGenerator === undefined || !isWorthExpanding(text)) return { expansion: 'skipped', terms: [] };
     const expanded = await expandQuery(textGenerator, text, expansionTimeoutMs);
     if (expanded.ok) return { expansion: 'expanded', terms: expanded.val };
-    console.warn(`timeline search expansion failed: ${expanded.err.type}`);
+    const message = text.length > 0 ? expanded.err.message.split(text).join('[query]') : expanded.err.message;
+    console.warn(`timeline search expansion failed: ${expanded.err.type}: ${message.slice(0, 200)}`);
     return { expansion: 'failed', terms: [] };
   };
 
