@@ -1,6 +1,7 @@
 {
   "type": "module",
   "name": "@iwasa-kosui/iori",
+  "version": "0.1.0",
   "engines": {
     "node": "24.12.0"
   },

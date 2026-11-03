@@ -101,6 +101,25 @@ describe('createCloudflareFederationRuntime', () => {
 
     expect(parsed?.type).toBe(type);
   });
+
+  it('serves NodeInfo 2.1 for iori', async () => {
+    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
+
+    const response = await federation.fetch(new Request(`${workerEnv.ORIGIN}/nodeinfo/2.1`), {
+      contextData: undefined,
+      onNotFound: () => new Response('not found', { status: 404 }),
+      onNotAcceptable: () => new Response('not acceptable', { status: 406 }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      software: { name: 'iori' },
+      protocols: ['activitypub'],
+      openRegistrations: false,
+      usage: { users: { total: 1 } },
+    });
+  });
 });
 
 describe('Cloudflare Fedify message queue', () => {

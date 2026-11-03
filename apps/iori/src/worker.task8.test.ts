@@ -11,6 +11,22 @@ const ogImage = vi.hoisted(() => ({
 
 const runtime = vi.hoisted(() => ({
   auth: { signInUseCase: {} },
+  oauth: {
+    registerOAuthApplicationUseCase: {},
+    validateAuthorizationRequestUseCase: {},
+    issueAuthorizationCodeUseCase: {},
+    exchangeTokenUseCase: {},
+    revokeTokenUseCase: {},
+    verifyAccessTokenUseCase: {},
+    oauthApplicationResolver: {},
+    sessionResolver: {},
+  },
+  mastodon: {
+    userResolver: {},
+    userResolverByUsername: {},
+    actorResolverByUserId: {},
+    accountStatsResolver: {},
+  },
   timeline: { getTimelineUseCase: {} },
   posting: { createPostUseCase: {} },
   socialActions: {

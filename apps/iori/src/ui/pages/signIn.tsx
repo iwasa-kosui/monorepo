@@ -1,6 +1,14 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+const resolveNextPath = (): string => {
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next === null || !next.startsWith('/oauth/authorize')) {
+    return '/';
+  }
+  return new URL(next, window.location.origin).origin === window.location.origin ? next : '/';
+};
+
 const SignInPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +28,7 @@ const SignInPage = () => {
       });
 
       if (response.ok) {
-        window.location.href = '/';
+        window.location.href = resolveNextPath();
         return;
       }
 
