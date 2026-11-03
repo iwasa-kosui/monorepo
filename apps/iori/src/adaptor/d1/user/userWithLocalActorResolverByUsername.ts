@@ -20,9 +20,6 @@ export const createD1UserWithLocalActorResolverByUsername = (db: IoriD1Db): User
         if (!row) {
           return undefined;
         }
-        if (rest.some((other) => other.users.userId !== row.users.userId)) {
-          throw new Error(`Multiple users found with the same username: ${username}`);
-        }
         if (rest.length > 0) {
           throw new Error(`Multiple actors found with the same userId: ${row.users.userId}`);
         }

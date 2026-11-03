@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWorkerCoreApiRouter } from '../../../adaptor/routes/workerCoreApiRouter.ts';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
@@ -360,6 +360,79 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     expect(result[0].post.linkPreviews).toHaveLength(2);
   });
 
+  it('returns the same posts as the per-post threadResolver when limit exceeds the D1 binding limit', async () => {
+    const { sqlite, db, queries } = setup();
+    const extraCount = 100;
+    for (let offset = 1; offset <= extraCount; offset++) {
+      const index = LOCAL_POST_COUNT + offset;
+      const postId = postIdOf(index);
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        localActorId,
+        `local post ${index}`,
+        index * 1000,
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      if (offset % 7 === 0) {
+        sqlite.prepare('INSERT INTO post_images(imageId,postId,url,altText,createdAt) VALUES (?,?,?,?,?)').run(
+          id(8000 + offset),
+          postId,
+          `https://iori.test/uploads/extra-${offset}.png`,
+          null,
+          offset,
+        );
+        sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
+          id(8200 + offset),
+          viewerActorId,
+          postId,
+          'remote',
+          1,
+        );
+        sqlite.prepare('INSERT INTO remote_likes(likeId,likeActivityUri) VALUES (?,?)').run(
+          id(8200 + offset),
+          `https://remote.test/likes/${id(8200 + offset)}`,
+        );
+        sqlite.prepare('INSERT INTO reposts(repostId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
+          id(8400 + offset),
+          viewerActorId,
+          postId,
+          1,
+        );
+        sqlite.prepare(
+          'INSERT INTO emoji_reacts(emojiReactId,actorId,postId,emoji,emojiImageUrl,createdAt) VALUES (?,?,?,?,?,?)',
+        ).run(id(8600 + offset), viewerActorId, postId, '👍', null, 1);
+        sqlite.prepare(
+          'INSERT INTO link_previews(linkPreviewId,postId,url,title,description,imageUrl,faviconUrl,siteName,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
+        ).run(
+          id(8800 + offset),
+          postId,
+          `https://example.test/extra-${offset}`,
+          `Extra ${offset}`,
+          null,
+          null,
+          null,
+          null,
+          1,
+        );
+      }
+    }
+    const resolver = createD1LocalPostsResolver(db, ORIGIN);
+    for (const limit of [120, 125]) {
+      const before = queries.length;
+      const actual = unwrap(await resolver.resolve({ createdAt: undefined, limit }));
+      expect(queries.length - before).toBe(11);
+      const expected = await legacyResolvePosts(db, ORIGIN, { createdAt: undefined, localOnly: true, limit });
+      expect(actual).toHaveLength(limit);
+      expect(actual.some(post => post.images.length > 0 && post.likeCount === 1)).toBe(true);
+      expect(actual).toEqual(expected);
+      expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
+    }
+    const before = queries.length;
+    expect(unwrap(await resolver.resolve({ createdAt: undefined, limit: 90 }))).toHaveLength(90);
+    expect(queries.length - before).toBe(6);
+  });
+
   it('returns an empty page with one query when no post matches', async () => {
     const { db, queries } = setup();
     const result = unwrap(
@@ -431,6 +504,16 @@ describe('getUserPosts resolves the user and the local actor in one query', () =
     expect(await response.text()).toBe(await legacyResponse.text());
   });
 
+  it('does not mix posts of other actors into the /api/v1/users/:username/posts response', async () => {
+    const { db } = setup();
+    const router = createWorkerCoreApiRouter({ getUserPostsUseCase: createUseCase(db) } as never);
+    const response = await router.request('/v1/users/kosui/posts?createdAt=5000');
+    const { posts } = await response.json() as { posts: PostWithAuthor[] };
+    expect(response.status).toBe(200);
+    expect(posts.map(post => post.postId)).toEqual([postIdOf(4), postIdOf(3), postIdOf(2), postIdOf(1)]);
+    expect(posts.every(post => post.type === 'local' && post.actorId === localActorId)).toBe(true);
+  });
+
   it('returns the same page for a cursor', async () => {
     const { db } = setup();
     const createdAt = Instant.orThrow(20_000);
@@ -474,6 +557,17 @@ describe('getUserPosts resolves the user and the local actor in one query', () =
         detail: { userId: orphanId },
       },
     });
+  });
+});
+
+describe('/v1/remote-users/:actorId/posts', () => {
+  it('returns 401 without a session cookie and does not run the use case', async () => {
+    const run = vi.fn();
+    const router = createWorkerCoreApiRouter({ getRemoteActorPostsUseCase: { run } } as never);
+    const response = await router.request(`/v1/remote-users/${remoteActorId}/posts`);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Unauthorized' });
+    expect(run).not.toHaveBeenCalled();
   });
 });
 

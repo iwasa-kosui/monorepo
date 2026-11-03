@@ -36,6 +36,19 @@ const groupByPostId = <T extends { postId: string }>(rows: readonly T[]): Map<st
   return grouped;
 };
 
+const POST_ID_BATCH_SIZE = 90;
+
+const selectByPostIds = async <T>(
+  postIds: readonly string[],
+  select: (batch: string[]) => Promise<T[]>,
+): Promise<T[]> => {
+  const batches: string[][] = [];
+  for (let start = 0; start < postIds.length; start += POST_ID_BATCH_SIZE) {
+    batches.push(postIds.slice(start, start + POST_ID_BATCH_SIZE));
+  }
+  return (await Promise.all(batches.map(select))).flat();
+};
+
 const resolvePosts = async (
   db: IoriD1Db,
   input: Readonly<{
@@ -86,19 +99,28 @@ const resolvePosts = async (
   if (rows.length === 0) return [];
   const postIds = rows.map((row) => row.posts.postId);
   const [imageRows, likeCounts, repostCounts, reactionRows, previewRows] = await Promise.all([
-    db.select().from(postImagesTable).where(inArray(postImagesTable.postId, postIds)),
-    db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
-      .from(likesTable).where(inArray(likesTable.postId, postIds)).groupBy(likesTable.postId),
-    db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
-      .from(repostsTable).where(inArray(repostsTable.postId, postIds)).groupBy(repostsTable.postId),
-    db.select({
-      postId: emojiReactsTable.postId,
-      emoji: emojiReactsTable.emoji,
-      emojiImageUrl: emojiReactsTable.emojiImageUrl,
-      count: sql<number>`count(*)`,
-    }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, postIds))
-      .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl),
-    db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, postIds)),
+    selectByPostIds(
+      postIds,
+      (batch) => db.select().from(postImagesTable).where(inArray(postImagesTable.postId, batch)),
+    ),
+    selectByPostIds(postIds, (batch) =>
+      db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
+        .from(likesTable).where(inArray(likesTable.postId, batch)).groupBy(likesTable.postId)),
+    selectByPostIds(postIds, (batch) =>
+      db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
+        .from(repostsTable).where(inArray(repostsTable.postId, batch)).groupBy(repostsTable.postId)),
+    selectByPostIds(postIds, (batch) =>
+      db.select({
+        postId: emojiReactsTable.postId,
+        emoji: emojiReactsTable.emoji,
+        emojiImageUrl: emojiReactsTable.emojiImageUrl,
+        count: sql<number>`count(*)`,
+      }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, batch))
+        .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)),
+    selectByPostIds(
+      postIds,
+      (batch) => db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, batch)),
+    ),
   ]);
   const imagesByPostId = groupByPostId(imageRows);
   const reactionsByPostId = groupByPostId(reactionRows);
