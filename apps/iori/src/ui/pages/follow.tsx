@@ -1,6 +1,8 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { follow, isMastodonApiError, searchAccount } from '../api/mastodonClient.ts';
+
 const FollowPage = () => {
   const params = new URLSearchParams(window.location.search);
   const initialUri = params.get('uri') ?? '';
@@ -17,20 +19,22 @@ const FollowPage = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/v1/follow', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle }),
-      });
-
-      if (response.ok) {
-        setSuccess(true);
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to follow');
+      const acct = handle.trim().replace(/^@/, '');
+      if (!acct.includes('@')) {
+        setError('Local accounts cannot be followed');
+        return;
       }
-    } catch {
-      setError('Network error. Please try again.');
+      const account = await searchAccount(acct);
+      if (account === undefined) {
+        setError('Account not found');
+        return;
+      }
+      await follow(account.id);
+      setSuccess(true);
+    } catch (error) {
+      setError(
+        isMastodonApiError(error) ? error.message : 'Network error. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  failureMessage,
+  favourite,
   fetchAccount,
   fetchAccountStatuses,
   fetchFavourites,
@@ -12,11 +14,20 @@ import {
   fetchRelationships,
   fetchStatus,
   fetchStatusContext,
+  follow,
   isNotFoundError,
   isUnauthorizedError,
+  isUnprocessableError,
   lookupAccount,
+  mute,
   parseLinkHeader,
+  reblog,
   saveNotificationsMarker,
+  searchAccount,
+  unfavourite,
+  unfollow,
+  unmute,
+  unreblog,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -270,6 +281,72 @@ describe('mastodon client requests', () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
     expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
+  });
+
+  it.each([
+    ['favourite', favourite, '/api/v1/statuses/s1/favourite'],
+    ['unfavourite', unfavourite, '/api/v1/statuses/s1/unfavourite'],
+    ['reblog', reblog, '/api/v1/statuses/s1/reblog'],
+    ['unreblog', unreblog, '/api/v1/statuses/s1/unreblog'],
+    ['follow', follow, '/api/v1/accounts/s1/follow'],
+    ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
+    ['mute', mute, '/api/v1/accounts/s1/mute'],
+    ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+  ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
+    const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
+
+    const body = await action('s1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe(path);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(body).toEqual({ id: 's1' });
+  });
+
+  it('encodes the id in a write path', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b' }));
+
+    await follow('a/b');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/accounts/a%2Fb/follow');
+  });
+
+  it('throws an unprocessable error carrying the server message when the reblog is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: Reblog of this status is not allowed' }, { status: 422 }));
+
+    const error = await reblog('s1').catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: Reblog of this status is not allowed');
+    expect(failureMessage('repost', error)).toBe(
+      'Failed to repost: Validation failed: Reblog of this status is not allowed',
+    );
+  });
+
+  it('throws on a failed follow and keeps the generic failure message for a network error', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: local account' }, { status: 422 }));
+
+    const error = await follow('a1').catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect(failureMessage('follow', new TypeError('Failed to fetch'))).toBe('Failed to follow. Please try again.');
+  });
+
+  it('searches an account with resolve=true and returns the first account', async () => {
+    const fetchMock = stubFetch(jsonResponse({ accounts: [{ id: 'a1' }, { id: 'a2' }], statuses: [], hashtags: [] }));
+
+    const account = await searchAccount('alice@remote.example');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v2/search?q=alice%40remote.example&resolve=true&type=accounts');
+    expect(account).toEqual({ id: 'a1' });
+  });
+
+  it('returns undefined when the search finds no account', async () => {
+    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
+
+    expect(await searchAccount('nobody@remote.example')).toBeUndefined();
   });
 
   it('does not treat a network failure as an unauthorized error', () => {
