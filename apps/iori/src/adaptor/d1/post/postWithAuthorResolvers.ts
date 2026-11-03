@@ -24,7 +24,7 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
-import { buildPostWithAuthor } from './threadResolver.ts';
+import { buildPostWithAuthor, type PostRow } from './threadResolver.ts';
 
 const groupByPostId = <T extends { postId: string }>(rows: readonly T[]): Map<string, T[]> => {
   const grouped = new Map<string, T[]>();
@@ -47,6 +47,63 @@ const selectByPostIds = async <T>(
     batches.push(postIds.slice(start, start + POST_ID_BATCH_SIZE));
   }
   return (await Promise.all(batches.map(select))).flat();
+};
+
+export const selectPostRowsByIds = (db: IoriD1Db, postIds: readonly string[]): Promise<PostRow[]> =>
+  selectByPostIds(postIds, (batch) =>
+    db.select().from(postsTable)
+      .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+      .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
+      .innerJoin(actorsTable, eq(postsTable.actorId, actorsTable.actorId))
+      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
+      .where(and(inArray(postsTable.postId, batch), isNull(postsTable.deletedAt))));
+
+export const buildPostsWithAuthor = async (db: IoriD1Db, rows: readonly PostRow[]): Promise<PostWithAuthor[]> => {
+  const postIds = rows.map((row) => row.posts.postId);
+  const [imageRows, likeCounts, repostCounts, reactionRows, previewRows] = await Promise.all([
+    selectByPostIds(
+      postIds,
+      (batch) => db.select().from(postImagesTable).where(inArray(postImagesTable.postId, batch)),
+    ),
+    selectByPostIds(postIds, (batch) =>
+      db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
+        .from(likesTable).where(inArray(likesTable.postId, batch)).groupBy(likesTable.postId)),
+    selectByPostIds(postIds, (batch) =>
+      db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
+        .from(repostsTable).where(inArray(repostsTable.postId, batch)).groupBy(repostsTable.postId)),
+    selectByPostIds(postIds, (batch) =>
+      db.select({
+        postId: emojiReactsTable.postId,
+        emoji: emojiReactsTable.emoji,
+        emojiImageUrl: emojiReactsTable.emojiImageUrl,
+        count: sql<number>`count(*)`,
+      }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, batch))
+        .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)),
+    selectByPostIds(
+      postIds,
+      (batch) => db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, batch)),
+    ),
+  ]);
+  const imagesByPostId = groupByPostId(imageRows);
+  const reactionsByPostId = groupByPostId(reactionRows);
+  const previewsByPostId = groupByPostId(previewRows);
+  const likeCountByPostId = new Map(likeCounts.map(({ postId, count }) => [postId, Number(count)]));
+  const repostCountByPostId = new Map(repostCounts.map(({ postId, count }) => [postId, Number(count)]));
+  return rows.map((row) =>
+    buildPostWithAuthor(row, {
+      images: imagesByPostId.get(row.posts.postId) ?? [],
+      likeCount: likeCountByPostId.get(row.posts.postId) ?? 0,
+      repostCount: repostCountByPostId.get(row.posts.postId) ?? 0,
+      reactions: (reactionsByPostId.get(row.posts.postId) ?? []).map(({ emoji, emojiImageUrl, count }) => ({
+        emoji,
+        emojiImageUrl,
+        count,
+      })),
+      previews: previewsByPostId.get(row.posts.postId) ?? [],
+    })
+  );
 };
 
 const resolvePosts = async (
@@ -97,50 +154,11 @@ const resolvePosts = async (
     .orderBy(desc(postsTable.createdAt))
     .limit(input.limit ?? 20);
   if (rows.length === 0) return [];
-  const postIds = rows.map((row) => row.posts.postId);
-  const [imageRows, likeCounts, repostCounts, reactionRows, previewRows] = await Promise.all([
-    selectByPostIds(
-      postIds,
-      (batch) => db.select().from(postImagesTable).where(inArray(postImagesTable.postId, batch)),
-    ),
-    selectByPostIds(postIds, (batch) =>
-      db.select({ postId: likesTable.postId, count: sql<number>`count(*)` })
-        .from(likesTable).where(inArray(likesTable.postId, batch)).groupBy(likesTable.postId)),
-    selectByPostIds(postIds, (batch) =>
-      db.select({ postId: repostsTable.postId, count: sql<number>`count(*)` })
-        .from(repostsTable).where(inArray(repostsTable.postId, batch)).groupBy(repostsTable.postId)),
-    selectByPostIds(postIds, (batch) =>
-      db.select({
-        postId: emojiReactsTable.postId,
-        emoji: emojiReactsTable.emoji,
-        emojiImageUrl: emojiReactsTable.emojiImageUrl,
-        count: sql<number>`count(*)`,
-      }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, batch))
-        .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl)),
-    selectByPostIds(
-      postIds,
-      (batch) => db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, batch)),
-    ),
-  ]);
-  const imagesByPostId = groupByPostId(imageRows);
-  const reactionsByPostId = groupByPostId(reactionRows);
-  const previewsByPostId = groupByPostId(previewRows);
-  const likeCountByPostId = new Map(likeCounts.map(({ postId, count }) => [postId, Number(count)]));
-  const repostCountByPostId = new Map(repostCounts.map(({ postId, count }) => [postId, Number(count)]));
-  return rows.map((row) => ({
-    ...buildPostWithAuthor(row, {
-      images: imagesByPostId.get(row.posts.postId) ?? [],
-      likeCount: likeCountByPostId.get(row.posts.postId) ?? 0,
-      repostCount: repostCountByPostId.get(row.posts.postId) ?? 0,
-      reactions: (reactionsByPostId.get(row.posts.postId) ?? []).map(({ emoji, emojiImageUrl, count }) => ({
-        emoji,
-        emojiImageUrl,
-        count,
-      })),
-      previews: previewsByPostId.get(row.posts.postId) ?? [],
-    }),
-    liked: row.liked,
-    reposted: row.reposted,
+  const posts = await buildPostsWithAuthor(db, rows);
+  return posts.map((post, index) => ({
+    ...post,
+    liked: rows[index].liked,
+    reposted: rows[index].reposted,
   }));
 };
 

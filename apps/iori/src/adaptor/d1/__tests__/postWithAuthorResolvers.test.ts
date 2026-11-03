@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWorkerCoreApiRouter } from '../../../adaptor/routes/workerCoreApiRouter.ts';
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../../domain/post/post.ts';
+import { RelayId } from '../../../domain/relay/relayId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import {
   createWorkerGetServerTimelineUseCase,
@@ -24,7 +26,7 @@ import {
   createD1PostsResolverByActorIdWithPagination,
 } from '../post/postWithAuthorResolvers.ts';
 import { createD1ThreadResolver } from '../post/threadResolver.ts';
-import { likesTable, localPostsTable, postsTable, repostsTable } from '../schema.ts';
+import { federatedTimelineItemsTable, likesTable, localPostsTable, postsTable, repostsTable } from '../schema.ts';
 import { createD1UserResolverByUsername } from '../user/userResolverByUsername.ts';
 import { createD1UserWithLocalActorResolverByUsername } from '../user/userWithLocalActorResolverByUsername.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -444,6 +446,159 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     );
     expect(result).toEqual([]);
     expect(queries).toHaveLength(1);
+  });
+});
+
+type FederatedInput = Readonly<{
+  receivedAt: Instant | undefined;
+  mutedActorIds: readonly ActorId[];
+  currentActorId?: ActorId;
+}>;
+
+// Implementation before batching: one threadResolver.resolve per timeline item.
+const legacyResolveFederatedItems = async (db: IoriD1Db, origin: string, input: FederatedInput) => {
+  const rows = await db.select().from(federatedTimelineItemsTable)
+    .where(and(
+      input.receivedAt === undefined
+        ? undefined
+        : lt(federatedTimelineItemsTable.receivedAt, new Date(input.receivedAt)),
+    ))
+    .orderBy(desc(federatedTimelineItemsTable.receivedAt))
+    .limit(20);
+  const muted = new Set<ActorId>(input.mutedActorIds);
+  const threadResolver = createD1ThreadResolver(db, origin);
+  const items = await Promise.all(rows.map(async (row) => {
+    const post = await threadResolver.resolve({ postId: row.postId as never });
+    if (!post.ok || post.val.currentPost === null || muted.has(post.val.currentPost.actorId)) return undefined;
+    return {
+      federatedTimelineItemId: FederatedTimelineItemId.orThrow(row.federatedTimelineItemId),
+      post: post.val.currentPost,
+      relayId: RelayId.orThrow(row.relayId),
+      receivedAt: Instant.orThrow(row.receivedAt.getTime()),
+    };
+  }));
+  return items.filter((item) => item !== undefined);
+};
+
+const setupFederatedPage = () => {
+  const fixture = setup();
+  const { sqlite } = fixture;
+  const insertItem = (itemId: string, postId: string, receivedAt: number) =>
+    sqlite.prepare(
+      'INSERT INTO federated_timeline_items(federatedTimelineItemId,postId,relayId,receivedAt) VALUES (?,?,?,?)',
+    ).run(itemId, postId, id(6000), receivedAt);
+  for (let index = 1; index <= 18; index++) insertItem(id(6200 + index), postIdOf(index), 50_000 + index * 100);
+  insertItem(id(6301), postIdOf(richIndex), 60_000);
+  insertItem(id(6302), postIdOf(replyIndex), 64_000);
+  insertItem(id(6303), remoteReplyTargetId, 65_000);
+  insertItem(id(6304), id(4000), 70_000);
+  return fixture;
+};
+
+const federatedCursors = [undefined, Instant.orThrow(87_500), Instant.orThrow(55_000), Instant.orThrow(100)];
+const federatedViewers = [undefined, viewerActorId, remoteActorId];
+const federatedMuted = [[], [remoteActorId], [localActorId]] as const;
+
+describe('D1 federated timeline resolver batches the post queries', () => {
+  it('returns the same items as the per-post threadResolver for every cursor, viewer and muted actor', async () => {
+    const { db } = setupFederatedPage();
+    const resolver = createD1FederatedTimelineItemsResolver(db, ORIGIN);
+    for (const receivedAt of federatedCursors) {
+      for (const currentActorId of federatedViewers) {
+        for (const mutedActorIds of federatedMuted) {
+          const input = { receivedAt, mutedActorIds, currentActorId };
+          const actual = unwrap(await resolver.resolve(input));
+          const expected = await legacyResolveFederatedItems(db, ORIGIN, input);
+          expect(actual).toEqual(expected);
+          expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
+        }
+      }
+    }
+  });
+
+  it('keeps the page content: order, count, cursor, deleted posts, duplicates and enrichment values', async () => {
+    const { db } = setupFederatedPage();
+    const resolver = createD1FederatedTimelineItemsResolver(db, ORIGIN);
+    const first = unwrap(await resolver.resolve({ receivedAt: undefined, mutedActorIds: [] }));
+    expect(first).toHaveLength(19);
+    expect(first.map(item => item.receivedAt)).toEqual(
+      [...first.map(item => item.receivedAt)].sort((a, b) => b - a),
+    );
+    expect(first.slice(0, 7).map(item => item.post.postId)).toEqual([
+      postIdOf(richIndex),
+      postIdOf(3),
+      id(3002),
+      id(3003),
+      remoteReplyTargetId,
+      postIdOf(replyIndex),
+      postIdOf(richIndex),
+    ]);
+    expect(first.some(item => item.post.postId === id(4000))).toBe(false);
+    expect(first[0].post).toMatchObject({ likeCount: 2, repostCount: 2, liked: false, reposted: false });
+    expect(first[0].post.images).toHaveLength(2);
+    expect(first[0].post.reactions).toEqual([
+      { emoji: ':blob:', emojiImageUrl: 'https://remote.test/emoji/blob.png', count: 1 },
+      { emoji: '🎉', emojiImageUrl: null, count: 1 },
+      { emoji: '👍', emojiImageUrl: null, count: 2 },
+    ]);
+    expect(first[0].post.linkPreviews).toHaveLength(2);
+    expect(first[0].relayId).toBe(id(6000));
+    const second = unwrap(
+      await resolver.resolve({ receivedAt: first[first.length - 1].receivedAt, mutedActorIds: [] }),
+    );
+    expect(second).toHaveLength(6);
+    const muted = unwrap(await resolver.resolve({ receivedAt: undefined, mutedActorIds: [remoteActorId] }));
+    expect(muted.some(item => item.post.type === 'remote')).toBe(false);
+    expect(muted).toHaveLength(16);
+  });
+
+  it('resolves a page of 20 timeline items with 7 D1 queries instead of one set of queries per post', async () => {
+    const legacyFixture = setupFederatedPage();
+    const input = { receivedAt: undefined, mutedActorIds: [], currentActorId: viewerActorId };
+    const legacy = await legacyResolveFederatedItems(legacyFixture.db, ORIGIN, input);
+    expect(legacyFixture.queries.length).toBeGreaterThan(100);
+
+    const { db, queries } = setupFederatedPage();
+    const before = queries.length;
+    const actual = unwrap(await createD1FederatedTimelineItemsResolver(db, ORIGIN).resolve(input));
+    expect(queries.length - before).toBe(7);
+    expect(actual).toEqual(legacy);
+  });
+
+  it('returns an empty page with one query when no item matches the cursor', async () => {
+    const { db, queries } = setupFederatedPage();
+    const before = queries.length;
+    const result = unwrap(
+      await createD1FederatedTimelineItemsResolver(db, ORIGIN).resolve({
+        receivedAt: Instant.orThrow(1),
+        mutedActorIds: [],
+      }),
+    );
+    expect(result).toEqual([]);
+    expect(queries.length - before).toBe(1);
+  });
+
+  it('returns the same JSON response as before for /v1/federated', async () => {
+    const { db } = setupFederatedPage();
+    const resolver = createD1FederatedTimelineItemsResolver(db, ORIGIN);
+    const respond = (resolve: (input: FederatedInput) => Promise<unknown>) =>
+      createWorkerCoreApiRouter({
+        getFederatedTimelineUseCase: {
+          run: async ({ receivedAt }: { receivedAt: Instant | undefined }) => {
+            const items = await resolve({ receivedAt, mutedActorIds: [], currentActorId: viewerActorId }) as {
+              receivedAt: Instant;
+            }[];
+            return RA.ok({
+              items,
+              nextCursor: items.length > 0 ? items[items.length - 1].receivedAt : undefined,
+            });
+          },
+        },
+      } as never).request('/v1/federated', { headers: { cookie: `sessionId=${id(9)}` } });
+    const actual = await respond(async (input) => unwrap(await resolver.resolve(input)));
+    const expected = await respond((input) => legacyResolveFederatedItems(db, ORIGIN, input));
+    expect(actual.status).toBe(200);
+    expect(await actual.text()).toBe(await expected.text());
   });
 });
 
