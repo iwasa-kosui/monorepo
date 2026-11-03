@@ -124,6 +124,10 @@ describe('iori Worker on workerd', () => {
     const unpublishedId = '9d2b5e30-74c6-4f5a-8a8d-3e1c6b4f9a32';
     const missingId = 'a3c6f041-85d7-4a6b-9b9e-4f2d7c5a0b43';
     const activityJson = { Accept: 'application/activity+json' };
+    const expectNotFoundVaryingOnAccept = (response: Response) => {
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Vary')).toContain('Accept');
+    };
     const articlePath = (id: string) => `${origin}/users/${username}/articles/${id}`;
 
     it('seeds a published, a draft, and an unpublished article', async () => {
@@ -177,17 +181,22 @@ describe('iori Worker on workerd', () => {
 
     it('returns 404 for an unknown article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(missingId), { headers: activityJson });
-      expect(response.status).toBe(404);
+      expectNotFoundVaryingOnAccept(response);
     });
 
     it('returns 404 for a draft article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(draftId), { headers: activityJson });
-      expect(response.status).toBe(404);
+      expectNotFoundVaryingOnAccept(response);
+    });
+
+    it('returns 404 for a draft article with application/ld+json without a profile', async () => {
+      const response = await SELF.fetch(articlePath(draftId), { headers: { Accept: 'application/ld+json' } });
+      expectNotFoundVaryingOnAccept(response);
     });
 
     it('returns 404 for an unpublished article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(unpublishedId), { headers: activityJson });
-      expect(response.status).toBe(404);
+      expectNotFoundVaryingOnAccept(response);
     });
 
     it('returns the Article for a published article with application/activity+json', async () => {

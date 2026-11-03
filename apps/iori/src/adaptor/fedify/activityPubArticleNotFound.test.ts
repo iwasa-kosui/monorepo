@@ -13,22 +13,29 @@ describe('isActivityPubArticleRequest', () => {
     expect(isActivityPubArticleRequest(request(articlePath, 'application/activity+json'))).toBe(true);
   });
 
-  it('accepts the article object path with the ActivityStreams ld+json profile', () => {
+  it('accepts the article object path with ld+json, with or without the ActivityStreams profile', () => {
     expect(isActivityPubArticleRequest(request(articlePath, ldJson))).toBe(true);
     expect(isActivityPubArticleRequest(request(articlePath, ldJson.replace(/"/g, '')))).toBe(true);
-  });
-
-  it('rejects ld+json without the ActivityStreams profile', () => {
-    expect(isActivityPubArticleRequest(request(articlePath, 'application/ld+json'))).toBe(false);
+    expect(isActivityPubArticleRequest(request(articlePath, 'application/ld+json'))).toBe(true);
     expect(
       isActivityPubArticleRequest(request(articlePath, 'application/ld+json; profile="https://example.com/other"')),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it('rejects text/html, wildcard, and a missing Accept header', () => {
+  it('accepts the article object path with application/json', () => {
+    expect(isActivityPubArticleRequest(request(articlePath, 'application/json'))).toBe(true);
+  });
+
+  it('rejects when the first preferred type is text/html or application/xhtml+xml', () => {
     expect(isActivityPubArticleRequest(request(articlePath, 'text/html'))).toBe(false);
+    expect(isActivityPubArticleRequest(request(articlePath, 'application/xhtml+xml'))).toBe(false);
     expect(isActivityPubArticleRequest(request(articlePath, 'text/html,application/xhtml+xml,*/*;q=0.8'))).toBe(false);
+    expect(isActivityPubArticleRequest(request(articlePath, 'text/html, application/ld+json'))).toBe(false);
+  });
+
+  it('rejects wildcard, an unrelated type, and a missing Accept header', () => {
     expect(isActivityPubArticleRequest(request(articlePath, '*/*'))).toBe(false);
+    expect(isActivityPubArticleRequest(request(articlePath, 'text/plain'))).toBe(false);
     expect(isActivityPubArticleRequest(request(articlePath))).toBe(false);
   });
 
@@ -37,6 +44,7 @@ describe('isActivityPubArticleRequest', () => {
       false,
     );
     expect(isActivityPubArticleRequest(request(articlePath, 'application/activity+json, text/html;q=0.9'))).toBe(true);
+    expect(isActivityPubArticleRequest(request(articlePath, 'text/html;q=0.5, application/ld+json'))).toBe(true);
     expect(isActivityPubArticleRequest(request(articlePath, 'application/activity+json;q=0'))).toBe(false);
   });
 
