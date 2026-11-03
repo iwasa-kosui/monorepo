@@ -1,3 +1,6 @@
+import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
+import { renderBottomNav, renderPostModal, renderSidebar } from './workerPageNav.tsx';
+
 type WorkerPage = Readonly<{
   entry: string;
   title: string;
@@ -49,27 +52,45 @@ export const createWorkerPageFallback = async (
   const page = pageForPath(new URL(request.url).pathname);
   if (page === undefined) return undefined;
   const isLoggedIn = identity?.isLoggedIn ?? /(?:^|;\s*)sessionId=/.test(request.headers.get('Cookie') ?? '');
+  const [sidebar, bottomNav, postModal] = isLoggedIn
+    ? await Promise.all([renderSidebar(isLoggedIn), renderBottomNav(isLoggedIn), renderPostModal()])
+    : ['', '', ''];
   const html = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="iori">
+    <link rel="apple-touch-icon" href="/icon-192.png">
     <meta name="theme-color" content="#1a1918">
     <title>${escapeHtml(page.title)}</title>
     <meta name="description" content="A microblog by kosui">
-    <link rel="icon" href="/favicon.ico">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>${layoutStyle}</style>
+    <script>${tailwindConfigScript}</script>
     <script type="module" src="/static/${page.entry}.js"></script>
   </head>
-  <body class="bg-[#f0eee9] dark:bg-gray-900 min-h-screen text-[#5a5450] dark:text-gray-100">
-    <main class="max-w-2xl mx-auto px-6 py-8">
+  <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
+    isLoggedIn ? 'pb-16 md:pb-0 md:px-16' : ''
+  }">
+    <div class="bg-decoration" aria-hidden="true">
+      <div class="bg-blob bg-blob-1"></div>
+      <div class="bg-blob bg-blob-2"></div>
+      <div class="bg-blob bg-blob-3"></div>
+    </div>
+    ${sidebar}
+    <main class="max-w-2xl mx-auto px-6 py-8 relative">
       <div id="root" class="h-full flex flex-col" data-is-logged-in="${String(isLoggedIn)}" data-user-id="${
     escapeHtml(identity?.userId ?? '')
   }"></div>
     </main>
+    ${bottomNav}
+    ${postModal}
   </body>
 </html>`;
   return new Response(request.method === 'HEAD' ? null : html, {

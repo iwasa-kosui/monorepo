@@ -686,12 +686,20 @@ const ServerTimeline = () => {
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
           blog.kosui.me
         </h1>
-        <a
-          href='/about'
-          class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-        >
-          ioriについて
-        </a>
+        <div class='flex items-center gap-4'>
+          <a
+            href='/about'
+            class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+          >
+            ioriについて
+          </a>
+          <a
+            href='/sign-in'
+            class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
+          >
+            Sign in
+          </a>
+        </div>
       </div>
       {posts.length > 0
         ? (

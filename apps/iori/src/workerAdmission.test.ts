@@ -50,6 +50,30 @@ describe('Worker admission', () => {
       ),
     ).toBeUndefined();
   });
+  it('admits the smoke enqueue POST with or without a zero content-length but not with a body', async () => {
+    const env = { ...admissionFixture(), SMOKE_QUEUE_TOKEN: 's'.repeat(32) };
+    const url = 'https://iori-production-fixture1.fixture.workers.dev/__smoke__/queue-enqueue';
+    const token = { 'x-iori-smoke-token': env.SMOKE_QUEUE_TOKEN };
+    expect(
+      await admitWorkerRequest(
+        new Request(url, { method: 'POST', headers: { ...token, 'content-length': '0' } }),
+        env,
+      ),
+    ).toMatchObject({ capability: 'smoke' });
+    expect(await admitWorkerRequest(new Request(url, { method: 'POST', headers: token }), env)).toMatchObject({
+      capability: 'smoke',
+    });
+    const emptyStream = new Request(url, {
+      method: 'POST',
+      headers: { ...token, 'content-length': '0' },
+      body: new ReadableStream({ start: (controller) => controller.close() }),
+      duplex: 'half',
+    } as RequestInit);
+    expect(emptyStream.body).not.toBeNull();
+    expect(await admitWorkerRequest(emptyStream, env)).toMatchObject({ capability: 'smoke' });
+    expect(await admitWorkerRequest(new Request(url, { method: 'POST', headers: token, body: 'x' }), env))
+      .toBeUndefined();
+  });
   it('separates active staging access from read-only smoke', async () => {
     const env = {
       ...admissionFixture('worker.test', 'staging'),

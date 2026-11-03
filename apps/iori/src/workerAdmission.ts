@@ -64,10 +64,12 @@ const tokenMatches = async (actual: string | null, expected: string | undefined)
   for (let i = 0; i < left.length; i++) difference |= left[i]! ^ right[i]!;
   return difference === 0;
 };
+export const hasNoBody = (request: Request): boolean =>
+  request.body === null || request.headers.get('content-length') === '0';
 const smokePath = (request: Request, identity: AdmissionIdentity) => {
   const url = new URL(request.url);
   if (request.method === 'POST') {
-    return url.pathname === '/__smoke__/queue-enqueue' && !url.search && request.body === null;
+    return url.pathname === '/__smoke__/queue-enqueue' && !url.search && hasNoBody(request);
   }
   if (request.method !== 'GET' || request.headers.has('cookie') || request.headers.has('authorization')) return false;
   if (url.pathname === '/.well-known/webfinger') {

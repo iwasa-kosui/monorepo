@@ -205,6 +205,8 @@ it('validates private inputs before remote work and uses only fixed reviewed SSH
     '123',
   ]);
   expect(calls[0].args).toContain('StrictHostKeyChecking=yes');
+  expect(calls[0].args).toContain('ServerAliveInterval=30');
+  expect(calls[0].args).toContain('ServerAliveCountMax=4');
   expect(calls[0].args).toContain(`UserKnownHostsFile=${options.knownHostsFile}`);
   await expect(createSourceSshAdapter({ ...options, host: 'x;touch /tmp/x' }, { spawnProcess })).rejects.toThrow();
   await expect(
