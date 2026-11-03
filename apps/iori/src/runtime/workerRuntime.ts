@@ -92,6 +92,7 @@ import { createD1TimelineItemCreatedStore } from '../adaptor/d1/timeline/timelin
 import { createD1TimelineItemDeletedStore } from '../adaptor/d1/timeline/timelineItemDeletedStore.ts';
 import { createD1TimelineItemResolverByRepostId } from '../adaptor/d1/timeline/timelineItemResolverByRepostId.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../adaptor/d1/timeline/timelineItemsResolverByActorIds.ts';
+import { createD1TimelineSearchCandidatesResolver } from '../adaptor/d1/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
@@ -103,6 +104,7 @@ import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
+import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
@@ -127,6 +129,7 @@ import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -163,6 +166,7 @@ export const createWorkerRuntimePorts = async (
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const db = createD1Db(env.DB);
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
+  const textGenerator = workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi);
   const sessionResolver = createD1SessionResolver(db);
   const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
@@ -268,6 +272,14 @@ export const createWorkerRuntimePorts = async (
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
+      }),
+      searchTimeline: createSearchTimelineUseCase({
+        actorResolverByUserId,
+        actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+        mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+        textGenerator,
+        timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+        htmlToPlainText,
       }),
     },
     timeline: {
@@ -517,7 +529,7 @@ export const createWorkerRuntimePorts = async (
     },
     uploads,
     federation: federationRuntime.federation,
-    textGenerator: workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi),
+    textGenerator,
     textEmbedder: workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi),
   };
 };

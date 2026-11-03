@@ -53,6 +53,7 @@ import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizatio
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
+import type { SearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendFollowRequestUseCase } from '../useCase/sendFollowRequest.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
@@ -110,6 +111,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
   statusAssembler: StatusAssembler;
+  searchTimeline: SearchTimelineUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
