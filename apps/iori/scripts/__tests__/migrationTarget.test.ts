@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import {
+  admissionEnvironment,
   assertTargetSummary,
   parseExpectedTarget,
   parsePreparationRecord,
   serializePreparationRecord,
 } from '../migration-target-contract.mjs';
+import { targetSetupConfiguration } from '../migration-target-setup.mjs';
 import { expectedTargetFixture, preparationFixture, targetSummaryFixture } from './migrationTargetFixture.js';
 
 it('accepts an independent expected target and canonical prepared evidence', () => {
@@ -57,4 +59,32 @@ it.each(['a.b', 'a:b', 'a'.repeat(81)])('rejects unsupported run %s', (run) => {
   target.identity.run_id = run;
   target.admission.runId = run;
   expect(() => parseExpectedTarget(target)).toThrow();
+});
+const setupEnvironment = (target: ReturnType<typeof expectedTargetFixture>, admission: string) => ({
+  IORI_ENVIRONMENT: target.identity.environment,
+  IORI_GENERATION: target.identity.generation,
+  CLOUDFLARE_ACCOUNT_ID: target.identity.account_id,
+  MAIN_SHA: target.identity.main_sha,
+  IORI_MIGRATION_RUN_ID: target.identity.run_id,
+  CLOUDFLARE_ZONE_ID: 'b'.repeat(32),
+  IORI_ADMISSION_IDENTITY: admission,
+  ORIGIN: `https://${target.admission.hostname}`,
+  CLOUDFLARE_API_TOKEN: 'fixture',
+});
+it('normalizes pretty or reordered admission identity', () => {
+  const target = expectedTargetFixture();
+  const reordered = Object.fromEntries(Object.entries(target.admission).reverse());
+  const config = targetSetupConfiguration(setupEnvironment(target, JSON.stringify(reordered, null, 2)), {
+    backend: false,
+  });
+  expect(config.admissionEnvironment).toEqual(admissionEnvironment(target));
+  expect(config.admission).toEqual(target.admission);
+});
+it('rejects an unknown key in the admission identity', () => {
+  const target = expectedTargetFixture();
+  expect(() =>
+    targetSetupConfiguration(setupEnvironment(target, JSON.stringify({ ...target.admission, unknown: true })), {
+      backend: false,
+    })
+  ).toThrow();
 });

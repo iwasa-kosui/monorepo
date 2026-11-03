@@ -31,6 +31,20 @@ it('binds protected invocation to reviewed main and separates maintenance code f
     'Maintenance operation requires a separate review.',
   );
 });
+it.each([
+  'prepare-target',
+  'estimate-source',
+  'rehearse-migration',
+  'purge-rehearsal-target',
+  'migrate-data',
+  'verify-import',
+  'cutover-route',
+  'adopt-cutover-state',
+])('rejects the removed migration operation %s', operation => {
+  expect(() => parseWorkflowInvocation({ ...env, IORI_OPERATION: operation })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+});
 const frozenSha = 'b'.repeat(40);
 const recoveryEnv = (operation: string, recovery?: string) => ({
   ...env,
@@ -105,7 +119,7 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each(['deploy-worker'])(
+it.each(['deploy-worker', 'put-worker-secrets'])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
     const valid = { ...env, IORI_OPERATION: operation };
@@ -166,17 +180,20 @@ it('rejects diagnose-source with a recovery value, a stale main SHA or an unknow
     'Protected workflow invocation is invalid.',
   );
 });
-it.each(['deploy-worker'])('rejects an empty or missing generation and run ID for %s', operation => {
-  const invocation = { ...env, IORI_OPERATION: operation };
-  expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
-  for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
-    for (const empty of ['', undefined]) {
-      expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
-        'Protected workflow invocation is invalid.',
-      );
+it.each(['deploy-worker', 'put-worker-secrets'])(
+  'rejects an empty or missing generation and run ID for %s',
+  operation => {
+    const invocation = { ...env, IORI_OPERATION: operation };
+    expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
+    for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
+      for (const empty of ['', undefined]) {
+        expect(() => parseWorkflowInvocation({ ...invocation, [key]: empty })).toThrow(
+          'Protected workflow invocation is invalid.',
+        );
+      }
     }
-  }
-});
+  },
+);
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',

@@ -589,7 +589,7 @@ INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
     },
   );
 });
-it('prints config-invalid for the configuration messages of the four operation scripts', () => {
+it('prints config-invalid for the configuration messages of the two operation scripts', () => {
   for (
     const message of [
       'Independent expected target is required.',

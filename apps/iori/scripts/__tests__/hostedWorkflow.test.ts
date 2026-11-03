@@ -49,10 +49,12 @@ it.each(['resume-source', 'release-pending-freeze', 'restart-failed-source', 'di
     }
   },
 );
-it('maps the recovery operations to their fixed scripts', async () => {
+it('maps the operations to their fixed scripts', async () => {
   const text = await readFile(new URL('../hosted-workflow.mjs', import.meta.url), 'utf8');
   for (
     const [name, script] of [
+      ['deploy-worker', 'deploy-active-worker.mjs'],
+      ['put-worker-secrets', 'worker-bindings-put.mjs'],
       ['resume-source', 'resume-source.mjs'],
       [
         'release-pending-freeze',
