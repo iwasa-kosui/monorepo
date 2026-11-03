@@ -37,6 +37,11 @@ export const withReblogged = (status: Status, reblogged: boolean): Status => ({
   reblog: status.reblog === null ? null : { ...status.reblog, reblogged },
 });
 
+export const withUpdatedStatus = (status: Status, updated: Status): Status =>
+  status.reblog === null
+    ? updated
+    : { ...status, favourited: updated.favourited, reblogged: updated.reblogged, reblog: updated };
+
 export const updateStatusesByPostId = (
   statuses: readonly Status[],
   postId: string,

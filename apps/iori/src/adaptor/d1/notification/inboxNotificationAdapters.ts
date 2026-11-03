@@ -1,5 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type {
@@ -14,6 +15,8 @@ import type {
   LikeNotificationDeletedStore,
   LikeNotificationResolverByActorIdAndPostId,
   LikeNotificationsResolverByPostId,
+  NotificationDismissedStore,
+  NotificationsClearedStore,
   ReplyNotification,
   ReplyNotificationCreatedStore,
   ReplyNotificationDeletedStore,
@@ -24,8 +27,10 @@ import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
+import { runBatch } from '../runBatch.ts';
 import {
   domainEventsTable,
+  mastodonMarkersTable,
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
@@ -157,6 +162,83 @@ export const createD1EmojiReactNotificationDeletedStore = (db: IoriD1Db): EmojiR
 });
 export const createD1ReplyNotificationDeletedStore = (db: IoriD1Db): ReplyNotificationDeletedStore => ({
   store: createDeletedStore(db, notificationRepliesTable),
+});
+
+const subtypeTables = [
+  notificationLikesTable,
+  notificationFollowsTable,
+  notificationEmojiReactsTable,
+  notificationRepliesTable,
+] as const;
+
+const markerNotifications = eq(mastodonMarkersTable.timeline, 'notifications');
+
+const moveMarkersBeforeDismissed = (db: IoriD1Db, userIds: readonly string[], ids: readonly string[]) => {
+  const dismissed = alias(notificationsTable, 'dismissed');
+  const previous = alias(notificationsTable, 'previous');
+  const previousId = db.select({ id: previous.notificationId }).from(dismissed)
+    .innerJoin(previous, eq(previous.recipientUserId, dismissed.recipientUserId))
+    .where(and(
+      eq(dismissed.notificationId, mastodonMarkersTable.lastReadId),
+      eq(dismissed.recipientUserId, mastodonMarkersTable.userId),
+      notInArray(previous.notificationId, [...ids]),
+      or(
+        lt(previous.createdAt, dismissed.createdAt),
+        and(eq(previous.createdAt, dismissed.createdAt), lt(previous.notificationId, dismissed.notificationId)),
+      ),
+    ))
+    .orderBy(desc(previous.createdAt), desc(previous.notificationId))
+    .limit(1);
+  const pointsAtDismissed = and(
+    markerNotifications,
+    inArray(mastodonMarkersTable.userId, [...userIds]),
+    inArray(mastodonMarkersTable.lastReadId, [...ids]),
+  );
+  return [
+    db.update(mastodonMarkersTable)
+      .set({ lastReadId: sql`(${previousId})` })
+      .where(and(pointsAtDismissed, exists(previousId))),
+    db.delete(mastodonMarkersTable).where(pointsAtDismissed),
+  ] as const;
+};
+
+export const createD1NotificationDismissedStore = (db: IoriD1Db): NotificationDismissedStore => ({
+  store: async (...events) => {
+    if (events.length === 0) return RA.ok(undefined);
+    const ids = events.map((event) => event.eventPayload.notificationId);
+    const userIds = events.map((event) => event.eventPayload.userId);
+    const ownedIds = db.select({ id: notificationsTable.notificationId }).from(notificationsTable)
+      .where(
+        and(inArray(notificationsTable.notificationId, ids), inArray(notificationsTable.recipientUserId, userIds)),
+      );
+    await runBatch(db, [
+      ...moveMarkersBeforeDismissed(db, userIds, ids),
+      ...subtypeTables.map((table) => db.delete(table).where(inArray(table.notificationId, ownedIds))),
+      db.delete(notificationsTable).where(
+        and(inArray(notificationsTable.notificationId, ids), inArray(notificationsTable.recipientUserId, userIds)),
+      ),
+      ...events.map((event) => db.insert(domainEventsTable).values(eventRow(event))),
+    ]);
+    return RA.ok(undefined);
+  },
+});
+
+export const createD1NotificationsClearedStore = (db: IoriD1Db): NotificationsClearedStore => ({
+  store: async (...events) => {
+    if (events.length === 0) return RA.ok(undefined);
+    const userIds = events.map((event) => event.eventPayload.userId);
+    const ownedIds = db.select({ id: notificationsTable.notificationId }).from(notificationsTable)
+      .where(inArray(notificationsTable.recipientUserId, userIds));
+    await runBatch(db, [
+      db.delete(mastodonMarkersTable).where(
+        and(markerNotifications, inArray(mastodonMarkersTable.userId, userIds)),
+      ),
+      ...subtypeTables.map((table) => db.delete(table).where(inArray(table.notificationId, ownedIds))),
+      db.delete(notificationsTable).where(inArray(notificationsTable.recipientUserId, userIds)),
+      ...events.map((event) => db.insert(domainEventsTable).values(eventRow(event))),
+    ]);
+    return RA.ok(undefined);
+  },
 });
 
 type LikeRow = {

@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
             notifications: './src/ui/pages/notifications.tsx',
             likedPosts: './src/ui/pages/likedPosts.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
+            search: './src/ui/pages/search.tsx',
           },
           output: {
             entryFileNames: 'static/[name].js',

@@ -10,7 +10,6 @@ import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
-import type { SendFollowRequestUseCase } from '../../useCase/sendFollowRequest.ts';
 import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { createSignUpUseCase } from '../../useCase/signUp.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
@@ -20,7 +19,6 @@ export type WorkerCoreApiRouterDeps = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
-  sendFollowRequestUseCase: SendFollowRequestUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   vapidPublicKey: string | undefined;
@@ -92,24 +90,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
     if (result.err.type === 'PostNotFoundError') return c.json({ error: result.err.message }, 404);
     return c.json({ error: `Failed to delete: ${JSON.stringify(result.err)}` }, 400);
   });
-
-  app.post(
-    '/v1/follow',
-    sValidator('json', z.object({ handle: z.string().min(1) })),
-    async (c) => {
-      const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-      if (sessionId === undefined) return c.json({ error: 'Unauthorized' }, 401);
-      const result = await deps.sendFollowRequestUseCase.run({
-        sessionId,
-        handle: c.req.valid('json').handle,
-        request: c.req.raw,
-        ctx: deps.createContext(c.req.raw),
-      });
-      return result.ok
-        ? c.json({ success: true })
-        : c.json({ error: `Failed to follow: ${JSON.stringify(result.err)}` }, 400);
-    },
-  );
 
   app.get('/v1/push/vapid-public-key', (c) =>
     deps.vapidPublicKey === undefined

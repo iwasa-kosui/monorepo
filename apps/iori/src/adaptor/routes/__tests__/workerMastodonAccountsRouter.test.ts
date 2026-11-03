@@ -697,6 +697,11 @@ describe('アカウントのルーターの登録順', () => {
             actorIdResolverByAcct: {} as never,
             accountRelationshipsResolverByActorIds: {} as never,
             statusAssembler: { assemble: async () => [], assembleAccounts: async () => [] },
+            createMuteUseCase: {} as never,
+            deleteMuteUseCase: {} as never,
+            followRemoteActor: {} as never,
+            unfollowRemoteActor: {} as never,
+            createContext: {} as never,
           }),
         );
         root.route(
