@@ -72,6 +72,13 @@ describe('PostContent.fromMarkdown', () => {
     expect(html).toContain('after');
   });
 
+  it('keeps a script tag inside a code block as escaped text in the highlighted spans', async () => {
+    const html = await PostContent.fromMarkdown('```html\n<script>alert(1)</script>\n```');
+
+    expect(html).not.toMatch(/<script/i);
+    expect(html).toContain('<span>&lt;script&gt;alert(1)&lt;/script&gt;</span>');
+  });
+
   it('gives a code block the same result as the status rendering', async () => {
     const html = await PostContent.fromMarkdown('```typescript\nconst answer: number = 42;\n```');
 

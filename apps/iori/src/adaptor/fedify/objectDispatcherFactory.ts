@@ -10,6 +10,7 @@ import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
 import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
 import { Post, type PostResolver, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
@@ -61,7 +62,7 @@ export const createObjectDispatcher = ({
             attribution: ctx.getActorUri(values.identifier),
             to: PUBLIC_COLLECTION,
             cc: ctx.getFollowersUri(values.identifier),
-            content: post.content,
+            content: sanitizePostContent(post.content),
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
             url: ctx.getObjectUri(Note, values),
@@ -125,6 +126,6 @@ const formatThreadAsHtml = (thread: PostWithAuthor[]): string =>
   thread.map((post) =>
     `<article>
 <header><strong>${post.username}</strong></header>
-<div>${post.content}</div>
+<div>${sanitizePostContent(post.content)}</div>
 </article>`
   ).join('\n<hr>\n');
