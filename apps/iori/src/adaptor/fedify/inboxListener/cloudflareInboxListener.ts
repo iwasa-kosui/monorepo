@@ -139,6 +139,8 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
 
   return createInboxListener({
     onAccept: {
+      origin,
+      relayResolverByActorUri: createD1RelayResolverByActorUri(db),
       inboxActorResolver,
       acceptRelaySubscriptionUseCase: AcceptRelaySubscriptionUseCase.create({
         relayResolverByActorUri: createD1RelayResolverByActorUri(db),

@@ -6,11 +6,14 @@ import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { FollowAcceptedStore, FollowResolver } from '../../../domain/follow/follow.ts';
 import { Follow as AppFollow } from '../../../domain/follow/follow.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { Relay, type RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
 export type OnAcceptDeps = Readonly<{
+  origin: string;
+  relayResolverByActorUri: RelayResolverByActorUri;
   inboxActorResolver: InboxActorResolver;
   acceptRelaySubscriptionUseCase: AcceptRelaySubscriptionUseCase;
   actorResolverByUri: ActorResolverByUri;
@@ -27,6 +30,32 @@ export const createOnAccept = (deps: OnAcceptDeps) => async (ctx: InboxContext<u
 
   const actorUri = actorId.href;
   getLogger().info(`Received Accept activity from: ${actorUri}`);
+
+  const acceptRelaySubscription = () =>
+    RA.flow(
+      deps.acceptRelaySubscriptionUseCase.run({ relayActorUri: actorUri }),
+      RA.match({
+        ok: (relay) => {
+          getLogger().info(`Relay subscription accepted: ${relay.actorUri}`);
+        },
+        err: (err) => {
+          getLogger().warn(`Failed to accept relay subscription: ${actorUri} - ${JSON.stringify(err)}`);
+        },
+      }),
+    );
+
+  const objectId = activity.objectId;
+  if (objectId && objectId.origin === new URL(deps.origin).origin) {
+    const relayResult = await deps.relayResolverByActorUri.resolve({ actorUri });
+    if (relayResult.ok && relayResult.val?.status === Relay.Status.Pending) {
+      getLogger().info(`Processing relay subscription Accept from: ${actorUri}`);
+      return acceptRelaySubscription();
+    }
+    if (relayResult.ok && relayResult.val?.status === Relay.Status.Accepted) {
+      getLogger().info(`Relay subscription already accepted: ${actorUri}`);
+      return;
+    }
+  }
 
   // Get the object that was accepted
   const object = await activity.getObject();
@@ -47,17 +76,7 @@ export const createOnAccept = (deps: OnAcceptDeps) => async (ctx: InboxContext<u
     // This is an Accept for a relay subscription
     getLogger().info(`Processing relay subscription Accept from: ${actorUri}`);
 
-    return RA.flow(
-      deps.acceptRelaySubscriptionUseCase.run({ relayActorUri: actorUri }),
-      RA.match({
-        ok: (relay) => {
-          getLogger().info(`Relay subscription accepted: ${relay.actorUri}`);
-        },
-        err: (err) => {
-          getLogger().warn(`Failed to accept relay subscription: ${actorUri} - ${JSON.stringify(err)}`);
-        },
-      }),
-    );
+    return acceptRelaySubscription();
   }
 
   // This is an Accept for a regular follow request
