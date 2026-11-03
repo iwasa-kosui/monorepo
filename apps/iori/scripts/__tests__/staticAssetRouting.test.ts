@@ -13,16 +13,20 @@ const readLocalRunWorkerFirst = async () => {
   return JSON.parse(match[1]) as unknown;
 };
 
-const readDeployedRunWorkerFirst = async () => {
+const readDeployedConfig = async () => {
   for (const [name, value] of Object.entries(fixtureEnvironment)) vi.stubEnv(name, value);
   const config = await createDeploymentWorkerConfig();
   try {
-    const deployed = JSON.parse(await readFile(config.path, 'utf8')) as { assets: { run_worker_first: unknown } };
-    return deployed.assets.run_worker_first;
+    return JSON.parse(await readFile(config.path, 'utf8')) as {
+      assets: { run_worker_first: unknown };
+      placement: unknown;
+    };
   } finally {
     await config.cleanup();
   }
 };
+
+const readDeployedRunWorkerFirst = async () => (await readDeployedConfig()).assets.run_worker_first;
 
 const matchesPattern = (pattern: string, path: string) =>
   new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(path);
@@ -96,6 +100,12 @@ describe('assets.run_worker_first', () => {
       expect(await readAppFile(path)).not.toContain('*/');
     },
   );
+});
+
+describe('placement', () => {
+  it('enables smart placement in the deployment config built from the template', async () => {
+    expect((await readDeployedConfig()).placement).toEqual({ mode: 'smart' });
+  });
 });
 
 describe('public/_headers', () => {
