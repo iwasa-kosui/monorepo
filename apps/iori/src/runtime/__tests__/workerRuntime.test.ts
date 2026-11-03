@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createWorkerRuntimePorts } from '../workerRuntime.ts';
 
@@ -13,7 +13,7 @@ describe('createWorkerRuntimePorts', () => {
       VAPID_SUBJECT: 'mailto:admin@example.invalid',
     };
 
-    const runtime = await createWorkerRuntimePorts(env);
+    const runtime = await createWorkerRuntimePorts(env, vi.fn());
 
     expect(runtime.db).toBeDefined();
     expect(runtime.auth.signInUseCase.run).toBeTypeOf('function');

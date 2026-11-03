@@ -401,46 +401,50 @@ describe('Worker fixture', () => {
       actor: new URL(`${origin}/users/fixture`),
     }).toJsonLd({ format: 'compact', contextLoader: fetchDocumentLoader });
     const senderKeys = [{ keyId: `${origin}/users/fixture#main-key`, privateKey }];
-    await worker.queue({
-      queue: 'iori-production-fixture1-fedify',
-      messages: [
-        {
-          body: {
-            type: 'fanout',
-            id: crypto.randomUUID(),
-            baseUrl: origin,
-            keys: senderKeys,
-            inboxes: {},
-            activity,
-            activityId: `${origin}/activities/fixture`,
-            activityType: 'https://www.w3.org/ns/activitystreams#Create',
-            collectionSync: undefined,
-            traceContext: {},
+    await worker.queue(
+      {
+        queue: 'iori-production-fixture1-fedify',
+        messages: [
+          {
+            body: {
+              type: 'fanout',
+              id: crypto.randomUUID(),
+              baseUrl: origin,
+              keys: senderKeys,
+              inboxes: {},
+              activity,
+              activityId: `${origin}/activities/fixture`,
+              activityType: 'https://www.w3.org/ns/activitystreams#Create',
+              collectionSync: undefined,
+              traceContext: {},
+            },
+            ack: queue.ack,
+            retry: queue.retry,
           },
-          ack: queue.ack,
-          retry: queue.retry,
-        },
-        {
-          body: {
-            type: 'outbox',
-            id: crypto.randomUUID(),
-            baseUrl: origin,
-            keys: senderKeys,
-            activity,
-            activityId: `${origin}/activities/fixture`,
-            activityType: 'https://www.w3.org/ns/activitystreams#Create',
-            inbox: 'not a URL',
-            sharedInbox: false,
-            started: new Date(0).toISOString(),
-            attempt: 0,
-            headers: {},
-            traceContext: {},
+          {
+            body: {
+              type: 'outbox',
+              id: crypto.randomUUID(),
+              baseUrl: origin,
+              keys: senderKeys,
+              activity,
+              activityId: `${origin}/activities/fixture`,
+              activityType: 'https://www.w3.org/ns/activitystreams#Create',
+              inbox: 'not a URL',
+              sharedInbox: false,
+              started: new Date(0).toISOString(),
+              attempt: 0,
+              headers: {},
+              traceContext: {},
+            },
+            ack: queue.ack,
+            retry: queue.retry,
           },
-          ack: queue.ack,
-          retry: queue.retry,
-        },
-      ],
-    } as never, makeEnv(new FixtureD1(await makeSeed())));
+        ],
+      } as never,
+      makeEnv(new FixtureD1(await makeSeed())),
+      { waitUntil: vi.fn() } as unknown as ExecutionContext,
+    );
     expect(queue.ack).toHaveBeenCalledOnce();
     expect(queue.retry).toHaveBeenCalledOnce();
   });
@@ -464,7 +468,11 @@ it('retries near smoke markers before the real Fedify adapter can implicitly ack
   ) {
     const ack = vi.fn();
     const retry = vi.fn();
-    await worker.queue({ queue: 'iori-production-fixture1-fedify', messages: [{ body, ack, retry }] } as never, env);
+    await worker.queue(
+      { queue: 'iori-production-fixture1-fedify', messages: [{ body, ack, retry }] } as never,
+      env,
+      {} as ExecutionContext,
+    );
     expect(retry).toHaveBeenCalledOnce();
     expect(ack).not.toHaveBeenCalled();
   }
