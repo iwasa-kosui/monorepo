@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { nodeArgon2idDerive } from '../../adaptor/argon2/nodeArgon2idDerive.ts';
 import { Password } from '../../domain/password/password.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
@@ -21,11 +22,12 @@ describe('createSignInUseCase', () => {
     const sessionStartedStore = createMockSessionStartedStore();
     const user = { id: UserId.generate(), username };
     userResolverByUsername.setUser(user);
-    userPasswordResolver.setPassword(user.id, Password.hashPassword(password));
+    userPasswordResolver.setPassword(user.id, await Password.hashPassword(nodeArgon2idDerive)(password));
     const useCase = createSignInUseCase({
       userResolverByUsername,
       userPasswordResolver,
       sessionStartedStore,
+      argon2idDerive: nodeArgon2idDerive,
     });
 
     const result = await useCase.run({

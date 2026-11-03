@@ -37,6 +37,7 @@ describe('runSmokeChecks', () => {
       entryPoints: [new URL('./worker.ts', import.meta.url).pathname],
       bundle: true,
       format: 'esm',
+      loader: { '.wasm': 'empty' },
       metafile: true,
       platform: 'node',
       target: 'es2022',

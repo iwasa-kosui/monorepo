@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 30000 });
 
+import { nobleArgon2idDerive } from '../../domain/password/argon2idDerive.ts';
 import type { Password } from '../../domain/password/password.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -27,6 +28,7 @@ describe('SignUpUseCase', () => {
       userCreatedStore,
       localActorCreatedStore,
       userPasswordSetStore,
+      argon2idDerive: nobleArgon2idDerive,
     };
   };
 

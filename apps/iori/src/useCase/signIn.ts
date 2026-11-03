@@ -2,6 +2,7 @@ import type { Context } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
 import { Instant } from '../domain/instant/instant.ts';
+import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { Password } from '../domain/password/password.ts';
 import type { UserPasswordResolver } from '../domain/password/userPassword.ts';
 import { Session, type SessionStartedStore } from '../domain/session/session.ts';
@@ -47,12 +48,14 @@ export type SignInDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   userPasswordResolver: UserPasswordResolver;
   sessionStartedStore: SessionStartedStore;
+  argon2idDerive: Argon2idDerive;
 }>;
 
 const create = ({
   userResolverByUsername,
   userPasswordResolver,
   sessionStartedStore,
+  argon2idDerive,
 }: SignInDeps): SignInUseCase => {
   const now = Instant.now();
   const resolveUser = (username: Username): RA<User, UsernameOrPasswordInvalid> =>
@@ -66,11 +69,11 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', ({ username }) => resolveUser(username)),
       RA.andBind('userPassword', ({ user }) => userPasswordResolver.resolve(user.id)),
-      RA.andThen(({ user, userPassword }) => {
+      RA.andThen(async ({ user, userPassword }) => {
         if (!userPassword) {
           return RA.err(UsernameOrPasswordInvalid.create(user.username));
         }
-        const isPasswordValid = Password.verifyPassword(
+        const isPasswordValid = await Password.verifyPassword(argon2idDerive)(
           userPassword.hashedPassword,
           input.password,
         );

@@ -1,7 +1,7 @@
-import { argon2id } from '@noble/hashes/argon2.js';
 import { z } from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
+import type { Argon2idDerive } from './argon2idDerive.ts';
 
 export const PasswordSym = Symbol('Password');
 const zodType = z.string().min(16).max(255).brand(PasswordSym).describe('Password');
@@ -40,14 +40,16 @@ const fromHex = (hex: string): Uint8Array => {
   return bytes;
 };
 
-const deriveHash = (password: Password, nonce: Uint8Array, config: Argon2Config) => {
+const deriveHash = (derive: Argon2idDerive, password: Password, nonce: Uint8Array, config: Argon2Config) => {
   switch (config.algorithm) {
     case 'argon2id':
-      return argon2id(password, nonce, {
-        p: config.parallelism,
-        dkLen: config.tagLength,
-        m: config.memory,
-        t: config.passes,
+      return derive({
+        password: new TextEncoder().encode(password),
+        salt: nonce,
+        parallelism: config.parallelism,
+        passes: config.passes,
+        memorySize: config.memory,
+        tagLength: config.tagLength,
       });
     default: {
       const unsupported: never = config.algorithm;
@@ -67,9 +69,9 @@ const equalBytes = (left: Uint8Array, right: Uint8Array): boolean => {
   return difference === 0;
 };
 
-const hashPassword = (password: Password) => {
+const hashPassword = (derive: Argon2idDerive) => async (password: Password): Promise<HashedPassword> => {
   const nonce = crypto.getRandomValues(new Uint8Array(16));
-  const tag = deriveHash(password, nonce, CONFIG);
+  const tag = await deriveHash(derive, password, nonce, CONFIG);
   return {
     algorithm: CONFIG.algorithm,
     parallelism: CONFIG.parallelism,
@@ -81,18 +83,19 @@ const hashPassword = (password: Password) => {
   };
 };
 
-const verifyPassword = (stored: HashedPassword, password: Password) => {
-  const nonce = fromHex(stored.nonceHex);
-  const expected = fromHex(stored.tagHex);
-  const actual = deriveHash(password, nonce, {
-    algorithm: stored.algorithm,
-    parallelism: stored.parallelism,
-    tagLength: stored.tagLength,
-    memory: stored.memory,
-    passes: stored.passes,
-  });
-  return equalBytes(expected, actual);
-};
+const verifyPassword =
+  (derive: Argon2idDerive) => async (stored: HashedPassword, password: Password): Promise<boolean> => {
+    const nonce = fromHex(stored.nonceHex);
+    const expected = fromHex(stored.tagHex);
+    const actual = await deriveHash(derive, password, nonce, {
+      algorithm: stored.algorithm,
+      parallelism: stored.parallelism,
+      tagLength: stored.tagLength,
+      memory: stored.memory,
+      passes: stored.passes,
+    });
+    return equalBytes(expected, actual);
+  };
 
 export const Password = {
   ...schema,

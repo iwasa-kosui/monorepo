@@ -76,6 +76,7 @@ import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareR
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
+import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
@@ -114,6 +115,11 @@ import {
   createWorkerGetUserPostsUseCase,
   createWorkerRemoteActorActions,
 } from './workerCoreUseCases.ts';
+
+const lazyWorkerArgon2idDerive: Argon2idDerive = async (params) => {
+  const { workerArgon2idDerive } = await import('../adaptor/argon2/workerArgon2idDerive.ts');
+  return workerArgon2idDerive(params);
+};
 
 export const createWorkerRuntimePorts = async (
   env: IoriWorkerEnv,
@@ -166,6 +172,7 @@ export const createWorkerRuntimePorts = async (
         userResolverByUsername: createD1UserResolverByUsername(db),
         userPasswordResolver: createD1UserPasswordResolver(db),
         sessionStartedStore: createD1SessionStartedStore(db),
+        argon2idDerive: lazyWorkerArgon2idDerive,
       }),
     },
     timeline: {
@@ -345,6 +352,7 @@ export const createWorkerRuntimePorts = async (
         userCreatedStore: createD1UserCreatedStore(db),
         localActorCreatedStore: createD1LocalActorCreatedStore(db),
         userPasswordSetStore: createD1UserPasswordSetStore(db),
+        argon2idDerive: lazyWorkerArgon2idDerive,
       }),
       sendReplyUseCase: SendReplyUseCase.create({
         sessionResolver,

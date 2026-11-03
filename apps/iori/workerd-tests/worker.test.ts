@@ -1,6 +1,9 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
+import { nobleArgon2idDerive } from '../src/domain/password/argon2idDerive.ts';
+import { Password } from '../src/domain/password/password.ts';
+
 const origin = 'http://localhost:8787';
 const username = 'kosui';
 const password = 'workerd-test-password-1';
@@ -113,5 +116,18 @@ describe('iori Worker on workerd', () => {
     expect(actor.type).toBe('Person');
     expect(actor.preferredUsername).toBe(username);
     expect(actor.publicKey?.publicKeyPem).toContain('BEGIN PUBLIC KEY');
+  });
+
+  it('verifies a stored @noble/hashes password hash with the WASM Argon2id', async () => {
+    const nobleHashedPassword = 'noble-hashed-password-1';
+    const hashed = await Password.hashPassword(nobleArgon2idDerive)(Password.orThrow(nobleHashedPassword));
+    await env.DB.prepare(
+      'UPDATE user_passwords SET nonceHex = ?, tagHex = ? WHERE userId = (SELECT userId FROM users WHERE username = ?)',
+    ).bind(hashed.nonceHex, hashed.tagHex, username).run();
+
+    const signedIn = await jsonPost('/api/v1/sign-in', { username, password: nobleHashedPassword });
+    expect(signedIn.status).toBe(200);
+    const rejected = await jsonPost('/api/v1/sign-in', { username, password });
+    expect(rejected.status).toBe(401);
   });
 });
