@@ -36,6 +36,7 @@ import {
   timelineItemsTable,
   usersTable,
 } from '../schema.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 
 const cursorItem = alias(timelineItemsTable, 'cursor_item');
 
@@ -216,6 +217,7 @@ export const createD1TimelineItemsResolverByActorIds = (
             content: row.posts.content,
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
+            visibility: toVisibility(row.remote_posts.visibility),
             type: 'remote',
           })
           : (() => {

@@ -37,6 +37,7 @@ import {
   remotePostsTable,
   usersTable,
 } from '../schema.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 
 type ActorRow = Readonly<{
   actors: typeof actorsTable.$inferSelect;
@@ -96,6 +97,7 @@ const reconstructPost = (row: PostRow): Post => {
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
+      visibility: toVisibility(row.remote_posts.visibility),
       type: 'remote',
     });
   }

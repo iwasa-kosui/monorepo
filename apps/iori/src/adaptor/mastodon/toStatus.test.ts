@@ -104,6 +104,7 @@ const remotePost: PostWithAuthor = {
   createdAt,
   uri: 'https://remote.example/users/alice/statuses/1',
   inReplyToUri: null,
+  visibility: 'public',
 } satisfies RemotePost & typeof author;
 
 const options = {

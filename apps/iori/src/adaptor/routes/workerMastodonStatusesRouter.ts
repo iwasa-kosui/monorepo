@@ -3,13 +3,13 @@ import { Hono } from 'hono';
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
-import type { PostsWithAuthorResolverByPostIds, PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
+import { Post, type PostsWithAuthorResolverByPostIds, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { Status } from '../mastodon/entities.ts';
 import {
-  isRemoteSource,
+  isSourceVisibleToAnonymous,
   type StatusAssembler,
   StatusAssemblyError,
   type StatusSource,
@@ -95,7 +95,7 @@ export const createWorkerMastodonStatusesRouter = ({
         return c.json(internalServerError, 500);
       }
       const source = await resolveSource(id.val, viewer.viewerActorId);
-      if (source === undefined || (viewer.viewerActorId === undefined && isRemoteSource(source))) {
+      if (source === undefined || (viewer.viewerActorId === undefined && !isSourceVisibleToAnonymous(source))) {
         return c.json(recordNotFound, 404);
       }
       const [status] = await statusAssembler.assemble({
@@ -125,11 +125,11 @@ export const createWorkerMastodonStatusesRouter = ({
         return c.json(internalServerError, 500);
       }
       const { currentPost } = thread.val;
-      if (currentPost === null || (viewerActorId === undefined && currentPost.type === 'remote')) {
+      if (currentPost === null || (viewerActorId === undefined && !Post.isVisibleToAnonymous(currentPost))) {
         return c.json(recordNotFound, 404);
       }
       const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
-        viewerActorId === undefined ? posts.filter((post) => post.type !== 'remote') : [...posts];
+        viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts];
       const ancestors = visible(thread.val.ancestors);
       const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({

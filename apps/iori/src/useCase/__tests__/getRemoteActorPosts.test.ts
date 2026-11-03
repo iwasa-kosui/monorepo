@@ -81,6 +81,7 @@ describe('GetRemoteActorPostsUseCase', () => {
           createdAt: Date.now() as PostWithAuthor['createdAt'],
           uri: 'https://remote.example.com/posts/1',
           inReplyToUri: null,
+          visibility: null,
           username: 'remote' as Username,
           logoUri: undefined,
           liked: false,

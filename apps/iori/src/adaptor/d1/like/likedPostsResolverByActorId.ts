@@ -22,6 +22,7 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
+import { toVisibility } from '../post/toVisibility.ts';
 
 export const createD1LikedPostsResolverByActorId = (
   db: IoriD1Db,
@@ -118,6 +119,7 @@ export const createD1LikedPostsResolverByActorId = (
           createdAt: row.posts.createdAt.getTime(),
           uri: row.remote_posts.uri,
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: toVisibility(row.remote_posts.visibility),
           type: 'remote',
         })
         : (() => {

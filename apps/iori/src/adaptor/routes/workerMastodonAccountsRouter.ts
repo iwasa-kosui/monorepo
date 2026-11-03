@@ -11,7 +11,7 @@ import type { PageRequest } from '../../domain/page/page.ts';
 import type { AccountStatusItemsResolverByActorId } from '../../domain/post/accountStatusItem.ts';
 import type { ActorResolverById } from '../d1/actor/actorResolverById.ts';
 import type { Account } from '../mastodon/entities.ts';
-import { isRemoteSource, type StatusAssembler, statusSourceId } from '../mastodon/statusAssembler.ts';
+import { isSourceVisibleToAnonymous, type StatusAssembler, statusSourceId } from '../mastodon/statusAssembler.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import {
   accountListLimits,
@@ -50,8 +50,6 @@ const readAccounts = Scope.orThrow('read:accounts');
 const readStatuses = Scope.orThrow('read:statuses');
 
 const accountIdPattern = '[0-9a-fA-F-]+';
-
-const isRemoteAccount = (account: Account): boolean => account.acct.includes('@');
 
 export const createWorkerMastodonAccountsRouter = ({
   authn,
@@ -133,15 +131,12 @@ export const createWorkerMastodonAccountsRouter = ({
       if (owner[0] === undefined) {
         return c.json(recordNotFound, 404);
       }
-      if (viewerActorId === undefined && isRemoteAccount(owner[0])) {
-        return c.json([]);
-      }
       if (!items.ok) {
         return c.json(internalServerError, 500);
       }
       const rows = toNewestFirst(items.val, page);
       const statuses = await statusAssembler.assemble({
-        sources: viewerActorId === undefined ? rows.filter((row) => !isRemoteSource(row)) : rows,
+        sources: viewerActorId === undefined ? rows.filter(isSourceVisibleToAnonymous) : rows,
         viewerActorId,
         requestUrl: c.req.url,
       });

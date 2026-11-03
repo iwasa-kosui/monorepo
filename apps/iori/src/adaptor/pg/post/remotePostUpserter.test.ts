@@ -13,6 +13,7 @@ const identity = {
     inboxUrl: 'https://remote.example/users/alice/inbox',
   },
   inReplyToUri: null,
+  visibility: null,
   attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
 };
 
