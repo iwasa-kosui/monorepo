@@ -58,6 +58,21 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
       )}
       {isLoggedIn && (
         <a
+          href='/digest'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z'
+            />
+          </svg>
+        </a>
+      )}
+      {isLoggedIn && (
+        <a
           href='/articles'
           class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
         >

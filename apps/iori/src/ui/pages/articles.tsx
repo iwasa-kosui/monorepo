@@ -7,6 +7,7 @@ type ArticleWithStatus = Article & {
   isPublishing?: boolean;
   isUnpublishing?: boolean;
   isDeleting?: boolean;
+  isDigest?: boolean;
 };
 
 type ArticlesResponse = {
@@ -95,7 +96,7 @@ const ArticlesPage = () => {
         setArticles((prev) =>
           prev.map((a) =>
             a.articleId === articleId
-              ? { ...data.article, isUnpublishing: false }
+              ? { ...data.article, isDigest: a.isDigest, isUnpublishing: false }
               : a
           )
         );
@@ -235,6 +236,17 @@ const ArticlesPage = () => {
 
   return (
     <div class='flex flex-col h-full'>
+      {isLoggedIn && (
+        <a
+          href='/digest'
+          class='md:hidden mb-4 px-4 py-3 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm font-medium text-charcoal dark:text-white flex items-center justify-between flex-shrink-0'
+        >
+          最新のダイジェスト
+          <svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7' />
+          </svg>
+        </a>
+      )}
       {/* Header */}
       <div class='flex items-center justify-between mb-6 flex-shrink-0'>
         <h1 class='text-xl font-semibold text-charcoal dark:text-white'>
@@ -344,16 +356,25 @@ const ArticlesPage = () => {
                   </div>
                   <div class='flex items-center gap-2 flex-shrink-0'>
                     {article.status === 'draft' || article.status === 'unpublished'
-                      ? (
-                        <button
-                          type='button'
-                          onClick={() => handlePublish(article.articleId)}
-                          disabled={article.isPublishing}
-                          class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
-                        >
-                          {article.isPublishing ? '公開中...' : '公開'}
-                        </button>
-                      )
+                      ? article.isDigest
+                        ? (
+                          <a
+                            href={`/articles/${article.articleId}`}
+                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
+                          >
+                            詳細で公開
+                          </a>
+                        )
+                        : (
+                          <button
+                            type='button'
+                            onClick={() => handlePublish(article.articleId)}
+                            disabled={article.isPublishing}
+                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
+                          >
+                            {article.isPublishing ? '公開中...' : '公開'}
+                          </button>
+                        )
                       : (
                         <button
                           type='button'
