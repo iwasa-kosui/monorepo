@@ -2,7 +2,7 @@ import type { Context } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
 import { Instant } from '../domain/instant/instant.ts';
-import { type Argon2idDerive, nobleArgon2idDerive } from '../domain/password/argon2idDerive.ts';
+import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { Password } from '../domain/password/password.ts';
 import type { UserPasswordResolver } from '../domain/password/userPassword.ts';
 import { Session, type SessionStartedStore } from '../domain/session/session.ts';
@@ -48,14 +48,14 @@ export type SignInDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   userPasswordResolver: UserPasswordResolver;
   sessionStartedStore: SessionStartedStore;
-  argon2idDerive?: Argon2idDerive;
+  argon2idDerive: Argon2idDerive;
 }>;
 
 const create = ({
   userResolverByUsername,
   userPasswordResolver,
   sessionStartedStore,
-  argon2idDerive = nobleArgon2idDerive,
+  argon2idDerive,
 }: SignInDeps): SignInUseCase => {
   const now = Instant.now();
   const resolveUser = (username: Username): RA<User, UsernameOrPasswordInvalid> =>

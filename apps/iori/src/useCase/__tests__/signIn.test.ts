@@ -128,6 +128,26 @@ describe('SignInUseCase', () => {
       });
     });
 
+    it('derive が失敗したときは UsernameOrPasswordInvalid にせず例外として伝える', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const password = 'securepassword1234' as Password;
+      await setupValidUser(deps, user, password);
+
+      const useCase = SignInUseCase.create({
+        ...deps,
+        argon2idDerive: () => Promise.reject(new Error('derive failed')),
+      });
+
+      await expect(useCase.run({ username: user.username, password, ctx: createMockFedifyContext() })).rejects.toThrow(
+        'derive failed',
+      );
+      expect(deps.sessionStartedStore.store).not.toHaveBeenCalled();
+    });
+
     it.each([
       { passwordLength: 16, description: '最小長のパスワード' },
       { passwordLength: 50, description: '中程度の長さのパスワード' },

@@ -11,6 +11,7 @@ import { z } from 'zod/v4';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { nobleArgon2idDerive } from '../../domain/password/argon2idDerive.ts';
 import { Password } from '../../domain/password/password.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
@@ -1079,6 +1080,7 @@ const app = new Hono()
         userResolverByUsername: PgUserResolverByUsername.getInstance(),
         userPasswordResolver: PgUserPasswordResolver.getInstance(),
         sessionStartedStore: PgSessionStartedStore.getInstance(),
+        argon2idDerive: nobleArgon2idDerive,
       });
 
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
@@ -1124,6 +1126,7 @@ const app = new Hono()
         userCreatedStore: PgUserCreatedStore.getInstance(),
         localActorCreatedStore: PgLocalActorCreatedStore.getInstance(),
         userPasswordSetStore: PgUserPasswordSetStore.getInstance(),
+        argon2idDerive: nobleArgon2idDerive,
       });
 
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);

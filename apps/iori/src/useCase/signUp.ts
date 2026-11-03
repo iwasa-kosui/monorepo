@@ -4,7 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import type { LocalActorCreatedStore } from '../domain/actor/createLocalActor.ts';
 import { LocalActor } from '../domain/actor/localActor.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { type Argon2idDerive, nobleArgon2idDerive } from '../domain/password/argon2idDerive.ts';
+import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { Password } from '../domain/password/password.ts';
 import { UserPassword } from '../domain/password/userPassword.ts';
 import type { UserCreatedStore } from '../domain/user/createUser.ts';
@@ -39,7 +39,7 @@ export type SignUpDeps = Readonly<{
   userCreatedStore: UserCreatedStore;
   localActorCreatedStore: LocalActorCreatedStore;
   userPasswordSetStore: UserPasswordSetStore;
-  argon2idDerive?: Argon2idDerive;
+  argon2idDerive: Argon2idDerive;
 }>;
 
 const create = ({
@@ -47,7 +47,7 @@ const create = ({
   userCreatedStore,
   localActorCreatedStore,
   userPasswordSetStore,
-  argon2idDerive = nobleArgon2idDerive,
+  argon2idDerive,
 }: SignUpDeps): SignUpUseCase => {
   const errIfUsernameTaken = (
     existingUser: User | undefined,

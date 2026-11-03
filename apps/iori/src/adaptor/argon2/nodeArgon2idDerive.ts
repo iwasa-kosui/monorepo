@@ -1,19 +1,12 @@
-import setupWasm from 'argon2id/lib/setup.js';
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
-import type { Argon2idDerive } from '../../domain/password/argon2idDerive.ts';
+import { createArgon2idDerive } from './createArgon2idDerive.ts';
 
 const require = createRequire(import.meta.url);
 
-const loadWasm = (specifier: string) => {
-  const bytes = readFileSync(require.resolve(specifier));
-  return (imports: WebAssembly.Imports) => WebAssembly.instantiate(bytes, imports);
-};
+const compileWasm = async (specifier: string) => WebAssembly.compile(await readFile(require.resolve(specifier)));
 
-let computeHash: ReturnType<typeof setupWasm> | undefined;
-
-export const nodeArgon2idDerive: Argon2idDerive = async (params) => {
-  computeHash ??= setupWasm(loadWasm('argon2id/dist/simd.wasm'), loadWasm('argon2id/dist/no-simd.wasm'));
-  return (await computeHash)(params);
-};
+export const nodeArgon2idDerive = createArgon2idDerive({
+  loadModule: (kind) => compileWasm(kind === 'simd' ? 'argon2id/dist/simd.wasm' : 'argon2id/dist/no-simd.wasm'),
+});
