@@ -1,9 +1,11 @@
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
+import type { LocalActor } from '../actor/localActor.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
+import type { User } from '../user/user.ts';
 import { UserId } from '../user/userId.ts';
 import { SessionId } from './sessionId.ts';
 
@@ -26,6 +28,12 @@ export const SessionEvent = AggregateEvent.createFactory<SessionAggregate>('sess
 export type SessionStarted = SessionEvent<Session, 'session.started', Omit<Session, 'sessionId'>>;
 export type SessionStartedStore = Agg.Store<SessionStarted>;
 export type SessionResolver = Agg.Resolver<SessionId, Session | undefined>;
+export type SessionWithUserAndActor = Readonly<{
+  session: Session;
+  user: User | undefined;
+  actor: LocalActor | undefined;
+}>;
+export type SessionWithUserAndActorResolver = Agg.Resolver<SessionId, SessionWithUserAndActor | undefined>;
 
 const startSession = (now: Instant) => (payload: Omit<Session, 'sessionId'>): SessionStarted =>
   SessionEvent.create(

@@ -3,9 +3,22 @@ import { eq } from 'drizzle-orm';
 
 import type { ActorResolverByUserId } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import type { LocalActor } from '../../../domain/actor/localActor.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { actorsTable, localActorsTable } from '../schema.ts';
+
+export const toLocalActor = (
+  actor: typeof actorsTable.$inferSelect,
+  localActor: typeof localActorsTable.$inferSelect,
+): LocalActor => ({
+  id: ActorId.orThrow(actor.actorId),
+  uri: actor.uri,
+  inboxUrl: actor.inboxUrl,
+  type: 'local',
+  userId: UserId.orThrow(localActor.userId),
+  logoUri: actor.logoUri ?? undefined,
+});
 
 export const createD1ActorResolverByUserId = (db: IoriD1Db): ActorResolverByUserId => ({
   resolve: async (userId) => {
@@ -22,13 +35,6 @@ export const createD1ActorResolverByUserId = (db: IoriD1Db): ActorResolverByUser
     if (row.local_actors === null) {
       throw new Error(`Actor type could not be determined for userId: ${userId}`);
     }
-    return RA.ok({
-      id: ActorId.orThrow(row.actors.actorId),
-      uri: row.actors.uri,
-      inboxUrl: row.actors.inboxUrl,
-      type: 'local',
-      userId: UserId.orThrow(row.local_actors.userId),
-      logoUri: row.actors.logoUri ?? undefined,
-    });
+    return RA.ok(toLocalActor(row.actors, row.local_actors));
   },
 });

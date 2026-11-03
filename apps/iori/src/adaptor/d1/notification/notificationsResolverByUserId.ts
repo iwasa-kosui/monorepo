@@ -106,25 +106,103 @@ export const createD1NotificationsResolverByUserId = (
   db: IoriD1Db,
 ): NotificationsResolverByUserId => ({
   resolve: async (userId) => {
-    const likeRows = await db.select({
-      notifications: notificationsTable,
-      notificationLikes: notificationLikesTable,
-      likerActors: actorsTable,
-      likerRemoteActors: remoteActorsTable,
-      likerLocalActors: localActorsTable,
-      posts: postsTable,
-      localPosts: localPostsTable,
-      remotePosts: remotePostsTable,
-    }).from(notificationsTable)
-      .innerJoin(notificationLikesTable, eq(notificationsTable.notificationId, notificationLikesTable.notificationId))
-      .innerJoin(actorsTable, eq(notificationLikesTable.likerActorId, actorsTable.actorId))
-      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
-      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
-      .innerJoin(postsTable, eq(notificationLikesTable.likedPostId, postsTable.postId))
-      .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
-      .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
-      .orderBy(desc(notificationsTable.createdAt)).limit(50);
+    const replyPosts = alias(postsTable, 'reply_posts');
+    const replyLocalPosts = alias(localPostsTable, 'reply_local_posts');
+    const replyRemotePosts = alias(remotePostsTable, 'reply_remote_posts');
+    const replyPostAuthorUsers = alias(usersTable, 'reply_post_author_users');
+    const originalPosts = alias(postsTable, 'original_posts');
+    const originalLocalPosts = alias(localPostsTable, 'original_local_posts');
+    const originalRemotePosts = alias(remotePostsTable, 'original_remote_posts');
+    const [likeRows, followRows, emojiRows, replyRows] = await Promise.all([
+      db.select({
+        notifications: notificationsTable,
+        notificationLikes: notificationLikesTable,
+        likerActors: actorsTable,
+        likerRemoteActors: remoteActorsTable,
+        likerLocalActors: localActorsTable,
+        posts: postsTable,
+        localPosts: localPostsTable,
+        remotePosts: remotePostsTable,
+      }).from(notificationsTable)
+        .innerJoin(notificationLikesTable, eq(notificationsTable.notificationId, notificationLikesTable.notificationId))
+        .innerJoin(actorsTable, eq(notificationLikesTable.likerActorId, actorsTable.actorId))
+        .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+        .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+        .innerJoin(postsTable, eq(notificationLikesTable.likedPostId, postsTable.postId))
+        .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+        .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
+        .where(eq(notificationsTable.recipientUserId, userId))
+        .orderBy(desc(notificationsTable.createdAt)).limit(50),
+      db.select({
+        notifications: notificationsTable,
+        notificationFollows: notificationFollowsTable,
+        followerActors: actorsTable,
+        followerRemoteActors: remoteActorsTable,
+        followerLocalActors: localActorsTable,
+      }).from(notificationsTable)
+        .innerJoin(
+          notificationFollowsTable,
+          eq(notificationsTable.notificationId, notificationFollowsTable.notificationId),
+        )
+        .innerJoin(actorsTable, eq(notificationFollowsTable.followerActorId, actorsTable.actorId))
+        .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+        .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+        .where(eq(notificationsTable.recipientUserId, userId))
+        .orderBy(desc(notificationsTable.createdAt)).limit(50),
+      db.select({
+        notifications: notificationsTable,
+        notificationEmojiReacts: notificationEmojiReactsTable,
+        reactorActors: actorsTable,
+        reactorRemoteActors: remoteActorsTable,
+        reactorLocalActors: localActorsTable,
+        posts: postsTable,
+        localPosts: localPostsTable,
+        remotePosts: remotePostsTable,
+      }).from(notificationsTable)
+        .innerJoin(
+          notificationEmojiReactsTable,
+          eq(notificationsTable.notificationId, notificationEmojiReactsTable.notificationId),
+        )
+        .innerJoin(actorsTable, eq(notificationEmojiReactsTable.reactorActorId, actorsTable.actorId))
+        .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+        .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+        .innerJoin(postsTable, eq(notificationEmojiReactsTable.reactedPostId, postsTable.postId))
+        .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+        .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
+        .where(eq(notificationsTable.recipientUserId, userId))
+        .orderBy(desc(notificationsTable.createdAt)).limit(50),
+      db.select({
+        notifications: notificationsTable,
+        notificationReplies: notificationRepliesTable,
+        replierActors: actorsTable,
+        replierRemoteActors: remoteActorsTable,
+        replierLocalActors: localActorsTable,
+        replyPosts,
+        replyLocalPosts,
+        replyRemotePosts,
+        replyPostAuthorUsers,
+        originalPosts,
+        originalLocalPosts,
+        originalRemotePosts,
+      }).from(notificationsTable)
+        .innerJoin(
+          notificationRepliesTable,
+          eq(notificationsTable.notificationId, notificationRepliesTable.notificationId),
+        )
+        .innerJoin(actorsTable, eq(notificationRepliesTable.replierActorId, actorsTable.actorId))
+        .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
+        .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+        .innerJoin(replyPosts, eq(notificationRepliesTable.replyPostId, replyPosts.postId))
+        .leftJoin(replyLocalPosts, eq(replyPosts.postId, replyLocalPosts.postId))
+        .leftJoin(replyRemotePosts, eq(replyPosts.postId, replyRemotePosts.postId))
+        .leftJoin(replyPostAuthorUsers, eq(replyLocalPosts.userId, replyPostAuthorUsers.userId))
+        .leftJoin(originalPosts, eq(notificationRepliesTable.originalPostId, originalPosts.postId))
+        .leftJoin(originalLocalPosts, eq(originalPosts.postId, originalLocalPosts.postId))
+        .leftJoin(originalRemotePosts, eq(originalPosts.postId, originalRemotePosts.postId))
+        .where(eq(notificationsTable.recipientUserId, userId))
+        .orderBy(desc(notificationsTable.createdAt)).limit(50),
+    ]);
+
     const likes: LikeNotificationWithDetails[] = likeRows.map((row) => {
       const notification: LikeNotification = {
         type: 'like',
@@ -146,22 +224,6 @@ export const createD1NotificationsResolverByUserId = (
       };
     });
 
-    const followRows = await db.select({
-      notifications: notificationsTable,
-      notificationFollows: notificationFollowsTable,
-      followerActors: actorsTable,
-      followerRemoteActors: remoteActorsTable,
-      followerLocalActors: localActorsTable,
-    }).from(notificationsTable)
-      .innerJoin(
-        notificationFollowsTable,
-        eq(notificationsTable.notificationId, notificationFollowsTable.notificationId),
-      )
-      .innerJoin(actorsTable, eq(notificationFollowsTable.followerActorId, actorsTable.actorId))
-      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
-      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
-      .where(eq(notificationsTable.recipientUserId, userId))
-      .orderBy(desc(notificationsTable.createdAt)).limit(50);
     const follows: FollowNotificationWithDetails[] = followRows.map((row) => {
       const notification: FollowNotification = {
         type: 'follow',
@@ -181,28 +243,6 @@ export const createD1NotificationsResolverByUserId = (
       };
     });
 
-    const emojiRows = await db.select({
-      notifications: notificationsTable,
-      notificationEmojiReacts: notificationEmojiReactsTable,
-      reactorActors: actorsTable,
-      reactorRemoteActors: remoteActorsTable,
-      reactorLocalActors: localActorsTable,
-      posts: postsTable,
-      localPosts: localPostsTable,
-      remotePosts: remotePostsTable,
-    }).from(notificationsTable)
-      .innerJoin(
-        notificationEmojiReactsTable,
-        eq(notificationsTable.notificationId, notificationEmojiReactsTable.notificationId),
-      )
-      .innerJoin(actorsTable, eq(notificationEmojiReactsTable.reactorActorId, actorsTable.actorId))
-      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
-      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
-      .innerJoin(postsTable, eq(notificationEmojiReactsTable.reactedPostId, postsTable.postId))
-      .leftJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
-      .leftJoin(remotePostsTable, eq(postsTable.postId, remotePostsTable.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
-      .orderBy(desc(notificationsTable.createdAt)).limit(50);
     const reactions: EmojiReactNotificationWithDetails[] = emojiRows.map((row) => {
       const notification: EmojiReactNotification = {
         type: 'emojiReact',
@@ -226,43 +266,6 @@ export const createD1NotificationsResolverByUserId = (
       };
     });
 
-    const replyPosts = alias(postsTable, 'reply_posts');
-    const replyLocalPosts = alias(localPostsTable, 'reply_local_posts');
-    const replyRemotePosts = alias(remotePostsTable, 'reply_remote_posts');
-    const replyPostAuthorUsers = alias(usersTable, 'reply_post_author_users');
-    const originalPosts = alias(postsTable, 'original_posts');
-    const originalLocalPosts = alias(localPostsTable, 'original_local_posts');
-    const originalRemotePosts = alias(remotePostsTable, 'original_remote_posts');
-    const replyRows = await db.select({
-      notifications: notificationsTable,
-      notificationReplies: notificationRepliesTable,
-      replierActors: actorsTable,
-      replierRemoteActors: remoteActorsTable,
-      replierLocalActors: localActorsTable,
-      replyPosts,
-      replyLocalPosts,
-      replyRemotePosts,
-      replyPostAuthorUsers,
-      originalPosts,
-      originalLocalPosts,
-      originalRemotePosts,
-    }).from(notificationsTable)
-      .innerJoin(
-        notificationRepliesTable,
-        eq(notificationsTable.notificationId, notificationRepliesTable.notificationId),
-      )
-      .innerJoin(actorsTable, eq(notificationRepliesTable.replierActorId, actorsTable.actorId))
-      .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
-      .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
-      .innerJoin(replyPosts, eq(notificationRepliesTable.replyPostId, replyPosts.postId))
-      .leftJoin(replyLocalPosts, eq(replyPosts.postId, replyLocalPosts.postId))
-      .leftJoin(replyRemotePosts, eq(replyPosts.postId, replyRemotePosts.postId))
-      .leftJoin(replyPostAuthorUsers, eq(replyLocalPosts.userId, replyPostAuthorUsers.userId))
-      .leftJoin(originalPosts, eq(notificationRepliesTable.originalPostId, originalPosts.postId))
-      .leftJoin(originalLocalPosts, eq(originalPosts.postId, originalLocalPosts.postId))
-      .leftJoin(originalRemotePosts, eq(originalPosts.postId, originalRemotePosts.postId))
-      .where(eq(notificationsTable.recipientUserId, userId))
-      .orderBy(desc(notificationsTable.createdAt)).limit(50);
     const replies: ReplyNotificationWithDetails[] = replyRows.map((row) => {
       const notification: ReplyNotification = {
         type: 'reply',

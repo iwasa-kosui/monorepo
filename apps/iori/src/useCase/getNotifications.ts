@@ -7,10 +7,14 @@ import {
   type NotificationsResolverByUserId,
   type NotificationWithDetails,
 } from '../domain/notification/notification.ts';
-import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
+import type {
+  SessionExpiredError,
+  SessionResolver,
+  SessionWithUserAndActorResolver,
+} from '../domain/session/session.ts';
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { composeSessionWithUserAndActorResolver, resolveSessionWithUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -29,6 +33,7 @@ export type GetNotificationsUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
+  sessionWithUserAndActorResolver?: SessionWithUserAndActorResolver;
   notificationsResolver: NotificationsResolverByUserId;
   notificationsReadStore: NotificationsReadStore;
 }>;
@@ -36,12 +41,16 @@ type Deps = Readonly<{
 const create = ({
   sessionResolver,
   userResolver,
+  sessionWithUserAndActorResolver,
   notificationsResolver,
   notificationsReadStore,
 }: Deps): GetNotificationsUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveSessionUser = resolveSessionWithUserWith(
+    sessionWithUserAndActorResolver
+      ?? composeSessionWithUserAndActorResolver(sessionResolver, userResolver, undefined),
+    now,
+  );
 
   const markUnreadAsRead = (
     notifications: ReadonlyArray<NotificationWithDetails>,
@@ -62,8 +71,8 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('resolved', ({ sessionId }) => resolveSessionUser(sessionId)),
+      RA.map(({ resolved, ...rest }) => ({ ...rest, ...resolved })),
       RA.andBind('notifications', ({ user }) => notificationsResolver.resolve(user.id)),
       RA.andThrough(({ notifications, user }) => markUnreadAsRead(notifications, user.id)),
     );

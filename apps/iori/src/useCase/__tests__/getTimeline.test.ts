@@ -1,5 +1,6 @@
 import { test as fcTest } from '@fast-check/vitest';
-import { describe, expect, it } from 'vitest';
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
@@ -320,6 +321,49 @@ describe('GetTimelineUseCase', () => {
         }
       },
     );
+  });
+
+  describe('sessionWithUserAndActorResolver', () => {
+    it('指定された場合は 1 つのポートで認証し、個別の resolver を呼ばない', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      const sessionWithUserAndActorResolver = { resolve: vi.fn(async () => RA.ok({ session, user, actor })) };
+
+      const useCase = GetTimelineUseCase.create({ ...deps, sessionWithUserAndActorResolver });
+
+      const result = await useCase.run({
+        sessionId: session.sessionId,
+        createdAt: undefined,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.val.user.id).toBe(user.id);
+        expect(result.val.actor.id).toBe(actor.id);
+      }
+      expect(sessionWithUserAndActorResolver.resolve).toHaveBeenCalledWith(session.sessionId);
+      expect(deps.sessionResolver.resolve).not.toHaveBeenCalled();
+      expect(deps.userResolver.resolve).not.toHaveBeenCalled();
+      expect(deps.actorResolverByUserId.resolve).not.toHaveBeenCalled();
+      expect(deps.actorsResolverByFollowerId.resolve).toHaveBeenCalledWith(actor.id);
+      expect(deps.actorsResolverByFollowingId.resolve).toHaveBeenCalledWith(actor.id);
+    });
   });
 
   describe('副作用の検証', () => {

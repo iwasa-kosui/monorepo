@@ -8,6 +8,11 @@ import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import { usersTable } from '../schema.ts';
 
+export const toUser = (row: typeof usersTable.$inferSelect): User => ({
+  id: UserId.parseOrThrow(row.userId),
+  username: Username.parseOrThrow(row.username),
+});
+
 export const createD1UserResolver = (db: IoriD1Db): UserResolver => ({
   resolve: (userId) =>
     RA.flow(
@@ -19,10 +24,7 @@ export const createD1UserResolver = (db: IoriD1Db): UserResolver => ({
         if (rest.length > 0) {
           throw new Error(`Multiple users found with the same ID: ${userId}`);
         }
-        return {
-          id: UserId.parseOrThrow(row.userId),
-          username: Username.parseOrThrow(row.username),
-        } satisfies User;
+        return toUser(row);
       }),
       RA.mapErr((error): never => {
         throw error;
