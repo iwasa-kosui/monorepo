@@ -6,12 +6,14 @@ import z from 'zod/v4';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import {
   Article,
+  ArticleBodyMissingError,
   ArticleInvalidStatusError,
   ArticleNotFoundError,
   type ArticlePublishedStore,
   type ArticleResolver,
 } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { SessionId } from '../domain/session/sessionId.ts';
@@ -50,7 +52,8 @@ type Err =
   | UserNotFoundError
   | ArticleNotFoundError
   | UnauthorizedError
-  | ArticleInvalidStatusError;
+  | ArticleInvalidStatusError
+  | ArticleBodyMissingError;
 
 export type PublishArticleUseCase = UseCase<Input, Ok, Err>;
 
@@ -60,6 +63,7 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   articleResolver: ArticleResolver;
   articlePublishedStore: ArticlePublishedStore;
+  articleBodyResolver: ArticleBodyResolver;
 }>;
 
 const create = ({
@@ -68,6 +72,7 @@ const create = ({
   actorResolverByUserId,
   articleResolver,
   articlePublishedStore,
+  articleBodyResolver,
 }: Deps): PublishArticleUseCase => {
   const now = Instant.now();
   const resolveSession = resolveSessionWith(sessionResolver, now);
@@ -102,6 +107,16 @@ const create = ({
               'unpublished',
             ]),
           );
+        }
+
+        if (existingArticle.rootPostId === null) {
+          const body = await articleBodyResolver.resolve(existingArticle.articleId);
+          if (!body.ok) {
+            return body;
+          }
+          if (body.val === undefined) {
+            return RA.err(ArticleBodyMissingError.create(existingArticle.articleId));
+          }
         }
 
         const publishEvent = Article.publishArticle(now)(existingArticle);

@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 
 import type { ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
 import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
 import { Post, type PostResolver, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
@@ -13,6 +14,7 @@ import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
   origin: string;
@@ -21,6 +23,7 @@ export type ObjectDispatcherDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   articleResolver?: ArticleResolver;
   threadResolver?: ThreadResolver;
+  articleBodyResolver: ArticleBodyResolver;
 }>;
 
 export const createObjectDispatcher = ({
@@ -30,12 +33,14 @@ export const createObjectDispatcher = ({
   userResolverByUsername,
   articleResolver,
   threadResolver,
+  articleBodyResolver,
 }: ObjectDispatcherDeps) => {
   const useCase = GetPostUseCase.create({ postResolver, postImagesResolver });
   const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) =>
     RA.flow(
-      RA.ok({ postId: PostId.orThrow(values.id) }),
-      RA.andThen((input) => useCase.run(input)),
+      RA.ok(values.id),
+      RA.andThen(PostId.parse),
+      RA.andThen((postId) => useCase.run({ postId })),
       RA.andThen(({ post, postImages }) => {
         if (post.type !== 'local' || !Post.isVisibleToAnonymous(post)) {
           return RA.err(new Error('Post is not a public local post'));
@@ -72,14 +77,16 @@ export const createObjectDispatcher = ({
       }),
     );
   const articleUseCase = articleResolver !== undefined && threadResolver !== undefined
-    ? GetArticleWithThreadUseCase.create({ articleResolver, threadResolver })
+    ? GetArticleWithThreadUseCase.create({ articleResolver, threadResolver, articleBodyResolver })
     : undefined;
   const ofArticle = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier', string>) => {
     if (articleUseCase === undefined) return null;
     return RA.flow(
-      articleUseCase.run({ articleId: ArticleId.orThrow(values.id) }),
+      RA.ok(values.id),
+      RA.andThen(ArticleId.parse),
+      RA.andThen((articleId) => articleUseCase.run({ articleId })),
       RA.match({
-        ok: ({ article, thread }) => {
+        ok: ({ article, thread, body }) => {
           if (article.status !== 'published') return null;
           return new FedifyArticle({
             id: ctx.getObjectUri(FedifyArticle, values),
@@ -87,7 +94,7 @@ export const createObjectDispatcher = ({
             to: PUBLIC_COLLECTION,
             cc: ctx.getFollowersUri(values.identifier),
             name: article.title,
-            content: formatThreadAsHtml(thread),
+            content: body === undefined ? formatThreadAsHtml(thread) : sanitizeArticleBody(body.html),
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(article.publishedAt ?? article.createdAt),
             url: ctx.getObjectUri(FedifyArticle, values),

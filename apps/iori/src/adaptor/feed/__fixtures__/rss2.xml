@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Example blog</title>
+    <link>https://zenn.example.test</link>
+    <item>
+      <title>With guid</title>
+      <link>https://zenn.example.test/articles/a</link>
+      <guid isPermaLink="false">guid-a</guid>
+      <description><![CDATA[<p>First <em>paragraph</em></p>]]></description>
+      <pubDate>Tue, 03 Mar 2026 10:00:00 GMT</pubDate>
+      <enclosure url="https://zenn.example.test/a.png" type="false" length="false"/>
+    </item>
+    <item>
+      <title>Without guid</title>
+      <link>https://zenn.example.test/articles/b</link>
+      <pubDate>not a date</pubDate>
+    </item>
+    <item>
+      <title>   </title>
+      <link>https://zenn.example.test/articles/empty-title</link>
+    </item>
+    <item>
+      <title>Bad link</title>
+      <link>javascript:alert(1)</link>
+    </item>
+  </channel>
+</rss>

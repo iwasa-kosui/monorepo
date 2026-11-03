@@ -271,7 +271,7 @@ export const articlesTable = sqliteTable('articles', {
   articleId: text('articleId').primaryKey(),
   authorActorId: text('authorActorId').notNull().references(() => actorsTable.actorId),
   authorUserId: text('authorUserId').notNull().references(() => usersTable.userId),
-  rootPostId: text('rootPostId').notNull().references(() => postsTable.postId),
+  rootPostId: text('rootPostId').references(() => postsTable.postId),
   title: text('title').notNull(),
   status: text('status').notNull(),
   createdAt: timestamp().notNull(),
@@ -282,6 +282,13 @@ export const articlesTable = sqliteTable('articles', {
   index('articles_root_post_id_idx').on(table.rootPostId),
   uniqueIndex('article_root_post_unique').on(table.rootPostId),
 ]);
+
+export const articleBodiesTable = sqliteTable('article_bodies', {
+  articleId: text('articleId').primaryKey().references(() => articlesTable.articleId),
+  privateHtml: text('privateHtml').notNull(),
+  publicHtml: text('publicHtml').notNull(),
+  updatedAt: timestamp().notNull(),
+});
 
 export const linkPreviewsTable = sqliteTable('link_previews', {
   linkPreviewId: text('linkPreviewId').primaryKey(),
@@ -361,6 +368,38 @@ export const oauthAccessTokensTable = sqliteTable('oauth_access_tokens', {
   index('oauth_access_tokens_authorization_code_hash_idx').on(table.authorizationCodeHash),
 ]);
 
+export const feedSourcesTable = sqliteTable('feed_sources', {
+  feedSourceId: text('feedSourceId').primaryKey(),
+  kind: text('kind').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  etag: text('etag'),
+  lastModified: text('lastModified'),
+  lastFetchedAt: timestamp(),
+  lastError: text('lastError'),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('feed_sources_url_unique').on(table.url),
+]);
+
+export const feedEntriesTable = sqliteTable('feed_entries', {
+  feedEntryId: text('feedEntryId').primaryKey(),
+  feedSourceId: text('feedSourceId').notNull().references(() => feedSourcesTable.feedSourceId),
+  guid: text('guid').notNull(),
+  url: text('url').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  publishedAt: timestamp(),
+  hatenaBookmarkCount: integer('hatenaBookmarkCount'),
+  fetchedAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('feed_entries_feed_source_guid_unique').on(table.feedSourceId, table.guid),
+  index('feed_entries_url_idx').on(table.url),
+  index('feed_entries_published_at_idx').on(table.publishedAt),
+  index('feed_entries_fetched_at_idx').on(table.fetchedAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -391,10 +430,13 @@ export const schema = {
   notificationRepliesTable,
   mutesTable,
   articlesTable,
+  articleBodiesTable,
   linkPreviewsTable,
   relaysTable,
   federatedTimelineItemsTable,
   oauthApplicationsTable,
   oauthAuthorizationCodesTable,
   oauthAccessTokensTable,
+  feedSourcesTable,
+  feedEntriesTable,
 } as const;

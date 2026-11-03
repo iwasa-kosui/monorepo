@@ -14,7 +14,7 @@ export const reconstructD1Article = (row: typeof articlesTable.$inferSelect): Ar
   articleId: row.articleId as ArticleId,
   authorActorId: row.authorActorId as ActorId,
   authorUserId: row.authorUserId as UserId,
-  rootPostId: row.rootPostId as PostId,
+  rootPostId: row.rootPostId as PostId | null,
   title: row.title,
   status: row.status as ArticleStatus,
   createdAt: row.createdAt.getTime() as Instant,

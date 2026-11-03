@@ -7,6 +7,7 @@ import { ArticleId } from '../../domain/article/articleId.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { Env } from '../../env.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgPostImagesResolverByPostId } from '../pg/image/postImagesResolver.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
@@ -22,6 +23,7 @@ const ofNote = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifier'
     postResolver: PgPostResolver.getInstance(),
     postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
     userResolverByUsername: PgUserResolverByUsername.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   }).ofNote(ctx, values);
 
 const formatThreadAsHtml = (thread: PostWithAuthor[]): string => {
@@ -40,6 +42,7 @@ const ofArticle = (ctx: RequestContext<unknown>, values: Record<'id' | 'identifi
   const useCase = GetArticleWithThreadUseCase.create({
     articleResolver: PgArticleResolver.getInstance(),
     threadResolver: PgThreadResolver.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   });
   return RA.flow(
     RA.ok({

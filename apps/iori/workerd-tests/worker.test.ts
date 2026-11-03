@@ -185,6 +185,11 @@ describe('iori Worker on workerd', () => {
       expectNotFoundVaryingOnAccept(response);
     });
 
+    it('returns 404 for an article whose id is not a UUID with application/activity+json', async () => {
+      const response = await SELF.fetch(articlePath('abc'), { headers: activityJson });
+      expectNotFoundVaryingOnAccept(response);
+    });
+
     it('returns 404 for a draft article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(draftId), { headers: activityJson });
       expectNotFoundVaryingOnAccept(response);
@@ -312,6 +317,11 @@ describe('iori Worker on workerd', () => {
 
       it('returns 404 for a local post requested under an unknown user', async () => {
         const response = await SELF.fetch(postPath('nobody', localPostId), { headers: activityJson });
+        expectNotFoundVaryingOnAccept(response);
+      });
+
+      it('returns 404 for a post whose id is not a UUID with application/activity+json', async () => {
+        const response = await SELF.fetch(postPath(username, 'abc'), { headers: activityJson });
         expectNotFoundVaryingOnAccept(response);
       });
 
