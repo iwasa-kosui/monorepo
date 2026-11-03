@@ -57,6 +57,13 @@
       "when": 1793732387775,
       "tag": "0007_remote_post_recipients",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793735722649,
+      "tag": "0008_digests",
+      "breakpoints": true
     }
   ]
 }
