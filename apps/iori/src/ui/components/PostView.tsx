@@ -4,7 +4,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
-import { safeUrl } from '../../helper/safeUrl.ts';
+import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
@@ -80,7 +80,7 @@ export const PostView = (
   const postDetailLink = isLocalPost
     ? `/users/${post.username}/posts/${post.postId}`
     : isRemotePost
-    ? safeUrl(post.uri)
+    ? safeAbsoluteUrl(post.uri)
     : undefined;
 
   const triggerLike = () => {
@@ -180,6 +180,8 @@ export const PostView = (
 
   const canLike = onLike && !post.liked && !isLiking;
 
+  const logoUrl = safeUrl(post.logoUri);
+
   return (
     <article
       data-post-index={dataIndex}
@@ -241,10 +243,10 @@ export const PostView = (
                 : undefined}
               class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm'
             >
-              {safeUrl(post.logoUri)
+              {logoUrl
                 ? (
                   <img
-                    src={safeUrl(post.logoUri)}
+                    src={logoUrl}
                     alt='Author Logo'
                     class='w-8 h-8 blob-avatar object-cover'
                   />
@@ -525,6 +527,8 @@ export const PostView = (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
               {post.reactions.map((reaction) => {
                 const isMyReaction = myReactions.includes(reaction.emoji);
+                const emojiUrl = safeUrl(reaction.emojiImageUrl);
+
                 return (
                   <button
                     key={reaction.emoji}
@@ -544,10 +548,10 @@ export const PostView = (
                     }`}
                     title={isMyReaction ? 'クリックで取り消す' : 'クリックでリアクション'}
                   >
-                    {safeUrl(reaction.emojiImageUrl)
+                    {emojiUrl
                       ? (
                         <img
-                          src={safeUrl(reaction.emojiImageUrl)}
+                          src={emojiUrl}
                           alt={reaction.emoji}
                           class='w-4 h-4 object-contain'
                         />

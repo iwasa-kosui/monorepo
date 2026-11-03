@@ -51,6 +51,8 @@ export const LocalUserPage = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [posts]);
 
+  const logoUrl = safeUrl(actor.logoUri);
+
   return (
     <>
       <div class='flex items-center justify-between mb-6'>
@@ -71,10 +73,10 @@ export const LocalUserPage = ({
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
-              {safeUrl(actor.logoUri)
+              {logoUrl
                 ? (
                   <img
-                    src={safeUrl(actor.logoUri)}
+                    src={logoUrl}
                     alt='User Logo'
                     class='w-16 h-16 blob-avatar object-cover'
                   />

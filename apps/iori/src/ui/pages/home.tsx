@@ -429,6 +429,8 @@ const UserProfile = () => {
   const url = new URL(actor.uri);
   const handle = `@${user.username}@${url.host}`;
 
+  const logoUrl = safeUrl(actor.logoUri);
+
   return (
     <section class='hidden md:block mb-8'>
       <header class='mb-4'>
@@ -441,10 +443,10 @@ const UserProfile = () => {
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <a href='#update-bio' class='relative group flex-shrink-0'>
               <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
-                {safeUrl(actor.logoUri)
+                {logoUrl
                   ? (
                     <img
-                      src={safeUrl(actor.logoUri)}
+                      src={logoUrl}
                       alt='User Logo'
                       class='w-16 h-16 blob-avatar object-cover'
                     />

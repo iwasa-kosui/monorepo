@@ -1,7 +1,7 @@
 import { useEffect } from 'hono/jsx';
 
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
-import { safeUrl } from '../../helper/safeUrl.ts';
+import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
   items: readonly TimelineItemWithPost[];
@@ -134,7 +134,7 @@ export const useKeyboardNavigation = ({
           if (post.type === 'local') {
             window.location.href = `/users/${post.username}/posts/${post.postId}`;
           } else if (post.type === 'remote' && 'uri' in post) {
-            const uri = safeUrl(post.uri);
+            const uri = safeAbsoluteUrl(post.uri);
             if (uri) window.open(uri, '_blank');
           }
           break;

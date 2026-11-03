@@ -9,6 +9,8 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
     onRemote: (x) => RemoteActor.getHandle(x) ?? actor.uri,
   })(actor);
 
+  const logoUrl = safeUrl(actor.logoUri);
+
   return (
     <a
       href={Actor.match({
@@ -18,10 +20,10 @@ export const ActorLink = ({ actor }: { actor: Actor }) => {
       class='flex items-center gap-2 p-2 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
     >
       <div class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
-        {safeUrl(actor.logoUri)
+        {logoUrl
           ? (
             <img
-              src={safeUrl(actor.logoUri)}
+              src={logoUrl}
               alt='Actor Logo'
               class='w-8 h-8 rounded-full object-cover'
             />
