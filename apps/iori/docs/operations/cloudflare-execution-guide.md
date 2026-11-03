@@ -81,6 +81,8 @@ Environment は保護されたブランチを許可し、`main` だけに限定�
 
 3つの workflow（`Deploy iori`、`Deploy iori Worker`、`Deploy iori Worker (main)`）は、concurrency group `deploy-iori-worker-production` を共有します。push で起動した `deploy-worker` が production の承認待ちの間は、その run がこの group を占有します。このため、dispatch の操作は、push で起動した run が終わるまで待たされます。dispatch の操作は、`Deploy iori` のロールバックと、`deploy-iori-worker.yml` の各 operation です。GitHub は group ごとに待ちの run を1件しか保ちません。後から来た push の run が、待っている dispatch の run を取り消すことがあります。承認者は、push で起動した run を承認するか却下するかを速やかに決めます。dispatch の操作を先に通したいときは、承認者が push で起動した run を却下します。作業者は、dispatch した後に、その run が取り消されずに残っているかを確かめます。
 
+push で起動した run を承認者が却下した場合や、その run が取り消された場合は、本番の Worker が main より古いまま残ります。`Deploy iori Worker (main)` は配備の対象のファイルを変える push でしか起動しないので、docs やテストだけの push では本番は main に追いつきません。GitHub は push の差分の先頭300ファイルだけで paths を判定するので、大きな push では対象のファイルを変えていても起動しないことがあります。これらの場合、作業者は dispatch の操作を終えた後に、`deploy-iori-worker.yml` を `operation=deploy-worker`、`environment=production`、`main_sha=<最新の main の SHA>` と移行時の `generation`、`migration_run_id`、`migration_main_sha` で dispatch し、本番を main に合わせます。
+
 Environment と `main` の保護は、2026-10-31 の読み戻しで有効を確認しました。**source credential の供給と merge より前に、この保護が維持されていることを再確認してください。** Ready 化・merge は明示承認後に行い、承認者は、merge により起動した Worker 配備の job を、merge した変更を本番に出してよいと確かめてから承認します。
 
 ## 3. 移行先と Environment inputs の準備
