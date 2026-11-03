@@ -141,9 +141,17 @@ describe('stripJsonc', () => {
 
   it('removes trailing commas outside strings only', () => {
     expect(JSON.parse(stripJsonc('{"a": [1, 2,], "b": ",}",\n}'))).toEqual({ a: [1, 2], b: ',}' });
+    expect(JSON.parse(stripJsonc('[1,/*x*/]'))).toEqual([1]);
+    expect(JSON.parse(stripJsonc('{"a":1,// c\n}'))).toEqual({ a: 1 });
+    expect(JSON.parse(stripJsonc('[1, {"a":2,},]'))).toEqual([1, { a: 2 }]);
   });
 
   it('leaves an unclosed block comment so that JSON.parse fails', () => {
     expect(() => JSON.parse(stripJsonc('{"a": 1} /* open'))).toThrow();
+  });
+
+  it('does not treat /*/ as a closed block comment', () => {
+    expect(() => JSON.parse(stripJsonc('{"a":1/*/}'))).toThrow();
+    expect(JSON.parse(stripJsonc('{"a":/**/1}'))).toEqual({ a: 1 });
   });
 });
