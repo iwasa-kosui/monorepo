@@ -10,6 +10,9 @@ export const OPERATION_STAGES = Object.freeze([
   'deploy-worker-migrate',
   'deploy-worker-deploy',
   'deploy-worker-after',
+  'put-worker-secrets',
+  'put-worker-secrets-read',
+  'put-worker-secrets-put',
 ]);
 export const operationFailureLines = (stage, error) => {
   const stageWord = OPERATION_STAGES.includes(stage) ? stage : 'unclassified';

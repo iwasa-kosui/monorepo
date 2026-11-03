@@ -41,6 +41,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     'verify-import',
     'cutover-route',
     'deploy-worker',
+    'put-worker-secrets',
     'adopt-cutover-state',
     'recover-source',
   ]);
@@ -58,7 +59,7 @@ it('runs every protected role on hosted isolated jobs after the public gate and 
     if (name !== 'public-artifact-gate') {
       expect([job.needs].flat()).toContain('public-artifact-gate');
       expect(job.environment).toBe('${{ inputs.environment }}');
-      if (name === 'recover-source' || name === 'deploy-worker') {
+      if (name === 'recover-source' || name === 'deploy-worker' || name === 'put-worker-secrets') {
         expect(job.steps.some(step => step.uses?.startsWith('hashicorp/setup-terraform'))).toBe(false);
       } else {
         expect(job.steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper)
@@ -227,6 +228,27 @@ it('gives adopt-cutover-state the cutover token and the Terraform state write ke
   expect(inputs.operation.options).toEqual(
     expect.arrayContaining(['adopt-cutover-state', 'reconcile-resources', 'replace-queue-consumer']),
   );
+});
+it('gives put-worker-secrets only the deploy token, the account and admission identity, and the three values to put', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['put-worker-secrets'];
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'put-worker-secrets\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    IORI_ADMISSION_IDENTITY: secret('IORI_ADMISSION_IDENTITY'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
+    VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
+    SMOKE_QUEUE_TOKEN: secret('SMOKE_QUEUE_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toContain('put-worker-secrets');
 });
 it('lets estimate-source start without generation or run ID while keeping them selectable for the other operations', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');

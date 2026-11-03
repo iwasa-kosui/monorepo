@@ -44,6 +44,9 @@ it('pins the operation stage vocabulary', () => {
     'deploy-worker-migrate',
     'deploy-worker-deploy',
     'deploy-worker-after',
+    'put-worker-secrets',
+    'put-worker-secrets-read',
+    'put-worker-secrets-put',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });

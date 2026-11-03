@@ -68,6 +68,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
       'verify-import',
       'cutover-route',
       'deploy-worker',
+      'put-worker-secrets',
       'adopt-cutover-state',
       'estimate-source',
       'diagnose-source',
@@ -79,7 +80,8 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))
-    || (!['deploy-worker', 'adopt-cutover-state', 'purge-rehearsal-target'].includes(operation) && !recoveryOperation
+    || (!['deploy-worker', 'put-worker-secrets', 'adopt-cutover-state', 'purge-rehearsal-target'].includes(operation)
+      && !recoveryOperation
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
     || (!recoveryOperation && env.IORI_RECOVERY)

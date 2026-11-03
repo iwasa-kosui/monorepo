@@ -22,6 +22,7 @@ const operations = Object.freeze({
   'verify-import': 'restore-protected-migration.mjs',
   'cutover-route': 'cutover-migration.mjs',
   'deploy-worker': 'deploy-active-worker.mjs',
+  'put-worker-secrets': 'worker-bindings-put.mjs',
   'adopt-cutover-state': 'adopt-cutover-state.mjs',
   'estimate-source': 'estimate-source.mjs',
   'purge-rehearsal-target': 'purge-rehearsal-target.mjs',

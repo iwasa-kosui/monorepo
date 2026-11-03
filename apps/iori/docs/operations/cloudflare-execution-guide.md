@@ -1354,6 +1354,55 @@ IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=
 
 `deploy-worker-migrate` で止まった場合は、基準の記録かマイグレーションの一部が、本番の D1 に適用済みの可能性があります。Worker は deploy されていません。作業者は、`d1_migrations` の行と表の状態を読み取って記録し、レビューに戻します。
 
+#### put-worker-secrets で Worker の secret を更新する
+
+`put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
+
+job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
+
+| job の環境変数            | 元の GitHub secret                 |
+| ------------------------- | ---------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`   | `CLOUDFLARE_ACCOUNT_ID`            |
+| `IORI_ADMISSION_IDENTITY` | `IORI_ADMISSION_IDENTITY`          |
+| `CLOUDFLARE_API_TOKEN`    | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` |
+| `VAPID_PUBLIC_KEY`        | `VAPID_PUBLIC_KEY`                 |
+| `VAPID_PRIVATE_KEY`       | `VAPID_PRIVATE_KEY`                |
+| `SMOKE_QUEUE_TOKEN`       | `SMOKE_QUEUE_TOKEN`                |
+
+手順は次のとおりです。
+
+1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は3つすべてを put するからです。
+2. 作業者は、`deploy-iori-worker.yml` を `operation=put-worker-secrets`、`environment`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。
+3. production の場合、承認者は job の承認待ちを承認します。
+4. job は、`IORI_ADMISSION_IDENTITY` の `environment`、`generation`、`runId`、`mainSha` が dispatch の入力と一致することを確かめます。
+5. job は、`SMOKE_QUEUE_TOKEN` の形式と、`VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対の鍵であることを確かめます。
+6. job は、Cloudflare API で Worker `iori-<environment>-<generation>` の deployments を読み、Worker が存在することを確かめます。
+7. job は、`wrangler secret put` を `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の順に実行します。job は値を標準入力だけで渡します。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
+
+`wrangler secret put` は、1回ごとに Worker の新しい version を作って deploy します。このため、1回の `put-worker-secrets` で Worker の version は3つ増えます。作業者は、実行後に Worker の現在の version を記録します。途中の put が失敗した場合は、先に put した secret だけが新しい値になっています。作業者は、原因を直してから `put-worker-secrets` を最初から dispatch し直します。
+
+失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を1行出します。`stage` は次のとおりです。
+
+| `stage`                   | 時点                                                                        |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `put-worker-secrets`      | 入力の検査（identity、値の有無、`SMOKE_QUEUE_TOKEN`、VAPID の鍵の対）の途中 |
+| `put-worker-secrets-read` | Worker の存在を Cloudflare API で確かめている途中                           |
+| `put-worker-secrets-put`  | `wrangler secret put` を実行している途中                                    |
+
+`reason` には、次の語が出ます。
+
+| `reason`                                        | 意味                                                                                                     |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `identity-mismatch`                             | `IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない、または JSON として読めません                   |
+| `credentials-missing`                           | account ID、API token、3つの値のどれかが空です                                                           |
+| `config-invalid`                                | `CLOUDFLARE_ACCOUNT_ID` の形式が正しくありません                                                         |
+| `smoke-token-empty` など `smoke-token-<区分>`   | `SMOKE_QUEUE_TOKEN` の形式が正しくありません。区分は、第6.3節の smoke token の区分の語と同じです         |
+| `vapid-rejected`                                | `VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対になっていません                                           |
+| `workers-http-404` など `workers-http-<status>` | Worker の deployments を読む API が、その status を返しました。404 は、Worker が存在しないことを示します |
+| `workers-request`、`workers-shape`              | API への要求が失敗したか、応答の形が想定と違います                                                       |
+| `command-failed`                                | `wrangler secret put` が失敗しました                                                                     |
+| `aborted`                                       | 時間切れか中断で止まりました                                                                             |
+
 #### 移行先の読み取りの失敗
 
 `rehearse-migration`、`migrate-data`、`verify-import`、`cutover-route`、`purge-rehearsal-target` は、operation の本体を始める前に、runner が移行先を読み取ります。この読み取りの途中で失敗すると、公開ログに `stage=hosted-` で始まる次の行が出ます。`hosted-reviewed-main` は、読み取りの前に main を確かめる1回目の検査です。`hosted-main-recheck` は、読み取りの後にもう一度 main を確かめる2回目の検査です。2つの `stage` は別の語です。
