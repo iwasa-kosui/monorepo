@@ -2,7 +2,7 @@ import type { Instant } from '../instant/instant.ts';
 import type { PostId } from '../post/postId.ts';
 import { JST_OFFSET_MS } from './jst.ts';
 
-export const MAX_SUMMARY_INPUT_CHARS = 20_000;
+export const MAX_SUMMARY_INPUT_CHARS = 12_000;
 
 export type SummaryItem = Readonly<{
   postId: PostId;

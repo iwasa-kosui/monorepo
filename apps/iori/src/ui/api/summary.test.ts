@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   buildSummaryRequest,
+  normalizeSummaryMarkdown,
   splitSummaryCitations,
   summaryErrorMessage,
   summaryResultLabel,
@@ -89,6 +90,66 @@ describe('splitSummaryCitations', () => {
       type: 'text',
       text: '一行目\n二行目[',
     });
+  });
+});
+
+describe('normalizeSummaryMarkdown', () => {
+  it('wraps a heading in brackets and drops the # marks', () => {
+    expect(normalizeSummaryMarkdown('# 猫')).toBe('【猫】');
+    expect(normalizeSummaryMarkdown('### 旅行の話')).toBe('【旅行の話】');
+    expect(normalizeSummaryMarkdown('###### 六つ')).toBe('【六つ】');
+  });
+
+  it('returns an empty line for a heading with no text after the # marks', () => {
+    expect(normalizeSummaryMarkdown('# ')).toBe('');
+    expect(normalizeSummaryMarkdown('### ')).toBe('');
+  });
+
+  it('keeps a heading that already starts with a bracket without wrapping it again', () => {
+    expect(normalizeSummaryMarkdown('## 【猫】')).toBe('【猫】');
+    expect(normalizeSummaryMarkdown('【猫】')).toBe('【猫】');
+  });
+
+  it('keeps a # that is not followed by a space or comes seven or more times', () => {
+    expect(normalizeSummaryMarkdown('#猫')).toBe('#猫');
+    expect(normalizeSummaryMarkdown('####### 七つ')).toBe('####### 七つ');
+  });
+
+  it('replaces a bullet marker of *, - and + with a middle dot', () => {
+    expect(normalizeSummaryMarkdown('* 一つ目')).toBe('・一つ目');
+    expect(normalizeSummaryMarkdown('- 二つ目')).toBe('・二つ目');
+    expect(normalizeSummaryMarkdown('+ 三つ目')).toBe('・三つ目');
+  });
+
+  it('replaces an indented bullet marker together with the spaces before it', () => {
+    expect(normalizeSummaryMarkdown('  * 入れ子')).toBe('・入れ子');
+    expect(normalizeSummaryMarkdown('\t- 入れ子')).toBe('・入れ子');
+  });
+
+  it('removes ** from a line', () => {
+    expect(normalizeSummaryMarkdown('これは**大事**です')).toBe('これは大事です');
+    expect(normalizeSummaryMarkdown('* **強調** の項目')).toBe('・強調 の項目');
+    expect(normalizeSummaryMarkdown('### **見出し**')).toBe('【見出し】');
+  });
+
+  it('keeps [n] in a line', () => {
+    expect(normalizeSummaryMarkdown('- 猫が増えた[1][2]')).toBe('・猫が増えた[1][2]');
+    expect(normalizeSummaryMarkdown('* 犬も[3, 4]')).toBe('・犬も[3, 4]');
+  });
+
+  it('keeps an ordinary line, a hyphen without a space and an empty line', () => {
+    expect(normalizeSummaryMarkdown('ふつうの行です。')).toBe('ふつうの行です。');
+    expect(normalizeSummaryMarkdown('-5度まで下がった')).toBe('-5度まで下がった');
+    expect(normalizeSummaryMarkdown('・すでに点')).toBe('・すでに点');
+    expect(normalizeSummaryMarkdown('')).toBe('');
+  });
+
+  it('converts each line of a multi-line summary', () => {
+    expect(normalizeSummaryMarkdown('### 猫\n* 一つ目[1]\n\n- 二つ目[2]')).toBe('【猫】\n・一つ目[1]\n\n・二つ目[2]');
+  });
+
+  it('does not change HTML-like text', () => {
+    expect(normalizeSummaryMarkdown('<b>太字</b> & <script>')).toBe('<b>太字</b> & <script>');
   });
 });
 

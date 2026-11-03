@@ -117,7 +117,7 @@ const SearchPage = () => {
           value={query}
           onInput={(event: Event) => setQuery((event.target as HTMLInputElement).value)}
         />
-        <button type='submit' class={buttonClass} disabled={isSearching}>検索</button>
+        <button type='submit' class={`${buttonClass} whitespace-nowrap shrink-0`} disabled={isSearching}>検索</button>
       </form>
 
       <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 mb-6 space-y-3'>

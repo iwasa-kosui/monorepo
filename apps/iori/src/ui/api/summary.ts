@@ -6,6 +6,21 @@ export type SummarySegment =
   | Readonly<{ type: 'text'; text: string }>
   | Readonly<{ type: 'link'; n: number; status: Status }>;
 
+const headingMarker = /^#{1,6}[ \t]+/;
+const bulletMarker = /^[ \t]*[*+-][ \t]/;
+
+const normalizeSummaryLine = (line: string): string => {
+  const heading = headingMarker.exec(line);
+  const headingText = heading === null ? '' : line.slice(heading[0].length);
+  const converted = heading !== null
+    ? (headingText.trim() === '' ? '' : headingText.startsWith('【') ? headingText : `【${headingText}】`)
+    : line.replace(bulletMarker, '・');
+  return converted.replaceAll('**', '');
+};
+
+export const normalizeSummaryMarkdown = (summary: string): string =>
+  summary.split('\n').map(normalizeSummaryLine).join('\n');
+
 const citationGroup = /\[(\d+(?:\s*[,、]\s*\d+)*)\]/g;
 
 export const splitSummaryCitations = (

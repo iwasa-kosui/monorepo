@@ -61,8 +61,8 @@ describe('truncateSummaryItems', () => {
     expect(truncateSummaryItems(items, 'fromEnd', 3).items).toEqual([]);
   });
 
-  it('既定の上限は 20,000 文字', () => {
-    const fits = item('あ'.repeat(20_000), 2);
+  it('既定の上限は 12,000 文字', () => {
+    const fits = item('あ'.repeat(12_000), 2);
     const over = item('い', 1);
 
     expect(truncateSummaryItems([fits], 'fromEnd').truncated).toBe(false);
