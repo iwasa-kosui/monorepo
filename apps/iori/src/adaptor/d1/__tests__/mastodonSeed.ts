@@ -178,6 +178,70 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return id;
   };
 
+  const addNotification = (recipientUserId: string, type: string, createdAt: number, isRead = 0) => {
+    const notificationId = uuid();
+    sqlite.prepare('INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)')
+      .run(notificationId, recipientUserId, type, isRead, createdAt);
+    return notificationId;
+  };
+
+  const addLikeNotification = (
+    recipientUserId: string,
+    likerActorId: string,
+    likedPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'like', createdAt);
+    sqlite.prepare('INSERT INTO notification_likes(notificationId,likerActorId,likedPostId) VALUES (?,?,?)')
+      .run(notificationId, likerActorId, likedPostId);
+    return notificationId;
+  };
+
+  const addReplyNotification = (
+    recipientUserId: string,
+    replierActorId: string,
+    replyPostId: string,
+    originalPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'reply', createdAt);
+    sqlite.prepare(
+      'INSERT INTO notification_replies(notificationId,replierActorId,replyPostId,originalPostId) VALUES (?,?,?,?)',
+    ).run(notificationId, replierActorId, replyPostId, originalPostId);
+    return notificationId;
+  };
+
+  const addFollowNotification = (recipientUserId: string, followerActorId: string, createdAt: number) => {
+    const notificationId = addNotification(recipientUserId, 'follow', createdAt);
+    sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)')
+      .run(notificationId, followerActorId);
+    return notificationId;
+  };
+
+  const addEmojiReactNotification = (
+    recipientUserId: string,
+    reactorActorId: string,
+    reactedPostId: string,
+    createdAt: number,
+    emoji = ':wave:',
+    emojiImageUrl: string | null = null,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'emojiReact', createdAt);
+    sqlite.prepare(
+      'INSERT INTO notification_emoji_reacts(notificationId,reactorActorId,reactedPostId,emoji,emojiImageUrl) VALUES (?,?,?,?,?)',
+    ).run(notificationId, reactorActorId, reactedPostId, emoji, emojiImageUrl);
+    return notificationId;
+  };
+
+  const setMarker = (userId: string, timeline: 'home' | 'notifications', lastReadId: string, version = 1) =>
+    sqlite.prepare('INSERT INTO mastodon_markers(userId,timeline,lastReadId,version,updatedAt) VALUES (?,?,?,?,?)').run(
+      userId,
+      timeline,
+      lastReadId,
+      version,
+      1_700_000_000_000,
+    );
+
   return {
     uuid,
     addLocalActor,
@@ -194,5 +258,10 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addLinkPreview,
     addRelay,
     addFederatedItem,
+    addLikeNotification,
+    addReplyNotification,
+    addFollowNotification,
+    addEmojiReactNotification,
+    setMarker,
   };
 };

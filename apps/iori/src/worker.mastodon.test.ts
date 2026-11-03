@@ -2,7 +2,13 @@ import type { ExecutionContext } from '@cloudflare/workers-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createSqliteD1Fixture } from './adaptor/d1/__tests__/sqliteFixture.ts';
-import { AccountSchema, CredentialAccountSchema, InstanceV2Schema, StatusSchema } from './adaptor/mastodon/entities.ts';
+import {
+  AccountSchema,
+  CredentialAccountSchema,
+  InstanceV2Schema,
+  NotificationSchema,
+  StatusSchema,
+} from './adaptor/mastodon/entities.ts';
 import { admissionFixture } from './testing/admissionFixture.ts';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
@@ -290,6 +296,52 @@ describe('Worker の Mastodon 互換 API', () => {
       expect(response.status).toBe(401);
     });
 
+    it('Cookie の利用者に通知と未読数とマーカーを返し、認証がなければ Mastodon 形式の 401 にする', async () => {
+      const { request, sqlite } = setup();
+      const followerId = crypto.randomUUID();
+      const notificationId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').run(
+        followerId,
+        'https://remote.example/users/alice',
+        'https://remote.example/users/alice/inbox',
+        'remote',
+      );
+      sqlite.prepare('INSERT INTO remote_actors(actorId,url,username) VALUES (?,?,?)').run(
+        followerId,
+        'https://remote.example/@alice',
+        'alice',
+      );
+      sqlite.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      )
+        .run(notificationId, userId, 'follow', 0, 1_000);
+      sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)')
+        .run(notificationId, followerId);
+      const headers = { Cookie: `sessionId=${sessionId}` };
+
+      const list = await request('/api/v1/notifications', { headers });
+      const unreadBefore = await request('/api/v2/notifications/unread_count', { headers });
+      const saved = await request('/api/v1/markers', {
+        method: 'POST',
+        headers: { ...headers, Origin: origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifications: { last_read_id: notificationId } }),
+      });
+      const unreadAfter = await request('/api/v1/notifications/unread_count', { headers });
+      const anonymous = await request('/api/v1/notifications');
+
+      expect(list.status).toBe(200);
+      expect(NotificationSchema.parse((await list.json() as unknown[])[0])).toMatchObject({
+        id: notificationId,
+        type: 'follow',
+        account: { acct: 'alice@remote.example' },
+      });
+      expect(await unreadBefore.json()).toEqual({ count: 1 });
+      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: notificationId, version: 1 } });
+      expect(await unreadAfter.json()).toEqual({ count: 0 });
+      expect(anonymous.status).toBe(401);
+      expect(await anonymous.json()).toEqual({ error: 'The access token is invalid' });
+    });
+
     it('消した独自 API のパスは未実装として 404 の JSON を返す', async () => {
       const { request } = setup();
 
@@ -306,15 +358,15 @@ describe('Worker の Mastodon 互換 API', () => {
   it('既存の独自 API と /api/og/* の応答を変えない', async () => {
     const { request } = setup();
 
-    const [home, notifications, mutes, vapid, og] = await Promise.all([
+    const [home, likedPosts, mutes, vapid, og] = await Promise.all([
       request('/api/v1/home'),
-      request('/api/v1/notifications'),
+      request('/api/v1/liked-posts'),
       request('/api/v1/mutes'),
       request('/api/v1/push/vapid-public-key'),
       request('/api/og/articles/not-an-id'),
     ]);
 
-    expect([home.status, notifications.status, mutes.status, vapid.status, og.status]).toEqual([
+    expect([home.status, likedPosts.status, mutes.status, vapid.status, og.status]).toEqual([
       401,
       401,
       401,
