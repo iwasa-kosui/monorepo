@@ -9,7 +9,12 @@ import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
-import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
+import {
+  CredentialAccountSchema,
+  ExtendedDescriptionSchema,
+  InstanceV1Schema,
+  InstanceV2Schema,
+} from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
@@ -457,6 +462,13 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({});
+    });
+
+    it('instance/extended_description は空の説明を認証なしで返す', async () => {
+      const response = await setup().request('/api/v1/instance/extended_description');
+
+      expect(response.status).toBe(200);
+      expect(ExtendedDescriptionSchema.parse(await response.json())).toEqual({ updated_at: null, content: '' });
     });
 
     it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {

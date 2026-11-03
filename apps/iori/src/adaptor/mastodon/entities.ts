@@ -245,6 +245,24 @@ export const NotificationPolicySchema = z.object({
 });
 export type NotificationPolicy = z.infer<typeof NotificationPolicySchema>;
 
+export const V1NotificationPolicySchema = z.object({
+  filter_not_following: z.boolean(),
+  filter_not_followers: z.boolean(),
+  filter_new_accounts: z.boolean(),
+  filter_private_mentions: z.boolean(),
+  summary: z.object({
+    pending_requests_count: z.number().int().nonnegative(),
+    pending_notifications_count: z.number().int().nonnegative(),
+  }),
+});
+export type V1NotificationPolicy = z.infer<typeof V1NotificationPolicySchema>;
+
+export const ExtendedDescriptionSchema = z.object({
+  updated_at: z.string().nullable(),
+  content: z.string(),
+});
+export type ExtendedDescription = z.infer<typeof ExtendedDescriptionSchema>;
+
 export const RelationshipSchema = z.object({
   id: z.string(),
   following: z.boolean(),
