@@ -1,47 +1,56 @@
-import { useEffect, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { fetchFavourites, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { PostView } from '../components/PostView.tsx';
-import { postToStatus } from '../legacyConversion.ts';
+import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
-type PostWithAuthor = {
-  postId: string;
-  content: string;
-  [key: string]: unknown;
-};
-
-type LikedPostsResponse = {
-  user: { id: string; username: string };
-  posts: PostWithAuthor[];
-};
+type LikedPostsData = Readonly<{
+  statuses: readonly Status[];
+  nextMaxId: string | undefined;
+}>;
 
 const LikedPostsPage = () => {
-  const [data, setData] = useState<LikedPostsResponse | null>(null);
+  const [data, setData] = useState<LikedPostsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
     const fetchLikedPosts = async () => {
       try {
-        const response = await fetch('/api/v1/liked-posts');
-        if (response.status === 401) {
+        const page = await fetchFavourites();
+        setData({ statuses: page.items, nextMaxId: page.nextMaxId });
+      } catch (fetchError) {
+        if (isUnauthorizedError(fetchError)) {
           window.location.href = '/sign-in';
           return;
         }
-        if (!response.ok) {
-          setError('Failed to load liked posts');
-          return;
-        }
-        const result = await response.json();
-        setData(result);
-      } catch {
-        setError('Network error. Please try again.');
+        setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load liked posts');
       } finally {
         setIsLoading(false);
       }
     };
     fetchLikedPosts();
   }, []);
+
+  const loadMore = useCallback(async (maxId: string) => {
+    if (isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
+    try {
+      const page = await fetchFavourites({ maxId });
+      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
+      setData((prev) => prev === null ? prev : { statuses: appendUniqueById(prev.statuses, page.items), nextMaxId });
+    } catch (loadError) {
+      console.error('Failed to load more liked posts:', loadError);
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, []);
+
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
 
   if (isLoading) {
     return (
@@ -77,14 +86,9 @@ const LikedPostsPage = () => {
       <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
 
       <div class='space-y-6 py-2'>
-        {data.posts.length > 0
+        {data.statuses.length > 0
           ? (
-            data.posts.map((post) => (
-              <PostView
-                key={post.postId}
-                status={postToStatus(post as never)}
-              />
-            ))
+            data.statuses.map((status) => <PostView key={status.id} status={status} />)
           )
           : (
             <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>

@@ -2,11 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
 import { actorIdsJson } from '../actorIdsJson.ts';
-import {
-  createD1PostsResolverByActorIds,
-  createD1PostsResolverByActorIdWithPagination,
-} from '../post/postWithAuthorResolvers.ts';
+import { resolvePostsWithAuthorByIds } from '../post/postWithAuthorBatch.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -75,13 +73,6 @@ describe('D1 actor selection with actual SQLite', () => {
         mutedActorIds: [],
       }),
     ).rejects.toThrow('text value limit');
-    await expect(
-      createD1PostsResolverByActorIds(db, 'https://fixture.invalid').resolve({
-        actorIds,
-        currentActorId: undefined,
-        createdAt: undefined,
-      }),
-    ).rejects.toThrow('text value limit');
     expect(queries).toHaveLength(0);
   });
 
@@ -136,12 +127,8 @@ describe('D1 actor selection with actual SQLite', () => {
     expect(result.val[0].post.repostCount).toBe(1);
   });
 
-  it('preserves global profile pagination across >100 actors and handles empty selections without SQL', async () => {
-    const { db, queries, actors, expected } = setup();
-    const resolver = createD1PostsResolverByActorIds(db, 'https://fixture.invalid');
-    const empty = await resolver.resolve({ actorIds: [], currentActorId: undefined, createdAt: undefined });
-    expect(empty).toEqual({ ok: true, val: [] });
-    expect(queries).toHaveLength(0);
+  it('handles empty selections without SQL', async () => {
+    const { db, queries } = setup();
     const emptyTimeline = await createD1TimelineItemsResolverByActorIds(db).resolve({
       actorIds: [],
       currentActorId: undefined,
@@ -150,19 +137,9 @@ describe('D1 actor selection with actual SQLite', () => {
     });
     expect(emptyTimeline).toEqual({ ok: true, val: [] });
     expect(queries).toHaveLength(0);
-    const result = await resolver.resolve({
-      actorIds: actors,
-      currentActorId: undefined,
-      createdAt: Instant.orThrow(80000),
-    });
-    if (!result.ok) throw new Error('Expected posts');
-    expect(result.val.map(post => post.postId)).toEqual(
-      expected.filter(row => row.time < 80000).slice(0, 20).map(row => row.postId),
-    );
-    expect(queries[0].params.length).toBeLessThanOrEqual(5);
   });
 
-  it.each(['single', 'multiple'] as const)('preserves strict viewer flags separately from totals (%s)', async mode => {
+  it('preserves strict viewer flags separately from totals', async () => {
     const { sqlite, db, rows } = setup();
     const [author, viewer, other] = rows;
     const secondPostId = id(6000);
@@ -195,27 +172,19 @@ describe('D1 actor selection with actual SQLite', () => {
       1000,
     );
     for (const currentActorId of [viewer.actorId, other.actorId, undefined]) {
-      const result = mode === 'single'
-        ? await createD1PostsResolverByActorIdWithPagination(db, 'https://fixture.invalid').resolve({
-          actorId: author.actorId,
-          currentActorId,
-          createdAt: undefined,
-        })
-        : await createD1PostsResolverByActorIds(db, 'https://fixture.invalid').resolve({
-          actorIds: [author.actorId],
-          currentActorId,
-          createdAt: undefined,
-        });
-      if (!result.ok) throw new Error('Expected posts');
-      expect(result.val.map(post => post.postId)).toEqual([secondPostId, author.postId]);
-      expect(result.val[0].liked).toBe(false);
-      expect(result.val[0].reposted).toBe(currentActorId === viewer.actorId);
-      expect(result.val[0].likeCount).toBe(0);
-      expect(result.val[0].repostCount).toBe(1);
-      expect(result.val[1].liked).toBe(currentActorId === viewer.actorId);
-      expect(result.val[1].reposted).toBe(false);
-      expect(result.val[1].likeCount).toBe(1);
-      expect(result.val[1].repostCount).toBe(0);
+      const posts = await resolvePostsWithAuthorByIds(db, [secondPostId, author.postId] as PostId[], currentActorId);
+      expect(posts.get(secondPostId as PostId)).toMatchObject({
+        liked: false,
+        reposted: currentActorId === viewer.actorId,
+        likeCount: 0,
+        repostCount: 1,
+      });
+      expect(posts.get(author.postId as PostId)).toMatchObject({
+        liked: currentActorId === viewer.actorId,
+        reposted: false,
+        likeCount: 1,
+        repostCount: 0,
+      });
     }
   });
 });

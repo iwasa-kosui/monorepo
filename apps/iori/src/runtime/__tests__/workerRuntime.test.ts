@@ -34,7 +34,6 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.notificationCountResolverSinceMarker.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.markersResolverByUserId.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.saveMarkersUseCase.run).toBeTypeOf('function');
-    expect(runtime.notifications.getLikedPostsUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.getArticleWithThreadUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.getArticlesUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.createArticleUseCase.run).toBeTypeOf('function');
@@ -44,7 +43,6 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.articles.publishedArticlesResolver.resolve).toBeTypeOf('function');
     expect(runtime.articles.publishOgImage).toBeTypeOf('function');
     expect(runtime.articles.deleteOgImage).toBeTypeOf('function');
-    expect(runtime.mutesRelays.getMutesUseCase.run).toBeTypeOf('function');
     expect(runtime.mutesRelays.createMuteUseCase.run).toBeTypeOf('function');
     expect(runtime.mutesRelays.deleteMuteUseCase.run).toBeTypeOf('function');
     expect(runtime.mutesRelays.subscribeRelayUseCase.run).toBeTypeOf('function');
@@ -53,12 +51,14 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.core.sendReplyUseCase.run).toBeTypeOf('function');
     expect(runtime.core.deletePostUseCase.run).toBeTypeOf('function');
     expect(runtime.core.sendFollowRequestUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.getUserPostsUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.getRemoteActorPostsUseCase.run).toBeTypeOf('function');
     expect(runtime.mastodon.localPostsResolverByPage.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.federatedTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.threadResolver.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.statusAssembler.assemble).toBeTypeOf('function');
+    expect(runtime.mastodon.actorIdResolverByAcct.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.accountRelationshipsResolverByActorIds.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.likedPostIdsResolverByActorIdWithPagination.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.mutedActorsResolverByUserIdWithPagination.resolve).toBeTypeOf('function');
     expect(runtime.core.subscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.core.unsubscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.uploads).toBeDefined();

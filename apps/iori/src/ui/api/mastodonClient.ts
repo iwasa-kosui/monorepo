@@ -1,4 +1,10 @@
-import type { Account, CredentialAccount, Notification, Status } from '../../adaptor/mastodon/entities.ts';
+import type {
+  Account,
+  CredentialAccount,
+  Notification,
+  Relationship,
+  Status,
+} from '../../adaptor/mastodon/entities.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -26,6 +32,8 @@ export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
 export const isUnauthorizedError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 401;
 
 export const isNotFoundError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 404;
+
+export const isUnprocessableError = (error: unknown): boolean => isMastodonApiError(error) && error.status === 422;
 
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
@@ -116,6 +124,39 @@ export const fetchStatusContext = async (id: string): Promise<StatusContext> =>
 
 export const fetchVerifyCredentials = async (): Promise<CredentialAccount> =>
   (await request<CredentialAccount>('/api/v1/accounts/verify_credentials')).body;
+
+export const lookupAccount = async (acct: string): Promise<Account> =>
+  (await request<Account>('/api/v1/accounts/lookup', { acct })).body;
+
+export const fetchAccount = async (accountId: string): Promise<Account> =>
+  (await request<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}`)).body;
+
+export const fetchAccountStatuses = (
+  accountId: string,
+  params: PageParams & Readonly<{ excludeReblogs?: boolean }> = {},
+): Promise<Page<Status>> =>
+  getPage<Status>(`/api/v1/accounts/${encodeURIComponent(accountId)}/statuses`, {
+    ...pageQuery(params),
+    exclude_reblogs: params.excludeReblogs,
+  });
+
+export const fetchRelationships = async (accountIds: readonly string[]): Promise<readonly Relationship[]> =>
+  (await request<Relationship[]>('/api/v1/accounts/relationships', { 'id[]': accountIds })).body;
+
+// 3つの取得のうちログインが必要なのは relationships だけなので、401 を未ログイン、422（アクターを持たない利用者）を関係なしとみなす
+export const fetchRelationshipOrSignedOut = async (accountId: string) => {
+  try {
+    const [relationship] = await fetchRelationships([accountId]);
+    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+  } catch (error) {
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
+    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false };
+    throw error;
+  }
+};
+
+export const fetchFavourites = (params: PageParams = {}): Promise<Page<Status>> =>
+  getPage<Status>('/api/v1/favourites', pageQuery(params));
 
 export const fetchFollowers = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/followers`, pageQuery(params));

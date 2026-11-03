@@ -1,58 +1,39 @@
-import { hc } from 'hono/client';
-import { useEffect, useRef, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { Actor } from '../../domain/actor/actor.ts';
-import type { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { User } from '../../domain/user/user.ts';
-import { debounce } from '../../helper/debounce.ts';
+import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import {
+  fetchAccountStatuses,
+  fetchFollowers,
+  fetchFollowing,
+  isNotFoundError,
+  lookupAccount,
+} from '../api/mastodonClient.ts';
+import { accountHandle, remoteUserPathOf } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
-import { appendUniqueBy } from '../hooks/appendUnique.ts';
-import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
-import { actorToAccount, postToStatus } from '../legacyConversion.ts';
+import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
-const client = hc<APIRouterType>('/api');
+const ACCOUNT_LIST_LIMIT = 80;
 
 type Props = Readonly<{
-  user: User;
-  actor: Actor;
+  account: Account;
   handle: string;
-  followers: ReadonlyArray<Actor>;
-  following: ReadonlyArray<Actor>;
-  posts: ReadonlyArray<PostWithAuthor>;
-  fetchData: (createdAt: Instant | undefined) => Promise<void>;
+  followers: readonly Account[];
+  following: readonly Account[];
+  statuses: readonly Status[];
 }>;
 
 export const LocalUserPage = ({
-  user,
-  actor,
+  account,
   handle,
   followers,
   following,
-  posts,
-  fetchData,
+  statuses,
 }: Props) => {
-  const debouncedFetchData = debounce(fetchData, 300);
-
-  useEffect(() => {
-    if (posts.length === 0) return;
-
-    const handleScroll = () => {
-      if (isNearDocumentEnd()) {
-        const oldest = posts.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
-        debouncedFetchData(oldest.createdAt);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [posts]);
-
-  const logoUrl = safeUrl(actor.logoUri);
+  const logoUrl = safeUrl(account.avatar);
 
   return (
     <>
@@ -83,12 +64,12 @@ export const LocalUserPage = ({
                   />
                 )
                 : (
-                  String(user.username).charAt(0).toUpperCase()
+                  account.username.charAt(0).toUpperCase()
                 )}
             </div>
             <div class='flex-1 min-w-0'>
               <h1 class='text-2xl font-bold text-charcoal dark:text-white truncate'>
-                {String(user.username)}
+                {account.username}
               </h1>
               <p class='text-charcoal-light dark:text-gray-400 truncate'>{handle}</p>
             </div>
@@ -98,7 +79,7 @@ export const LocalUserPage = ({
             <div class='flex gap-6 text-sm'>
               <div>
                 <span class='font-semibold text-charcoal dark:text-white'>
-                  {followers.length}
+                  {account.followers_count}
                 </span>
                 <a
                   class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
@@ -109,7 +90,7 @@ export const LocalUserPage = ({
               </div>
               <div>
                 <span class='font-semibold text-charcoal dark:text-white'>
-                  {following.length}
+                  {account.following_count}
                 </span>
                 <a
                   class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
@@ -120,7 +101,7 @@ export const LocalUserPage = ({
               </div>
               <div>
                 <span class='font-semibold text-charcoal dark:text-white'>
-                  {posts.length}+
+                  {account.statuses_count}
                 </span>
                 <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
               </div>
@@ -149,7 +130,7 @@ export const LocalUserPage = ({
                 {followers.length > 0
                   ? (
                     <div class='space-y-1 max-h-48 overflow-y-auto'>
-                      {followers.map((follower) => <ActorLink key={follower.id} account={actorToAccount(follower)} />)}
+                      {followers.map((follower) => <ActorLink key={follower.id} account={follower} />)}
                     </div>
                   )
                   : (
@@ -182,7 +163,7 @@ export const LocalUserPage = ({
                 {following.length > 0
                   ? (
                     <div class='space-y-1 max-h-48 overflow-y-auto'>
-                      {following.map((followed) => <ActorLink key={followed.id} account={actorToAccount(followed)} />)}
+                      {following.map((followed) => <ActorLink key={followed.id} account={followed} />)}
                     </div>
                   )
                   : (
@@ -213,7 +194,7 @@ export const LocalUserPage = ({
                   Remote Follow
                 </h2>
 
-                <form method='post' action={`/users/${user.username}/remote-follow`} class='space-y-3'>
+                <form method='post' action={`/users/${account.username}/remote-follow`} class='space-y-3'>
                   <input
                     type='text'
                     name='handle'
@@ -266,9 +247,9 @@ export const LocalUserPage = ({
 
       <section class='space-y-6 py-2'>
         <h2 class='text-lg font-semibold text-charcoal dark:text-white'>Posts</h2>
-        {posts.length > 0
+        {statuses.length > 0
           ? (
-            posts.map((post) => <PostView key={post.postId} status={postToStatus(post)} />)
+            statuses.map((status) => <PostView key={status.id} status={status} />)
           )
           : (
             <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6 text-center'>
@@ -280,63 +261,82 @@ export const LocalUserPage = ({
   );
 };
 
+type LocalUserData = Readonly<{
+  account: Account;
+  followers: readonly Account[];
+  following: readonly Account[];
+  statuses: readonly Status[];
+  nextMaxId: string | undefined;
+}>;
+
+const getUsernameFromUrl = () => {
+  const pathParts = window.location.pathname.split('/');
+  const usernameIndex = pathParts.indexOf('users') + 1;
+  return pathParts[usernameIndex];
+};
+
 const App = () => {
-  const [init, setInit] = useState(false);
+  const [data, setData] = useState<{ error: string } | LocalUserData | null>(null);
   const isFetchingMoreRef = useRef(false);
-  const [data, setData] = useState<
-    | { error: string }
-    | {
-      user: User;
-      actor: Actor;
-      handle: string;
-      following: readonly Actor[];
-      followers: readonly Actor[];
-      posts: readonly PostWithAuthor[];
-    }
-    | null
-  >(null);
-
-  const getUsernameFromUrl = () => {
-    const pathParts = window.location.pathname.split('/');
-    const usernameIndex = pathParts.indexOf('users') + 1;
-    return pathParts[usernameIndex];
-  };
-
-  const fetchData = async (createdAt: Instant | undefined) => {
-    const username = getUsernameFromUrl();
-    if (!username) return;
-    if (createdAt !== undefined) {
-      if (isFetchingMoreRef.current) return;
-      isFetchingMoreRef.current = true;
-    }
-    try {
-      const res = await client.v1.users[':username'].posts.$get({
-        param: { username },
-        query: { createdAt: createdAt ? String(createdAt) : undefined },
-      });
-      const latest = await res.json();
-
-      if (latest && !('error' in latest) && data && !('error' in data)) {
-        setData({
-          ...latest,
-          posts: appendUniqueBy(data.posts, latest.posts, (post) => post.postId),
-        });
-      } else {
-        setData(latest);
-      }
-    } finally {
-      if (createdAt !== undefined) {
-        isFetchingMoreRef.current = false;
-      }
-    }
-  };
 
   useEffect(() => {
-    if (!init) {
-      setInit(true);
-      fetchData(undefined);
+    const username = getUsernameFromUrl();
+    if (!username) return;
+    const fetchFirstPage = async () => {
+      try {
+        const account = await lookupAccount(username);
+        const remotePath = remoteUserPathOf(account);
+        if (remotePath !== undefined) {
+          window.location.replace(remotePath);
+          return;
+        }
+        const [page, followers, following] = await Promise.all([
+          fetchAccountStatuses(account.id, { excludeReblogs: true }),
+          fetchFollowers(account.id, { limit: ACCOUNT_LIST_LIMIT }),
+          fetchFollowing(account.id, { limit: ACCOUNT_LIST_LIMIT }),
+        ]);
+        setData({
+          account,
+          followers: followers.items,
+          following: following.items,
+          statuses: page.items,
+          nextMaxId: page.nextMaxId,
+        });
+      } catch (error) {
+        setData({
+          error: isNotFoundError(error)
+            ? `The user with username "${username}" was not found.`
+            : error instanceof Error
+            ? error.message
+            : String(error),
+        });
+      }
+    };
+    fetchFirstPage();
+  }, []);
+
+  const loaded = data !== null && !('error' in data) ? data : undefined;
+  const accountId = loaded?.account.id;
+
+  const loadMore = useCallback(async (maxId: string) => {
+    if (accountId === undefined || isFetchingMoreRef.current) return;
+    isFetchingMoreRef.current = true;
+    try {
+      const page = await fetchAccountStatuses(accountId, { maxId, excludeReblogs: true });
+      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, statuses: appendUniqueById(prev.statuses, page.items), nextMaxId }
+      );
+    } catch (error) {
+      console.error('Failed to load more posts:', error);
+    } finally {
+      isFetchingMoreRef.current = false;
     }
-  }, [init]);
+  }, [accountId]);
+
+  useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
 
   if (data === null) {
     return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
@@ -348,13 +348,11 @@ const App = () => {
 
   return (
     <LocalUserPage
-      user={data.user}
-      actor={data.actor}
-      handle={data.handle}
+      account={data.account}
+      handle={`@${accountHandle(data.account)}`}
       followers={data.followers}
       following={data.following}
-      posts={data.posts}
-      fetchData={fetchData}
+      statuses={data.statuses}
     />
   );
 };
