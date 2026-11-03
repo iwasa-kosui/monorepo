@@ -22,6 +22,7 @@ import {
   type LocalPostResolverByUri,
   Post,
   type PostCreatedStore,
+  type RemotePostAttachment,
   type RemotePostCreated,
 } from '../domain/post/post.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
@@ -29,11 +30,6 @@ import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
-
-type Attachment = Readonly<{
-  url: string;
-  altText: string | null;
-}>;
 
 type ActorIdentity = Readonly<{
   uri: string;
@@ -47,7 +43,7 @@ type Input = Readonly<{
   content: string;
   uri: string;
   actorIdentity: ActorIdentity;
-  attachments: Attachment[];
+  attachments: RemotePostAttachment[];
   inReplyToUri?: string | null;
 }>;
 

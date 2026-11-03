@@ -1,4 +1,4 @@
-import { type Announce, type InboxContext, isActor, Note } from '@fedify/fedify';
+import { type Announce, type DocumentLoader, type InboxContext, isActor, Note } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -9,11 +9,12 @@ import type {
 import { FederatedTimelineItem } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { RemotePostUpserter } from '../../../domain/post/post.ts';
+import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { extractAttachments } from './extractAttachments.ts';
 
 export type OnAnnounceDeps = Readonly<{
   relayResolverByActorUri: RelayResolverByActorUri;
@@ -23,6 +24,18 @@ export type OnAnnounceDeps = Readonly<{
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
 }>;
+
+const extractAttachmentsOrEmpty = async (
+  note: Note,
+  documentLoader: DocumentLoader,
+): Promise<RemotePostAttachment[]> => {
+  try {
+    return await extractAttachments(note, documentLoader);
+  } catch (error) {
+    getLogger().warn(`Failed to extract attachments for: ${note.id?.href} - ${String(error)}`);
+    return [];
+  }
+};
 
 export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxContext<unknown>, activity: Announce) => {
   const actorId = activity.actorId;
@@ -44,7 +57,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
-  const { actorIdentity: reposterIdentity } = actorResult.val;
+  const { actorIdentity: reposterIdentity, documentLoaderOptions } = actorResult.val;
   if (!activity.id) {
     getLogger().warn('Announce activity has no id');
     return;
@@ -120,6 +133,10 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   const contentText = String(note.content ?? '');
   const authorIcon = await author.getIcon();
+  const attachments = await extractAttachmentsOrEmpty(
+    note,
+    documentLoaderOptions.documentLoader ?? ctx.documentLoader,
+  );
 
   return RA.flow(
     deps.addReceivedRepostUseCase.run({
@@ -129,6 +146,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       remotePostIdentity: {
         uri: note.id.href,
         content: contentText,
+        attachments,
         authorIdentity: {
           uri: author.id.href,
           inboxUrl: author.inboxId.href,
@@ -163,7 +181,7 @@ import type { Relay } from '../../../domain/relay/relay.ts';
 
 const processRelayAnnounce = async (
   deps: OnAnnounceDeps,
-  _ctx: InboxContext<unknown>,
+  ctx: InboxContext<unknown>,
   activity: Announce,
   relay: Relay,
 ) => {
@@ -196,12 +214,14 @@ const processRelayAnnounce = async (
 
   const contentText = String(note.content ?? '');
   const authorIcon = await author.getIcon();
+  const attachments = await extractAttachmentsOrEmpty(note, ctx.documentLoader);
 
   // Upsert the remote post using the existing upserter
   // Use the remote post upserter to create/get the post
   const postResult = await deps.remotePostUpserter.resolve({
     uri: note.id.href,
     content: contentText,
+    attachments,
     authorIdentity: {
       uri: author.id.href,
       inboxUrl: author.inboxId.href,
