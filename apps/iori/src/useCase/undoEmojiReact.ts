@@ -99,19 +99,7 @@ const create = ({
         }
         return RA.ok(result.val);
       }),
-      // Delete the emoji react from database
-      RA.andThrough(async ({ emojiReact }) => {
-        const syntheticActivityUri = emojiReact.emojiReactActivityUri
-          || `local:emoji-react:${emojiReact.emojiReactId}`;
-        const emojiReactWithUri = {
-          ...emojiReact,
-          emojiReactActivityUri: syntheticActivityUri,
-        };
-        const event = EmojiReact.deleteEmojiReact(emojiReactWithUri, now);
-        return emojiReactDeletedStore.store(event);
-      }),
-      // Send Undo activity to the remote server (only for remote posts)
-      RA.andThrough(async ({ user, post, ctx, emoji, emojiReact }) => {
+      RA.andBind('remote', async ({ user, post, ctx }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -149,6 +137,25 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Delete the emoji react from database
+      RA.andThrough(async ({ emojiReact }) => {
+        const syntheticActivityUri = emojiReact.emojiReactActivityUri
+          || `local:emoji-react:${emojiReact.emojiReactId}`;
+        const emojiReactWithUri = {
+          ...emojiReact,
+          emojiReactActivityUri: syntheticActivityUri,
+        };
+        const event = EmojiReact.deleteEmojiReact(emojiReactWithUri, now);
+        return emojiReactDeletedStore.store(event);
+      }),
+      // Send Undo activity to the remote server (only for remote posts)
+      RA.andThrough(async ({ user, ctx, emoji, emojiReact, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         const actorUri = ctx.getActorUri(user.username);
 
         const originalActivityId = new URL(
@@ -163,22 +170,22 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new Undo({
             id: undoActivityId,
             actor: actorUri,
             object: new FedifyEmojiReact({
               id: originalActivityId,
               actor: actorUri,
-              object: result.id,
+              object: remote.noteId,
               content: emoji,
             }),
-            to: author.id,
+            to: remote.authorId,
           }),
         );
 
         getLogger().info(
-          `Sent Undo EmojiReact: user=${user.username}, note=${result.id.href}, emoji=${emoji}`,
+          `Sent Undo EmojiReact: user=${user.username}, note=${remote.noteId.href}, emoji=${emoji}`,
         );
         return RA.ok(undefined);
       }),

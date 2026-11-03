@@ -14,6 +14,7 @@ import type { UserId } from '../../domain/user/userId.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import type { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
+import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { type StatusAssembler, StatusAssemblyError } from '../mastodon/statusAssembler.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody } from './helper/requestBody.ts';
@@ -45,7 +46,12 @@ const urlSchema = z.string().url();
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
 
-const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
+type ReactionActionError = Exclude<
+  InferUseCaseError<SendEmojiReactUseCase> | InferUseCaseError<UndoEmojiReactUseCase>,
+  Readonly<{ type: 'AlreadyReactedError' | 'EmojiReactNotFoundError' }>
+>;
+
+const failed = (c: Context, err: ReactionActionError): Response => {
   switch (err.type) {
     case 'PostNotFoundError':
       return c.json(recordNotFound, 404);
@@ -54,8 +60,10 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
       return c.json(invalidToken, 401);
     case 'RemoteNoteLookupError':
       return c.json({ error: 'The remote server could not be reached' }, 502);
-    default:
-      throw new Error(`The reaction action failed: ${err.type}`);
+    default: {
+      const unhandled: never = err;
+      throw new Error(`The reaction action failed: ${JSON.stringify(unhandled)}`);
+    }
   }
 };
 

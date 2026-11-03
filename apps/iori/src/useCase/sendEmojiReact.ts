@@ -101,22 +101,7 @@ const create = ({
           }),
         );
       }),
-      // Create and store emoji react
-      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
-        EmojiReact.createEmojiReact(
-          {
-            emojiReactId: EmojiReactId.generate(),
-            actorId: actor.id,
-            postId,
-            emoji,
-            emojiReactActivityUri: null,
-            emojiImageUrl: null,
-          },
-          now,
-        )),
-      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
-      // Send the EmojiReact activity to the remote server (only for remote posts)
-      RA.andThrough(async ({ user, post, ctx, emoji, emojiReactCreated }) => {
+      RA.andBind('remote', async ({ user, post, ctx }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -154,6 +139,28 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Create and store emoji react
+      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
+        EmojiReact.createEmojiReact(
+          {
+            emojiReactId: EmojiReactId.generate(),
+            actorId: actor.id,
+            postId,
+            emoji,
+            emojiReactActivityUri: null,
+            emojiImageUrl: null,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
+      // Send the EmojiReact activity to the remote server (only for remote posts)
+      RA.andThrough(async ({ user, ctx, emoji, emojiReactCreated, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         const actorUri = ctx.getActorUri(user.username);
         const activityId = new URL(
           `#emoji-reacts/${emojiReactCreated.aggregateId.emojiReactId}`,
@@ -162,18 +169,18 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new FedifyEmojiReact({
             id: activityId,
             actor: actorUri,
-            object: result.id,
+            object: remote.noteId,
             content: emoji,
-            to: author.id,
+            to: remote.authorId,
           }),
         );
 
         getLogger().info(
-          `Sent EmojiReact: user=${user.username}, note=${result.id.href}, emoji=${emoji}, activityId=${activityId.href}`,
+          `Sent EmojiReact: user=${user.username}, note=${remote.noteId.href}, emoji=${emoji}, activityId=${activityId.href}`,
         );
         return RA.ok(undefined);
       }),

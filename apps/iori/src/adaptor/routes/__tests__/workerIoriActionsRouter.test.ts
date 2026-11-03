@@ -1,5 +1,5 @@
 import { EmojiReact, Note, Person } from '@fedify/fedify';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
@@ -187,6 +187,56 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'The remote server could not be reached' });
+    expect(t.count()).toBe(0);
+  });
+
+  it('リモートの投稿を取得できない取り消しは 502 にして、反応の行を消さない', async () => {
+    const t = await seedReactions();
+    t.seed.addEmojiReact(t.me.actorId, t.publicNote.postId, ':wave:');
+
+    const response = await t.del(t.publicNote.postId);
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'The remote server could not be reached' });
+    expect(t.count()).toBe(1);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('検索の後に同じ反応が保存されて一意制約に違反しても、エラーにせず現在の状態を返す', async () => {
+    const t = await seedReactions();
+    t.seed.addEmojiReact(t.me.actorId, t.local.postId, ':wave:');
+    const prepare = t.sqlite.prepare.bind(t.sqlite);
+    let missed = false;
+    vi.spyOn(t.sqlite, 'prepare').mockImplementation((sql) => {
+      if (missed || !/from "emoji_reacts"[\s\S]*limit/i.test(sql)) return prepare(sql);
+      missed = true;
+      return { setReturnArrays: () => undefined, all: () => [] } as unknown as ReturnType<typeof prepare>;
+    });
+
+    const response = await t.put(t.local.postId);
+
+    expect(missed).toBe(true);
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({
+      id: t.local.postId,
+      iori: { reactions: [{ emoji: ':wave:', count: 1, me: true }] },
+    });
+    expect(t.count()).toBe(1);
+  });
+
+  it('フォローしていない相手の private の投稿は 404 にして、フォローすると反応できる', async () => {
+    const t = await seedReactions();
+    const followersOnly = t.seed.addRemotePost(t.alice, 2_300, { visibility: 'private', timeline: false });
+    t.serveRemoteNote(followersOnly);
+
+    const beforeFollow = await t.put(followersOnly.postId);
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+    const afterFollow = await t.put(followersOnly.postId);
+
+    expect(beforeFollow.status).toBe(404);
+    expect(await beforeFollow.json()).toEqual(notFound);
+    expect(afterFollow.status).toBe(200);
+    expect(t.count(`postId='${followersOnly.postId}'`)).toBe(1);
   });
 
   it('閲覧者に見えないリモートの投稿は 404 にして emoji_reacts を増やさない', async () => {
