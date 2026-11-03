@@ -1,4 +1,6 @@
-import type { LinkPreview } from '../../domain/linkPreview/linkPreview.ts';
+import type { IoriStatusExtension } from '../../adaptor/mastodon/entities.ts';
+
+type LinkPreview = IoriStatusExtension['link_previews'][number];
 
 type Props = Readonly<{
   preview: LinkPreview;
@@ -22,10 +24,10 @@ export const LinkPreviewCard = ({ preview }: Props) => {
       class='block rounded-xl border border-warm-gray dark:border-gray-700 overflow-hidden hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
     >
       <div class='flex'>
-        {preview.imageUrl && (
+        {preview.image && (
           <div class='flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32'>
             <img
-              src={preview.imageUrl}
+              src={preview.image}
               alt={preview.title ?? 'Link preview'}
               class='w-full h-full object-cover'
               loading='lazy'
@@ -34,18 +36,15 @@ export const LinkPreviewCard = ({ preview }: Props) => {
         )}
         <div class='flex-1 min-w-0 p-3'>
           <div class='flex items-center gap-1 text-xs text-charcoal-light dark:text-gray-400 mb-1'>
-            {preview.faviconUrl && (
+            {preview.favicon && (
               <img
-                src={preview.faviconUrl}
+                src={preview.favicon}
                 alt=''
                 class='w-4 h-4 flex-shrink-0'
                 loading='lazy'
-                onError={(e: Event) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
               />
             )}
-            <span class='truncate'>{preview.siteName ?? displayUrl}</span>
+            <span class='truncate'>{preview.site_name ?? displayUrl}</span>
           </div>
           {preview.title && (
             <h4 class='text-sm font-medium text-charcoal dark:text-white line-clamp-2 mb-1'>

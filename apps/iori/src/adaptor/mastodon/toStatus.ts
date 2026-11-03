@@ -103,6 +103,8 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
         title: preview.title,
         description: preview.description,
         image: preview.imageUrl,
+        site_name: preview.siteName,
+        favicon: preview.faviconUrl,
       })),
     },
   };
@@ -114,7 +116,10 @@ export type ToReblogStatusOptions = Readonly<{
   reblog: Status;
 }>;
 
-export const toReblogStatus = (item: RepostTimelineItem, options: ToReblogStatusOptions): Status => ({
+export const toReblogStatus = (
+  item: Pick<RepostTimelineItem, 'createdAt'>,
+  options: ToReblogStatusOptions,
+): Status => ({
   id: options.repostId,
   uri: `${options.account.uri}/reposts/${options.repostId}`,
   created_at: toIsoString(item.createdAt),

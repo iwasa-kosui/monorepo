@@ -1,9 +1,10 @@
 import { useEffect } from 'hono/jsx';
 
-import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
-  items: readonly TimelineItemWithPost[];
+  items: readonly Status[];
   selectedIndex: number;
   setSelectedIndex: (index: number) => void;
   scrollToSelected: (index: number) => void;
@@ -100,7 +101,7 @@ export const useKeyboardNavigation = ({
       const selectedItem = items[selectedIndex];
       if (!selectedItem) return;
 
-      const post = selectedItem.post;
+      const post = displayStatus(selectedItem);
 
       switch (e.key) {
         case 'j':
@@ -121,18 +122,18 @@ export const useKeyboardNavigation = ({
           break;
         case 'l':
           e.preventDefault();
-          if (post.liked && !undoingLikePostId) {
-            onUndoLike(post.postId);
-          } else if (!post.liked && !likingPostId) {
-            onLike(post.postId);
+          if (post.favourited && !undoingLikePostId) {
+            onUndoLike(post.id);
+          } else if (!post.favourited && !likingPostId) {
+            onLike(post.id);
           }
           break;
         case 'o':
         case 'Enter':
           e.preventDefault();
-          if (post.type === 'local') {
-            window.location.href = `/users/${post.username}/posts/${post.postId}`;
-          } else if (post.type === 'remote' && 'uri' in post) {
+          if (isLocalAccount(post.account)) {
+            window.location.href = statusHref(post);
+          } else {
             window.open(post.uri, '_blank');
           }
           break;
@@ -157,7 +158,7 @@ export const useKeyboardNavigation = ({
         }
         case 'p': {
           e.preventDefault();
-          onReply(post.postId);
+          onReply(post.id);
           break;
         }
       }

@@ -6,6 +6,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { User, UserResolver, UserResolverByUsername } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
+import { defaultImageUrls } from '../mastodon/defaultImages.ts';
 import type { Account, CredentialAccount, Marker, Preferences } from '../mastodon/entities.ts';
 import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
@@ -13,9 +14,6 @@ import { toIsoString } from '../mastodon/time.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
 import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
-
-export const DEFAULT_AVATAR_PATH = '/default-avatar.png';
-export const DEFAULT_HEADER_PATH = '/default-header.png';
 
 export type WorkerMastodonCoreRouterDeps = Readonly<{
   authn: MastodonAuthn;
@@ -87,8 +85,7 @@ export const createWorkerMastodonCoreRouter = ({
       return undefined;
     }
     const account: Account = toAccount({ type: 'local', user, actor: actor.val }, {
-      defaultAvatarUrl: new URL(DEFAULT_AVATAR_PATH, requestUrl).href,
-      defaultHeaderUrl: new URL(DEFAULT_HEADER_PATH, requestUrl).href,
+      ...defaultImageUrls(requestUrl),
       ...stats.val,
     });
     return {

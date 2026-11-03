@@ -4,6 +4,7 @@ import type { User } from '../../domain/user/user.ts';
 import { Layout } from '../../layout.tsx';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { actorToAccount, postToStatus } from '../legacyConversion.ts';
 
 type Props = Readonly<{
   user: User;
@@ -118,7 +119,7 @@ export const GetUserPage = ({
               {followers.length > 0
                 ? (
                   <div class='space-y-1 max-h-48 overflow-y-auto'>
-                    {followers.map((follower) => <ActorLink key={follower.id} actor={follower} />)}
+                    {followers.map((follower) => <ActorLink key={follower.id} account={actorToAccount(follower)} />)}
                   </div>
                 )
                 : (
@@ -151,7 +152,7 @@ export const GetUserPage = ({
               {following.length > 0
                 ? (
                   <div class='space-y-1 max-h-48 overflow-y-auto'>
-                    {following.map((followed) => <ActorLink key={followed.id} actor={followed} />)}
+                    {following.map((followed) => <ActorLink key={followed.id} account={actorToAccount(followed)} />)}
                   </div>
                 )
                 : (
@@ -237,7 +238,7 @@ export const GetUserPage = ({
       <h2 class='text-lg font-semibold text-charcoal dark:text-white'>Posts</h2>
       {posts.length > 0
         ? (
-          posts.map((post) => <PostView post={post} />)
+          posts.map((post) => <PostView status={postToStatus(post)} />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>

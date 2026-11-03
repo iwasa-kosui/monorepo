@@ -10,8 +10,9 @@ import type { User } from '../../domain/user/user.ts';
 import { debounce } from '../../helper/debounce.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { isNearDocumentEnd } from '../hooks/infiniteScrollPosition.ts';
-import { appendUniquePosts } from '../hooks/postsMerge.ts';
+import { actorToAccount, postToStatus } from '../legacyConversion.ts';
 
 const client = hc<APIRouterType>('/api');
 
@@ -145,7 +146,7 @@ export const LocalUserPage = ({
                 {followers.length > 0
                   ? (
                     <div class='space-y-1 max-h-48 overflow-y-auto'>
-                      {followers.map((follower) => <ActorLink key={follower.id} actor={follower} />)}
+                      {followers.map((follower) => <ActorLink key={follower.id} account={actorToAccount(follower)} />)}
                     </div>
                   )
                   : (
@@ -178,7 +179,7 @@ export const LocalUserPage = ({
                 {following.length > 0
                   ? (
                     <div class='space-y-1 max-h-48 overflow-y-auto'>
-                      {following.map((followed) => <ActorLink key={followed.id} actor={followed} />)}
+                      {following.map((followed) => <ActorLink key={followed.id} account={actorToAccount(followed)} />)}
                     </div>
                   )
                   : (
@@ -264,7 +265,7 @@ export const LocalUserPage = ({
         <h2 class='text-lg font-semibold text-charcoal dark:text-white'>Posts</h2>
         {posts.length > 0
           ? (
-            posts.map((post) => <PostView key={post.postId} post={post} />)
+            posts.map((post) => <PostView key={post.postId} status={postToStatus(post)} />)
           )
           : (
             <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6 text-center'>
@@ -315,7 +316,7 @@ const App = () => {
       if (latest && !('error' in latest) && data && !('error' in data)) {
         setData({
           ...latest,
-          posts: appendUniquePosts(data.posts, latest.posts),
+          posts: appendUniqueBy(data.posts, latest.posts, (post) => post.postId),
         });
       } else {
         setData(latest);

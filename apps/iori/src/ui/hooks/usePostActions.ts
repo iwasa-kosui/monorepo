@@ -1,20 +1,15 @@
 import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
+import { withFavourited, withReblogged } from '../api/status.ts';
 
 const client = hc<APIRouterType>('/api');
 
-type PostUpdater = (
+type StatusUpdater = (
   postId: string,
-  updater: (item: TimelineItemWithPost) => TimelineItemWithPost,
-) => void;
-
-type ThreadPostUpdater = (
-  postId: string,
-  updater: (post: PostWithAuthor) => PostWithAuthor,
+  updater: (status: Status) => Status,
 ) => void;
 
 export type ActionState = Readonly<{
@@ -39,8 +34,8 @@ export type UsePostActionsReturn = Readonly<{
 }>;
 
 type UsePostActionsProps = Readonly<{
-  updateTimelineItem: PostUpdater;
-  updateThreadPost?: ThreadPostUpdater;
+  updateTimelineItem: StatusUpdater;
+  updateThreadPost?: StatusUpdater;
   removePost: (postId: string) => void;
   refreshTimeline: () => Promise<void>;
   onPostDeleted?: (postId: string) => void;
@@ -68,11 +63,8 @@ export const usePostActions = ({
         const res = await client.v1.like.$post({ json: { postId } });
         const result = await res.json();
         if ('success' in result && result.success) {
-          updateTimelineItem(postId, (item) => ({
-            ...item,
-            post: { ...item.post, liked: true },
-          }));
-          updateThreadPost?.(postId, (post) => ({ ...post, liked: true }));
+          updateTimelineItem(postId, (status) => withFavourited(status, true));
+          updateThreadPost?.(postId, (status) => withFavourited(status, true));
         } else if ('error' in result) {
           console.error('Failed to like:', result.error);
         }
@@ -92,11 +84,8 @@ export const usePostActions = ({
         const res = await client.v1.like.$delete({ json: { postId } });
         const result = await res.json();
         if ('success' in result && result.success) {
-          updateTimelineItem(postId, (item) => ({
-            ...item,
-            post: { ...item.post, liked: false },
-          }));
-          updateThreadPost?.(postId, (post) => ({ ...post, liked: false }));
+          updateTimelineItem(postId, (status) => withFavourited(status, false));
+          updateThreadPost?.(postId, (status) => withFavourited(status, false));
         } else if ('error' in result) {
           console.error('Failed to undo like:', result.error);
           alert(`Failed to undo like: ${result.error}`);
@@ -119,7 +108,7 @@ export const usePostActions = ({
         const result = await res.json();
         if ('success' in result && result.success) {
           await refreshTimeline();
-          updateThreadPost?.(postId, (post) => ({ ...post, reposted: true }));
+          updateThreadPost?.(postId, (status) => withReblogged(status, true));
         } else if ('error' in result) {
           console.error('Failed to repost:', result.error);
           alert(`Failed to repost: ${result.error}`);
@@ -145,7 +134,7 @@ export const usePostActions = ({
         const result = await res.json();
         if ('success' in result && result.success) {
           await refreshTimeline();
-          updateThreadPost?.(postId, (post) => ({ ...post, reposted: false }));
+          updateThreadPost?.(postId, (status) => withReblogged(status, false));
         } else if ('error' in result) {
           console.error('Failed to undo repost:', result.error);
           alert(`Failed to undo repost: ${result.error}`);

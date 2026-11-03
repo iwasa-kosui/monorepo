@@ -54,6 +54,17 @@ type Authentication = Readonly<
 const invalidToken = (c: Context) => c.json({ error: 'The access token is invalid' }, 401);
 const outsideScopes = (c: Context) => c.json({ error: 'This action is outside the authorized scopes' }, 403);
 
+export const rejectUnlessUser = (
+  c: Context,
+  principal: MastodonPrincipal | undefined,
+  scopes: ReadonlyArray<Scope>,
+): Response | undefined => {
+  if (principal === undefined || principal.userId === null) {
+    return invalidToken(c);
+  }
+  return Scope.includesAny(principal.scopes, scopes) ? undefined : outsideScopes(c);
+};
+
 export const createMastodonAuthn = (
   { verifyAccessTokenUseCase, sessionResolver }: MastodonAuthnDeps,
 ): MastodonAuthn => {
@@ -120,12 +131,6 @@ export const createMastodonAuthn = (
   return {
     optionalAuth: guard(() => undefined),
     requireApp: guard((c, principal) => principal === undefined ? invalidToken(c) : undefined),
-    requireUser: (...scopes) =>
-      guard((c, principal) => {
-        if (principal === undefined || principal.userId === null) {
-          return invalidToken(c);
-        }
-        return Scope.includesAny(principal.scopes, scopes) ? undefined : outsideScopes(c);
-      }),
+    requireUser: (...scopes) => guard((c, principal) => rejectUnlessUser(c, principal, scopes)),
   };
 };

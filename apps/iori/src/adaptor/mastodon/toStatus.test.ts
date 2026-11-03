@@ -63,7 +63,7 @@ const author = {
       title: 'Title A',
       description: null,
       imageUrl: 'https://example.com/a.png',
-      faviconUrl: null,
+      faviconUrl: 'https://example.com/favicon.ico',
       siteName: 'Example',
       createdAt,
     },
@@ -187,8 +187,15 @@ describe('toStatus', () => {
       image: 'https://example.com/a.png',
     });
     expect(status.iori?.link_previews).toEqual([
-      { url: 'https://example.com/a', title: 'Title A', description: null, image: 'https://example.com/a.png' },
-      { url: 'https://example.com/b', title: null, description: 'Desc B', image: null },
+      {
+        url: 'https://example.com/a',
+        title: 'Title A',
+        description: null,
+        image: 'https://example.com/a.png',
+        site_name: 'Example',
+        favicon: 'https://example.com/favicon.ico',
+      },
+      { url: 'https://example.com/b', title: null, description: 'Desc B', image: null, site_name: null, favicon: null },
     ]);
   });
 
@@ -218,6 +225,7 @@ describe('toReblogStatus', () => {
     const item: RepostTimelineItem = {
       type: 'repost',
       timelineItemId: TimelineItemId.generate(),
+      repostId,
       post: localPost,
       repostedBy: { actorId: reposterActorId, username: 'alice', logoUri: undefined },
       createdAt: Date.UTC(2025, 1, 3) as Instant,

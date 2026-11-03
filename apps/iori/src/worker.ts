@@ -14,9 +14,12 @@ import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
+import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMastodonFallbackRouter.ts';
+import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
+import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
 import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
 import { createWorkerNotificationsApiRouter } from './adaptor/routes/workerNotificationsApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
@@ -256,6 +259,9 @@ export default {
             },
           }),
         );
+        app.route('/api', createWorkerMastodonTimelinesRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonStatusesRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerMastodonAccountsRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),

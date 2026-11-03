@@ -2,7 +2,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createSqliteD1Fixture } from './adaptor/d1/__tests__/sqliteFixture.ts';
-import { CredentialAccountSchema, InstanceV2Schema } from './adaptor/mastodon/entities.ts';
+import { CredentialAccountSchema, InstanceV2Schema, StatusSchema } from './adaptor/mastodon/entities.ts';
 import { admissionFixture } from './testing/admissionFixture.ts';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
@@ -60,7 +60,7 @@ const setup = () => {
   } as unknown as IoriWorkerEnv;
   const request = (path: string, init?: RequestInit) =>
     worker.fetch(new Request(`${origin}${path}`, init), env, executionContext);
-  return { request };
+  return { request, sqlite };
 };
 
 describe('Worker の Mastodon 互換 API', () => {
@@ -166,13 +166,13 @@ describe('Worker の Mastodon 互換 API', () => {
     const headers = { Cookie: `sessionId=${sessionId}` };
 
     const [v1, v2] = await Promise.all([
-      request('/api/v1/statuses/abc?q=1', { headers }),
+      request('/api/v1/statuses/abc/favourited_by?q=1', { headers }),
       request('/api/v2/media', { method: 'POST', headers }),
     ]);
 
     expect([v1.status, v2.status]).toEqual([404, 404]);
     expect(await v1.json()).toEqual({ error: 'Record not found' });
-    expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: GET /api/v1/statuses/abc');
+    expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: GET /api/v1/statuses/abc/favourited_by');
     expect(warn).toHaveBeenCalledWith('Unimplemented Mastodon API: POST /api/v2/media');
     warn.mockRestore();
   });
@@ -194,6 +194,78 @@ describe('Worker の Mastodon 互換 API', () => {
     expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
     expect(warn.mock.calls.some((call) => String(call[0]).startsWith('Unimplemented Mastodon API'))).toBe(false);
     warn.mockRestore();
+  });
+
+  describe('ホームと投稿の表示', () => {
+    const seedPost = (sqlite: ReturnType<typeof setup>['sqlite'], createdAt: number) => {
+      const postId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        actorId,
+        '<p>seeded</p>',
+        createdAt,
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      sqlite.prepare(
+        'INSERT INTO timeline_items(timelineItemId,type,actorId,postId,repostId,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(crypto.randomUUID(), 'post', actorId, postId, null, createdAt);
+      return postId;
+    };
+
+    it('Cookie の利用者に timelines/home と statuses/:id を返し、Link ヘッダーを付ける', async () => {
+      const { request, sqlite } = setup();
+      const older = seedPost(sqlite, Date.UTC(2025, 0, 3));
+      const newer = seedPost(sqlite, Date.UTC(2025, 0, 4));
+      const headers = { Cookie: `sessionId=${sessionId}` };
+
+      const home = await request('/api/v1/timelines/home?limit=1', { headers });
+      const status = await request(`/api/v1/statuses/${older}`, { headers });
+      const context = await request(`/api/v1/statuses/${older}/context`);
+
+      expect(home.status).toBe(200);
+      const [first] = await home.json() as unknown[];
+      expect(StatusSchema.parse(first)).toMatchObject({ id: newer, account: { id: actorId, username: 'kosui' } });
+      expect(home.headers.get('Link')).toContain(`max_id=${newer}`);
+      expect(status.status).toBe(200);
+      expect(StatusSchema.parse(await status.json()).id).toBe(older);
+      expect(await context.json()).toEqual({ ancestors: [], descendants: [] });
+    });
+
+    it('timelines/public は未認証でローカルの投稿を返し、remote=true は 401 にする', async () => {
+      const { request, sqlite } = setup();
+      const postId = seedPost(sqlite, Date.UTC(2025, 0, 3));
+
+      const [local, remote, missing] = await Promise.all([
+        request('/api/v1/timelines/public?local=true'),
+        request('/api/v1/timelines/public?remote=true'),
+        request(`/api/v1/statuses/${crypto.randomUUID()}`),
+      ]);
+
+      expect(local.status).toBe(200);
+      expect((await local.json() as Array<{ id: string }>).map((status) => status.id)).toEqual([postId]);
+      expect(remote.status).toBe(401);
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({ error: 'Record not found' });
+    });
+
+    it('timelines/home は認証がなければ 401 にする', async () => {
+      const response = await setup().request('/api/v1/timelines/home');
+
+      expect(response.status).toBe(401);
+    });
+
+    it('消した独自 API のパスは未実装として 404 の JSON を返す', async () => {
+      const { request } = setup();
+
+      const responses = await Promise.all([
+        request('/api/v1/server-timeline'),
+        request('/api/v1/federated'),
+        request('/api/v1/thread?postId=x'),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
+    });
   });
 
   it('既存の独自 API と /api/og/* の応答を変えない', async () => {

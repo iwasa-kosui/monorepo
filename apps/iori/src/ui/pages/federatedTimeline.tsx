@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { fetchPublicTimeline } from '../api/mastodonClient.ts';
 import { PostView } from '../components/PostView.tsx';
-
-type FederatedTimelineItem = {
-  federatedTimelineItemId: string;
-  post: {
-    postId: string;
-    content: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
 
 type Relay = {
   relayId: string;
@@ -20,7 +12,7 @@ type Relay = {
 };
 
 const FederatedTimelinePage = () => {
-  const [items, setItems] = useState<FederatedTimelineItem[]>([]);
+  const [items, setItems] = useState<readonly Status[]>([]);
   const [relays, setRelays] = useState<Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -33,19 +25,14 @@ const FederatedTimelinePage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const timelineResponse = await fetch('/api/v1/federated');
-        if (timelineResponse.ok) {
-          const timelineData = await timelineResponse.json();
-          setItems(timelineData.items);
-          setIsLoggedIn(true);
+        const page = await fetchPublicTimeline('remote');
+        setItems(page.items);
+        setIsLoggedIn(true);
 
-          const relaysResponse = await fetch('/api/v1/relays');
-          if (relaysResponse.ok) {
-            const relaysData = await relaysResponse.json();
-            setRelays(relaysData.relays);
-          }
-        } else {
-          setIsLoggedIn(false);
+        const relaysResponse = await fetch('/api/v1/relays');
+        if (relaysResponse.ok) {
+          const relaysData = await relaysResponse.json();
+          setRelays(relaysData.relays);
         }
       } catch {
         // Network error
@@ -187,7 +174,7 @@ const FederatedTimelinePage = () => {
 
       {items.length > 0
         ? (
-          items.map((item) => <PostView key={item.federatedTimelineItemId} post={item.post as never} />)
+          items.map((status) => <PostView key={status.id} status={status} />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>
