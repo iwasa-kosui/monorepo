@@ -14,9 +14,13 @@ import {
   fetchStatusContext,
   isNotFoundError,
   isUnauthorizedError,
+  isUnprocessableError,
   lookupAccount,
   parseLinkHeader,
   saveNotificationsMarker,
+  updateAvatar,
+  updateMedia,
+  uploadMedia,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -274,5 +278,97 @@ describe('mastodon client requests', () => {
 
   it('does not treat a network failure as an unauthorized error', () => {
     expect(isUnauthorizedError(new TypeError('Failed to fetch'))).toBe(false);
+  });
+});
+
+describe('mastodon client media and avatar writes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const callOf = (fetchMock: ReturnType<typeof stubFetch>) =>
+    (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+  const image = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
+  const attachment = { id: 'm1', type: 'image', url: 'https://iori.example/uploads/m1.png' };
+
+  it('uploads a file to /api/v2/media as same-origin multipart without a Content-Type header', async () => {
+    const fetchMock = stubFetch(jsonResponse(attachment));
+    const file = image();
+
+    const media = await uploadMedia(file);
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v2/media');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ Accept: 'application/json' });
+    const body = init.body as FormData;
+    expect(body.get('file')).toBe(file);
+    expect(body.has('description')).toBe(false);
+    expect(media).toEqual(attachment);
+  });
+
+  it('sends the description when uploading with one', async () => {
+    const fetchMock = stubFetch(jsonResponse(attachment));
+
+    await uploadMedia(image(), '猫の写真');
+
+    expect((callOf(fetchMock)[1].body as FormData).get('description')).toBe('猫の写真');
+  });
+
+  it('rejects an upload with the server message', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The file is too large. Max size: 5MB' }, { status: 422 }));
+
+    const error = await uploadMedia(image()).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The file is too large. Max size: 5MB');
+  });
+
+  it('updates the media description with a same-origin PUT', async () => {
+    const fetchMock = stubFetch(jsonResponse({ ...attachment, description: '犬' }));
+
+    const media = await updateMedia('m 1', '犬');
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v1/media/m%201');
+    expect(init.method).toBe('PUT');
+    expect(init.credentials).toBe('same-origin');
+    expect((init.body as FormData).get('description')).toBe('犬');
+    expect(media.description).toBe('犬');
+  });
+
+  it('rejects a media update for a missing media as not found', async () => {
+    stubFetch(jsonResponse({ error: 'Record not found' }, { status: 404 }));
+
+    expect(isNotFoundError(await updateMedia('missing', 'x').catch((e: unknown) => e))).toBe(true);
+  });
+
+  it('sends the avatar to update_credentials with a same-origin PATCH and returns the account', async () => {
+    const account = { id: 'a1', username: 'kosui', avatar: 'https://iori.example/uploads/a.png' };
+    const fetchMock = stubFetch(jsonResponse(account));
+    const file = image();
+
+    const result = await updateAvatar(file);
+
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('/api/v1/accounts/update_credentials');
+    expect(init.method).toBe('PATCH');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ Accept: 'application/json' });
+    expect((init.body as FormData).get('avatar')).toBe(file);
+    expect(result).toEqual(account);
+  });
+
+  it('rejects an avatar update with the server message', async () => {
+    stubFetch(
+      jsonResponse({ error: 'Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP' }, {
+        status: 422,
+      }),
+    );
+
+    const error = await updateAvatar(image()).catch((e: unknown) => e);
+
+    expect((error as Error).message).toBe('Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP');
   });
 });

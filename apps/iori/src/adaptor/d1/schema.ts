@@ -154,6 +154,17 @@ export const postImagesTable = sqliteTable('post_images', {
   createdAt: timestamp().notNull(),
 });
 
+export const mediaUploadsTable = sqliteTable('media_uploads', {
+  mediaId: text('mediaId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  url: text('url').notNull(),
+  mimeType: text('mimeType').notNull(),
+  description: text('description'),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  index('media_uploads_user_id_idx').on(table.userId),
+]);
+
 export const notificationsTable = sqliteTable('notifications', {
   notificationId: text('notificationId').primaryKey(),
   recipientUserId: text('recipientUserId').notNull().references(() => usersTable.userId),
@@ -471,6 +482,7 @@ export const schema = {
   localLikesTable,
   remoteLikesTable,
   postImagesTable,
+  mediaUploadsTable,
   notificationsTable,
   mastodonMarkersTable,
   notificationLikesTable,

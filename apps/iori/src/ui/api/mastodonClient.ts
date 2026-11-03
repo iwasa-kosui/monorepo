@@ -1,6 +1,7 @@
 import type {
   Account,
   CredentialAccount,
+  MediaAttachment,
   Notification,
   Relationship,
   Status,
@@ -178,4 +179,35 @@ export const saveNotificationsMarker = async (lastReadId: string): Promise<void>
     body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
   });
   if (!res.ok) throw await toApiError(res);
+};
+
+const send = async <T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: FormData): Promise<T> => {
+  // multipart の境界を含む Content-Type は、ブラウザに任せる
+  const res = await fetch(path, {
+    method,
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+    body,
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as T;
+};
+
+export const uploadMedia = (file: File, description?: string): Promise<MediaAttachment> => {
+  const body = new FormData();
+  body.append('file', file);
+  if (description !== undefined) body.append('description', description);
+  return send<MediaAttachment>('POST', '/api/v2/media', body);
+};
+
+export const updateMedia = (id: string, description: string): Promise<MediaAttachment> => {
+  const body = new FormData();
+  body.append('description', description);
+  return send<MediaAttachment>('PUT', `/api/v1/media/${encodeURIComponent(id)}`, body);
+};
+
+export const updateAvatar = (file: File): Promise<CredentialAccount> => {
+  const body = new FormData();
+  body.append('avatar', file);
+  return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
 };

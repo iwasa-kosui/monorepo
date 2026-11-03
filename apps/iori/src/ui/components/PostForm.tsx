@@ -1,5 +1,6 @@
 import { useRef, useState } from 'hono/jsx';
 
+import { uploadMedia } from '../api/mastodonClient.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 
 type Props = Readonly<{
@@ -32,19 +33,8 @@ export const PostForm = ({ id, formId }: Props) => {
     const newUrls: string[] = [];
 
     for (const file of Array.from(files)) {
-      const formData = new FormData();
-      formData.append('file', file);
       try {
-        const res = await fetch('/api/v1/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const result = await res.json();
-        if (result.url) {
-          newUrls.push(result.url);
-        } else if (result.error) {
-          alert('Upload failed: ' + result.error);
-        }
+        newUrls.push((await uploadMedia(file)).url);
       } catch (err) {
         alert('Upload failed: ' + (err as Error).message);
       }

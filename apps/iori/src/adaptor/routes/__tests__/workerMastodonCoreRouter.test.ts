@@ -4,10 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { createIoriApp } from '../../../appFactory.tsx';
 import type { LocalActor } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import { UPLOAD_IMAGE_MAX_BYTES } from '../../../domain/image/uploadImage.ts';
 import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
+import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
 import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
+import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
@@ -34,6 +37,9 @@ const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) 
       logoUri: undefined,
     } as LocalActor);
   };
+  const actorResolverByUserId = { resolve: (userId: string) => RA.ok(actors.get(userId)) } as never;
+  const bucket = { put: vi.fn(async () => undefined), get: vi.fn() };
+  const logoUriStored = vi.fn();
   const router = createWorkerMastodonCoreRouter({
     authn,
     userResolver: {
@@ -47,7 +53,20 @@ const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) 
     userResolverByUsername: {
       resolve: (username: string) => RA.ok([...users.values()].find((user) => user.username === username)),
     } as never,
-    actorResolverByUserId: { resolve: (userId: string) => RA.ok(actors.get(userId)) } as never,
+    actorResolverByUserId,
+    updateAvatarUseCase: UpdateAvatarUseCase.create({
+      actorResolverByUserId,
+      uploads: createPostImageR2ObjectStore({ bucket: bucket as never }),
+      logoUriUpdatedStore: {
+        store: async (event) => {
+          logoUriStored(event);
+          const actor = [...actors.values()].find((candidate) => candidate.id === event.aggregateId);
+          if (actor !== undefined) actors.set(actor.userId, { ...actor, logoUri: event.aggregateState.logoUri });
+          return RA.ok(undefined);
+        },
+      },
+      origin: ORIGIN,
+    }),
     accountStatsResolver: {
       resolve: () =>
         RA.ok({
@@ -77,7 +96,7 @@ const setup = ({ failUserResolve = false }: { failUserResolve?: boolean } = {}) 
     serveOgImage: async () => new Response('og', { status: 200 }),
   });
   const request = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init);
-  return { ...h, addUser, request, app };
+  return { ...h, addUser, request, app, bucket, logoUriStored, actors };
 };
 
 describe('createWorkerMastodonCoreRouter', () => {
@@ -186,6 +205,137 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('PATCH /api/v1/accounts/update_credentials', () => {
+    const png = (size = 16) => {
+      const bytes = new Uint8Array(size);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      return bytes;
+    };
+    const patch = (h: ReturnType<typeof setup>, token: string, values: Record<string, string | File>) => {
+      const body = new FormData();
+      for (const [key, value] of Object.entries(values)) body.set(key, value);
+      return h.request('/api/v1/accounts/update_credentials', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+    };
+    const setupUser = async (scope = 'write:accounts') => {
+      const h = setup();
+      const { token, userId } = await h.issueUserToken(scope);
+      h.addUser(userId, 'kosui');
+      return { h, token, userId };
+    };
+
+    it('avatar を R2 に保存して logoUri を更新し、更新後の CredentialAccount を返す', async () => {
+      const { h, token, userId } = await setupUser('read:accounts write:accounts');
+
+      const response = await patch(h, token, { avatar: new File([png()], 'a.png', { type: 'image/png' }) });
+
+      expect(response.status).toBe(200);
+      const body = CredentialAccountSchema.parse(await response.json());
+      expect(body.avatar).toMatch(new RegExp(`^${ORIGIN}/uploads/[0-9a-f-]{36}\\.png$`));
+      expect(body.avatar_static).toBe(body.avatar);
+      expect(body.source).toMatchObject({ privacy: 'public', note: '' });
+      expect(h.bucket.put).toHaveBeenCalledWith(
+        expect.stringMatching(/^post-images\/[0-9a-f-]{36}\/original$/),
+        expect.anything(),
+        expect.objectContaining({ httpMetadata: expect.objectContaining({ contentType: 'image/png' }) }),
+      );
+      expect(h.actors.get(userId)?.logoUri).toBe(body.avatar);
+      expect(h.logoUriStored).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventName: 'actor.logoUriUpdated',
+          eventPayload: expect.objectContaining({ logoUri: body.avatar }),
+        }),
+      );
+      const verified = await h.request('/api/v1/accounts/verify_credentials', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(await verified.json()).toMatchObject({ avatar: body.avatar });
+    });
+
+    it('申告の type が違っても、先頭のバイトで形式を決める', async () => {
+      const { h, token } = await setupUser();
+
+      const response = await patch(h, token, { avatar: new File([png()], 'a.gif', { type: 'image/gif' }) });
+
+      expect(response.status).toBe(200);
+      expect((await response.json() as { avatar: string }).avatar).toMatch(/\.png$/);
+    });
+
+    it.each([
+      ['中身が画像でない', () => new File([new TextEncoder().encode('<html></html>')], 'a.png', { type: 'image/png' })],
+      ['5MB を超える', () => new File([png(UPLOAD_IMAGE_MAX_BYTES + 1)], 'a.png', { type: 'image/png' })],
+      ['空', () => new File([new Uint8Array()], 'a.png', { type: 'image/png' })],
+    ])('avatar が%sなら 422 にして、何も保存しない', async (_name, file) => {
+      const { h, token, userId } = await setupUser();
+
+      const response = await patch(h, token, { avatar: file() });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.logoUriStored).not.toHaveBeenCalled();
+      expect(h.actors.get(userId)?.logoUri).toBeUndefined();
+    });
+
+    it('iori にない項目は受け付けて無視する', async () => {
+      const { h, token } = await setupUser();
+
+      const response = await patch(h, token, {
+        display_name: '別名',
+        note: '自己紹介',
+        header: new File([png()], 'h.png', { type: 'image/png' }),
+        locked: 'true',
+        bot: 'true',
+        discoverable: 'true',
+        'fields_attributes[0][name]': 'web',
+        'fields_attributes[0][value]': 'https://example.com',
+        'source[privacy]': 'private',
+      });
+
+      expect(response.status).toBe(200);
+      expect(CredentialAccountSchema.parse(await response.json())).toMatchObject({
+        username: 'kosui',
+        locked: false,
+        bot: false,
+        avatar: `${ORIGIN}/default-avatar.png`,
+        header: `${ORIGIN}/default-header.png`,
+        source: { privacy: 'public', note: '' },
+      });
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.logoUriStored).not.toHaveBeenCalled();
+    });
+
+    it('avatar がなければ何も変えずに現在の値を返す', async () => {
+      const { h, token } = await setupUser();
+
+      const response = await patch(h, token, { avatar: 'not a file' });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ avatar: `${ORIGIN}/default-avatar.png` });
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.logoUriStored).not.toHaveBeenCalled();
+    });
+
+    it('write スコープでも通る', async () => {
+      const { h, token } = await setupUser('write');
+
+      expect((await patch(h, token, {})).status).toBe(200);
+    });
+
+    it('write:accounts がなければ 403、認証がなければ 401 にする', async () => {
+      const { h, token } = await setupUser('read:accounts profile');
+
+      const forbidden = await patch(h, token, { avatar: new File([png()], 'a.png', { type: 'image/png' }) });
+      const anonymous = await h.request('/api/v1/accounts/update_credentials', { method: 'PATCH' });
+
+      expect([forbidden.status, anonymous.status]).toEqual([403, 401]);
+      expect(h.bucket.put).not.toHaveBeenCalled();
     });
   });
 

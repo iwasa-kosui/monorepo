@@ -14,13 +14,6 @@ const createDeps = () => ({
   sendFollowRequestUseCase: { run: vi.fn() },
   subscribePushUseCase: { run: vi.fn() },
   unsubscribePushUseCase: { run: vi.fn() },
-  uploads: {
-    put: vi.fn(async (input) => ({
-      key: `post-images/${input.imageId}/original`,
-      url: `/uploads/${input.imageId}.png`,
-    })),
-    get: vi.fn(),
-  },
   vapidPublicKey: 'public-key',
   createContext: vi.fn(() => ({})),
 });
@@ -67,7 +60,7 @@ describe('createWorkerCoreApiRouter', () => {
     ]);
   });
 
-  it('stores uploads in R2 with their actual content type', async () => {
+  it('no longer serves the replaced upload endpoint', async () => {
     const deps = createDeps();
     const app = createIoriApp({
       federationMiddleware: undefined,
@@ -85,13 +78,6 @@ describe('createWorkerCoreApiRouter', () => {
       body: form,
     });
 
-    expect(response.status).toBe(200);
-    expect(deps.uploads.put).toHaveBeenCalledWith(expect.objectContaining({
-      contentType: 'image/png',
-      contentLength: 3,
-    }));
-    await expect(response.json()).resolves.toMatchObject({
-      url: expect.stringMatching(/^\/uploads\/[0-9a-f-]+\.png$/),
-    });
+    expect(response.status).toBe(404);
   });
 });
