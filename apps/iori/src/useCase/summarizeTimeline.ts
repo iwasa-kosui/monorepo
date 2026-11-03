@@ -48,7 +48,9 @@ type Input = Readonly<{
 
 type Ok = Readonly<{
   summary: string | null;
+  viewerActorId: ActorId;
   sourcePostIds: ReadonlyArray<PostId>;
+  citations: ReadonlyArray<Readonly<{ n: number; postId: PostId }>>;
   usedPostCount: number;
   excludedNonPublicCount: number;
   truncated: boolean;
@@ -108,6 +110,7 @@ type Deps = Readonly<{
 }>;
 
 type Gathered = Readonly<{
+  viewerActorId: ActorId;
   posts: ReadonlyArray<PostWithAuthor>;
   dropOrder: SummaryDropOrder;
 }>;
@@ -149,6 +152,7 @@ const create = ({
       RA.andThen(async ({ viewerActorId, postIds }) => {
         const posts = await resolvePosts(postIds, viewerActorId);
         return RA.ok<Gathered>({
+          viewerActorId,
           posts: posts.filter((post) => withinPeriod(post, target)),
           dropOrder: 'fromEnd',
         });
@@ -176,7 +180,7 @@ const create = ({
         });
         if (!postIds.ok) return postIds;
         const posts = await resolvePosts(postIds.val, actor.id);
-        return RA.ok<Gathered>({ posts, dropOrder: 'oldestFirst' });
+        return RA.ok<Gathered>({ viewerActorId: actor.id, posts, dropOrder: 'oldestFirst' });
       }),
     );
 
@@ -205,19 +209,22 @@ const create = ({
 
   const summarize = async (
     userId: UserId,
-    { posts, dropOrder }: Gathered,
+    { viewerActorId, posts, dropOrder }: Gathered,
     gatherMs: number,
   ): Promise<Result<Ok, Err>> => {
     const summarizable = posts.filter(isSummarizable);
     const excludedNonPublicCount = posts.length - summarizable.length;
-    const day = Instant.toJstDate(Instant.now());
+    const now = Instant.now();
+    const day = Instant.toJstDate(now);
 
     if (summarizable.length === 0) {
       const used = await aiSummaryUsageRecorder.read({ userId, day });
       if (!used.ok) return used;
       return Result.ok({
         summary: null,
+        viewerActorId,
         sourcePostIds: [],
+        citations: [],
         usedPostCount: 0,
         excludedNonPublicCount,
         truncated: false,
@@ -241,7 +248,7 @@ const create = ({
     const reservation = await aiSummaryUsageRecorder.reserve({ userId, day, limit: DAILY_SUMMARY_LIMIT });
     if (!reservation.ok) return reservation;
     if (!reservation.val.allowed) {
-      return Result.err(SummaryLimitExceededError.create(secondsUntilNextJstDay(Instant.now())));
+      return Result.err(SummaryLimitExceededError.create(secondsUntilNextJstDay(now)));
     }
 
     const aiStartedAt = performance.now();
@@ -249,9 +256,12 @@ const create = ({
     const aiMs = performance.now() - aiStartedAt;
     if (!generated.ok) return generated;
 
+    const citations = readSourceNumbers(generated.val, sent.length).map((n) => ({ n, postId: sent[n - 1]!.postId }));
     return Result.ok({
       summary: generated.val,
-      sourcePostIds: readSourceNumbers(generated.val, sent.length).map((number) => sent[number - 1]!.postId),
+      viewerActorId,
+      sourcePostIds: citations.map(({ postId }) => postId),
+      citations,
       usedPostCount: sent.length,
       excludedNonPublicCount,
       truncated,

@@ -20,6 +20,8 @@ const post = (body: unknown, headers: Record<string, string> = {}, rawBody?: str
 
 const replyByKind = (summary: string) => (request: object): string => 'documents' in request ? summary : '[]';
 
+type CitationBody = { n: number; status: { id: string; content: string } };
+
 const day = (value: number) => Date.UTC(2020, 0, value, 12);
 const period = {
   since: new Date(Date.UTC(2020, 0, 1)).toISOString(),
@@ -150,6 +152,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     });
     expect(body.source_status_ids).toHaveLength(2);
     expect(Object.keys(body).sort()).toEqual([
+      'citations',
       'excluded_non_public_count',
       'model',
       'remaining_today',
@@ -188,7 +191,11 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
       expect.stringMatching(/^\[1\] @alice 2020-01-02 21:00（JST）\n京都の旅行計画$/),
       expect.stringMatching(/^\[2\] @kosui 2020-01-01 21:00（JST）\n京都で旅行した$/),
     ]);
-    const body = (await response.json()) as Record<string, unknown>;
+    const { citations, ...body } = (await response.json()) as { citations: CitationBody[] };
+    expect(citations.map(({ n, status }) => [n, status.id])).toEqual([
+      [1, t.fromAlice.postId],
+      [2, t.mine.postId],
+    ]);
     expect(body).toEqual({
       summary: '- 話題 [1][2]',
       source_status_ids: [t.fromAlice.postId, t.mine.postId],
@@ -198,6 +205,29 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
       model: '@cf/meta/llama-4-scout-17b-16e-instruct',
       remaining_today: 19,
     });
+  });
+
+  it('citations は本文に残る番号の昇順で、番号と投稿を対応させる', async () => {
+    const t = await seedTimeline({
+      textGenerator: createStubTextGenerator(replyByKind('- 旅行 [2]\n- 京都 [1][9][2]')).generator,
+    });
+
+    const response = await t.request(PATH, post(period, t.me.bearer));
+
+    const body = (await response.json()) as { source_status_ids: string[]; citations: CitationBody[] };
+    expect(body.citations.map(({ n, status }) => [n, status.id, status.content])).toEqual([
+      [1, t.fromAlice.postId, '<p>京都の旅行計画</p>'],
+      [2, t.mine.postId, '<p>京都で旅行した</p>'],
+    ]);
+    expect(body.source_status_ids).toEqual(body.citations.map(({ status }) => status.id));
+  });
+
+  it('citations は番号が本文にないとき空にする', async () => {
+    const t = await seedTimeline({ textGenerator: createStubTextGenerator(replyByKind('- 番号なし')).generator });
+
+    const response = await t.request(PATH, post(period, t.me.bearer));
+
+    expect(((await response.json()) as { citations: unknown[] }).citations).toEqual([]);
   });
 
   it('Server-Timing に gather と ai と total を付ける', async () => {
@@ -221,6 +251,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(await response.json()).toEqual({
       summary: null,
       source_status_ids: [],
+      citations: [],
       used_status_count: 0,
       excluded_non_public_count: 0,
       truncated: false,

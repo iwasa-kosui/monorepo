@@ -161,6 +161,8 @@ export const setupReadApi = (
             textGenerator: options.textGenerator,
             htmlToPlainText,
           }),
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
         }),
       );
       root.route(

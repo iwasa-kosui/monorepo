@@ -238,6 +238,18 @@ describe('SummarizeTimelineUseCase', () => {
     expect(result.sourcePostIds).toEqual([ids[1], ids[2]]);
   });
 
+  it('citations は本文の番号の昇順で、渡していない番号を含めない', async () => {
+    const { generator } = createStubTextGenerator(() => '- A [3]\n- B [1][3]\n- C [9]\n- D [0]');
+    const t = setup({ textGenerator: generator });
+    const ids = t.store(makePost('a'), makePost('b'), makePost('c'));
+    t.setSearchResult(ids);
+
+    const result = await expectOk(t.summarize({ q: 'x' }));
+
+    expect(result.citations).toEqual([{ n: 1, postId: ids[0] }, { n: 3, postId: ids[2] }]);
+    expect(result.sourcePostIds).toEqual([ids[0], ids[2]]);
+  });
+
   it('since と until の範囲外の投稿を検索結果から除く', async () => {
     const t = setup();
     const [before, atSince, inside, atUntil] = t.store(
@@ -360,6 +372,21 @@ describe('SummarizeTimelineUseCase', () => {
 
     expect(error).toMatchObject({ type: 'SummaryLimitExceededError', retryAfterSeconds: 12 * 60 * 60 });
     expect(t.calls).toEqual([]);
+  });
+
+  it('上限超過の秒数は、回数の日付を求めた時刻から計算する', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 10, 4, 14, 59, 59));
+    const t = setup();
+    t.setSearchResult(t.store(makePost('a')));
+    vi.mocked(t.usage.recorder.reserve).mockImplementationOnce(() => {
+      vi.setSystemTime(Date.UTC(2026, 10, 4, 15, 0, 0));
+      return RA.ok({ allowed: false, count: 20 });
+    });
+
+    const error = await expectErr(t.summarize({ q: 'x' }));
+
+    expect(error).toMatchObject({ type: 'SummaryLimitExceededError', retryAfterSeconds: 1 });
   });
 
   it('日本時間の日付ごとに回数を数える', async () => {
