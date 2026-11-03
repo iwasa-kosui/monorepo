@@ -91,3 +91,17 @@ it('accepts the exact explicit local fixture Queue identity', async () => {
   expect(retryAll).not.toHaveBeenCalled();
   expect(processCloudflareFedifyQueueBatch).not.toHaveBeenCalled();
 });
+it('passes the execution context waitUntil to the runtime constructed for an admitted fetch', async () => {
+  vi.clearAllMocks();
+  let waitUntilForRuntime: ((promise: Promise<unknown>) => void) | undefined;
+  vi.mocked(createWorkerRuntimePorts).mockImplementationOnce(async (_env, waitUntil) => {
+    waitUntilForRuntime = waitUntil;
+    throw new Error('runtime stub stops the request');
+  });
+  const waitUntil = vi.fn();
+  await worker.fetch(new Request('https://worker.test/health'), admissionFixture() as never, { waitUntil } as never)
+    .catch(() => undefined);
+  const pending = Promise.resolve();
+  waitUntilForRuntime?.(pending);
+  expect(waitUntil).toHaveBeenCalledWith(pending);
+});

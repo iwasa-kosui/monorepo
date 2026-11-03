@@ -461,6 +461,54 @@ describe('Worker fixture', () => {
     expect(queue.ack).toHaveBeenCalledOnce();
     expect(queue.retry).toHaveBeenCalledOnce();
   });
+
+  it('registers the outbox enqueue of a fanout with the execution context waitUntil through Worker queue', async () => {
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const waitUntil = vi.fn();
+    const sendBatch = vi.fn(async () => undefined);
+    const keyPair = await generateCryptoKeyPair('Ed25519');
+    const privateKey = await exportJwk(keyPair.privateKey);
+    const activity = await new Create({
+      id: new URL(`${origin}/activities/fixture-fanout`),
+      actor: new URL(`${origin}/users/fixture`),
+    }).toJsonLd({ format: 'compact', contextLoader: fetchDocumentLoader });
+    const env = {
+      ...makeEnv(new FixtureD1(await makeSeed())),
+      FEDIFY_QUEUE: { send: async () => {}, sendBatch } as unknown as IoriWorkerEnv['FEDIFY_QUEUE'],
+    };
+
+    await worker.queue(
+      {
+        queue: 'iori-production-fixture1-fedify',
+        messages: [
+          {
+            body: {
+              type: 'fanout',
+              id: crypto.randomUUID(),
+              baseUrl: origin,
+              keys: [{ keyId: `${origin}/users/fixture#main-key`, privateKey }],
+              inboxes: { 'https://remote.example.invalid/inbox': { actorIds: [], sharedInbox: false } },
+              activity,
+              activityId: `${origin}/activities/fixture-fanout`,
+              activityType: 'https://www.w3.org/ns/activitystreams#Create',
+              collectionSync: undefined,
+              traceContext: {},
+            },
+            ack,
+            retry,
+          },
+        ],
+      } as never,
+      env,
+      { waitUntil } as unknown as ExecutionContext,
+    );
+
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(sendBatch).toHaveBeenCalledOnce();
+    expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise));
+  }, 30_000);
 });
 
 it('retries near smoke markers before the real Fedify adapter can implicitly acknowledge unknown types', async () => {
