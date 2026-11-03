@@ -93,6 +93,7 @@ operation が使う参照名は、次のとおりです。
 
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
+- `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -442,6 +443,56 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | `workers-request`、`workers-shape`              | API への要求が失敗したか、応答の形が想定と違います                                                                                                                                                                                                  |
 | `command-failed`                                | `wrangler secret bulk` が失敗したか、成功を示す `3 secrets successfully uploaded` の行が出ませんでした                                                                                                                                              |
 | `aborted`                                       | 時間切れか中断で止まりました                                                                                                                                                                                                                        |
+
+#### delete-rehearsal-d1 で予行演習の空の D1 を削除する
+
+`delete-rehearsal-d1` は、予行演習で作った空の D1 データベース `iori-production-prdrehearse1` から `iori-production-prdrehearse5` までの5つだけを削除する operation です。この operation は、Worker のコードも、ほかの D1 も、Terraform の状態も変えません。対象の名前は workflow の入力から受け取らず、スクリプトの定数で固定しています。名前が完全に一致するデータベースだけを扱うため、`iori-production-prd20261102a` などの本番の D1 は対象になりません。
+
+job が受け取る secret は、次の2つです。
+
+| job の環境変数          | 元の GitHub secret                 |
+| ----------------------- | ---------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | `CLOUDFLARE_ACCOUNT_ID`            |
+| `CLOUDFLARE_API_TOKEN`  | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` |
+
+手順は次のとおりです。
+
+1. 作業者は、`deploy-iori-worker.yml` を `operation=delete-rehearsal-d1`、`environment=production`、`main_sha=<最新の main の SHA>` で dispatch します。`generation` と `migration_run_id` は空にします。`migration_main_sha` は、空にするか `main_sha` と同じ値にします。`environment` が `production` 以外の場合、job は API を呼ばずに止まります。
+2. 承認者は、job の承認待ちを承認します。
+3. job は、Cloudflare API で D1 の一覧を `per_page=100` で全ページ読みます。一覧に同じ名前が2件ある場合、job はその名前を削除しません。
+4. job は、対象の5つについて `present` か `absent` かを、`IORI_NOTICE` の行で出します。一覧に無い対象は、削除済みとして飛ばします。
+5. job は、一覧にある対象ごとに、D1 の詳細を読んで名前が対象と一致することを確かめます。次に job は、テーブルが1つも無いことを `sqlite_master` への問い合わせで確かめます。SQLite 内部のテーブル（`sqlite_` で始まる名前）と D1 内部のテーブル（`_cf_` で始まる名前）は、数えません。
+6. job は、空だった対象だけを削除します。1つの対象の削除が失敗しても、job はほかの対象の処理を続けます。テーブルがある対象、名前が不一致の対象、同名が2件ある対象を、job は削除しません。
+7. job は、一覧を読み直して、対象が一覧に残っていないかを確かめ、`deleted` か `remaining` かを `IORI_NOTICE` の行で出します。
+8. すべての対象が一覧から消えていれば、job は成功します。1つでも削除されなかった対象があれば、job は失敗します。
+
+公開ログに出る `IORI_NOTICE` の行は、`IORI_NOTICE rehearsal-d1 name=<対象の名前> state=<状態>` の形です。`state` には、`present`、`absent`、`empty`、`not-empty`、`ambiguous`、`check-failed`、`deleted`、`delete-failed`、`remaining` のどれかが入ります。データベースの ID と、API token は、ログに出ません。
+
+失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を、失敗の種類ごとに出します。`stage` は次のとおりです。
+
+| `stage`                   | 時点                                                          |
+| ------------------------- | ------------------------------------------------------------- |
+| `rehearsal-delete`        | 入力の検査（`IORI_ENVIRONMENT`、account ID、API token）の途中 |
+| `rehearsal-delete-list`   | D1 の一覧を読んでいる途中、または同名が2件ある場合            |
+| `rehearsal-delete-check`  | 詳細の名前の確認と、空かどうかの検査の途中                    |
+| `rehearsal-delete-remove` | D1 を削除している途中                                         |
+| `rehearsal-delete-verify` | 削除後の一覧の読み直しの途中                                  |
+
+`reason` には、次の語が出ます。
+
+| `reason`                                     | 意味                                                                                            |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `config-invalid`                             | `IORI_ENVIRONMENT` が `production` ではないか、`CLOUDFLARE_ACCOUNT_ID` の形式が正しくありません |
+| `credentials-missing`                        | account ID か API token が空です                                                                |
+| `api-forbidden`                              | Cloudflare API が 401 か 403 を返しました。API token の権限を確かめます                         |
+| `d1-http-<status>`、`d1-request`、`d1-shape` | API が `<status>` を返したか、要求が失敗したか、応答の形が想定と違います                        |
+| `identity-mismatch`                          | D1 の詳細の名前が、対象の名前と一致しません                                                     |
+| `resource-ambiguous`                         | 同じ名前の D1 が2件あります                                                                     |
+| `rehearsal-d1-not-empty`                     | D1 にテーブルがあるか、問い合わせの結果の形が想定と違います                                     |
+| `rehearsal-d1-remaining`                     | 削除した後も、D1 が一覧に残っています                                                           |
+| `aborted`                                    | 時間切れか中断で止まりました                                                                    |
+
+失敗した場合、削除できた D1 は戻りません。作業者は、`IORI_NOTICE` の行で残っている対象を確かめ、原因を直してから `delete-rehearsal-d1` を dispatch し直します。`absent` の対象は、再実行でも飛ばされます。
 
 ## 6. 中断と引き継ぎ
 

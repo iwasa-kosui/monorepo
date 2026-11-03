@@ -57,10 +57,12 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
       'deploy-worker',
       'put-worker-secrets',
       'diagnose-source',
+      'delete-rehearsal-d1',
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (operation === 'diagnose-source'
+    || (operation === 'delete-rehearsal-d1' && env.IORI_ENVIRONMENT !== 'production')
+    || (['diagnose-source', 'delete-rehearsal-d1'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))

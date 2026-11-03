@@ -41,6 +41,11 @@ it('pins the operation stage vocabulary', () => {
     'put-worker-secrets',
     'put-worker-secrets-read',
     'put-worker-secrets-put',
+    'rehearsal-delete',
+    'rehearsal-delete-list',
+    'rehearsal-delete-check',
+    'rehearsal-delete-remove',
+    'rehearsal-delete-verify',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });
