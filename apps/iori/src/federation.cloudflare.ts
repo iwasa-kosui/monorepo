@@ -13,6 +13,7 @@ import {
   Like,
   type Message,
   type MessageQueue,
+  type MessageQueueEnqueueOptions,
   Note,
   Undo,
 } from '@fedify/fedify';
@@ -79,16 +80,77 @@ const keepAlive = (waitUntil: WaitUntil, send: Promise<void>): Promise<void> => 
   return send;
 };
 
+const QUEUE_BATCH_MAX_MESSAGES = 100;
+const QUEUE_BATCH_MAX_BYTES = 240_000;
+const QUEUE_MESSAGE_MAX_BYTES = 120_000;
+const QUEUE_MESSAGE_OVERHEAD_BYTES = 256;
+
+const textEncoder = new TextEncoder();
+
+const estimateMessageBytes = (message: Message): number =>
+  textEncoder.encode(JSON.stringify(message)).byteLength + QUEUE_MESSAGE_OVERHEAD_BYTES;
+
+const isTooLarge = (message: Message, bytes: number): boolean => {
+  if (bytes <= QUEUE_MESSAGE_MAX_BYTES) return false;
+  console.error('Fedify queue message too large; dropped.', {
+    bytes,
+    type: message.type,
+    ...('activityType' in message ? { activityType: message.activityType } : {}),
+  });
+  return true;
+};
+
+// Cloudflare Queues の sendBatch は100件かつ256,000 bytes までに制限される
+const splitIntoBatches = (messages: readonly Message[]): Message[][] => {
+  const batches: Message[][] = [];
+  let current: Message[] = [];
+  let currentBytes = 0;
+  for (const message of messages) {
+    const bytes = estimateMessageBytes(message);
+    if (isTooLarge(message, bytes)) continue;
+    if (
+      current.length > 0
+      && (current.length >= QUEUE_BATCH_MAX_MESSAGES || currentBytes + bytes > QUEUE_BATCH_MAX_BYTES)
+    ) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(message);
+    currentBytes += bytes;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+};
+
 const createWorkersMessageQueue = (
   env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>,
   waitUntil: WaitUntil,
 ): MessageQueue => {
   const queue = new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
+  const enqueue = async (message: Message, options?: MessageQueueEnqueueOptions): Promise<void> => {
+    if (isTooLarge(message, estimateMessageBytes(message))) return;
+    await queue.enqueue(message, options);
+  };
+  const enqueueMany = async (messages: readonly Message[], options?: MessageQueueEnqueueOptions): Promise<void> => {
+    const batches = splitIntoBatches(messages);
+    for (const [index, batch] of batches.entries()) {
+      try {
+        await queue.enqueueMany!(batch, options);
+      } catch (error) {
+        console.error('Fedify queue batch send failed.', {
+          sentBatches: index,
+          totalBatches: batches.length,
+          ...describeQueueFailure(error),
+        });
+        throw error;
+      }
+    }
+  };
   return {
     nativeRetrial: queue.nativeRetrial,
-    enqueue: (message, options) => keepAlive(waitUntil, queue.enqueue(message, options)),
-    enqueueMany: (messages, options) =>
-      keepAlive(waitUntil, messages.length === 0 ? Promise.resolve() : queue.enqueueMany!(messages, options)),
+    enqueue: (message, options) => keepAlive(waitUntil, enqueue(message, options)),
+    enqueueMany: (messages, options) => keepAlive(waitUntil, enqueueMany(messages, options)),
     listen: (handler, options) => queue.listen(handler, options),
   };
 };

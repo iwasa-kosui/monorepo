@@ -118,6 +118,147 @@ describe('Cloudflare Fedify message queue', () => {
     expect(sendBatch).toHaveBeenCalledOnce();
   });
 
+  describe('enqueueMany batching', () => {
+    const outboxMessage = (index: number, size: number) => ({
+      type: 'outbox' as const,
+      id: `message-${index}`,
+      activityType: 'Create',
+      inbox: `https://remote${index}.example.invalid/inbox`,
+      keys: [{ jwk: 'k'.repeat(size) }],
+    });
+    const estimate = (message: unknown) => new TextEncoder().encode(JSON.stringify(message)).byteLength + 256;
+    const bodiesOf = (sendBatch: ReturnType<typeof vi.fn>) =>
+      sendBatch.mock.calls.map((call) => (call[0] as { body: { id: string } }[]).map((request) => request.body));
+
+    it('splits 72 messages of about 7 KB into batches within the count and size limits', async () => {
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+      const messages = Array.from({ length: 72 }, (_, index) => outboxMessage(index, 7_000));
+
+      await queue.enqueueMany?.(messages);
+
+      const batches = bodiesOf(sendBatch);
+      expect(batches.length).toBeGreaterThan(1);
+      for (const batch of batches) {
+        expect(batch.length).toBeLessThanOrEqual(100);
+        expect(batch.reduce((sum, body) => sum + estimate(body), 0)).toBeLessThanOrEqual(240_000);
+      }
+      expect(batches.flat().map((body) => body.id)).toEqual(messages.map((message) => message.id));
+    });
+
+    it('splits 150 small messages into 100 and 50', async () => {
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+
+      await queue.enqueueMany?.(Array.from({ length: 150 }, (_, index) => ({ type: 'outbox', id: `${index}` })));
+
+      expect(bodiesOf(sendBatch).map((batch) => batch.length)).toEqual([100, 50]);
+    });
+
+    it('passes contentType json and delaySeconds to every batch', async () => {
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+
+      await queue.enqueueMany?.(
+        Array.from({ length: 101 }, (_, index) => ({ type: 'outbox', id: `${index}` })),
+        { delay: { total: () => 5 } as never },
+      );
+
+      expect(sendBatch).toHaveBeenCalledTimes(2);
+      for (const call of sendBatch.mock.calls) {
+        expect((call[0] as { contentType: string }[])[0]?.contentType).toBe('json');
+        expect(call[1]).toEqual({ delaySeconds: 5 });
+      }
+    });
+
+    it('does not call sendBatch for zero messages', async () => {
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+
+      await queue.enqueueMany?.([]);
+
+      expect(sendBatch).not.toHaveBeenCalled();
+    });
+
+    it('drops a message over 120,000 bytes with a fixed log and sends the rest', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+      const oversized = outboxMessage(1, 130_000);
+
+      await expect(queue.enqueueMany?.([outboxMessage(0, 100), oversized, outboxMessage(2, 100)])).resolves
+        .toBeUndefined();
+
+      expect(bodiesOf(sendBatch).flat().map((body) => body.id)).toEqual(['message-0', 'message-2']);
+      expect(error).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith('Fedify queue message too large; dropped.', {
+        bytes: estimate(oversized),
+        type: 'outbox',
+        activityType: 'Create',
+      });
+      expect(JSON.stringify(error.mock.calls)).not.toMatch(/kkkk|remote1\.example|jwk/);
+      error.mockRestore();
+    });
+
+    it('stops after a failed batch, logs a fixed message and rethrows', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
+      sendBatch.mockResolvedValueOnce(undefined);
+      sendBatch.mockRejectedValueOnce(new TypeError('x'.repeat(600)));
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { sendBatch } as never,
+      }, vi.fn());
+
+      await expect(
+        queue.enqueueMany?.(Array.from({ length: 350 }, (_, index) => ({ type: 'outbox', id: `${index}` }))),
+      ).rejects.toThrow(TypeError);
+
+      expect(sendBatch).toHaveBeenCalledTimes(2);
+      expect(error).toHaveBeenCalledWith('Fedify queue batch send failed.', {
+        sentBatches: 1,
+        totalBatches: 4,
+        name: 'TypeError',
+        message: 'x'.repeat(500),
+      });
+      error.mockRestore();
+    });
+
+    it('does not send a single message over 120,000 bytes from enqueue and returns normally', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const send = vi.fn(async (..._args: unknown[]) => undefined);
+      const { queue } = await createCloudflareFederationRuntime({
+        ...workerEnv,
+        FEDIFY_QUEUE: { send } as never,
+      }, vi.fn());
+
+      await expect(queue.enqueue(outboxMessage(1, 130_000))).resolves.toBeUndefined();
+
+      expect(send).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith('Fedify queue message too large; dropped.', {
+        bytes: estimate(outboxMessage(1, 130_000)),
+        type: 'outbox',
+        activityType: 'Create',
+      });
+      error.mockRestore();
+    });
+  });
+
   it('registers enqueue and enqueueMany promises with waitUntil', async () => {
     const send = vi.fn(async () => undefined);
     const sendBatch = vi.fn(async () => undefined);
