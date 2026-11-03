@@ -197,6 +197,8 @@ export const createWorkerIoriDigestRouter = ({
           return err.reason === 'daily_limit'
             ? c.json({ error: err.message }, 429)
             : c.json({ error: 'Digest request too soon' }, 409);
+        case 'ArticleNotFoundError':
+          return c.json(internalServerError, 500);
         default:
           return c.json(internalServerError, 500);
       }

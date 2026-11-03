@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { ArticleResolver } from '../domain/article/article.ts';
+import { ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import {
   DigestAlreadyPublishedError,
@@ -66,9 +66,8 @@ const create = ({
     const existing = await digestHeaderResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
     if (existing.val !== undefined) {
       const article = await articleResolver.resolve(existing.val.articleId);
-      if (article.val !== undefined && article.val.status !== 'draft') {
-        return RA.err(DigestAlreadyPublishedError.create(digestDate));
-      }
+      if (article.val === undefined) return RA.err(ArticleNotFoundError.create(existing.val.articleId));
+      if (article.val.status !== 'draft') return RA.err(DigestAlreadyPublishedError.create(digestDate));
     }
 
     const reservation = await digestRequestUsageRecorder.reserve({ userId, day: digestDate, now: requestedAt });

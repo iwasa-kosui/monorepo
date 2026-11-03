@@ -7,6 +7,7 @@ import { createD1ActorResolverByUserId } from '../../adaptor/d1/actor/actorResol
 import { createD1ArticleResolver } from '../../adaptor/d1/article/articleResolver.ts';
 import { createD1ArticleWithBodyCreatedStore } from '../../adaptor/d1/article/articleWithBodyCreatedStore.ts';
 import { createD1ArticleWithDependentsDeletedStore } from '../../adaptor/d1/article/articleWithDependentsDeletedStore.ts';
+import { createD1DraftArticleWithDependentsDeletedStore } from '../../adaptor/d1/article/draftArticleWithDependentsDeletedStore.ts';
 import { createD1ArticleBodyResolver } from '../../adaptor/d1/articleBody/articleBodyResolver.ts';
 import type { IoriD1Db } from '../../adaptor/d1/client.ts';
 import { createD1DigestCreatedStore } from '../../adaptor/d1/digest/digestCreatedStore.ts';
@@ -20,7 +21,11 @@ import { createD1RadarFeedEntriesResolverByFetchedSince } from '../../adaptor/d1
 import { createD1TimelineLinkTrendsResolverByUserId } from '../../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
-import type { ArticleWithDependentsDeletedStore } from '../../domain/article/article.ts';
+import type {
+  ArticleResolver,
+  ArticleWithDependentsDeletedStore,
+  DraftArticleWithDependentsDeletedStore,
+} from '../../domain/article/article.ts';
 import type { DigestCreatedStore, DigestTrigger } from '../../domain/digest/digest.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { UserId } from '../../domain/user/userId.ts';
@@ -48,6 +53,8 @@ const setup = (
     sleep?: (ms: number) => Promise<void>;
     digestCreatedStore?: (db: IoriD1Db) => DigestCreatedStore;
     articleWithDependentsDeletedStore?: (db: IoriD1Db) => ArticleWithDependentsDeletedStore;
+    draftArticleWithDependentsDeletedStore?: (db: IoriD1Db) => DraftArticleWithDependentsDeletedStore;
+    articleResolver?: (db: IoriD1Db) => ArticleResolver;
   } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
@@ -61,10 +68,12 @@ const setup = (
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeaderResolverByUserIdAndDigestDate: createD1DigestHeaderResolverByUserIdAndDigestDate(db),
     latestDigestHeaderResolverByUserId: createD1LatestDigestHeaderResolverByUserId(db),
-    articleResolver: createD1ArticleResolver(db),
+    articleResolver: (options.articleResolver ?? createD1ArticleResolver)(db),
     articleBodyResolver: createD1ArticleBodyResolver(db),
     articleWithDependentsDeletedStore: (options.articleWithDependentsDeletedStore
       ?? createD1ArticleWithDependentsDeletedStore)(db),
+    draftArticleWithDependentsDeletedStore: (options.draftArticleWithDependentsDeletedStore
+      ?? createD1DraftArticleWithDependentsDeletedStore)(db),
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     newFeedEntriesResolverByFetchedSince: createD1NewFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
@@ -847,6 +856,80 @@ describe('CreateDailyDigestUseCase: requested', () => {
       expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
     },
   );
+
+  describe.each(
+    [
+      ['requested', { ok: false, err: { type: 'DigestAlreadyPublishedError' } }],
+      ['scheduled', { ok: true, val: { status: 'skipped' } }],
+    ] as const,
+  )('置き換えの途中で公開されたとき (%s)', (trigger, expected) => {
+    const seedRequestedDigest = async (options: Parameters<typeof setup>[0]) => {
+      const t = setup(options);
+      const first = await t.run('requested');
+      t.clock.value = (NOW + HOUR) as typeof NOW;
+      return { t, first };
+    };
+    const expectNothingDeleted = (t: ReturnType<typeof setup>, first: { digestId?: string; articleId?: string }) => {
+      expect(t.all('SELECT digestId, articleId FROM digests')).toEqual([
+        { digestId: first.digestId, articleId: first.articleId },
+      ]);
+      expect(t.all('SELECT articleId, status FROM articles')).toEqual([
+        { articleId: first.articleId, status: expect.any(String) },
+      ]);
+      expect(t.all('SELECT articleId FROM article_bodies')).toEqual([{ articleId: first.articleId }]);
+      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
+        { n: 0 },
+      ]);
+    };
+
+    it('削除の直前に取り直した article が draft でなければ、何も消さずに置き換えをやめる', async () => {
+      const calls = { count: 0 };
+      const { t, first } = await seedRequestedDigest({
+        articleResolver: (db) => {
+          const real = createD1ArticleResolver(db);
+          return {
+            resolve: async (articleId) => {
+              calls.count += 1;
+              const resolved = await real.resolve(articleId);
+              return calls.count < 2 || !resolved.ok || resolved.val === undefined
+                ? resolved
+                : RA.ok({ ...resolved.val, status: 'published' as const });
+            },
+          };
+        },
+      });
+      calls.count = 0;
+
+      const result = await t.runResult(trigger);
+
+      expect(result).toMatchObject(expected);
+      expect(calls.count).toBe(2);
+      expectNothingDeleted(t, first);
+      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
+    });
+
+    it('取り直した後、削除までの間に公開されたら、条件付きの削除が何も消さずに置き換えをやめる', async () => {
+      const hooks: { publish?: () => void } = {};
+      const { t, first } = await seedRequestedDigest({
+        draftArticleWithDependentsDeletedStore: (db) => {
+          const real = createD1DraftArticleWithDependentsDeletedStore(db);
+          return {
+            store: (...events) => {
+              hooks.publish?.();
+              return real.store(...events);
+            },
+          };
+        },
+      });
+      hooks.publish = () => t.setArticleStatus('published');
+
+      const result = await t.runResult(trigger);
+
+      expect(result).toMatchObject(expected);
+      expectNothingDeleted(t, first);
+      expect(t.all('SELECT status FROM articles')).toEqual([{ status: 'published' }]);
+    });
+  });
 
   it('scheduled は requested の draft の digest を置き換え、trigger を scheduled にして Web Push を送る', async () => {
     const t = setup();

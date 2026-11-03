@@ -7,6 +7,7 @@ import {
   ArticleNotFoundError,
   type ArticleResolver,
   type ArticleWithDependentsDeletedStore,
+  type DraftArticleWithDependentsDeletedStore,
 } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import { ArticleBody, type ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
@@ -99,6 +100,7 @@ type Deps = Readonly<{
   articleResolver: ArticleResolver;
   articleBodyResolver: ArticleBodyResolver;
   articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore;
+  draftArticleWithDependentsDeletedStore: DraftArticleWithDependentsDeletedStore;
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   newFeedEntriesResolverByFetchedSince: NewFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
@@ -135,6 +137,7 @@ const create = ({
   articleResolver,
   articleBodyResolver,
   articleWithDependentsDeletedStore,
+  draftArticleWithDependentsDeletedStore,
   radarFeedEntriesResolverByFetchedSince,
   newFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
@@ -208,6 +211,9 @@ const create = ({
       pushed: 0,
     });
 
+    const notReplaceable = () =>
+      trigger === 'scheduled' ? RA.ok(skipped()) : RA.err(DigestAlreadyPublishedError.create(digestDate));
+
     const existing = await digestHeaderResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
     let replacing: DigestHeader | undefined;
     if (existing.val !== undefined) {
@@ -262,12 +268,15 @@ const create = ({
 
     if (replacing !== undefined) {
       const replacedAt = now();
+      const replacingArticle = await articleResolver.resolve(replacing.articleId);
+      if (replacingArticle.val?.status !== 'draft') return notReplaceable();
       const body = await articleBodyResolver.resolve(replacing.articleId);
-      await articleWithDependentsDeletedStore.store(
+      const deleted = await draftArticleWithDependentsDeletedStore.store(
         Article.deleteArticle(replacedAt)(replacing.articleId),
         body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(replacing.articleId),
         Digest.expire(replacing, replacedAt),
       );
+      if (!deleted.val.deleted) return notReplaceable();
     }
 
     const article = await createArticleWithBodyUseCase.run({

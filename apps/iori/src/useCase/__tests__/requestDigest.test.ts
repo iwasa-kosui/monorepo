@@ -31,6 +31,7 @@ const setup = (
     existing?: DigestHeader;
     status?: Article['status'];
     reservation?: DigestRequestReservation;
+    articleMissing?: boolean;
   } = {},
 ) => {
   const reserve = vi.fn(() => RA.ok(options.reservation ?? { allowed: true as const }));
@@ -54,7 +55,11 @@ const setup = (
     digestHeaderResolverByUserIdAndDigestDate: { resolve: resolveHeader },
     articleResolver: {
       resolve: () =>
-        RA.ok(options.existing === undefined ? undefined : { status: options.status ?? 'draft' } as Article),
+        RA.ok(
+          options.existing === undefined || options.articleMissing === true
+            ? undefined
+            : { status: options.status ?? 'draft' } as Article,
+        ),
     },
     digestRequestUsageRecorder: { reserve },
     createDailyDigestUseCase: { run: createRun } as CreateDailyDigestUseCase,
@@ -99,6 +104,16 @@ describe('RequestDigestUseCase', () => {
       expect(t.createRun).not.toHaveBeenCalled();
     },
   );
+
+  it('その日の digest の article が見つからなければ、予約せずに ArticleNotFoundError を返す', async () => {
+    const t = setup({ existing: header, articleMissing: true });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'ArticleNotFoundError' } });
+    expect(t.reserve).not.toHaveBeenCalled();
+    expect(t.createRun).not.toHaveBeenCalled();
+  });
 
   it.each(['daily_limit', 'too_soon'] as const)(
     '予約を断られたら %s の DigestRequestLimitError を返し、digest を作らない',

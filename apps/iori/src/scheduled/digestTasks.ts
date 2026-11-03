@@ -2,6 +2,7 @@ import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolver
 import { createD1ArticleResolver } from '../adaptor/d1/article/articleResolver.ts';
 import { createD1ArticleWithBodyCreatedStore } from '../adaptor/d1/article/articleWithBodyCreatedStore.ts';
 import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article/articleWithDependentsDeletedStore.ts';
+import { createD1DraftArticleWithDependentsDeletedStore } from '../adaptor/d1/article/draftArticleWithDependentsDeletedStore.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestCreatedStore } from '../adaptor/d1/digest/digestCreatedStore.ts';
@@ -45,6 +46,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     articleResolver,
     articleBodyResolver: createD1ArticleBodyResolver(db),
     articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
+    draftArticleWithDependentsDeletedStore: createD1DraftArticleWithDependentsDeletedStore(db),
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     newFeedEntriesResolverByFetchedSince: createD1NewFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
