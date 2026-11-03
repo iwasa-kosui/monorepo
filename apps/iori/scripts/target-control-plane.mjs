@@ -58,49 +58,6 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       failApi(path, 'request');
     }
   };
-  const list = async (path, pagination) => {
-    const body = await get(path);
-    const items = pagination === 'cursor' ? body.result?.buckets : body.result;
-    if (!Array.isArray(items)) failApi(path, 'shape');
-    if (
-      items.length >= 100 || body.result_info?.cursor || body.result.cursor || body.result.truncated === true
-    ) failApi(path, 'limit');
-    if (pagination === 'cursor') {
-      const info = body.result_info;
-      if (info !== undefined && (info === null || typeof info !== 'object' || Array.isArray(info))) {
-        failApi(path, 'shape');
-      }
-      const perPage = info?.per_page;
-      if (perPage !== undefined && (!Number.isInteger(perPage) || perPage < 1 || items.length > perPage)) {
-        failApi(path, 'shape');
-      }
-      // The default page stops at 20 buckets with no cursor, and without result_info we cannot confirm per_page took effect (cloudflare/workers-sdk#15103).
-      if (items.length >= (perPage ?? 20)) failApi(path, 'limit');
-      const totalCount = info?.total_count;
-      if (totalCount !== undefined) {
-        if (!Number.isInteger(totalCount) || totalCount < 0) failApi(path, 'shape');
-        if (totalCount > items.length) failApi(path, 'limit');
-        if (totalCount !== items.length) failApi(path, 'shape');
-      }
-    } else if (pagination !== 'none') {
-      const info = body.result_info;
-      if (!info || !Number.isInteger(info.per_page) || info.per_page < 1 || items.length > info.per_page) {
-        failApi(path, 'shape');
-      }
-      if (!Number.isInteger(info.total_count)) failApi(path, 'shape');
-      if (info.total_count > items.length) failApi(path, 'limit');
-      if (
-        info.total_count !== items.length || info.page !== 1
-        || (info.count !== undefined && info.count !== items.length)
-      ) failApi(path, 'shape');
-      // D1 and KV expose count/page/per_page/total_count; total_pages is Queue-specific.
-      if (pagination === 'queue') {
-        if (!Number.isInteger(info.total_pages) || info.total_pages < 0) failApi(path, 'shape');
-        if (info.total_pages > 1) failApi(path, 'limit');
-      }
-    }
-    return items;
-  };
   const pagedItems = async (path) => {
     const items = [];
     let cursor;
@@ -159,22 +116,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     );
     return { d1Id, kvId, queueId, dlqId, consumerId };
   };
-  const assertFresh = async () => {
-    const specs = [
-      [`${root}/workers/scripts`, 'id', [identity.workerName], 'none'],
-      [`${root}/d1/database?per_page=100&page=1`, 'name', [identity.names.d1], 'offset'],
-      [`${root}/storage/kv/namespaces?per_page=100&page=1`, 'title', [identity.names.kv], 'offset'],
-      [`${root}/queues?per_page=100&page=1`, 'queue_name', [identity.names.queue, identity.names.dlq], 'queue'],
-      [`${root}/r2/buckets?per_page=100`, 'name', [identity.names.uploads, identity.names.transfer], 'cursor'],
-    ];
-    for (const [path, key, names, pagination] of specs) {
-      const items = await list(path, pagination);
-      if (items.some((item) => typeof item?.[key] !== 'string')) failApi(path, 'shape');
-      if (items.some((item) => names.includes(item[key]))) failApi(path, 'exists');
-    }
-    return { fresh: true, resourceCount: 0 };
-  };
-  const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }, paused) => {
+  const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }) => {
     if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail('state-mismatch', ['resource-input']);
     const [d1, kv, uploads, transfer, queue, dlq] = await Promise.all([
       get(`${root}/d1/database/${d1Id}`),
@@ -193,7 +135,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     if (uploads.name !== identity.names.uploads || transfer.name !== identity.names.transfer) note('resource-r2');
     for (const [q, id, name] of [[queue, queueId, identity.names.queue], [dlq, dlqId, identity.names.dlq]]) {
       if (q.queue_id !== id || q.queue_name !== name) note('resource-queue-identity');
-      if (q.settings?.delivery_paused !== (id === queueId ? paused : true)) note('resource-queue-paused');
+      if (q.settings?.delivery_paused !== (id !== queueId)) note('resource-queue-paused');
       if (
         !Array.isArray(q.consumers) || !Array.isArray(q.producers)
         || !Number.isInteger(q.consumers_total_count) || q.consumers_total_count !== q.consumers.length
@@ -237,19 +179,16 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       dlqCreatedOn: dlq.created_on,
       queueSettings: queue.settings,
       consumerId: queue.consumers[0]?.consumer_id ?? null,
-      queuePaused: paused,
-      ...(!paused && {
-        queueConfiguration: { settings: queue.settings, consumers: queue.consumers, producers: queue.producers },
-        dlqConfiguration: { settings: dlq.settings, consumers: dlq.consumers, producers: dlq.producers },
-      }),
+      queuePaused: false,
+      queueConfiguration: { settings: queue.settings, consumers: queue.consumers, producers: queue.producers },
+      dlqConfiguration: { settings: dlq.settings, consumers: dlq.consumers, producers: dlq.producers },
     };
   };
   const readWorkerState = async (
     { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
-    paused,
   ) => {
     if (typeof routePresent !== 'boolean') fail('worker-input');
-    if (!same(resources?.identity, identity) || resources.queuePaused !== paused) fail('worker-resources');
+    if (!same(resources?.identity, identity) || resources.queuePaused !== false) fail('worker-resources');
     const admission = parseAdmission(admissionEnvironment);
     if (
       !admission || admission.environment !== identity.environment
@@ -327,18 +266,16 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       mode: admission.mode,
       previewsEnabled: false,
       routeCount: Number(routePresent),
-      ...(paused ? {} : { routeConfiguration: routes.filter(route => route.script === identity.workerName) }),
+      routeConfiguration: routes.filter(route => route.script === identity.workerName),
       bindingCount: bindings.length,
     };
   };
-  const readResources = (input) => readResourceState(input, true);
-  const readActiveResources = (input) => readResourceState({ ...input, consumerAttached: true }, false);
-  const readWorkerAdmission = (input) => readWorkerState(input, true);
+  const readActiveResources = (input) => readResourceState({ ...input, consumerAttached: true });
   const readActiveWorker = (input) => {
     if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'active' || input.routePresent !== true) {
       fail('state-mismatch');
     }
-    return readWorkerState(input, false);
+    return readWorkerState(input);
   };
   const readCurrentVersion = async () => {
     const deployments = (await get(`${root}/workers/scripts/${identity.workerName}/deployments`)).result;
@@ -349,27 +286,8 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     ) fail('state-mismatch');
     return versions[0].version_id;
   };
-  const readSealedWorker = async (input) => {
-    if (input.admissionEnvironment?.IORI_ADMISSION_MODE !== 'sealed') fail('not-sealed');
-    return readWorkerAdmission(input);
-  };
-  const readQueuePause = async ({ queueId, paused }) => {
-    if (!safeId(queueId) || typeof paused !== 'boolean') fail('state-mismatch');
-    const queue = (await get(`${root}/queues/${queueId}`)).result;
-    if (queue === null || typeof queue !== 'object') fail('state-mismatch');
-    if (queue.queue_id !== queueId || queue.queue_name !== identity.names.queue) fail('state-mismatch');
-    if (queue.settings?.delivery_paused !== paused) {
-      fail(paused === true && queue.settings?.delivery_paused === false ? 'queue-not-paused' : 'state-mismatch');
-    }
-    return { queueId, paused };
-  };
   return Object.freeze({
-    assertFresh,
     resolveActiveResources,
-    readResources,
-    readSealedWorker,
-    readWorkerAdmission,
-    readQueuePause,
     readActiveResources,
     readActiveWorker,
     readCurrentVersion,

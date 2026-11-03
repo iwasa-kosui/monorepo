@@ -1,6 +1,7 @@
 import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
 import { RA } from '@iwasa-kosui/result';
 
+import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Post, PostNotFoundError, PostResolver, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
@@ -186,6 +187,7 @@ const create = ({
         const remotePostResult = await remotePostUpserter.resolve({
           uri: objectUri,
           content: String(result.content ?? ''),
+          visibility: extractVisibility(result, author.followersId),
           authorIdentity: {
             uri: author.id.href,
             inboxUrl: author.inboxId.href,

@@ -5,11 +5,12 @@ import { LocalPost, type Post, type PostResolver, RemotePost } from '../../../do
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
+import { toVisibility } from './toVisibility.ts';
 
 const toPost = (row: {
   posts: { postId: string; actorId: string; content: string; createdAt: Date };
   local_posts: { userId: string; inReplyToUri: string | null } | null;
-  remote_posts: { uri: string; inReplyToUri: string | null } | null;
+  remote_posts: { uri: string; inReplyToUri: string | null; visibility: string | null } | null;
 }): Post => {
   if (row.local_posts !== null) {
     return LocalPost.orThrow({
@@ -30,6 +31,7 @@ const toPost = (row: {
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
+      visibility: toVisibility(row.remote_posts.visibility),
       type: 'remote',
     });
   }

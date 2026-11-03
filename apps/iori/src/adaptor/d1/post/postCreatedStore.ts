@@ -27,6 +27,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
             postId: post.postId,
             uri: post.uri,
             inReplyToUri: post.inReplyToUri,
+            visibility: post.visibility,
           });
 
         await db.batch([

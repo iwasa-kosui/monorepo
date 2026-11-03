@@ -25,6 +25,7 @@ import {
   type RemotePostAttachment,
   type RemotePostCreated,
 } from '../domain/post/post.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
@@ -45,6 +46,7 @@ type Input = Readonly<{
   actorIdentity: ActorIdentity;
   attachments: RemotePostAttachment[];
   inReplyToUri?: string | null;
+  visibility: Visibility | null;
 }>;
 
 type Ok = Readonly<{
@@ -99,12 +101,13 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(actorIdentity)),
-      RA.andBind('post', ({ actor, content, uri, inReplyToUri }) => {
+      RA.andBind('post', ({ actor, content, uri, inReplyToUri, visibility }) => {
         const createPost = Post.createRemotePost(now)({
           content,
           uri,
           actorId: actor.id,
           inReplyToUri,
+          visibility,
         });
         return postCreatedStore.store(createPost).then(() => RA.ok(createPost));
       }),

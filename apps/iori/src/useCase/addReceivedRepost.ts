@@ -12,6 +12,7 @@ import {
   type RemotePostUpserter,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import {
   AlreadyRepostedError,
   Repost,
@@ -36,6 +37,7 @@ type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
   authorIdentity: ActorIdentity;
+  visibility: Visibility | null;
   attachments?: readonly RemotePostAttachment[];
 }>;
 

@@ -72,6 +72,8 @@ export type RepostResolver = Agg.Resolver<
   { actorId: ActorId; postId: PostId },
   Repost | undefined
 >;
+export type RepostWithCreatedAt = Repost & { createdAt: Instant };
+export type RepostResolverById = Agg.Resolver<RepostId, RepostWithCreatedAt | undefined>;
 export type RepostsResolverByPostId = Agg.Resolver<
   { postId: PostId },
   Repost[]

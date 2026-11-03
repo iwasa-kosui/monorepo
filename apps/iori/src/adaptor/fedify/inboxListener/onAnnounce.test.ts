@@ -96,6 +96,36 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('records the visibility of the announced Note in a remote Announce', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ ccs: [new URL('https://www.w3.org/ns/activitystreams#Public')] });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ visibility: 'unlisted' }),
+      }),
+    );
+  });
+
+  it('records the visibility of the announced Note in a relay Announce', async () => {
+    const { deps, remotePostUpserter } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+    const note = createNote([]).clone({ tos: [new URL('https://www.w3.org/ns/activitystreams#Public')] });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
+  });
+
+  it('records null when the announced Note has no to and cc', async () => {
+    const { deps, remotePostUpserter } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
+  });
+
   it('continues with empty attachments when fetching attachments fails in a remote Announce', async () => {
     const { deps, documentLoader, addReceivedRepostUseCase } = createDeps(undefined);
     documentLoader.mockRejectedValue(new Error('load failed'));

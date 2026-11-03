@@ -2,23 +2,20 @@ import type { RequestContext } from '@fedify/fedify';
 import { sValidator } from '@hono/standard-validator';
 import type { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
-import { deleteCookie, getCookie } from 'hono/cookie';
+import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
-import type { FederatedTimelineItemWithPost } from '../../domain/federatedTimeline/federatedTimelineItem.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { Password } from '../../domain/password/password.ts';
-import type { PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
+import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
-import type { GetFederatedTimelineUseCase } from '../../useCase/getFederatedTimeline.ts';
-import type { GetServerTimelineUseCase } from '../../useCase/getServerTimeline.ts';
 import type { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import type { SendFollowRequestUseCase } from '../../useCase/sendFollowRequest.ts';
 import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
@@ -39,7 +36,6 @@ export type WorkerCoreApiRouterDeps = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   sendFollowRequestUseCase: SendFollowRequestUseCase;
-  getFederatedTimelineUseCase: GetFederatedTimelineUseCase;
   getUserPostsUseCase: GetUserPostsUseCase;
   getRemoteActorPostsUseCase: Readonly<{
     run: (
@@ -50,8 +46,6 @@ export type WorkerCoreApiRouterDeps = Readonly<{
       }>,
     ) => RA<RemoteActorPostsResult, { message: string }>;
   }>;
-  getServerTimelineUseCase: GetServerTimelineUseCase;
-  threadResolver: ThreadResolver;
   subscribePushUseCase: SubscribePushUseCase;
   unsubscribePushUseCase: UnsubscribePushUseCase;
   uploads: PostImageObjectStore;
@@ -67,11 +61,6 @@ const sessionFrom = (cookie: string | undefined): SessionId | undefined => {
 const sanitizePost = (post: PostWithAuthor): PostWithAuthor => ({
   ...post,
   content: sanitize(post.content),
-});
-
-const sanitizeFederatedItem = (item: FederatedTimelineItemWithPost): FederatedTimelineItemWithPost => ({
-  ...item,
-  post: sanitizePost(item.post),
 });
 
 export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono => {
@@ -173,24 +162,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
   );
 
   app.get(
-    '/v1/federated',
-    sValidator('query', z.object({ receivedAt: z.optional(z.coerce.number().pipe(Instant.zodType)) })),
-    async (c) => {
-      const sessionId = sessionFrom(getCookie(c, 'sessionId'));
-      if (sessionId === undefined) return c.json({ error: 'Unauthorized' }, 401);
-      const result = await deps.getFederatedTimelineUseCase.run({
-        sessionId,
-        receivedAt: c.req.valid('query').receivedAt,
-      });
-      if (result.ok) {
-        return c.json({ items: result.val.items.map(sanitizeFederatedItem), nextCursor: result.val.nextCursor });
-      }
-      deleteCookie(c, 'sessionId');
-      return c.json({ error: JSON.stringify(result.err) }, 400);
-    },
-  );
-
-  app.get(
     '/v1/users/:username/posts',
     sValidator('param', z.object({ username: Username.zodType })),
     sValidator('query', z.object({ createdAt: z.optional(z.coerce.number().pipe(Instant.zodType)) })),
@@ -226,27 +197,6 @@ export const createWorkerCoreApiRouter = (deps: WorkerCoreApiRouterDeps): Hono =
         : c.json({ error: result.err.message }, 400);
     },
   );
-
-  app.get(
-    '/v1/thread',
-    sValidator('query', z.object({ postId: PostId.zodType })),
-    async (c) => {
-      const result = await deps.threadResolver.resolve({ postId: c.req.valid('query').postId });
-      if (!result.ok) return c.json({ error: String(result.err) }, 400);
-      return c.json({
-        currentPost: result.val.currentPost === null ? null : sanitizePost(result.val.currentPost),
-        ancestors: result.val.ancestors.map(sanitizePost),
-        descendants: result.val.descendants.map(sanitizePost),
-      });
-    },
-  );
-
-  app.get('/v1/server-timeline', async (c) => {
-    const result = await deps.getServerTimelineUseCase.run({ createdAt: undefined });
-    return result.ok
-      ? c.json({ posts: result.val.posts.map(sanitizePost) })
-      : c.json({ error: 'Failed to load timeline' }, 500);
-  });
 
   app.get('/v1/push/vapid-public-key', (c) =>
     deps.vapidPublicKey === undefined

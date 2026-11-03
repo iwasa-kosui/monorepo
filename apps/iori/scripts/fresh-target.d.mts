@@ -1,6 +1,4 @@
-export type TargetInput = Readonly<
-  { environment: string; generation: string; accountId: string; backendBucket?: string }
->;
+export type TargetInput = Readonly<{ environment: string; generation: string; accountId: string }>;
 export type TargetIdentity =
   & TargetInput
   & Readonly<
@@ -11,10 +9,3 @@ export type TargetIdentity =
     }
   >;
 export function createTargetIdentity(input: TargetInput): TargetIdentity;
-export function assertFreshTargetState(identity: TargetIdentity, state: unknown): void;
-export function validateFreshTargetPlan(plan: unknown, identity: TargetIdentity, stage: string): string[];
-export function inspectFreshTargetPlan(
-  plan: unknown,
-  identity: TargetIdentity,
-  stage: string,
-): { message: string; address?: string; actions?: readonly string[] }[];

@@ -19,7 +19,7 @@ import {
 } from '../smoke-diagnostics.mjs';
 
 const publicLine =
-  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|terraform|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
+  /^IORI_DIAG stage=[a-z-]{1,24} program=(?:ssh|rsync|node|none) exit=(?:\d{1,3}|none) signal=(?:[A-Z0-9]{1,12}|none) reason=[a-z0-9-]{1,40}$/;
 const fixtureHostname = 'smoke-fixture-host.example';
 const fixtureToken = 'fixture-smoke-queue-token';
 const itemNames = DEFAULT_STAGING_SMOKE_CHECKS.map((check: { name: string }) => check.name) as string[];

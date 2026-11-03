@@ -54,6 +54,32 @@ describe('D1 timeline and posting adapters', () => {
     });
   });
 
+  it('persists the visibility of a remote post in remote_posts', async () => {
+    const insert = vi.fn((table: unknown) => ({
+      values: (values: unknown) => ({ table, values }),
+    }));
+    const batch = vi.fn(async (_queries: unknown[]) => []);
+    const db = { insert, batch } as unknown as IoriD1Db;
+    const event = Post.createRemotePost(Instant.now())({
+      actorId: ActorId.generate(),
+      content: 'Hello from remote',
+      uri: 'https://remote.example/notes/1',
+      inReplyToUri: null,
+      visibility: 'unlisted',
+    });
+
+    const result = await createD1PostCreatedStore(db).store(event);
+
+    expect(result.ok).toBe(true);
+    const [, remotePostInsert] = batch.mock.calls[0][0] as Array<{ values: Record<string, unknown> }>;
+    expect(remotePostInsert.values).toEqual({
+      postId: event.aggregateState.postId,
+      uri: 'https://remote.example/notes/1',
+      inReplyToUri: null,
+      visibility: 'unlisted',
+    });
+  });
+
   it('persists a timeline item and post images with their original metadata', async () => {
     const values = vi.fn((input: unknown) => ({ input }));
     const insert = vi.fn((_table: unknown) => ({
