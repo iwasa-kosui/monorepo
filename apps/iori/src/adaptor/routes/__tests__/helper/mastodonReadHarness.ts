@@ -5,6 +5,7 @@ import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
+import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
@@ -12,6 +13,7 @@ import { createD1ActorIdResolverByAcct } from '../../../d1/actor/actorIdResolver
 import { createD1ActorResolverById } from '../../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
+import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -38,6 +40,7 @@ import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasRe
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1RepostResolverById } from '../../../d1/repost/repostResolverById.ts';
+import { createD1HomePostsResolverByPeriod } from '../../../d1/timeline/homePostsResolverByPeriod.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../../../d1/timeline/timelineItemsResolverByActorIds.ts';
 import { createD1TimelineSearchCandidatesResolver } from '../../../d1/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
@@ -45,6 +48,7 @@ import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
+import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
@@ -80,6 +84,15 @@ export const setupReadApi = (
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
+  });
+  const searchTimeline = createSearchTimelineUseCase({
+    actorResolverByUserId,
+    actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
+    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    textGenerator: options.textGenerator,
+    timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
+    htmlToPlainText,
+    ...options.searchTimeline,
   });
   const app = createIoriApp({
     federationMiddleware: undefined,
@@ -137,14 +150,25 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriSearchRouter({
           authn,
-          searchTimeline: createSearchTimelineUseCase({
+          searchTimeline,
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriSummaryRouter({
+          authn,
+          summarizeTimeline: createSummarizeTimelineUseCase({
             actorResolverByUserId,
             actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
             mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+            searchTimeline,
+            homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
+            postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+            aiSummaryUsageRecorder: createD1AiSummaryUsageRecorder(db),
             textGenerator: options.textGenerator,
-            timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
             htmlToPlainText,
-            ...options.searchTimeline,
           }),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
