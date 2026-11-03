@@ -161,7 +161,7 @@ describe('createWorkerArticlesApiRouter', () => {
       unpublishedAt: status === 'unpublished' ? createdAt : null,
     });
 
-    const createApp = (article: Article) => {
+    const createApp = (article: Article, options: Readonly<{ sessionResolverThrows?: boolean }> = {}) => {
       const sessionResolver = createMockSessionResolver();
       const future = Instant.orThrow(Date.now() + 60_000);
       sessionResolver.setSession({ sessionId: authorSessionId, userId: authorUserId, expires: future });
@@ -189,7 +189,13 @@ describe('createWorkerArticlesApiRouter', () => {
               unpublishArticleUseCase: unused,
               deleteArticleUseCase: unused,
               publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
-              sessionResolver,
+              sessionResolver: options.sessionResolverThrows
+                ? {
+                  resolve: async () => {
+                    throw new Error('D1 is unavailable');
+                  },
+                }
+                : sessionResolver,
               createContext: () => createMockRequestContext(),
             }),
           );
@@ -249,6 +255,120 @@ describe('createWorkerArticlesApiRouter', () => {
       const article = createArticle('published');
 
       expect((await get(createApp(article), article, `sessionId=${SessionId.generate()}`)).status).toBe(200);
+    });
+
+    it('session の解決が例外を投げても published は 200 になる', async () => {
+      const article = createArticle('published');
+
+      const app = createApp(article, { sessionResolverThrows: true });
+
+      expect((await get(app, article, `sessionId=${authorSessionId}`)).status).toBe(200);
+    });
+
+    it('session の解決が例外を投げたら draft は 404 になる', async () => {
+      const article = createArticle('draft');
+
+      const app = createApp(article, { sessionResolverThrows: true });
+
+      expect((await get(app, article, `sessionId=${authorSessionId}`)).status).toBe(404);
+    });
+  });
+
+  describe('OG 画像の削除', () => {
+    const articleId = ArticleId.generate();
+    const article = {
+      articleId,
+      authorActorId: ActorId.generate(),
+      authorUserId: UserId.generate(),
+      rootPostId: PostId.generate(),
+      title: 'OG article',
+      status: 'unpublished' as const,
+      createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+      publishedAt: null,
+      unpublishedAt: null,
+    };
+
+    const createApp = (
+      options: Readonly<{ succeeds: boolean; deleteOgImage: (articleId: ArticleId) => Promise<void> }>,
+    ) => {
+      const result = () =>
+        options.succeeds
+          ? RA.ok({ article, success: true as const })
+          : RA.err({ type: 'UnauthorizedError' as const, message: 'forbidden' });
+      const unpublishArticleUseCase = { run: async () => result() } as unknown as UnpublishArticleUseCase;
+      const deleteArticleUseCase = { run: async () => result() } as unknown as DeleteArticleUseCase;
+      const unused = { run: async () => RA.err({}) } as never;
+      return createIoriApp({
+        federationMiddleware: undefined,
+        registerRoutes: (router) => {
+          router.route(
+            '/api',
+            createWorkerArticlesApiRouter({
+              getArticleWithThreadUseCase: unused,
+              getArticlesUseCase: unused,
+              createArticleUseCase: unused,
+              publishArticleUseCase: unused,
+              unpublishArticleUseCase,
+              deleteArticleUseCase,
+              publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
+              sessionResolver: createMockSessionResolver(),
+              deleteOgImage: options.deleteOgImage,
+              createContext: () => createMockRequestContext(),
+            }),
+          );
+        },
+        serveAsset: async () => undefined,
+        serveUpload: async () => undefined,
+        serveOgImage: async () => new Response('not implemented', { status: 501 }),
+      });
+    };
+
+    const requests = {
+      unpublish: (app: ReturnType<typeof createApp>) =>
+        app.request(`https://worker.test/api/v1/articles/${articleId}/unpublish`, {
+          method: 'POST',
+          headers: { Cookie: sessionCookie },
+        }),
+      delete: (app: ReturnType<typeof createApp>) =>
+        app.request(`https://worker.test/api/v1/articles/${articleId}`, {
+          method: 'DELETE',
+          headers: { Cookie: sessionCookie },
+        }),
+    };
+
+    it.each(['unpublish', 'delete'] as const)('%s が成功したら OG 画像を削除する', async (operation) => {
+      const deleteOgImage = vi.fn(async () => undefined);
+
+      const response = await requests[operation](createApp({ succeeds: true, deleteOgImage }));
+
+      expect(response.status).toBe(200);
+      expect(deleteOgImage).toHaveBeenCalledExactlyOnceWith(articleId);
+    });
+
+    it.each(['unpublish', 'delete'] as const)(
+      '%s の成功後に削除が失敗しても応答は成功のままで警告を出す',
+      async (operation) => {
+        const error = new Error('R2 is unavailable');
+        const deleteOgImage = vi.fn(async () => {
+          throw error;
+        });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        const response = await requests[operation](createApp({ succeeds: true, deleteOgImage }));
+
+        expect(response.status).toBe(200);
+        expect(warn).toHaveBeenCalledWith(expect.any(String), { articleId, error });
+        warn.mockRestore();
+      },
+    );
+
+    it.each(['unpublish', 'delete'] as const)('%s が失敗したら OG 画像を削除しない', async (operation) => {
+      const deleteOgImage = vi.fn(async () => undefined);
+
+      const response = await requests[operation](createApp({ succeeds: false, deleteOgImage }));
+
+      expect(response.status).toBe(403);
+      expect(deleteOgImage).not.toHaveBeenCalled();
     });
   });
 });

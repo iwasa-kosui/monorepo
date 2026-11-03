@@ -34,7 +34,7 @@ const setup = (
   const loadFont = vi.fn(overrides.loadFont ?? (async () => fontData));
   const render = vi.fn(overrides.render ?? (async () => png));
   const run = generateOgImageOnDemand({
-    store: { get, put },
+    store: { get, put, delete: vi.fn(async () => undefined) },
     resolvePublishedTitle,
     loadFont,
     render,
@@ -72,7 +72,7 @@ describe('generateOgImageOnDemand', () => {
     const response = (result as Extract<typeof result, { status: 'found' }>).response;
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
     expect(loadFont).toHaveBeenCalledWith('日本語のタイトルblog.kosui.me');
     expect(render).toHaveBeenCalledWith({ title: '日本語のタイトル', fontData });

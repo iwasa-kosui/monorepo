@@ -1,3 +1,5 @@
+import { ogImageCacheControl } from '../r2/ogImageStore.ts';
+
 export type OgImageBackfillArticle = Readonly<{
   articleId: string;
   title: string;
@@ -15,8 +17,6 @@ export type OgImageBackfillDeps = Readonly<{
   upload: (input: OgImageBackfillInput) => Promise<void>;
 }>;
 
-const cacheControl = 'public, max-age=31536000, immutable';
-
 export const ogImageObjectKey = (articleId: string): string => `og/${articleId}.png`;
 
 export const backfillOgImages = async ({
@@ -28,7 +28,7 @@ export const backfillOgImages = async ({
     await upload({
       key: ogImageObjectKey(article.articleId),
       body: await generate(article.title),
-      cacheControl,
+      cacheControl: ogImageCacheControl,
     });
   }
 

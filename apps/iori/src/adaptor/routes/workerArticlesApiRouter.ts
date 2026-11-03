@@ -11,6 +11,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { SessionResolver } from '../../domain/session/session.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
+import type { UserId } from '../../domain/user/userId.ts';
 import type { CreateArticleUseCase } from '../../useCase/createArticle.ts';
 import type { DeleteArticleUseCase } from '../../useCase/deleteArticle.ts';
 import type { GetArticlesUseCase } from '../../useCase/getArticles.ts';
@@ -30,22 +31,37 @@ export type WorkerArticlesApiRouterDeps = Readonly<{
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
   sessionResolver: SessionResolver;
   publishOgImage?: (article: Article) => Promise<void>;
+  deleteOgImage?: (articleId: ArticleId) => Promise<void>;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
 
 export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps): Hono => {
   const app = new Hono();
 
+  const deleteOgImageSafely = async (articleId: ArticleId) => {
+    try {
+      await deps.deleteOgImage?.(articleId);
+    } catch (error) {
+      console.warn('Failed to delete the OGP image.', { articleId, error });
+    }
+  };
+
   app.get('/v1/articles/:articleId', async (c) => {
     const articleId = ArticleId.parse(c.req.param('articleId'));
     if (!articleId.ok) return c.json({ error: 'Invalid article ID' }, 400);
     const sessionId = SessionId.parse(getCookie(c, 'sessionId'));
-    const session = sessionId.ok
-      ? await resolveSessionWith(deps.sessionResolver, Instant.now())(sessionId.val)
-      : undefined;
+    let viewerUserId: UserId | undefined;
+    if (sessionId.ok) {
+      try {
+        const session = await resolveSessionWith(deps.sessionResolver, Instant.now())(sessionId.val);
+        viewerUserId = session.ok ? session.val.userId : undefined;
+      } catch {
+        viewerUserId = undefined;
+      }
+    }
     const result = await deps.getArticleWithThreadUseCase.run({
       articleId: articleId.val,
-      viewerUserId: session?.ok ? session.val.userId : undefined,
+      viewerUserId,
     });
     if (!result.ok) {
       return result.err.type === 'ArticleNotFoundError'
@@ -118,7 +134,10 @@ export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps)
       articleId: articleId.val,
       ctx: deps.createContext(c.req.raw),
     });
-    if (result.ok) return c.json({ article: result.val.article });
+    if (result.ok) {
+      await deleteOgImageSafely(articleId.val);
+      return c.json({ article: result.val.article });
+    }
     if (result.err.type === 'UnauthorizedError') return c.json({ error: result.err.message }, 403);
     if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
     return c.json({ error: result.err.message }, 400);
@@ -134,7 +153,10 @@ export const createWorkerArticlesApiRouter = (deps: WorkerArticlesApiRouterDeps)
       articleId: articleId.val,
       ctx: deps.createContext(c.req.raw),
     });
-    if (result.ok) return c.json({ success: true });
+    if (result.ok) {
+      await deleteOgImageSafely(articleId.val);
+      return c.json({ success: true });
+    }
     if (result.err.type === 'UnauthorizedError') return c.json({ error: result.err.message }, 403);
     if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
     return c.json({ error: `Failed to delete article: ${JSON.stringify(result.err)}` }, 400);

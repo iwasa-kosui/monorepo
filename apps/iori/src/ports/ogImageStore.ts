@@ -7,4 +7,5 @@ export type OgImageStore = Readonly<{
       contentType: string;
     }>,
   ) => Promise<void>;
+  delete: (key: string) => Promise<void>;
 }>;

@@ -51,6 +51,7 @@ const runtime = vi.hoisted(() => ({
     deleteArticleUseCase: {},
     publishedArticlesResolver: {},
     publishOgImage: async () => undefined,
+    deleteOgImage: async () => undefined,
   },
   core: {
     signUpUseCase: {},
@@ -112,7 +113,7 @@ describe('Task 8 Worker OGP route', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600');
     expect(get).toHaveBeenCalledWith('og/573c7c51-0e4b-453c-bb9f-5dbd15a319a7.png');
   });
 
