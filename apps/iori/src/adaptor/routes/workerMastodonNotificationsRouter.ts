@@ -22,6 +22,7 @@ import type {
   NotificationGroup,
   NotificationPolicy,
   Status,
+  V1NotificationPolicy,
 } from '../mastodon/entities.ts';
 import type { StatusAssembler } from '../mastodon/statusAssembler.ts';
 import { selectDomainTypes, targetPostIdOf, toNotification, triggerActorIdOf } from '../mastodon/toNotification.ts';
@@ -63,6 +64,14 @@ const notificationPolicy: NotificationPolicy = {
   for_private_mentions: 'filter',
   for_limited_accounts: 'filter',
   summary: { pending_requests_count: 0, pending_notifications_count: 0 },
+};
+
+const v1NotificationPolicy: V1NotificationPolicy = {
+  filter_not_following: notificationPolicy.for_not_following !== 'accept',
+  filter_not_followers: notificationPolicy.for_not_followers !== 'accept',
+  filter_new_accounts: notificationPolicy.for_new_accounts !== 'accept',
+  filter_private_mentions: notificationPolicy.for_private_mentions !== 'accept',
+  summary: notificationPolicy.summary,
 };
 
 const queryList = (c: Context, name: string): string[] => [
@@ -213,6 +222,8 @@ export const createWorkerMastodonNotificationsRouter = ({
       const userId = getMastodonPrincipal(c)?.userId;
       return userId === null || userId === undefined ? c.json(invalidToken, 401) : countUnread(c, userId);
     })
+    .get('/v1/notifications/requests', authn.requireUser(readNotifications), (c) => c.json([]))
+    .get('/v1/notifications/policy', authn.requireUser(readNotifications), (c) => c.json(v1NotificationPolicy))
     .get('/v1/notifications/:id', authn.requireUser(readNotifications), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createStatus,
+  deleteStatus,
   failureMessage,
   favourite,
   fetchAccount,
@@ -292,6 +294,68 @@ describe('mastodon client requests', () => {
     const error = await saveNotificationsMarker('n9').catch((e: unknown) => e);
 
     expect(isUnauthorizedError(error)).toBe(true);
+  });
+
+  it('creates a status with a same-origin JSON post and returns the created status', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 's2' }));
+
+    const status = await createStatus({
+      status: 'hello',
+      in_reply_to_id: 's1',
+      media_ids: ['m1', 'm2'],
+      content_type: 'text/markdown',
+    });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/statuses');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      status: 'hello',
+      in_reply_to_id: 's1',
+      media_ids: ['m1', 'm2'],
+      content_type: 'text/markdown',
+    });
+    expect(status).toEqual({ id: 's2' });
+  });
+
+  it('omits the optional fields of a status that is not a reply and has no media', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 's2' }));
+
+    await createStatus({ status: 'hello', content_type: 'text/markdown' });
+
+    const [, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ status: 'hello', content_type: 'text/markdown' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the status is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: Text can not be blank' }, { status: 422 }));
+
+    const error = await createStatus({ status: '', content_type: 'text/markdown' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: Text can not be blank');
+  });
+
+  it('deletes a status by encoded id and returns the deleted status', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b', text: 'bye' }));
+
+    const status = await deleteStatus('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/statuses/a%2Fb');
+    expect(init.method).toBe('DELETE');
+    expect(init.credentials).toBe('same-origin');
+    expect(status).toEqual({ id: 'a/b', text: 'bye' });
+  });
+
+  it('throws a not found error when the status to delete is missing', async () => {
+    stubFetch(jsonResponse({ error: 'Record not found' }, { status: 404 }));
+
+    const error = await deleteStatus('missing').catch((e: unknown) => e);
+
+    expect(isNotFoundError(error)).toBe(true);
   });
 
   it('throws an unauthorized error carrying the server message on 401', async () => {

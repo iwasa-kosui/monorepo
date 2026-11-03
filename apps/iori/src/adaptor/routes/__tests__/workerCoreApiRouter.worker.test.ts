@@ -5,12 +5,9 @@ import { createIoriApp } from '../../../appFactory.tsx';
 import { createWorkerCoreApiRouter } from '../workerCoreApiRouter.ts';
 
 const sessionCookie = 'sessionId=4dc530d6-d06c-4b4a-a021-0e1aee0b6d82';
-const postId = '573c7c51-0e4b-453c-bb9f-5dbd15a319a7';
 
 const createDeps = () => ({
   signUpUseCase: { run: vi.fn(async () => RA.ok({ user: { username: 'newuser' } })) },
-  sendReplyUseCase: { run: vi.fn() },
-  deletePostUseCase: { run: vi.fn() },
   subscribePushUseCase: { run: vi.fn() },
   unsubscribePushUseCase: { run: vi.fn() },
   vapidPublicKey: 'public-key',
@@ -34,8 +31,6 @@ describe('createWorkerCoreApiRouter', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: 'newuser', password: 'a-secure-password-with-16-characters' }),
       }),
-      app.request('/api/v1/reply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
-      app.request(`/api/v1/posts/${postId}`, { method: 'DELETE' }),
       app.request('/api/v1/follow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
       app.request('/api/v1/remote-users/not-an-id/posts'),
       app.request('/api/v1/users/not valid/posts'),
@@ -49,8 +44,6 @@ describe('createWorkerCoreApiRouter', () => {
 
     expect(responses.map((response) => response.status)).toEqual([
       200,
-      400,
-      401,
       404,
       404,
       404,

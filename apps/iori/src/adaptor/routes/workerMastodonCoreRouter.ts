@@ -9,7 +9,7 @@ import type { UserId } from '../../domain/user/userId.ts';
 import type { Username } from '../../domain/user/username.ts';
 import type { UpdateAvatarUseCase } from '../../useCase/updateAvatar.ts';
 import { defaultImageUrls } from '../mastodon/defaultImages.ts';
-import type { Account, CredentialAccount, Preferences } from '../mastodon/entities.ts';
+import type { Account, CredentialAccount, ExtendedDescription, Preferences } from '../mastodon/entities.ts';
 import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
 import { IORI_VERSION } from '../mastodon/ioriVersion.ts';
 import { toAccount } from '../mastodon/toAccount.ts';
@@ -62,6 +62,8 @@ const preferences: Preferences = {
   'reading:expand:media': 'default',
   'reading:expand:spoilers': false,
 };
+
+const extendedDescription: ExtendedDescription = { updated_at: null, content: '' };
 
 const languages = [{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }] as const;
 
@@ -213,6 +215,7 @@ export const createWorkerMastodonCoreRouter = ({
       '/v1/instance/translation_languages',
       (c) => c.json(instance.translationEnabled === true ? { und: ['ja'] } : {}),
     )
+    .get('/v1/instance/extended_description', (c) => c.json(extendedDescription))
     .get('/v1/instance/languages', (c) => c.json(languages))
     .get('/v1/trends/statuses', (c) => c.json([]))
     .get('/v1/trends/tags', (c) => c.json([]))

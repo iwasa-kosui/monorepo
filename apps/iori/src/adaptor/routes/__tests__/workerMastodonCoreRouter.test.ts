@@ -9,7 +9,12 @@ import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
-import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
+import {
+  CredentialAccountSchema,
+  ExtendedDescriptionSchema,
+  InstanceV1Schema,
+  InstanceV2Schema,
+} from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
@@ -390,6 +395,14 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
     });
 
+    it('v1 に pleroma.metadata.post_formats を足し、version は Mastodon 互換のままにする', async () => {
+      const response = await setup().request('/api/v1/instance');
+
+      const body = InstanceV1Schema.parse(await response.json());
+      expect(body.pleroma).toEqual({ metadata: { post_formats: ['text/plain', 'text/markdown'] } });
+      expect(body.version).toMatch(/^4\.3\.0 \(compatible; iori \S+\)$/);
+    });
+
     it('連絡先の利用者がいなければ contact_account を null にする', async () => {
       const h = setup();
 
@@ -481,6 +494,13 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(enabledBody.configuration.translation).toEqual({ enabled: true });
       expect(disabledBody.configuration.translation).toEqual({ enabled: false });
+    });
+
+    it('instance/extended_description は空の説明を認証なしで返す', async () => {
+      const response = await setup().request('/api/v1/instance/extended_description');
+
+      expect(response.status).toBe(200);
+      expect(ExtendedDescriptionSchema.parse(await response.json())).toEqual({ updated_at: null, content: '' });
     });
 
     it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {

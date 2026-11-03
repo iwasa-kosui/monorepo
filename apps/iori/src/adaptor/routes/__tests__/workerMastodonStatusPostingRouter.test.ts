@@ -1,0 +1,309 @@
+import { Delete } from '@fedify/fedify';
+import { describe, expect, it } from 'vitest';
+
+import { StatusSchema } from '../../mastodon/entities.ts';
+import { setupReadApi } from './helper/mastodonReadHarness.ts';
+import { ORIGIN } from './helper/oauthHarness.ts';
+
+const notFound = { error: 'Record not found' };
+
+const setup = async () => {
+  const t = setupReadApi();
+  const me = await t.signIn('write:statuses');
+  const alice = t.seed.addLocalActor('alice');
+  const json = (body: unknown, headers: Record<string, string> = me.bearer) =>
+    t.request('/api/v1/statuses', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const count = (table: string, where = '1=1') =>
+    Number((t.sqlite.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${where}`).get() as { n: number | bigint }).n);
+  const imagesOf = (postId: string) =>
+    t.sqlite
+      .prepare('SELECT url, altText, createdAt FROM post_images WHERE postId = ? ORDER BY createdAt, imageId')
+      .all(postId) as unknown as ReadonlyArray<{ url: string; altText: string | null; createdAt: number }>;
+  return { ...t, me, alice, json, count, imagesOf };
+};
+
+describe('POST /api/v1/statuses の検証', () => {
+  const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+    ['visibility が public 以外', { status: 'hi', visibility: 'private' }],
+    ['spoiler_text が空でない', { status: 'hi', spoiler_text: 'cw' }],
+    ['sensitive が真', { status: 'hi', sensitive: true }],
+    ['sensitive が文字列の true', { status: 'hi', sensitive: 'true' }],
+    ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
+    ['status が空白だけで media_ids も空', { status: ' \n\t', media_ids: [] }],
+    ['status がなく media_ids も空', {}],
+    ['media_ids が形式不正', { status: 'hi', media_ids: ['nope'] }],
+    ['media_ids に存在しない media', { status: 'hi', media_ids: [crypto.randomUUID()] }],
+  ];
+
+  it.each(rejected)('%s のとき 422 にして投稿を作らない', async (_name, body) => {
+    const t = await setup();
+
+    const response = await t.json(body);
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('scheduled_at が空でないとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', scheduled_at: '2099-01-01T00:00:00.000Z' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('poll[options][] を含むとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.request('/api/v1/statuses', {
+      method: 'POST',
+      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([
+        ['status', 'hi'],
+        ['poll[options][]', 'a'],
+        ['poll[options][]', 'b'],
+        ['poll[expires_in]', '300'],
+      ]).toString(),
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('status が 10001 文字のとき 422 にして投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'あ'.repeat(10001) });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('status が 10000 文字ちょうどのとき投稿できる', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'あ'.repeat(10000) });
+
+    expect(response.status).toBe(200);
+    expect(t.count('posts')).toBe(1);
+  });
+
+  it('media_ids が5件以上のとき 422 にする', async () => {
+    const t = await setup();
+    const medias = [];
+    for (let i = 0; i < 5; i++) medias.push(await t.addMedia(t.me.userId));
+
+    const response = await t.json({ status: 'hi', media_ids: medias.map((media) => media.mediaId) });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('他人の media を含むとき 422 にする', async () => {
+    const t = await setup();
+    const mine = await t.addMedia(t.me.userId);
+    const theirs = await t.addMedia(t.alice.userId);
+
+    const response = await t.json({ status: 'hi', media_ids: [mine.mediaId, theirs.mediaId] });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('in_reply_to_id の投稿が存在しないとき 404 にする', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', in_reply_to_id: crypto.randomUUID() });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(notFound);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('in_reply_to_id の投稿が閲覧者に見えないとき 404 にする', async () => {
+    const t = await setup();
+    const remote = t.seed.addRemoteActor('bob');
+    const hidden = t.seed.addRemotePost(remote, 1_000, { visibility: 'direct', timeline: false });
+
+    const response = await t.json({ status: 'hi', in_reply_to_id: hidden.postId });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(notFound);
+    expect(t.count('posts', `postId != '${hidden.postId}'`)).toBe(0);
+  });
+
+  it('write:statuses のない Bearer を 403 にする', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi' }, await t.bearerFor('read'));
+
+    expect(response.status).toBe(403);
+    expect(t.count('posts')).toBe(0);
+  });
+});
+
+describe('POST /api/v1/statuses', () => {
+  it('text/plain の本文を HTML にして投稿し、language と Idempotency-Key は無視する', async () => {
+    const t = await setup();
+
+    const response = await t.json({
+      status: 'hello <b>\nsee https://example.com/a.',
+      language: 'ja',
+      visibility: 'public',
+      sensitive: false,
+      spoiler_text: '',
+    }, { ...t.me.bearer, 'Idempotency-Key': 'abc' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status).toMatchObject({
+      content: '<p>hello &lt;b&gt;<br />see <a href="https://example.com/a">https://example.com/a</a>.</p>',
+      in_reply_to_id: null,
+      media_attachments: [],
+      account: { username: 'kosui' },
+    });
+    expect(t.count('posts', `postId='${status.id}' AND actorId='${t.me.actorId}'`)).toBe(1);
+    expect(t.count('timeline_items', `postId='${status.id}'`)).toBe(1);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('text/markdown の本文を Markdown として HTML にする', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'a **bold** word', content_type: 'text/markdown' });
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json()).content).toContain('<strong>bold</strong>');
+  });
+
+  it('画像の順序と説明を保って保存し、レスポンスでも同じ順序で返す', async () => {
+    const t = await setup();
+    const first = await t.addMedia(t.me.userId, 'first');
+    const second = await t.addMedia(t.me.userId, null);
+    const third = await t.addMedia(t.me.userId, 'third');
+
+    const response = await t.request('/api/v1/statuses', {
+      method: 'POST',
+      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: [third, first, second].map((media) => `media_ids[]=${media.mediaId}`).join('&') + '&status=pics',
+    });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.media_attachments.map((media) => [media.url, media.description])).toEqual([
+      [third.url, 'third'],
+      [first.url, 'first'],
+      [second.url, null],
+    ]);
+    const stored = t.imagesOf(status.id);
+    expect(stored.map((image) => [image.url, image.altText])).toEqual([
+      [third.url, 'third'],
+      [first.url, 'first'],
+      [second.url, null],
+    ]);
+    expect(stored[1]!.createdAt - stored[0]!.createdAt).toBe(1);
+    expect(stored[2]!.createdAt - stored[1]!.createdAt).toBe(1);
+  });
+
+  it('status が空でも media_ids があれば投稿できる', async () => {
+    const t = await setup();
+    const media = await t.addMedia(t.me.userId, 'only');
+    const body = new FormData();
+    body.set('media_ids', media.mediaId);
+
+    const response = await t.request('/api/v1/statuses', { method: 'POST', headers: t.me.bearer, body });
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({
+      content: '',
+      media_attachments: [{ url: media.url, description: 'only' }],
+    });
+  });
+
+  it('返信として投稿し、返信先の投稿の in_reply_to_id を持つ Status を返す', async () => {
+    const t = await setup();
+    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+    const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status).toMatchObject({
+      content: '<p>reply</p>',
+      in_reply_to_id: parent.postId,
+      in_reply_to_account_id: t.alice.actorId,
+    });
+    expect(t.count('local_posts', `postId='${status.id}' AND inReplyToUri IS NOT NULL`)).toBe(1);
+    expect(t.count('notifications', `recipientUserId='${t.alice.userId}'`)).toBe(1);
+  });
+
+  it('Cookie のセッションでも投稿できる', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'from the web' }, {
+      Cookie: `sessionId=${t.me.sessionId}`,
+      Origin: ORIGIN,
+    });
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json()).content).toBe('<p>from the web</p>');
+    expect(t.count('posts', `actorId='${t.me.actorId}'`)).toBe(1);
+  });
+});
+
+describe('DELETE /api/v1/statuses/:id', () => {
+  const remove = (t: Awaited<ReturnType<typeof setup>>, id: string) =>
+    t.request(`/api/v1/statuses/${id}`, { method: 'DELETE', headers: t.me.bearer });
+
+  it('自分の投稿を削除し、削除前の Status に text を足して返す', async () => {
+    const t = await setup();
+    const own = t.seed.addLocalPost(t.me, 1_000, { content: '<p>Hello <b>world</b></p><p>second</p>' });
+
+    const response = await remove(t, own.postId);
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(StatusSchema.parse(body)).toMatchObject({
+      id: own.postId,
+      content: '<p>Hello <b>world</b></p><p>second</p>',
+      text: 'Hello world\nsecond',
+    });
+    expect(t.count('posts', `postId='${own.postId}'`)).toBe(0);
+    const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toBeInstanceOf(Delete);
+    const afterwards = await t.request(`/api/v1/statuses/${own.postId}`, { headers: await t.bearerFor('read') });
+    expect(afterwards.status).toBe(404);
+  });
+
+  it('存在しない、他人の、リモートの投稿は 404 にして削除しない', async () => {
+    const t = await setup();
+    const theirs = t.seed.addLocalPost(t.alice, 1_000);
+    const remote = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 2_000, { visibility: 'public' });
+
+    const responses = await Promise.all([
+      remove(t, crypto.randomUUID()),
+      remove(t, 'nope'),
+      remove(t, theirs.postId),
+      remove(t, remote.postId),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(notFound);
+    }
+    expect(t.count('posts', `postId IN ('${theirs.postId}', '${remote.postId}')`)).toBe(2);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+});

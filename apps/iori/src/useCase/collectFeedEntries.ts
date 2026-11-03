@@ -60,7 +60,7 @@ const uniqueByGuid = (items: ReadonlyArray<ParsedFeedItem>): ParsedFeedItem[] =>
   return items.filter((item) => !seen.has(item.guid) && seen.add(item.guid));
 };
 
-const runWithConcurrency = async <T>(
+export const runWithConcurrency = async <T>(
   items: ReadonlyArray<T>,
   limit: number,
   task: (item: T) => Promise<void>,

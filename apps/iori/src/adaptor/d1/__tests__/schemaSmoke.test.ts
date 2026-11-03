@@ -21,6 +21,7 @@ describe('D1 schema', () => {
       'federatedTimelineItemsTable',
       'followsTable',
       'instanceActorKeysTable',
+      'interestSourcesTable',
       'keysTable',
       'likesTable',
       'linkPreviewsTable',
