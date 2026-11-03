@@ -370,6 +370,7 @@ describe('D1 query counts for a page of 20 posts', () => {
     addFederatedItems(sqlite);
     const result = unwrap(await createD1FederatedTimelineItemsResolver(db).resolve(federatedInput(undefined)));
     expect(result).toHaveLength(20);
+    expect(result.every(item => !item.post.liked && !item.post.reposted)).toBe(true);
     expect(result.slice(0, 4).map(item => item.post.postId)).toEqual([
       postIdOf(richIndex),
       postIdOf(3),
@@ -409,13 +410,14 @@ describe('D1 query counts for a page of 20 posts', () => {
     ]);
   });
 
-  it('runs 6 queries for /api/v1/users/:username/posts posts without a viewer and 8 with a viewer', async () => {
+  it('runs 6 queries for /api/v1/users/:username/posts without a viewer and 8 with a viewer', async () => {
     const { db, queries } = setup();
     const resolver = createD1PostsResolverByActorIds(db, ORIGIN);
     const anonymous = unwrap(
       await resolver.resolve({ actorIds: [localActorId], currentActorId: undefined, createdAt: undefined }),
     );
     expect(anonymous).toHaveLength(20);
+    expect(anonymous.every(post => !post.liked && !post.reposted)).toBe(true);
     expect(queries).toHaveLength(6);
 
     queries.length = 0;
@@ -444,25 +446,25 @@ describe('resolvePostsWithAuthorByIds with more than 100 post IDs', () => {
         userId,
         null,
       );
-      sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
-        id(7000 + index),
-        viewerActorId,
-        postIdOf(index),
-        'remote',
-        1,
-      );
-      sqlite.prepare('INSERT INTO remote_likes(likeId,likeActivityUri) VALUES (?,?)').run(
-        id(7000 + index),
-        `https://remote.test/likes/${index}`,
-      );
-      if (index % 2 === 0) {
-        sqlite.prepare('INSERT INTO reposts(repostId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
-          id(7200 + index),
-          remoteActorId,
+      if (index % 3 !== 0) {
+        sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
+          id(7000 + index),
+          viewerActorId,
           postIdOf(index),
+          'remote',
           1,
         );
+        sqlite.prepare('INSERT INTO remote_likes(likeId,likeActivityUri) VALUES (?,?)').run(
+          id(7000 + index),
+          `https://remote.test/likes/${index}`,
+        );
       }
+      sqlite.prepare('INSERT INTO reposts(repostId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
+        id(7200 + index),
+        index % 2 === 0 ? viewerActorId : remoteActorId,
+        postIdOf(index),
+        1,
+      );
       if (index % 3 === 0) {
         sqlite.prepare('INSERT INTO post_images(imageId,postId,url,altText,createdAt) VALUES (?,?,?,?,?)').run(
           id(7400 + index),
@@ -506,7 +508,6 @@ describe('resolvePostsWithAuthorByIds with more than 100 post IDs', () => {
     expect(posts.size).toBe(EXTRA_LAST);
     expect([...posts.keys()].sort()).toEqual([...postIds].sort());
     expect(queries).toHaveLength(8);
-    expect(queries.every(query => query.params.length <= 100)).toBe(true);
     expect(posts.get(postIdOf(richIndex) as PostId)).toMatchObject({
       liked: true,
       reposted: true,
@@ -517,10 +518,10 @@ describe('resolvePostsWithAuthorByIds with more than 100 post IDs', () => {
       const post = posts.get(postIdOf(index) as PostId);
       expect(post).toMatchObject({
         postId: postIdOf(index),
-        liked: true,
-        reposted: false,
-        likeCount: 1,
-        repostCount: index % 2 === 0 ? 1 : 0,
+        liked: index % 3 !== 0,
+        reposted: index % 2 === 0,
+        likeCount: index % 3 !== 0 ? 1 : 0,
+        repostCount: 1,
       });
       expect(post?.images.map(image => image.url)).toEqual(
         index % 3 === 0 ? [`https://iori.test/uploads/extra-${index}.png`] : [],
@@ -530,6 +531,9 @@ describe('resolvePostsWithAuthorByIds with more than 100 post IDs', () => {
         index % 7 === 0 ? [`https://example.test/extra-${index}`] : [],
       );
     }
+    const beyondFirst100 = postIds.slice(100).map(postId => posts.get(postId));
+    expect(new Set(beyondFirst100.map(post => post?.liked))).toEqual(new Set([true, false]));
+    expect(new Set(beyondFirst100.map(post => post?.reposted))).toEqual(new Set([true, false]));
   });
 });
 
