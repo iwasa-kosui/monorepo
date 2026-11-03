@@ -36,6 +36,13 @@
       "when": 1793729386207,
       "tag": "0004_notifications_paging_and_markers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793730226889,
+      "tag": "0005_tech_digest_feeds",
+      "breakpoints": true
     }
   ]
 }
