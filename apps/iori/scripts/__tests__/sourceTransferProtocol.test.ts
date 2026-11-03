@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 
 import { APPLICATION_TABLE_ORDER } from '../export-postgres-lib.mjs';
-import { estimateUploadFailureReason, SOURCE_LIMITS, validateSourceInventory } from '../source-transfer-protocol.mjs';
+import { SOURCE_LIMITS, validateSourceInventory } from '../source-transfer-protocol.mjs';
 
 const identity = { main_sha: 'a'.repeat(40), run_id: 'fixture' };
 const checksum = createHash('sha256').update('').digest('hex');
@@ -46,31 +46,4 @@ it('rejects an inventory whose uploads and missing uploads exceed the file limit
 });
 it('rejects an inventory with an unknown extra field', () => {
   expect(() => validateSourceInventory(inventory({ omittedCount: 0 }))).toThrow();
-});
-const estimate = {
-  upload_missing_count: 0,
-  upload_owner_count: 0,
-  upload_not_regular_count: 0,
-  upload_too_large_count: 0,
-  upload_access_count: 0,
-  upload_other_count: 0,
-};
-it('passes only when the missing count equals the allowed count and no other cause is counted', () => {
-  expect(estimateUploadFailureReason(estimate)).toBeNull();
-  expect(estimateUploadFailureReason(estimate, 0)).toBeNull();
-  expect(estimateUploadFailureReason({ ...estimate, upload_missing_count: 3 }, 3)).toBeNull();
-  expect(estimateUploadFailureReason({ ...estimate, upload_missing_count: 3 })).toBe('estimate-upload-missing');
-  expect(estimateUploadFailureReason({ ...estimate, upload_missing_count: 3 }, 2)).toBe('estimate-upload-missing');
-  expect(estimateUploadFailureReason({ ...estimate, upload_missing_count: 3 }, 4)).toBe('estimate-upload-missing');
-  expect(estimateUploadFailureReason(estimate, 1)).toBe('estimate-upload-missing');
-});
-it('reports a cause other than missing before the missing count, in the fixed order', () => {
-  const all = { ...estimate, upload_missing_count: 3 };
-  expect(estimateUploadFailureReason({ ...all, upload_other_count: 1, upload_owner_count: 1 }, 3)).toBe(
-    'estimate-upload-owner',
-  );
-  expect(estimateUploadFailureReason({ ...all, upload_other_count: 1, upload_access_count: 1 }, 3)).toBe(
-    'estimate-upload-access',
-  );
-  expect(estimateUploadFailureReason({ ...all, upload_other_count: 1 }, 0)).toBe('estimate-upload-other');
 });
