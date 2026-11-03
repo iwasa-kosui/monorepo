@@ -1,3 +1,5 @@
+export const stripJsonc: (source: string) => string;
+
 export const createDeploymentWorkerConfig: (options?: {
   withoutQueueProducer?: boolean;
   admissionMode?: string;
