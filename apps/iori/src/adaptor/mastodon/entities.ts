@@ -193,14 +193,57 @@ export const NotificationTypeSchema = z.enum([
 ]);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 
+export const IORI_EMOJI_REACTION_TYPE = 'iori:emoji_reaction';
+
+export const IoriNotificationExtensionSchema = z.object({
+  emoji: z.string(),
+  url: z.string().nullable(),
+});
+export type IoriNotificationExtension = z.infer<typeof IoriNotificationExtensionSchema>;
+
 export const NotificationSchema = z.object({
   id: z.string(),
-  type: NotificationTypeSchema,
+  type: z.union([NotificationTypeSchema, z.literal(IORI_EMOJI_REACTION_TYPE)]),
   created_at: z.string(),
   account: AccountSchema,
   status: StatusSchema.optional(),
+  iori: IoriNotificationExtensionSchema.optional(),
 });
 export type Notification = z.infer<typeof NotificationSchema>;
+
+export const NotificationGroupSchema = z.object({
+  group_key: z.string(),
+  notifications_count: z.number().int().positive(),
+  type: NotificationSchema.shape.type,
+  most_recent_notification_id: z.string(),
+  page_min_id: z.string(),
+  page_max_id: z.string(),
+  latest_page_notification_at: z.string(),
+  sample_account_ids: z.array(z.string()),
+  status_id: z.string().optional(),
+  iori: IoriNotificationExtensionSchema.optional(),
+});
+export type NotificationGroup = z.infer<typeof NotificationGroupSchema>;
+
+export const GroupedNotificationsResultsSchema = z.object({
+  accounts: z.array(AccountSchema),
+  statuses: z.array(StatusSchema),
+  notification_groups: z.array(NotificationGroupSchema),
+});
+export type GroupedNotificationsResults = z.infer<typeof GroupedNotificationsResultsSchema>;
+
+export const NotificationPolicySchema = z.object({
+  for_not_following: z.enum(['accept', 'filter', 'drop']),
+  for_not_followers: z.enum(['accept', 'filter', 'drop']),
+  for_new_accounts: z.enum(['accept', 'filter', 'drop']),
+  for_private_mentions: z.enum(['accept', 'filter', 'drop']),
+  for_limited_accounts: z.enum(['accept', 'filter', 'drop']),
+  summary: z.object({
+    pending_requests_count: z.number().int().nonnegative(),
+    pending_notifications_count: z.number().int().nonnegative(),
+  }),
+});
+export type NotificationPolicy = z.infer<typeof NotificationPolicySchema>;
 
 export const RelationshipSchema = z.object({
   id: z.string(),

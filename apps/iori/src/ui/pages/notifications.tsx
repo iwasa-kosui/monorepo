@@ -1,24 +1,24 @@
-import { useEffect, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { IORI_EMOJI_REACTION_TYPE, type Notification } from '../../adaptor/mastodon/entities.ts';
+import {
+  fetchNotifications,
+  fetchVerifyCredentials,
+  isUnauthorizedError,
+  saveNotificationsMarker,
+} from '../api/mastodonClient.ts';
 import { NotificationItem } from '../components/NotificationItem.tsx';
+import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
-type NotificationData = {
-  notification: {
-    notification: {
-      notificationId: string;
-      type: string;
-      [key: string]: unknown;
-    };
-    [key: string]: unknown;
-  };
-  sanitizedContent: string;
-};
+const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', IORI_EMOJI_REACTION_TYPE] as const;
 
-type NotificationsResponse = {
-  user: { id: string; username: string };
-  notifications: NotificationData[];
-};
+type NotificationsData = Readonly<{
+  username: string;
+  notifications: readonly Notification[];
+  nextMaxId: string | undefined;
+}>;
 
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -223,32 +223,57 @@ const PushSubscriptionSection = () => {
 };
 
 const NotificationsPage = () => {
-  const [data, setData] = useState<NotificationsResponse | null>(null);
+  const [data, setData] = useState<NotificationsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const fetchFirstPage = async () => {
       try {
-        const response = await fetch('/api/v1/notifications');
-        if (response.status === 401) {
+        const [page, me] = await Promise.all([
+          fetchNotifications(NOTIFICATION_TYPES),
+          fetchVerifyCredentials(),
+        ]);
+        setData({ username: me.username, notifications: page.items, nextMaxId: page.nextMaxId });
+        const newest = page.items[0];
+        if (newest !== undefined) {
+          saveNotificationsMarker(newest.id).catch((markerError) => {
+            console.error('Failed to save the notifications marker:', markerError);
+          });
+        }
+      } catch (fetchError) {
+        if (isUnauthorizedError(fetchError)) {
           window.location.href = '/sign-in';
           return;
         }
-        if (!response.ok) {
-          setError('Failed to load notifications');
-          return;
-        }
-        const result = await response.json();
-        setData(result);
-      } catch {
-        setError('Network error. Please try again.');
+        setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load notifications');
       } finally {
         setIsLoading(false);
       }
     };
-    fetchNotifications();
+    fetchFirstPage();
   }, []);
+
+  const loadMore = useCallback(async (maxId: string) => {
+    if (isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
+    try {
+      const page = await fetchNotifications(NOTIFICATION_TYPES, { maxId });
+      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
+      setData((prev) =>
+        prev === null
+          ? prev
+          : { ...prev, notifications: appendUniqueById(prev.notifications, page.items), nextMaxId }
+      );
+    } catch (loadError) {
+      console.error('Failed to load more notifications:', loadError);
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, []);
+
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
 
   if (isLoading) {
     return (
@@ -288,12 +313,11 @@ const NotificationsPage = () => {
       <div class='space-y-6 py-2'>
         {data.notifications.length > 0
           ? (
-            data.notifications.map(({ notification, sanitizedContent }) => (
+            data.notifications.map((notification) => (
               <NotificationItem
-                key={notification.notification.notificationId}
-                notification={notification as never}
-                sanitizedContent={sanitizedContent}
-                recipientUsername={data.user.username}
+                key={notification.id}
+                notification={notification}
+                recipientUsername={data.username}
               />
             ))
           )
