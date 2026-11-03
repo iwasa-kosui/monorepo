@@ -22,7 +22,7 @@ import {
   usersTable,
 } from '../schema.ts';
 
-type PostRow = {
+export type PostRow = {
   posts: typeof postsTable.$inferSelect;
   local_posts: typeof localPostsTable.$inferSelect | null;
   remote_posts: typeof remotePostsTable.$inferSelect | null;
@@ -41,32 +41,26 @@ const baseQuery = (db: IoriD1Db) =>
     .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
     .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId));
 
-const enrich = async (db: IoriD1Db, row: PostRow): Promise<PostWithAuthor> => {
+export type PostExtras = Readonly<{
+  images: readonly { url: string; altText: string | null }[];
+  likeCount: number;
+  repostCount: number;
+  reactions: readonly { emoji: string; emojiImageUrl: string | null; count: number }[];
+  previews: readonly (typeof linkPreviewsTable.$inferSelect)[];
+}>;
+
+export const buildPostWithAuthor = (row: PostRow, extras: PostExtras): PostWithAuthor => {
   const postId = row.posts.postId;
-  const [images, likeCount, repostCount, reactions, previews] = await Promise.all([
-    db.select().from(postImagesTable).where(eq(postImagesTable.postId, postId)),
-    db.select({ count: sql<number>`count(*)` }).from(likesTable).where(eq(likesTable.postId, postId)),
-    db.select({ count: sql<number>`count(*)` }).from(repostsTable).where(eq(repostsTable.postId, postId)),
-    db.select({
-      emoji: emojiReactsTable.emoji,
-      emojiImageUrl: emojiReactsTable.emojiImageUrl,
-      count: sql<number>`count(*)`,
-    }).from(emojiReactsTable).where(eq(emojiReactsTable.postId, postId)).groupBy(
-      emojiReactsTable.emoji,
-      emojiReactsTable.emojiImageUrl,
-    ),
-    db.select().from(linkPreviewsTable).where(eq(linkPreviewsTable.postId, postId)),
-  ]);
   const common = {
     username: Username.orThrow(row.users?.username ?? row.remote_actors?.username ?? 'unknown'),
     logoUri: row.actors.logoUri ?? undefined,
     liked: false,
     reposted: false,
-    images: images.map(({ url, altText }) => ({ url, altText })),
-    likeCount: Number(likeCount[0]?.count ?? 0),
-    repostCount: Number(repostCount[0]?.count ?? 0),
-    reactions: reactions.map((reaction) => ({ ...reaction, count: Number(reaction.count) })),
-    linkPreviews: previews.map((preview) =>
+    images: extras.images.map(({ url, altText }) => ({ url, altText })),
+    likeCount: extras.likeCount,
+    repostCount: extras.repostCount,
+    reactions: extras.reactions.map((reaction) => ({ ...reaction, count: Number(reaction.count) })),
+    linkPreviews: extras.previews.map((preview) =>
       LinkPreview.orThrow({
         ...preview,
         linkPreviewId: LinkPreviewId.orThrow(preview.linkPreviewId),
@@ -98,6 +92,31 @@ const enrich = async (db: IoriD1Db, row: PostRow): Promise<PostWithAuthor> => {
     };
   }
   throw new Error(`Post type could not be determined for ${postId}`);
+};
+
+const enrich = async (db: IoriD1Db, row: PostRow): Promise<PostWithAuthor> => {
+  const postId = row.posts.postId;
+  const [images, likeCount, repostCount, reactions, previews] = await Promise.all([
+    db.select().from(postImagesTable).where(eq(postImagesTable.postId, postId)),
+    db.select({ count: sql<number>`count(*)` }).from(likesTable).where(eq(likesTable.postId, postId)),
+    db.select({ count: sql<number>`count(*)` }).from(repostsTable).where(eq(repostsTable.postId, postId)),
+    db.select({
+      emoji: emojiReactsTable.emoji,
+      emojiImageUrl: emojiReactsTable.emojiImageUrl,
+      count: sql<number>`count(*)`,
+    }).from(emojiReactsTable).where(eq(emojiReactsTable.postId, postId)).groupBy(
+      emojiReactsTable.emoji,
+      emojiReactsTable.emojiImageUrl,
+    ),
+    db.select().from(linkPreviewsTable).where(eq(linkPreviewsTable.postId, postId)),
+  ]);
+  return buildPostWithAuthor(row, {
+    images,
+    likeCount: Number(likeCount[0]?.count ?? 0),
+    repostCount: Number(repostCount[0]?.count ?? 0),
+    reactions,
+    previews,
+  });
 };
 
 export const createD1ThreadResolver = (db: IoriD1Db, origin: string): ThreadResolver => {
