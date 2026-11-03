@@ -72,8 +72,9 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     resolve: vi.fn(async () => RA.ok(options.hasBody ? body : undefined)) as unknown as ArticleBodyResolver['resolve'],
   };
   const digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId = {
-    resolve: vi.fn(async () => RA.ok(options.hasDigest ? digestHeader : undefined)) as unknown as
-      DigestHeaderResolverByArticleId['resolve'],
+    resolve: vi.fn(async () =>
+      RA.ok(options.hasDigest ? digestHeader : undefined)
+    ) as unknown as DigestHeaderResolverByArticleId['resolve'],
   };
   const articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore = {
     store: vi.fn(async () => RA.ok(undefined)),
