@@ -176,7 +176,7 @@ describe('GET /api/v1/timelines/public', () => {
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
     const local = t.seed.addLocalPost(me, 1_000);
-    const remote = t.seed.addRemotePost(alice, 2_000);
+    const remote = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
     const relay = t.seed.addRelay();
     t.seed.addFederatedItem(remote.postId, relay, 3_000);
     return { ...t, me, alice, local, remote };
@@ -252,7 +252,7 @@ describe('GET /api/v1/timelines/public', () => {
   it('remote=true はミュートした投稿者を除き、max_id と Link でページを送る', async () => {
     const t = await seedPublic();
     const bob = t.seed.addRemoteActor('bob');
-    const second = t.seed.addRemotePost(bob, 1_500);
+    const second = t.seed.addRemotePost(bob, 1_500, { visibility: 'public' });
     const relay = t.seed.addRelay();
     t.seed.addFederatedItem(second.postId, relay, 2_000);
 

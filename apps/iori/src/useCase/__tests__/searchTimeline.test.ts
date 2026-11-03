@@ -134,6 +134,7 @@ describe('SearchTimelineUseCase', () => {
     expect(result.postIds).toEqual([theirs, mine]);
     expect(resolve).toHaveBeenCalledWith({
       actorIds: [me.id, followed.id],
+      currentActorId: me.id,
       terms: [{ pattern: '旅行', weight: 2 }],
       limit: 200,
     });

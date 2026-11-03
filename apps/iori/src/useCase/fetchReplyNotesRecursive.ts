@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
+import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
@@ -28,12 +29,14 @@ export type FetchReplyNotesRecursiveUseCase = Readonly<{
 }>;
 
 type Deps = Readonly<{
+  origin: string;
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
 }>;
 
 const create = ({
+  origin,
   postResolverByUri,
   localPostResolverByUri,
   remotePostUpserter,
@@ -42,7 +45,15 @@ const create = ({
     uri: string,
     documentLoader: DocumentLoader,
     lookupObject: LookupObject,
-  ): Promise<{ note: Note; authorIdentity: ActorIdentity; visibility: Visibility | null } | undefined> => {
+  ): Promise<
+    | {
+      note: Note;
+      authorIdentity: ActorIdentity;
+      visibility: Visibility | null;
+      recipientActorUris: string[];
+    }
+    | undefined
+  > => {
     try {
       const result = await lookupObject(uri, { documentLoader });
       if (!(result instanceof Note)) {
@@ -70,6 +81,7 @@ const create = ({
         note: result,
         authorIdentity: actorIdentityResult.val,
         visibility: extractVisibility(result, author.followersId),
+        recipientActorUris: extractRecipientActorUris([result], origin),
       };
     } catch (error) {
       getLogger().debug(`Failed to fetch note: ${uri} - ${error}`);
@@ -119,7 +131,7 @@ const create = ({
         break;
       }
 
-      const { note, authorIdentity, visibility } = fetchResult;
+      const { note, authorIdentity, visibility, recipientActorUris } = fetchResult;
       const noteUri = note.id?.href;
       if (!noteUri) {
         break;
@@ -134,6 +146,7 @@ const create = ({
         authorIdentity,
         inReplyToUri: noteInReplyToUri,
         visibility,
+        recipientActorUris,
       });
 
       if (upsertResult.ok) {

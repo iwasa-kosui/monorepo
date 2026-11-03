@@ -161,6 +161,7 @@ const create = () => {
       }),
     },
     onCreate: {
+      origin: Env.getInstance().ORIGIN,
       inboxActorResolver,
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin: Env.getInstance().ORIGIN,
@@ -178,6 +179,7 @@ const create = () => {
         ogpFetcher: createOgpFetcher(),
       }),
       fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+        origin: Env.getInstance().ORIGIN,
         postResolverByUri: PgPostResolverByUri.getInstance(),
         localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
         remotePostUpserter,
@@ -207,6 +209,7 @@ const create = () => {
     },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },
     onAnnounce: {
+      origin: Env.getInstance().ORIGIN,
       relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
       inboxActorResolver,
       addReceivedRepostUseCase,

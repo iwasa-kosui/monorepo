@@ -41,6 +41,7 @@ const createDeps = (relay: unknown) => {
   const federatedTimelineItemResolverByPostId = { resolve: vi.fn(async () => RA.ok(undefined)) };
   const federatedTimelineItemCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) };
   const deps = {
+    origin: 'https://iori.test',
     relayResolverByActorUri: { resolve: vi.fn(async () => RA.ok(relay)) },
     inboxActorResolver: {
       resolve: vi.fn(async () =>
@@ -124,6 +125,32 @@ describe('createOnAnnounce', () => {
     await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
 
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
+  });
+
+  it('records the local actors addressed by the announced Note in a remote Announce', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({
+      tos: [new URL('https://iori.test/users/kosui'), new URL('https://remote.example/users/alice/followers')],
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
+      }),
+    );
+  });
+
+  it('records the local actors addressed by the announced Note in a relay Announce', async () => {
+    const { deps, remotePostUpserter } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+    const note = createNote([]).clone({ ccs: [new URL('https://iori.test/users/kosui')] });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
+    );
   });
 
   it('continues with empty attachments when fetching attachments fails in a remote Announce', async () => {

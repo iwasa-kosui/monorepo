@@ -94,6 +94,7 @@ const create = ({
           currentActorId: actor.id,
           createdAt: input.createdAt,
           mutedActorIds,
+          onlyVisibleToViewer: true,
         });
       }),
     );

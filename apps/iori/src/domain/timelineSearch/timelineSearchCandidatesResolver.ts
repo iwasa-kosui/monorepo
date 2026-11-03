@@ -13,6 +13,7 @@ export type TimelineSearchCandidate = Readonly<{
 export type TimelineSearchCandidatesResolver = Agg.Resolver<
   {
     actorIds: ReadonlyArray<ActorId>;
+    currentActorId: ActorId;
     terms: ReadonlyArray<WeightedPattern>;
     limit: number;
   },

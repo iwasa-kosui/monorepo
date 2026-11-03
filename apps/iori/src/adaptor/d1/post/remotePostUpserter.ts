@@ -43,6 +43,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       actorId: actor.val.id,
       inReplyToUri: identity.inReplyToUri,
       visibility: identity.visibility,
+      recipientActorUris: identity.recipientActorUris,
     });
     await deps.postCreatedStore.store(event);
     const attachments = identity.attachments ?? [];

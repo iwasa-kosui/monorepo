@@ -10,6 +10,7 @@ describe('GET /api/v1/statuses/:id', () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(me.actorId, alice.actorId);
     const note = t.seed.addRemotePost(alice, 1_000, { timeline: true });
     const boost = t.seed.addRepost(me.actorId, note.postId, 2_000);
     t.seed.addLike(me.actorId, note.postId);
@@ -73,20 +74,18 @@ describe('GET /api/v1/statuses/:id', () => {
     expect(StatusSchema.parse(await responses[1]!.json())).toMatchObject({ visibility: 'unlisted' });
   });
 
-  it('ログインすると private と direct と記録のないリモートの投稿も返し、visibility を記録の値にする', async () => {
+  it('ログインするとフォロー中の相手の private と記録のないリモートの投稿を返し、visibility を記録の値にする', async () => {
     const t = await seedStatuses();
     const privateNote = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private' });
-    const directNote = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'direct' });
 
     const responses = await Promise.all([
       t.request(`/api/v1/statuses/${privateNote.postId}`, { headers: t.me.bearer }),
-      t.request(`/api/v1/statuses/${directNote.postId}`, { headers: t.me.bearer }),
       t.request(`/api/v1/statuses/${t.note.postId}`, { headers: t.me.bearer }),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
     const statuses = await Promise.all(responses.map(async (response) => StatusSchema.parse(await response.json())));
-    expect(statuses.map((status) => status.visibility)).toEqual(['private', 'direct', 'private']);
+    expect(statuses.map((status) => status.visibility)).toEqual(['private', 'private']);
   });
 
   it('userId のないアプリトークンは未認証として扱い、リモートの投稿を 404 にする', async () => {
@@ -170,6 +169,7 @@ describe('GET /api/v1/statuses/:id/context', () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(me.actorId, alice.actorId);
     const root = t.seed.addRemotePost(alice, 1_000);
     const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
     const late = t.seed.addRemotePost(alice, 5_000, { inReplyToUri: mid.uri });
@@ -192,6 +192,7 @@ describe('GET /api/v1/statuses/:id/context', () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(me.actorId, alice.actorId);
     const root = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
     const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
     const unlisted = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri, visibility: 'unlisted' });
@@ -214,7 +215,7 @@ describe('GET /api/v1/statuses/:id/context', () => {
       ];
     };
     expect(await idsIn(anonymous)).toEqual([[root.postId], [unlisted.postId]]);
-    expect((await idsIn(loggedIn))[1]).toHaveLength(4);
+    expect((await idsIn(loggedIn))[1]).toHaveLength(3);
     expect(hidden.status).toBe(404);
   });
 

@@ -64,6 +64,33 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('passes the recipients of a new post to the store', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventPayload: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
+      }),
+    );
+  });
+
+  it('does not store again when the post already exists', async () => {
+    const { deps, postCreatedStore } = createDeps({ postId: 'existing' } as unknown as RemotePost);
+
+    await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+
+    expect(postCreatedStore.store).not.toHaveBeenCalled();
+  });
+
   it('does not store attachments when the post already exists', async () => {
     const { deps, postImageCreatedStore } = createDeps({ postId: 'existing' } as unknown as RemotePost);
 

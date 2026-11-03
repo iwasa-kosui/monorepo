@@ -185,6 +185,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       }),
     },
     onCreate: {
+      origin,
       inboxActorResolver,
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin,
@@ -202,6 +203,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         ogpFetcher: createOgpFetcher(),
       }),
       fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+        origin,
         postResolverByUri,
         localPostResolverByUri,
         remotePostUpserter,
@@ -231,6 +233,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },
     onAnnounce: {
+      origin,
       relayResolverByActorUri: createD1RelayResolverByActorUri(db),
       inboxActorResolver,
       addReceivedRepostUseCase,
