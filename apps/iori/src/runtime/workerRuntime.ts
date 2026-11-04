@@ -67,6 +67,7 @@ import {
   createD1ReplyNotificationCreatedStore,
 } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../adaptor/d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../adaptor/d1/notification/notificationsResolverByPage.ts';
 import { createD1AccessTokenIssuedStore } from '../adaptor/d1/oauth/accessTokenIssuedStore.ts';
@@ -355,6 +356,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
       markersResolverByUserId,
+      notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
       saveMarkersUseCase: SaveMarkersUseCase.create({
         markersResolverByUserId,
         markerSavedStore: createD1MarkerSavedStore(db),

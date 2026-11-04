@@ -36,6 +36,7 @@ import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
 import type {
   NotificationCountResolverSinceMarker,
+  NotificationIdsResolverByUserIdAndCreatedAt,
   NotificationResolverByUserIdAndId,
   NotificationsResolverByPage,
 } from '../domain/notification/notification.ts';
@@ -150,6 +151,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   notificationsResolverByPage: NotificationsResolverByPage;
   notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
+  notificationIdsResolverByUserIdAndCreatedAt: NotificationIdsResolverByUserIdAndCreatedAt;
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
   uploadMediaUseCase: UploadMediaUseCase;
