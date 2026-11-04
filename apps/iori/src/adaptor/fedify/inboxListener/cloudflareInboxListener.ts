@@ -9,6 +9,7 @@ import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNote
 import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
+import { createD1ActorResolverById } from '../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
 import { createD1LogoUriUpdatedStore } from '../../d1/actor/logoUriUpdatedStore.ts';
@@ -187,6 +188,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         userResolverByUsername: createD1UserResolverByUsername(db),
       }),
       removeReceivedLikeUseCase: RemoveReceivedLikeUseCase.create({
+        actorResolverById: createD1ActorResolverById(db),
         remoteLikeDeletedStore: createD1RemoteLikeDeletedStore(db),
         remoteLikeResolverByActivityUri: createD1RemoteLikeResolverByActivityUri(db),
       }),
@@ -195,6 +197,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         repostResolverByActivityUri: createD1RepostResolverByActivityUri(db),
       }),
       removeReceivedEmojiReactUseCase: RemoveReceivedEmojiReactUseCase.create({
+        actorResolverById: createD1ActorResolverById(db),
         emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
         emojiReactResolverByActivityUri,
       }),

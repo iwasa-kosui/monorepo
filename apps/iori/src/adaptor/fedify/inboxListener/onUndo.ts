@@ -49,7 +49,11 @@ const handleUndoFollow = async (deps: OnUndoDeps, ctx: InboxContext<unknown>, un
   );
 };
 
-const isSameOrigin = (a: URL, b: URL) => a.origin === b.origin;
+const warnUndoActorMismatch = (kind: string, activityUri: string, undoActorUri: string) => {
+  getLogger().warn(
+    `Ignored Undo ${kind}: ${activityUri} - the Undo sender ${undoActorUri} does not match the stored actor`,
+  );
+};
 
 const handleUndoLike = async (deps: OnUndoDeps, undo: Undo, like: Like) => {
   if (!like.id) {
@@ -57,10 +61,20 @@ const handleUndoLike = async (deps: OnUndoDeps, undo: Undo, like: Like) => {
     return;
   }
   const likeActivityUri = like.id.href;
+  const actorId = undo.actorId;
+  if (actorId == null) {
+    getLogger().warn(`Undo Like activity has no actor: ${likeActivityUri}`);
+    return;
+  }
+  const actorUri = actorId.href;
 
-  const likeResult = await deps.removeReceivedLikeUseCase.run({ likeActivityUri });
+  const likeResult = await deps.removeReceivedLikeUseCase.run({ likeActivityUri, actorUri });
   if (likeResult.ok) {
     getLogger().info(`Processed Undo Like: ${likeActivityUri}`);
+    return;
+  }
+  if (likeResult.err.type === 'UndoActorMismatchError') {
+    warnUndoActorMismatch('Like', likeActivityUri, actorUri);
     return;
   }
   if (likeResult.err.type !== 'LikeNotFoundError') {
@@ -68,15 +82,16 @@ const handleUndoLike = async (deps: OnUndoDeps, undo: Undo, like: Like) => {
     return;
   }
 
-  const actorId = undo.actorId;
-  if (actorId == null || !isSameOrigin(actorId, like.id)) {
-    getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(likeResult.err)}`);
-    return;
-  }
-
-  const emojiReactResult = await deps.removeReceivedEmojiReactUseCase.run({ emojiReactActivityUri: likeActivityUri });
+  const emojiReactResult = await deps.removeReceivedEmojiReactUseCase.run({
+    emojiReactActivityUri: likeActivityUri,
+    actorUri,
+  });
   if (emojiReactResult.ok) {
     getLogger().info(`Processed Undo Like as EmojiReact: ${likeActivityUri}`);
+    return;
+  }
+  if (emojiReactResult.err.type === 'UndoActorMismatchError') {
+    warnUndoActorMismatch('Like', likeActivityUri, actorUri);
     return;
   }
   getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(emojiReactResult.err)}`);
@@ -114,7 +129,7 @@ const isEmojiReactJsonLd = (json: unknown): json is JsonLdEmojiReact => {
   return obj.type === 'EmojiReact' || obj.type === 'litepub:EmojiReact';
 };
 
-const handleUndoEmojiReact = async (deps: OnUndoDeps, object: Activity) => {
+const handleUndoEmojiReact = async (deps: OnUndoDeps, undo: Undo, object: Activity) => {
   const json = await object.toJsonLd();
   if (!isEmojiReactJsonLd(json)) {
     return false;
@@ -126,14 +141,25 @@ const handleUndoEmojiReact = async (deps: OnUndoDeps, object: Activity) => {
     return true;
   }
 
+  const actorId = undo.actorId;
+  if (actorId == null) {
+    getLogger().warn(`Undo EmojiReact activity has no actor: ${emojiReactActivityUri}`);
+    return true;
+  }
+  const actorUri = actorId.href;
+
   await RA.flow(
-    RA.ok({ emojiReactActivityUri }),
-    RA.andThen(({ emojiReactActivityUri }) => deps.removeReceivedEmojiReactUseCase.run({ emojiReactActivityUri })),
+    RA.ok({ emojiReactActivityUri, actorUri }),
+    RA.andThen((input) => deps.removeReceivedEmojiReactUseCase.run(input)),
     RA.match({
       ok: () => {
         getLogger().info(`Processed Undo EmojiReact: ${emojiReactActivityUri}`);
       },
       err: (err) => {
+        if (err.type === 'UndoActorMismatchError') {
+          warnUndoActorMismatch('EmojiReact', emojiReactActivityUri, actorUri);
+          return;
+        }
         getLogger().warn(`Failed to process Undo EmojiReact: ${emojiReactActivityUri} - ${JSON.stringify(err)}`);
       },
     }),
@@ -164,7 +190,7 @@ export const createOnUndo = (deps: OnUndoDeps) => async (ctx: InboxContext<unkno
 
   // Try to handle EmojiReact (custom activity type not natively supported by Fedify)
   if (object instanceof Activity) {
-    const handled = await handleUndoEmojiReact(deps, object);
+    const handled = await handleUndoEmojiReact(deps, undo, object);
     if (handled) {
       return;
     }

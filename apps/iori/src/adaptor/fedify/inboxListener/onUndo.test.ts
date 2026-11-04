@@ -1,7 +1,8 @@
-import { Like, type Undo } from '@fedify/vocab';
+import { Activity, Like, type Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { RemoteActor } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { EmojiReact } from '../../../domain/emojiReact/emojiReact.ts';
 import { EmojiReactId } from '../../../domain/emojiReact/emojiReactId.ts';
@@ -12,11 +13,20 @@ import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.t
 import { createOnUndo, type OnUndoDeps } from './onUndo.ts';
 
 const likeUri = 'https://misskey.example/likes/1';
+const aliceUri = 'https://misskey.example/users/alice';
+const malloryUri = 'https://misskey.example/users/mallory';
+
+const alice: RemoteActor = {
+  id: ActorId.generate(),
+  uri: aliceUri,
+  inboxUrl: 'https://misskey.example/users/alice/inbox',
+  type: 'remote',
+};
 
 const createDeps = (savedLikes: string[] = []) => {
   const emojiReacts: EmojiReact[] = [{
     emojiReactId: EmojiReactId.generate(),
-    actorId: ActorId.generate(),
+    actorId: alice.id,
     postId: PostId.generate(),
     emoji: ':wave:',
     emojiReactActivityUri: likeUri,
@@ -25,7 +35,7 @@ const createDeps = (savedLikes: string[] = []) => {
   const remoteLikes = savedLikes.map((likeActivityUri) => ({
     type: 'remote' as const,
     likeId: LikeId.generate(),
-    actorId: ActorId.generate(),
+    actorId: alice.id,
     postId: PostId.generate(),
     likeActivityUri,
   }));
@@ -47,16 +57,21 @@ const createDeps = (savedLikes: string[] = []) => {
       return RA.ok(undefined);
     }),
   };
+  const actorResolverById = {
+    resolve: async (actorId: ActorId) => RA.ok(actorId === alice.id ? alice : undefined),
+  };
   const deps = {
     acceptUnfollowUseCase: { run: vi.fn() },
     removeReceivedRepostUseCase: { run: vi.fn() },
     removeReceivedLikeUseCase: RemoveReceivedLikeUseCase.create({
+      actorResolverById,
       remoteLikeDeletedStore: remoteLikeDeletedStore as never,
       remoteLikeResolverByActivityUri: {
         resolve: async ({ likeActivityUri }) => RA.ok(remoteLikes.find((l) => l.likeActivityUri === likeActivityUri)),
       },
     }),
     removeReceivedEmojiReactUseCase: RemoveReceivedEmojiReactUseCase.create({
+      actorResolverById,
       emojiReactDeletedStore: emojiReactDeletedStore as never,
       emojiReactResolverByActivityUri: {
         resolve: async ({ emojiReactActivityUri }) =>
@@ -79,26 +94,49 @@ const createUndo = (actorUri: string, likeId: string = likeUri) =>
     ),
   }) as unknown as Undo;
 
+const createUndoEmojiReact = (actorUri: string, emojiReactId: string = likeUri) => {
+  const emojiReact = Object.create(Activity.prototype) as Activity;
+  emojiReact.toJsonLd = vi.fn(async () => ({ type: 'EmojiReact', id: emojiReactId }));
+  return {
+    actorId: new URL(actorUri),
+    getObject: vi.fn(async () => emojiReact),
+  } as unknown as Undo;
+};
+
 const ctx = { recipient: null, getDocumentLoader: vi.fn(async () => vi.fn()) } as never;
 
 describe('createOnUndo (Undo Like)', () => {
-  it('removes an emoji react saved from a Misskey-style Like when the actor has the same origin', async () => {
+  it('removes an emoji react saved from a Misskey-style Like when the Undo is sent by the stored actor', async () => {
     const { deps, emojiReacts } = createDeps();
-    await createOnUndo(deps)(ctx, createUndo('https://misskey.example/users/alice'));
+    await createOnUndo(deps)(ctx, createUndo(aliceUri));
     expect(emojiReacts).toHaveLength(0);
   });
 
-  it('keeps the emoji react when the actor has a different origin', async () => {
+  it('keeps the emoji react when the Undo is sent by another actor on the same host', async () => {
+    const { deps, emojiReacts } = createDeps();
+    await createOnUndo(deps)(ctx, createUndo(malloryUri));
+    expect(emojiReacts).toHaveLength(1);
+  });
+
+  it('keeps the emoji react when the Undo is sent by an actor on a different host', async () => {
     const { deps, emojiReacts } = createDeps();
     await createOnUndo(deps)(ctx, createUndo('https://evil.example/users/mallory'));
     expect(emojiReacts).toHaveLength(1);
   });
 
-  it('removes a regular remote like without touching emoji reacts', async () => {
+  it('removes a regular remote like without touching emoji reacts when the Undo is sent by the stored actor', async () => {
     const regularLikeUri = 'https://misskey.example/likes/2';
     const { deps, emojiReacts, remoteLikes } = createDeps([regularLikeUri]);
-    await createOnUndo(deps)(ctx, createUndo('https://misskey.example/users/alice', regularLikeUri));
+    await createOnUndo(deps)(ctx, createUndo(aliceUri, regularLikeUri));
     expect(remoteLikes).toHaveLength(0);
+    expect(emojiReacts).toHaveLength(1);
+  });
+
+  it('keeps a regular remote like when the Undo is sent by another actor on the same host', async () => {
+    const regularLikeUri = 'https://misskey.example/likes/2';
+    const { deps, emojiReacts, remoteLikes } = createDeps([regularLikeUri]);
+    await createOnUndo(deps)(ctx, createUndo(malloryUri, regularLikeUri));
+    expect(remoteLikes).toHaveLength(1);
     expect(emojiReacts).toHaveLength(1);
   });
 
@@ -106,8 +144,22 @@ describe('createOnUndo (Undo Like)', () => {
     const { deps, emojiReacts } = createDeps();
     await createOnUndo(deps)(
       ctx,
-      createUndo('https://misskey.example/users/alice', 'https://misskey.example/likes/404'),
+      createUndo(aliceUri, 'https://misskey.example/likes/404'),
     );
+    expect(emojiReacts).toHaveLength(1);
+  });
+});
+
+describe('createOnUndo (Undo EmojiReact)', () => {
+  it('removes the emoji react when the Undo is sent by the stored actor', async () => {
+    const { deps, emojiReacts } = createDeps();
+    await createOnUndo(deps)(ctx, createUndoEmojiReact(aliceUri));
+    expect(emojiReacts).toHaveLength(0);
+  });
+
+  it('keeps the emoji react when the Undo is sent by another actor on the same host', async () => {
+    const { deps, emojiReacts } = createDeps();
+    await createOnUndo(deps)(ctx, createUndoEmojiReact(malloryUri));
     expect(emojiReacts).toHaveLength(1);
   });
 });
