@@ -56,13 +56,21 @@ async (
   const documentLoader = await ctx.getDocumentLoader({ identifier: INSTANCE_ACTOR_IDENTIFIER });
 
   let document: unknown;
+  let documentUrl: string;
   try {
-    ({ document } = await documentLoader(objectId.href));
+    ({ document, documentUrl } = await documentLoader(objectId.href));
   } catch (error) {
     if (!isFetchFailure(error)) {
       throw error;
     }
     getLogger().warn(`Failed to fetch a relay-forwarded Note: ${objectId.href} - ${String(error)}`);
+    return;
+  }
+
+  if (!URL.canParse(documentUrl) || new URL(documentUrl).href !== objectId.href) {
+    getLogger().warn(
+      `Skipping a relay-forwarded Note fetched from a different URL than requested: ${objectId.href} -> ${documentUrl}`,
+    );
     return;
   }
 

@@ -29,14 +29,14 @@ const createNote = (overrides: { id?: string; tos?: URL[]; actorId?: string } = 
     }),
   });
 
-const createCtx = (fetched: Note | Person | null | Error) => {
+const createCtx = (fetched: Note | Person | null | Error, documentUrl?: string) => {
   const documentLoader = vi.fn(async (url: string) => {
     if (fetched instanceof Error) {
       throw fetched;
     }
     return {
       contextUrl: null,
-      documentUrl: url,
+      documentUrl: documentUrl ?? url,
       document: fetched === null ? null : await fetched.toJsonLd(),
     };
   });
@@ -115,6 +115,15 @@ describe('createRefetchRelayForwardedNoteHandler', () => {
     const { ctx } = createCtx(createNote({ id: 'https://remote.example/notes/2' }));
 
     await createRefetchRelayForwardedNoteHandler(deps)(ctx, data);
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('resolves without storing when the documentUrl has a different origin from the requested one', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps();
+    const { ctx } = createCtx(createNote(), 'https://attacker.example/notes/1');
+
+    await expect(createRefetchRelayForwardedNoteHandler(deps)(ctx, data)).resolves.toBeUndefined();
 
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
