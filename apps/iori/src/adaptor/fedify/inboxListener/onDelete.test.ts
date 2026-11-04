@@ -223,7 +223,7 @@ describe('createOnDelete', () => {
         federatedTimelineItemDeletedStore: noopStore,
         postDeletedStore,
       } satisfies OnDeleteDeps;
-      return { deps, postDeletedStore, remotePostResolverByUri };
+      return { deps, postDeletedStore, remotePostResolverByUri, actorResolverById };
     };
 
     it('deletes the post when the sender is the author of the post', async () => {
@@ -272,6 +272,36 @@ describe('createOnDelete', () => {
           objectId: new URL('https://remote.example/posts/1'),
         } as never,
       );
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('fails the handler so that it is retried when the author actor lookup fails', async () => {
+      const { deps, postDeletedStore, actorResolverById } = buildDeps();
+      actorResolverById.resolve.mockResolvedValueOnce(RA.err(new Error('db_down')) as never);
+      await expect(
+        createOnDelete(deps)(
+          {} as never,
+          {
+            actorId: new URL('https://remote.example/users/alice'),
+            objectId: new URL('https://remote.example/posts/1'),
+          } as never,
+        ),
+      ).rejects.toThrow('Failed to resolve the author');
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('fails the handler so that it is retried when the remote post lookup fails', async () => {
+      const { deps, postDeletedStore, remotePostResolverByUri } = buildDeps();
+      remotePostResolverByUri.resolve.mockResolvedValueOnce(RA.err(new Error('db_down')) as never);
+      await expect(
+        createOnDelete(deps)(
+          {} as never,
+          {
+            actorId: new URL('https://remote.example/users/alice'),
+            objectId: new URL('https://remote.example/posts/1'),
+          } as never,
+        ),
+      ).rejects.toThrow('Failed to resolve the remote post');
       expect(postDeletedStore.store).not.toHaveBeenCalled();
     });
 

@@ -91,7 +91,10 @@ async (
 
   // Find the remote post
   const remotePostResult = await deps.remotePostResolverByUri.resolve({ uri: objectUri });
-  const remotePost = remotePostResult.ok ? remotePostResult.val : undefined;
+  if (!remotePostResult.ok) {
+    throw new Error(`Failed to resolve the remote post for ${objectUri}: ${String(remotePostResult.err)}`);
+  }
+  const remotePost = remotePostResult.val;
 
   if (!remotePost) {
     logger.info(`No remote post found for URI: ${objectUri}`);
@@ -99,7 +102,10 @@ async (
   }
 
   const actorResult = await deps.actorResolverById.resolve(remotePost.actorId);
-  const author = actorResult.ok ? actorResult.val : undefined;
+  if (!actorResult.ok) {
+    throw new Error(`Failed to resolve the author of ${objectUri}: ${String(actorResult.err)}`);
+  }
+  const author = actorResult.val;
   if (!author || author.uri !== senderId.href) {
     logger.warn(
       `Ignored Delete activity whose sender is not the author of the post: sender=${senderId.href} object=${objectUri}`,
