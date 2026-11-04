@@ -1,4 +1,4 @@
-import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/fedify';
+import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';

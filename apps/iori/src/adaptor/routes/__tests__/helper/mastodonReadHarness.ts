@@ -1,5 +1,5 @@
 import type { ExecutionContext } from '@cloudflare/workers-types';
-import { Note } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, vi } from 'vitest';
 

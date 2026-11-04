@@ -1,4 +1,5 @@
-import type { Activity, Actor, InboxContext } from '@fedify/fedify';
+import type { InboxContext } from '@fedify/fedify';
+import type { Activity, Actor } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { ActorIdentity, type FromFedifyActorOptions, type ParseActorIdentityError } from './actorIdentity.ts';

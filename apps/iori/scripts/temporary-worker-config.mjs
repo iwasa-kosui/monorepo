@@ -86,6 +86,9 @@ const resolveWorkerPaths = (rendered, { withoutQueueProducer }) => {
     {
       ...config,
       main: resolveFromTemplate(config.main),
+      alias: config.alias === undefined
+        ? undefined
+        : Object.fromEntries(Object.entries(config.alias).map(([name, path]) => [name, resolveFromTemplate(path)])),
       assets: config.assets === undefined
         ? undefined
         : { ...config.assets, directory: resolveFromTemplate(config.assets.directory) },

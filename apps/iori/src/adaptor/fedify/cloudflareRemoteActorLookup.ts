@@ -1,5 +1,6 @@
-import type { Actor, Federation } from '@fedify/fedify';
-import { isActor } from '@fedify/fedify';
+import type { Federation } from '@fedify/fedify';
+import type { Actor } from '@fedify/vocab';
+import { isActor } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { RemoteActorLookup } from './remoteActorLookup.ts';

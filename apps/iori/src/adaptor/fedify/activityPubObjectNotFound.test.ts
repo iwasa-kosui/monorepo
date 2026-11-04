@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import type { Federation } from '@fedify/fedify';
+import { Hono } from 'hono';
+import { describe, expect, it, vi } from 'vitest';
 
-import { isActivityPubObjectRequest } from './activityPubObjectNotFound.ts';
+import { federationWithObjectNotFound, isActivityPubObjectRequest } from './activityPubObjectNotFound.ts';
 
 const articleId = '3f1d6a52-8c1e-4b6a-9d0e-5a7c2b9e1f40';
 const request = (path: string, accept?: string) =>
@@ -100,5 +102,48 @@ describe('isActivityPubObjectRequest for the post object path', () => {
     expect(isActivityPubObjectRequest(request(`${postPath}/edit`, 'application/activity+json'))).toBe(false);
     expect(isActivityPubObjectRequest(request(`/posts/${articleId}`, 'application/activity+json'))).toBe(false);
     expect(isActivityPubObjectRequest(request(`/users//posts/${articleId}`, 'application/activity+json'))).toBe(false);
+  });
+});
+
+describe('federationWithObjectNotFound for POST requests', () => {
+  const setup = () => {
+    const fetch = vi.fn(async () => new Response('federated', { status: 202 }));
+    const app = new Hono();
+    app.use('*', federationWithObjectNotFound({ fetch } as unknown as Federation<void>, () => undefined));
+    app.all('*', (c) => c.text('next'));
+    const post = (path: string, accept?: string) =>
+      app.request(`https://iori.example${path}`, {
+        method: 'POST',
+        headers: accept === undefined ? undefined : { Accept: accept },
+        body: '{}',
+      });
+    return { fetch, post };
+  };
+
+  it('does not pass a POST to a non-inbox path to Fedify even with Accept: application/activity+json', async () => {
+    const { fetch, post } = setup();
+
+    const response = await post('/users/x', 'application/activity+json');
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await response.text()).toBe('next');
+  });
+
+  it('passes a POST to the shared inbox to Fedify', async () => {
+    const { fetch, post } = setup();
+
+    const response = await post('/inbox');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(response.status).toBe(202);
+  });
+
+  it('passes a POST to a personal inbox to Fedify', async () => {
+    const { fetch, post } = setup();
+
+    const response = await post('/users/x/inbox');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(response.status).toBe(202);
   });
 });

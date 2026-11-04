@@ -1,17 +1,6 @@
-import {
-  Accept,
-  Activity,
-  Announce,
-  Article,
-  Create,
-  createFederation,
-  Delete,
-  Follow,
-  Like,
-  Note,
-  Undo,
-} from '@fedify/fedify';
+import { createFederation } from '@fedify/fedify';
 import { PostgresKvStore } from '@fedify/postgres';
+import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import postgres from 'postgres';
@@ -43,16 +32,18 @@ const getQueue = singleton(() => {
 const create = () => {
   const env = Env.getInstance();
   const federation = createFederation({
-    kv: new PostgresKvStore(postgres(env.DATABASE_URL, PgConfig.getInstance())),
+    kv: new PostgresKvStore(postgres(env.DATABASE_URL, PgConfig.getInstance()), { unlogged: true }),
     queue: getQueue(),
     manuallyStartQueue: true,
     origin: env.ORIGIN,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
   const inboxListener = InboxListener.getInstance();
   const sharedKeyDispatcher = SharedKeyDispatcher.getInstance();
   federation
     .setInboxListeners('/users/{identifier}/inbox', '/inbox')
+    .withIdempotency('per-origin')
     .setSharedKeyDispatcher(sharedKeyDispatcher.dispatch)
     .on(Accept, inboxListener.onAccept)
     .on(Follow, inboxListener.onFollow)

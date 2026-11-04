@@ -1,4 +1,5 @@
-import { Announce, type Recipient, type RequestContext, Undo } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Announce, type Recipient, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';

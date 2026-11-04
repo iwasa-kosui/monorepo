@@ -8,7 +8,7 @@ describe('buildNodeInfo', () => {
     const nodeInfo = buildNodeInfo('1.2.3');
 
     expect(nodeInfo).toMatchObject({
-      software: { name: 'iori', version: { major: 1, minor: 2, patch: 3 } },
+      software: { name: 'iori', version: '1.2.3' },
       protocols: ['activitypub'],
       openRegistrations: false,
       usage: { users: { total: 1 } },
@@ -16,6 +16,6 @@ describe('buildNodeInfo', () => {
   });
 
   it('accepts the version of package.json', () => {
-    expect(() => buildNodeInfo(IORI_VERSION)).not.toThrow();
+    expect(IORI_VERSION).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
   });
 });

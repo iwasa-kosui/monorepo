@@ -1,4 +1,4 @@
-import { Follow as ActivityPubFollow, Undo } from '@fedify/fedify';
+import { Follow as ActivityPubFollow, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';

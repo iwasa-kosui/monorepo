@@ -1,4 +1,4 @@
-import { Delete } from '@fedify/fedify';
+import { Delete } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';

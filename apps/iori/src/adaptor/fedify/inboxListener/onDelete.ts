@@ -1,4 +1,5 @@
-import type { Delete, InboxContext } from '@fedify/fedify';
+import type { InboxContext } from '@fedify/fedify';
+import type { Delete } from '@fedify/vocab';
 import { getLogger } from '@logtape/logtape';
 
 import {

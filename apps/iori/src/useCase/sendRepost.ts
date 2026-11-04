@@ -1,4 +1,5 @@
-import { Announce, isActor, Note, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Announce, isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';

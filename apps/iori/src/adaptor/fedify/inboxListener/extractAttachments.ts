@@ -1,4 +1,5 @@
-import { Document, type DocumentLoader, Image, type Note } from '@fedify/fedify';
+import { Document, Image, type Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 
 import type { RemotePostAttachment } from '../../../domain/post/post.ts';
 

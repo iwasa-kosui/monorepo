@@ -1,4 +1,5 @@
-import { isActor, Like, Note, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { isActor, Like, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
