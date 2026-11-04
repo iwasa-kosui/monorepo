@@ -33,7 +33,7 @@ export const embedInterestSources = async (
     console.error('iori interest sources: embedding an entry failed.', {
       interestSourceId: source.interestSourceId,
       kind: source.kind,
-      message: error.message,
+      errorMessage: error.message,
     });
   });
   if (!embedded.ok) return embedded;
@@ -49,7 +49,7 @@ export const embedInterestSources = async (
       console.error('iori interest sources: the embedding was not stored.', {
         interestSourceId: source.interestSourceId,
         kind: source.kind,
-        message: event.err.message,
+        errorMessage: event.err.message,
       });
     }
   });

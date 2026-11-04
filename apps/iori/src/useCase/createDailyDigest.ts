@@ -281,7 +281,7 @@ const create = ({
     if (!generated.ok) {
       console.error('iori digest: summarizing an entry failed.', {
         feedEntryId: entry.feedEntryId,
-        message: generated.err.message,
+        errorMessage: generated.err.message,
       });
       return null;
     }
@@ -300,7 +300,7 @@ const create = ({
     } catch (error) {
       console.error('iori digest: deleting the article left by the failed digest failed.', {
         articleId,
-        message: error instanceof Error ? error.message : String(error),
+        errorMessage: error instanceof Error ? error.message : String(error),
       });
     }
   };
@@ -510,7 +510,7 @@ const create = ({
       const storeFailed = DigestStoreFailedError.create(articleId, error);
       console.error('iori digest: storing the digest failed after the article was created.', {
         articleId,
-        message: storeFailed.message,
+        errorMessage: storeFailed.message,
       });
       await deleteDraftArticle(articleId);
       return RA.err(storeFailed);
@@ -555,7 +555,7 @@ const create = ({
       if (!result.ok) {
         console.error('iori digest: sending a web push failed.', {
           subscriptionId: pushSubscription.subscriptionId,
-          message: result.err.message,
+          errorMessage: result.err.message,
           statusCode: result.err.statusCode,
         });
       }

@@ -76,13 +76,13 @@ const embedPendingFeedEntries = async (embedFeedEntries: EmbedFeedEntriesUseCase
   try {
     const result = await embedFeedEntries.run();
     if (!result.ok) {
-      console.error('iori feed entries: embedding failed.', { message: result.err.message });
+      console.error('iori feed entries: embedding failed.', { errorMessage: result.err.message });
       return;
     }
     console.info('iori feed entries embedded.', result.val);
   } catch (error) {
     console.error('iori feed entries: embedding failed.', {
-      message: error instanceof Error ? error.message : String(error),
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
 };
