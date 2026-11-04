@@ -1,4 +1,5 @@
 import { Note, Person } from '@fedify/vocab';
+import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,27 +11,39 @@ const actorId = 'https://remote.example/users/alice';
 const data = { objectId, actorId, relayId };
 const publicAddress = new URL('https://www.w3.org/ns/activitystreams#Public');
 
-const createNote = (overrides: { id?: string; tos?: URL[] } = {}) =>
+const fetchTimeout = (url: string) => {
+  const error = new FetchError(url, 'Timed out after 10000 ms');
+  error.cause = new DOMException('The document loader timed out after 10000 ms.', 'TimeoutError');
+  return error;
+};
+
+const createNote = (overrides: { id?: string; tos?: URL[]; actorId?: string } = {}) =>
   new Note({
     id: new URL(overrides.id ?? objectId),
     content: '<p>hello</p>',
     tos: overrides.tos ?? [publicAddress],
     attribution: new Person({
-      id: new URL(actorId),
-      inbox: new URL(`${actorId}/inbox`),
+      id: new URL(overrides.actorId ?? actorId),
+      inbox: new URL(`${overrides.actorId ?? actorId}/inbox`),
       preferredUsername: 'alice',
     }),
   });
 
-const createCtx = (looked: unknown) => {
-  const documentLoader = vi.fn();
-  const lookupObject = vi.fn(async () => looked);
+const createCtx = (fetched: Note | Person | null | Error) => {
+  const documentLoader = vi.fn(async (url: string) => {
+    if (fetched instanceof Error) {
+      throw fetched;
+    }
+    return {
+      contextUrl: null,
+      documentUrl: url,
+      document: fetched === null ? null : await fetched.toJsonLd(),
+    };
+  });
   return {
     documentLoader,
-    lookupObject,
     ctx: {
       getDocumentLoader: vi.fn(async () => documentLoader),
-      lookupObject,
     } as never,
   };
 };
@@ -61,11 +74,11 @@ const createDeps = (relayStatus: string | null = 'accepted') => {
 describe('createRefetchRelayForwardedNoteHandler', () => {
   it('refetches the Note with the instance actor loader and stores a federated timeline item', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps();
-    const { ctx, documentLoader, lookupObject } = createCtx(createNote());
+    const { ctx, documentLoader } = createCtx(createNote());
 
     await createRefetchRelayForwardedNoteHandler(deps)(ctx, data);
 
-    expect(lookupObject).toHaveBeenCalledWith(new URL(objectId), { documentLoader });
+    expect(documentLoader).toHaveBeenCalledWith(objectId);
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
@@ -79,7 +92,7 @@ describe('createRefetchRelayForwardedNoteHandler', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
-  it('does not store when lookupObject returns null', async () => {
+  it('does not store when the fetched document is null', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps();
     const { ctx } = createCtx(null);
 
@@ -118,29 +131,87 @@ describe('createRefetchRelayForwardedNoteHandler', () => {
 
   it('does not refetch when the relay is not accepted', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps('pending');
-    const { ctx, lookupObject } = createCtx(createNote());
+    const { ctx, documentLoader } = createCtx(createNote());
 
     await createRefetchRelayForwardedNoteHandler(deps)(ctx, data);
 
-    expect(lookupObject).not.toHaveBeenCalled();
+    expect(documentLoader).not.toHaveBeenCalled();
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
   it('does not refetch when the relay does not exist', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps(null);
-    const { ctx, lookupObject } = createCtx(createNote());
+    const { ctx, documentLoader } = createCtx(createNote());
 
     await createRefetchRelayForwardedNoteHandler(deps)(ctx, data);
 
-    expect(lookupObject).not.toHaveBeenCalled();
+    expect(documentLoader).not.toHaveBeenCalled();
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
   it('does not store when the origin of the Note differs from the origin of the actor', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps();
-    const { ctx } = createCtx(createNote());
+    const otherActorId = 'https://other.example/users/alice';
+    const note = createNote({ actorId: otherActorId });
+    const author = await note.getAttribution();
+    const documentLoader = vi.fn(async (url: string) => ({
+      contextUrl: null,
+      documentUrl: url,
+      document: await (url === otherActorId ? author : note)?.toJsonLd(),
+    }));
+    const ctx = { getDocumentLoader: vi.fn(async () => documentLoader) } as never;
 
-    await createRefetchRelayForwardedNoteHandler(deps)(ctx, { ...data, actorId: 'https://other.example/users/alice' });
+    await createRefetchRelayForwardedNoteHandler(deps)(ctx, { ...data, actorId: otherActorId });
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('does not store when the author of the Note differs from the actor of the Create', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps();
+    const { ctx } = createCtx(createNote({ actorId: 'https://remote.example/users/bob' }));
+
+    await createRefetchRelayForwardedNoteHandler(deps)(ctx, data);
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('resolves without storing when fetching the Note times out', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps();
+    const timeout = fetchTimeout(objectId);
+    const { ctx } = createCtx(timeout);
+
+    await expect(createRefetchRelayForwardedNoteHandler(deps)(ctx, data)).resolves.toBeUndefined();
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('rejects when fetching the Note fails for a reason other than the fetch', async () => {
+    const { deps } = createDeps();
+    const error = new Error('unexpected');
+    const { ctx } = createCtx(error);
+
+    await expect(createRefetchRelayForwardedNoteHandler(deps)(ctx, data)).rejects.toBe(error);
+  });
+
+  it('resolves without storing when fetching the author times out', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps();
+    const authorId = new URL(actorId);
+    const timeout = fetchTimeout(actorId);
+    const note = new Note({
+      id: new URL(objectId),
+      content: '<p>hello</p>',
+      tos: [publicAddress],
+      attribution: authorId,
+    });
+    const documentLoader = vi.fn(async (url: string) => {
+      if (url === actorId) {
+        throw timeout;
+      }
+      return { contextUrl: null, documentUrl: url, document: await note.toJsonLd() };
+    });
+    const ctx = { getDocumentLoader: vi.fn(async () => documentLoader) } as never;
+
+    await expect(createRefetchRelayForwardedNoteHandler(deps)(ctx, data)).resolves.toBeUndefined();
 
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });

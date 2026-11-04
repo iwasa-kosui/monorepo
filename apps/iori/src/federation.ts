@@ -71,7 +71,7 @@ const create = () => {
     .on(Activity, inboxListener.onActivity)
     .onRequestFinished(createOnRequestFinished({
       relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
-      enqueue: (ctx, data) => ctx.enqueueTask(refetchRelayForwardedNoteTask, data),
+      enqueue: (ctx, data) => ctx.enqueueTask(refetchRelayForwardedNoteTask, data, { deduplicationKey: data.objectId }),
     }));
 
   federation.setObjectDispatcher(

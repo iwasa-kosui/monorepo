@@ -1,5 +1,6 @@
 import { type Context, createExponentialBackoffPolicy, type TaskRegistry } from '@fedify/fedify';
 import { Note } from '@fedify/vocab';
+import { FetchError, UrlError } from '@fedify/vocab-runtime';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
 
@@ -26,7 +27,11 @@ export type RefetchRelayForwardedNoteDeps =
     relayResolver: RelayResolver;
   }>;
 
-type RefetchContext = Pick<Context<unknown>, 'getDocumentLoader' | 'lookupObject'>;
+type RefetchContext = Pick<Context<unknown>, 'getDocumentLoader' | 'contextLoader'>;
+
+const isFetchFailure = (error: unknown): boolean =>
+  error instanceof FetchError || error instanceof UrlError
+  || (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'));
 
 export const createRefetchRelayForwardedNoteHandler = (deps: RefetchRelayForwardedNoteDeps) =>
 async (
@@ -49,9 +54,32 @@ async (
 
   const objectId = new URL(data.objectId);
   const documentLoader = await ctx.getDocumentLoader({ identifier: INSTANCE_ACTOR_IDENTIFIER });
-  const note = await ctx.lookupObject(objectId, { documentLoader });
+
+  let document: unknown;
+  try {
+    ({ document } = await documentLoader(objectId.href));
+  } catch (error) {
+    if (!isFetchFailure(error)) {
+      throw error;
+    }
+    getLogger().warn(`Failed to fetch a relay-forwarded Note: ${objectId.href} - ${String(error)}`);
+    return;
+  }
+
+  let note: unknown;
+  try {
+    note = await Note.fromJsonLd(document, { documentLoader, contextLoader: ctx.contextLoader });
+  } catch (error) {
+    getLogger().warn(`Refetched object is not the requested Note: ${objectId.href} - ${String(error)}`);
+    return;
+  }
   if (!(note instanceof Note) || note.id?.href !== objectId.href) {
     getLogger().warn(`Refetched object is not the requested Note: ${objectId.href}`);
+    return;
+  }
+
+  if (note.attributionId?.href !== data.actorId) {
+    getLogger().info(`Skipping a relay-forwarded Note whose author differs from the Create actor: ${objectId.href}`);
     return;
   }
 
@@ -60,12 +88,19 @@ async (
     return;
   }
 
-  await saveFederatedNote(deps, {
-    note,
-    relayId,
-    documentLoader,
-    actorId: new URL(data.actorId),
-  });
+  try {
+    await saveFederatedNote(deps, {
+      note,
+      relayId,
+      documentLoader,
+      actorId: new URL(data.actorId),
+    });
+  } catch (error) {
+    if (!isFetchFailure(error)) {
+      throw error;
+    }
+    getLogger().warn(`Failed to fetch the author of a relay-forwarded Note: ${objectId.href} - ${String(error)}`);
+  }
 };
 
 // relay の HTTP 署名は取り直すきっかけにだけ使い、転送された本文は保存しない
