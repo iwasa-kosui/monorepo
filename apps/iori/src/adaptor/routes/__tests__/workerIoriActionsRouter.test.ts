@@ -278,6 +278,48 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
     });
 
+    it('Emoji の icon の取得が失敗しても、反応は成功し、tag なしで送って emojiImageUrl は null にする', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [
+        new Emoji({
+          id: new URL('https://remote.example/emojis/wave'),
+          name: ':wave:',
+          icon: new URL('https://remote.example/emoji/wave-icon'),
+        }),
+      ]);
+      t.federation.getDocumentLoader.mockResolvedValue(async () => {
+        throw new Error('icon fetch failed');
+      });
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('icon の mediaType が image/ で始まらないときは、url は採用して tag を付け、mediaType は付けない', async () => {
+      const t = await seedReactions();
+      const url = 'https://remote.example/emoji/wave.png';
+      t.serveRemoteNote(t.publicNote, [
+        new Emoji({
+          id: new URL('https://remote.example/emojis/wave'),
+          name: ':wave:',
+          icon: new Image({ url: new URL(url), mediaType: 'text/html' }),
+        }),
+      ]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      const icon = await tags[0]!.getIcon();
+      expect(icon?.url?.toString()).toBe(url);
+      expect(icon?.mediaType).toBeNull();
+      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
+    });
+
     it('Unicode 絵文字の反応は tag なしで送る', async () => {
       const t = await seedReactions();
       t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'https://remote.example/emoji/wave.png')]);

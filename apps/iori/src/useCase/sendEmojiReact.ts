@@ -80,11 +80,11 @@ const findEmojiImage = async (
       return {
         ...(tag.id ? { id: tag.id } : {}),
         url,
-        ...(icon?.mediaType ? { mediaType: icon.mediaType } : {}),
+        ...(icon?.mediaType?.startsWith('image/') ? { mediaType: icon.mediaType } : {}),
       };
     }
   } catch (err) {
-    getLogger().debug(`findEmojiImage: ${err}`);
+    getLogger().warn(`findEmojiImage: ${err}`);
   }
   return undefined;
 };
