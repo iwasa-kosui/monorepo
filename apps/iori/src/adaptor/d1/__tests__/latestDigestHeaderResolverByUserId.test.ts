@@ -16,6 +16,7 @@ const setup = () => {
     digestDate: string,
     createdAt: number,
     trigger = 'scheduled',
+    topicKey = 'summary',
   ) => {
     const digestId = crypto.randomUUID();
     const articleId = crypto.randomUUID();
@@ -23,49 +24,56 @@ const setup = () => {
       'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
     ).run(articleId, owner.actorId, owner.userId, null, 'title', 'draft', 1_000, null, null);
     fixture.sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,trigger) VALUES (?,?,?,?,?,?,?)',
-    ).run(digestId, owner.userId, digestDate, articleId, createdAt, null, trigger);
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,trigger,topicKey) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(digestId, owner.userId, digestDate, articleId, createdAt, null, trigger, topicKey);
     return DigestId.orThrow(digestId);
   };
   return { db: fixture.db, me, other, addDigest };
 };
 
 describe('createD1LatestDigestHeaderResolverByUserId', () => {
-  it('createdAt が最も新しい自分の digest の header を trigger 付きで返す', async () => {
+  it('digestDateBefore より前の日付で createdAt が最も新しい自分の digest の header を trigger 付きで返す', async () => {
     const { db, me, other, addDigest } = setup();
     addDigest(me, '2026-11-03', 1_000);
     const latest = addDigest(me, '2026-11-04', 3_000, 'requested');
     addDigest(me, '2026-11-02', 2_000);
+    addDigest(me, '2026-11-05', 9_500);
     addDigest(other, '2026-11-04', 9_000);
 
     const result = await createD1LatestDigestHeaderResolverByUserId(db).resolve({
       userId: UserId.orThrow(me.userId),
-      excludingDigestId: undefined,
+      digestDateBefore: '2026-11-05',
     });
 
-    expect(result.ok && result.val).toMatchObject({ digestId: latest, createdAt: 3_000, trigger: 'requested' });
+    expect(result.ok && result.val).toMatchObject({
+      digestId: latest,
+      createdAt: 3_000,
+      trigger: 'requested',
+      topicKey: 'summary',
+    });
   });
 
-  it('excludingDigestId の digest を除いて、次に新しいものを返す', async () => {
+  it('digestDateBefore と同じ日付の digest は、topicKey が違っても除く', async () => {
     const { db, me, addDigest } = setup();
     const previous = addDigest(me, '2026-11-03', 1_000);
-    const excluded = addDigest(me, '2026-11-04', 3_000);
+    addDigest(me, '2026-11-04', 3_000);
+    addDigest(me, '2026-11-04', 4_000, 'scheduled', 'genai');
 
     const result = await createD1LatestDigestHeaderResolverByUserId(db).resolve({
       userId: UserId.orThrow(me.userId),
-      excludingDigestId: excluded,
+      digestDateBefore: '2026-11-04',
     });
 
     expect(result.ok && result.val?.digestId).toBe(previous);
   });
 
-  it('除いた後に何も残らなければ undefined を返す', async () => {
+  it('前の日付の digest が無ければ undefined を返す', async () => {
     const { db, me, addDigest } = setup();
-    const only = addDigest(me, '2026-11-04', 3_000);
+    addDigest(me, '2026-11-04', 3_000);
 
     const result = await createD1LatestDigestHeaderResolverByUserId(db).resolve({
       userId: UserId.orThrow(me.userId),
-      excludingDigestId: only,
+      digestDateBefore: '2026-11-04',
     });
 
     expect(result).toEqual({ ok: true, val: undefined });

@@ -25,17 +25,28 @@ const header: DigestHeader = {
   createdAt: NOW,
   pushSentAt: null,
   trigger: 'scheduled',
+  topicKey: 'summary',
 };
+
+type ExistingDigest = Readonly<{
+  header: DigestHeader;
+  status?: Article['status'];
+  edited?: boolean;
+  articleMissing?: boolean;
+}>;
+
+const existingDigest = (topicKey: string, options: Omit<ExistingDigest, 'header'> = {}): ExistingDigest => ({
+  header: { ...header, digestId: DigestId.generate(), articleId: ArticleId.generate(), topicKey },
+  ...options,
+});
 
 const setup = (
   options: {
-    existing?: DigestHeader;
-    status?: Article['status'];
-    edited?: boolean;
+    existing?: ReadonlyArray<ExistingDigest>;
     reservation?: DigestRequestReservation;
-    articleMissing?: boolean;
   } = {},
 ) => {
+  const existing = options.existing ?? [];
   const reserve = vi.fn(() => RA.ok(options.reservation ?? { allowed: true as const }));
   const createRun = vi.fn(() =>
     RA.ok({
@@ -44,8 +55,9 @@ const setup = (
       digestDate: '2026-11-05',
       digestId,
       articleId,
-      replaced: options.existing !== undefined,
+      replaced: existing.length > 0,
       durationMs: 10,
+      topics: 0,
       items: 0,
       trends: 0,
       summarized: 0,
@@ -60,30 +72,35 @@ const setup = (
       },
     })
   );
-  const resolveHeader = vi.fn(() => RA.ok(options.existing));
+  const resolveHeaders = vi.fn(() => RA.ok(existing.map((digest) => digest.header)));
+  const find = (id: ArticleId) => existing.find((digest) => digest.header.articleId === id);
   const useCase = RequestDigestUseCase.create({
-    digestHeaderResolverByUserIdAndDigestDate: { resolve: resolveHeader },
+    digestHeadersResolverByUserIdAndDigestDate: { resolve: resolveHeaders },
     articleResolver: {
-      resolve: () =>
-        RA.ok(
-          options.existing === undefined || options.articleMissing === true
+      resolve: (id) => {
+        const digest = find(id);
+        return RA.ok(
+          digest === undefined || digest.articleMissing === true
             ? undefined
-            : { status: options.status ?? 'draft', createdAt: NOW } as Article,
-        ),
+            : { status: digest.status ?? 'draft', createdAt: NOW } as Article,
+        );
+      },
     },
     articleBodyResolver: {
-      resolve: () =>
-        RA.ok(
-          options.existing === undefined
+      resolve: (id) => {
+        const digest = find(id);
+        return RA.ok(
+          digest === undefined
             ? undefined
-            : { updatedAt: options.edited === true ? NOW + 1_000 : NOW } as ArticleBody,
-        ),
+            : { updatedAt: digest.edited === true ? NOW + 1_000 : NOW } as ArticleBody,
+        );
+      },
     },
     digestRequestUsageRecorder: { reserve },
-    createDailyDigestUseCase: { run: createRun } as CreateDailyDigestUseCase,
+    createDailyDigestUseCase: { run: createRun } as unknown as CreateDailyDigestUseCase,
     now: () => NOW,
   });
-  return { useCase, reserve, createRun, resolveHeader };
+  return { useCase, reserve, createRun, resolveHeaders };
 };
 
 describe('RequestDigestUseCase', () => {
@@ -93,13 +110,13 @@ describe('RequestDigestUseCase', () => {
     const result = await t.useCase.run({ userId });
 
     expect(result).toEqual({ ok: true, val: { digestId, articleId, digestDate: '2026-11-05', replaced: false } });
-    expect(t.resolveHeader).toHaveBeenCalledWith({ userId, digestDate: '2026-11-05' });
+    expect(t.resolveHeaders).toHaveBeenCalledWith({ userId, digestDate: '2026-11-05' });
     expect(t.reserve).toHaveBeenCalledWith({ userId, day: '2026-11-05', now: NOW });
     expect(t.createRun).toHaveBeenCalledWith({ userId, trigger: 'requested' });
   });
 
   it('その日の draft の digest があれば予約して作り直し、replaced を true にする', async () => {
-    const t = setup({ existing: header, status: 'draft' });
+    const t = setup({ existing: [existingDigest('summary'), existingDigest('genai')] });
 
     const result = await t.useCase.run({ userId });
 
@@ -107,8 +124,32 @@ describe('RequestDigestUseCase', () => {
     expect(t.reserve).toHaveBeenCalledTimes(1);
   });
 
-  it('その日の draft の digest の本文が編集済みなら、予約せずに DigestDraftEditedError を返す', async () => {
-    const t = setup({ existing: header, status: 'draft', edited: true });
+  it('まとめが draft なら、topic の digest が公開済みでも予約して作り直す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary'), existingDigest('genai', { status: 'published' })],
+    });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: true, val: { replaced: true } });
+    expect(t.createRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('まとめが編集済みでない draft なら、topic の digest が編集済みでも予約して作り直す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary'), existingDigest('genai', { edited: true })],
+    });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(t.createRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('その日の digest がすべて編集済みの draft なら、予約せずに DigestDraftEditedError を返す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary', { edited: true }), existingDigest('genai', { edited: true })],
+    });
 
     const result = await t.useCase.run({ userId });
 
@@ -120,10 +161,46 @@ describe('RequestDigestUseCase', () => {
     expect(t.createRun).not.toHaveBeenCalled();
   });
 
+  it('まとめが編集済みなら、topic の digest が draft でも予約せずに DigestDraftEditedError を返す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary', { edited: true }), existingDigest('genai')],
+    });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'DigestDraftEditedError' } });
+    expect(t.reserve).not.toHaveBeenCalled();
+    expect(t.createRun).not.toHaveBeenCalled();
+  });
+
   it.each(['published', 'unpublished'] as const)(
-    'その日の digest の article が %s なら、予約せずに DigestAlreadyPublishedError を返す',
+    'まとめが %s なら、topic の digest が draft でも予約せずに DigestAlreadyPublishedError を返し、作成を呼ばない',
     async (status) => {
-      const t = setup({ existing: header, status });
+      const t = setup({ existing: [existingDigest('summary', { status }), existingDigest('genai')] });
+
+      const result = await t.useCase.run({ userId });
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
+      expect(t.reserve).not.toHaveBeenCalled();
+      expect(t.createRun).not.toHaveBeenCalled();
+    },
+  );
+
+  it('まとめが公開済みなら、topic の digest が編集済みでも DigestAlreadyPublishedError を返す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary', { status: 'published' }), existingDigest('genai', { edited: true })],
+    });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
+    expect(t.reserve).not.toHaveBeenCalled();
+  });
+
+  it.each(['published', 'unpublished'] as const)(
+    'その日の digest の article がすべて %s なら、予約せずに DigestAlreadyPublishedError を返す',
+    async (status) => {
+      const t = setup({ existing: [existingDigest('summary', { status }), existingDigest('genai', { status })] });
 
       const result = await t.useCase.run({ userId });
 
@@ -137,7 +214,7 @@ describe('RequestDigestUseCase', () => {
   );
 
   it('その日の digest の article が見つからなければ、予約せずに ArticleNotFoundError を返す', async () => {
-    const t = setup({ existing: header, articleMissing: true });
+    const t = setup({ existing: [existingDigest('summary', { articleMissing: true })] });
 
     const result = await t.useCase.run({ userId });
 

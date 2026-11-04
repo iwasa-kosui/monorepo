@@ -1,18 +1,19 @@
 import { RA } from '@iwasa-kosui/result';
 
-import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
+import { ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import {
   DigestAlreadyPublishedError,
   DigestDraftEditedError,
-  type DigestHeaderResolverByUserIdAndDigestDate,
+  type DigestHeadersResolverByUserIdAndDigestDate,
 } from '../domain/digest/digest.ts';
 import type { DigestId } from '../domain/digest/digestId.ts';
 import type { DigestRequestUsageRecorder } from '../domain/digest/digestRequestLimit.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { CreateDailyDigestUseCase } from './createDailyDigest.ts';
+import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
 import type { InferUseCaseError, UseCase } from './useCase.ts';
 
 type Input = Readonly<{ userId: UserId }>;
@@ -47,7 +48,7 @@ type Err = DigestRequestLimitError | InferUseCaseError<CreateDailyDigestUseCase>
 export type RequestDigestUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
-  digestHeaderResolverByUserIdAndDigestDate: DigestHeaderResolverByUserIdAndDigestDate;
+  digestHeadersResolverByUserIdAndDigestDate: DigestHeadersResolverByUserIdAndDigestDate;
   articleResolver: ArticleResolver;
   articleBodyResolver: ArticleBodyResolver;
   digestRequestUsageRecorder: DigestRequestUsageRecorder;
@@ -56,7 +57,7 @@ type Deps = Readonly<{
 }>;
 
 const create = ({
-  digestHeaderResolverByUserIdAndDigestDate,
+  digestHeadersResolverByUserIdAndDigestDate,
   articleResolver,
   articleBodyResolver,
   digestRequestUsageRecorder,
@@ -67,14 +68,15 @@ const create = ({
     const requestedAt = now();
     const digestDate = Instant.toJstDate(requestedAt);
 
-    const existing = await digestHeaderResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
-    if (existing.val !== undefined) {
-      const article = await articleResolver.resolve(existing.val.articleId);
-      if (article.val === undefined) return RA.err(ArticleNotFoundError.create(existing.val.articleId));
-      if (article.val.status !== 'draft') return RA.err(DigestAlreadyPublishedError.create(digestDate));
-      const body = await articleBodyResolver.resolve(existing.val.articleId);
-      if (Article.isBodyEdited(article.val, body.val)) return RA.err(DigestDraftEditedError.create(digestDate));
+    const replaceable = await resolveReplaceableDigests(
+      { digestHeadersResolverByUserIdAndDigestDate, articleResolver, articleBodyResolver },
+      { userId, digestDate },
+    );
+    if (replaceable.missingArticleId !== undefined) {
+      return RA.err(ArticleNotFoundError.create(replaceable.missingArticleId));
     }
+    if (replaceable.blockedBy === 'edited') return RA.err(DigestDraftEditedError.create(digestDate));
+    if (replaceable.blockedBy === 'published') return RA.err(DigestAlreadyPublishedError.create(digestDate));
 
     const reservation = await digestRequestUsageRecorder.reserve({ userId, day: digestDate, now: requestedAt });
     if (!reservation.val.allowed) {

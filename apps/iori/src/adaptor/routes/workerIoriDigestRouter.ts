@@ -5,6 +5,8 @@ import {
   DigestFeedback,
   type DigestResolverByUserId,
   type DigestResolverByUserIdAndDigestDate,
+  type DigestTopicEntriesResolverByUserIdAndDigestDate,
+  type DigestTopicEntry,
   type DigestTrend,
 } from '../../domain/digest/digest.ts';
 import { DigestItemId } from '../../domain/digest/digestItemId.ts';
@@ -37,6 +39,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   authn: MastodonAuthn;
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
   digestResolverByUserId: DigestResolverByUserId;
+  digestTopicEntriesResolverByUserIdAndDigestDate: DigestTopicEntriesResolverByUserIdAndDigestDate;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
@@ -52,11 +55,13 @@ export type IoriDigestResponse = Readonly<{
     digestId: string;
     digestDate: string;
     articleId: string;
+    topicKey: string;
     createdAt: string;
     pushSentAt: string | null;
     items: ReadonlyArray<
       Readonly<{ rank: number; url: string; title: string; summary: string | null; feedEntryId: string }>
     >;
+    topics: ReadonlyArray<Readonly<{ topicKey: string; name: string; articleId: string; itemCount: number }>>;
     trends: Readonly<{
       timelineLinks: ReadonlyArray<DigestTrendBody>;
       hatena: ReadonlyArray<DigestTrendBody>;
@@ -82,11 +87,12 @@ const digestDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 const toTrendBody = ({ rank, url, title, count }: DigestTrend): DigestTrendBody => ({ rank, url, title, count });
 
-const toDigestBody = (digest: Digest): IoriDigestResponse => ({
+const toDigestBody = (digest: Digest, topics: ReadonlyArray<DigestTopicEntry>): IoriDigestResponse => ({
   digest: {
     digestId: digest.digestId,
     digestDate: digest.digestDate,
     articleId: digest.articleId,
+    topicKey: digest.topicKey,
     createdAt: toIsoString(digest.createdAt),
     pushSentAt: digest.pushSentAt === null ? null : toIsoString(digest.pushSentAt),
     items: digest.items.map(({ rank, url, title, summary, feedEntryId }) => ({
@@ -96,6 +102,7 @@ const toDigestBody = (digest: Digest): IoriDigestResponse => ({
       summary,
       feedEntryId,
     })),
+    topics: topics.map(({ topicKey, name, articleId, itemCount }) => ({ topicKey, name, articleId, itemCount })),
     trends: {
       timelineLinks: digest.trends.filter((trend) => trend.kind === 'timeline_link').map(toTrendBody),
       hatena: digest.trends.filter((trend) => trend.kind === 'hatena').map(toTrendBody),
@@ -132,6 +139,7 @@ export const createWorkerIoriDigestRouter = ({
   authn,
   digestResolverByUserIdAndDigestDate,
   digestResolverByUserId,
+  digestTopicEntriesResolverByUserIdAndDigestDate,
   timelineLinkTrendsResolverByUserId,
   hatenaTrendsResolverByFetchedSince,
   digestSubscriptionResolverByUserId,
@@ -146,7 +154,12 @@ export const createWorkerIoriDigestRouter = ({
       if (userId === undefined) return c.json(invalidToken, 401);
       const digest = await digestResolverByUserId.resolve(userId);
       if (!digest.ok) return c.json(internalServerError, 500);
-      return digest.val === undefined ? c.json(digestNotFound, 404) : c.json(toDigestBody(digest.val));
+      if (digest.val === undefined) return c.json(digestNotFound, 404);
+      const topics = await digestTopicEntriesResolverByUserIdAndDigestDate.resolve({
+        userId,
+        digestDate: digest.val.digestDate,
+      });
+      return topics.ok ? c.json(toDigestBody(digest.val, topics.val)) : c.json(internalServerError, 500);
     })
     .get('/iori/v1/digests/:date', authn.requireUser(readStatuses), async (c) => {
       const userId = userIdOf(c);
@@ -155,7 +168,12 @@ export const createWorkerIoriDigestRouter = ({
       if (!digestDatePattern.test(digestDate)) return c.json({ error: 'Validation failed: date' }, 400);
       const digest = await digestResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
       if (!digest.ok) return c.json(internalServerError, 500);
-      return digest.val === undefined ? c.json(digestNotFound, 404) : c.json(toDigestBody(digest.val));
+      if (digest.val === undefined) return c.json(digestNotFound, 404);
+      const topics = await digestTopicEntriesResolverByUserIdAndDigestDate.resolve({
+        userId,
+        digestDate: digest.val.digestDate,
+      });
+      return topics.ok ? c.json(toDigestBody(digest.val, topics.val)) : c.json(internalServerError, 500);
     })
     .get('/iori/v1/trends/links', authn.requireUser(readStatuses), async (c) => {
       const userId = userIdOf(c);
@@ -238,6 +256,8 @@ export const createWorkerIoriDigestRouter = ({
           return c.json({ error: 'Digest already published' }, 409);
         case 'DigestDraftEditedError':
           return c.json({ error: 'Digest draft edited' }, 409);
+        case 'DigestTopicsUnavailableError':
+          return c.json({ error: 'Digest topics unavailable' }, 503);
         case 'DigestRequestLimitError':
           c.header('Retry-After', String(err.retryAfterSeconds));
           return err.reason === 'daily_limit'

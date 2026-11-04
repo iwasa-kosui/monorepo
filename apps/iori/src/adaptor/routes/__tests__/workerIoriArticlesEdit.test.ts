@@ -28,7 +28,9 @@ const CREATED_AT = 1_000;
 
 const digestBody = buildDigestBodies({
   radar: undefined,
-  entries: [{ title: 'First', url: 'https://example.com/first', summary: '要約', hatenaBookmarkCount: 5 }],
+  recommendations: [
+    { title: 'First', url: 'https://example.com/first', summary: '要約', fromHatena: false, reason: null },
+  ],
   timelineTrends: [],
   hatenaTrends: [],
 });

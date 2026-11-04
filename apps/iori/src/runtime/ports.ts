@@ -20,10 +20,11 @@ import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/art
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import type {
-  DigestHeaderResolverByArticleId,
   DigestHeadersResolverByArticleIds,
+  DigestResolverByArticleId,
   DigestResolverByUserId,
   DigestResolverByUserIdAndDigestDate,
+  DigestTopicEntriesResolverByUserIdAndDigestDate,
 } from '../domain/digest/digest.ts';
 import type {
   HatenaTrendsResolverByFetchedSince,
@@ -169,6 +170,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
 export type IoriDigestRuntimePorts = Readonly<{
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
   digestResolverByUserId: DigestResolverByUserId;
+  digestTopicEntriesResolverByUserIdAndDigestDate: DigestTopicEntriesResolverByUserIdAndDigestDate;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
@@ -203,9 +205,8 @@ export type IoriArticlesRuntimePorts = Readonly<{
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
-  digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
   digestHeadersResolverByArticleIds: DigestHeadersResolverByArticleIds;
-  digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
+  digestResolverByArticleId: DigestResolverByArticleId;
   actorResolverByUserId: ActorResolverByUserId;
   publishOgImage: (article: Article) => Promise<void>;
   deleteOgImage: (articleId: ArticleId) => Promise<void>;

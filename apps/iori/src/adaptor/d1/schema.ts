@@ -479,9 +479,25 @@ export const digestsTable = sqliteTable('digests', {
   createdAt: timestamp().notNull(),
   pushSentAt: timestamp(),
   trigger: text('trigger').notNull().default('scheduled'),
+  topicKey: text('topicKey').notNull().default('summary'),
 }, (table) => [
-  uniqueIndex('digests_user_id_digest_date_unique').on(table.userId, table.digestDate),
+  uniqueIndex('digests_user_id_digest_date_topic_key_unique').on(table.userId, table.digestDate, table.topicKey),
   index('digests_digest_date_idx').on(table.digestDate),
+]);
+
+export const digestTopicsTable = sqliteTable('digest_topics', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  topicKey: text('topicKey').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  embedding: embeddingBlob('embedding'),
+  embeddedAt: timestamp(),
+  sortOrder: integer('sortOrder').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.topicKey] }),
 ]);
 
 export const digestRequestUsagesTable = sqliteTable('digest_request_usages', {
@@ -585,6 +601,7 @@ export const schema = {
   feedEntriesTable,
   digestSubscriptionsTable,
   digestsTable,
+  digestTopicsTable,
   digestRequestUsagesTable,
   digestItemsTable,
   digestTrendsTable,

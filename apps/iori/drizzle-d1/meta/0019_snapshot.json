@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "9212c1f3-4dda-450a-a58b-e652ec5fd47c",
-  "prevId": "cb051041-f4a6-408e-b632-a9956cc58e31",
+  "prevId": "0e5cceca-ca8b-4818-a10d-e241d08379db",
   "tables": {
     "actors": {
       "name": "actors",
@@ -586,6 +586,108 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "digest_topics": {
+      "name": "digest_topics",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "topicKey": {
+          "name": "topicKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "embeddedAt": {
+          "name": "embeddedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "digest_topics_userId_users_userId_fk": {
+          "name": "digest_topics_userId_users_userId_fk",
+          "tableFrom": "digest_topics",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "digest_topics_userId_topicKey_pk": {
+          "columns": [
+            "userId",
+            "topicKey"
+          ],
+          "name": "digest_topics_userId_topicKey_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "digest_trends": {
       "name": "digest_trends",
       "columns": {
@@ -713,14 +815,23 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'scheduled'"
+        },
+        "topicKey": {
+          "name": "topicKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'summary'"
         }
       },
       "indexes": {
-        "digests_user_id_digest_date_unique": {
-          "name": "digests_user_id_digest_date_unique",
+        "digests_user_id_digest_date_topic_key_unique": {
+          "name": "digests_user_id_digest_date_topic_key_unique",
           "columns": [
             "userId",
-            "digestDate"
+            "digestDate",
+            "topicKey"
           ],
           "isUnique": true
         },

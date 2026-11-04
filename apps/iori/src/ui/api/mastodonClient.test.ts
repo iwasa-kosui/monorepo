@@ -182,6 +182,28 @@ describe('mastodon client requests', () => {
     expect(requestedUrl(remoteMock)).toBe('/api/v1/timelines/public?max_id=m1&remote=true');
   });
 
+  it('requests the remote public timeline with max_id and returns the cursors from the Link header', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/timelines/public?max_id=r1&remote=true>; rel="next"',
+    }));
+
+    const page = await fetchPublicTimeline('remote', { maxId: 'm1' });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/timelines/public?max_id=m1&remote=true');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'r1', prevMinId: undefined });
+  });
+
+  it('requests the local public timeline with max_id and returns the cursors from the Link header', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/timelines/public?max_id=l1&local=true>; rel="next"',
+    }));
+
+    const page = await fetchPublicTimeline('local', { maxId: 'm1' });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/timelines/public?max_id=m1&local=true');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'l1', prevMinId: undefined });
+  });
+
   it('requests a status and its context by encoded id', async () => {
     const statusMock = stubFetch(jsonResponse({ id: 'a/b' }));
     await fetchStatus('a/b');

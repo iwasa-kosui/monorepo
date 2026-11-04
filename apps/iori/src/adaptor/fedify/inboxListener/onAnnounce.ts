@@ -106,9 +106,17 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   if (!localObject) {
     const followedResult = await deps.followedByLocalActorResolverByActorUri.resolve({ actorUri: actorId.href });
-    if (followedResult.ok && !followedResult.val) {
+    if (!followedResult.ok) {
+      getLogger().warn(
+        `Failed to determine whether a local actor follows ${actorId.href}; failing the Announce to retry: ${activity.id?.href} - ${
+          String(followedResult.err)
+        }`,
+      );
+      throw new Error(`Failed to determine whether a local actor follows ${actorId.href}`);
+    }
+    if (!followedResult.val) {
       getLogger().info(
-        `Skipping Announce activity from an actor no local actor follows: ${actorId.href} (${activity.id?.href})`,
+        `Not creating a repost for an Announce from an actor no local actor follows; trying to save it to the federated timeline as a relay-forwarded boost: ${actorId.href} (${activity.id?.href})`,
       );
       await saveForwardedAnnounce(deps, ctx, activity);
       return;

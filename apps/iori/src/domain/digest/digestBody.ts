@@ -1,12 +1,6 @@
 import type { TrendCandidate } from './digestMaterial.ts';
 
 export type DigestBodyRadar = Readonly<{ title: string; url: string }>;
-export type DigestBodyEntry = Readonly<{
-  title: string;
-  url: string;
-  summary: string | null;
-  hatenaBookmarkCount: number | null;
-}>;
 
 export type DigestBodyReason = Readonly<{
   scope: 'kosui' | 'own';
@@ -23,7 +17,6 @@ export type DigestBodyRecommendation = Readonly<{
 
 export type DigestBodyInput = Readonly<{
   radar: DigestBodyRadar | undefined;
-  entries: ReadonlyArray<DigestBodyEntry>;
   recommendations?: ReadonlyArray<DigestBodyRecommendation>;
   timelineTrends: ReadonlyArray<TrendCandidate>;
   hatenaTrends: ReadonlyArray<TrendCandidate>;
@@ -63,18 +56,6 @@ const section = (heading: string, items: ReadonlyArray<string>): string =>
 const radarSection = (radar: DigestBodyRadar | undefined): string =>
   radar === undefined ? '' : section('Thoughtworks Technology Radar の新しい版', [link(radar.title, radar.url)]);
 
-const entriesSection = (entries: ReadonlyArray<DigestBodyEntry>, showHatenaCount: boolean): string =>
-  section(
-    '新着',
-    entries.map((entry) => {
-      const count = showHatenaCount && entry.hatenaBookmarkCount !== null
-        ? `（はてなブックマーク ${entry.hatenaBookmarkCount}）`
-        : '';
-      const summary = entry.summary === null ? '' : `<br>${escapeHtml(entry.summary).replaceAll('\n', '<br>')}`;
-      return `${link(entry.title, entry.url)}${count}${summary}`;
-    }),
-  );
-
 const recommendationsSection = (
   recommendations: ReadonlyArray<DigestBodyRecommendation>,
   isPublic: boolean,
@@ -105,7 +86,6 @@ const join = (sections: ReadonlyArray<string>): string => {
 
 export const buildDigestBodies = ({
   radar,
-  entries,
   recommendations = [],
   timelineTrends,
   hatenaTrends,
@@ -113,13 +93,43 @@ export const buildDigestBodies = ({
   privateHtml: join([
     radarSection(radar),
     recommendationsSection(recommendations, false),
-    entriesSection(entries, true),
     trendsSection('みんなの関心（iori のタイムライン）', timelineTrends, '人が共有'),
     trendsSection('みんなの関心（はてなブックマーク）', hatenaTrends, 'ブックマーク'),
   ]),
   publicHtml: join([
     radarSection(radar),
     recommendationsSection(recommendations, true),
-    entriesSection(entries, false),
   ]),
+});
+
+export type DigestSummaryBodyTopic = Readonly<{ name: string; articleId: string }>;
+
+export type DigestSummaryBodyInput = Readonly<{
+  radar: DigestBodyRadar | undefined;
+  topics: ReadonlyArray<DigestSummaryBodyTopic>;
+  timelineTrends: ReadonlyArray<TrendCandidate>;
+  hatenaTrends: ReadonlyArray<TrendCandidate>;
+}>;
+
+const SUMMARY_PUBLIC_HTML = '<p>このまとめは公開を想定していません。</p>';
+
+const topicsSection = (topics: ReadonlyArray<DigestSummaryBodyTopic>): string =>
+  section(
+    'トピック別のダイジェスト',
+    topics.map((topic) => `<a href="/articles/${encodeURIComponent(topic.articleId)}">${escapeHtml(topic.name)}</a>`),
+  );
+
+export const buildSummaryBodies = ({
+  radar,
+  topics,
+  timelineTrends,
+  hatenaTrends,
+}: DigestSummaryBodyInput): DigestBodies => ({
+  privateHtml: join([
+    radarSection(radar),
+    topicsSection(topics),
+    trendsSection('みんなの関心（iori のタイムライン）', timelineTrends, '人が共有'),
+    trendsSection('みんなの関心（はてなブックマーク）', hatenaTrends, 'ブックマーク'),
+  ]),
+  publicHtml: SUMMARY_PUBLIC_HTML,
 });

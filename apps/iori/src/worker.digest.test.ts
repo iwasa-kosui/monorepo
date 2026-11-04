@@ -34,15 +34,15 @@ const setup = () => {
     userId,
     Date.now() + 60_000,
   );
-  const addDigest = (digestDate: string) => {
+  const addDigest = (digestDate: string, topicKey = 'summary') => {
     const articleId = crypto.randomUUID();
     sqlite.prepare(
       'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
     ).run(articleId, actorId, userId, null, `ダイジェスト ${digestDate}`, 'draft', 1_000, null, null);
     sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
     )
-      .run(crypto.randomUUID(), userId, digestDate, articleId, 2_000, null);
+      .run(crypto.randomUUID(), userId, digestDate, articleId, 2_000, null, topicKey);
     return articleId;
   };
   const env = {
@@ -83,7 +83,7 @@ describe('GET /digest', () => {
     expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/articles');
   });
 
-  it('ログイン中で digest があれば、最新の digest の article へ 302 で返す', async () => {
+  it('ログイン中で digest があれば、最新のまとめの article へ 302 で返す', async () => {
     const { request, addDigest } = setup();
     addDigest('2026-11-04');
     const latest = addDigest('2026-11-05');
@@ -92,5 +92,29 @@ describe('GET /digest', () => {
 
     expect(response.status).toBe(302);
     expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${latest}`);
+  });
+
+  it('同じ日にトピックの digest が混ざっていても、まとめの article へ 302 で返す', async () => {
+    const { request, addDigest } = setup();
+    addDigest('2026-11-04');
+    const summary = addDigest('2026-11-05');
+    addDigest('2026-11-05', 'genai');
+    addDigest('2026-11-05', 'security');
+
+    const response = await request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
+
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${summary}`);
+  });
+
+  it('より新しい日にトピックの digest だけがあっても、まとめのある日の article へ 302 で返す', async () => {
+    const { request, addDigest } = setup();
+    const summary = addDigest('2026-11-04');
+    addDigest('2026-11-05', 'genai');
+
+    const response = await request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
+
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${summary}`);
   });
 });

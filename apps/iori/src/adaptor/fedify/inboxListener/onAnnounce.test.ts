@@ -359,6 +359,23 @@ describe('createOnAnnounce', () => {
     expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
   });
 
+  it('rejects without saving anything when checking whether a local actor follows the announcer fails', async () => {
+    const {
+      deps,
+      addReceivedRepostUseCase,
+      federatedTimelineItemCreatedStore,
+      followedByLocalActorResolverByActorUri,
+      inboxActorResolver,
+    } = createDeps(undefined, false, [{ relayId: 'relay-1' }]);
+    followedByLocalActorResolverByActorUri.resolve.mockResolvedValue(RA.err(new Error('db down')) as never);
+
+    await expect(createOnAnnounce(deps)(createCtx(), createActivity(createNote([])))).rejects.toThrow();
+
+    expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
   it('saves a remote Announce from an actor a local actor follows', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined, true);
 
