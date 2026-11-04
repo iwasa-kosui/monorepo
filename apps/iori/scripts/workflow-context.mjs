@@ -3,9 +3,15 @@ import { join } from 'node:path';
 
 const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-failed-source'];
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
+const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
 const shaPattern = /^[a-f0-9]{40}$/;
 const generationPattern = /^[a-z][a-z0-9]{7,19}$/;
 const runIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
+export const repostCreatedBefore = (value, now = Date.now()) => {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,15}$/.test(value)) return undefined;
+  const milliseconds = Number(value);
+  return Number.isSafeInteger(milliseconds) && milliseconds <= now ? milliseconds : undefined;
+};
 const admissionInputs = (text) => {
   try {
     const value = JSON.parse(text ?? 'null');
@@ -40,7 +46,7 @@ const pushInvocation = (env, deferIdentity) => {
     runId: derived?.runId ?? '',
   });
 };
-export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => {
+export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date.now() } = {}) => {
   const operation = env.IORI_OPERATION;
   if (['reconcile-resources', 'replace-queue-consumer'].includes(operation)) {
     throw new Error('Maintenance operation requires a separate review.');
@@ -58,14 +64,20 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false } = {}) => 
       'put-worker-secrets',
       'diagnose-source',
       'delete-rehearsal-d1',
+      ...moveOperations,
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (operation === 'delete-rehearsal-d1' && env.IORI_ENVIRONMENT !== 'production')
+    || (['delete-rehearsal-d1', ...moveOperations].includes(operation) && env.IORI_ENVIRONMENT !== 'production')
     || (['diagnose-source', 'delete-rehearsal-d1'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
+      : moveOperations.includes(operation)
+      ? !generationPattern.test(env.IORI_GENERATION ?? '') || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))
+    || (moveOperations.includes(operation)
+      ? repostCreatedBefore(env.IORI_REPOST_CREATED_BEFORE_MS, now) === undefined
+      : Boolean(env.IORI_REPOST_CREATED_BEFORE_MS))
     || (!['deploy-worker', 'put-worker-secrets'].includes(operation)
       && !recoveryOperation
       && codeSha !== migrationSha)

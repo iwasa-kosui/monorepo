@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "5d694e3f-3fc0-4b3e-825c-d15bac4d8234",
-  "prevId": "0e5cceca-ca8b-4818-a10d-e241d08379db",
+  "prevId": "9212c1f3-4dda-450a-a58b-e652ec5fd47c",
   "tables": {
     "actors": {
       "name": "actors",
@@ -2688,6 +2688,73 @@
           "tableTo": "actors",
           "columnsFrom": [
             "replierActorId"
+          ],
+          "columnsTo": [
+            "actorId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "notification_reposts": {
+      "name": "notification_reposts",
+      "columns": {
+        "notificationId": {
+          "name": "notificationId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reposterActorId": {
+          "name": "reposterActorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "repostedPostId": {
+          "name": "repostedPostId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "notification_reposts_reposter_post_unique": {
+          "name": "notification_reposts_reposter_post_unique",
+          "columns": [
+            "reposterActorId",
+            "repostedPostId"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "notification_reposts_notificationId_notifications_notificationId_fk": {
+          "name": "notification_reposts_notificationId_notifications_notificationId_fk",
+          "tableFrom": "notification_reposts",
+          "tableTo": "notifications",
+          "columnsFrom": [
+            "notificationId"
+          ],
+          "columnsTo": [
+            "notificationId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_reposts_reposterActorId_actors_actorId_fk": {
+          "name": "notification_reposts_reposterActorId_actors_actorId_fk",
+          "tableFrom": "notification_reposts",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "reposterActorId"
           ],
           "columnsTo": [
             "actorId"

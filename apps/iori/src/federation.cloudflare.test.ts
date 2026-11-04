@@ -1,5 +1,6 @@
 import { WorkersMessageQueue } from '@fedify/cfworkers';
 import { SendActivityError } from '@fedify/fedify';
+import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -483,8 +484,16 @@ describe('decideQueueFailureAction', () => {
       type: 'retry',
       delaySeconds: 60,
     });
-    expect(decideQueueFailureAction(sendActivityError(statusCode), 2, 'outbox')).toEqual({ type: 'drop', statusCode });
-    expect(decideQueueFailureAction(sendActivityError(statusCode), 3, 'outbox')).toEqual({ type: 'drop', statusCode });
+    expect(decideQueueFailureAction(sendActivityError(statusCode), 2, 'outbox')).toEqual({
+      type: 'drop',
+      reason: 'clientError',
+      statusCode,
+    });
+    expect(decideQueueFailureAction(sendActivityError(statusCode), 3, 'outbox')).toEqual({
+      type: 'drop',
+      reason: 'clientError',
+      statusCode,
+    });
   });
 
   it('treats errors without a status code as retryable', () => {
@@ -500,7 +509,11 @@ describe('decideQueueFailureAction', () => {
       type: 'retry',
       delaySeconds: 60,
     });
-    expect(decideQueueFailureAction(sendActivityError(403), 2, messageType)).toEqual({ type: 'drop', statusCode: 403 });
+    expect(decideQueueFailureAction(sendActivityError(403), 2, messageType)).toEqual({
+      type: 'drop',
+      reason: 'clientError',
+      statusCode: 403,
+    });
   });
 
   it.each(['inbox', 'task', undefined] as const)(
@@ -512,6 +525,42 @@ describe('decideQueueFailureAction', () => {
         });
         expect(decideQueueFailureAction(sendActivityError(403), attempts, messageType)).toEqual({ type: 'retry' });
       }
+    },
+  );
+});
+
+const fetchTimeout = (url = 'https://slow.example/users/a') => {
+  const error = new FetchError(url, 'Timed out after 10000 ms');
+  error.cause = new DOMException('The document loader timed out after 10000 ms.', 'TimeoutError');
+  return error;
+};
+
+describe('decideQueueFailureAction for inbox fetch timeouts', () => {
+  it('retries an inbox fetch timeout once with delaySeconds 60 and then drops it', () => {
+    expect(decideQueueFailureAction(fetchTimeout(), 1, 'inbox')).toEqual({ type: 'retry', delaySeconds: 60 });
+    for (const attempts of [2, 3]) {
+      expect(decideQueueFailureAction(fetchTimeout(), attempts, 'inbox')).toEqual({
+        type: 'drop',
+        reason: 'fetchTimeout',
+        url: 'https://slow.example/users/a',
+      });
+    }
+  });
+
+  it('keeps retrying an inbox FetchError that is not a timeout', () => {
+    const notFound = new FetchError('https://slow.example/users/a', 'HTTP 500');
+    expect(decideQueueFailureAction(notFound, 3, 'inbox')).toEqual({ type: 'retry' });
+  });
+
+  it.each(['task', undefined] as const)('does not drop a fetch timeout in a %s message', (messageType) => {
+    expect(decideQueueFailureAction(fetchTimeout(), 3, messageType)).toEqual({ type: 'retry' });
+  });
+
+  it.each(['outbox', 'fanout'] as const)(
+    'applies the delivery delays to a fetch timeout in a %s message',
+    (messageType) => {
+      expect(decideQueueFailureAction(fetchTimeout(), 2, messageType)).toEqual({ type: 'retry', delaySeconds: 600 });
+      expect(decideQueueFailureAction(fetchTimeout(), 3, messageType)).toEqual({ type: 'retry', delaySeconds: 3600 });
     },
   );
 });
@@ -645,6 +694,24 @@ describe('processCloudflareFedifyMessages retry delays', () => {
       'Fedify queued task dropped after a client error response.',
       { statusCode: 403, attempts: 2 },
     ]);
+  });
+
+  it('acks an inbox fetch timeout on attempt 2 and logs the reason and the URL', async () => {
+    const { ack, retry, logged } = await run(fetchTimeout(), 2, 'inbox');
+
+    expect(retry).not.toHaveBeenCalled();
+    expect(ack).toHaveBeenCalledOnce();
+    expect(logged).toContainEqual([
+      'Fedify queued task dropped after a fetch timeout.',
+      { url: 'https://slow.example/users/a', attempts: 2 },
+    ]);
+  });
+
+  it('retries an inbox fetch timeout on attempt 1 with delaySeconds 60', async () => {
+    const { ack, retry } = await run(fetchTimeout(), 1, 'inbox');
+
+    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
+    expect(ack).not.toHaveBeenCalled();
   });
 
   it('treats a message without attempts as attempt 1', async () => {

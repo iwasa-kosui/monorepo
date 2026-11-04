@@ -36,6 +36,8 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'deploy-worker',
     'put-worker-secrets',
     'delete-rehearsal-d1',
+    'move-unfollowed-reposts-dry-run',
+    'move-unfollowed-reposts',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -160,8 +162,39 @@ it('gives delete-rehearsal-d1 only the account and the deploy token, and no inpu
     'generation',
     'migration_run_id',
     'recovery',
+    'repost_created_before_ms',
   ]);
 });
+it.each(['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'])(
+  'gives %s only the account and the deploy token, and one optional input for the repost time limit',
+  async (name) => {
+    const workflow = await readWorkflow('deploy-iori-worker.yml');
+    const job = workflow.jobs[name];
+    const secret = (key: string) => `\${{ secrets.${key} }}`;
+    expect(job.if).toBe(`inputs.operation == '${name}'`);
+    expect(job.needs).toBe('public-artifact-gate');
+    expect(job.environment).toBe('${{ inputs.environment }}');
+    expect(operation(job).env).toEqual({
+      CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+      CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    });
+    expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+    expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+    const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+    const parsed = parse(text) as {
+      on: { workflow_dispatch: { inputs: Record<string, { required?: boolean; type?: string; options?: string[] }> } };
+      env: Record<string, string>;
+    };
+    const inputs = parsed.on.workflow_dispatch.inputs;
+    expect(inputs.operation.options).toContain(name);
+    expect(inputs.repost_created_before_ms).toEqual({
+      description: expect.any(String),
+      required: false,
+      type: 'string',
+    });
+    expect(parsed.env.IORI_REPOST_CREATED_BEFORE_MS).toBe('${{ inputs.repost_created_before_ms }}');
+  },
+);
 it('lets diagnose-source start without generation or run ID', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const inputs =

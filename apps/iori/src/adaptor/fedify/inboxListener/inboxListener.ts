@@ -1,3 +1,6 @@
+import { RA } from '@iwasa-kosui/result';
+
+import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { Env } from '../../../env.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
@@ -16,6 +19,7 @@ import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
 import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
+import { PgArticleResolver } from '../../pg/article/articleResolver.ts';
 import { PgEmojiReactCreatedStore } from '../../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
@@ -25,6 +29,7 @@ import { PgFederatedTimelineItemDeletedStore } from '../../pg/federatedTimeline/
 import { PgFederatedTimelineItemResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
 import { PgFederatedTimelineItemsResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemsResolverByPostId.ts';
 import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
+import { PgFollowedByLocalActorResolverByActorUri } from '../../pg/follow/followedByLocalActorResolverByActorUri.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
@@ -54,10 +59,12 @@ import { PgPostResolver } from '../../pg/post/postResolver.ts';
 import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
 import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { PgAcceptedRelaysResolver } from '../../pg/relay/acceptedRelaysResolver.ts';
 import { PgRelayResolverByActorUri } from '../../pg/relay/relayResolverByActorUri.ts';
 import { PgRelaySubscriptionAcceptedStore } from '../../pg/relay/relaySubscriptionAcceptedStore.ts';
 import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
 import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
+import { PgRepostResolver } from '../../pg/repost/repostResolver.ts';
 import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
 import { PgRepostsResolverByPostId } from '../../pg/repost/repostsResolverByPostId.ts';
 import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
@@ -107,12 +114,27 @@ const create = () => {
   const addReceivedRepostUseCase = AddReceivedRepostUseCase.create({
     repostCreatedStore: PgRepostCreatedStore.getInstance(),
     repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
+    repostResolver: PgRepostResolver.getInstance(),
+    repostNotificationCreatedStore: { store: async () => RA.ok(undefined) },
+    repostNotificationResolver: {
+      resolve: async ({ recipientUserId, reposterActorId, repostedPostId }) =>
+        RA.ok({
+          type: 'repost',
+          notificationId: NotificationId.generate(),
+          recipientUserId,
+          isRead: true,
+          reposterActorId,
+          repostedPostId,
+        }),
+    },
     postResolver,
     remotePostUpserter,
     remoteActorCreatedStore,
     logoUriUpdatedStore,
     actorResolverByUri,
     timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+    pushSubscriptionsResolver,
+    webPushSender: { send: async () => RA.ok(undefined) },
   });
 
   return createInboxListener({
@@ -220,8 +242,11 @@ const create = () => {
     onAnnounce: {
       origin: Env.getInstance().ORIGIN,
       relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
+      followedByLocalActorResolverByActorUri: PgFollowedByLocalActorResolverByActorUri.getInstance(),
+      acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
       inboxActorResolver,
       addReceivedRepostUseCase,
+      articleResolver: PgArticleResolver.getInstance(),
       remotePostUpserter,
       federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
       federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),

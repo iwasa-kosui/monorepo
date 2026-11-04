@@ -10,6 +10,7 @@ import {
   SendActivityError,
 } from '@fedify/fedify';
 import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
+import { FetchError } from '@fedify/vocab-runtime';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowingId } from './adaptor/d1/actor/actorsResolverByFollowingId.ts';
@@ -262,8 +263,15 @@ export type QueueMessageType = Message['type'];
 
 export type QueueFailureAction = Readonly<
   | { type: 'retry'; delaySeconds?: number }
-  | { type: 'drop'; statusCode: number }
+  | { type: 'drop'; reason: 'clientError'; statusCode: number }
+  | { type: 'drop'; reason: 'fetchTimeout'; url: string }
 >;
+
+const isFetchTimeout = (error: unknown): error is FetchError =>
+  error instanceof FetchError
+  && typeof error.cause === 'object'
+  && error.cause !== null
+  && (error.cause as { name?: unknown }).name === 'TimeoutError';
 
 const isPermanentClientErrorStatus = (statusCode: number): boolean =>
   statusCode >= 400 && statusCode <= 499 && statusCode !== 408 && statusCode !== 429;
@@ -274,13 +282,18 @@ export const decideQueueFailureAction = (
   attempts: number,
   messageType: QueueMessageType | undefined,
 ): QueueFailureAction => {
+  if (messageType === 'inbox' && isFetchTimeout(error)) {
+    return attempts <= 1
+      ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
+      : { type: 'drop', reason: 'fetchTimeout', url: error.url.href };
+  }
   if (messageType !== 'outbox' && messageType !== 'fanout') {
     return { type: 'retry' };
   }
   if (error instanceof SendActivityError && isPermanentClientErrorStatus(error.statusCode)) {
     return attempts <= 1
       ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
-      : { type: 'drop', statusCode: error.statusCode };
+      : { type: 'drop', reason: 'clientError', statusCode: error.statusCode };
   }
   return { type: 'retry', delaySeconds: queueRetryDelaySeconds(attempts) };
 };
@@ -301,10 +314,14 @@ export const processCloudflareFedifyMessages = async (
       const attempts = message.attempts ?? 1;
       const action = decideQueueFailureAction(error, attempts, messageType);
       if (action.type === 'drop') {
-        console.error('Fedify queued task dropped after a client error response.', {
-          statusCode: action.statusCode,
-          attempts,
-        });
+        if (action.reason === 'clientError') {
+          console.error('Fedify queued task dropped after a client error response.', {
+            statusCode: action.statusCode,
+            attempts,
+          });
+        } else {
+          console.error('Fedify queued task dropped after a fetch timeout.', { url: action.url, attempts });
+        }
         message.ack();
       } else {
         if (action.delaySeconds === undefined) {

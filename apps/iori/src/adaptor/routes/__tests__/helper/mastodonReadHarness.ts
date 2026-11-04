@@ -328,6 +328,7 @@ export const setupReadApi = (
             }),
             timelineItemCreatedStore,
             postResolver,
+            articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
           }),
           undoRepostUseCase: UndoRepostUseCase.create({
             sessionResolver,
@@ -339,6 +340,7 @@ export const setupReadApi = (
             timelineItemResolverByRepostId: createD1TimelineItemResolverByRepostId(db),
             timelineItemDeletedStore: createD1TimelineItemDeletedStore(db),
             postResolver,
+            articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
           }),
           createContext,
         }),

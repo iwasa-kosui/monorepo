@@ -1,6 +1,8 @@
 import type { Federation } from '@fedify/fedify';
 import type { Context, MiddlewareHandler } from 'hono';
 
+import { activityTypeOf, findBlockedInboxDomain, readInboxActivity } from './blockedInboxDomain.ts';
+
 const OBJECT_PATH = /^\/users\/[^/]+\/(?:articles|posts)\/[^/]+$/;
 const INBOX_PATH = /^(?:\/users\/[^/]+)?\/inbox$/;
 const MEDIA_TYPE = /^\s*([^\s/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
@@ -41,6 +43,20 @@ export const federationWithObjectNotFound = <TContextData>(
 async (c, next) => {
   // Fedify 2 は POST のとき Accept を判定せずに actor のハンドラへ進むため、inbox 以外の POST を渡さない
   if (c.req.method === 'POST' && !INBOX_PATH.test(c.req.path)) return next();
+  if (c.req.method === 'POST') {
+    const activity = await readInboxActivity(c.req.raw);
+    const domain = findBlockedInboxDomain(activity);
+    if (domain !== undefined) {
+      console.info('iori inbox: dropped an activity from a blocked domain.', {
+        domain,
+        activityType: activityTypeOf(activity),
+        path: c.req.path,
+      });
+      await c.req.raw.body?.cancel();
+      // 4xx だと relay が配送の失敗として再送しうるので、受け付けたことにして捨てる
+      return new Response(null, { status: 202 });
+    }
+  }
   return federation.fetch(c.req.raw, {
     contextData: await contextDataFactory(c),
     async onNotFound(request) {

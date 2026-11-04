@@ -24,13 +24,36 @@ const createActivity = (note: Note) =>
     getObject: vi.fn(async () => note),
   }) as unknown as Announce;
 
-const createCtx = (documentLoader: unknown = vi.fn()) =>
+const createCtx = (documentLoader: unknown = vi.fn(), parsedUri: unknown = null) =>
   ({
-    parseUri: vi.fn(() => null),
+    parseUri: vi.fn(() => parsedUri),
     documentLoader,
   }) as never;
 
-const createDeps = (relay: unknown) => {
+const createLocalActivity = (objectUri: string) =>
+  ({
+    id: new URL('https://announcer.example/activities/2'),
+    actorId: new URL('https://announcer.example/users/bob'),
+    objectId: new URL(objectUri),
+    getObject: vi.fn(),
+  }) as unknown as Announce;
+
+const createLocalCtx = (className: 'Note' | 'Article', id: string) =>
+  ({
+    parseUri: vi.fn(() => ({
+      type: 'object',
+      class: { typeId: new URL(`https://www.w3.org/ns/activitystreams#${className}`) },
+      values: { identifier: 'kosui', id },
+    })),
+    documentLoader: vi.fn(),
+  }) as never;
+
+const createDeps = (
+  relay: unknown,
+  followed = true,
+  acceptedRelays: unknown[] = [],
+  article: unknown = undefined,
+) => {
   const documentLoader = vi.fn();
   const addReceivedRepostUseCase = {
     run: vi.fn(async () => RA.ok({ actor: { uri: 'https://announcer.example/users/bob' } })),
@@ -38,20 +61,26 @@ const createDeps = (relay: unknown) => {
   const remotePostUpserter = {
     resolve: vi.fn(async () => RA.ok({ postId: 'post-1' })),
   };
+  const articleResolver = { resolve: vi.fn(async () => RA.ok(article)) };
   const federatedTimelineItemResolverByPostId = { resolve: vi.fn(async () => RA.ok(undefined)) };
   const federatedTimelineItemCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) };
+  const followedByLocalActorResolverByActorUri = { resolve: vi.fn(async () => RA.ok(followed)) };
+  const inboxActorResolver = {
+    resolve: vi.fn(async () =>
+      RA.ok({
+        actorIdentity: { uri: 'https://announcer.example/users/bob' },
+        documentLoaderOptions: { documentLoader },
+      })
+    ),
+  };
   const deps = {
     origin: 'https://iori.test',
     relayResolverByActorUri: { resolve: vi.fn(async () => RA.ok(relay)) },
-    inboxActorResolver: {
-      resolve: vi.fn(async () =>
-        RA.ok({
-          actorIdentity: { uri: 'https://announcer.example/users/bob' },
-          documentLoaderOptions: { documentLoader },
-        })
-      ),
-    },
+    followedByLocalActorResolverByActorUri,
+    acceptedRelaysResolver: { resolve: vi.fn(async () => RA.ok(acceptedRelays)) },
+    inboxActorResolver,
     addReceivedRepostUseCase,
+    articleResolver,
     remotePostUpserter,
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
@@ -61,7 +90,10 @@ const createDeps = (relay: unknown) => {
     documentLoader,
     addReceivedRepostUseCase,
     remotePostUpserter,
+    articleResolver,
     federatedTimelineItemCreatedStore,
+    followedByLocalActorResolverByActorUri,
+    inboxActorResolver,
   };
 };
 
@@ -216,5 +248,205 @@ describe('createOnAnnounce', () => {
 
     expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  describe('Announce of a local object', () => {
+    const noteId = crypto.randomUUID();
+    const articleId = crypto.randomUUID();
+    const rootPostId = crypto.randomUUID();
+    const noteUri = `https://iori.test/users/kosui/posts/${noteId}`;
+    const articleUri = `https://iori.test/users/kosui/articles/${articleId}`;
+
+    it('passes a local Note to the local branch with its post id', async () => {
+      const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined);
+
+      await createOnAnnounce(deps)(createLocalCtx('Note', noteId), createLocalActivity(noteUri));
+
+      expect(articleResolver.resolve).not.toHaveBeenCalled();
+      expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith({
+        type: 'local',
+        announceActivityUri: 'https://announcer.example/activities/2',
+        repostedPostId: noteId,
+        reposterIdentity: { uri: 'https://announcer.example/users/bob' },
+      });
+    });
+
+    it('passes a local Article to the local branch with the root post id of the article', async () => {
+      const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined, true, [], {
+        articleId,
+        rootPostId,
+        status: 'published',
+      });
+
+      await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
+
+      expect(articleResolver.resolve).toHaveBeenCalledWith(articleId);
+      expect(addReceivedRepostUseCase.run).toHaveBeenCalledOnce();
+      expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith({
+        type: 'local',
+        announceActivityUri: 'https://announcer.example/activities/2',
+        repostedPostId: rootPostId,
+        reposterIdentity: { uri: 'https://announcer.example/users/bob' },
+      });
+    });
+
+    it('stops without calling the use case when the Article has no root post', async () => {
+      const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], {
+        articleId,
+        rootPostId: null,
+        status: 'published',
+      });
+
+      await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
+
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    });
+
+    it.each(['unpublished', 'draft'] as const)(
+      'stops without calling the use case when the Article is %s',
+      async (status) => {
+        const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], { articleId, rootPostId, status });
+
+        await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
+
+        expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+      },
+    );
+
+    it('stops without calling the use case when the Article does not exist', async () => {
+      const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], undefined);
+
+      await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
+
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    });
+
+    it('stops without calling the use case when the Article id is not a valid id', async () => {
+      const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined);
+
+      await createOnAnnounce(deps)(createLocalCtx('Article', 'not-a-uuid'), createLocalActivity(articleUri));
+
+      expect(articleResolver.resolve).not.toHaveBeenCalled();
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not save a remote Announce from an actor no local actor follows', async () => {
+    const { deps, addReceivedRepostUseCase, inboxActorResolver, followedByLocalActorResolverByActorUri } = createDeps(
+      undefined,
+      false,
+    );
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(followedByLocalActorResolverByActorUri.resolve).toHaveBeenCalledWith({
+      actorUri: 'https://announcer.example/users/bob',
+    });
+    expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  it('saves a remote Announce from an actor a local actor follows', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined, true);
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledOnce();
+  });
+
+  it('saves a local Note Announce even from an actor no local actor follows', async () => {
+    const { deps, addReceivedRepostUseCase, followedByLocalActorResolverByActorUri } = createDeps(undefined, false);
+    const postId = '00000000-0000-4000-8000-000000000001';
+    const parsedUri = {
+      type: 'object',
+      class: { typeId: new URL('https://www.w3.org/ns/activitystreams#Note') },
+      values: { id: postId },
+    };
+
+    await createOnAnnounce(deps)(createCtx(vi.fn(), parsedUri), createActivity(createNote([])));
+
+    expect(followedByLocalActorResolverByActorUri.resolve).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'local', repostedPostId: postId }),
+    );
+  });
+
+  it('does not check follows for a relay Announce', async () => {
+    const { deps, followedByLocalActorResolverByActorUri, federatedTimelineItemCreatedStore } = createDeps({
+      status: 'accepted',
+      actorUri: 'https://relay.example/actor',
+      relayId: 'relay-1',
+    }, false);
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(followedByLocalActorResolverByActorUri.resolve).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+  });
+
+  it('saves a federated timeline item from an unfollowed actor Announce when exactly one relay is accepted', async () => {
+    const { deps, addReceivedRepostUseCase, federatedTimelineItemCreatedStore, remotePostUpserter } = createDeps(
+      undefined,
+      false,
+      [{ relayId: 'relay-1', actorUri: 'https://relay.example/actor' }],
+    );
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+    expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [0, []],
+    [2, [{ relayId: 'relay-1' }, { relayId: 'relay-2' }]],
+  ])('creates nothing from an unfollowed actor Announce when %i relays are accepted', async (_count, relays) => {
+    const { deps, addReceivedRepostUseCase, federatedTimelineItemCreatedStore, remotePostUpserter } = createDeps(
+      undefined,
+      false,
+      relays,
+    );
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  it('creates nothing from an unfollowed actor Announce whose object is not a Note', async () => {
+    const { deps, addReceivedRepostUseCase, federatedTimelineItemCreatedStore, remotePostUpserter } = createDeps(
+      undefined,
+      false,
+      [{ relayId: 'relay-1' }],
+    );
+    const activity = {
+      ...createActivity(createNote([])),
+      getObject: vi.fn(async () => new Person({ id: new URL('https://remote.example/users/alice') })),
+    } as unknown as Announce;
+
+    await createOnAnnounce(deps)(createCtx(), activity);
+
+    expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  it('creates nothing from an unfollowed actor Announce when fetching the object fails', async () => {
+    const { deps, addReceivedRepostUseCase, federatedTimelineItemCreatedStore } = createDeps(undefined, false, [
+      { relayId: 'relay-1' },
+    ]);
+    const activity = {
+      ...createActivity(createNote([])),
+      getObject: vi.fn(async () => {
+        throw new Error('fetch failed');
+      }),
+    } as unknown as Announce;
+
+    await createOnAnnounce(deps)(createCtx(), activity);
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
   });
 });
