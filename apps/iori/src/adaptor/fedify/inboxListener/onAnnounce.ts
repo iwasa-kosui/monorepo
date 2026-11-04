@@ -1,4 +1,6 @@
-import { type Announce, type DocumentLoader, type InboxContext, isActor, Note } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { type Announce, isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

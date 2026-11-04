@@ -1,4 +1,4 @@
-import { Person } from '@fedify/fedify';
+import { Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 

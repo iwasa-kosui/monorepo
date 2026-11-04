@@ -1,4 +1,4 @@
-import { type DocumentLoader, getDocumentLoader } from '@fedify/fedify';
+import { type DocumentLoader, getDocumentLoader } from '@fedify/vocab-runtime';
 
 const PRELOADED_CONTEXTS: Record<string, object> = {
   'http://joinmastodon.org/ns': {

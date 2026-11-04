@@ -1,4 +1,5 @@
-import { Application, Endpoints, Image, Person, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Application, Endpoints, Image, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -24,7 +25,7 @@ const getInstance = () => {
       }),
       url: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
       publicKey: keys.at(0)?.cryptographicKey,
-      assertionMethods: keys.map((k) => k.multikey),
+      assertionMethods: keys.map((k) => k.multikey.clone({ id: k.keyId })),
     });
   };
 
@@ -58,7 +59,7 @@ const getInstance = () => {
               : undefined,
             url: ctx.getActorUri(identifier),
             publicKey: keys.at(0)?.cryptographicKey,
-            assertionMethods: keys.map((k) => k.multikey),
+            assertionMethods: keys.map((k) => k.multikey.clone({ id: k.keyId })),
             followers: ctx.getFollowersUri(identifier),
           });
         },

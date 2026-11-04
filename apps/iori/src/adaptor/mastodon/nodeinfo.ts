@@ -1,9 +1,9 @@
-import { type NodeInfo, parseSemVer } from '@fedify/fedify';
+import type { NodeInfo } from '@fedify/fedify';
 
 export const buildNodeInfo = (ioriVersion: string): NodeInfo => ({
   software: {
     name: 'iori',
-    version: parseSemVer(ioriVersion),
+    version: ioriVersion,
   },
   protocols: ['activitypub'],
   openRegistrations: false,

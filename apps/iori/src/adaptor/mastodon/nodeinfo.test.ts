@@ -8,7 +8,7 @@ describe('buildNodeInfo', () => {
     const nodeInfo = buildNodeInfo('1.2.3');
 
     expect(nodeInfo).toMatchObject({
-      software: { name: 'iori', version: { major: 1, minor: 2, patch: 3 } },
+      software: { name: 'iori', version: '1.2.3' },
       protocols: ['activitypub'],
       openRegistrations: false,
       usage: { users: { total: 1 } },

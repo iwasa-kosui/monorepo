@@ -149,7 +149,11 @@ describe('Cloudflare Fedify message queue', () => {
     const outboxMessageOfBytes = (index: number, bytes: number) =>
       outboxMessage(index, bytes - estimate(outboxMessage(index, 0)));
     const bodiesOf = (sendBatch: ReturnType<typeof vi.fn>) =>
-      sendBatch.mock.calls.map((call) => (call[0] as { body: { id: string } }[]).map((request) => request.body));
+      sendBatch.mock.calls.map((call) =>
+        (call[0] as { body: { __fedify_payload__: { id: string } } }[]).map((request) =>
+          request.body.__fedify_payload__
+        )
+      );
 
     it('splits 72 messages of about 7 KB into batches within the count and size limits', async () => {
       const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);

@@ -1,4 +1,5 @@
-import { Follow, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { ActorIdentity, ParseActorIdentityError } from '../adaptor/fedify/actorIdentity.ts';

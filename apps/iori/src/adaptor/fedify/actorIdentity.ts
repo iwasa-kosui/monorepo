@@ -1,4 +1,5 @@
-import type { Actor, DocumentLoader } from '@fedify/fedify';
+import type { Actor } from '@fedify/vocab';
+import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 
 export type ActorIdentity = Readonly<{

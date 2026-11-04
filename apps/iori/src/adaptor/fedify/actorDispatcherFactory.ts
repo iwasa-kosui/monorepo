@@ -1,4 +1,5 @@
-import { Application, Endpoints, Image, Person, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Application, Endpoints, Image, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -24,7 +25,7 @@ export const createActorDispatcher = ({ userResolverByUsername, actorResolverByU
       endpoints: new Endpoints({ sharedInbox: ctx.getInboxUri() }),
       url: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
       publicKey: keys.at(0)?.cryptographicKey,
-      assertionMethods: keys.map((key) => key.multikey),
+      assertionMethods: keys.map((key) => key.multikey.clone({ id: key.keyId })),
     });
   };
 
@@ -53,7 +54,7 @@ export const createActorDispatcher = ({ userResolverByUsername, actorResolverByU
               ? undefined
               : new Image({ url: new URL(actor.logoUri), mediaType: 'image/png' }),
             publicKey: keys.at(0)?.cryptographicKey,
-            assertionMethods: keys.map((key) => key.multikey),
+            assertionMethods: keys.map((key) => key.multikey.clone({ id: key.keyId })),
           });
         },
         err: (error) => {

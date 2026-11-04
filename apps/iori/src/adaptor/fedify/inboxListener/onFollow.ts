@@ -1,4 +1,5 @@
-import { Accept, type Follow, type InboxContext } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Accept, type Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

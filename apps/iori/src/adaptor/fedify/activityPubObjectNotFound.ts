@@ -2,6 +2,7 @@ import type { Federation } from '@fedify/fedify';
 import type { Context, MiddlewareHandler } from 'hono';
 
 const OBJECT_PATH = /^\/users\/[^/]+\/(?:articles|posts)\/[^/]+$/;
+const INBOX_PATH = /^(?:\/users\/[^/]+)?\/inbox$/;
 const MEDIA_TYPE = /^\s*([^\s/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
 
 const preferredMediaTypes = (accept: string): string[] =>
@@ -37,8 +38,9 @@ export const federationWithObjectNotFound = <TContextData>(
   federation: Federation<TContextData>,
   contextDataFactory: (c: Context) => TContextData | Promise<TContextData>,
 ): MiddlewareHandler =>
-async (c, next) =>
-  federation.fetch(c.req.raw, {
+async (c, next) => {
+  if (c.req.method === 'POST' && !INBOX_PATH.test(c.req.path)) return next();
+  return federation.fetch(c.req.raw, {
     contextData: await contextDataFactory(c),
     async onNotFound(request) {
       if (isActivityPubObjectRequest(request)) {
@@ -56,3 +58,4 @@ async (c, next) =>
       });
     },
   });
+};

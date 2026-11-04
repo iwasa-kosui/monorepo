@@ -1,5 +1,7 @@
 import type { ExecutionContext, Queue } from '@cloudflare/workers-types';
-import { Create, exportJwk, fetchDocumentLoader, generateCryptoKeyPair } from '@fedify/fedify';
+import { exportJwk, generateCryptoKeyPair } from '@fedify/fedify';
+import { Create } from '@fedify/vocab';
+import { getDocumentLoader } from '@fedify/vocab-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 // @ts-expect-error Node ESM runner has no generated declaration.
@@ -457,7 +459,7 @@ describe('Worker fixture', () => {
     const activity = await new Create({
       id: new URL(`${origin}/activities/fixture`),
       actor: new URL(`${origin}/users/fixture`),
-    }).toJsonLd({ format: 'compact', contextLoader: fetchDocumentLoader });
+    }).toJsonLd({ format: 'compact', contextLoader: getDocumentLoader() });
     const senderKeys = [{ keyId: `${origin}/users/fixture#main-key`, privateKey }];
     await worker.queue(
       {
@@ -517,7 +519,7 @@ describe('Worker fixture', () => {
     const activity = await new Create({
       id: new URL(`${origin}/activities/fixture-fanout`),
       actor: new URL(`${origin}/users/fixture`),
-    }).toJsonLd({ format: 'compact', contextLoader: fetchDocumentLoader });
+    }).toJsonLd({ format: 'compact', contextLoader: getDocumentLoader() });
     const env = {
       ...makeEnv(new FixtureD1(await makeSeed())),
       FEDIFY_QUEUE: { send: async () => {}, sendBatch } as unknown as IoriWorkerEnv['FEDIFY_QUEUE'],

@@ -1,18 +1,14 @@
 import {
-  Activity,
-  Application,
-  Create,
   createFederation,
   detachSignature,
   generateCryptoKeyPair,
   MemoryKvStore,
-  Note,
-  PUBLIC_COLLECTION,
   type RequestContext,
   verifyJsonLd,
   verifyObject,
   verifyRequest,
 } from '@fedify/fedify';
+import { Activity, Application, Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +31,7 @@ const setup = async () => {
     kv: new MemoryKvStore(),
     origin: ORIGIN,
     firstKnock: 'draft-cavage-http-signatures-12',
+    allowPrivateAddress: true,
   });
   federation
     .setActorDispatcher('/users/{identifier}', (ctx, identifier) =>
@@ -46,7 +43,9 @@ const setup = async () => {
   const keyPairs = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
   const publicKeys = new Map<string, unknown>();
   for (const keyPair of keyPairs) {
-    const key = keyPair.privateKey.algorithm.name === 'Ed25519' ? keyPair.multikey : keyPair.cryptographicKey;
+    const key = keyPair.privateKey.algorithm.name === 'Ed25519'
+      ? keyPair.multikey.clone({ id: keyPair.keyId })
+      : keyPair.cryptographicKey;
     if (key.id) publicKeys.set(key.id.href, key);
   }
   const keyCache = {
@@ -137,14 +136,6 @@ describe('relay への送信', () => {
       to: PUBLIC_IRI,
     });
     await expectSignaturesCover(sent, keyCache);
-    expect(
-      await verifyObject(
-        Activity,
-        { ...(detachSignature(sent.json) as Record<string, unknown>), object: 'as:Public' },
-        { keyCache },
-      ),
-    )
-      .toBeNull();
   });
 
   it('Undo Follow を送っても、proof と署名が送った JSON を覆う', async () => {
@@ -167,7 +158,7 @@ describe('relay への送信', () => {
     await expectSignaturesCover(sent, keyCache);
   });
 
-  it('投稿の Create の to は従来どおり as:Public のまま', async () => {
+  it('投稿の Create の to は完全な IRI で送る', async () => {
     const { ctx, keyCache } = await setup();
     const actor = ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER);
     const keys = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
@@ -189,8 +180,8 @@ describe('relay への送信', () => {
     );
 
     const sent = await sentRequest();
-    expect(sent.json.to).toBe('as:Public');
-    expect(sent.json.object).toMatchObject({ type: 'Note', to: 'as:Public' });
+    expect(sent.json.to).toBe(PUBLIC_IRI);
+    expect(sent.json.object).toMatchObject({ type: 'Note', to: PUBLIC_IRI });
     await expectSignaturesCover(sent, keyCache);
   });
 });

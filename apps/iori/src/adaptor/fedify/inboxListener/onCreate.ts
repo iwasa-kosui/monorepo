@@ -1,4 +1,5 @@
-import { Create, type InboxContext, Note } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

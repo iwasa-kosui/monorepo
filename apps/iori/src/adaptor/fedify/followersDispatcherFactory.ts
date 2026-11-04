@@ -1,4 +1,5 @@
-import { type Context, type Recipient } from '@fedify/fedify';
+import { type Context } from '@fedify/fedify';
+import { type Recipient } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
