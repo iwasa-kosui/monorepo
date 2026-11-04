@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Note } from '@fedify/vocab';
+import { Article as FedifyArticle, Document, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +7,8 @@ import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
+import type { PostImage } from '../../domain/image/image.ts';
+import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { LocalPost, Post, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
@@ -194,11 +196,15 @@ const createRemotePost = (visibility: Visibility | null): RemotePost => ({
   visibility,
 });
 
-const createNoteDispatcher = (post: Post | undefined, users: readonly User[] = [author]) =>
+const createNoteDispatcher = (
+  post: Post | undefined,
+  users: readonly User[] = [author],
+  postImages: readonly PostImage[] = [],
+) =>
   createObjectDispatcher({
     origin: 'https://example.com',
     postResolver: { resolve: vi.fn(async () => RA.ok(post)) } as unknown as PostResolver,
-    postImagesResolver: { resolve: vi.fn(async () => RA.ok([])) } as never,
+    postImagesResolver: { resolve: vi.fn(async () => RA.ok(postImages)) } as never,
     userResolverByUsername: {
       resolve: vi.fn(async (username: string) => RA.ok(users.find((user) => user.username === username))),
     } as never,
@@ -288,5 +294,50 @@ describe('createObjectDispatcher ofNote', () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  const createImage = (post: LocalPost, url: string, altText: string | null): PostImage => ({
+    imageId: ImageId.generate(),
+    postId: post.postId,
+    url,
+    altText,
+    createdAt: post.createdAt,
+  });
+
+  const getDocuments = async (note: Note) => {
+    const documents: Document[] = [];
+    for await (const attachment of note.getAttachments()) {
+      documents.push(attachment as Document);
+    }
+    return documents;
+  };
+
+  it('altText のある添付は、Document の name に altText を入れる', async () => {
+    const post = createLocalPost();
+    const images = [createImage(post, '/media/a.png', '猫の写真')];
+
+    const result = await createNoteDispatcher(post, [author], images).ofNote(createContext(), {
+      id: post.postId,
+      identifier: 'kosui',
+    });
+
+    const [document] = await getDocuments(result as Note);
+    expect(document?.name?.toString()).toBe('猫の写真');
+    expect(document?.url?.href).toBe('https://example.com/media/a.png');
+    expect(document?.mediaType).toBe('image/png');
+  });
+
+  it.each([null, ''])('altText が %j の添付は、Document に name を付けない', async (altText) => {
+    const post = createLocalPost();
+    const images = [createImage(post, '/media/a.png', altText)];
+
+    const result = await createNoteDispatcher(post, [author], images).ofNote(createContext(), {
+      id: post.postId,
+      identifier: 'kosui',
+    });
+
+    const [document] = await getDocuments(result as Note);
+    expect(document).toBeInstanceOf(Document);
+    expect(document?.name).toBeNull();
   });
 });

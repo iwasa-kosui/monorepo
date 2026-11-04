@@ -24,6 +24,7 @@ import { createD1FederatedTimelineItemDeletedStore } from '../../d1/federatedTim
 import { createD1FederatedTimelineItemResolverByPostId } from '../../d1/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
 import { createD1FederatedTimelineItemsResolverByPostId } from '../../d1/federatedTimeline/federatedTimelineItemsResolverByPostId.ts';
 import { createD1FollowAcceptedStore } from '../../d1/follow/followAcceptedStore.ts';
+import { createD1FollowedByLocalActorResolverByActorUri } from '../../d1/follow/followedByLocalActorResolverByActorUri.ts';
 import { createD1FollowResolver } from '../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../d1/image/postImageCreatedStore.ts';
@@ -57,6 +58,7 @@ import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../d1/post/postResolverByUri.ts';
 import { createD1RemotePostUpserter } from '../../d1/post/remotePostUpserter.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1AcceptedRelaysResolver } from '../../d1/relay/acceptedRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../../d1/relay/relayResolverByActorUri.ts';
 import { createD1RelaySubscriptionAcceptedStore } from '../../d1/relay/relaySubscriptionAcceptedStore.ts';
 import { createD1RepostCreatedStore } from '../../d1/repost/repostCreatedStore.ts';
@@ -253,6 +255,8 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     onAnnounce: {
       origin,
       relayResolverByActorUri: createD1RelayResolverByActorUri(db),
+      followedByLocalActorResolverByActorUri: createD1FollowedByLocalActorResolverByActorUri(db),
+      acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
       inboxActorResolver,
       addReceivedRepostUseCase,
       remotePostUpserter,

@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Document, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Article as FedifyArticle, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
@@ -8,7 +8,6 @@ import type { ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
-import { getMimeTypeFromUrl } from '../../domain/image/mimeType.ts';
 import { Post, type PostResolver, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
@@ -16,6 +15,7 @@ import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { toImageDocument } from '../../useCase/helper/postImageDocument.ts';
 import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
@@ -68,9 +68,7 @@ export const createObjectDispatcher = ({
             published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
             url: ctx.getObjectUri(Note, values),
             replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
-            attachments: postImages.map((image) =>
-              new Document({ url: new URL(image.url, origin), mediaType: getMimeTypeFromUrl(image.url) })
-            ),
+            attachments: postImages.map((image) => toImageDocument(image, origin)),
           }),
         err: (error) => {
           getLogger().warn(`Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${error}`);
