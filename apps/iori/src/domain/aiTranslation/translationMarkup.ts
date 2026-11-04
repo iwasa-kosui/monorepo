@@ -1,11 +1,6 @@
 export const MAX_TRANSLATION_INPUT_CHARS = 5000;
 export const TRUNCATION_NOTICE = '（以下省略）';
 
-export type TranslationSource = Readonly<{
-  text: string;
-  anchors: ReadonlyArray<string>;
-}>;
-
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   amp: '&',
   lt: '<',
@@ -35,27 +30,65 @@ const escapeHtml = (text: string): string =>
     .replace(/'/g, '&#39;');
 
 const marker = (n: number): string => `⟦${n}⟧`;
+const paragraphMarker = (n: number): string => `⟪${n}⟫`;
 
-export const toTranslationSource = (html: string): TranslationSource => {
-  const anchors: string[] = [];
-  const text = decodeEntities(
-    html
-      .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/<a\b[^>]*>[\s\S]*?<\/a\s*>/gi, (anchor) => {
-        anchors.push(anchor);
-        return marker(anchors.length);
-      })
-      .replace(/<\/p\s*>\s*<p\b[^>]*>/gi, '\n\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]*>/g, ''),
-  )
+const KEPT_REMAINDER = /^(?:RE|QT):$/i;
+
+export type TranslationParagraph =
+  | Readonly<{ kind: 'translate' }>
+  | Readonly<{ kind: 'keep'; html: string }>;
+
+export type TranslationSource = Readonly<{
+  text: string;
+  anchors: ReadonlyArray<string>;
+  paragraphs: ReadonlyArray<TranslationParagraph>;
+}>;
+
+const normalizeParagraph = (text: string): string =>
+  text
     .split('\n')
     .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return { text, anchors };
+
+const renderParagraph = (text: string, resolve: (n: number) => string | undefined): string =>
+  escapeHtml(text)
+    .replace(/⟦\s*(\d+)\s*⟧/g, (_match, digits: string) => resolve(Number(digits)) ?? '')
+    .trim()
+    .replace(/\n/g, '<br>');
+
+export const toTranslationSource = (html: string): TranslationSource => {
+  const all: string[] = [];
+  const chunks = html
+    .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<a\b[^>]*>[\s\S]*?<\/a\s*>/gi, (anchor) => {
+      all.push(anchor);
+      return marker(all.length);
+    })
+    .split(/<\/p\s*>\s*<p\b[^>]*>/i);
+  const anchors: string[] = [];
+  const paragraphs: TranslationParagraph[] = [];
+  const texts: string[] = [];
+  for (const chunk of chunks) {
+    const text = normalizeParagraph(decodeEntities(chunk.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '')));
+    if (text === '') continue;
+    const remainder = text.replace(/⟦\d+⟧/g, '').replace(/\s+/g, '');
+    if (remainder === '' || KEPT_REMAINDER.test(remainder)) {
+      paragraphs.push({ kind: 'keep', html: renderParagraph(text, (n) => all[n - 1]) });
+      continue;
+    }
+    const renumbered = text.replace(/⟦(\d+)⟧/g, (match, digits: string) => {
+      const anchor = all[Number(digits) - 1];
+      if (anchor === undefined) return match;
+      anchors.push(anchor);
+      return marker(anchors.length);
+    });
+    paragraphs.push({ kind: 'translate' });
+    texts.push(`${paragraphMarker(texts.length + 1)} ${renumbered}`);
+  }
+  return { text: texts.join('\n\n'), anchors, paragraphs };
 };
 
 export const truncateTranslationSource = (
@@ -64,38 +97,79 @@ export const truncateTranslationSource = (
 ): Readonly<{ source: TranslationSource; truncated: boolean }> => {
   const chars = Array.from(source.text);
   if (chars.length <= maxChars) return { source, truncated: false };
-  const text = chars.slice(0, maxChars).join('').replace(/⟦\d*$/, '').trimEnd();
+  const text = chars.slice(0, maxChars).join('').replace(/[⟦⟪]\d*$/, '').trimEnd();
   const kept = Array.from(text.matchAll(/⟦(\d+)⟧/g)).reduce((max, match) => Math.max(max, Number(match[1])), 0);
-  return { source: { text, anchors: source.anchors.slice(0, kept) }, truncated: true };
+  const keptParagraphs = Array.from(text.matchAll(/⟪\d+⟫/g)).length;
+  const translateIndexes = source.paragraphs.flatMap((paragraph, index) =>
+    paragraph.kind === 'translate' ? [index] : []
+  );
+  const end = (translateIndexes[keptParagraphs - 1] ?? -1) + 1;
+  return {
+    source: { text, anchors: source.anchors.slice(0, kept), paragraphs: source.paragraphs.slice(0, end) },
+    truncated: true,
+  };
 };
 
-export const fromTranslatedText = (text: string, anchors: ReadonlyArray<string>): string => {
-  const used = new Set<number>();
-  const paragraphs = text
-    .replace(/\r\n?/g, '\n')
+type Piece = Readonly<{ html: string; translated: boolean }>;
+
+const tidy = (text: string): string =>
+  text
     .split('\n')
     .map((line) => line.trimEnd())
     .join('\n')
-    .trim()
-    .split(/\n{2,}/)
-    .map((paragraph) =>
-      escapeHtml(paragraph).replace(/⟦\s*(\d+)\s*⟧/g, (_match, digits: string) => {
-        const n = Number(digits);
-        const anchor = anchors[n - 1];
-        if (anchor === undefined) return '';
-        used.add(n);
-        return anchor;
-      })
-    )
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph !== '');
+    .trim();
+
+export const fromTranslatedText = (
+  text: string,
+  { anchors, paragraphs }: Pick<TranslationSource, 'anchors' | 'paragraphs'>,
+): string => {
+  const used = new Set<number>();
+  const render = (segment: string): string =>
+    renderParagraph(segment, (n) => {
+      const anchor = anchors[n - 1];
+      if (anchor !== undefined) used.add(n);
+      return anchor;
+    });
+  const normalized = text.replace(/\r\n?/g, '\n');
+  const [preamble = '', ...rest] = tidy(normalized).split(/⟪\s*(\d+)\s*⟫/);
+  const numbers = rest.filter((_part, index) => index % 2 === 0).map(Number);
+  const segments = rest.filter((_part, index) => index % 2 === 1);
+  const translateCount = paragraphs.filter((paragraph) => paragraph.kind === 'translate').length;
+  const marked = preamble.trim() === ''
+    && numbers.length === translateCount
+    && numbers.every((n, index) => n === index + 1);
+
+  const pieces: Piece[] = [];
+  if (marked) {
+    const rendered = segments.map(render);
+    let next = 0;
+    for (const paragraph of paragraphs) {
+      if (paragraph.kind === 'keep') pieces.push({ html: paragraph.html, translated: false });
+      else pieces.push({ html: rendered[next++] ?? '', translated: true });
+    }
+  } else {
+    const group = tidy(normalized.replace(/⟪\s*\d+\s*⟫[^\S\n]*/g, ''))
+      .split(/\n{2,}/)
+      .map((segment) => ({ html: render(segment), translated: true }));
+    let placed = false;
+    for (const paragraph of paragraphs) {
+      if (paragraph.kind === 'keep') pieces.push({ html: paragraph.html, translated: false });
+      else if (!placed) {
+        pieces.push(...group);
+        placed = true;
+      }
+    }
+    if (!placed) pieces.push(...group);
+  }
+
+  const visible = pieces.filter((piece) => piece.html !== '');
   const missing = anchors.filter((_anchor, index) => !used.has(index + 1));
   if (missing.length > 0) {
-    const last = paragraphs.length - 1;
-    if (last < 0) paragraphs.push(missing.join(' '));
-    else paragraphs[last] = `${paragraphs[last]} ${missing.join(' ')}`;
+    const last = visible.findLastIndex((piece) => piece.translated);
+    if (last < 0) visible.push({ html: missing.join(' '), translated: true });
+    else visible[last] = { html: `${visible[last]!.html} ${missing.join(' ')}`, translated: true };
   }
-  return paragraphs.map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`).join('');
+  return visible.map((piece) => `<p>${piece.html}</p>`).join('');
 };
 
 export const withTruncationNotice = (html: string): string => `${html}<p>${TRUNCATION_NOTICE}</p>`;
