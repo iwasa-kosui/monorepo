@@ -58,9 +58,11 @@ const createWorkersKvStore = (kv: KVNamespace): KvStore => new WorkersKvStore(kv
 
 const QUEUE_FAILURE_MESSAGE_LIMIT = 500;
 
-const describeQueueFailure = (error: unknown): Readonly<{ name: string; message: string } | { thrownType: string }> =>
+const describeQueueFailure = (
+  error: unknown,
+): Readonly<{ name: string; errorMessage: string } | { thrownType: string }> =>
   error instanceof Error
-    ? { name: error.name, message: error.message.slice(0, QUEUE_FAILURE_MESSAGE_LIMIT) }
+    ? { name: error.name, errorMessage: error.message.slice(0, QUEUE_FAILURE_MESSAGE_LIMIT) }
     : { thrownType: typeof error };
 
 export type WaitUntil = (promise: Promise<unknown>) => void;

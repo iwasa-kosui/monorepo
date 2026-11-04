@@ -270,7 +270,7 @@ describe('Cloudflare Fedify message queue', () => {
         sentBatches: 1,
         totalBatches: 4,
         name: 'TypeError',
-        message: 'x'.repeat(500),
+        errorMessage: 'x'.repeat(500),
       });
       error.mockRestore();
     });
@@ -372,7 +372,7 @@ describe('Cloudflare Fedify message queue', () => {
     expect(error).toHaveBeenCalledOnce();
     expect(error).toHaveBeenCalledWith('Fedify queue send failed.', {
       name: 'TypeError',
-      message: 'x'.repeat(500),
+      errorMessage: 'x'.repeat(500),
     });
     expect(JSON.stringify(error.mock.calls)).not.toMatch(/stack|hidden cause|queue-body/);
     error.mockRestore();
@@ -411,7 +411,7 @@ describe('processCloudflareFedifyMessages', () => {
     expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
     expect(error).toHaveBeenCalledWith('Fedify queued task failed.', {
       name: 'Error',
-      message: 'fixture failure',
+      errorMessage: 'fixture failure',
     });
     error.mockRestore();
   });
@@ -429,7 +429,7 @@ describe('processCloudflareFedifyMessages', () => {
     expect(error).toHaveBeenCalledOnce();
     const [label, detail] = error.mock.calls[0] ?? [];
     expect(label).toBe('Fedify queued task failed.');
-    expect(detail).toEqual({ name: 'TypeError', message: 'x'.repeat(500) });
+    expect(detail).toEqual({ name: 'TypeError', errorMessage: 'x'.repeat(500) });
     expect(JSON.stringify(error.mock.calls)).not.toMatch(/stack|hidden cause|queue-body/);
     error.mockRestore();
   });
@@ -543,7 +543,7 @@ describe('processCloudflareFedifyMessages retry delays', () => {
       expect(retry).toHaveBeenCalledOnce();
       expect(retry).toHaveBeenCalledWith({ delaySeconds });
       expect(ack).not.toHaveBeenCalled();
-      expect(logged).toEqual([['Fedify queued task failed.', { name: 'SendActivityError', message: 'HTTP 503' }]]);
+      expect(logged).toEqual([['Fedify queued task failed.', { name: 'SendActivityError', errorMessage: 'HTTP 503' }]]);
     },
   );
 
@@ -603,7 +603,10 @@ describe('processCloudflareFedifyMessages retry delays', () => {
         expect(retry).toHaveBeenCalledOnce();
         expect(retry).toHaveBeenCalledWith();
         expect(ack).not.toHaveBeenCalled();
-        expect(logged).toEqual([['Fedify queued task failed.', { name: 'SendActivityError', message: 'HTTP 403' }]]);
+        expect(logged).toEqual([['Fedify queued task failed.', {
+          name: 'SendActivityError',
+          errorMessage: 'HTTP 403',
+        }]]);
       }
     },
   );
