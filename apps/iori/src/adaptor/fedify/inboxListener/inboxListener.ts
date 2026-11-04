@@ -221,6 +221,7 @@ const create = () => {
     },
     onDelete: {
       remotePostResolverByUri: PgPostResolverByUri.getInstance(),
+      actorResolverById: PgActorResolverById.getInstance(),
       timelineItemsResolverByPostId: PgTimelineItemsResolverByPostId.getInstance(),
       likeNotificationsResolverByPostId: PgLikeNotificationsResolverByPostId.getInstance(),
       emojiReactNotificationsResolverByPostId: PgEmojiReactNotificationsResolverByPostId.getInstance(),
