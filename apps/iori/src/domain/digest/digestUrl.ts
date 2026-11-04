@@ -1,4 +1,10 @@
 const UTM_PREFIX = 'utm_';
+const ROUTING_FRAGMENT = /^#[/!]/;
+
+const withoutUtmQuery = (search: string): string => {
+  const kept = search.slice(1).split('&').filter((part) => !part.toLowerCase().startsWith(UTM_PREFIX));
+  return search === '' || kept.length === 0 ? '' : `?${kept.join('&')}`;
+};
 
 export const normalizeDigestUrl = (url: string): string => {
   let parsed: URL;
@@ -8,8 +14,8 @@ export const normalizeDigestUrl = (url: string): string => {
     return url;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return url;
-  for (const key of [...parsed.searchParams.keys()]) {
-    if (key.toLowerCase().startsWith(UTM_PREFIX)) parsed.searchParams.delete(key);
-  }
-  return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, '')}${parsed.search}`;
+  const fragment = ROUTING_FRAGMENT.test(parsed.hash) ? parsed.hash : '';
+  return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, '')}${
+    withoutUtmQuery(parsed.search)
+  }${fragment}`;
 };

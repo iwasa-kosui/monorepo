@@ -8,6 +8,7 @@ import {
   type DigestTopicEmbedded,
   type DigestTopicEmbeddedStore,
   type DigestTopicsResolverByUserId,
+  type StoredDigestTopic,
 } from '../domain/digestTopic/digestTopic.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
@@ -17,7 +18,7 @@ import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ userId: UserId }>;
 
-type Ok = Readonly<{ created: number; embedded: number }>;
+type Ok = Readonly<{ created: number; embedded: number; topics: ReadonlyArray<StoredDigestTopic> }>;
 
 type Err = never;
 
@@ -38,7 +39,7 @@ const create = ({
   textEmbedder,
   now,
 }: Deps): EnsureDefaultDigestTopicsUseCase => {
-  const run = async ({ userId }: Input): RA<Ok, Err> => {
+  const ensure = async (userId: UserId): Promise<Readonly<{ created: number; embedded: number }>> => {
     const registered = (await digestTopicsResolverByUserId.resolve(userId)).val;
     const registeredKeys = new Set(registered.map((topic) => topic.topicKey));
     const createdEvents: DigestTopicCreated[] = [];
@@ -55,7 +56,7 @@ const create = ({
       ...createdEvents.map((event) => event.aggregateState),
     ];
     if (textEmbedder === undefined || pending.length === 0) {
-      return RA.ok({ created: createdEvents.length, embedded: 0 });
+      return { created: createdEvents.length, embedded: 0 };
     }
 
     const vectors = await embedTextsOneByOneOnFailure(
@@ -70,7 +71,7 @@ const create = ({
     );
     if (!vectors.ok) {
       console.error('iori digest topics: embedding topics failed.', { errorMessage: vectors.err.message });
-      return RA.ok({ created: createdEvents.length, embedded: 0 });
+      return { created: createdEvents.length, embedded: 0 };
     }
     const timestamp = now();
     const embeddedEvents: DigestTopicEmbedded[] = [];
@@ -87,7 +88,13 @@ const create = ({
       }
     });
     if (embeddedEvents.length > 0) await digestTopicEmbeddedStore.store(...embeddedEvents);
-    return RA.ok({ created: createdEvents.length, embedded: embeddedEvents.length });
+    return { created: createdEvents.length, embedded: embeddedEvents.length };
+  };
+
+  const run = async ({ userId }: Input): RA<Ok, Err> => {
+    const counts = await ensure(userId);
+    const topics = (await digestTopicsResolverByUserId.resolve(userId)).val;
+    return RA.ok({ ...counts, topics });
   };
 
   return { run };

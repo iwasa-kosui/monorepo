@@ -11,9 +11,11 @@ const notice = (
   },
   edited = false,
   topicKey = 'genai',
+  items: ReadonlyArray<unknown> = topicKey === 'summary' ? [] : [{}],
 ) => ({
   digestDate: '2026-11-05',
   topicKey,
+  items,
   edited,
   excluded: { recommendations: false, ...excluded },
 });
@@ -63,6 +65,26 @@ describe('buildDigestPublishConfirmMessage', () => {
   it('除く項目がなければ確認の文面を返さない', () => {
     expect(buildDigestPublishConfirmMessage(notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false })))
       .toBeUndefined();
+  });
+
+  it('旧形式のまとめ（項目を持つ）には、公開を想定していない旨を出さない', () => {
+    expect(
+      buildDigestPublishConfirmMessage(
+        notice({ timelineLinks: 3, hatena: 0, hatenaCounts: true }, false, 'summary', [{}]),
+      ),
+    ).toBe(
+      [
+        '公開版では次の項目を除きます。',
+        '・みんなの関心（iori のタイムライン）3 件',
+        '・新着のはてなブックマーク数の表示',
+        '公開しますか？',
+      ].join('\n'),
+    );
+    expect(
+      buildDigestPublishConfirmMessage(
+        notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false }, false, 'summary', [{}]),
+      ),
+    ).toBeUndefined();
   });
 
   it('まとめなら、除く項目がなくても公開を想定していない旨と確認の文面を返す', () => {

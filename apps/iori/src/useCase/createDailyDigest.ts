@@ -21,6 +21,7 @@ import {
   type DigestItemUrlsResolverByUserId,
   type DigestParseError,
   type DigestPushSentStore,
+  DigestTopicsUnavailableError,
   type DigestTrigger,
   type LatestDigestHeaderResolverByUserId,
   SUMMARY_DIGEST_TOPIC_KEY,
@@ -39,7 +40,7 @@ import type {
 } from '../domain/digest/digestMaterial.ts';
 import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
-import type { DigestTopicsResolverByUserId, StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
+import type { StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
 import { assignTopics, TOPIC_MIN_SIMILARITY } from '../domain/digestTopic/topicAssignment.ts';
 import type { FeedEntry } from '../domain/feedEntry/feedEntry.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -103,6 +104,7 @@ type Ok = Readonly<{
   trends: number;
   summarized: number;
   pushed: number;
+  skippedReason?: string;
   recommendation: Readonly<{
     materials: number;
     candidates: number;
@@ -135,6 +137,7 @@ type Err =
   | DigestStoreFailedError
   | DigestAlreadyPublishedError
   | DigestDraftEditedError
+  | DigestTopicsUnavailableError
   | ArticleNotFoundError;
 
 export type CreateDailyDigestUseCase = UseCase<Input, Ok, Err>;
@@ -144,7 +147,6 @@ type Deps = Readonly<{
   digestHeadersResolverByUserIdAndDigestDate: DigestHeadersResolverByUserIdAndDigestDate;
   latestDigestHeaderResolverByUserId: LatestDigestHeaderResolverByUserId;
   digestItemUrlsResolverByUserId: DigestItemUrlsResolverByUserId;
-  digestTopicsResolverByUserId: DigestTopicsResolverByUserId;
   ensureDefaultDigestTopicsUseCase: EnsureDefaultDigestTopicsUseCase;
   articleResolver: ArticleResolver;
   articleBodyResolver: ArticleBodyResolver;
@@ -260,7 +262,6 @@ const create = ({
   digestHeadersResolverByUserIdAndDigestDate,
   latestDigestHeaderResolverByUserId,
   digestItemUrlsResolverByUserId,
-  digestTopicsResolverByUserId,
   ensureDefaultDigestTopicsUseCase,
   articleResolver,
   articleBodyResolver,
@@ -336,11 +337,12 @@ const create = ({
     const deadline = trigger === 'requested' ? startedAt + REQUESTED_DEADLINE_MS : undefined;
     const remainingMs = (): number => (deadline === undefined ? Infinity : Math.max(0, deadline - now()));
     const digestDate = Instant.toJstDate(startedAt);
-    const skipped = (): Ok => ({
+    const skipped = (skippedReason?: string): Ok => ({
       status: 'skipped',
       trigger,
       digestDate,
       replaced: false,
+      ...(skippedReason === undefined ? {} : { skippedReason }),
       durationMs: now() - startedAt,
       topics: 0,
       items: 0,
@@ -389,11 +391,21 @@ const create = ({
     }
 
     const keptTopicKeys: ReadonlySet<string> = new Set(existing.kept.map((header) => header.topicKey));
-    const keptSummary = existing.kept.find((header) => header.topicKey === SUMMARY_DIGEST_TOPIC_KEY);
-    const keptTopicHeaders = existing.kept.filter((header) => header.topicKey !== SUMMARY_DIGEST_TOPIC_KEY);
+    const keptTopicHeaders = existing.kept;
 
-    await ensureDefaultDigestTopicsUseCase.run({ userId });
-    const topics = (await digestTopicsResolverByUserId.resolve(userId)).val.filter((topic) => topic.enabled);
+    const ensured = await ensureDefaultDigestTopicsUseCase.run({ userId });
+    const enabledTopics = ensured.val.topics.filter((topic) => topic.enabled);
+    const topics = enabledTopics.filter((topic) => topic.embedding !== null);
+    if (topics.length === 0) {
+      console.warn('iori digest: no enabled topic has an embedding, so generation was skipped.', {
+        trigger,
+        digestDate,
+        enabledTopics: enabledTopics.length,
+      });
+      return trigger === 'scheduled'
+        ? RA.ok(skipped('topics not embedded'))
+        : RA.err(DigestTopicsUnavailableError.create());
+    }
 
     const previous = await latestDigestHeaderResolverByUserId.resolve({
       userId,
@@ -444,7 +456,6 @@ const create = ({
     const scoringMs = Date.now() - scoringStartedAt;
     selections.sort((a, b) => b.items.length - a.items.length || a.topic.sortOrder - b.topic.sortOrder);
     const chosen = selections.slice(0, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
-    if (chosen.length === 0 && keptSummary !== undefined) return notReplaceable();
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
     let fetchedBodies = 0;
@@ -503,20 +514,6 @@ const create = ({
       };
     };
 
-    const replacedAt = now();
-    for (const header of existing.replaceable) {
-      const replacingArticle = await articleResolver.resolve(header.articleId);
-      if (replacingArticle.val?.status !== 'draft') return notReplaceable();
-      const body = await articleBodyResolver.resolve(header.articleId);
-      if (Article.isBodyEdited(replacingArticle.val, body.val)) return editedDraft();
-      const deleted = await draftArticleWithDependentsDeletedStore.store(
-        Article.deleteArticle(replacedAt)(header.articleId),
-        body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(header.articleId),
-        Digest.expire(header, replacedAt),
-      );
-      if (!deleted.val.deleted) return notReplaceable();
-    }
-
     const createdArticleIds: ArticleId[] = [];
     const discardCreatedArticles = async () => {
       for (const articleId of createdArticleIds) await deleteDraftArticle(articleId);
@@ -545,30 +542,27 @@ const create = ({
       topicDigests.push({ selection, articleId: article.val.article.articleId });
     }
 
-    let summaryArticleId: ArticleId | undefined;
-    if (keptSummary === undefined) {
-      const topicNameByKey = new Map(topics.map((topic) => [topic.topicKey, topic.name]));
-      const article = await createArticle(
-        `技術ニュースのまとめ ${digestDate}`,
-        buildSummaryBodies({
-          radar,
-          topics: [
-            ...keptTopicHeaders.map((header) => ({
-              name: topicNameByKey.get(header.topicKey) ?? header.topicKey,
-              articleId: header.articleId,
-            })),
-            ...topicDigests.map(({ selection, articleId }) => ({ name: selection.topic.name, articleId })),
-          ],
-          timelineTrends: timelineTrends.val,
-          hatenaTrends: hatenaTrends.val,
-        }),
-      );
-      if (!article.ok) {
-        await discardCreatedArticles();
-        return article;
-      }
-      summaryArticleId = article.val.article.articleId;
+    const topicNameByKey = new Map(enabledTopics.map((topic) => [topic.topicKey, topic.name]));
+    const summaryArticle = await createArticle(
+      `技術ニュースのまとめ ${digestDate}`,
+      buildSummaryBodies({
+        radar,
+        topics: [
+          ...keptTopicHeaders.map((header) => ({
+            name: topicNameByKey.get(header.topicKey) ?? header.topicKey,
+            articleId: header.articleId,
+          })),
+          ...topicDigests.map(({ selection, articleId }) => ({ name: selection.topic.name, articleId })),
+        ],
+        timelineTrends: timelineTrends.val,
+        hatenaTrends: hatenaTrends.val,
+      }),
+    );
+    if (!summaryArticle.ok) {
+      await discardCreatedArticles();
+      return summaryArticle;
     }
+    const summaryArticleId = summaryArticle.val.article.articleId;
 
     const createdEvents = [];
     for (const { selection, articleId } of topicDigests) {
@@ -597,25 +591,47 @@ const create = ({
       }
       createdEvents.push(created.val);
     }
-    if (summaryArticleId !== undefined) {
-      const created = Digest.create({
-        userId,
-        digestDate,
-        articleId: summaryArticleId,
-        trigger,
-        topicKey: SUMMARY_DIGEST_TOPIC_KEY,
-        items: [],
-        trends: [
-          ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
-          ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
-        ],
-      }, now());
-      if (!created.ok) {
-        await discardCreatedArticles();
-        return created;
-      }
-      createdEvents.push(created.val);
+    const summaryCreated = Digest.create({
+      userId,
+      digestDate,
+      articleId: summaryArticleId,
+      trigger,
+      topicKey: SUMMARY_DIGEST_TOPIC_KEY,
+      items: [],
+      trends: [
+        ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
+        ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
+      ],
+    }, now());
+    if (!summaryCreated.ok) {
+      await discardCreatedArticles();
+      return summaryCreated;
     }
+    createdEvents.push(summaryCreated.val);
+
+    const replacedAt = now();
+    for (const header of existing.replaceable) {
+      const replacingArticle = await articleResolver.resolve(header.articleId);
+      if (replacingArticle.val?.status !== 'draft') {
+        await discardCreatedArticles();
+        return notReplaceable();
+      }
+      const body = await articleBodyResolver.resolve(header.articleId);
+      if (Article.isBodyEdited(replacingArticle.val, body.val)) {
+        await discardCreatedArticles();
+        return editedDraft();
+      }
+      const deleted = await draftArticleWithDependentsDeletedStore.store(
+        Article.deleteArticle(replacedAt)(header.articleId),
+        body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(header.articleId),
+        Digest.expire(header, replacedAt),
+      );
+      if (!deleted.val.deleted) {
+        await discardCreatedArticles();
+        return notReplaceable();
+      }
+    }
+
     try {
       await digestCreatedStore.store(...createdEvents);
     } catch (error) {
@@ -627,8 +643,7 @@ const create = ({
       await discardCreatedArticles();
       return RA.err(storeFailed);
     }
-    const summaryDigest = summaryArticleId === undefined ? undefined : createdEvents.at(-1)!.aggregateState;
-    const summaryHeader = summaryDigest ?? keptSummary!;
+    const summaryDigest = summaryCreated.val.aggregateState;
     const durationMs = now() - startedAt;
 
     const createdOk = (pushed: number) =>
@@ -636,13 +651,13 @@ const create = ({
         status: 'created',
         trigger,
         digestDate,
-        digestId: summaryHeader.digestId,
-        articleId: summaryHeader.articleId,
+        digestId: summaryDigest.digestId,
+        articleId: summaryDigest.articleId,
         replaced: existing.replaceable.length > 0,
         durationMs,
         topics: topicDigests.length,
         items: selectedItems.length,
-        trends: summaryDigest?.trends.length ?? 0,
+        trends: summaryDigest.trends.length,
         summarized,
         pushed,
         recommendation: {
@@ -654,7 +669,7 @@ const create = ({
           fallbackToDescription,
         },
       });
-    if (trigger === 'requested' || summaryDigest === undefined) return createdOk(0);
+    if (trigger === 'requested') return createdOk(0);
 
     const pushSubscriptions = await pushSubscriptionsResolverByUserId.resolve(userId);
     const payload = {

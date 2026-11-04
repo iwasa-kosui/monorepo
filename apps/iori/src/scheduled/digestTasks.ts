@@ -54,7 +54,6 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     digestHeadersResolverByUserIdAndDigestDate,
     latestDigestHeaderResolverByUserId: createD1LatestDigestHeaderResolverByUserId(db),
     digestItemUrlsResolverByUserId: createD1DigestItemUrlsResolverByUserId(db),
-    digestTopicsResolverByUserId,
     ensureDefaultDigestTopicsUseCase: EnsureDefaultDigestTopicsUseCase.create({
       digestTopicsResolverByUserId,
       digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),

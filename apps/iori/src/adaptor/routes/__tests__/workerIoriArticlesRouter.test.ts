@@ -5,7 +5,7 @@ import { createIoriApp } from '../../../appFactory.tsx';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { Article, ArticleStatus } from '../../../domain/article/article.ts';
 import { ArticleId } from '../../../domain/article/articleId.ts';
-import { Digest } from '../../../domain/digest/digest.ts';
+import { Digest, DigestSummaryNotPublishableError } from '../../../domain/digest/digest.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
@@ -902,13 +902,52 @@ describe('createWorkerIoriArticlesRouter', () => {
       expect(body.digest).toMatchObject({ excluded: { recommendations: true } });
     });
 
-    it('項目があっても hatenaCounts は false にする', async () => {
+    it('トピックの digest は、項目があっても hatenaCounts を false にする', async () => {
       const article = createArticle('draft');
       const t = createDigestApp(article, createDigest(article, 2));
 
       const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
 
       expect(body.digest).toMatchObject({ excluded: { hatenaCounts: false } });
+    });
+
+    it('旧形式のまとめ（項目を持つ）は hatenaCounts を true にする', async () => {
+      const article = createArticle('draft');
+      const t = createDigestApp(article, createDigest(article, 2, null, 'summary'));
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({ topicKey: 'summary', excluded: { hatenaCounts: true } });
+    });
+
+    it('新形式のまとめ（項目を持たない）は hatenaCounts を false にする', async () => {
+      const article = createArticle('draft');
+      const t = createDigestApp(article, createDigest(article, 0, null, 'summary'));
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({ topicKey: 'summary', excluded: { hatenaCounts: false } });
+    });
+
+    it('新形式のまとめの公開が拒まれたら、409 とそのメッセージを返し、OGP 画像を作らない', async () => {
+      const article = createArticle('draft');
+      const auth = createAuth();
+      const publishOgImage = vi.fn(async () => undefined);
+      const app = createApp(auth.authn, {
+        publishArticleUseCase: {
+          run: async () => RA.err(DigestSummaryNotPublishableError.create(article.articleId)),
+        },
+        publishOgImage,
+      });
+
+      const response = await app.request(`${articlesPath}/${article.articleId}/publish`, {
+        method: 'POST',
+        headers: { Cookie: auth.cookieFor(authorUserId), ...sameOrigin },
+      });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ error: 'このまとめは公開できません' });
+      expect(publishOgImage).not.toHaveBeenCalled();
     });
 
     it('公開中のダイジェストでも、匿名には digest を付けない', async () => {

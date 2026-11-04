@@ -124,9 +124,9 @@ describe('RequestDigestUseCase', () => {
     expect(t.reserve).toHaveBeenCalledTimes(1);
   });
 
-  it('置き換えられる digest が 1 本でもあれば、ほかが公開済みでも予約して作り直す', async () => {
+  it('まとめが draft なら、topic の digest が公開済みでも予約して作り直す', async () => {
     const t = setup({
-      existing: [existingDigest('summary', { status: 'published' }), existingDigest('genai')],
+      existing: [existingDigest('summary'), existingDigest('genai', { status: 'published' })],
     });
 
     const result = await t.useCase.run({ userId });
@@ -135,9 +135,9 @@ describe('RequestDigestUseCase', () => {
     expect(t.createRun).toHaveBeenCalledTimes(1);
   });
 
-  it('置き換えられる digest が 1 本でもあれば、ほかが編集済みでも予約して作り直す', async () => {
+  it('まとめが編集済みでない draft なら、topic の digest が編集済みでも予約して作り直す', async () => {
     const t = setup({
-      existing: [existingDigest('summary', { edited: true }), existingDigest('genai')],
+      existing: [existingDigest('summary'), existingDigest('genai', { edited: true })],
     });
 
     const result = await t.useCase.run({ userId });
@@ -161,14 +161,39 @@ describe('RequestDigestUseCase', () => {
     expect(t.createRun).not.toHaveBeenCalled();
   });
 
-  it('編集済みの draft が 1 本でもあれば、残りが公開済みでも DigestDraftEditedError を返す', async () => {
+  it('まとめが編集済みなら、topic の digest が draft でも予約せずに DigestDraftEditedError を返す', async () => {
+    const t = setup({
+      existing: [existingDigest('summary', { edited: true }), existingDigest('genai')],
+    });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'DigestDraftEditedError' } });
+    expect(t.reserve).not.toHaveBeenCalled();
+    expect(t.createRun).not.toHaveBeenCalled();
+  });
+
+  it.each(['published', 'unpublished'] as const)(
+    'まとめが %s なら、topic の digest が draft でも予約せずに DigestAlreadyPublishedError を返し、作成を呼ばない',
+    async (status) => {
+      const t = setup({ existing: [existingDigest('summary', { status }), existingDigest('genai')] });
+
+      const result = await t.useCase.run({ userId });
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
+      expect(t.reserve).not.toHaveBeenCalled();
+      expect(t.createRun).not.toHaveBeenCalled();
+    },
+  );
+
+  it('まとめが公開済みなら、topic の digest が編集済みでも DigestAlreadyPublishedError を返す', async () => {
     const t = setup({
       existing: [existingDigest('summary', { status: 'published' }), existingDigest('genai', { edited: true })],
     });
 
     const result = await t.useCase.run({ userId });
 
-    expect(result).toMatchObject({ ok: false, err: { type: 'DigestDraftEditedError' } });
+    expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
     expect(t.reserve).not.toHaveBeenCalled();
   });
 

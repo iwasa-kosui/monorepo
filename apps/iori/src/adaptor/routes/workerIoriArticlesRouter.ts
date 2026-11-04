@@ -8,7 +8,11 @@ import type { PublishedArticlesWithAuthorResolver } from '../../domain/article/a
 import { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import type { DigestHeadersResolverByArticleIds, DigestResolverByArticleId } from '../../domain/digest/digest.ts';
+import {
+  type DigestHeadersResolverByArticleIds,
+  type DigestResolverByArticleId,
+  SUMMARY_DIGEST_TOPIC_KEY,
+} from '../../domain/digest/digest.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
@@ -108,7 +112,7 @@ export const createWorkerIoriArticlesRouter = ({
       excluded: {
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,
-        hatenaCounts: false,
+        hatenaCounts: digest.val.topicKey === SUMMARY_DIGEST_TOPIC_KEY && digest.val.items.length > 0,
         recommendations: digest.val.items.some((item) => item.reasonInterestSourceId !== null),
       },
     };
@@ -205,6 +209,7 @@ export const createWorkerIoriArticlesRouter = ({
       }
       if (result.err.type === 'UnauthorizedError') return c.json({ error: result.err.message }, 403);
       if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
+      if (result.err.type === 'DigestSummaryNotPublishableError') return c.json({ error: result.err.message }, 409);
       return c.json({ error: result.err.message }, 400);
     })
     .post('/iori/v1/articles/:articleId/unpublish', authn.requireUser(writeStatuses), async (c) => {

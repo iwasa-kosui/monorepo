@@ -557,6 +557,21 @@ describe('iori のダイジェスト API', () => {
       return { now, today: Instant.toJstDate(now) };
     };
     const post = (headers: Record<string, string>) => ({ method: 'POST', headers });
+    const seedEmbeddedTopic = (t: ReturnType<typeof setupReadApi>, owner: { userId: string }) =>
+      t.sqlite.prepare(
+        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        owner.userId,
+        'genai',
+        '生成 AI',
+        '生成 AI の説明',
+        new Uint8Array(EMBEDDING_DIMENSIONS * 4),
+        1,
+        0,
+        1,
+        1,
+        1,
+      );
     const insertUsage = (
       t: ReturnType<typeof setupReadApi>,
       userId: string,
@@ -588,6 +603,7 @@ describe('iori のダイジェスト API', () => {
     it('digest を作って 201 で返し、trigger を requested にして回数を 1 つ数える', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       const { now, today } = freezeNow();
 
       const response = await t.request('/api/iori/v1/digests', post(me.bearer));
@@ -617,9 +633,27 @@ describe('iori のダイジェスト API', () => {
       ]);
     });
 
+    it('埋め込みのある有効なトピックが無ければ 503 にして、何も作らず、回数は予約のまま残す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { today } = freezeNow();
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Digest topics unavailable' });
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digests').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM articles').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT day, count FROM digest_request_usages').all()).toEqual([{
+        day: today,
+        count: 1,
+      }]);
+    });
+
     it('その日の draft の digest があれば置き換えて、replaced を true にする', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       const { today } = freezeNow();
       const old = seedDigest(t, me, today);
 
@@ -638,6 +672,7 @@ describe('iori のダイジェスト API', () => {
     it('実行環境の waitUntil に、結果を返すのと同じ生成の Promise を渡す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       freezeNow();
       const waitUntil = vi.fn();
 
@@ -718,6 +753,7 @@ describe('iori のダイジェスト API', () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
       const other = t.seed.addLocalActor('other');
+      seedEmbeddedTopic(t, me);
       const { now, today } = freezeNow();
       insertUsage(t, other.userId, today, 3, now);
 

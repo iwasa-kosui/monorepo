@@ -17,6 +17,21 @@ describe('normalizeDigestUrl', () => {
     expect(normalizeDigestUrl('https://example.com/a#section')).toBe('https://example.com/a');
   });
 
+  it('# の直後が / か ! のフラグメントは残し、ページ内のルートごとに別の URL にする', () => {
+    expect(normalizeDigestUrl('https://example.com/app#/post/1')).toBe('https://example.com/app#/post/1');
+    expect(normalizeDigestUrl('https://example.com/app#!/post/1')).toBe('https://example.com/app#!/post/1');
+    expect(normalizeDigestUrl('https://example.com/app#/post/1')).not.toBe(
+      normalizeDigestUrl('https://example.com/app#/post/2'),
+    );
+  });
+
+  it('クエリは & で分けて utm_ のキーだけを除き、ほかの部分は再エンコードしない', () => {
+    expect(normalizeDigestUrl('https://example.com/a?q=a%20b&utm_source=x&tag=~&r=a+b')).toBe(
+      'https://example.com/a?q=a%20b&tag=~&r=a+b',
+    );
+    expect(normalizeDigestUrl('https://example.com/a?UTM_Source=x&id=1')).toBe('https://example.com/a?id=1');
+  });
+
   it('パス末尾の / を落とす', () => {
     expect(normalizeDigestUrl('https://example.com/a/')).toBe('https://example.com/a');
     expect(normalizeDigestUrl('https://example.com/')).toBe('https://example.com');

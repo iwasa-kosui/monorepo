@@ -174,6 +174,20 @@ export const DigestArticlePublishedError = {
   }),
 } as const;
 
+export type DigestSummaryNotPublishableError = Readonly<{
+  type: 'DigestSummaryNotPublishableError';
+  message: string;
+  detail: { articleId: ArticleId };
+}>;
+
+export const DigestSummaryNotPublishableError = {
+  create: (articleId: ArticleId): DigestSummaryNotPublishableError => ({
+    type: 'DigestSummaryNotPublishableError',
+    message: 'このまとめは公開できません',
+    detail: { articleId },
+  }),
+} as const;
+
 const giveFeedback = (
   digest: Digest,
   digestItemId: DigestItemId,
@@ -273,6 +287,18 @@ export const DigestDraftEditedError = {
     type: 'DigestDraftEditedError',
     message: `The draft digest of "${digestDate}" has been edited and cannot be replaced.`,
     detail: { digestDate },
+  }),
+} as const;
+
+export type DigestTopicsUnavailableError = Readonly<{
+  type: 'DigestTopicsUnavailableError';
+  message: string;
+}>;
+
+export const DigestTopicsUnavailableError = {
+  create: (): DigestTopicsUnavailableError => ({
+    type: 'DigestTopicsUnavailableError',
+    message: 'No enabled digest topic has an embedding yet.',
   }),
 } as const;
 

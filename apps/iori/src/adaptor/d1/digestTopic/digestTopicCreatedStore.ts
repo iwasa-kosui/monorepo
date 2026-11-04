@@ -17,8 +17,8 @@ export const createD1DigestTopicCreatedStore = (db: IoriD1Db): DigestTopicCreate
           embeddedAt: null,
           createdAt: new Date(event.aggregateState.createdAt),
           updatedAt: new Date(event.aggregateState.updatedAt),
-        }),
-        db.insert(domainEventsTable).values(toD1DomainEventRow(event)),
+        }).onConflictDoNothing(),
+        db.insert(domainEventsTable).values(toD1DomainEventRow(event)).onConflictDoNothing(),
       ]),
     );
     return RA.ok(undefined);

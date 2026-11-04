@@ -1,7 +1,11 @@
 import { Article, type ArticleResolver } from '../../domain/article/article.ts';
 import type { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import type { DigestHeader, DigestHeadersResolverByUserIdAndDigestDate } from '../../domain/digest/digest.ts';
+import {
+  type DigestHeader,
+  type DigestHeadersResolverByUserIdAndDigestDate,
+  SUMMARY_DIGEST_TOPIC_KEY,
+} from '../../domain/digest/digest.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 
 export type ReplaceableDigests = Readonly<{
@@ -26,6 +30,7 @@ export const resolveReplaceableDigests = async (
   const replaceable: DigestHeader[] = [];
   const kept: DigestHeader[] = [];
   let hasEditedDraft = false;
+  let hasEditedSummary = false;
   let missingArticleId: ArticleId | undefined;
   for (const header of existing) {
     const article = (await articleResolver.resolve(header.articleId)).val;
@@ -41,10 +46,20 @@ export const resolveReplaceableDigests = async (
     const body = (await articleBodyResolver.resolve(header.articleId)).val;
     if (Article.isBodyEdited(article, body)) {
       hasEditedDraft = true;
+      hasEditedSummary ||= header.topicKey === SUMMARY_DIGEST_TOPIC_KEY;
       kept.push(header);
       continue;
     }
     replaceable.push(header);
+  }
+  if (kept.some((header) => header.topicKey === SUMMARY_DIGEST_TOPIC_KEY)) {
+    return {
+      existing,
+      replaceable: [],
+      kept: existing,
+      blockedBy: hasEditedSummary ? 'edited' : 'published',
+      missingArticleId,
+    };
   }
   const blockedBy = existing.length === 0 || replaceable.length > 0
     ? undefined

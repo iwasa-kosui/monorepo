@@ -51,7 +51,7 @@ describe('EnsureDefaultDigestTopics', () => {
   it('既定の 7 件を sortOrder の順に作り、name と description を「name: description」で 1 回だけ embed して保存する', async () => {
     const { stub, ensure, rows } = setup();
 
-    expect(await ensure.run({ userId: USER_ID })).toEqual({ ok: true, val: { created: 7, embedded: 7 } });
+    expect(await ensure.run({ userId: USER_ID })).toMatchObject({ ok: true, val: { created: 7, embedded: 7 } });
 
     expect(rows()).toEqual(defaultDigestTopics.map((topic, sortOrder) => ({
       ...topic,
@@ -69,7 +69,7 @@ describe('EnsureDefaultDigestTopics', () => {
     const { stub, ensure, rows } = setup();
     await ensure.run({ userId: USER_ID });
 
-    expect(await ensure.run({ userId: USER_ID })).toEqual({ ok: true, val: { created: 0, embedded: 0 } });
+    expect(await ensure.run({ userId: USER_ID })).toMatchObject({ ok: true, val: { created: 0, embedded: 0 } });
 
     expect(stub.calls).toHaveLength(1);
     expect(rows()).toHaveLength(7);
@@ -83,7 +83,7 @@ describe('EnsureDefaultDigestTopics', () => {
     sqlite.prepare('UPDATE digest_topics SET embedding = ?, embeddedAt = ? WHERE topicKey = ?')
       .run(new Uint8Array(4096), 1_000, 'genai');
 
-    expect(await ensure.run({ userId: USER_ID })).toEqual({ ok: true, val: { created: 6, embedded: 6 } });
+    expect(await ensure.run({ userId: USER_ID })).toMatchObject({ ok: true, val: { created: 6, embedded: 6 } });
 
     expect(rows().find((row) => row.topicKey === 'genai')).toEqual({
       topicKey: 'genai',
@@ -104,7 +104,7 @@ describe('EnsureDefaultDigestTopics', () => {
 
     const result = await build(stub.embedder).run({ userId: USER_ID });
 
-    expect(result).toEqual({ ok: true, val: { created: 0, embedded: 7 } });
+    expect(result).toMatchObject({ ok: true, val: { created: 0, embedded: 7 } });
     expect(rows().every((row) => row.embeddedAt === NOW && row.bytes === 4096)).toBe(true);
   });
 
@@ -115,7 +115,7 @@ describe('EnsureDefaultDigestTopics', () => {
     };
     const { ensure, rows } = setup({ textEmbedder: failing });
 
-    expect(await ensure.run({ userId: USER_ID })).toEqual({ ok: true, val: { created: 7, embedded: 0 } });
+    expect(await ensure.run({ userId: USER_ID })).toMatchObject({ ok: true, val: { created: 7, embedded: 0 } });
 
     expect(rows()).toHaveLength(7);
     expect(rows().every((row) => row.embeddedAt === null)).toBe(true);
@@ -145,5 +145,51 @@ describe('EnsureDefaultDigestTopics', () => {
     const embedded = events.filter((event) => event.eventName === 'digestTopic.embedded');
     expect(embedded).toHaveLength(7);
     expect(embedded.every((event) => event.size < 300)).toBe(true);
+  });
+
+  it('作成と embed の後に取り直した topic の一覧を、embedding 付きで返す', async () => {
+    const { ensure } = setup();
+
+    const result = await ensure.run({ userId: USER_ID });
+
+    expect(result.ok && result.val.topics.map((topic) => topic.topicKey)).toEqual(
+      defaultDigestTopics.map((topic) => topic.topicKey),
+    );
+    expect(result.ok && result.val.topics.every((topic) => topic.embedding?.length === 1024)).toBe(true);
+  });
+
+  it('埋め込みを使えなくても、作った topic を embedding 無しで返す', async () => {
+    const { ensure } = setup({ textEmbedder: null });
+
+    const result = await ensure.run({ userId: USER_ID });
+
+    expect(result.ok && result.val.topics).toHaveLength(7);
+    expect(result.ok && result.val.topics.every((topic) => topic.embedding === null)).toBe(true);
+  });
+
+  it('同時に走った相手がすでに topic を作っていても失敗せず、7 件のまま一覧を返す', async () => {
+    const { db, stub, ensure, rows, digestTopicsResolverByUserId } = setup();
+    await ensure.run({ userId: USER_ID });
+    const staleOnce = { remaining: 1 };
+    const racing = EnsureDefaultDigestTopicsUseCase.create({
+      digestTopicsResolverByUserId: {
+        resolve: async (userId) => {
+          if (staleOnce.remaining === 0) return digestTopicsResolverByUserId.resolve(userId);
+          staleOnce.remaining -= 1;
+          return RA.ok([]);
+        },
+      },
+      digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),
+      digestTopicEmbeddedStore: createD1DigestTopicEmbeddedStore(db),
+      textEmbedder: stub.embedder,
+      now: () => NOW,
+    });
+
+    const result = await racing.run({ userId: USER_ID });
+
+    expect(result).toMatchObject({ ok: true, val: { created: 7 } });
+    expect(result.ok && result.val.topics).toHaveLength(7);
+    expect(rows()).toHaveLength(7);
+    expect(rows().every((row) => row.embeddedAt === NOW && row.bytes === 4096)).toBe(true);
   });
 });

@@ -545,6 +545,7 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         articlePublishedStore: createD1ArticlePublishedStore(db),
         articleBodyResolver,
+        digestResolverByArticleId: createD1DigestResolverByArticleId(db),
       }),
       unpublishArticleUseCase: UnpublishArticleUseCase.create({
         sessionResolver,

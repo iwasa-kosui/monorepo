@@ -3,6 +3,7 @@ import { SUMMARY_DIGEST_TOPIC_KEY } from '../../domain/digest/digest.ts';
 export type DigestPublishNotice = Readonly<{
   digestDate: string;
   topicKey: string;
+  items: ReadonlyArray<unknown>;
   edited: boolean;
   excluded: Readonly<{
     timelineLinks: number;
@@ -16,7 +17,7 @@ const UNPUBLISHABLE_NOTICE = 'この記事は公開を想定していません�
 
 export const buildDigestPublishConfirmMessage = (notice: DigestPublishNotice): string | undefined => {
   const message = buildExclusionMessage(notice);
-  if (notice.topicKey !== SUMMARY_DIGEST_TOPIC_KEY) return message;
+  if (notice.topicKey !== SUMMARY_DIGEST_TOPIC_KEY || notice.items.length > 0) return message;
   return [UNPUBLISHABLE_NOTICE, message ?? '公開しますか？'].join('\n');
 };
 
