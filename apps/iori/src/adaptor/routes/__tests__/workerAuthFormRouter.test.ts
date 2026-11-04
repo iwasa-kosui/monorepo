@@ -82,6 +82,9 @@ describe('createWorkerAuthFormRouter', () => {
       expect(cookie).toContain('sessionId=');
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('Secure');
+      expect(cookie).toContain('SameSite=Lax');
+      expect(cookie).toContain('Path=/');
+      expect(cookie).toContain('Max-Age=604800');
       expect(signInUseCase.run).toHaveBeenCalledTimes(1);
     });
 
