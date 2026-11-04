@@ -20,6 +20,9 @@ import { createD1NewFeedEntriesResolverByFetchedSince } from '../../adaptor/d1/f
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1InterestVectorsResolverByUserId } from '../../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
+import { createSafeFetcher, type SafeFetcher } from '../../adaptor/http/safeFetch.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import type {
   ArticleResolver,
@@ -28,6 +31,8 @@ import type {
 } from '../../domain/article/article.ts';
 import type { DigestCreatedStore, DigestTrigger } from '../../domain/digest/digest.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { EMBEDDING_DIMENSIONS } from '../../domain/interestSource/embedding.ts';
+import { float32ToBytes } from '../../domain/interestSource/embeddingBytes.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../testing/aiStubs.ts';
@@ -44,13 +49,17 @@ type EntryOptions = Readonly<{
   publishedAt?: number | null;
   fetchedAt?: number;
   description?: string;
+  embedding?: Float32Array;
 }>;
+
+const basis = (index: number) => Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === index ? 1 : 0));
 
 const setup = (
   options: {
     textGenerator?: TextGenerator;
     send?: WebPushSender['send'];
     sleep?: (ms: number) => Promise<void>;
+    fetchText?: SafeFetcher['fetchText'];
     digestCreatedStore?: (db: IoriD1Db) => DigestCreatedStore;
     articleWithDependentsDeletedStore?: (db: IoriD1Db) => ArticleWithDependentsDeletedStore;
     draftArticleWithDependentsDeletedStore?: (db: IoriD1Db) => DraftArticleWithDependentsDeletedStore;
@@ -64,6 +73,10 @@ const setup = (
   const clock = { value: NOW };
 
   const send = vi.fn<WebPushSender['send']>(options.send ?? (() => RA.ok(undefined)));
+  const fetchText = vi.fn<SafeFetcher['fetchText']>(
+    options.fetchText
+      ?? (() => RA.err({ type: 'SafeFetchError', reason: 'network', message: 'no network in tests' })),
+  );
   const useCase = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeaderResolverByUserIdAndDigestDate: createD1DigestHeaderResolverByUserIdAndDigestDate(db),
@@ -78,6 +91,9 @@ const setup = (
     newFeedEntriesResolverByFetchedSince: createD1NewFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+    interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
+    recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+    safeFetcher: { fetchText },
     textGenerator: options.textGenerator,
     createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
       actorResolverByUserId: createD1ActorResolverByUserId(db),
@@ -107,7 +123,7 @@ const setup = (
     const feedEntryId = seed.uuid();
     const url = entry.url ?? `https://example.com/${encodeURIComponent(title)}`;
     sqlite.prepare(
-      'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,publishedAt,hatenaBookmarkCount,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,publishedAt,hatenaBookmarkCount,fetchedAt,embedding,embeddedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       feedEntryId,
       feedSourceId,
@@ -118,8 +134,30 @@ const setup = (
       entry.publishedAt ?? null,
       entry.count ?? null,
       entry.fetchedAt ?? NOW - HOUR,
+      entry.embedding === undefined ? null : float32ToBytes(entry.embedding),
+      entry.embedding === undefined ? null : NOW,
     );
     return { feedEntryId, url };
+  };
+  const addInterest = (kind: string, ref: string, embedding: Float32Array, occurredAt: number = NOW - HOUR) => {
+    const interestSourceId = seed.uuid();
+    sqlite.prepare(
+      'INSERT INTO interest_sources(interestSourceId,userId,kind,ref,contentHash,weight,occurredAt,embedding,embeddedAt,deletedAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(
+      interestSourceId,
+      me.userId,
+      kind,
+      ref,
+      'a'.repeat(64),
+      1,
+      occurredAt,
+      float32ToBytes(embedding),
+      NOW,
+      null,
+      1,
+      1,
+    );
+    return interestSourceId;
   };
   const addLink = (postId: string, url: string, title: string | null, createdAt: number = NOW - HOUR) =>
     sqlite.prepare(
@@ -153,10 +191,12 @@ const setup = (
     me,
     clock,
     send,
+    fetchText,
     useCase,
     sources,
     addSource,
     addEntry,
+    addInterest,
     addLink,
     addPushSubscription,
     setSubscription,
@@ -438,6 +478,236 @@ describe('CreateDailyDigestUseCase: 要約', () => {
 
     expect(result.summarized).toBe(0);
     expect(t.all('SELECT summary FROM digest_items')).toEqual([{ summary: null }]);
+  });
+});
+
+describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
+  const KOSUI_REF = 'https://kosui.me/posts/a';
+  const fetched = (body: string) =>
+    RA.ok({ status: 200, body, etag: null, lastModified: null, finalUrl: 'https://example.com/final' });
+
+  it('関心のベクトルがあれば、新着の代わりに「あなたへのおすすめ」を作り、score と根拠と rank を保存する', async () => {
+    const t = setup();
+    const interestSourceId = t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Other', { count: 99, embedding: basis(1) });
+    t.addEntry(t.sources.rss, 'Match', { count: 1, embedding: basis(0) });
+
+    const result = await t.run();
+
+    expect(result).toMatchObject({ status: 'created', items: 2 });
+    const items = t.all('SELECT rank, title, score, reasonInterestSourceId FROM digest_items ORDER BY rank');
+    expect(items.map((item) => [item.rank, item.title, item.reasonInterestSourceId])).toEqual([
+      [1, 'Match', interestSourceId],
+      [2, 'Other', interestSourceId],
+    ]);
+    expect(items[0]!.score).toBeCloseTo(1, 3);
+    expect(items[1]!.score).toBeCloseTo(0, 3);
+    const { privateHtml } = t.bodies();
+    expect(privateHtml).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(privateHtml).not.toContain('<h2>新着</h2>');
+    expect(privateHtml).not.toContain('はてなブックマーク 99');
+  });
+
+  it('関心のベクトルが無ければ、埋め込み済みの記事があっても新着にし、score と根拠を null にする', async () => {
+    const t = setup();
+    t.addEntry(t.sources.rss, 'News', { count: 1, embedding: basis(0) });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ materials: 0, candidates: 0, selected: 0 });
+    expect(t.all('SELECT rank, score, reasonInterestSourceId FROM digest_items')).toEqual([
+      { rank: 1, score: null, reasonInterestSourceId: null },
+    ]);
+    expect(t.bodies().privateHtml).toContain('<h2>新着</h2>');
+    expect(t.bodies().privateHtml).not.toContain('あなたへのおすすめ');
+  });
+
+  it('埋め込み済みの候補が 0 件なら、ベクトルがあっても新着に戻す', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Low count', { count: 1 });
+    t.addEntry(t.sources.rss, 'High count', { count: 9 });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ materials: 1, candidates: 0, selected: 0 });
+    expect(t.all('SELECT title, score, reasonInterestSourceId FROM digest_items ORDER BY rank')).toEqual([
+      { title: 'High count', score: null, reasonInterestSourceId: null },
+      { title: 'Low count', score: null, reasonInterestSourceId: null },
+    ]);
+    expect(t.bodies().privateHtml).toContain('<h2>新着</h2>');
+  });
+
+  it('候補は url の重複を除いて、上位 10 件を選び、ログ用の件数を返す', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    for (let index = 1; index <= 12; index += 1) {
+      t.addEntry(t.sources.hotentry, `Hot ${index}`, { url: `https://example.com/same-${index}`, embedding: basis(0) });
+      t.addEntry(t.sources.rss, `Rss ${index}`, { url: `https://example.com/same-${index}`, embedding: basis(0) });
+    }
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ materials: 1, candidates: 12, selected: 10 });
+    expect(result.recommendation.scoringMs).toEqual(expect.any(Number));
+    const titles = t.all('SELECT title FROM digest_items ORDER BY rank').map((row) => String(row.title));
+    expect(titles).toHaveLength(10);
+    expect(titles.every((title) => title.startsWith('Rss '))).toBe(true);
+  });
+
+  it('本文を取得できたら、平文にした 6,000 文字までを要約の入力にし、本文は保存しない', async () => {
+    const { generator, calls } = createStubTextGenerator(() => 'おすすめの要約');
+    const t = setup({ textGenerator: generator, fetchText: () => fetched(`<p>${'あ'.repeat(7000)}</p>`) });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0), description: 'short description' });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ fetchedBodies: 1, fallbackToDescription: 0 });
+    expect(calls).toHaveLength(1);
+    const input = (calls[0] as { input: string }).input;
+    expect(Array.from(input)).toHaveLength(6000);
+    expect(input.startsWith(`Match\n\n${'あ'.repeat(10)}`)).toBe(true);
+    expect(calls[0]).toMatchObject({ model: DIGEST_SUMMARY_MODEL, maxOutputTokens: 512 });
+    expect(t.all('SELECT summary FROM digest_items')).toEqual([{ summary: 'おすすめの要約' }]);
+    expect(JSON.stringify(t.all('SELECT * FROM digest_items'))).not.toContain('あああああ');
+    expect(t.fetchText).toHaveBeenCalledWith('https://example.com/Match', {
+      timeoutMs: 10_000,
+      maxBytes: 5 * 1024 * 1024,
+      maxRedirects: 3,
+    });
+  });
+
+  it('本文を取得できなければ、title と description で要約し、件数を返す', async () => {
+    const { generator, calls } = createStubTextGenerator(() => 'まとめ');
+    const t = setup({ textGenerator: generator });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0), description: '<p>Hello <b>world</b></p>' });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ fetchedBodies: 0, fallbackToDescription: 1 });
+    expect(result.summarized).toBe(1);
+    expect((calls[0] as { input: string }).input).toBe('Match\n\nHello world');
+  });
+
+  it('本文が空の平文になるときも、description に戻す', async () => {
+    const { generator, calls } = createStubTextGenerator(() => 'まとめ');
+    const t = setup({ textGenerator: generator, fetchText: () => fetched('<script>x</script>') });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0), description: 'desc' });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ fetchedBodies: 0, fallbackToDescription: 1 });
+    expect((calls[0] as { input: string }).input).toBe('Match\n\ndesc');
+  });
+
+  it('requested の本文の取得は 5 秒でタイムアウトする', async () => {
+    const { generator } = createStubTextGenerator(() => 'まとめ');
+    const t = setup({ textGenerator: generator });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0) });
+
+    await t.run('requested');
+
+    expect(t.fetchText).toHaveBeenCalledWith(
+      'https://example.com/Match',
+      expect.objectContaining({ timeoutMs: 5_000 }),
+    );
+  });
+
+  it('本文の取得は同時に 5 件までにする', async () => {
+    const { generator } = createStubTextGenerator(() => 'まとめ');
+    let running = 0;
+    let peak = 0;
+    const t = setup({
+      textGenerator: generator,
+      fetchText: async () => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+        return fetched('<p>body</p>');
+      },
+    });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    for (let index = 1; index <= 10; index += 1) {
+      t.addEntry(t.sources.rss, `Entry ${index}`, { embedding: basis(0) });
+    }
+
+    const result = await t.run();
+
+    expect(result.recommendation.fetchedBodies).toBe(10);
+    expect(peak).toBe(5);
+  });
+
+  it('AI が無ければ本文を取得しない', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0) });
+
+    await t.run();
+
+    expect(t.fetchText).not.toHaveBeenCalled();
+  });
+
+  it('プライベート IP とループバックの URL は取得せず、description に戻す', async () => {
+    const { generator } = createStubTextGenerator(() => 'まとめ');
+    const fetchMock = vi.fn();
+    const t = setup({
+      textGenerator: generator,
+      fetchText: createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText,
+    });
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'Private', { url: 'https://10.0.0.1/a', embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'Loopback', { url: 'https://127.0.0.1/a', embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'Local', { url: 'https://app.localhost/a', embedding: basis(0) });
+
+    const result = await t.run();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.recommendation).toMatchObject({ fetchedBodies: 0, fallbackToDescription: 3 });
+  });
+
+  it('非公開版には関心の根拠を出し、公開版ははてな由来の記事と iori の投稿やいいねの根拠を除く', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addInterest('own_post', 'post-id-1', basis(1));
+    t.addInterest('own_like', 'like-id-1', basis(2));
+    t.addEntry(t.sources.rss, 'Rss Kosui', { count: 77, embedding: basis(0) });
+    t.addEntry(t.sources.hotentry, 'Hot Kosui', { embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'Rss Post', { embedding: basis(1) });
+    t.addEntry(t.sources.rss, 'Rss Like', { embedding: basis(2) });
+
+    await t.run();
+
+    const { privateHtml, publicHtml } = t.bodies();
+    expect(privateHtml).toContain('Hot Kosui');
+    expect(privateHtml).toContain(`関心の根拠: <a href="${KOSUI_REF}"`);
+    expect(privateHtml).toContain('関心の根拠: iori の投稿');
+    expect(privateHtml).toContain('関心の根拠: iori のいいね');
+    expect(publicHtml).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(publicHtml).toContain('Rss Kosui');
+    expect(publicHtml).toContain('Rss Post');
+    expect(publicHtml).toContain('Rss Like');
+    expect(publicHtml).not.toContain('Hot Kosui');
+    expect(publicHtml).toContain(`関心の根拠: <a href="${KOSUI_REF}"`);
+    expect(publicHtml).not.toContain('iori の投稿');
+    expect(publicHtml).not.toContain('iori のいいね');
+    expect(publicHtml).not.toContain('77');
+  });
+
+  it('Web Push の本文はおすすめの件数にする', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'One', { embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'Two', { embedding: basis(0) });
+    t.addPushSubscription('https://push.example/1');
+
+    await t.run();
+
+    expect(t.send.mock.calls[0]![1]).toMatchObject({ body: 'おすすめ 2 件' });
   });
 });
 
@@ -756,6 +1026,14 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
       trends: 0,
       summarized: 0,
       pushed: 0,
+      recommendation: {
+        materials: 0,
+        candidates: 0,
+        selected: 0,
+        scoringMs: 0,
+        fetchedBodies: 0,
+        fallbackToDescription: 0,
+      },
     });
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 1 }]);
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);

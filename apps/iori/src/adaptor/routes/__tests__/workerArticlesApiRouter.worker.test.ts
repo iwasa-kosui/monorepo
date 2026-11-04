@@ -605,7 +605,7 @@ describe('createWorkerArticlesApiRouter', () => {
       unpublishedAt: null,
     });
 
-    const createDigest = (article: Article, itemCount: number) => {
+    const createDigest = (article: Article, itemCount: number, reasonInterestSourceId: string | null = null) => {
       const created = Digest.create({
         userId: authorUserId,
         digestDate: '2026-11-05',
@@ -618,7 +618,7 @@ describe('createWorkerArticlesApiRouter', () => {
           rank: index + 1,
           score: null,
           summary: null,
-          reasonInterestSourceId: null,
+          reasonInterestSourceId,
           feedback: null,
         })),
         trends: [
@@ -698,8 +698,20 @@ describe('createWorkerArticlesApiRouter', () => {
 
       expect(body.digest).toEqual({
         digestDate: '2026-11-05',
-        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true },
+        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true, recommendations: false },
       });
+    });
+
+    it('おすすめの項目があれば recommendations を true にする', async () => {
+      const article = createArticle('draft');
+
+      const body = await getDetail(
+        createApp(article, createDigest(article, 2, 'interest-source-1')),
+        article,
+        authorSessionId,
+      );
+
+      expect(body.digest).toMatchObject({ excluded: { recommendations: true } });
     });
 
     it('新着の項目がなければ hatenaCounts を false にする', async () => {

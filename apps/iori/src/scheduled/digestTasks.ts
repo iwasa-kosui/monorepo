@@ -18,7 +18,10 @@ import { createD1NewFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feed
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1InterestVectorsResolverByUserId } from '../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
+import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
@@ -51,6 +54,9 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     newFeedEntriesResolverByFetchedSince: createD1NewFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+    interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
+    recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+    safeFetcher: createSafeFetcher(),
     textGenerator: workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi),
     createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
       actorResolverByUserId: createD1ActorResolverByUserId(db),

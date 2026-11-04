@@ -48,6 +48,14 @@ const setup = (
       trends: 0,
       summarized: 0,
       pushed: 0,
+      recommendation: {
+        materials: 0,
+        candidates: 0,
+        selected: 0,
+        scoringMs: 0,
+        fetchedBodies: 0,
+        fallbackToDescription: 0,
+      },
     })
   );
   const resolveHeader = vi.fn(() => RA.ok(options.existing));
