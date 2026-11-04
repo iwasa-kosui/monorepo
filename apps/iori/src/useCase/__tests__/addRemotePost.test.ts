@@ -476,7 +476,7 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
 
-    it('投稿はあるが後続が欠けているとき、欠けたものだけを作り Web Push は送らない', async () => {
+    it('投稿はあるが後続が欠けているとき、欠けたものだけを作り、返信の通知を作ったので Web Push を送る', async () => {
       const deps = createIdempotencyDeps();
       deps.postResolverByUri.setPost(existingPost);
       deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
@@ -494,6 +494,73 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.replyNotificationCreatedStore.items[0].aggregateState).toMatchObject({
         replyPostId: existingPost.postId,
       });
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('投稿はあるが返信の通知が欠けているとき、通知を作り Web Push を送る', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
+      deps.postImagesResolver.setImages(existingPost.postId, [image]);
+      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
+
+      const result = await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(result.ok && result.val.post.postId).toBe(existingPost.postId);
+      expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('投稿も返信の通知もあるとき、Web Push を送らない', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.replyNotificationsResolverByReplyPostId.setNotifications(existingPost.postId, [replyNotification]);
+
+      await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('保存の前の確認で別のアクターの投稿が見つかったとき、専用のエラーを返し、何も作らず Web Push も送らない', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost({ ...existingPost, actorId: 'actor-other' as ActorId });
+
+      const result = await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(!result.ok && result.err).toEqual({
+        type: 'RemotePostAuthorMismatchError',
+        message: expect.any(String),
+        detail: { uri: postUri, existingActorId: 'actor-other', actorId: actor.id },
+      });
+      expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.timelineItemCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.postImageCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.linkPreviewCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('保存の失敗後の引き直しで別のアクターの投稿が見つかったとき、専用のエラーを返し、何も作らない', async () => {
+      const deps = createIdempotencyDeps();
+      vi.mocked(deps.postCreatedStore.store).mockImplementationOnce(
+        (async () => {
+          deps.postResolverByUri.setPost({ ...existingPost, actorId: 'actor-other' as ActorId });
+          throw new Error('UNIQUE constraint failed: remote_posts.uri');
+        }) as never,
+      );
+
+      const result = await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(!result.ok && result.err).toMatchObject({
+        type: 'RemotePostAuthorMismatchError',
+        detail: { uri: postUri, existingActorId: 'actor-other', actorId: actor.id },
+      });
+      expect(deps.timelineItemCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.postImageCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.linkPreviewCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
       expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
 
@@ -509,8 +576,9 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.timelineItemCreatedStore.store).toHaveBeenCalledTimes(1);
     });
 
-    it('保存が失敗し、引き直すと投稿があるとき、既存の投稿として続け Web Push は送らない', async () => {
+    it('保存が失敗し、引き直すと投稿があるとき、既存の投稿として続け、通知が既にあれば Web Push は送らない', async () => {
       const deps = createIdempotencyDeps();
+      deps.replyNotificationsResolverByReplyPostId.setNotifications(existingPost.postId, [replyNotification]);
       vi.mocked(deps.postCreatedStore.store).mockImplementationOnce(
         (async () => {
           deps.postResolverByUri.setPost(existingPost);
@@ -534,6 +602,24 @@ describe('AddRemotePostUseCase', () => {
           throw failure;
         }) as never,
       );
+
+      await expect(AddRemotePostUseCase.create(deps).run(input)).rejects.toBe(failure);
+
+      expect(deps.timelineItemCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('引き直しが例外を投げたとき、元の保存のエラーを投げる', async () => {
+      const deps = createIdempotencyDeps();
+      const failure = new Error('D1_ERROR: database is locked');
+      vi.mocked(deps.postCreatedStore.store).mockImplementationOnce(
+        (async () => {
+          throw failure;
+        }) as never,
+      );
+      vi.mocked(deps.postResolverByUri.resolve)
+        .mockResolvedValueOnce(RA.ok(undefined) as never)
+        .mockRejectedValueOnce(new Error('D1_ERROR: resolve failed'));
 
       await expect(AddRemotePostUseCase.create(deps).run(input)).rejects.toBe(failure);
 

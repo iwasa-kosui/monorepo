@@ -4,6 +4,7 @@ import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../domain/image/image.ts';
@@ -65,7 +66,26 @@ type Ok = Readonly<{
   actor: Actor;
 }>;
 
-type Err = never;
+export type RemotePostAuthorMismatchError = Readonly<{
+  type: 'RemotePostAuthorMismatchError';
+  message: string;
+  detail: {
+    uri: string;
+    existingActorId: ActorId;
+    actorId: ActorId;
+  };
+}>;
+
+export const RemotePostAuthorMismatchError = {
+  create: (detail: { uri: string; existingActorId: ActorId; actorId: ActorId }): RemotePostAuthorMismatchError => ({
+    type: 'RemotePostAuthorMismatchError',
+    message:
+      `The post with URI "${detail.uri}" belongs to actor "${detail.existingActorId}", not to actor "${detail.actorId}".`,
+    detail,
+  }),
+} as const;
+
+type Err = RemotePostAuthorMismatchError;
 
 export type AddRemotePostUseCase = UseCase<Input, Ok, Err>;
 
@@ -125,7 +145,12 @@ const create = ({
       RA.andBind('saved', async ({ actor, content, uri, inReplyToUri, visibility, recipientActorUris }) => {
         const existing = await postResolverByUri.resolve({ uri });
         if (existing.ok && existing.val) {
-          return RA.ok({ post: existing.val, created: false });
+          if (existing.val.actorId !== actor.id) {
+            return RA.err(
+              RemotePostAuthorMismatchError.create({ uri, existingActorId: existing.val.actorId, actorId: actor.id }),
+            );
+          }
+          return RA.ok({ post: existing.val });
         }
         const createPost = Post.createRemotePost(now)({
           content,
@@ -138,13 +163,23 @@ const create = ({
         try {
           await postCreatedStore.store(createPost);
         } catch (error) {
-          const resolved = await postResolverByUri.resolve({ uri });
+          let resolved;
+          try {
+            resolved = await postResolverByUri.resolve({ uri });
+          } catch {
+            throw error;
+          }
           if (resolved.ok && resolved.val) {
-            return RA.ok({ post: resolved.val, created: false });
+            if (resolved.val.actorId !== actor.id) {
+              return RA.err(
+                RemotePostAuthorMismatchError.create({ uri, existingActorId: resolved.val.actorId, actorId: actor.id }),
+              );
+            }
+            return RA.ok({ post: resolved.val });
           }
           throw error;
         }
-        return RA.ok({ post: createPost.aggregateState, created: true });
+        return RA.ok({ post: createPost.aggregateState });
       }),
       RA.andThrough(async ({ saved: { post }, actor }) => {
         const existingItems = await timelineItemsResolverByPostId.resolve({ postId: post.postId });
@@ -225,14 +260,14 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Create reply notification if this is a reply to a local post
-      RA.andThrough(async ({ saved: { post }, actor, inReplyToUri }) => {
+      RA.andBind('replyNotificationCreated', async ({ saved: { post }, actor, inReplyToUri }) => {
         if (!inReplyToUri) {
-          return RA.ok(undefined);
+          return RA.ok(false);
         }
         const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
         if (!originalPostResult.ok || !originalPostResult.val) {
           // Not a local post, skip notification
-          return RA.ok(undefined);
+          return RA.ok(false);
         }
         const originalPost: LocalPost = originalPostResult.val;
         const existingNotifications = await replyNotificationsResolverByReplyPostId.resolve({
@@ -242,7 +277,7 @@ const create = ({
           existingNotifications.ok
           && existingNotifications.val.some((existing) => existing.originalPostId === originalPost.postId)
         ) {
-          return RA.ok(undefined);
+          return RA.ok(false);
         }
         // Create reply notification
         const notificationId = NotificationId.generate();
@@ -257,11 +292,11 @@ const create = ({
         };
         const event = Notification.createReplyNotification(notification, now);
         await replyNotificationCreatedStore.store(event);
-        return RA.ok(undefined);
+        return RA.ok(true);
       }),
       // Send web push notification for reply
-      RA.andThrough(async ({ saved: { created }, actor, inReplyToUri }) => {
-        if (!created || !inReplyToUri) {
+      RA.andThrough(async ({ replyNotificationCreated, actor, inReplyToUri }) => {
+        if (!replyNotificationCreated || !inReplyToUri) {
           return RA.ok(undefined);
         }
         const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
