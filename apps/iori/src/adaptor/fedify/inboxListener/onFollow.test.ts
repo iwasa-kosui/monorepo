@@ -11,6 +11,8 @@ import { getDocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { UserNotFoundError } from '../../../domain/user/user.ts';
+import type { Username } from '../../../domain/user/username.ts';
 import { createActorDispatcher } from '../actorDispatcherFactory.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 import { createOnFollow } from './onFollow.ts';
@@ -32,7 +34,7 @@ describe('createOnFollow', () => {
     vi.unstubAllGlobals();
   });
 
-  it('instance actor を対象にした Follow へ、instance actor の鍵で proof をつけた Accept を返す', async () => {
+  const setup = async (run: ReturnType<typeof vi.fn>) => {
     const contextLoader = getDocumentLoader();
     const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
     const rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
@@ -72,7 +74,6 @@ describe('createOnFollow', () => {
       .setKeyPairsDispatcher(async () => [rsa, ed25519]);
     federation.setOutboxDispatcher('/users/{identifier}/outbox', () => ({ items: [] }));
     federation.setFollowersDispatcher('/users/{identifier}/followers', () => ({ items: [] }));
-    const run = vi.fn(async () => RA.err(new Error('User not found')));
     federation
       .setInboxListeners('/users/{identifier}/inbox', '/inbox')
       .on(
@@ -89,28 +90,38 @@ describe('createOnFollow', () => {
           acceptFollowRequestUseCase: { run } as never,
         }),
       );
-    const instanceActorUri = `${ORIGIN}/users/${INSTANCE_ACTOR_IDENTIFIER}`;
-    const follow = new Follow({
-      id: new URL('https://remote.example/activities/follow-1'),
-      actor: new URL(REMOTE_ACTOR),
-      object: new URL(instanceActorUri),
-    });
-    const unsigned = new Request(`${ORIGIN}/inbox`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/activity+json' },
-      body: JSON.stringify(await follow.toJsonLd({ format: 'compact', contextLoader })),
-    });
+    const postFollow = async (objectUri: string) => {
+      const follow = new Follow({
+        id: new URL('https://remote.example/activities/follow-1'),
+        actor: new URL(REMOTE_ACTOR),
+        object: new URL(objectUri),
+      });
+      const unsigned = new Request(`${ORIGIN}/inbox`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/activity+json' },
+        body: JSON.stringify(await follow.toJsonLd({ format: 'compact', contextLoader })),
+      });
+      return federation.fetch(
+        await signRequest(unsigned, remoteKeyPair.privateKey, new URL(REMOTE_KEY)),
+        { contextData: undefined },
+      );
+    };
+    const deliveries = () =>
+      fetchMock.mock.calls.map(([request]) => request).filter((request) => request.method === 'POST');
+    return { federation, postFollow, deliveries };
+  };
 
-    const response = await federation.fetch(
-      await signRequest(unsigned, remoteKeyPair.privateKey, new URL(REMOTE_KEY)),
-      { contextData: undefined },
-    );
+  it('instance actor を対象にした Follow へ、instance actor の鍵で proof をつけた Accept を返す', async () => {
+    const run = vi.fn(async () => RA.err(new Error('User not found')));
+    const { federation, postFollow, deliveries } = await setup(run);
+    const instanceActorUri = `${ORIGIN}/users/${INSTANCE_ACTOR_IDENTIFIER}`;
+
+    const response = await postFollow(instanceActorUri);
 
     expect(response.status).toBe(202);
     expect(run).toHaveBeenCalledOnce();
-    const deliveries = fetchMock.mock.calls.map(([request]) => request).filter((request) => request.method === 'POST');
-    expect(deliveries).toHaveLength(1);
-    const accept = deliveries[0];
+    expect(deliveries()).toHaveLength(1);
+    const accept = deliveries()[0];
     expect(accept.url).toBe(REMOTE_INBOX);
     const sent = JSON.parse(await accept.clone().text()) as Record<string, unknown>;
     expect(sent).toMatchObject({ type: 'Accept', actor: instanceActorUri });
@@ -127,5 +138,36 @@ describe('createOnFollow', () => {
 
     expect(sent.proof).toBeDefined();
     expect(await verifyObject(Activity, detachSignature(sent), { documentLoader })).not.toBeNull();
+  });
+
+  it('ユーザーを対象にした Follow で use case が成功したとき、そのユーザーとして Accept を1回返す', async () => {
+    const run = vi.fn(async () => RA.ok({}));
+    const { postFollow, deliveries } = await setup(run);
+    const userUri = `${ORIGIN}/users/bob`;
+
+    const response = await postFollow(userUri);
+
+    expect(response.status).toBe(202);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith({
+      username: 'bob',
+      follower: { uri: REMOTE_ACTOR, inboxUrl: REMOTE_INBOX, url: undefined, username: 'alice' },
+    });
+    expect(deliveries()).toHaveLength(1);
+    const accept = deliveries()[0];
+    expect(accept.url).toBe(REMOTE_INBOX);
+    const sent = JSON.parse(await accept.clone().text()) as Record<string, unknown>;
+    expect(sent).toMatchObject({ type: 'Accept', actor: userUri });
+  });
+
+  it('ユーザーを対象にした Follow で use case が失敗したとき、Accept を返さない', async () => {
+    const run = vi.fn(async () => RA.err(UserNotFoundError.create({ username: 'bob' as Username })));
+    const { postFollow, deliveries } = await setup(run);
+
+    const response = await postFollow(`${ORIGIN}/users/bob`);
+
+    expect(response.status).toBe(202);
+    expect(run).toHaveBeenCalledOnce();
+    expect(deliveries()).toHaveLength(0);
   });
 });
