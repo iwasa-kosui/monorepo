@@ -9,7 +9,7 @@ export const isNearScrollEnd = (
 export const shouldLoadNow = (
   cursor: string | undefined,
   isNearEnd: boolean,
-): boolean => cursor !== undefined && isNearEnd;
+): cursor is string => cursor !== undefined && isNearEnd;
 
 export const shouldAutoLoadCursor = (
   cursor: string | undefined,

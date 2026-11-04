@@ -11,7 +11,7 @@ import {
 import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
 import { appendUniqueById } from './appendUnique.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
-import { canStartLoadMore } from './loadMoreGuard.ts';
+import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
 import { stateAfterFetchFailure } from './timelineFailure.ts';
 
 const ACCOUNT_LIST_LIMIT = 80;
@@ -52,6 +52,7 @@ export const useTimeline = (): UseTimelineReturn => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isLoadingMoreRef = useRef(false);
   const isReloadingRef = useRef(false);
+  const nextMaxIdRef = useRef<string | undefined>(undefined);
   const generationRef = useRef(0);
 
   const loadAccountLists = useCallback(async (accountId: string, generation: number) => {
@@ -83,6 +84,7 @@ export const useTimeline = (): UseTimelineReturn => {
         const [page, me] = await Promise.all([fetchHomeTimeline(), fetchVerifyCredentials()]);
         if (isStaleGeneration(generationRef, generation)) return;
         isReloadingRef.current = false;
+        nextMaxIdRef.current = page.nextMaxId;
         setState((prev) => ({
           status: 'success',
           data: {
@@ -100,8 +102,10 @@ export const useTimeline = (): UseTimelineReturn => {
         isReloadingRef.current = false;
         setIsRefreshing(false);
         if (!isManualRefresh) {
+          nextMaxIdRef.current = undefined;
           setState((prev) => stateAfterFetchFailure(prev, false, errorMessage(error)));
         } else if (isMastodonApiError(error)) {
+          nextMaxIdRef.current = undefined;
           setState({ status: 'error', error: error.message });
         } else {
           console.error('Failed to refresh:', error);
@@ -116,13 +120,20 @@ export const useTimeline = (): UseTimelineReturn => {
   const refresh = useCallback(() => loadFirstPage(true), [loadFirstPage]);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (!canStartLoadMore(isLoadingMoreRef.current === true, isReloadingRef.current === true, maxId.length > 0)) return;
+    if (
+      !canStartLoadMore(
+        isLoadingMoreRef.current === true,
+        isReloadingRef.current === true,
+        isCurrentCursor(maxId, nextMaxIdRef.current ?? undefined),
+      )
+    ) return;
     isLoadingMoreRef.current = true;
     const generation = currentGeneration(generationRef);
     try {
       const page = await fetchHomeTimeline({ maxId });
       if (isStaleGeneration(generationRef, generation)) return;
       const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
+      nextMaxIdRef.current = nextMaxId;
       setState((prev) => {
         if (prev.status !== 'success') return prev;
         return {

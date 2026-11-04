@@ -31,7 +31,7 @@ export const useInfiniteScroll = ({
 
   useEffect(() => {
     const check = (isAutomatic: boolean) => {
-      if (nextCursor === undefined || !shouldLoadNow(nextCursor, isNearDocumentEnd())) return;
+      if (!shouldLoadNow(nextCursor, isNearDocumentEnd())) return;
       if (!isAutomatic) {
         debouncedLoadMore(nextCursor);
         return;
@@ -41,13 +41,15 @@ export const useInfiniteScroll = ({
       onLoadMore(nextCursor);
     };
 
-    const handleScroll = () => check(false);
+    const handleScrollOrResize = () => check(false);
 
     const frameId = requestAnimationFrame(() => check(true));
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScrollOrResize);
+    window.addEventListener('resize', handleScrollOrResize);
     return () => {
       cancelAnimationFrame(frameId);
-      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
       if (timeoutRef.current !== undefined) {
         clearTimeout(timeoutRef.current);
       }

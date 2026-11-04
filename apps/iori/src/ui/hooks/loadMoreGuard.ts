@@ -1,5 +1,10 @@
 export const canStartLoadMore = (
   isLoadingMore: boolean,
   isReloading: boolean,
-  hasCursor: boolean,
-): boolean => hasCursor && !isLoadingMore && !isReloading;
+  isCurrentCursor: boolean,
+): boolean => isCurrentCursor && !isLoadingMore && !isReloading;
+
+export const isCurrentCursor = (
+  maxId: string,
+  currentCursor: string | undefined,
+): boolean => maxId.length > 0 && maxId === currentCursor;
