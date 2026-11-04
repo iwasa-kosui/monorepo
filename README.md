@@ -81,7 +81,7 @@ Railway Oriented Programming をサポートする Result 型ライブラリで�
 
 ## 開発方針
 
-開発方針の詳細は [AGENTS.md](./AGENTS.md) を参照してください。
+開発方針の詳細は [CLAUDE.md](./CLAUDE.md) を参照してください。
 
 - Schema-Driven Development with Zod
 - Always-Valid Domain Model

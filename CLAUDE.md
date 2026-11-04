@@ -15,6 +15,7 @@ pnpm --filter kosui-me generate:talks
 
 pnpm --filter '*' build
 pnpm --filter '*' tsc --noEmit
+pnpm --filter iori run typecheck
 pnpm --filter '*' lint:fix
 pnpm --filter '*' format
 pnpm --filter '*' test:ci
@@ -24,6 +25,7 @@ pnpm --filter iori run test:workerd
 #### 実行ルール
 
 - **tsc --noEmit**: コード変更後は必ず実行し、すべての型エラーを解消してください
+- **typecheck**: apps/iori を変更したときは必ず実行してください。tsc --noEmit は apps/iori の型検査を実行しません
 - **lint:fix**: コード変更後は必ず実行し、すべてのlintエラーを解消してください
 - **format**: コミット前に必ず実行し、コードスタイルを統一してください
 - **test**: 機能追加・修正後は必ず実行し、すべてのテストがパスすることを確認してください
