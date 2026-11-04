@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'hono/jsx';
 
-import { isNearDocumentEnd } from './infiniteScrollPosition.ts';
+import { isNearDocumentEnd, shouldAutoLoadCursor, shouldLoadNow } from './infiniteScrollPosition.ts';
 
 type UseInfiniteScrollProps = Readonly<{
   nextCursor: string | undefined;
@@ -15,6 +15,7 @@ export const useInfiniteScroll = ({
 }: UseInfiniteScrollProps): void => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutRef = useRef<any>(undefined);
+  const lastAutoLoadedCursorRef = useRef<string | undefined>(undefined);
 
   const debouncedLoadMore = useCallback(
     (cursor: string) => {
@@ -29,20 +30,29 @@ export const useInfiniteScroll = ({
   );
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (nextCursor === undefined) return;
-
-      if (isNearDocumentEnd()) {
+    const check = (isAutomatic: boolean) => {
+      if (!shouldLoadNow(nextCursor, isNearDocumentEnd())) return;
+      if (!isAutomatic) {
         debouncedLoadMore(nextCursor);
+        return;
       }
+      if (!shouldAutoLoadCursor(nextCursor, lastAutoLoadedCursorRef.current ?? undefined)) return;
+      lastAutoLoadedCursorRef.current = nextCursor;
+      onLoadMore(nextCursor);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    const handleScrollOrResize = () => check(false);
+
+    const frameId = requestAnimationFrame(() => check(true));
+    window.addEventListener('scroll', handleScrollOrResize);
+    window.addEventListener('resize', handleScrollOrResize);
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
       if (timeoutRef.current !== undefined) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [nextCursor, debouncedLoadMore]);
+  }, [nextCursor, onLoadMore, debouncedLoadMore]);
 };
