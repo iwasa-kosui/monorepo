@@ -1,12 +1,11 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Document, isActor, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, isActor, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { PostImageCreatedStore } from '../domain/image/image.ts';
-import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
   Notification,
@@ -29,6 +28,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -185,13 +185,7 @@ const create = ({
             published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             replyTarget: new URL(inReplyToUri),
-            attachments: images.map(
-              (image) =>
-                new Document({
-                  url: new URL(image.url, origin),
-                  mediaType: getMimeTypeFromUrl(image.url),
-                }),
-            ),
+            attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
           await ctx.sendActivity(
@@ -252,13 +246,7 @@ const create = ({
           published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
           url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           replyTarget: new URL(objectUri),
-          attachments: images.map(
-            (image) =>
-              new Document({
-                url: new URL(image.url, origin),
-                mediaType: getMimeTypeFromUrl(image.url),
-              }),
-          ),
+          attachments: images.map((image) => toImageDocument(image, origin)),
         });
 
         // Send to the note's author
