@@ -1,4 +1,5 @@
-import { Create, Document, isActor, Note, PUBLIC_COLLECTION, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Create, Document, isActor, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 

@@ -1,10 +1,12 @@
-import { Accept, type Follow, type InboxContext } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Accept, type Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../../domain/user/username.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
 export type OnFollowDeps = Readonly<{
   inboxActorResolver: InboxActorResolver;
@@ -39,15 +41,16 @@ export const createOnFollow = (deps: OnFollowDeps) => async (ctx: InboxContext<u
         username,
         follower: followerIdentity,
       });
-      await ctx.sendActivity(
-        object,
-        follower,
-        new Accept({
-          actor: activity.objectId,
-          to: activity.actorId,
-          object: activity,
-        }),
-      );
+      const accept = new Accept({
+        actor: activity.objectId,
+        to: activity.actorId,
+        object: activity,
+      });
+      if (object.identifier === INSTANCE_ACTOR_IDENTIFIER) {
+        await ctx.sendActivity(await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER), follower, accept);
+      } else {
+        await ctx.sendActivity(object, follower, accept);
+      }
       return RA.ok(undefined);
     }),
     RA.match({

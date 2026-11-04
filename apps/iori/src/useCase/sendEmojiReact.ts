@@ -1,12 +1,6 @@
-import {
-  type DocumentLoader,
-  Emoji,
-  EmojiReact as FedifyEmojiReact,
-  Image,
-  isActor,
-  Note,
-  type RequestContext,
-} from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Emoji, EmojiReact as FedifyEmojiReact, Image, isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

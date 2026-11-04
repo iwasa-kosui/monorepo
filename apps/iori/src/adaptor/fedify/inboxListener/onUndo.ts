@@ -1,4 +1,5 @@
-import { Activity, Announce, Follow, type InboxContext, Like, Undo } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Activity, Announce, Follow, Like, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

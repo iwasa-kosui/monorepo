@@ -1,4 +1,4 @@
-import { Follow, Undo } from '@fedify/fedify';
+import { Follow, Undo } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { RelationshipSchema } from '../../mastodon/entities.ts';

@@ -1,4 +1,4 @@
-import { Note } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { extractAttachments } from './extractAttachments.ts';

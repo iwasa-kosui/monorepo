@@ -1,23 +1,14 @@
-import type { KVNamespace, MessageBatch, Queue } from '@cloudflare/workers-types';
+import type { KVNamespace, MessageBatch } from '@cloudflare/workers-types';
+import { WorkersKvStore, WorkersMessageQueue } from '@fedify/cfworkers';
 import {
-  Accept,
-  Activity,
-  Announce,
-  Article,
-  Create,
   createFederationBuilder,
-  Delete,
   type Federation,
-  Follow,
   type KvStore,
-  Like,
   type Message,
   type MessageQueue,
   type MessageQueueEnqueueOptions,
-  Note,
-  Undo,
 } from '@fedify/fedify';
-import { WorkersKvStore, WorkersMessageQueue } from '@fedify/fedify/x/cfworkers';
+import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
 
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowingId } from './adaptor/d1/actor/actorsResolverByFollowingId.ts';
@@ -45,10 +36,6 @@ import { buildNodeInfo } from './adaptor/mastodon/nodeinfo.ts';
 import { createContextLoaderFactory } from './federationContext.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
-type WorkersKvStoreConstructor = new(namespace: KVNamespace) => KvStore;
-
-type WorkersMessageQueueConstructor = new(queue: Queue) => MessageQueue;
-
 export type CloudflareFederationDeps = Readonly<{
   origin: string;
   kv: KvStore;
@@ -63,10 +50,10 @@ export const createCloudflareFederation = (
     queue: deps.queue,
     origin: deps.origin,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
 
-const createWorkersKvStore = (kv: KVNamespace): KvStore =>
-  new (WorkersKvStore as unknown as WorkersKvStoreConstructor)(kv);
+const createWorkersKvStore = (kv: KVNamespace): KvStore => new WorkersKvStore(kv);
 
 const QUEUE_FAILURE_MESSAGE_LIMIT = 500;
 
@@ -131,8 +118,8 @@ const splitIntoBatches = (messages: readonly Message[]): Message[][] => {
 const createWorkersMessageQueue = (
   env: Pick<IoriWorkerEnv, 'FEDIFY_QUEUE'>,
   waitUntil: WaitUntil,
-): MessageQueue => {
-  const queue = new (WorkersMessageQueue as unknown as WorkersMessageQueueConstructor)(env.FEDIFY_QUEUE);
+): MessageQueue & Pick<WorkersMessageQueue, 'processMessage'> => {
+  const queue = new WorkersMessageQueue(env.FEDIFY_QUEUE);
   const enqueue = async (message: Message, options?: MessageQueueEnqueueOptions): Promise<void> => {
     if (dropIfTooLarge(message, estimateMessageBytes(message))) return;
     await queue.enqueue(message, options);
@@ -141,7 +128,7 @@ const createWorkersMessageQueue = (
     const batches = splitIntoBatches(messages);
     for (const [index, batch] of batches.entries()) {
       try {
-        await queue.enqueueMany!(batch, options);
+        await queue.enqueueMany(batch, options);
       } catch (error) {
         console.error('Fedify queue batch send failed.', {
           sentBatches: index,
@@ -157,6 +144,7 @@ const createWorkersMessageQueue = (
     enqueue: (message, options) => keepAlive(waitUntil, enqueue(message, options)),
     enqueueMany: (messages, options) => keepAlive(waitUntil, enqueueMany(messages, options)),
     listen: (handler, options) => queue.listen(handler, options),
+    processMessage: (rawMessage) => queue.processMessage(rawMessage),
   };
 };
 
@@ -205,6 +193,7 @@ export const createCloudflareFederationRuntime = async (
     vapidPrivateKey: env.VAPID_PRIVATE_KEY,
   });
   federationBuilder.setInboxListeners('/users/{identifier}/inbox', '/inbox')
+    .withIdempotency('per-origin')
     .setSharedKeyDispatcher(SharedKeyDispatcher.getInstance().dispatch)
     .on(Accept, inboxListener.onAccept)
     .on(Follow, inboxListener.onFollow)
@@ -228,6 +217,7 @@ export const createCloudflareFederationRuntime = async (
     // processQueuedTask().  WorkersMessageQueue deliberately cannot listen.
     manuallyStartQueue: true,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
 
   return {
@@ -245,7 +235,11 @@ export const processCloudflareFedifyQueueBatch = async (
 
   await processCloudflareFedifyMessages(
     batch,
-    (message) => runtime.federation.processQueuedTask(undefined, message),
+    async (body) => {
+      // orderingKv を渡していないので、shouldProcess は常に true で release も返らない
+      const { message } = await runtime.queue.processMessage(body);
+      await runtime.federation.processQueuedTask(undefined, message);
+    },
   );
 };
 

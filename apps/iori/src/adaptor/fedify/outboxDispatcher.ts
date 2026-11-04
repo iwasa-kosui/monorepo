@@ -1,4 +1,5 @@
-import { Create, Note, PUBLIC_COLLECTION, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';

@@ -1,4 +1,4 @@
-import { Create, Note, Person } from '@fedify/fedify';
+import { Create, Note, Person } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { extractVisibility } from './extractVisibility.ts';

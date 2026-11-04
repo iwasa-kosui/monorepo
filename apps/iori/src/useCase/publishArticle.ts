@@ -1,5 +1,5 @@
 import type { RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Create } from '@fedify/fedify';
+import { Article as FedifyArticle, Create } from '@fedify/vocab';
 import { RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 

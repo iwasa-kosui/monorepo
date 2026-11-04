@@ -1,4 +1,4 @@
-import { Accept, Follow } from '@fedify/fedify';
+import { Accept, Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 

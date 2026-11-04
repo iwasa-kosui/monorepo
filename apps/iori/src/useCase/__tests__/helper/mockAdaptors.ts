@@ -1,5 +1,5 @@
 import type { Context, RequestContext } from '@fedify/fedify';
-import { Note } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
