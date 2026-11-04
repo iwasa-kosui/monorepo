@@ -712,7 +712,7 @@ describe('createWorkerIoriArticlesRouter', () => {
       unpublishedAt: null,
     });
 
-    const createDigest = (article: Article, itemCount: number) => {
+    const createDigest = (article: Article, itemCount: number, reasonInterestSourceId: string | null = null) => {
       const created = Digest.create({
         userId: authorUserId,
         digestDate: '2026-11-05',
@@ -725,7 +725,7 @@ describe('createWorkerIoriArticlesRouter', () => {
           rank: index + 1,
           score: null,
           summary: null,
-          reasonInterestSourceId: null,
+          reasonInterestSourceId,
           feedback: null,
         })),
         trends: [
@@ -790,8 +790,17 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect(body.digest).toEqual({
         digestDate: '2026-11-05',
-        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true },
+        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true, recommendations: false },
       });
+    });
+
+    it('おすすめの項目があれば recommendations を true にする', async () => {
+      const article = createArticle('draft');
+      const t = createDigestApp(article, createDigest(article, 2, 'interest-source-1'));
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({ excluded: { recommendations: true } });
     });
 
     it('新着の項目がなければ hatenaCounts を false にする', async () => {

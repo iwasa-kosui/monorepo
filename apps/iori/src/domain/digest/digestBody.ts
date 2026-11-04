@@ -8,9 +8,23 @@ export type DigestBodyEntry = Readonly<{
   hatenaBookmarkCount: number | null;
 }>;
 
+export type DigestBodyReason = Readonly<{
+  scope: 'kosui' | 'own';
+  label: string;
+  url?: string;
+}>;
+export type DigestBodyRecommendation = Readonly<{
+  title: string;
+  url: string;
+  summary: string | null;
+  fromHatena: boolean;
+  reason: DigestBodyReason | null;
+}>;
+
 export type DigestBodyInput = Readonly<{
   radar: DigestBodyRadar | undefined;
   entries: ReadonlyArray<DigestBodyEntry>;
+  recommendations?: ReadonlyArray<DigestBodyRecommendation>;
   timelineTrends: ReadonlyArray<TrendCandidate>;
   hatenaTrends: ReadonlyArray<TrendCandidate>;
 }>;
@@ -61,6 +75,23 @@ const entriesSection = (entries: ReadonlyArray<DigestBodyEntry>, showHatenaCount
     }),
   );
 
+const recommendationsSection = (
+  recommendations: ReadonlyArray<DigestBodyRecommendation>,
+  isPublic: boolean,
+): string =>
+  section(
+    'あなたへのおすすめ',
+    recommendations
+      .filter((recommendation) => !isPublic || !recommendation.fromHatena)
+      .map(({ title, url, summary, reason }) => {
+        const summaryHtml = summary === null ? '' : `<br>${escapeHtml(summary).replaceAll('\n', '<br>')}`;
+        const reasonHtml = reason === null || (isPublic && reason.scope === 'own')
+          ? ''
+          : `<br>関心の根拠: ${reason.url === undefined ? escapeHtml(reason.label) : link(reason.label, reason.url)}`;
+        return `${link(title, url)}${summaryHtml}${reasonHtml}`;
+      }),
+  );
+
 const trendsSection = (heading: string, trends: ReadonlyArray<TrendCandidate>, unit: string): string =>
   section(
     heading,
@@ -72,12 +103,23 @@ const join = (sections: ReadonlyArray<string>): string => {
   return html === '' ? EMPTY_HTML : html;
 };
 
-export const buildDigestBodies = ({ radar, entries, timelineTrends, hatenaTrends }: DigestBodyInput): DigestBodies => ({
+export const buildDigestBodies = ({
+  radar,
+  entries,
+  recommendations = [],
+  timelineTrends,
+  hatenaTrends,
+}: DigestBodyInput): DigestBodies => ({
   privateHtml: join([
     radarSection(radar),
+    recommendationsSection(recommendations, false),
     entriesSection(entries, true),
     trendsSection('みんなの関心（iori のタイムライン）', timelineTrends, '人が共有'),
     trendsSection('みんなの関心（はてなブックマーク）', hatenaTrends, 'ブックマーク'),
   ]),
-  publicHtml: join([radarSection(radar), entriesSection(entries, false)]),
+  publicHtml: join([
+    radarSection(radar),
+    recommendationsSection(recommendations, true),
+    entriesSection(entries, false),
+  ]),
 });

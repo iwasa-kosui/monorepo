@@ -101,6 +101,7 @@ export const createWorkerIoriArticlesRouter = ({
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,
         hatenaCounts: digest.val.items.length > 0,
+        recommendations: digest.val.items.some((item) => item.reasonInterestSourceId !== null),
       },
     };
   };

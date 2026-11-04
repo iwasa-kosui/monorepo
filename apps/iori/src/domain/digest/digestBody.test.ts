@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildDigestBodies, type DigestBodyInput } from './digestBody.ts';
+import { buildDigestBodies, type DigestBodyInput, type DigestBodyRecommendation } from './digestBody.ts';
 
 const input: DigestBodyInput = {
   radar: { title: 'Technology Radar Vol. 34', url: 'https://www.thoughtworks.com/radar' },
@@ -132,5 +132,101 @@ describe('buildDigestBodies', () => {
     });
 
     expect(privateHtml).toContain('<li><a href="https://example.com/z">Zero</a></li>');
+  });
+});
+
+describe('buildDigestBodies: あなたへのおすすめ', () => {
+  const recommendations: ReadonlyArray<DigestBodyRecommendation> = [
+    {
+      title: 'Kosui based',
+      url: 'https://example.com/k',
+      summary: '要約K',
+      fromHatena: false,
+      reason: { scope: 'kosui', label: 'https://kosui.me/posts/a', url: 'https://kosui.me/posts/a' },
+    },
+    {
+      title: 'Hatena based',
+      url: 'https://example.com/h',
+      summary: null,
+      fromHatena: true,
+      reason: { scope: 'kosui', label: 'https://kosui.me/posts/b', url: 'https://kosui.me/posts/b' },
+    },
+    {
+      title: 'Post based',
+      url: 'https://example.com/p',
+      summary: '要約P',
+      fromHatena: false,
+      reason: { scope: 'own', label: 'iori の投稿' },
+    },
+    { title: 'No reason', url: 'https://example.com/n', summary: null, fromHatena: false, reason: null },
+  ];
+  const withRecommendations: DigestBodyInput = { ...input, entries: [], recommendations };
+
+  it('private は要約の下に関心の根拠の行を出し、新着の代わりにおすすめの節を Radar の次に置く', () => {
+    const { privateHtml } = buildDigestBodies(withRecommendations);
+
+    expect(privateHtml).toContain(
+      '<a href="https://example.com/k">Kosui based</a><br>要約K<br>関心の根拠: '
+        + '<a href="https://kosui.me/posts/a">https://kosui.me/posts/a</a>',
+    );
+    expect(privateHtml).toContain('<a href="https://example.com/h">Hatena based</a><br>関心の根拠: ');
+    expect(privateHtml).toContain('<a href="https://example.com/p">Post based</a><br>要約P<br>関心の根拠: iori の投稿');
+    expect(privateHtml).toContain('<li><a href="https://example.com/n">No reason</a></li>');
+    expect(privateHtml).not.toContain('<h2>新着</h2>');
+    const positions = ['Thoughtworks Technology Radar', '<h2>あなたへのおすすめ</h2>', 'みんなの関心（iori']
+      .map((heading) => privateHtml.indexOf(heading));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+  });
+
+  it('public ははてな由来の記事を除き、iori の投稿といいねの根拠の行を消し、kosui.me の根拠の行は残す', () => {
+    const { publicHtml } = buildDigestBodies({
+      ...withRecommendations,
+      recommendations: [
+        ...recommendations,
+        {
+          title: 'Like based',
+          url: 'https://example.com/l',
+          summary: null,
+          fromHatena: false,
+          reason: { scope: 'own', label: 'iori のいいね' },
+        },
+      ],
+    });
+
+    expect(publicHtml).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(publicHtml).toContain('Kosui based');
+    expect(publicHtml).toContain('<a href="https://kosui.me/posts/a">https://kosui.me/posts/a</a>');
+    expect(publicHtml).toContain('<a href="https://example.com/p">Post based</a><br>要約P</li>');
+    expect(publicHtml).toContain('<li><a href="https://example.com/l">Like based</a></li>');
+    expect(publicHtml).not.toContain('Hatena based');
+    expect(publicHtml).not.toContain('https://kosui.me/posts/b');
+    expect(publicHtml).not.toContain('iori の投稿');
+    expect(publicHtml).not.toContain('iori のいいね');
+    expect(publicHtml).not.toContain('はてなブックマーク');
+  });
+
+  it('public のおすすめがすべてはてな由来なら、おすすめの節を出さない', () => {
+    const { publicHtml } = buildDigestBodies({ ...withRecommendations, recommendations: [recommendations[1]!] });
+
+    expect(publicHtml).not.toContain('あなたへのおすすめ');
+  });
+
+  it('根拠のラベルとリンクをエスケープし、http と https 以外の URL にはリンクを付けない', () => {
+    const { privateHtml } = buildDigestBodies({
+      ...withRecommendations,
+      recommendations: [
+        {
+          title: 'A',
+          url: 'https://example.com/a',
+          summary: null,
+          fromHatena: false,
+          reason: { scope: 'kosui', label: '<b>x</b>', url: 'javascript:alert(1)' },
+        },
+      ],
+    });
+
+    expect(privateHtml).toContain('関心の根拠: &lt;b&gt;x&lt;/b&gt;');
+    expect(privateHtml).not.toContain('javascript:');
   });
 });

@@ -15,6 +15,7 @@ export type SafeFetchResult = Readonly<{
   etag: string | null;
   lastModified: string | null;
   finalUrl: string;
+  contentType?: string;
 }>;
 
 export type SafeFetchErrorReason =
@@ -143,11 +144,13 @@ export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
           }
           continue;
         }
+        const contentType = response.headers.get('Content-Type') ?? undefined;
         const meta = {
           status: response.status,
           etag: response.headers.get('ETag'),
           lastModified: response.headers.get('Last-Modified'),
           finalUrl: target.href,
+          ...(contentType === undefined ? {} : { contentType }),
         };
         if (response.status === 304) {
           await response.body?.cancel();
