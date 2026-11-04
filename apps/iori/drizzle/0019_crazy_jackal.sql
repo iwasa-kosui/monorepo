@@ -1,0 +1,3 @@
+-- 一意索引を作る前に、post_id と relay_id が重複する行を最も古い1件だけ残して消す
+DELETE FROM "federated_timeline_items" WHERE EXISTS (SELECT 1 FROM "federated_timeline_items" AS "keep" WHERE "keep"."postId" = "federated_timeline_items"."postId" AND "keep"."relayId" = "federated_timeline_items"."relayId" AND ("keep"."receivedAt" < "federated_timeline_items"."receivedAt" OR ("keep"."receivedAt" = "federated_timeline_items"."receivedAt" AND "keep"."federatedTimelineItemId" < "federated_timeline_items"."federatedTimelineItemId")));--> statement-breakpoint
+ALTER TABLE "federated_timeline_items" ADD CONSTRAINT "federated_timeline_items_post_id_relay_id_unique" UNIQUE("postId","relayId");
