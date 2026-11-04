@@ -10,6 +10,7 @@ import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
+import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
@@ -174,6 +175,14 @@ export default {
           '/api',
           createWorkerAuthApiRouter({
             signInUseCase: runtime.auth.signInUseCase,
+            createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
+          }),
+        );
+        app.route(
+          '/auth',
+          createWorkerAuthFormRouter({
+            signInUseCase: runtime.auth.signInUseCase,
+            signUpUseCase: runtime.core.signUpUseCase,
             createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
           }),
         );

@@ -30,9 +30,14 @@ describe('iori Worker on workerd', () => {
   });
 
   it('signs up and signs in with an argon2 password hash', async () => {
-    const signedUp = await jsonPost('/api/v1/sign-up', { username, password });
-    expect(signedUp.status).toBe(200);
-    expect(await signedUp.json()).toEqual({ success: true, username });
+    const signedUp = await SELF.fetch(`${origin}/auth/sign-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
+      body: new URLSearchParams({ username, password }),
+      redirect: 'manual',
+    });
+    expect(signedUp.status).toBe(303);
+    expect(signedUp.headers.get('Location')).toBe('/sign-in?registered=1');
 
     const startedAt = performance.now();
     const signedIn = await jsonPost('/api/v1/sign-in', { username, password });
