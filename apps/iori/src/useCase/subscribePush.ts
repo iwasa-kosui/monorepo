@@ -8,17 +8,17 @@ import {
 } from '../domain/pushSubscription/pushSubscription.ts';
 import { PushSubscriptionId } from '../domain/pushSubscription/pushSubscriptionId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  endpoint: string;
-  p256dhKey: string;
-  authKey: string;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    endpoint: string;
+    p256dhKey: string;
+    authKey: string;
+  }>;
 
 type Ok = Readonly<{
   subscription: PushSubscription;
@@ -49,14 +49,12 @@ type Deps = Readonly<{
 
 const create = (deps: Deps): SubscribePushUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(deps.sessionResolver, now);
-  const resolveUser = resolveUserWith(deps.userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(deps.sessionResolver, deps.userResolver, now);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('existing', ({ endpoint }) => deps.pushSubscriptionResolverByEndpoint.resolve(endpoint)),
       RA.andThen(({ existing, ...rest }) => {
         if (existing) {

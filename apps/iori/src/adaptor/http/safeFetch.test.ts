@@ -33,7 +33,13 @@ describe('createSafeFetcher blocked targets', () => {
 describe('createSafeFetcher fetching', () => {
   it('returns the body with validators and sends the user agent and extra headers', async () => {
     const fetchMock = vi.fn(async () =>
-      textResponse('<rss/>', { headers: { ETag: '"abc"', 'Last-Modified': 'Wed, 01 Jan 2026 00:00:00 GMT' } })
+      textResponse('<rss/>', {
+        headers: {
+          ETag: '"abc"',
+          'Last-Modified': 'Wed, 01 Jan 2026 00:00:00 GMT',
+          'Content-Type': 'application/rss+xml; charset=utf-8',
+        },
+      })
     );
     const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
       'https://example.com/feed',
@@ -47,6 +53,7 @@ describe('createSafeFetcher fetching', () => {
         etag: '"abc"',
         lastModified: 'Wed, 01 Jan 2026 00:00:00 GMT',
         finalUrl: 'https://example.com/feed',
+        contentType: 'application/rss+xml; charset=utf-8',
       },
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -56,6 +63,16 @@ describe('createSafeFetcher fetching', () => {
         headers: { 'User-Agent': 'iori-digest/1.0 (+https://blog.kosui.me)', 'If-None-Match': '"old"' },
       }),
     );
+  });
+
+  it('leaves contentType undefined when the response has no Content-Type', async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([111, 107]), { status: 200 }));
+    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
+      'https://example.com/page',
+      options,
+    );
+    expect(result).toMatchObject({ ok: true, val: { body: 'ok' } });
+    expect(result.ok && result.val.contentType).toBeUndefined();
   });
 
   it('returns ok with status 304 and no body', async () => {

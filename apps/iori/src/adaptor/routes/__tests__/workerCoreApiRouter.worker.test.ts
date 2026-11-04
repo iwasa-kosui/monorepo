@@ -1,5 +1,4 @@
-import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
 import { createWorkerCoreApiRouter } from '../workerCoreApiRouter.ts';
@@ -7,11 +6,7 @@ import { createWorkerCoreApiRouter } from '../workerCoreApiRouter.ts';
 const sessionCookie = 'sessionId=4dc530d6-d06c-4b4a-a021-0e1aee0b6d82';
 
 const createDeps = () => ({
-  signUpUseCase: { run: vi.fn(async () => RA.ok({ user: { username: 'newuser' } })) },
-  subscribePushUseCase: { run: vi.fn() },
-  unsubscribePushUseCase: { run: vi.fn() },
   vapidPublicKey: 'public-key',
-  createContext: vi.fn(() => ({})),
 });
 
 describe('createWorkerCoreApiRouter', () => {
@@ -26,29 +21,17 @@ describe('createWorkerCoreApiRouter', () => {
     });
 
     const responses = await Promise.all([
-      app.request('/api/v1/sign-up', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'newuser', password: 'a-secure-password-with-16-characters' }),
-      }),
       app.request('/api/v1/follow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
       app.request('/api/v1/remote-users/not-an-id/posts'),
       app.request('/api/v1/users/not valid/posts'),
       app.request('/api/v1/push/vapid-public-key'),
-      app.request('/api/v1/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      }),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
-      200,
       404,
       404,
       404,
       200,
-      400,
     ]);
   });
 

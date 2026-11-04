@@ -21,7 +21,7 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
         </svg>
       </a>
       <a
-        href={isLoggedIn ? '#post-modal' : '/sign-in'}
+        href={isLoggedIn ? '/#post-modal' : '/sign-in'}
         class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
       >
         <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>

@@ -1,4 +1,4 @@
-import type { Result } from '@iwasa-kosui/result';
+import { ok, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -7,10 +7,12 @@ import type { Agg } from '../aggregate/index.ts';
 import type { FeedSourceKind } from '../feedSource/feedSource.ts';
 import { FeedSourceId } from '../feedSource/feedSourceId.ts';
 import { Instant } from '../instant/instant.ts';
+import { Embedding, type EmbeddingDimensionsError } from '../interestSource/embedding.ts';
 import { FeedEntryId } from './feedEntryId.ts';
 
 export const FEED_ENTRY_DESCRIPTION_MAX_CHARS = 1000;
 export const FEED_ENTRY_KEY_MAX_CHARS = 2048;
+export const FEED_ENTRY_EMBEDDING_TEXT_MAX_CHARS = 2000;
 
 const zodType = z
   .object({
@@ -52,6 +54,11 @@ export type FeedEntryBookmarkCountUpdated = FeedEntryEvent<
   'feedEntry.bookmarkCountUpdated',
   { feedEntryId: FeedEntryId; hatenaBookmarkCount: number }
 >;
+export type FeedEntryEmbedded = FeedEntryEvent<
+  FeedEntry,
+  'feedEntry.embedded',
+  { feedEntryId: FeedEntryId; embedding: Float32Array; embeddedAt: Instant }
+>;
 export type FeedEntryExpired = FeedEntryEvent<undefined, 'feedEntry.expired', { feedEntryId: FeedEntryId }>;
 
 const collect = (
@@ -88,6 +95,27 @@ const updateBookmarkCount = (
   );
 };
 
+const toEmbeddingText = (feedEntry: Pick<FeedEntry, 'title' | 'description'>): string =>
+  Array.from(`${feedEntry.title}\n${feedEntry.description}`).slice(0, FEED_ENTRY_EMBEDDING_TEXT_MAX_CHARS).join('');
+
+const embed = (
+  feedEntry: FeedEntry,
+  embedding: Float32Array,
+  now: Instant,
+): Result<FeedEntryEmbedded, EmbeddingDimensionsError> => {
+  const validated = Embedding.validate(embedding);
+  if (!validated.ok) return validated;
+  return ok(
+    FeedEntryEvent.create(
+      toAggregateId(feedEntry),
+      feedEntry,
+      'feedEntry.embedded',
+      { feedEntryId: feedEntry.feedEntryId, embedding: validated.val, embeddedAt: now },
+      now,
+    ),
+  );
+};
+
 const expire = (feedEntry: FeedEntry, now: Instant): FeedEntryExpired =>
   FeedEntryEvent.create(
     toAggregateId(feedEntry),
@@ -99,6 +127,7 @@ const expire = (feedEntry: FeedEntry, now: Instant): FeedEntryExpired =>
 
 export type FeedEntryCollectedStore = Agg.Store<FeedEntryCollected>;
 export type FeedEntryBookmarkCountUpdatedStore = Agg.Store<FeedEntryBookmarkCountUpdated>;
+export type FeedEntryEmbeddedStore = Agg.Store<FeedEntryEmbedded>;
 export type FeedEntryExpiredStore = Agg.Store<FeedEntryExpired>;
 export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<
   { feedSourceId: FeedSourceId; guids: ReadonlyArray<string> },
@@ -106,6 +135,10 @@ export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<
 >;
 export type FeedEntriesResolverByFetchedBefore = Agg.Resolver<
   { fetchedBefore: Instant; limit: number },
+  ReadonlyArray<FeedEntry>
+>;
+export type FeedEntriesResolverByFetchedSincePendingEmbedding = Agg.Resolver<
+  { fetchedSince: Instant; limit: number },
   ReadonlyArray<FeedEntry>
 >;
 export type FeedEntriesResolverByFetchedSinceExcludingKinds = Agg.Resolver<
@@ -117,6 +150,8 @@ export const FeedEntry = {
   ...schema,
   collect,
   updateBookmarkCount,
+  toEmbeddingText,
+  embed,
   expire,
   toAggregateId,
 } as const;

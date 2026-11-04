@@ -9,10 +9,11 @@ import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts'
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
-import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
+import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
+import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
@@ -29,7 +30,6 @@ import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMast
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerPageActionsRouter.ts';
-import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
 import { ArticleId } from './domain/article/articleId.ts';
@@ -172,16 +172,17 @@ export default {
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(
-          '/posts',
-          createWorkerPostsRouter({
-            createPostUseCase: runtime.posting.createPostUseCase,
-            createContext: (postRequest) => runtime.federation.createContext(postRequest, undefined),
-          }),
-        );
-        app.route(
           '/api',
           createWorkerAuthApiRouter({
             signInUseCase: runtime.auth.signInUseCase,
+            createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
+          }),
+        );
+        app.route(
+          '/auth',
+          createWorkerAuthFormRouter({
+            signInUseCase: runtime.auth.signInUseCase,
+            signUpUseCase: runtime.core.signUpUseCase,
             createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
           }),
         );
@@ -193,16 +194,8 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerArticlesApiRouter({
-            ...runtime.articles,
-            createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
-          }),
-        );
-        app.route(
-          '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
-            createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
           }),
         );
         const authn = createMastodonAuthn({
@@ -264,7 +257,16 @@ export default {
             ...runtime.mastodon,
             ...runtime.socialActions,
             subscribeRelayUseCase: runtime.mutesRelays.subscribeRelayUseCase,
+            subscribePushUseCase: runtime.core.subscribePushUseCase,
             allRelaysResolver: runtime.mutesRelays.allRelaysResolver,
+            authn,
+            createContext,
+          }),
+        );
+        app.route(
+          '/api',
+          createWorkerIoriArticlesRouter({
+            ...runtime.articles,
             authn,
             createContext,
           }),

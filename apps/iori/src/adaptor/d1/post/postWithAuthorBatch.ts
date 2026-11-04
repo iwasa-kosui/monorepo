@@ -80,11 +80,11 @@ export const enrichPostRows = async (
     db.select({
       postId: emojiReactsTable.postId,
       emoji: emojiReactsTable.emoji,
-      emojiImageUrl: emojiReactsTable.emojiImageUrl,
+      emojiImageUrl: sql<string | null>`max(${emojiReactsTable.emojiImageUrl})`,
       count: sql<number>`count(*)`,
     }).from(emojiReactsTable)
       .where(inArray(emojiReactsTable.postId, postIdSelection))
-      .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl),
+      .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji),
     db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, postIdSelection)),
     currentActorId === undefined
       ? Promise.resolve([])

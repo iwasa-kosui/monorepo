@@ -1,5 +1,6 @@
 import { type RequestContext } from '@fedify/fedify';
-import { EmojiReact as FedifyEmojiReact, isActor, Note } from '@fedify/vocab';
+import { Emoji, EmojiReact as FedifyEmojiReact, Image, isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -48,6 +49,39 @@ type Deps = Readonly<{
   emojiReactResolverByActorAndPostAndEmoji: EmojiReactResolverByActorAndPostAndEmoji;
   postResolver: PostResolver;
 }>;
+
+type EmojiImage = Readonly<{
+  id?: URL;
+  url: URL;
+  mediaType?: string;
+}>;
+
+const findEmojiImage = async (
+  note: Note,
+  emoji: string,
+  documentLoader: DocumentLoader,
+): Promise<EmojiImage | undefined> => {
+  try {
+    for await (const tag of note.getTags({ documentLoader })) {
+      if (!(tag instanceof Emoji) || tag.name?.toString() !== emoji) {
+        continue;
+      }
+      const icon = await tag.getIcon({ documentLoader });
+      const url = icon?.url instanceof URL ? icon.url : icon?.url?.href;
+      if (url?.protocol !== 'https:') {
+        continue;
+      }
+      return {
+        ...(tag.id ? { id: tag.id } : {}),
+        url,
+        ...(icon?.mediaType?.startsWith('image/') ? { mediaType: icon.mediaType } : {}),
+      };
+    }
+  } catch (err) {
+    getLogger().warn(`findEmojiImage: ${err}`);
+  }
+  return undefined;
+};
 
 const create = ({
   sessionResolver,
@@ -102,7 +136,7 @@ const create = ({
           }),
         );
       }),
-      RA.andBind('remote', async ({ user, post, ctx }) => {
+      RA.andBind('remote', async ({ user, post, ctx, emoji }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -140,10 +174,12 @@ const create = ({
           );
         }
 
-        return RA.ok({ noteId: result.id, author, authorId: author.id });
+        const emojiImage = await findEmojiImage(result, emoji, documentLoader);
+
+        return RA.ok({ noteId: result.id, author, authorId: author.id, emojiImage });
       }),
       // Create and store emoji react
-      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
+      RA.bind('emojiReactCreated', ({ actor, postId, emoji, remote }) =>
         EmojiReact.createEmojiReact(
           {
             emojiReactId: EmojiReactId.generate(),
@@ -151,7 +187,7 @@ const create = ({
             postId,
             emoji,
             emojiReactActivityUri: null,
-            emojiImageUrl: null,
+            emojiImageUrl: remote?.emojiImage?.url.href ?? null,
           },
           now,
         )),
@@ -177,6 +213,17 @@ const create = ({
             object: remote.noteId,
             content: emoji,
             to: remote.authorId,
+            ...(remote.emojiImage
+              ? {
+                tags: [
+                  new Emoji({
+                    id: remote.emojiImage.id,
+                    name: emoji,
+                    icon: new Image({ url: remote.emojiImage.url, mediaType: remote.emojiImage.mediaType }),
+                  }),
+                ],
+              }
+              : {}),
           }),
         );
 
