@@ -25,10 +25,18 @@ const PostQuote = ({
         role='button'
         class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
       >
-        <div
-          class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
-          dangerouslySetInnerHTML={{ __html: status.content }}
-        />
+        {status.spoiler_text !== ''
+          ? (
+            <div class='text-sm text-charcoal dark:text-gray-200 line-clamp-2'>
+              CW: {status.spoiler_text}
+            </div>
+          )
+          : (
+            <div
+              class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light [&_p]:text-charcoal dark:[&_p]:text-gray-200 [&_p]:m-0'
+              dangerouslySetInnerHTML={{ __html: status.content }}
+            />
+          )}
       </div>
     )}
     <a href={postUrl} title={new Date(createdAt).toLocaleString()}>
