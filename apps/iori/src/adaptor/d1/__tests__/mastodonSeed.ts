@@ -248,6 +248,18 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return notificationId;
   };
 
+  const addRepostNotification = (
+    recipientUserId: string,
+    reposterActorId: string,
+    repostedPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'repost', createdAt);
+    sqlite.prepare('INSERT INTO notification_reposts(notificationId,reposterActorId,repostedPostId) VALUES (?,?,?)')
+      .run(notificationId, reposterActorId, repostedPostId);
+    return notificationId;
+  };
+
   const setMarker = (userId: string, timeline: 'home' | 'notifications', lastReadId: string, version = 1) =>
     sqlite.prepare('INSERT INTO mastodon_markers(userId,timeline,lastReadId,version,updatedAt) VALUES (?,?,?,?,?)').run(
       userId,
@@ -277,6 +289,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addReplyNotification,
     addFollowNotification,
     addEmojiReactNotification,
+    addRepostNotification,
     setMarker,
   };
 };

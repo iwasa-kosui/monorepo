@@ -11,6 +11,8 @@ import { createD1MarkersResolverByUserId } from '../marker/markersResolverByUser
 import {
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
+  createD1RepostNotificationCreatedStore,
+  createD1RepostNotificationResolverByRecipientAndActorIdAndPostId,
 } from '../notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../notification/notificationResolverByUserIdAndId.ts';
@@ -276,6 +278,106 @@ describe('通知の削除と notifications のマーカー', () => {
     expect(markerOf(t, 'home')).toEqual({ lastReadId: 'h' });
     expect(t.sqlite.prepare('SELECT count(*) AS n FROM notifications WHERE recipientUserId = ?').get(t.me.userId))
       .toMatchObject({ n: 0 });
+  });
+});
+
+describe('repost 通知', () => {
+  const seedReposts = () => {
+    const t = seedNotifications();
+    const repost = t.seed.addRepostNotification(t.me.userId, t.alice.actorId, t.myPost.postId, 8_000);
+    return { ...t, repost };
+  };
+
+  it('types に repost が含まれるときだけ、子表から値を復元して返す', async () => {
+    const t = seedReposts();
+
+    const result = await t.resolveByPage({}, ['repost']);
+
+    expect(await t.idsOf()).not.toContain(t.repost);
+    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
+      {
+        type: 'repost',
+        notificationId: t.repost,
+        recipientUserId: t.me.userId,
+        reposterActorId: t.alice.actorId,
+        repostedPostId: t.myPost.postId,
+      },
+    ]);
+    expect(result.ok && result.val[0]?.createdAt).toBe(8_000);
+  });
+
+  it('作成ストアが通知、子表、ドメインイベントを保存する', async () => {
+    const t = seedNotifications();
+    const event = Notification.createRepostNotification({
+      type: 'repost',
+      notificationId: NotificationId.generate(),
+      recipientUserId: UserId.orThrow(t.me.userId),
+      isRead: false,
+      reposterActorId: t.alice.actorId as never,
+      repostedPostId: t.myPost.postId as never,
+    }, Instant.orThrow(9_000));
+
+    await createD1RepostNotificationCreatedStore(t.db).store(event);
+
+    const items = await t.resolveByPage({}, ['repost']);
+    const events = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get(
+      'notification.repostNotificationCreated',
+    );
+    expect(items.ok && items.val.map((item) => item.notification)).toEqual([event.aggregateState]);
+    expect(events).toMatchObject({ n: 1 });
+  });
+
+  it('受信者、reposter、投稿が一致する通知だけをリゾルバーが返す', async () => {
+    const t = seedReposts();
+    const resolver = createD1RepostNotificationResolverByRecipientAndActorIdAndPostId(t.db);
+    const resolve = (recipientUserId: string, reposterActorId: string, repostedPostId: string) =>
+      resolver.resolve({
+        recipientUserId: UserId.orThrow(recipientUserId),
+        reposterActorId: reposterActorId as never,
+        repostedPostId: repostedPostId as never,
+      });
+
+    const found = await resolve(t.me.userId, t.alice.actorId, t.myPost.postId);
+    const otherRecipient = await resolve(t.other.userId, t.alice.actorId, t.myPost.postId);
+    const otherReposter = await resolve(t.me.userId, t.other.actorId, t.myPost.postId);
+    const otherPost = await resolve(t.me.userId, t.alice.actorId, t.seed.uuid());
+
+    expect(found.ok && found.val).toMatchObject({ type: 'repost', notificationId: t.repost });
+    expect(otherRecipient.ok && otherRecipient.val).toBeUndefined();
+    expect(otherReposter.ok && otherReposter.val).toBeUndefined();
+    expect(otherPost.ok && otherPost.val).toBeUndefined();
+  });
+
+  it('同じ (reposter, 投稿) の組で2件目の通知を作ると一意索引で失敗する', () => {
+    const t = seedReposts();
+
+    expect(() => t.seed.addRepostNotification(t.other.userId, t.alice.actorId, t.myPost.postId, 8_600))
+      .toThrow(/UNIQUE/);
+    expect(() => t.seed.addRepostNotification(t.me.userId, t.other.actorId, t.myPost.postId, 8_700))
+      .not.toThrow();
+  });
+
+  it('通知の削除と全件削除で子表の行も消える', async () => {
+    const t = seedReposts();
+    t.seed.addRepostNotification(t.me.userId, t.alice.actorId, t.seed.uuid(), 8_500);
+    const count = () => t.sqlite.prepare('SELECT count(*) AS n FROM notification_reposts').get();
+
+    await createD1NotificationDismissedStore(t.db).store(
+      Notification.dismissNotification({
+        type: 'repost',
+        notificationId: NotificationId.orThrow(t.repost),
+        recipientUserId: UserId.orThrow(t.me.userId),
+        isRead: false,
+        reposterActorId: t.alice.actorId as never,
+        repostedPostId: t.myPost.postId as never,
+      }, Instant.orThrow(9_000)),
+    );
+    expect(count()).toMatchObject({ n: 1 });
+
+    await createD1NotificationsClearedStore(t.db).store(
+      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(9_500)),
+    );
+    expect(count()).toMatchObject({ n: 0 });
   });
 });
 

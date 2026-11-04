@@ -12,7 +12,7 @@ import { NotificationItem } from '../components/NotificationItem.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
-const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', IORI_EMOJI_REACTION_TYPE] as const;
+const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', 'reblog', IORI_EMOJI_REACTION_TYPE] as const;
 
 type NotificationsData = Readonly<{
   username: string;

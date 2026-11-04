@@ -4,6 +4,8 @@ import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ArticleResolver } from '../../../domain/article/article.ts';
+import { ArticleId } from '../../../domain/article/articleId.ts';
 import type {
   FederatedTimelineItemCreatedStore,
   FederatedTimelineItemResolverByPostId,
@@ -19,6 +21,9 @@ import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
+const NOTE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Note';
+const ARTICLE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Article';
+
 export type OnAnnounceDeps = Readonly<{
   origin: string;
   relayResolverByActorUri: RelayResolverByActorUri;
@@ -26,6 +31,7 @@ export type OnAnnounceDeps = Readonly<{
   acceptedRelaysResolver: AcceptedRelaysResolver;
   inboxActorResolver: InboxActorResolver;
   addReceivedRepostUseCase: AddReceivedRepostUseCase;
+  articleResolver: ArticleResolver;
   remotePostUpserter: RemotePostUpserter;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
@@ -90,14 +96,14 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
-  // Check if this is a local Note
+  // Check if this is a local Note or Article
   const parsed = ctx.parseUri(objectId);
-  const localNote = parsed && parsed.type === 'object'
-      && parsed.class?.typeId?.href === 'https://www.w3.org/ns/activitystreams#Note'
+  const localObject = parsed && parsed.type === 'object'
+      && (parsed.class?.typeId?.href === NOTE_TYPE_ID || parsed.class?.typeId?.href === ARTICLE_TYPE_ID)
     ? parsed
     : undefined;
 
-  if (!localNote) {
+  if (!localObject) {
     const followedResult = await deps.followedByLocalActorResolverByActorUri.resolve({ actorUri: actorId.href });
     if (followedResult.ok && !followedResult.val) {
       getLogger().info(
@@ -120,14 +126,33 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
   }
   const announceActivityUri = activity.id.href;
 
-  if (localNote) {
-    // Local Note repost
-    const postIdResult = PostId.parse(localNote.values.id);
-    if (!postIdResult.ok) {
-      getLogger().warn(`Failed to parse postId from Announce activity: ${localNote.values.id}`);
-      return;
+  if (localObject) {
+    let repostedPostId: PostId;
+    if (localObject.class?.typeId?.href === ARTICLE_TYPE_ID) {
+      const articleIdResult = ArticleId.parse(localObject.values.id);
+      if (!articleIdResult.ok) {
+        getLogger().warn(`Failed to parse articleId from Announce activity: ${localObject.values.id}`);
+        return;
+      }
+      const articleResult = await deps.articleResolver.resolve(articleIdResult.val);
+      const article = articleResult.ok ? articleResult.val : undefined;
+      const rootPostId = article?.status === 'published' ? article.rootPostId : undefined;
+      if (!rootPostId) {
+        getLogger().info(
+          `Announce activity targets an unpublished article or one without a root post: ${objectId.href}`,
+        );
+        return;
+      }
+      repostedPostId = rootPostId;
+    } else {
+      // Local Note repost
+      const postIdResult = PostId.parse(localObject.values.id);
+      if (!postIdResult.ok) {
+        getLogger().warn(`Failed to parse postId from Announce activity: ${localObject.values.id}`);
+        return;
+      }
+      repostedPostId = postIdResult.val;
     }
-    const repostedPostId = postIdResult.val;
 
     return RA.flow(
       deps.addReceivedRepostUseCase.run({
