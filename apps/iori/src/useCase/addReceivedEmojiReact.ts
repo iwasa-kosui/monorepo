@@ -134,7 +134,7 @@ const create = ({
           emojiImageUrl: emojiImageUrl ?? null,
         };
         const event = EmojiReact.createEmojiReact(emojiReact, now);
-        return emojiReactCreatedStore.store(event).then(() => RA.ok(emojiReact));
+        return RA.flow(emojiReactCreatedStore.store(event), RA.map(() => emojiReact));
       }),
       RA.andThrough(({ post, actor, emoji, emojiImageUrl }) => {
         const notificationId = NotificationId.generate();

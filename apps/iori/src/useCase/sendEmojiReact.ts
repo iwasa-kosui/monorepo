@@ -14,19 +14,19 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  emoji: string;
-  request: Request;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    postId: PostId;
+    emoji: string;
+    request: Request;
+    ctx: RequestContext<unknown>;
+  }>;
 
 type Ok = void;
 
@@ -57,8 +57,7 @@ const create = ({
   postResolver,
 }: Deps): SendEmojiReactUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
@@ -80,8 +79,7 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the post
       RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
@@ -103,22 +101,7 @@ const create = ({
           }),
         );
       }),
-      // Create and store emoji react
-      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
-        EmojiReact.createEmojiReact(
-          {
-            emojiReactId: EmojiReactId.generate(),
-            actorId: actor.id,
-            postId,
-            emoji,
-            emojiReactActivityUri: null,
-            emojiImageUrl: null,
-          },
-          now,
-        )),
-      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
-      // Send the EmojiReact activity to the remote server (only for remote posts)
-      RA.andThrough(async ({ user, post, ctx, emoji, emojiReactCreated }) => {
+      RA.andBind('remote', async ({ user, post, ctx }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
@@ -156,6 +139,28 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Create and store emoji react
+      RA.bind('emojiReactCreated', ({ actor, postId, emoji }) =>
+        EmojiReact.createEmojiReact(
+          {
+            emojiReactId: EmojiReactId.generate(),
+            actorId: actor.id,
+            postId,
+            emoji,
+            emojiReactActivityUri: null,
+            emojiImageUrl: null,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ emojiReactCreated }) => emojiReactCreatedStore.store(emojiReactCreated)),
+      // Send the EmojiReact activity to the remote server (only for remote posts)
+      RA.andThrough(async ({ user, ctx, emoji, emojiReactCreated, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         const actorUri = ctx.getActorUri(user.username);
         const activityId = new URL(
           `#emoji-reacts/${emojiReactCreated.aggregateId.emojiReactId}`,
@@ -164,18 +169,18 @@ const create = ({
 
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new FedifyEmojiReact({
             id: activityId,
             actor: actorUri,
-            object: result.id,
+            object: remote.noteId,
             content: emoji,
-            to: author.id,
+            to: remote.authorId,
           }),
         );
 
         getLogger().info(
-          `Sent EmojiReact: user=${user.username}, note=${result.id.href}, emoji=${emoji}, activityId=${activityId.href}`,
+          `Sent EmojiReact: user=${user.username}, note=${remote.noteId.href}, emoji=${emoji}, activityId=${activityId.href}`,
         );
         return RA.ok(undefined);
       }),

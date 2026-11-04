@@ -94,7 +94,7 @@ describe('Task 7 Worker route mounting', () => {
         env,
         executionContext,
       ),
-      worker.fetch(new Request('https://worker.test/api/v1/relays'), env, executionContext),
+      worker.fetch(new Request('https://worker.test/api/iori/v1/relays'), env, executionContext),
       worker.fetch(
         new Request('https://worker.test/remote-users/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/follow', {
           method: 'POST',

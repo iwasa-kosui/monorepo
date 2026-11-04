@@ -1,3 +1,4 @@
+import type { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -65,7 +66,9 @@ const deleteEmojiReact = (emojiReact: EmojiReact, now: Instant): EmojiReactDelet
   );
 };
 
-export type EmojiReactCreatedStore = Agg.Store<EmojiReactCreated>;
+export type EmojiReactCreatedStore = Readonly<{
+  store: (...events: readonly EmojiReactCreated[]) => RA<void, AlreadyReactedError>;
+}>;
 export type EmojiReactDeletedStore = Agg.Store<EmojiReactDeleted>;
 export type EmojiReactResolverByActivityUri = Agg.Resolver<
   { emojiReactActivityUri: string },

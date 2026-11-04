@@ -29,7 +29,7 @@ const FederatedTimelinePage = () => {
         setItems(page.items);
         setIsLoggedIn(true);
 
-        const relaysResponse = await fetch('/api/v1/relays');
+        const relaysResponse = await fetch('/api/iori/v1/relays');
         if (relaysResponse.ok) {
           const relaysData = await relaysResponse.json();
           setRelays(relaysData.relays);
@@ -61,10 +61,10 @@ const FederatedTimelinePage = () => {
     setIsSubscribing(true);
 
     try {
-      const response = await fetch('/api/v1/relay', {
+      const response = await fetch('/api/iori/v1/relays', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorUri: relayUri }),
+        body: JSON.stringify({ url: relayUri }),
       });
       const data = await response.json();
 
