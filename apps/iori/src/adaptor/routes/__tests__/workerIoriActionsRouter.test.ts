@@ -1,4 +1,4 @@
-import { EmojiReact, Note, Person } from '@fedify/fedify';
+import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/fedify';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';
@@ -23,12 +23,13 @@ const seedReactions = async (scope = 'read write') => {
     Number(
       (t.sqlite.prepare(`SELECT count(*) AS n FROM emoji_reacts WHERE ${where}`).get() as { n: number | bigint }).n,
     );
-  const serveRemoteNote = (note: { uri: string }) =>
+  const serveRemoteNote = (note: { uri: string }, tags: Emoji[] = []) =>
     t.federation.lookupObject.mockResolvedValue(
       new Note({
         id: new URL(note.uri),
         content: 'remote',
         to: new URL('https://www.w3.org/ns/activitystreams#Public'),
+        tags,
         attribution: new Person({
           id: new URL(`https://remote.example/users/${alice.username}`),
           inbox: new URL(`https://remote.example/users/${alice.username}/inbox`),
@@ -206,6 +207,87 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toBeInstanceOf(EmojiReact);
+  });
+
+  describe('リモートの投稿へのカスタム絵文字の反応', () => {
+    const emojiTag = (name: string, url: string) =>
+      new Emoji({
+        id: new URL(`https://remote.example/emojis/${name.replaceAll(':', '')}`),
+        name,
+        icon: new Image({ url: new URL(url), mediaType: 'image/png' }),
+      });
+    const selfEmojiImageUrl = (t: Awaited<ReturnType<typeof seedReactions>>, emoji: string) =>
+      (t.sqlite.prepare('SELECT emojiImageUrl FROM emoji_reacts WHERE actorId = ? AND emoji = ?').get(
+        t.me.actorId,
+        emoji,
+      ) as { emojiImageUrl: string | null }).emojiImageUrl;
+    const sentReact = (t: Awaited<ReturnType<typeof seedReactions>>) => {
+      const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
+      expect(sent).toHaveLength(1);
+      return sent[0] as EmojiReact;
+    };
+    const tagsOf = async (react: EmojiReact) => {
+      const tags: Emoji[] = [];
+      for await (const tag of react.getTags()) {
+        tags.push(tag as Emoji);
+      }
+      return tags;
+    };
+
+    it('投稿に同名の Emoji があるとき、tag に同じ Emoji を付けて送り、icon の url を保存する', async () => {
+      const t = await seedReactions();
+      const url = 'https://remote.example/emoji/wave.png';
+      t.serveRemoteNote(t.publicNote, [
+        emojiTag(':other:', 'https://remote.example/emoji/other.png'),
+        emojiTag(':wave:', url),
+      ]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(StatusSchema.parse(await response.json())).toMatchObject({
+        iori: { reactions: [{ emoji: ':wave:', count: 1, url, me: true }] },
+      });
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      expect(tags[0]).toBeInstanceOf(Emoji);
+      expect(tags[0]!.name?.toString()).toBe(':wave:');
+      expect((await tags[0]!.getIcon())?.url?.toString()).toBe(url);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
+    });
+
+    it('投稿に同名の Emoji が無いとき、tag なしで送り、emojiImageUrl は null にする', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':other:', 'https://remote.example/emoji/other.png')]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('icon の url が https でないときは採用せず、tag なしで送る', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'http://remote.example/emoji/wave.png')]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('Unicode 絵文字の反応は tag なしで送る', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'https://remote.example/emoji/wave.png')]);
+
+      const response = await t.put(t.publicNote.postId, '👍');
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, '👍')).toBeNull();
+    });
   });
 
   it('リモートの投稿を取得できないときは 502 にする', async () => {
