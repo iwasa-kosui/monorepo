@@ -135,6 +135,19 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('records the summary and sensitive of the announced Note in a remote Announce', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ summary: 'spoiler', sensitive: true });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ summary: 'spoiler', sensitive: true }),
+      }),
+    );
+  });
+
   it('records the visibility of the announced Note in a remote Announce', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined);
     const note = createNote([]).clone({ ccs: [new URL('https://www.w3.org/ns/activitystreams#Public')] });
