@@ -11,11 +11,18 @@ import { InboxListener } from './adaptor/fedify/inboxListener/inboxListener.ts';
 import { KeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcher.ts';
 import { ObjectDispatcher } from './adaptor/fedify/objectDispatcher.ts';
 import { OutboxDispatcher } from './adaptor/fedify/outboxDispatcher.ts';
+import { createOnRequestFinished } from './adaptor/fedify/relayForwardedCreate/onRequestFinished.ts';
+import { defineRefetchRelayForwardedNoteTask } from './adaptor/fedify/relayForwardedCreate/refetchRelayForwardedNote.ts';
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { ControlledQueue } from './adaptor/node/source/controlledQueue.ts';
 import { postgresQueueStorage } from './adaptor/node/source/postgresQueueStorage.ts';
 import { PgActorResolverByUserId } from './adaptor/pg/actor/actorResolverByUserId.ts';
+import { PgFederatedTimelineItemCreatedStore } from './adaptor/pg/federatedTimeline/federatedTimelineItemCreatedStore.ts';
+import { PgFederatedTimelineItemResolverByPostId } from './adaptor/pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
+import { PgRemotePostUpserter } from './adaptor/pg/post/remotePostUpserter.ts';
+import { PgRelayResolver } from './adaptor/pg/relay/relayResolver.ts';
+import { PgRelayResolverByActorUri } from './adaptor/pg/relay/relayResolverByActorUri.ts';
 import { PgUserResolverByUsername } from './adaptor/pg/user/userResolverByUsername.ts';
 import { Username } from './domain/user/username.ts';
 import { Env } from './env.ts';
@@ -43,6 +50,13 @@ const create = () => {
   });
   const inboxListener = InboxListener.getInstance();
   const sharedKeyDispatcher = SharedKeyDispatcher.getInstance();
+  const refetchRelayForwardedNoteTask = defineRefetchRelayForwardedNoteTask(federation, {
+    origin: env.ORIGIN,
+    relayResolver: PgRelayResolver.getInstance(),
+    remotePostUpserter: PgRemotePostUpserter.getInstance(),
+    federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
+    federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
+  });
   federation
     .setInboxListeners('/users/{identifier}/inbox', '/inbox')
     .withIdempotency('per-origin')
@@ -54,7 +68,11 @@ const create = () => {
     .on(Delete, inboxListener.onDelete)
     .on(Like, inboxListener.onLike)
     .on(Announce, inboxListener.onAnnounce)
-    .on(Activity, inboxListener.onActivity);
+    .on(Activity, inboxListener.onActivity)
+    .onRequestFinished(createOnRequestFinished({
+      relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
+      enqueue: (ctx, data) => ctx.enqueueTask(refetchRelayForwardedNoteTask, data),
+    }));
 
   federation.setObjectDispatcher(
     Note,
