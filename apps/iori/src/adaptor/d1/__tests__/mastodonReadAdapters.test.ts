@@ -122,6 +122,22 @@ describe('createD1TimelineItemsResolverByActorIds with page', () => {
     expect(result.ok && result.val).toHaveLength(2);
     expect(result.ok && result.val.every((item) => item.post.actorId !== t.alice.actorId)).toBe(true);
   });
+
+  it('同じ名前のリアクションは URL の有無にかかわらず 1 件にまとめ、URL は非 null の値を採る', async () => {
+    const t = seedTimeline();
+    t.seed.addEmojiReact(t.alice.actorId, t.first.postId, ':x:', 'https://remote.example/emoji/x.png');
+    t.seed.addEmojiReact(t.me.actorId, t.first.postId, ':x:', null);
+    t.seed.addEmojiReact(t.alice.actorId, t.first.postId, '👍', null);
+    t.seed.addEmojiReact(t.me.actorId, t.first.postId, '👍', null);
+
+    const result = await t.resolve({});
+
+    const post = result.ok ? result.val.find((item) => item.post.postId === t.first.postId)?.post : undefined;
+    expect(post?.reactions).toEqual([
+      { emoji: ':x:', emojiImageUrl: 'https://remote.example/emoji/x.png', count: 2 },
+      { emoji: '👍', emojiImageUrl: null, count: 2 },
+    ]);
+  });
 });
 
 describe('createD1LocalPostsResolverByPage', () => {

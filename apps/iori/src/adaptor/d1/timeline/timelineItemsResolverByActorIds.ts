@@ -127,10 +127,10 @@ export const createD1TimelineItemsResolverByActorIds = (
         : db.select({
           postId: emojiReactsTable.postId,
           emoji: emojiReactsTable.emoji,
-          emojiImageUrl: emojiReactsTable.emojiImageUrl,
+          emojiImageUrl: sql<string | null>`max(${emojiReactsTable.emojiImageUrl})`,
           count: sql<number>`count(*)`,
         }).from(emojiReactsTable).where(inArray(emojiReactsTable.postId, postIds))
-          .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji, emojiReactsTable.emojiImageUrl),
+          .groupBy(emojiReactsTable.postId, emojiReactsTable.emoji),
       postIds.length === 0
         ? Promise.resolve([])
         : db.select().from(linkPreviewsTable).where(inArray(linkPreviewsTable.postId, postIds)),
