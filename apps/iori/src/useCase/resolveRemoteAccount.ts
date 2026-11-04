@@ -6,6 +6,7 @@ import type { ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
@@ -28,6 +29,7 @@ type Deps = Readonly<{
   remoteActorLookup: RemoteActorLookup;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
 }>;
 
@@ -36,6 +38,7 @@ const create = ({
   remoteActorLookup,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  remoteActorProfileUpdatedStore,
   actorResolverByUri,
 }: Deps): ResolveRemoteAccountUseCase => {
   const resolveUser = resolveUserWith(userResolver);
@@ -50,7 +53,13 @@ const create = ({
         RA.flow(
           ActorIdentity.fromFedifyActor(fedifyActor),
           RA.andThen(
-            upsertRemoteActor({ now: Instant.now(), remoteActorCreatedStore, logoUriUpdatedStore, actorResolverByUri }),
+            upsertRemoteActor({
+              now: Instant.now(),
+              remoteActorCreatedStore,
+              logoUriUpdatedStore,
+              remoteActorProfileUpdatedStore,
+              actorResolverByUri,
+            }),
           ),
         )
       ),

@@ -7,18 +7,21 @@ import {
   createMockActorResolverByUri,
   createMockLogoUriUpdatedStore,
   createMockRemoteActorCreatedStore,
+  createMockRemoteActorProfileUpdatedStore,
 } from './mockAdaptors.ts';
 
 describe('upsertRemoteActor', () => {
   const createDeps = () => {
     const remoteActorCreatedStore = createMockRemoteActorCreatedStore();
     const logoUriUpdatedStore = createMockLogoUriUpdatedStore();
+    const remoteActorProfileUpdatedStore = createMockRemoteActorProfileUpdatedStore();
     const actorResolverByUri = createMockActorResolverByUri();
     const now = Instant.now();
     return {
       now,
       remoteActorCreatedStore,
       logoUriUpdatedStore,
+      remoteActorProfileUpdatedStore,
       actorResolverByUri,
     };
   };
@@ -227,6 +230,102 @@ describe('upsertRemoteActor', () => {
 
       expect(deps.remoteActorCreatedStore.store).not.toHaveBeenCalled();
       expect(deps.logoUriUpdatedStore.store).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('プロフィール', () => {
+    const base = {
+      uri: 'https://remote.example.com/users/pat',
+      inboxUrl: 'https://remote.example.com/users/pat/inbox',
+    };
+    const existing = (overrides: Partial<RemoteActor> = {}): RemoteActor => ({
+      id: crypto.randomUUID() as RemoteActor['id'],
+      ...base,
+      type: 'remote',
+      displayName: 'Pat',
+      summary: '<p>hello</p>',
+      ...overrides,
+    });
+
+    it('新規作成時に profile が RemoteActor に入る', async () => {
+      const deps = createDeps();
+      const profile = {
+        displayName: 'Pat',
+        summary: '<p>hi</p>',
+        actorType: 'Service' as const,
+        fields: [{ name: 'web', value: 'example' }],
+        emojis: [],
+      };
+
+      const result = await upsertRemoteActor(deps)({ ...base, profile });
+
+      expect(result.ok && (result.val as RemoteActor)).toMatchObject({
+        displayName: 'Pat',
+        summary: '<p>hi</p>',
+        actorType: 'Service',
+        fields: [{ name: 'web', value: 'example' }],
+      });
+      expect(deps.remoteActorProfileUpdatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('profile が保存済みの値と違えば remoteActorProfileUpdatedStore.store で更新する', async () => {
+      const deps = createDeps();
+      const actor = existing();
+      deps.actorResolverByUri.setActor(actor);
+
+      const result = await upsertRemoteActor(deps)({ ...base, profile: { displayName: 'Patricia' } });
+
+      expect(deps.remoteActorProfileUpdatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.remoteActorCreatedStore.store).not.toHaveBeenCalled();
+      expect(result.ok && (result.val as RemoteActor).displayName).toBe('Patricia');
+      expect(result.ok && (result.val as RemoteActor).summary).toBe('<p>hello</p>');
+    });
+
+    it('profile の値が null のときは保存済みの値を空にする', async () => {
+      const deps = createDeps();
+      deps.actorResolverByUri.setActor(existing());
+
+      const result = await upsertRemoteActor(deps)({ ...base, profile: { summary: null } });
+
+      expect(deps.remoteActorProfileUpdatedStore.store).toHaveBeenCalledTimes(1);
+      expect(result.ok && (result.val as RemoteActor).summary).toBeUndefined();
+    });
+
+    it('profile が undefined のときは更新しない', async () => {
+      const deps = createDeps();
+      deps.actorResolverByUri.setActor(existing());
+
+      await upsertRemoteActor(deps)({ ...base });
+
+      expect(deps.remoteActorProfileUpdatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('profile が保存済みの値と同じなら更新しない', async () => {
+      const deps = createDeps();
+      deps.actorResolverByUri.setActor(existing({ fields: [{ name: 'web', value: 'example' }] }));
+
+      await upsertRemoteActor(deps)({
+        ...base,
+        profile: {
+          displayName: 'Pat',
+          summary: '<p>hello</p>',
+          fields: [{ name: 'web', value: 'example' }],
+          emojis: [],
+        },
+      });
+
+      expect(deps.remoteActorProfileUpdatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('remoteActorProfileUpdatedStore が渡されないときは更新しない', async () => {
+      const deps = createDeps();
+      deps.actorResolverByUri.setActor(existing());
+      const { remoteActorProfileUpdatedStore: _unused, ...withoutStore } = deps;
+
+      const result = await upsertRemoteActor(withoutStore)({ ...base, profile: { displayName: 'Patricia' } });
+
+      expect(result.ok && (result.val as RemoteActor).displayName).toBe('Pat');
+      expect(_unused.store).not.toHaveBeenCalled();
     });
   });
 });
