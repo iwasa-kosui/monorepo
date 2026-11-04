@@ -44,6 +44,11 @@ resource "cloudflare_r2_bucket" "event_archive" {
   }
 }
 
+import {
+  to = cloudflare_r2_bucket.event_archive
+  id = "${var.cloudflare_account_id}/${local.event_archive_name}/default"
+}
+
 resource "cloudflare_workers_kv_namespace" "fedify" {
   account_id = var.cloudflare_account_id
   title      = local.kv_namespace_name
