@@ -29,4 +29,111 @@ describe('logging.cloudflare', () => {
     expect(warn).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledTimes(2);
   });
+
+  it('writes the failure debug records of the fedify LD signature logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const ld = getLogger(['fedify', 'sig', 'ld']);
+    const sig = {
+      type: 'RsaSignature2017',
+      creator: 'https://remote.example/users/alice#main-key',
+      created: '2026-11-04T00:00:00Z',
+      signatureValue: 'c2lnbmF0dXJl',
+    };
+
+    ld.debug(
+      'Failed to verify with the cached key {keyId}; signature {signatureValue} is invalid.  Retrying with the freshly fetched key...',
+      { keyId: sig.creator, ...sig },
+    );
+    expect(debug).toHaveBeenCalledTimes(1);
+
+    ld.debug(
+      'Failed to verify with the fetched key {keyId}; signature {signatureValue} is invalid.  Check if the key is correct or if the signed message is correct.  The message to sign is:\n{message}',
+      { keyId: sig.creator, ...sig, message: 'hash' },
+    );
+    expect(debug).toHaveBeenCalledTimes(2);
+
+    ld.debug('Key {keyId} has no owner.', { keyId: 'https://relay.example/actor#main-key' });
+    expect(debug).toHaveBeenCalledTimes(3);
+
+    ld.debug('Some attributions are not authenticated by the Linked Data Signatures: {attributions}.', {
+      attributions: ['https://remote.example/users/alice'],
+    });
+    expect(debug).toHaveBeenCalledTimes(4);
+  });
+
+  it('drops the other debug records of the fedify LD signature logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const ld = getLogger(['fedify', 'sig', 'ld']);
+
+    ld.debug('Failed to verify; invalid base64 signatureValue: {signatureValue}', {
+      type: 'RsaSignature2017',
+      creator: 'https://remote.example/users/alice#main-key',
+      signatureValue: '%%%',
+      error: new Error('x'),
+    });
+    ld.debug('Some unrelated debug record with {document}', { document: { content: 'post body' } });
+
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('writes only the fetch failure debug records of the fedify key logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const key = getLogger(['fedify', 'sig', 'key']);
+    const keyId = 'https://relay.example/actor#main-key';
+
+    key.debug('Failed to fetch key {keyId}.', { keyId });
+    expect(debug).toHaveBeenCalledTimes(1);
+
+    key.debug('Failed to verify; key {keyId} returned an invalid object.', { keyId });
+    expect(debug).toHaveBeenCalledTimes(2);
+
+    key.debug('Key {keyId} found in cache.', { keyId });
+    key.debug('Fetching key {keyId} to verify signature...', { keyId });
+    expect(debug).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes info and above of the fedify key logger once each', async () => {
+    await import('./logging.cloudflare.ts');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const key = getLogger(['fedify', 'sig', 'key']);
+
+    key.info('key info');
+    key.warn('key warn');
+    key.error('key error');
+
+    expect(info).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+  });
+
+  it('writes info and above of the fedify LD signature logger once each', async () => {
+    await import('./logging.cloudflare.ts');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const ld = getLogger(['fedify', 'sig', 'ld']);
+
+    ld.info('ld info');
+    ld.warn('ld warn');
+    ld.error('ld error');
+
+    expect(info).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+  });
+
+  it('does not write debug of the fedify HTTP signature and federation loggers', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+    getLogger(['fedify', 'sig', 'http']).debug('Key {keyId} has no owner.', { keyId: 'k' });
+    getLogger(['fedify', 'federation']).debug('Key {keyId} has no owner.', { keyId: 'k' });
+
+    expect(debug).not.toHaveBeenCalled();
+  });
 });
