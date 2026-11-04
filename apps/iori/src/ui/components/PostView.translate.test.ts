@@ -19,6 +19,8 @@ const base = postToStatus({
   liked: false,
   reposted: false,
   inReplyToUri: null,
+  summary: null,
+  sensitive: false,
   images: [],
   likeCount: 0,
   repostCount: 0,

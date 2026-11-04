@@ -90,6 +90,8 @@ describe('GetUserProfileUseCase', () => {
       const posts: PostWithAuthor[] = [
         {
           type: 'local',
+          summary: null,
+          sensitive: false,
           postId: crypto.randomUUID() as PostId,
           actorId: actor.id,
           content: 'Hello from profile!',

@@ -159,7 +159,7 @@ describe('D1 timeline and posting adapters', () => {
           repostId: null,
           createdAt,
         },
-        posts: { postId, actorId, content: 'Hello timeline', createdAt },
+        posts: { postId, actorId, content: 'Hello timeline', createdAt, summary: null, sensitive: false },
         local_posts: { userId, inReplyToUri: null },
         remote_posts: null,
         actors: { actorId, logoUri: null },

@@ -38,6 +38,8 @@ describe('createOnDelete', () => {
           resolve: async () =>
             RA.ok({
               type: 'remote' as const,
+              summary: null,
+              sensitive: false,
               postId,
               actorId,
               content: 'remote post',
