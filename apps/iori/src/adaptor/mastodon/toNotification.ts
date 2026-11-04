@@ -30,6 +30,8 @@ export const toType = (notification: DomainNotification): ResponseNotificationTy
       return 'follow';
     case 'emojiReact':
       return IORI_EMOJI_REACTION_TYPE;
+    case 'repost':
+      return 'reblog';
   }
 };
 
@@ -43,6 +45,8 @@ export const triggerActorIdOf = (notification: DomainNotification): ActorId => {
       return notification.followerActorId;
     case 'emojiReact':
       return notification.reactorActorId;
+    case 'repost':
+      return notification.reposterActorId;
   }
 };
 
@@ -56,6 +60,8 @@ export const targetPostIdOf = (notification: DomainNotification): PostId | undef
       return undefined;
     case 'emojiReact':
       return notification.reactedPostId;
+    case 'repost':
+      return notification.repostedPostId;
   }
 };
 
@@ -70,7 +76,7 @@ const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<Dom
   follow: ['follow'],
   [IORI_EMOJI_REACTION_TYPE]: ['emojiReact'],
   status: [],
-  reblog: [],
+  reblog: ['repost'],
   follow_request: [],
   poll: [],
   update: [],
@@ -81,7 +87,7 @@ const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<Dom
 };
 
 const knownTypes = new Set<string>([...NotificationTypeSchema.options, IORI_EMOJI_REACTION_TYPE]);
-const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'follow'];
+const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'follow', 'reblog'];
 
 const known = (values: ReadonlyArray<string>): ResponseNotificationType[] =>
   values.filter((value): value is ResponseNotificationType => knownTypes.has(value));

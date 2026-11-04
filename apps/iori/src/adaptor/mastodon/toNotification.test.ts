@@ -7,7 +7,14 @@ import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { type Account, NotificationSchema, RelationshipSchema } from './entities.ts';
-import { selectDomainTypes, toGroupedNotificationId, toNotification, toStrictlyDescending } from './toNotification.ts';
+import {
+  selectDomainTypes,
+  targetPostIdOf,
+  toGroupedNotificationId,
+  toNotification,
+  toStrictlyDescending,
+  triggerActorIdOf,
+} from './toNotification.ts';
 import { toRelationship } from './toRelationship.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
@@ -73,6 +80,20 @@ describe('toNotification', () => {
     expect(result?.type).toBe('mention');
   });
 
+  it('maps repost to reblog with the reposter and the reposted post', () => {
+    const reposterActorId = ActorId.generate();
+    const repostedPostId = PostId.generate();
+    const notification: Notification = { ...base, type: 'repost', reposterActorId, repostedPostId };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({ id: notification.notificationId, type: 'reblog' });
+    expect(result).not.toHaveProperty('iori');
+    expect(triggerActorIdOf(notification)).toBe(reposterActorId);
+    expect(targetPostIdOf(notification)).toBe(repostedPostId);
+  });
+
   it('maps follow to follow without a status', () => {
     const result = toNotification({ ...base, type: 'follow', followerActorId: ActorId.generate() }, options);
 
@@ -108,8 +129,8 @@ describe('toNotification', () => {
 describe('selectDomainTypes', () => {
   const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
 
-  it('returns like, reply and follow by default and leaves emojiReact out', () => {
-    expect(select([])).toEqual(['like', 'reply', 'follow']);
+  it('returns like, reply, follow and repost by default and leaves emojiReact out', () => {
+    expect(select([])).toEqual(['like', 'reply', 'follow', 'repost']);
   });
 
   it('returns emojiReact only when iori:emoji_reaction is named', () => {
@@ -118,10 +139,11 @@ describe('selectDomainTypes', () => {
   });
 
   it('ignores unknown values and applies the exclusions', () => {
-    expect(select(['bogus'])).toEqual(['like', 'reply', 'follow']);
+    expect(select(['bogus'])).toEqual(['like', 'reply', 'follow', 'repost']);
     expect(select(['favourite', 'bogus'])).toEqual(['like']);
-    expect(select([], ['follow', 'bogus'])).toEqual(['like', 'reply']);
-    expect(select(['reblog'])).toEqual([]);
+    expect(select([], ['follow', 'bogus'])).toEqual(['like', 'reply', 'repost']);
+    expect(select(['reblog'])).toEqual(['repost']);
+    expect(select(['status'])).toEqual([]);
   });
 });
 

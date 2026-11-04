@@ -10,19 +10,31 @@ import {
   SendActivityError,
 } from '@fedify/fedify';
 import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
+import { FetchError } from '@fedify/vocab-runtime';
 
+import { createD1ActorResolverByUri } from './adaptor/d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowingId } from './adaptor/d1/actor/actorsResolverByFollowingId.ts';
+import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
+import { createD1RemoteActorCreatedStore } from './adaptor/d1/actor/remoteActorCreatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1ArticleBodyResolver } from './adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1Db } from './adaptor/d1/client.ts';
+import { createD1FederatedTimelineItemCreatedStore } from './adaptor/d1/federatedTimeline/federatedTimelineItemCreatedStore.ts';
+import { createD1FederatedTimelineItemResolverByPostId } from './adaptor/d1/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
+import { createD1PostImageCreatedStore } from './adaptor/d1/image/postImageCreatedStore.ts';
 import { createD1PostImagesResolverByPostId } from './adaptor/d1/image/postImagesResolver.ts';
 import { createD1InstanceActorKeyPairsResolver } from './adaptor/d1/key/instanceActorKeyPairsResolver.ts';
 import { createD1KeyGeneratedStore } from './adaptor/d1/key/keyGeneratedStore.ts';
 import { createD1KeysResolverByUserId } from './adaptor/d1/key/keysResolverByUserId.ts';
+import { createD1PostCreatedStore } from './adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostResolver } from './adaptor/d1/post/postResolver.ts';
+import { createD1PostResolverByUri } from './adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsResolverByActorId } from './adaptor/d1/post/postsResolverByActorId.ts';
+import { createD1RemotePostUpserter } from './adaptor/d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from './adaptor/d1/post/threadResolver.ts';
+import { createD1RelayResolver } from './adaptor/d1/relay/relayResolver.ts';
+import { createD1RelayResolverByActorUri } from './adaptor/d1/relay/relayResolverByActorUri.ts';
 import { createD1UserResolverByUsername } from './adaptor/d1/user/userResolverByUsername.ts';
 import { createActorDispatcher } from './adaptor/fedify/actorDispatcherFactory.ts';
 import { createFollowersCounter, createFollowersDispatcher } from './adaptor/fedify/followersDispatcherFactory.ts';
@@ -31,6 +43,8 @@ import { FedifyKeyGenerator } from './adaptor/fedify/keyGenerator.ts';
 import { createKeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcherFactory.ts';
 import { createObjectDispatcher } from './adaptor/fedify/objectDispatcherFactory.ts';
 import { createOutboxDispatcher } from './adaptor/fedify/outboxDispatcherFactory.ts';
+import { createOnRequestFinished } from './adaptor/fedify/relayForwardedCreate/onRequestFinished.ts';
+import { defineRefetchRelayForwardedNoteTask } from './adaptor/fedify/relayForwardedCreate/refetchRelayForwardedNote.ts';
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { IORI_VERSION } from './adaptor/mastodon/ioriVersion.ts';
 import { buildNodeInfo } from './adaptor/mastodon/nodeinfo.ts';
@@ -195,6 +209,21 @@ export const createCloudflareFederationRuntime = async (
     vapidPublicKey: env.VAPID_PUBLIC_KEY,
     vapidPrivateKey: env.VAPID_PRIVATE_KEY,
   });
+  const relayResolverByActorUri = createD1RelayResolverByActorUri(db);
+  const refetchRelayForwardedNoteTask = defineRefetchRelayForwardedNoteTask(federationBuilder, {
+    origin: env.ORIGIN,
+    relayResolver: createD1RelayResolver(db),
+    remotePostUpserter: createD1RemotePostUpserter({
+      postResolverByUri: createD1PostResolverByUri(db),
+      postCreatedStore: createD1PostCreatedStore(db),
+      postImageCreatedStore: createD1PostImageCreatedStore(db),
+      remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
+      logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+      actorResolverByUri: createD1ActorResolverByUri(db),
+    }),
+    federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
+    federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),
+  });
   federationBuilder.setInboxListeners('/users/{identifier}/inbox', '/inbox')
     .withIdempotency('per-origin')
     .setSharedKeyDispatcher(SharedKeyDispatcher.getInstance().dispatch)
@@ -205,7 +234,11 @@ export const createCloudflareFederationRuntime = async (
     .on(Delete, inboxListener.onDelete)
     .on(Like, inboxListener.onLike)
     .on(Announce, inboxListener.onAnnounce)
-    .on(Activity, inboxListener.onActivity);
+    .on(Activity, inboxListener.onActivity)
+    .onRequestFinished(createOnRequestFinished({
+      relayResolverByActorUri,
+      enqueue: (ctx, data) => ctx.enqueueTask(refetchRelayForwardedNoteTask, data),
+    }));
   federationBuilder.setFollowersDispatcher('/users/{identifier}/followers', followersDispatcher.dispatch)
     .setCounter(createFollowersCounter(followersDeps));
   federationBuilder.setOutboxDispatcher('/users/{identifier}/outbox', outboxDispatcher.dispatch);
@@ -262,8 +295,15 @@ export type QueueMessageType = Message['type'];
 
 export type QueueFailureAction = Readonly<
   | { type: 'retry'; delaySeconds?: number }
-  | { type: 'drop'; statusCode: number }
+  | { type: 'drop'; reason: 'clientError'; statusCode: number }
+  | { type: 'drop'; reason: 'fetchTimeout'; url: string }
 >;
+
+const isFetchTimeout = (error: unknown): error is FetchError =>
+  error instanceof FetchError
+  && typeof error.cause === 'object'
+  && error.cause !== null
+  && (error.cause as { name?: unknown }).name === 'TimeoutError';
 
 const isPermanentClientErrorStatus = (statusCode: number): boolean =>
   statusCode >= 400 && statusCode <= 499 && statusCode !== 408 && statusCode !== 429;
@@ -274,13 +314,18 @@ export const decideQueueFailureAction = (
   attempts: number,
   messageType: QueueMessageType | undefined,
 ): QueueFailureAction => {
+  if (messageType === 'inbox' && isFetchTimeout(error)) {
+    return attempts <= 1
+      ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
+      : { type: 'drop', reason: 'fetchTimeout', url: error.url.href };
+  }
   if (messageType !== 'outbox' && messageType !== 'fanout') {
     return { type: 'retry' };
   }
   if (error instanceof SendActivityError && isPermanentClientErrorStatus(error.statusCode)) {
     return attempts <= 1
       ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
-      : { type: 'drop', statusCode: error.statusCode };
+      : { type: 'drop', reason: 'clientError', statusCode: error.statusCode };
   }
   return { type: 'retry', delaySeconds: queueRetryDelaySeconds(attempts) };
 };
@@ -301,10 +346,14 @@ export const processCloudflareFedifyMessages = async (
       const attempts = message.attempts ?? 1;
       const action = decideQueueFailureAction(error, attempts, messageType);
       if (action.type === 'drop') {
-        console.error('Fedify queued task dropped after a client error response.', {
-          statusCode: action.statusCode,
-          attempts,
-        });
+        if (action.reason === 'clientError') {
+          console.error('Fedify queued task dropped after a client error response.', {
+            statusCode: action.statusCode,
+            attempts,
+          });
+        } else {
+          console.error('Fedify queued task dropped after a fetch timeout.', { url: action.url, attempts });
+        }
         message.ack();
       } else {
         if (action.delaySeconds === undefined) {

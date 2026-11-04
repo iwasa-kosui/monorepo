@@ -14,6 +14,11 @@ import {
 } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import {
+  type DigestResolverByArticleId,
+  DigestSummaryNotPublishableError,
+  SUMMARY_DIGEST_TOPIC_KEY,
+} from '../domain/digest/digest.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
@@ -53,6 +58,7 @@ type Err =
   | ArticleNotFoundError
   | UnauthorizedError
   | ArticleInvalidStatusError
+  | DigestSummaryNotPublishableError
   | ArticleBodyMissingError;
 
 export type PublishArticleUseCase = UseCase<Input, Ok, Err>;
@@ -64,6 +70,7 @@ type Deps = Readonly<{
   articleResolver: ArticleResolver;
   articlePublishedStore: ArticlePublishedStore;
   articleBodyResolver: ArticleBodyResolver;
+  digestResolverByArticleId: DigestResolverByArticleId;
 }>;
 
 const create = ({
@@ -73,6 +80,7 @@ const create = ({
   articleResolver,
   articlePublishedStore,
   articleBodyResolver,
+  digestResolverByArticleId,
 }: Deps): PublishArticleUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
@@ -105,6 +113,14 @@ const create = ({
               'unpublished',
             ]),
           );
+        }
+
+        const digest = await digestResolverByArticleId.resolve(existingArticle.articleId);
+        if (!digest.ok) {
+          return digest;
+        }
+        if (digest.val?.topicKey === SUMMARY_DIGEST_TOPIC_KEY && digest.val.items.length === 0) {
+          return RA.err(DigestSummaryNotPublishableError.create(existingArticle.articleId));
         }
 
         if (existingArticle.rootPostId === null) {

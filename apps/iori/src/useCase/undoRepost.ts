@@ -1,10 +1,11 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Announce, type Recipient, Undo } from '@fedify/vocab';
+import { PUBLIC_COLLECTION, type Recipient, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Agg } from '../domain/aggregate/index.ts';
+import type { ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -16,7 +17,8 @@ import {
   type TimelineItemResolverByRepostId,
 } from '../domain/timeline/timelineItem.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import { createRepostAnnounce, repostAnnounceUri, resolveLocalPostObjectUri } from './helper/repostAnnounce.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -63,7 +65,13 @@ type Deps = Readonly<{
   timelineItemResolverByRepostId: TimelineItemResolverByRepostId;
   timelineItemDeletedStore: TimelineItemDeletedStore;
   postResolver: PostResolver;
+  articleResolverByRootPostId: ArticleResolverByRootPostId;
 }>;
+
+type UndoTarget =
+  | Readonly<{ type: 'local'; objectUri: URL; authorActorUri: URL }>
+  | Readonly<{ type: 'remote'; objectUri: URL; authorActorUri: URL; recipient: Recipient }>
+  | Readonly<{ type: 'remoteAuthorUnresolved'; objectUri: URL | undefined; authorActorUri: URL | undefined }>;
 
 const create = ({
   sessionResolver,
@@ -75,10 +83,12 @@ const create = ({
   timelineItemResolverByRepostId,
   timelineItemDeletedStore,
   postResolver,
+  articleResolverByRootPostId,
 }: Deps): UndoRepostUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+  const resolveUser = resolveUserWith(userResolver);
 
   const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
     RA.flow(
@@ -118,23 +128,40 @@ const create = ({
           }),
         );
       }),
-      RA.andBind('remote', ({ post }) => {
-        // Local posts don't need ActivityPub delivery
+      RA.andBind('target', async ({ post, ctx }): RA<UndoTarget, UserNotFoundError> => {
         if (post.type === 'local') {
-          return RA.ok(undefined);
+          const postAuthor = await resolveUser(post.userId);
+          if (!postAuthor.ok) {
+            return postAuthor;
+          }
+          const objectUri = await resolveLocalPostObjectUri({
+            ctx,
+            authorUsername: postAuthor.val.username,
+            postId: post.postId,
+            articleResolverByRootPostId,
+          });
+          return RA.ok({
+            type: 'local',
+            objectUri,
+            authorActorUri: ctx.getActorUri(postAuthor.val.username),
+          });
         }
 
         return RA.flow(
           actorResolverById.resolve(post.actorId),
-          RA.map((author) => {
+          RA.map((author): UndoTarget => {
+            const objectUri = URL.canParse(post.uri) ? new URL(post.uri) : undefined;
+            const authorActorUri = author?.type === 'remote' && URL.canParse(author.uri)
+              ? new URL(author.uri)
+              : undefined;
             if (
-              author?.type !== 'remote' || !URL.canParse(post.uri) || !URL.canParse(author.uri)
+              author?.type !== 'remote' || objectUri === undefined || authorActorUri === undefined
               || !URL.canParse(author.inboxUrl)
             ) {
-              return undefined;
+              return { type: 'remoteAuthorUnresolved', objectUri, authorActorUri };
             }
-            const recipient: Recipient = { id: new URL(author.uri), inboxId: new URL(author.inboxUrl) };
-            return { noteId: new URL(post.uri), recipient };
+            const recipient: Recipient = { id: authorActorUri, inboxId: new URL(author.inboxUrl) };
+            return { type: 'remote', objectUri, authorActorUri, recipient };
           }),
         );
       }),
@@ -157,34 +184,32 @@ const create = ({
         const deletedEvent = Repost.deleteRepost(repost, now);
         return repostDeletedStore.store(deletedEvent);
       }),
-      // Send Undo Announce activity for remote posts
-      RA.andThrough(async ({ ctx, user, repost, remote }) => {
-        if (remote === undefined) {
+      RA.andThrough(async ({ ctx, user, repost, target }) => {
+        if (target.objectUri === undefined) {
           return RA.ok(undefined);
         }
 
         const actorUri = ctx.getActorUri(user.username);
-        const followersUri = new URL(`${actorUri.href}/followers`);
-
-        const announceId = repost.announceActivityUri
-          ? new URL(repost.announceActivityUri)
-          : new URL(`#announces/${repost.repostId}`, actorUri);
-
-        await ctx.sendActivity(
-          { username: user.username },
-          remote.recipient,
-          new Undo({
-            id: new URL(`#undo-announces/${repost.repostId}`, actorUri),
-            actor: actorUri,
-            object: new Announce({
-              id: announceId,
-              actor: actorUri,
-              object: remote.noteId,
-            }),
-            to: new URL('https://www.w3.org/ns/activitystreams#Public'),
-            cc: followersUri,
+        const undo = new Undo({
+          id: new URL(`#undo-announces/${repost.repostId}`, actorUri),
+          actor: actorUri,
+          object: createRepostAnnounce({
+            ctx,
+            username: user.username,
+            id: repost.announceActivityUri
+              ? new URL(repost.announceActivityUri)
+              : repostAnnounceUri(ctx, user.username, repost.repostId),
+            object: target.objectUri,
+            authorActorUri: target.authorActorUri,
           }),
-        );
+          to: PUBLIC_COLLECTION,
+          cc: ctx.getFollowersUri(user.username),
+        });
+
+        if (target.type === 'remote') {
+          await ctx.sendActivity({ identifier: user.username }, target.recipient, undo);
+        }
+        await ctx.sendActivity({ identifier: user.username }, 'followers', undo);
         return RA.ok(undefined);
       }),
       RA.map(() => undefined),

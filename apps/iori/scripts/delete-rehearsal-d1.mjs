@@ -25,7 +25,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMPTY_CHECK_SQL = String
   .raw`SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite\_%' ESCAPE '\' AND name NOT LIKE '\_cf\_%' ESCAPE '\'`;
 
-const request = async ({ method, path, body, token, signal, fetchRequest }) => {
+export const request = async ({ method, path, body, token, signal, fetchRequest }) => {
   const api = controlPlaneApi(path);
   const failed = (reason) => withReason(new Error('Cloudflare request failed.'), signal?.aborted ? 'aborted' : reason);
   try {
@@ -73,7 +73,7 @@ const request = async ({ method, path, body, token, signal, fetchRequest }) => {
     throw failed(`${api}-request`);
   }
 };
-const listDatabases = async (context) => {
+export const listDatabases = async (context) => {
   const path = `/accounts/${context.accountId}/d1/database`;
   const items = [];
   for (let page = 1; page <= MAX_PAGES; page += 1) {
@@ -92,7 +92,7 @@ const listDatabases = async (context) => {
   }
   throw withReason(new Error('Cloudflare response is too long.'), 'd1-limit');
 };
-const matchesOf = (items, name) =>
+export const matchesOf = (items, name) =>
   items.filter((item) => item !== null && typeof item === 'object' && item.name === name);
 const checkEmpty = async (context, name, uuid) => {
   const path = `/accounts/${context.accountId}/d1/database/${uuid}`;

@@ -28,6 +28,7 @@ import { PgArticleUnpublishedStore } from '../pg/article/articleUnpublishedStore
 import { PgArticleWithDependentsDeletedStore } from '../pg/article/articleWithDependentsDeletedStore.ts';
 import { DB } from '../pg/db.ts';
 import { PgDigestHeaderResolverByArticleId } from '../pg/digest/digestHeaderResolverByArticleId.ts';
+import { PgDigestResolverByArticleId } from '../pg/digest/digestResolverByArticleId.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { articlesTable, usersTable } from '../pg/schema.ts';
@@ -192,6 +193,7 @@ app.post('/articles/:articleId/publish', async (c) => {
     articleResolver: PgArticleResolver.getInstance(),
     articlePublishedStore: PgArticlePublishedStore.getInstance(),
     articleBodyResolver: PgArticleBodyResolver.getInstance(),
+    digestResolverByArticleId: PgDigestResolverByArticleId.getInstance(),
   });
 
   const result = await useCase.run({
