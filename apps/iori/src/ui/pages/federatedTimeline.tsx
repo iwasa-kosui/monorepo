@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { fetchPublicTimeline } from '../api/mastodonClient.ts';
 import { PostView } from '../components/PostView.tsx';
+import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 
 type Relay = {
   relayId: string;
@@ -12,7 +12,7 @@ type Relay = {
 };
 
 const FederatedTimelinePage = () => {
-  const [items, setItems] = useState<readonly Status[]>([]);
+  const { items, setFirstPage } = usePublicTimeline('remote');
   const [relays, setRelays] = useState<Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -26,7 +26,7 @@ const FederatedTimelinePage = () => {
     const fetchData = async () => {
       try {
         const page = await fetchPublicTimeline('remote');
-        setItems(page.items);
+        setFirstPage(page);
         setIsLoggedIn(true);
 
         const relaysResponse = await fetch('/api/iori/v1/relays');
