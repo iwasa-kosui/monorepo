@@ -2,8 +2,10 @@ import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1FeedEntriesResolverByFeedSourceIdAndGuids } from '../adaptor/d1/feedEntry/feedEntriesResolverByFeedSourceIdAndGuids.ts';
 import { createD1FeedEntriesResolverByFetchedBefore } from '../adaptor/d1/feedEntry/feedEntriesResolverByFetchedBefore.ts';
 import { createD1FeedEntriesResolverByFetchedSinceExcludingKinds } from '../adaptor/d1/feedEntry/feedEntriesResolverByFetchedSinceExcludingKinds.ts';
+import { createD1FeedEntriesResolverByFetchedSincePendingEmbedding } from '../adaptor/d1/feedEntry/feedEntriesResolverByFetchedSincePendingEmbedding.ts';
 import { createD1FeedEntryBookmarkCountUpdatedStore } from '../adaptor/d1/feedEntry/feedEntryBookmarkCountUpdatedStore.ts';
 import { createD1FeedEntryCollectedStore } from '../adaptor/d1/feedEntry/feedEntryCollectedStore.ts';
+import { createD1FeedEntryEmbeddedStore } from '../adaptor/d1/feedEntry/feedEntryEmbeddedStore.ts';
 import { createD1FeedEntryExpiredStore } from '../adaptor/d1/feedEntry/feedEntryExpiredStore.ts';
 import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
@@ -11,9 +13,12 @@ import { createD1FeedSourceFetchedStore } from '../adaptor/d1/feedSource/feedSou
 import { createD1FeedSourceFetchFailedStore } from '../adaptor/d1/feedSource/feedSourceFetchFailedStore.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
+import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
+import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { CollectFeedEntriesUseCase } from '../useCase/collectFeedEntries.ts';
 import { DetectRadarVolumeUseCase } from '../useCase/detectRadarVolume.ts';
+import { EmbedFeedEntriesUseCase } from '../useCase/embedFeedEntries.ts';
 import { EnsureDefaultFeedSourcesUseCase } from '../useCase/ensureDefaultFeedSources.ts';
 import { RefreshHatenaBookmarkCountsUseCase } from '../useCase/refreshHatenaBookmarkCounts.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -22,6 +27,8 @@ import type { ScheduledTask } from './scheduledTasks.ts';
 export const createFeedUseCases = (env: IoriWorkerEnv) => {
   const db = createD1Db(env.DB);
   const now = Instant.now;
+  const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
+  const textEmbedder = workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi);
   return {
     ensureDefaultFeedSources: EnsureDefaultFeedSourcesUseCase.create({
       allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
@@ -56,6 +63,12 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       now,
     }),
+    embedFeedEntries: EmbedFeedEntriesUseCase.create({
+      feedEntriesResolverByFetchedSincePendingEmbedding: createD1FeedEntriesResolverByFetchedSincePendingEmbedding(db),
+      feedEntryEmbeddedStore: createD1FeedEntryEmbeddedStore(db),
+      textEmbedder,
+      now,
+    }),
   } as const;
 };
 
@@ -81,5 +94,15 @@ export const detectRadarVolumeTask: ScheduledTask = {
     await useCases.ensureDefaultFeedSources.run();
     const summary = await useCases.detectRadarVolume.run();
     console.info('iori radar volume detected.', summary.val);
+  },
+};
+
+export const embedFeedEntriesTask: ScheduledTask = {
+  name: 'embedFeedEntries',
+  run: async ({ env }) => {
+    const useCases = createFeedUseCases(env);
+    const result = await useCases.embedFeedEntries.run();
+    if (!result.ok) throw new Error(result.err.message);
+    console.info('iori feed entries embedded.', result.val);
   },
 };

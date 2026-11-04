@@ -4,7 +4,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { NewFeedEntriesResolverByFetchedSince } from '../../../domain/digest/digestMaterial.ts';
 import type { IoriD1Db } from '../client.ts';
 import { feedEntriesTable, feedSourcesTable } from '../schema.ts';
-import { reconstructFeedEntry } from './feedEntryMapper.ts';
+import { feedEntrySelection, reconstructFeedEntry } from './feedEntryMapper.ts';
 
 const OVERFETCH_FACTOR = 5;
 
@@ -12,7 +12,7 @@ export const createD1NewFeedEntriesResolverByFetchedSince = (
   db: IoriD1Db,
 ): NewFeedEntriesResolverByFetchedSince => ({
   resolve: async ({ fetchedSince, limit }) => {
-    const rows = await db.select({ entry: feedEntriesTable }).from(feedEntriesTable)
+    const rows = await db.select({ entry: feedEntrySelection }).from(feedEntriesTable)
       .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
       .where(and(
         eq(feedSourcesTable.kind, 'rss'),
