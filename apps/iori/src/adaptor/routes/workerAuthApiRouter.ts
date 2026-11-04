@@ -2,12 +2,12 @@ import type { Context } from '@fedify/fedify';
 import { sValidator } from '@hono/standard-validator';
 import { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
-import { setCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
 import { Password } from '../../domain/password/password.ts';
 import { Username } from '../../domain/user/username.ts';
 import { createSignInUseCase } from '../../useCase/signIn.ts';
+import { setSessionCookie } from './helper/sessionCookie.ts';
 
 export type WorkerAuthApiRouterDeps = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
@@ -35,13 +35,7 @@ export const createWorkerAuthApiRouter = ({
         signInUseCase.run({ username, password, ctx }),
         RA.match({
           ok: ({ sessionId }) => {
-            setCookie(c, 'sessionId', sessionId, {
-              httpOnly: true,
-              path: '/',
-              maxAge: 7 * 24 * 60 * 60,
-              sameSite: 'lax',
-              secure: true,
-            });
+            setSessionCookie(c, sessionId);
             return c.json({ success: true });
           },
           err: () => c.json({ error: 'Invalid username or password' }, 401),
