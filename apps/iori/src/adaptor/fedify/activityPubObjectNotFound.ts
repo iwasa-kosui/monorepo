@@ -39,6 +39,7 @@ export const federationWithObjectNotFound = <TContextData>(
   contextDataFactory: (c: Context) => TContextData | Promise<TContextData>,
 ): MiddlewareHandler =>
 async (c, next) => {
+  // Fedify 2 は POST のとき Accept を判定せずに actor のハンドラへ進むため、inbox 以外の POST を渡さない
   if (c.req.method === 'POST' && !INBOX_PATH.test(c.req.path)) return next();
   return federation.fetch(c.req.raw, {
     contextData: await contextDataFactory(c),

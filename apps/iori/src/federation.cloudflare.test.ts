@@ -12,6 +12,7 @@ import {
   createCloudflareFederation,
   createCloudflareFederationRuntime,
   processCloudflareFedifyMessages,
+  processCloudflareFedifyQueueBatch,
 } from './federation.cloudflare.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
@@ -438,6 +439,53 @@ describe('processCloudflareFedifyMessages', () => {
     expect(retry).toHaveBeenCalledOnce();
     expect(error).toHaveBeenCalledWith('Fedify queued task failed.', { thrownType: 'string' });
     expect(JSON.stringify(error.mock.calls)).not.toContain('secret-token');
+    error.mockRestore();
+  });
+});
+
+describe('processCloudflareFedifyQueueBatch', () => {
+  const message = { type: 'outbox', id: 'message-1', inbox: 'https://remote.example.invalid/inbox' };
+  const bodies = [
+    ['an unwrapped body of the old format', message],
+    ['a body wrapped by WorkersMessageQueue', { __fedify_ordering_key__: undefined, __fedify_payload__: message }],
+    [
+      'a body wrapped by WorkersMessageQueue with an ordering key',
+      { __fedify_ordering_key__: 'remote.example.invalid', __fedify_payload__: message },
+    ],
+  ] as const;
+
+  const spyOnProcessQueuedTask = async () => {
+    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
+    return vi.spyOn(Object.getPrototypeOf(federation), 'processQueuedTask');
+  };
+
+  it.each(bodies)('acks and passes the same message to processQueuedTask for %s', async (_name, body) => {
+    const processQueuedTask = (await spyOnProcessQueuedTask()).mockResolvedValue(undefined);
+    const ack = vi.fn();
+    const retry = vi.fn();
+
+    await processCloudflareFedifyQueueBatch({ messages: [{ body, ack, retry }] } as never, workerEnv, vi.fn());
+
+    expect(processQueuedTask).toHaveBeenCalledOnce();
+    expect(processQueuedTask).toHaveBeenCalledWith(undefined, message);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    processQueuedTask.mockRestore();
+  });
+
+  it.each(bodies)('retries and passes the same message to processQueuedTask for %s', async (_name, body) => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const processQueuedTask = (await spyOnProcessQueuedTask()).mockRejectedValue(new Error('task failure'));
+    const ack = vi.fn();
+    const retry = vi.fn();
+
+    await processCloudflareFedifyQueueBatch({ messages: [{ body, ack, retry }] } as never, workerEnv, vi.fn());
+
+    expect(processQueuedTask).toHaveBeenCalledOnce();
+    expect(processQueuedTask).toHaveBeenCalledWith(undefined, message);
+    expect(ack).not.toHaveBeenCalled();
+    expect(retry).toHaveBeenCalledOnce();
+    processQueuedTask.mockRestore();
     error.mockRestore();
   });
 });

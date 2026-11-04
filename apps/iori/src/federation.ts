@@ -37,6 +37,7 @@ const create = () => {
     manuallyStartQueue: true,
     origin: env.ORIGIN,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
   const inboxListener = InboxListener.getInstance();
   const sharedKeyDispatcher = SharedKeyDispatcher.getInstance();

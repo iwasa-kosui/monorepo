@@ -54,7 +54,7 @@ export const createActorDispatcher = ({ userResolverByUsername, actorResolverByU
               ? undefined
               : new Image({ url: new URL(actor.logoUri), mediaType: 'image/png' }),
             publicKey: keys.at(0)?.cryptographicKey,
-            assertionMethods: keys.map((key) => key.multikey.clone({ id: key.keyId })),
+            assertionMethods: keys.map((key) => key.multikey),
           });
         },
         err: (error) => {

@@ -1,5 +1,12 @@
-import { createFederation, generateCryptoKeyPair, MemoryKvStore, signRequest } from '@fedify/fedify';
-import { Create, CryptographicKey, Follow, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import {
+  createFederation,
+  generateCryptoKeyPair,
+  MemoryKvStore,
+  signJsonLd,
+  signObject,
+  signRequest,
+} from '@fedify/fedify';
+import { Create, CryptographicKey, Follow, Multikey, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -131,5 +138,113 @@ describe('HTTP 署名つきの活動の受信', () => {
 
     expect(response.status).toBe(401);
     expect(onFollow).not.toHaveBeenCalled();
+  });
+});
+
+describe('relay が転送した活動の受信', { timeout: 30_000 }, () => {
+  const RELAY_ACTOR = 'https://relay.example/actor';
+  const RELAY_KEY = `${RELAY_ACTOR}#main-key`;
+  const AUTHOR_PROOF_KEY = `${REMOTE_ACTOR}#ed25519-key`;
+
+  const setupRelay = async () => {
+    const contextLoader = getDocumentLoader();
+    const relayKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const authorKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const authorProofKeyPair = await generateCryptoKeyPair('Ed25519');
+    const relayActor = new Person({
+      id: new URL(RELAY_ACTOR),
+      preferredUsername: 'relay',
+      inbox: new URL('https://relay.example/inbox'),
+      publicKey: new CryptographicKey({
+        id: new URL(RELAY_KEY),
+        owner: new URL(RELAY_ACTOR),
+        publicKey: relayKeyPair.publicKey,
+      }),
+    });
+    const authorActor = new Person({
+      id: new URL(REMOTE_ACTOR),
+      preferredUsername: 'alice',
+      inbox: new URL(`${REMOTE_ACTOR}/inbox`),
+      publicKey: new CryptographicKey({
+        id: new URL(REMOTE_KEY),
+        owner: new URL(REMOTE_ACTOR),
+        publicKey: authorKeyPair.publicKey,
+      }),
+      assertionMethods: [
+        new Multikey({
+          id: new URL(AUTHOR_PROOF_KEY),
+          controller: new URL(REMOTE_ACTOR),
+          publicKey: authorProofKeyPair.publicKey,
+        }),
+      ],
+    });
+    const documents = new Map<string, unknown>([
+      [RELAY_ACTOR, await relayActor.toJsonLd({ format: 'compact', contextLoader })],
+      [REMOTE_ACTOR, await authorActor.toJsonLd({ format: 'compact', contextLoader })],
+    ]);
+    const federation = createFederation<void>({
+      kv: new MemoryKvStore(),
+      origin: ORIGIN,
+      contextLoaderFactory: createContextLoaderFactory(),
+      documentLoaderFactory: () => async (url) => {
+        const document = documents.get(url.split('#')[0] ?? url);
+        if (document === undefined) throw new Error(`unexpected document: ${url}`);
+        return { contextUrl: null, document, documentUrl: url };
+      },
+    });
+    const onCreate = vi.fn();
+    federation.setActorDispatcher(
+      '/users/{identifier}',
+      (ctx, identifier) =>
+        identifier === 'kosui' ? new Person({ id: ctx.getActorUri(identifier), preferredUsername: identifier }) : null,
+    ).setKeyPairsDispatcher(async () => []);
+    federation
+      .setInboxListeners('/users/{identifier}/inbox', '/inbox')
+      .withIdempotency('per-origin')
+      .on(Create, onCreate);
+    const forward = async (body: unknown) => {
+      const unsigned = new Request(`${ORIGIN}/inbox`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/activity+json' },
+        body: JSON.stringify(body),
+      });
+      const signed = await signRequest(unsigned, relayKeyPair.privateKey, new URL(RELAY_KEY));
+      return federation.fetch(signed, { contextData: undefined });
+    };
+    return { authorKeyPair, authorProofKeyPair, contextLoader, forward, onCreate };
+  };
+
+  it('relay が HTTP 署名し、投稿者の LD 署名がついた Create を 202 で受け付けて listener を呼ぶ', async () => {
+    const { authorKeyPair, contextLoader, forward, onCreate } = await setupRelay();
+    const jsonLd = await create().toJsonLd({ format: 'compact', contextLoader });
+    const signed = await signJsonLd(jsonLd, authorKeyPair.privateKey, new URL(REMOTE_KEY), { contextLoader });
+
+    const response = await forward(signed);
+
+    expect(response.status, await response.clone().text()).toBe(202);
+    expect(onCreate).toHaveBeenCalledOnce();
+  });
+
+  it('relay が HTTP 署名し、投稿者の Object Integrity Proof がついた Create を 202 で受け付けて listener を呼ぶ', async () => {
+    const { authorProofKeyPair, contextLoader, forward, onCreate } = await setupRelay();
+    const signed = await signObject(create(), authorProofKeyPair.privateKey, new URL(AUTHOR_PROOF_KEY), {
+      contextLoader,
+    });
+    const jsonLd = await signed.toJsonLd({ format: 'compact', contextLoader });
+
+    const response = await forward(jsonLd);
+
+    expect(response.status, await response.clone().text()).toBe(202);
+    expect(onCreate).toHaveBeenCalledOnce();
+  });
+
+  it('署名のない Create を relay が転送しても 401 で拒否して listener を呼ばない', async () => {
+    const { contextLoader, forward, onCreate } = await setupRelay();
+    const jsonLd = await create().toJsonLd({ format: 'compact', contextLoader });
+
+    const response = await forward(jsonLd);
+
+    expect(response.status).toBe(401);
+    expect(onCreate).not.toHaveBeenCalled();
   });
 });

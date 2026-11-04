@@ -50,6 +50,7 @@ export const createCloudflareFederation = (
     queue: deps.queue,
     origin: deps.origin,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
 
 const createWorkersKvStore = (kv: KVNamespace): KvStore => new WorkersKvStore(kv);
@@ -216,6 +217,7 @@ export const createCloudflareFederationRuntime = async (
     // processQueuedTask().  WorkersMessageQueue deliberately cannot listen.
     manuallyStartQueue: true,
     contextLoaderFactory: createContextLoaderFactory(),
+    circuitBreaker: false,
   });
 
   return {
@@ -234,6 +236,7 @@ export const processCloudflareFedifyQueueBatch = async (
   await processCloudflareFedifyMessages(
     batch,
     async (body) => {
+      // orderingKv を渡していないので、shouldProcess は常に true で release も返らない
       const { message } = await runtime.queue.processMessage(body);
       await runtime.federation.processQueuedTask(undefined, message);
     },

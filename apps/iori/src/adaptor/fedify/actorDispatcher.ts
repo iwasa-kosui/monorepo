@@ -59,7 +59,7 @@ const getInstance = () => {
               : undefined,
             url: ctx.getActorUri(identifier),
             publicKey: keys.at(0)?.cryptographicKey,
-            assertionMethods: keys.map((k) => k.multikey.clone({ id: k.keyId })),
+            assertionMethods: keys.map((k) => k.multikey),
             followers: ctx.getFollowersUri(identifier),
           });
         },

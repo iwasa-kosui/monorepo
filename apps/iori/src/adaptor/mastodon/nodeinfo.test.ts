@@ -16,6 +16,6 @@ describe('buildNodeInfo', () => {
   });
 
   it('accepts the version of package.json', () => {
-    expect(() => buildNodeInfo(IORI_VERSION)).not.toThrow();
+    expect(IORI_VERSION).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
   });
 });
