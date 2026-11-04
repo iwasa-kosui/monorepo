@@ -18,6 +18,7 @@ pnpm --filter '*' tsc --noEmit
 pnpm --filter '*' lint:fix
 pnpm --filter '*' format
 pnpm --filter '*' test:ci
+pnpm --filter iori run test:workerd
 ```
 
 #### 実行ルール
@@ -26,6 +27,7 @@ pnpm --filter '*' test:ci
 - **lint:fix**: コード変更後は必ず実行し、すべてのlintエラーを解消してください
 - **format**: コミット前に必ず実行し、コードスタイルを統一してください
 - **test**: 機能追加・修正後は必ず実行し、すべてのテストがパスすることを確認してください
+- **test:workerd**: apps/iori を変更したときは必ず実行してください。test:ci は apps/iori の workerd のテストを含みません
 
 これらのチェックがすべてパスしない限り、コードの変更は完了とみなしません。
 
