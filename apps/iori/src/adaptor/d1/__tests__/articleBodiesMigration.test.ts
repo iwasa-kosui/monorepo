@@ -41,7 +41,13 @@ describe('0006 article_bodies migration', () => {
     const remaining = fixture.sqlite.prepare('SELECT * FROM article_bodies').all();
 
     expect(inserted).toEqual([
-      { articleId: 'article-1', privateHtml: '<p>private</p>', publicHtml: '<p>public</p>', updatedAt: 4_000 },
+      {
+        articleId: 'article-1',
+        privateHtml: '<p>private</p>',
+        publicHtml: '<p>public</p>',
+        markdown: null,
+        updatedAt: 4_000,
+      },
     ]);
     expect(remaining).toEqual([]);
   });
@@ -96,6 +102,47 @@ describe('0006 article_bodies migration', () => {
     expect(after).toEqual(before);
     expect(after).toHaveLength(1);
     expect(sqlite.prepare('SELECT articleId FROM article_bodies').all()).toEqual([{ articleId: 'article-1' }]);
+    expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
+});
+
+describe('0016 article_bodies.markdown migration', () => {
+  it('0015 まで適用して入れた article_bodies の行が 0016 の適用後も全列そのまま残り、markdown は NULL になる', () => {
+    const sqlite = new DatabaseSync(':memory:');
+    const apply = (files: string[]) => {
+      for (const file of files) sqlite.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
+    };
+    const index0016 = migrationFiles.findIndex((name) => name.startsWith('0016_'));
+    apply(migrationFiles.slice(0, index0016));
+    sqlite.exec('PRAGMA foreign_keys=ON');
+    sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run('user-1', 'alice');
+    sqlite.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').run(
+      'actor-1',
+      'https://iori.test/users/alice',
+      'https://iori.test/users/alice/inbox',
+      'local',
+    );
+    insertArticle(sqlite, { articleId: 'article-1', actorId: 'actor-1', userId: 'user-1', rootPostId: null });
+    sqlite.prepare('INSERT INTO article_bodies(articleId,privateHtml,publicHtml,updatedAt) VALUES (?,?,?,?)').run(
+      'article-1',
+      '<p>private</p>',
+      '<p>public</p>',
+      4_000,
+    );
+
+    apply(migrationFiles.slice(index0016));
+
+    expect(sqlite.prepare('SELECT * FROM article_bodies').all()).toEqual([
+      {
+        articleId: 'article-1',
+        privateHtml: '<p>private</p>',
+        publicHtml: '<p>public</p>',
+        updatedAt: 4_000,
+        markdown: null,
+      },
+    ]);
+    sqlite.prepare('UPDATE article_bodies SET markdown = ? WHERE articleId = ?').run('public', 'article-1');
+    expect(sqlite.prepare('SELECT markdown FROM article_bodies').all()).toEqual([{ markdown: 'public' }]);
     expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 });

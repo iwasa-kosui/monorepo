@@ -76,6 +76,21 @@ describe('createD1DraftArticleWithDependentsDeletedStore', () => {
     },
   );
 
+  it('確認の後に本文が編集された draft は、何も消さず、イベントも書かず、deleted を false にする', async () => {
+    const { fixture, count, eventNames, store } = setup('draft');
+    fixture.sqlite.prepare('UPDATE article_bodies SET updatedAt = 5_000').run();
+
+    const result = await store();
+
+    expect(result).toEqual({ ok: true, val: { deleted: false } });
+    expect(count('digest_trends')).toBe(1);
+    expect(count('digest_items')).toBe(1);
+    expect(count('digests')).toBe(1);
+    expect(count('article_bodies')).toBe(1);
+    expect(count('articles')).toBe(1);
+    expect(eventNames()).toEqual([]);
+  });
+
   it('本文のない draft は、本文のイベントを書かずに消す', async () => {
     const { fixture, articleId, count, eventNames } = setup('draft');
     fixture.sqlite.prepare('DELETE FROM article_bodies').run();

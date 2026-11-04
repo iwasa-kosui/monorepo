@@ -369,4 +369,57 @@ describe('iori Worker on workerd', () => {
     const rejected = await jsonPost('/api/v1/sign-in', { username, password });
     expect(rejected.status).toBe(401);
   });
+
+  describe('article editing', () => {
+    const articleId = 'b4d7a152-96e8-4b7c-8c0f-5a3e8d6b1c54';
+    const digestHtml =
+      '<h2>新着</h2><ul><li><a href="https://example.com/first">First</a>（はてなブックマーク 12）<br>一行目<br>二行目</li></ul>';
+
+    it('converts the stored HTML to Markdown with turndown on workerd', async () => {
+      const cookie = requireSession();
+      const author = await env.DB.prepare('SELECT actorId, userId FROM local_actors LIMIT 1').first<
+        { actorId: string; userId: string }
+      >();
+      await env.DB.batch([
+        env.DB.prepare(
+          'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt, publishedAt, unpublishedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ).bind(articleId, author!.actorId, author!.userId, null, 'ダイジェスト', 'draft', 1, null, null),
+        env.DB.prepare(
+          'INSERT INTO article_bodies (articleId, privateHtml, publicHtml, updatedAt) VALUES (?, ?, ?, ?)',
+        ).bind(articleId, digestHtml, digestHtml, 1),
+      ]);
+
+      const response = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}/edit`, {
+        headers: { Cookie: cookie },
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        title: 'ダイジェスト',
+        markdown:
+          '## 新着\n\n-   [First](https://example.com/first)（はてなブックマーク 12）  \n    一行目  \n    二行目',
+      });
+    });
+
+    it('saves the edited Markdown as HTML and returns it when the editor is opened again', async () => {
+      const cookie = requireSession();
+      const markdown = '## 編集後\n\n本文 [link](https://example.com/a)';
+
+      const saved = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: origin },
+        body: JSON.stringify({ title: '編集後のタイトル', markdown }),
+      });
+      expect(saved.status).toBe(200);
+
+      const detail = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}`, { headers: { Cookie: cookie } });
+      const body = await detail.json<{ article: { title: string }; body: { html: string } }>();
+      expect(body.article.title).toBe('編集後のタイトル');
+      expect(body.body.html).toContain('<h2>編集後</h2>');
+      const reopened = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}/edit`, {
+        headers: { Cookie: cookie },
+      });
+      expect(await reopened.json()).toEqual({ title: '編集後のタイトル', markdown });
+    });
+  });
 });

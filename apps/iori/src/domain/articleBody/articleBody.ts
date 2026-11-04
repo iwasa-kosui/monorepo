@@ -10,6 +10,7 @@ const articleBodyZodType = z.object({
   articleId: ArticleId.zodType,
   privateHtml: z.string(),
   publicHtml: z.string(),
+  markdown: z.nullable(z.string()),
   updatedAt: Instant.zodType,
 });
 

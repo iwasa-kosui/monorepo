@@ -49,6 +49,7 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     articleId: article.articleId,
     privateHtml: '<p>private</p>',
     publicHtml: '<p>public</p>',
+    markdown: null,
     updatedAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
   };
   const digestHeader: DigestHeader = {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import type { ArticleBody } from '../../domain/articleBody/articleBody.ts';
 import type { DigestHeader } from '../../domain/digest/digest.ts';
 import { DigestId } from '../../domain/digest/digestId.ts';
 import type { DigestRequestReservation } from '../../domain/digest/digestRequestLimit.ts';
@@ -30,6 +31,7 @@ const setup = (
   options: {
     existing?: DigestHeader;
     status?: Article['status'];
+    edited?: boolean;
     reservation?: DigestRequestReservation;
     articleMissing?: boolean;
   } = {},
@@ -66,7 +68,15 @@ const setup = (
         RA.ok(
           options.existing === undefined || options.articleMissing === true
             ? undefined
-            : { status: options.status ?? 'draft' } as Article,
+            : { status: options.status ?? 'draft', createdAt: NOW } as Article,
+        ),
+    },
+    articleBodyResolver: {
+      resolve: () =>
+        RA.ok(
+          options.existing === undefined
+            ? undefined
+            : { updatedAt: options.edited === true ? NOW + 1_000 : NOW } as ArticleBody,
         ),
     },
     digestRequestUsageRecorder: { reserve },
@@ -95,6 +105,19 @@ describe('RequestDigestUseCase', () => {
 
     expect(result).toMatchObject({ ok: true, val: { replaced: true } });
     expect(t.reserve).toHaveBeenCalledTimes(1);
+  });
+
+  it('その日の draft の digest の本文が編集済みなら、予約せずに DigestDraftEditedError を返す', async () => {
+    const t = setup({ existing: header, status: 'draft', edited: true });
+
+    const result = await t.useCase.run({ userId });
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'DigestDraftEditedError', detail: { digestDate: '2026-11-05' } },
+    });
+    expect(t.reserve).not.toHaveBeenCalled();
+    expect(t.createRun).not.toHaveBeenCalled();
   });
 
   it.each(['published', 'unpublished'] as const)(

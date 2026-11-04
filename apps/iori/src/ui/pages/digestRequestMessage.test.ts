@@ -9,6 +9,12 @@ describe('buildDigestRequestFailureMessage', () => {
     );
   });
 
+  it('409 で編集済みの下書きがあるなら、作り直せないと伝える', () => {
+    expect(buildDigestRequestFailureMessage({ status: 409, error: 'Digest draft edited' })).toBe(
+      '編集済みの下書きがあるため作り直せません。',
+    );
+  });
+
   it('409 で間隔が短いなら、Retry-After の秒数を入れて伝える', () => {
     expect(
       buildDigestRequestFailureMessage({ status: 409, error: 'Digest request too soon', retryAfterSeconds: 45 }),

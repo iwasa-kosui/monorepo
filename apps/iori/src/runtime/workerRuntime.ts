@@ -20,6 +20,7 @@ import { createD1ArticleResolverByRootPostId } from '../adaptor/d1/article/artic
 import { createD1ArticlesResolverByAuthorActorId } from '../adaptor/d1/article/articlesResolverByAuthorActorId.ts';
 import { createD1ArticleUnpublishedStore } from '../adaptor/d1/article/articleUnpublishedStore.ts';
 import { createD1ArticleWithBodyCreatedStore } from '../adaptor/d1/article/articleWithBodyCreatedStore.ts';
+import { createD1ArticleWithBodyEditedStore } from '../adaptor/d1/article/articleWithBodyEditedStore.ts';
 import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article/articleWithDependentsDeletedStore.ts';
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
@@ -132,6 +133,7 @@ import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
+import { htmlToMarkdown } from '../adaptor/text/htmlToMarkdown.ts';
 import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
@@ -139,6 +141,7 @@ import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
+import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
@@ -150,7 +153,9 @@ import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
+import { EditArticleUseCase } from '../useCase/editArticle.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
@@ -519,6 +524,17 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         articleBodyWrittenStore,
       }),
+      getArticleForEditUseCase: GetArticleForEditUseCase.create({
+        articleResolver,
+        articleBodyResolver,
+        htmlToMarkdown,
+      }),
+      editArticleUseCase: EditArticleUseCase.create({
+        articleResolver,
+        articleWithBodyEditedStore: createD1ArticleWithBodyEditedStore(db),
+        renderMarkdown: renderMarkdownToUnsanitizedHtml,
+      }),
+      articleBodyResolver,
       publishArticleUseCase: PublishArticleUseCase.create({
         sessionResolver,
         userResolver,

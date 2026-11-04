@@ -58,6 +58,7 @@ const create = ({
           articleId: article.articleId,
           privateHtml: sanitizeArticleBody(privateHtml),
           publicHtml: sanitizeArticleBody(publicHtml),
+          markdown: null,
         });
         await articleBodyWrittenStore.store(event);
         return RA.ok({ body: event.aggregateState });
