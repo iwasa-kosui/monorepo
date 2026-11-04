@@ -55,6 +55,16 @@ describe('NotificationItem', () => {
     expect(html).toContain('href="/remote-users/actor-2"');
   });
 
+  it('renders a reblog with the actor, the boosted post content and a link to the post', () => {
+    const html = render(notification({ type: 'reblog', status: status('p3') }));
+
+    expect(html).toContain('alice@remote.example');
+    expect(html).toContain('boosted your post');
+    expect(html).toContain('<p>content of p3</p>');
+    expect(html).toContain('href="/users/kosui/posts/p3"');
+    expect(html).toContain('href="/remote-users/actor-2"');
+  });
+
   it('renders a mention with the reply content and a link to the replied-to post', () => {
     const html = render(notification({ type: 'mention', status: status('reply-1', { in_reply_to_id: 'p1' }) }));
 
@@ -106,6 +116,6 @@ describe('NotificationItem', () => {
   });
 
   it('renders nothing for a notification type the page does not request', () => {
-    expect(render(notification({ type: 'reblog' }))).toBe('');
+    expect(render(notification({ type: 'poll' }))).toBe('');
   });
 });

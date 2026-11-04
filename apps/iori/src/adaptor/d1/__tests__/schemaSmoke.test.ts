@@ -36,6 +36,7 @@ describe('D1 schema', () => {
       'notificationFollowsTable',
       'notificationLikesTable',
       'notificationRepliesTable',
+      'notificationRepostsTable',
       'notificationsTable',
       'oauthAccessTokensTable',
       'oauthApplicationsTable',

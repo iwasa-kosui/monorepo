@@ -4,6 +4,8 @@ import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ArticleResolver } from '../../../domain/article/article.ts';
+import { ArticleId } from '../../../domain/article/articleId.ts';
 import type {
   FederatedTimelineItemCreatedStore,
   FederatedTimelineItemResolverByPostId,
@@ -20,11 +22,15 @@ import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
 
+const NOTE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Note';
+const ARTICLE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Article';
+
 export type OnAnnounceDeps = Readonly<{
   origin: string;
   relayResolverByActorUri: RelayResolverByActorUri;
   inboxActorResolver: InboxActorResolver;
   addReceivedRepostUseCase: AddReceivedRepostUseCase;
+  articleResolver: ArticleResolver;
   remotePostUpserter: RemotePostUpserter;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
@@ -75,18 +81,34 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
-  // Check if this is a local Note
+  // Check if this is a local Note or Article
   const parsed = ctx.parseUri(objectId);
-  if (
-    parsed && parsed.type === 'object' && parsed.class?.typeId?.href === 'https://www.w3.org/ns/activitystreams#Note'
-  ) {
-    // Local Note repost
-    const postIdResult = PostId.parse(parsed.values.id);
-    if (!postIdResult.ok) {
-      getLogger().warn(`Failed to parse postId from Announce activity: ${parsed.values.id}`);
-      return;
+  const parsedObject = parsed && parsed.type === 'object' ? parsed : undefined;
+  const parsedClassId = parsedObject?.class?.typeId?.href;
+  if (parsedObject && (parsedClassId === NOTE_TYPE_ID || parsedClassId === ARTICLE_TYPE_ID)) {
+    let repostedPostId: PostId;
+    if (parsedClassId === ARTICLE_TYPE_ID) {
+      const articleIdResult = ArticleId.parse(parsedObject.values.id);
+      if (!articleIdResult.ok) {
+        getLogger().warn(`Failed to parse articleId from Announce activity: ${parsedObject.values.id}`);
+        return;
+      }
+      const articleResult = await deps.articleResolver.resolve(articleIdResult.val);
+      const rootPostId = articleResult.ok ? articleResult.val?.rootPostId : undefined;
+      if (!rootPostId) {
+        getLogger().info(`Announce activity targets an article without a root post: ${objectId.href}`);
+        return;
+      }
+      repostedPostId = rootPostId;
+    } else {
+      // Local Note repost
+      const postIdResult = PostId.parse(parsedObject.values.id);
+      if (!postIdResult.ok) {
+        getLogger().warn(`Failed to parse postId from Announce activity: ${parsedObject.values.id}`);
+        return;
+      }
+      repostedPostId = postIdResult.val;
     }
-    const repostedPostId = postIdResult.val;
 
     return RA.flow(
       deps.addReceivedRepostUseCase.run({

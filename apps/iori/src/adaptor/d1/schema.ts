@@ -230,6 +230,12 @@ export const notificationFollowsTable = sqliteTable('notification_follows', {
   followerActorId: text('followerActorId').notNull().references(() => actorsTable.actorId),
 });
 
+export const notificationRepostsTable = sqliteTable('notification_reposts', {
+  notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
+  reposterActorId: text('reposterActorId').notNull().references(() => actorsTable.actorId),
+  repostedPostId: text('repostedPostId').notNull(),
+});
+
 export const pushSubscriptionsTable = sqliteTable('push_subscriptions', {
   subscriptionId: text('subscriptionId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -559,6 +565,7 @@ export const schema = {
   emojiReactsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationRepostsTable,
   mutesTable,
   articlesTable,
   articleBodiesTable,
