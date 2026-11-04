@@ -1,6 +1,7 @@
 export const BLOCKED_INBOX_DOMAINS: readonly string[] = ['crazylab.online'];
 
-const MAX_INBOX_BODY_BYTES = 16 * 1024 * 1024;
+// Content-Length がない本文と文字数での比較は目安で、正確なバイト数の上限ではない
+const APPROX_MAX_INBOX_BODY_SIZE = 16 * 1024 * 1024;
 
 type Json = Record<string, unknown>;
 
@@ -27,7 +28,7 @@ const candidateIds = (activity: Json): string[] => {
 
 const hostnameOf = (id: string): string | undefined => {
   try {
-    return new URL(id).hostname.toLowerCase();
+    return new URL(id).hostname.toLowerCase().replace(/\.$/, '');
   } catch {
     return undefined;
   }
@@ -55,15 +56,19 @@ export const findBlockedInboxDomain = (
 
 export const readInboxActivity = async (request: Request): Promise<unknown> => {
   const length = Number(request.headers.get('Content-Length'));
-  if (Number.isFinite(length) && length > MAX_INBOX_BODY_BYTES) return undefined;
+  if (Number.isFinite(length) && length > APPROX_MAX_INBOX_BODY_SIZE) return undefined;
   try {
     const text = await request.clone().text();
-    if (text.length > MAX_INBOX_BODY_BYTES) return undefined;
+    if (text.length > APPROX_MAX_INBOX_BODY_SIZE) return undefined;
     return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
 };
 
+const ACTIVITY_TYPE_LOG_LIMIT = 64;
+
 export const activityTypeOf = (activity: unknown): string =>
-  isRecord(activity) && typeof activity['type'] === 'string' ? activity['type'] : 'unknown';
+  isRecord(activity) && typeof activity['type'] === 'string'
+    ? activity['type'].slice(0, ACTIVITY_TYPE_LOG_LIMIT)
+    : 'unknown';

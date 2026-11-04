@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { federationWithObjectNotFound } from './activityPubObjectNotFound.ts';
-import { findBlockedInboxDomain, isBlockedHost } from './blockedInboxDomain.ts';
+import { activityTypeOf, findBlockedInboxDomain, isBlockedHost } from './blockedInboxDomain.ts';
 
 const relayedCreate = (author: string) => ({
   '@context': 'https://www.w3.org/ns/activitystreams',
@@ -27,6 +27,16 @@ describe('isBlockedHost', () => {
     expect(isBlockedHost('crazylab.online', 'crazylab.online')).toBe(true);
     expect(isBlockedHost('media.crazylab.online', 'crazylab.online')).toBe(true);
     expect(isBlockedHost('CrazyLab.Online', 'crazylab.online')).toBe(true);
+  });
+
+  it('blocks an id whose hostname ends with a trailing dot', () => {
+    expect(findBlockedInboxDomain({ type: 'Create', actor: 'https://crazylab.online./users/a' })).toBe(
+      'crazylab.online',
+    );
+  });
+
+  it('truncates a long activity type for the log', () => {
+    expect(activityTypeOf({ type: 'x'.repeat(100) })).toBe('x'.repeat(64));
   });
 
   it('does not block a different domain that only shares the tail', () => {

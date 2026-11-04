@@ -52,6 +52,7 @@ async (c, next) => {
         activityType: activityTypeOf(activity),
         path: c.req.path,
       });
+      await c.req.raw.body?.cancel();
       // 4xx だと relay が配送の失敗として再送しうるので、受け付けたことにして捨てる
       return new Response(null, { status: 202 });
     }
