@@ -100,6 +100,14 @@ export const selectDomainTypes = (
 export const toGroupedNotificationId = (notificationId: string, createdAtMs: number): number =>
   createdAtMs * 1024 + (Number.parseInt(notificationId.slice(0, 3), 16) >> 2);
 
+// 同じミリ秒で先頭 10 bit が一致した通知の値が重ならないように、狭義の降順にそろえる
+export const toStrictlyDescending = (values: ReadonlyArray<number>): number[] =>
+  values.reduce<number[]>((result, value) => {
+    const previous = result.at(-1);
+    result.push(previous === undefined || value < previous ? value : previous - 1);
+    return result;
+  }, []);
+
 export const toNotification = (
   notification: DomainNotification,
   options: ToNotificationOptions,

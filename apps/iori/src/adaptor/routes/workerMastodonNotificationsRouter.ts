@@ -30,6 +30,7 @@ import {
   targetPostIdOf,
   toGroupedNotificationId,
   toNotification,
+  toStrictlyDescending,
   triggerActorIdOf,
 } from '../mastodon/toNotification.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
@@ -266,13 +267,18 @@ export const createWorkerMastodonNotificationsRouter = ({
       if (result === undefined) {
         return c.json(internalServerError, 500);
       }
+      const groups = result.notifications.map(toGroup);
+      const mostRecentIds = toStrictlyDescending(groups.map((group) => group.most_recent_notification_id));
       const body: GroupedNotificationsResults = {
         accounts: uniqueBy(result.notifications.map(({ account }) => account), ({ id }) => id),
         statuses: uniqueBy(
           result.notifications.flatMap(({ status }) => status ?? []),
           ({ id }) => id,
         ),
-        notification_groups: result.notifications.map(toGroup),
+        notification_groups: groups.map((group, index) => ({
+          ...group,
+          most_recent_notification_id: mostRecentIds[index] ?? group.most_recent_notification_id,
+        })),
       };
       const first = result.rowIds[0];
       const last = result.rowIds[result.rowIds.length - 1];

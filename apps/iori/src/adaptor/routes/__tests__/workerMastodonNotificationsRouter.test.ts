@@ -6,12 +6,10 @@ import {
   NotificationSchema,
   V1NotificationPolicySchema,
 } from '../../mastodon/entities.ts';
+import { toGroupedNotificationId } from '../../mastodon/toNotification.ts';
 import { linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
 
 const jsonHeaders = (bearer: Record<string, string>) => ({ ...bearer, 'Content-Type': 'application/json' });
-
-const groupedIdOf = (notificationId: string, createdAt: number): number =>
-  createdAt * 1024 + (Number.parseInt(notificationId.slice(0, 3), 16) >> 2);
 
 const seedNotifications = async () => {
   const t = setupReadApi();
@@ -29,11 +27,11 @@ const seedNotifications = async () => {
     others: t.seed.addLikeNotification(other.userId, alice.actorId, myPost.postId, 6_000),
   };
   const get = (path: string, headers: Record<string, string> = me.bearer) => t.request(path, { headers });
-  const addFollowNotificationWithId = (notificationId: string, createdAt: number) => {
+  const addFollowNotificationWithId = (notificationId: string, createdAt: number, recipientUserId = me.userId) => {
     t.sqlite.prepare(
       'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
     )
-      .run(notificationId, me.userId, 'follow', 0, createdAt);
+      .run(notificationId, recipientUserId, 'follow', 0, createdAt);
     t.sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)')
       .run(notificationId, alice.actorId);
   };
@@ -190,7 +188,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.follow}`,
         notifications_count: 1,
         type: 'follow',
-        most_recent_notification_id: groupedIdOf(t.ids.follow, 4_000),
+        most_recent_notification_id: toGroupedNotificationId(t.ids.follow, 4_000),
         page_min_id: t.ids.follow,
         page_max_id: t.ids.follow,
         latest_page_notification_at: '1970-01-01T00:00:04.000Z',
@@ -200,7 +198,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.reply}`,
         notifications_count: 1,
         type: 'mention',
-        most_recent_notification_id: groupedIdOf(t.ids.reply, 3_000),
+        most_recent_notification_id: toGroupedNotificationId(t.ids.reply, 3_000),
         page_min_id: t.ids.reply,
         page_max_id: t.ids.reply,
         latest_page_notification_at: '1970-01-01T00:00:03.000Z',
@@ -211,7 +209,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.like}`,
         notifications_count: 1,
         type: 'favourite',
-        most_recent_notification_id: groupedIdOf(t.ids.like, 2_000),
+        most_recent_notification_id: toGroupedNotificationId(t.ids.like, 2_000),
         page_min_id: t.ids.like,
         page_max_id: t.ids.like,
         latest_page_notification_at: '1970-01-01T00:00:02.000Z',
@@ -273,10 +271,33 @@ describe('GET /api/v2/notifications', () => {
       t.ids.follow,
     ]);
     expect(values.slice(0, 3)).toEqual([
-      groupedIdOf(sameMillisecondHigh, 4_000),
-      groupedIdOf(sameMillisecondMid, 4_000),
-      groupedIdOf(t.ids.follow, 4_000),
+      toGroupedNotificationId(sameMillisecondHigh, 4_000),
+      toGroupedNotificationId(sameMillisecondMid, 4_000),
+      toGroupedNotificationId(t.ids.follow, 4_000),
     ]);
+  });
+
+  it('先頭 10 bit が一致する UUID が同じミリ秒にあっても、値を重ねずに狭義の降順で返す', async () => {
+    const t = await seedNotifications();
+    const sameBitsHigh = '1a300000-0000-4000-8000-000000000001';
+    const sameBitsLow = '1a000000-0000-4000-8000-000000000002';
+    t.addFollowNotificationWithId(sameBitsLow, 4_000);
+    t.addFollowNotificationWithId(sameBitsHigh, 4_000);
+
+    const response = await t.get('/api/v2/notifications');
+
+    const body = GroupedNotificationsResultsSchema.parse(await response.json());
+    const values = body.notification_groups.map((group) => group.most_recent_notification_id);
+    expect(toGroupedNotificationId(sameBitsHigh, 4_000)).toBe(toGroupedNotificationId(sameBitsLow, 4_000));
+    expect(body.notification_groups.slice(0, 3).map((group) => group.page_max_id)).toEqual([
+      sameBitsHigh,
+      sameBitsLow,
+      t.ids.follow,
+    ]);
+    expect(values[0]).toBe(toGroupedNotificationId(sameBitsHigh, 4_000));
+    expect(values[1]).toBe(values[0]! - 1);
+    expect(new Set(values).size).toBe(values.length);
+    values.slice(1).forEach((value, index) => expect(value).toBeLessThan(values[index]!));
   });
 
   it('2 ページ取得しても most_recent_notification_id がページをまたいで狭義に減っていく', async () => {
@@ -400,6 +421,114 @@ describe('unread_count と markers', () => {
 
     expect(saved.status).toBe(200);
     expect(await unread(t)).toEqual([{ count: 1 }, { count: 1 }]);
+  });
+
+  describe('notifications の last_read_id に most_recent_notification_id の整数が届いたとき', () => {
+    const postMarker = (t: Awaited<ReturnType<typeof seedNotifications>>, lastReadId: unknown) =>
+      t.request('/api/v1/markers', {
+        method: 'POST',
+        headers: jsonHeaders(t.me.bearer),
+        body: JSON.stringify({ notifications: { last_read_id: lastReadId } }),
+      });
+    const savedLastReadId = async (t: Awaited<ReturnType<typeof seedNotifications>>) => {
+      const body = await (await t.get('/api/v1/markers?timeline[]=notifications')).json() as Record<
+        string,
+        { last_read_id: string; version: number }
+      >;
+      return body['notifications'];
+    };
+
+    it.each([
+      ['文字列', (n: number) => String(n)],
+      ['数値', (n: number) => n],
+    ])('自分の通知の整数を%sで送ると、その通知の UUID を保存して未読数が下がる', async (_label, encode) => {
+      const t = await seedNotifications();
+
+      const saved = await postMarker(t, encode(toGroupedNotificationId(t.ids.reply, 3_000)));
+
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: t.ids.reply, version: 1 } });
+      expect(await savedLastReadId(t)).toMatchObject({ last_read_id: t.ids.reply });
+      expect(await unread(t)).toEqual([{ count: 1 }, { count: 1 }]);
+    });
+
+    it('同じミリ秒・同じ先頭 10 bit の通知を持つ他の利用者がいても、自分の通知の UUID を保存する', async () => {
+      const t = await seedNotifications();
+      t.addFollowNotificationWithId('00000000-0000-4000-8000-0000000000ff', 3_000, t.other.userId);
+
+      const saved = await postMarker(t, toGroupedNotificationId(t.ids.reply, 3_000));
+
+      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: t.ids.reply } });
+    });
+
+    it('同じ値が自分の通知の中で複数一致するときは、ID が最大の通知を保存する', async () => {
+      const t = await seedNotifications();
+      const larger = '00100000-0000-4000-8000-000000000001';
+      t.addFollowNotificationWithId(larger, 3_000);
+
+      const saved = await postMarker(t, toGroupedNotificationId(t.ids.reply, 3_000));
+
+      expect(toGroupedNotificationId(larger, 3_000)).toBe(toGroupedNotificationId(t.ids.reply, 3_000));
+      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: larger } });
+    });
+
+    it('他の利用者の通知の整数にしか一致しないときは、既存の値を変えない', async () => {
+      const t = await seedNotifications();
+      t.seed.setMarker(t.me.userId, 'notifications', t.ids.like);
+
+      const saved = await postMarker(t, toGroupedNotificationId(t.ids.others, 6_000));
+
+      expect(await saved.json()).toEqual({});
+      expect(await savedLastReadId(t)).toMatchObject({ last_read_id: t.ids.like, version: 1 });
+    });
+
+    it.each([
+      ['一致する通知がない整数', toGroupedNotificationId('00000000-0000-4000-8000-000000000000', 9_999)],
+      [
+        '一致する通知がない整数の文字列',
+        String(toGroupedNotificationId('00000000-0000-4000-8000-000000000000', 9_999)),
+      ],
+      ['負の値', -5],
+      ['小数', 1.5],
+      ['安全な整数でない数値', 2 ** 60],
+      ['安全な整数でない数字列', '99999999999999999999'],
+    ])('%sのときは、既存の値を変えない', async (_label, lastReadId) => {
+      const t = await seedNotifications();
+      t.seed.setMarker(t.me.userId, 'notifications', t.ids.like);
+
+      const saved = await postMarker(t, lastReadId);
+
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toEqual({});
+      expect(await savedLastReadId(t)).toMatchObject({ last_read_id: t.ids.like, version: 1 });
+    });
+
+    it('UUID を送ったときは、通知として存在するかを確かめずにそのまま保存する', async () => {
+      const t = await seedNotifications();
+
+      const saved = await postMarker(t, t.ids.others);
+
+      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: t.ids.others, version: 1 } });
+    });
+
+    it('home の last_read_id は整数でも変換せず、数値は無視する', async () => {
+      const t = await seedNotifications();
+      const asString = await t.request('/api/v1/markers', {
+        method: 'POST',
+        headers: jsonHeaders(t.me.bearer),
+        body: JSON.stringify({ home: { last_read_id: String(toGroupedNotificationId(t.ids.reply, 3_000)) } }),
+      });
+      const asNumber = await t.request('/api/v1/markers', {
+        method: 'POST',
+        headers: jsonHeaders(t.me.bearer),
+        body: JSON.stringify({ home: { last_read_id: 123 } }),
+      });
+
+      expect(await asString.json()).toMatchObject({
+        home: { last_read_id: String(toGroupedNotificationId(t.ids.reply, 3_000)) },
+      });
+      expect(await asNumber.json()).toEqual({});
+    });
   });
 
   it('home のマーカーは通知の件数に影響しない', async () => {

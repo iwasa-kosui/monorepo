@@ -80,6 +80,7 @@ import {
   createD1ReplyNotificationCreatedStore,
 } from '../../../d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../../../d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../../../d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../../../d1/notification/notificationsResolverByPage.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
@@ -435,6 +436,7 @@ export const setupReadApi = (
         createWorkerMastodonMarkersRouter({
           authn,
           markersResolverByUserId,
+          notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
           saveMarkersUseCase: SaveMarkersUseCase.create({
             markersResolverByUserId,
             markerSavedStore: createD1MarkerSavedStore(db),

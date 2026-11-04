@@ -7,7 +7,7 @@ import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { type Account, NotificationSchema, RelationshipSchema } from './entities.ts';
-import { selectDomainTypes, toGroupedNotificationId, toNotification } from './toNotification.ts';
+import { selectDomainTypes, toGroupedNotificationId, toNotification, toStrictlyDescending } from './toNotification.ts';
 import { toRelationship } from './toRelationship.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
@@ -144,6 +144,21 @@ describe('toGroupedNotificationId', () => {
     const result = toGroupedNotificationId(id('fff'), Date.now());
 
     expect(Number.isSafeInteger(result)).toBe(true);
+  });
+});
+
+describe('toStrictlyDescending', () => {
+  it('keeps values that already descend strictly', () => {
+    expect(toStrictlyDescending([30, 20, 10])).toEqual([30, 20, 10]);
+  });
+
+  it('lowers a value that equals or exceeds the previous one to the previous value minus one', () => {
+    expect(toStrictlyDescending([10, 10, 12, 5])).toEqual([10, 9, 8, 5]);
+  });
+
+  it('cascades through a run of equal values and returns an empty array for no values', () => {
+    expect(toStrictlyDescending([7, 7, 7, 7])).toEqual([7, 6, 5, 4]);
+    expect(toStrictlyDescending([])).toEqual([]);
   });
 });
 
