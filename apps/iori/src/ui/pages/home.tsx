@@ -744,7 +744,7 @@ const HomePage = () => {
     if (!isTimelineReady || window.location.hash !== '#post-modal') return;
     if (document.getElementById('post-modal') === null) return;
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    window.location.hash = 'post-modal';
+    window.location.replace('#post-modal');
   }, [isTimelineReady]);
 
   if (timeline.state.status === 'loading') {

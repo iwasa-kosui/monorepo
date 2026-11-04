@@ -196,7 +196,6 @@ export default {
           '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
-            createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
           }),
         );
         const authn = createMastodonAuthn({
