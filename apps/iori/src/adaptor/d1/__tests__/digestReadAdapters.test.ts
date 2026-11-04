@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { ArticleId } from '../../../domain/article/articleId.ts';
+import { Digest } from '../../../domain/digest/digest.ts';
+import { DigestItemId } from '../../../domain/digest/digestItemId.ts';
 import { DigestSubscription } from '../../../domain/digestSubscription/digestSubscription.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../digest/digestHeadersResolverByArticleIds.ts';
+import { createD1DigestItemFeedbackGivenStore } from '../digest/digestItemFeedbackGivenStore.ts';
+import { createD1DigestResolverByDigestItemId } from '../digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -125,6 +129,84 @@ describe('digest の読み取り resolver', () => {
     const { db } = setup();
 
     expect(valueOf(await createD1DigestHeadersResolverByArticleIds(db).resolve([]))).toEqual([]);
+  });
+});
+
+describe('digestItem の反応', () => {
+  const itemIdOf = (fixture: ReturnType<typeof setup>['fixture'], digestId: string, rank: number) =>
+    (fixture.sqlite.prepare('SELECT digestItemId FROM digest_items WHERE digestId = ? AND rank = ?').get(
+      digestId,
+      rank,
+    ) as { digestItemId: string }).digestItemId as DigestItemId;
+
+  it('digestItemId で引くと、その項目を含む digest を items と trends 付きで返す', async () => {
+    const { fixture, db, me, other, addDigest } = setup();
+    const mine = addDigest(me, '2026-11-05');
+    addDigest(other, '2026-11-05');
+
+    const digest = valueOf(
+      await createD1DigestResolverByDigestItemId(db).resolve(itemIdOf(fixture, mine.digestId, 2)),
+    );
+
+    expect(digest).toMatchObject({ digestId: mine.digestId, userId: me.userId, articleId: mine.articleId });
+    expect(digest?.items.map((item) => item.rank)).toEqual([1, 2, 3]);
+    expect(digest?.items.every((item) => item.feedback === null && item.feedbackAt === null)).toBe(true);
+    expect(digest?.trends).toHaveLength(3);
+  });
+
+  it('存在しない digestItemId では undefined を返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-05');
+
+    expect(valueOf(await createD1DigestResolverByDigestItemId(db).resolve(DigestItemId.generate()))).toBeUndefined();
+  });
+
+  it('反応ストアは feedback と feedbackAt を項目に書き、他の項目を変えず、domain event を書く', async () => {
+    const { fixture, db, me, addDigest } = setup();
+    const added = addDigest(me, '2026-11-05');
+    const itemId = itemIdOf(fixture, added.digestId, 1);
+    const digest = valueOf(await createD1DigestResolverByDigestItemId(db).resolve(itemId))!;
+    const at = Instant.orThrow(5_000);
+    const given = Digest.giveFeedback(digest, itemId, 'not_interested', at);
+    if (!given.ok) throw new Error('unexpected');
+
+    await createD1DigestItemFeedbackGivenStore(db).store(given.val);
+
+    expect(
+      fixture.sqlite.prepare('SELECT rank, feedback, feedbackAt FROM digest_items ORDER BY rank').all(),
+    ).toEqual([
+      { rank: 1, feedback: 'not_interested', feedbackAt: 5_000 },
+      { rank: 2, feedback: null, feedbackAt: null },
+      { rank: 3, feedback: null, feedbackAt: null },
+    ]);
+    const reread = valueOf(await createD1DigestResolverByDigestItemId(db).resolve(itemId));
+    expect(reread?.items[0]).toMatchObject({ feedback: 'not_interested', feedbackAt: at });
+    expect(fixture.sqlite.prepare('SELECT eventName FROM domain_events').all()).toEqual([
+      { eventName: 'digest.itemFeedbackGiven' },
+    ]);
+  });
+
+  it('取り消しは feedback と feedbackAt を NULL に戻す', async () => {
+    const { fixture, db, me, addDigest } = setup();
+    const added = addDigest(me, '2026-11-05');
+    const itemId = itemIdOf(fixture, added.digestId, 1);
+    const store = createD1DigestItemFeedbackGivenStore(db);
+    const first = Digest.giveFeedback(
+      valueOf(await createD1DigestResolverByDigestItemId(db).resolve(itemId))!,
+      itemId,
+      'interested',
+      Instant.orThrow(5_000),
+    );
+    if (!first.ok) throw new Error('unexpected');
+    await store.store(first.val);
+    const second = Digest.giveFeedback(first.val.aggregateState, itemId, 'interested', Instant.orThrow(6_000));
+    if (!second.ok) throw new Error('unexpected');
+
+    await store.store(second.val);
+
+    expect(
+      fixture.sqlite.prepare('SELECT feedback, feedbackAt FROM digest_items WHERE rank = 1').get(),
+    ).toEqual({ feedback: null, feedbackAt: null });
   });
 });
 

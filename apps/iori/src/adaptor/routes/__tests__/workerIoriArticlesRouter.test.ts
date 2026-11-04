@@ -727,6 +727,7 @@ describe('createWorkerIoriArticlesRouter', () => {
           summary: null,
           reasonInterestSourceId,
           feedback: null,
+          feedbackAt: null,
         })),
         trends: [
           { kind: 'timeline_link', rank: 1, url: 'https://example.com/t1', title: 'T1', count: 3 },
@@ -790,7 +791,35 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect(body.digest).toEqual({
         digestDate: '2026-11-05',
+        items: [1, 2].map((rank) => ({
+          digestItemId: expect.any(String),
+          rank,
+          url: `https://example.com/${rank}`,
+          title: `entry ${rank}`,
+          feedback: null,
+        })),
         excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true, recommendations: false },
+      });
+    });
+
+    it('反応した項目は feedback を返す', async () => {
+      const article = createArticle('draft');
+      const digest = createDigest(article, 2);
+      const reacted: Digest = {
+        ...digest,
+        items: digest.items.map((item, index) =>
+          index === 0 ? { ...item, feedback: 'interested', feedbackAt: createdAt } : item
+        ),
+      };
+      const t = createDigestApp(article, reacted);
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({
+        items: [
+          { rank: 1, feedback: 'interested' },
+          { rank: 2, feedback: null },
+        ],
       });
     });
 

@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { secondsUntilNextJstDay } from '../../../domain/aiSummary/usageLimit.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.ts';
+import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
+import { sha256Hex } from '../../../helper/sha256.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -557,6 +560,349 @@ describe('iori のダイジェスト API', () => {
       const response = await t.request('/api/iori/v1/digests', post(me.bearer));
 
       expect(response.status).toBe(201);
+    });
+  });
+
+  describe('POST /api/iori/v1/digest-items/:digestItemId/feedback', () => {
+    const itemUrl = 'https://example.com/a';
+    const basis = (index: number) =>
+      float32ToBytes(Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === index ? 1 : 0)));
+
+    const seedFeedbackDigest = (
+      t: ReturnType<typeof setupReadApi>,
+      owner: { userId: string; actorId: string },
+      options: { embedding?: Uint8Array | null; entry?: boolean } = {},
+    ) => {
+      const ids = seedDigest(t, owner, '2026-11-05');
+      const item = t.sqlite.prepare(
+        'SELECT digestItemId, feedEntryId FROM digest_items WHERE digestId = ? AND rank = 1',
+      )
+        .get(ids.digestId) as { digestItemId: string; feedEntryId: string };
+      if (options.entry !== false) {
+        t.sqlite.prepare('INSERT INTO feed_sources(feedSourceId,kind,url,title,enabled,createdAt) VALUES (?,?,?,?,?,?)')
+          .run(`source-${ids.digestId}`, 'rss', `https://example.com/${ids.digestId}.rss`, 'rss', 1, 1_000);
+        t.sqlite.prepare(
+          'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,publishedAt,hatenaBookmarkCount,fetchedAt,embedding,embeddedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(
+          item.feedEntryId,
+          `source-${ids.digestId}`,
+          'g1',
+          itemUrl,
+          'A',
+          '',
+          null,
+          null,
+          Date.now(),
+          options.embedding === undefined ? basis(0) : options.embedding,
+          options.embedding === null ? null : Date.now(),
+        );
+      }
+      return { ...ids, digestItemId: item.digestItemId };
+    };
+
+    const post = (digestItemId: string, headers: Record<string, string>, feedback?: string) => ({
+      path: `/api/iori/v1/digest-items/${digestItemId}/feedback`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
+        body: feedback === undefined ? '' : `feedback=${feedback}`,
+      },
+    });
+
+    const feedbackOf = (t: ReturnType<typeof setupReadApi>, digestItemId: string) =>
+      t.sqlite.prepare('SELECT feedback, feedbackAt FROM digest_items WHERE digestItemId = ?').get(digestItemId) as {
+        feedback: string | null;
+        feedbackAt: number | null;
+      };
+
+    const sourcesOf = (t: ReturnType<typeof setupReadApi>) =>
+      t.sqlite.prepare(
+        'SELECT interestSourceId, kind, ref, contentHash, weight, occurredAt, deletedAt, embeddedAt, length(embedding) AS bytes FROM interest_sources ORDER BY kind',
+      ).all() as Array<{
+        interestSourceId: string;
+        kind: string;
+        ref: string;
+        contentHash: string;
+        weight: number;
+        occurredAt: number;
+        deletedAt: number | null;
+        embeddedAt: number | null;
+        bytes: number | null;
+      }>;
+
+    const give = async (
+      t: ReturnType<typeof setupReadApi>,
+      digestItemId: string,
+      headers: Record<string, string>,
+      feedback?: string,
+    ) => {
+      const { path, init } = post(digestItemId, headers, feedback);
+      return await t.request(path, init);
+    };
+
+    const cookieOf = (me: { sessionId: string }, origin: string | null = ORIGIN) => ({
+      Cookie: `sessionId=${me.sessionId}`,
+      ...(origin === null ? {} : { Origin: origin }),
+    });
+
+    it('認証なしだと 401 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, { Origin: ORIGIN }, 'interested');
+
+      expect(response.status).toBe(401);
+      expect(feedbackOf(t, digestItemId).feedback).toBeNull();
+    });
+
+    it('write:accounts を満たさない scope のトークンを 403 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, me.bearer, 'interested');
+
+      expect(response.status).toBe(403);
+      expect(feedbackOf(t, digestItemId).feedback).toBeNull();
+    });
+
+    it('Cookie のとき Origin がなければ 403 にし、何も変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, cookieOf(me, null), 'interested');
+
+      expect(response.status).toBe(403);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      expect(sourcesOf(t)).toEqual([]);
+    });
+
+    it('Cookie のとき別の Origin なら 403 にし、何も変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, cookieOf(me, 'https://evil.example'), 'interested');
+
+      expect(response.status).toBe(403);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      expect(sourcesOf(t)).toEqual([]);
+    });
+
+    it('Cookie で同じ Origin なら、反応を保存して記事の画面に 303 で戻す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId, articleId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, { ...cookieOf(me), Referer: 'https://evil.example/' }, 'interested');
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('Location')).toBe(`/articles/${articleId}`);
+      const saved = feedbackOf(t, digestItemId);
+      expect(saved.feedback).toBe('interested');
+      expect(saved.feedbackAt).toBeGreaterThan(0);
+      expect(
+        t.sqlite.prepare('SELECT eventName FROM domain_events WHERE eventName = \'digest.itemFeedbackGiven\'').all(),
+      ).toEqual([{ eventName: 'digest.itemFeedbackGiven' }]);
+    });
+
+    it('反応した記事の embedding を、記事の URL を ref にした feedback_positive の材料として写す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      await give(t, digestItemId, cookieOf(me), 'interested');
+
+      const feedbackAt = feedbackOf(t, digestItemId).feedbackAt;
+      expect(sourcesOf(t)).toEqual([{
+        interestSourceId: expect.any(String),
+        kind: 'feedback_positive',
+        ref: itemUrl,
+        contentHash: await sha256Hex(itemUrl),
+        weight: 1,
+        occurredAt: feedbackAt,
+        deletedAt: null,
+        embeddedAt: expect.any(Number),
+        bytes: EMBEDDING_DIMENSIONS * 4,
+      }]);
+    });
+
+    it('関心なしは feedback_negative の材料にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      await give(t, digestItemId, cookieOf(me), 'not_interested');
+
+      expect(feedbackOf(t, digestItemId).feedback).toBe('not_interested');
+      expect(sourcesOf(t).map(({ kind, deletedAt }) => ({ kind, deletedAt }))).toEqual([
+        { kind: 'feedback_negative', deletedAt: null },
+      ]);
+    });
+
+    it('Bearer でも本人なら保存して 303 で戻す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId, articleId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, me.bearer, 'interested');
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('Location')).toBe(`/articles/${articleId}`);
+      expect(feedbackOf(t, digestItemId).feedback).toBe('interested');
+    });
+
+    it('JSON の body でも受け付ける', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await t.request(`/api/iori/v1/digest-items/${digestItemId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...me.bearer },
+        body: JSON.stringify({ feedback: 'not_interested' }),
+      });
+
+      expect(response.status).toBe(303);
+      expect(feedbackOf(t, digestItemId).feedback).toBe('not_interested');
+    });
+
+    it('他人の項目は 404 にし、DB を変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const other = t.seed.addLocalActor('other');
+      const { digestItemId } = seedFeedbackDigest(t, other);
+
+      const withBearer = await give(t, digestItemId, me.bearer, 'interested');
+      const withCookie = await give(t, digestItemId, cookieOf(me), 'not_interested');
+
+      expect(withBearer.status).toBe(404);
+      expect(withCookie.status).toBe(404);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      expect(sourcesOf(t)).toEqual([]);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName LIKE \'digest.%\'').get())
+        .toEqual({ n: 0 });
+    });
+
+    it.each([crypto.randomUUID(), 'not-a-uuid'])('存在しない ID %s は 404 にする', async (digestItemId) => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, me.bearer, 'interested');
+
+      expect(response.status).toBe(404);
+    });
+
+    it.each([undefined, 'maybe', 'INTERESTED', ''])('feedback が %j だと 400 にし、DB を変えない', async (feedback) => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      const response = await give(t, digestItemId, me.bearer, feedback);
+
+      expect(response.status).toBe(400);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      expect(sourcesOf(t)).toEqual([]);
+    });
+
+    it('同じ値をもう一度押すと取り消し、材料を論理削除する', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      const response = await give(t, digestItemId, cookieOf(me), 'interested');
+
+      expect(response.status).toBe(303);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      const sources = sourcesOf(t);
+      expect(sources).toHaveLength(1);
+      expect(sources[0]).toMatchObject({ kind: 'feedback_positive', deletedAt: expect.any(Number) });
+    });
+
+    it('別の値を押すと切り替え、反対の kind の材料を論理削除する', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      await give(t, digestItemId, cookieOf(me), 'not_interested');
+
+      expect(feedbackOf(t, digestItemId).feedback).toBe('not_interested');
+      const byKind = Object.fromEntries(sourcesOf(t).map((source) => [source.kind, source]));
+      expect(byKind.feedback_positive?.deletedAt).toEqual(expect.any(Number));
+      expect(byKind.feedback_negative?.deletedAt).toBeNull();
+    });
+
+    it('取り消した材料は、同じ行を復活させて occurredAt と embedding を更新する', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      const first = sourcesOf(t)[0]!;
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      t.sqlite.prepare('UPDATE feed_entries SET embedding = ?').run(basis(1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      await give(t, digestItemId, cookieOf(me), 'interested');
+
+      const sources = sourcesOf(t);
+      expect(sources).toHaveLength(1);
+      expect(sources[0]).toMatchObject({
+        interestSourceId: first.interestSourceId,
+        kind: 'feedback_positive',
+        deletedAt: null,
+      });
+      expect(sources[0]!.occurredAt).toBeGreaterThan(first.occurredAt);
+      const stored = t.sqlite.prepare('SELECT embedding FROM interest_sources').get() as { embedding: Uint8Array };
+      expect(Array.from(stored.embedding)).toEqual(Array.from(basis(1)));
+    });
+
+    it('取り消してから切り替えた材料も、削除済みの行を復活させる', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      await give(t, digestItemId, cookieOf(me), 'not_interested');
+      await give(t, digestItemId, cookieOf(me), 'interested');
+
+      const byKind = Object.fromEntries(sourcesOf(t).map((source) => [source.kind, source]));
+      expect(sourcesOf(t)).toHaveLength(2);
+      expect(byKind.feedback_positive?.deletedAt).toBeNull();
+      expect(byKind.feedback_negative?.deletedAt).toEqual(expect.any(Number));
+    });
+
+    it.each([
+      ['embedding が未計算', { embedding: null }],
+      ['feed_entries の行が期限切れで無い', { entry: false }],
+    ])('feed_entries に %s ときは、反応だけ保存して材料を作らない', async (_, options) => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me, options);
+
+      const response = await give(t, digestItemId, cookieOf(me), 'interested');
+
+      expect(response.status).toBe(303);
+      expect(feedbackOf(t, digestItemId).feedback).toBe('interested');
+      expect(sourcesOf(t)).toEqual([]);
+    });
+
+    it('埋め込みが無い記事の反応を切り替えると、反対の材料は消す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId } = seedFeedbackDigest(t, me);
+      await give(t, digestItemId, cookieOf(me), 'interested');
+      t.sqlite.prepare('UPDATE feed_entries SET embedding = NULL, embeddedAt = NULL').run();
+
+      await give(t, digestItemId, cookieOf(me), 'not_interested');
+
+      expect(sourcesOf(t).map(({ kind, deletedAt }) => [kind, deletedAt === null])).toEqual([
+        ['feedback_positive', false],
+      ]);
     });
   });
 });

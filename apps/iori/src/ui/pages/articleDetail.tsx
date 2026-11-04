@@ -7,12 +7,27 @@ import { PostView } from '../components/PostView.tsx';
 import { postToStatus } from '../legacyConversion.ts';
 import { buildDigestPublishConfirmMessage, type DigestPublishNotice } from './digestPublishConfirm.ts';
 
+type DigestFeedbackValue = 'interested' | 'not_interested';
+
+type DigestFeedbackItem = {
+  digestItemId: string;
+  rank: number;
+  url: string;
+  title: string;
+  feedback: DigestFeedbackValue | null;
+};
+
 type ArticleData = {
   article: Article;
   thread: PostWithAuthor[];
   body?: { html: string };
-  digest?: DigestPublishNotice;
+  digest?: DigestPublishNotice & { items: DigestFeedbackItem[] };
 };
+
+const feedbackButtons: ReadonlyArray<Readonly<{ value: DigestFeedbackValue; label: string; pressedClass: string }>> = [
+  { value: 'interested', label: '関心あり', pressedClass: 'bg-sage-dark hover:bg-sage text-white' },
+  { value: 'not_interested', label: '関心なし', pressedClass: 'bg-rust hover:bg-rust text-white' },
+];
 
 const getIsLoggedIn = (): boolean => {
   const root = document.getElementById('root');
@@ -247,6 +262,44 @@ const ArticleDetailPage = () => {
             </div>
           )}
       </div>
+
+      {isLoggedIn && article.status !== 'published' && data.digest !== undefined && data.digest.items.length > 0 && (
+        <div class='mt-8 flex-shrink-0'>
+          <h2 class='text-xl font-bold text-charcoal dark:text-white mb-3'>この記事への反応</h2>
+          <ul class='space-y-3'>
+            {data.digest.items.map((item) => (
+              <li key={item.digestItemId} class='flex flex-col gap-2'>
+                <a
+                  href={item.url}
+                  class='text-terracotta dark:text-terracotta-light hover:underline break-all'
+                >
+                  {item.title}
+                </a>
+                <form
+                  method='post'
+                  action={`/api/iori/v1/digest-items/${item.digestItemId}/feedback`}
+                  class='flex items-center gap-2'
+                >
+                  {feedbackButtons.map(({ value, label, pressedClass }) => (
+                    <button
+                      key={value}
+                      type='submit'
+                      name='feedback'
+                      value={value}
+                      aria-pressed={item.feedback === value ? 'true' : 'false'}
+                      class={`px-3 py-1 text-sm font-medium rounded-clay transition-all shadow-clay-sm ${
+                        item.feedback === value ? pressedClass : 'bg-sand hover:bg-sand-light text-charcoal'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

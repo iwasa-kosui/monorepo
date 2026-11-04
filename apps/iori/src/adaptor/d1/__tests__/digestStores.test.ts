@@ -41,6 +41,7 @@ const createDigest = () => {
         summary: null,
         reasonInterestSourceId: null,
         feedback: null,
+        feedbackAt: null,
       },
       {
         feedEntryId: 'e2',
@@ -51,6 +52,7 @@ const createDigest = () => {
         summary: null,
         reasonInterestSourceId: null,
         feedback: null,
+        feedbackAt: null,
       },
     ],
     trends: [{ kind: 'hatena', rank: 1, url: 'https://example.com/h', title: 'H', count: 1 }],

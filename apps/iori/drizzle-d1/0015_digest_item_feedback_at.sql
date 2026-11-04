@@ -1,0 +1,1 @@
+ALTER TABLE `digest_items` ADD `feedbackAt` integer;

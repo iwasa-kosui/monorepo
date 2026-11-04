@@ -17,6 +17,7 @@ import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
+import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
@@ -48,6 +49,8 @@ import { createD1AiTranslationUsageRecorder } from '../../../d1/aiTranslation/ai
 import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTranslationStore.ts';
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
+import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -56,6 +59,7 @@ import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReac
 import { createD1EmojiReactDeletedStore } from '../../../d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
@@ -66,6 +70,9 @@ import { createD1FollowRequestedStore } from '../../../d1/follow/followRequested
 import { createD1FollowResolver } from '../../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../../d1/image/postImageCreatedStore.ts';
+import { createD1InterestSourceDeletedStore } from '../../../d1/interestSource/interestSourceDeletedStore.ts';
+import { createD1InterestSourceEmbeddingCopiedStore } from '../../../d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
+import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../../../d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
 import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1LikeResolver } from '../../../d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../../../d1/like/localLikeCreatedStore.ts';
@@ -472,6 +479,15 @@ export const setupReadApi = (
           }),
           requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
             .requestDigest,
+          giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
+            digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
+            feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
+            interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),
+            interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
+            interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
+            digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
+            now: Instant.now,
+          }),
         }),
       );
       root.route(

@@ -511,7 +511,9 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
   it('関心のベクトルがあれば、新着の代わりに「あなたへのおすすめ」を作り、score と根拠と rank を保存する', async () => {
     const t = setup();
     const interestSourceId = t.addInterest('kosui_post', KOSUI_REF, basis(0));
-    t.addEntry(t.sources.rss, 'Other', { count: 99, embedding: basis(1) });
+    const partial = basis(1);
+    partial[0] = 0.1;
+    t.addEntry(t.sources.rss, 'Other', { count: 99, embedding: partial });
     t.addEntry(t.sources.rss, 'Match', { count: 1, embedding: basis(0) });
 
     const result = await t.run();
@@ -523,11 +525,43 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
       [2, 'Other', interestSourceId],
     ]);
     expect(items[0]!.score).toBeCloseTo(1, 3);
-    expect(items[1]!.score).toBeCloseTo(0, 3);
+    expect(items[1]!.score).toBeGreaterThan(0);
+    expect(items[1]!.score).toBeLessThan(0.2);
     const { privateHtml } = t.bodies();
     expect(privateHtml).toContain('<h2>あなたへのおすすめ</h2>');
     expect(privateHtml).not.toContain('<h2>新着</h2>');
     expect(privateHtml).not.toContain('はてなブックマーク 99');
+  });
+
+  it('関心なしのベクトルだけなら、埋め込み済みの記事があっても新着にし、候補を取らない', async () => {
+    const t = setup();
+    t.addInterest('feedback_negative', KOSUI_REF, basis(0));
+    t.addEntry(t.sources.rss, 'News', { count: 1, embedding: basis(1) });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({ materials: 1, candidates: 0, selected: 0 });
+    expect(t.all('SELECT rank, score, reasonInterestSourceId FROM digest_items')).toEqual([
+      { rank: 1, score: null, reasonInterestSourceId: null },
+    ]);
+    expect(t.bodies().privateHtml).toContain('<h2>新着</h2>');
+  });
+
+  it('関心なしのベクトルに近い記事はおすすめから外す', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, basis(0));
+    t.addInterest('feedback_negative', 'https://example.com/disliked', basis(1));
+    const mixed = basis(0);
+    mixed[1] = 2;
+    t.addEntry(t.sources.rss, 'Disliked', { count: 1, embedding: basis(1) });
+    t.addEntry(t.sources.rss, 'Mixed', { count: 1, embedding: mixed });
+    t.addEntry(t.sources.rss, 'Match', { count: 1, embedding: basis(0) });
+
+    await t.run();
+
+    expect(t.all('SELECT title FROM digest_items ORDER BY rank').map((item) => item.title)).toEqual([
+      'Match',
+    ]);
   });
 
   it('関心のベクトルが無ければ、埋め込み済みの記事があっても新着にし、score と根拠を null にする', async () => {
@@ -810,7 +844,7 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     }]);
     expect(
       t.all(
-        'SELECT digestId, feedEntryId, url, title, rank, score, summary, reasonInterestSourceId, feedback FROM digest_items',
+        'SELECT digestId, feedEntryId, url, title, rank, score, summary, reasonInterestSourceId, feedback, feedbackAt FROM digest_items',
       ),
     ).toEqual([{
       digestId: result.digestId,
@@ -822,6 +856,7 @@ describe('CreateDailyDigestUseCase: 保存', () => {
       summary: null,
       reasonInterestSourceId: null,
       feedback: null,
+      feedbackAt: null,
     }]);
     expect(t.all('SELECT digestId, kind, rank, url, title, count FROM digest_trends')).toEqual([{
       digestId: result.digestId,

@@ -69,6 +69,7 @@ import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -170,6 +171,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
+  giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;

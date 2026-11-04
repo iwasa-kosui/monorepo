@@ -372,7 +372,7 @@ const create = ({
     const radar = radarEntries.val[0];
 
     const materials = interestVectors.val;
-    const candidates = materials.length === 0
+    const candidates = materials.every((material) => Recommendation.isNegative(material))
       ? []
       : uniqueByUrl((await recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since })).val);
     const scoringStartedAt = Date.now();
@@ -493,6 +493,7 @@ const create = ({
         summary: summaries[index] ?? null,
         reasonInterestSourceId: item.reasonInterestSourceId,
         feedback: null,
+        feedbackAt: null,
       })),
       trends: [
         ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
