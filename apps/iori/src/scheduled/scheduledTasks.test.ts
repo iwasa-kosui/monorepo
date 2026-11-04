@@ -54,4 +54,72 @@ describe('dispatchScheduled', () => {
       error: failure,
     });
   });
+
+  it('runs a task after the task named in after finishes, while the other tasks start without waiting', async () => {
+    const order: string[] = [];
+    let finishSync: () => void = () => undefined;
+    const syncDone = new Promise<void>((resolve) => {
+      finishSync = resolve;
+    });
+    const sync = vi.fn(async () => {
+      order.push('sync:start');
+      await syncDone;
+      order.push('sync:end');
+    });
+    const embed = vi.fn(async () => {
+      order.push('embed:start');
+    });
+    const collect = vi.fn(async () => {
+      order.push('collect:start');
+    });
+    const dispatched = dispatchScheduled('0 * * * *', {
+      '0 * * * *': [
+        { name: 'collect', run: collect },
+        { name: 'sync', run: sync },
+        { name: 'embed', after: 'sync', run: embed },
+      ],
+    }, context);
+    await vi.waitFor(() => expect(collect).toHaveBeenCalledOnce());
+    expect(sync).toHaveBeenCalledOnce();
+    expect(embed).not.toHaveBeenCalled();
+    finishSync();
+    await dispatched;
+    expect(embed).toHaveBeenCalledWith(context);
+    expect(order).toEqual(['collect:start', 'sync:start', 'sync:end', 'embed:start']);
+  });
+
+  it('still runs the task after a failed prerequisite and logs the prerequisite failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failure = new Error('sync boom');
+    const embed = vi.fn(async () => undefined);
+    await dispatchScheduled('0 * * * *', {
+      '0 * * * *': [
+        { name: 'sync', run: async () => Promise.reject(failure) },
+        { name: 'embed', after: 'sync', run: embed },
+      ],
+    }, context);
+    expect(embed).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith('iori scheduled task failed.', {
+      cron: '0 * * * *',
+      task: 'sync',
+      error: failure,
+    });
+  });
+
+  it('logs a failure of the task that runs after its prerequisite under its own name', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failure = new Error('embed boom');
+    await dispatchScheduled('0 * * * *', {
+      '0 * * * *': [
+        { name: 'sync', run: async () => undefined },
+        { name: 'embed', after: 'sync', run: async () => Promise.reject(failure) },
+      ],
+    }, context);
+    expect(error).toHaveBeenCalledWith('iori scheduled task failed.', {
+      cron: '0 * * * *',
+      task: 'embed',
+      error: failure,
+    });
+  });
 });
