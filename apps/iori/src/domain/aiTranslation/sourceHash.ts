@@ -1,4 +1,4 @@
 export const hashTranslationSource = async (html: string): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`v2:${html}`));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
