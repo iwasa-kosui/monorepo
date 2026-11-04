@@ -2,6 +2,8 @@
  * OGP（Open Graph Protocol）情報を取得するフェッチャー
  */
 
+import { decodeBody } from '../http/decodeBody.ts';
+
 export type OgpData = Readonly<{
   title: string | null;
   description: string | null;
@@ -137,7 +139,7 @@ export const createOgpFetcher = (): OgpFetcher => {
         return emptyOgpData;
       }
 
-      const html = await response.text();
+      const html = decodeBody(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type'));
 
       // OGP情報を抽出
       const ogTitle = extractMetaContent(html, 'og:title');
