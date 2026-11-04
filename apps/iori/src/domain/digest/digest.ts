@@ -243,6 +243,20 @@ export const DigestAlreadyPublishedError = {
   }),
 } as const;
 
+export type DigestDraftEditedError = Readonly<{
+  type: 'DigestDraftEditedError';
+  message: string;
+  detail: { digestDate: string };
+}>;
+
+export const DigestDraftEditedError = {
+  create: (digestDate: string): DigestDraftEditedError => ({
+    type: 'DigestDraftEditedError',
+    message: `The draft digest of "${digestDate}" has been edited and cannot be replaced.`,
+    detail: { digestDate },
+  }),
+} as const;
+
 export const Digest = {
   ...schema,
   create,

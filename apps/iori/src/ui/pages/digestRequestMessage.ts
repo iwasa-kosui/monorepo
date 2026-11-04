@@ -12,6 +12,9 @@ export const buildDigestRequestFailureMessage = (
   if (status === 409 && error === 'Digest already published') {
     return '今日のダイジェストは公開済みのため、作り直せません。';
   }
+  if (status === 409 && error === 'Digest draft edited') {
+    return '編集済みの下書きがあるため作り直せません。';
+  }
   if (status === 409 && error === 'Digest request too soon') {
     return retryAfterSeconds === undefined
       ? '続けて作ることはできません。しばらくしてからもう一度お試しください。'

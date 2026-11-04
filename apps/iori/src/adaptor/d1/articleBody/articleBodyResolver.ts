@@ -11,6 +11,7 @@ export const reconstructD1ArticleBody = (row: typeof articleBodiesTable.$inferSe
   articleId: row.articleId as ArticleId,
   privateHtml: row.privateHtml,
   publicHtml: row.publicHtml,
+  markdown: row.markdown,
   updatedAt: row.updatedAt.getTime() as Instant,
 });
 

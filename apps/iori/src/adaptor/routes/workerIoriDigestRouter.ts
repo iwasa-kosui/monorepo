@@ -236,6 +236,8 @@ export const createWorkerIoriDigestRouter = ({
       switch (err.type) {
         case 'DigestAlreadyPublishedError':
           return c.json({ error: 'Digest already published' }, 409);
+        case 'DigestDraftEditedError':
+          return c.json({ error: 'Digest draft edited' }, 409);
         case 'DigestRequestLimitError':
           c.header('Retry-After', String(err.retryAfterSeconds));
           return err.reason === 'daily_limit'

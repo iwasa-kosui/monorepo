@@ -19,6 +19,7 @@
     "@iwasa-kosui/result": "workspace:*",
     "@js-temporal/polyfill": "0.5.1",
     "@logtape/logtape": "2.4.2",
+    "@mixmark-io/domino": "2.2.0",
     "@noble/hashes": "1.8.0",
     "@standard-schema/spec": "1.1.0",
     "argon2id": "1.0.1",
@@ -33,6 +34,7 @@
     "satori": "0.19.1",
     "sharp": "0.34.5",
     "shiki": "3.21.0",
+    "turndown": "7.2.5",
     "web-push": "3.6.7",
     "x-forwarded-fetch": "0.2.0",
     "zod": "4.2.1"
@@ -48,6 +50,7 @@
     "@types/pg": "8.16.0",
     "@types/sanitize-html": "2.16.0",
     "@types/sharp": "0.32.0",
+    "@types/turndown": "5.0.6",
     "@types/web-push": "3.6.4",
     "@vitest/runner": "3.1.2",
     "@vitest/snapshot": "3.1.2",

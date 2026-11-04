@@ -8,16 +8,17 @@ import { articleBodiesTable, domainEventsTable } from '../schema.ts';
 export const createD1ArticleBodyWrittenStore = (db: IoriD1Db): ArticleBodyWrittenStore => ({
   store: async (...events) => {
     for (const event of events) {
-      const { articleId, privateHtml, publicHtml, updatedAt } = event.aggregateState;
+      const { articleId, privateHtml, publicHtml, markdown, updatedAt } = event.aggregateState;
       await db.batch([
         db.insert(articleBodiesTable).values({
           articleId,
           privateHtml,
           publicHtml,
+          markdown,
           updatedAt: new Date(updatedAt),
         }).onConflictDoUpdate({
           target: articleBodiesTable.articleId,
-          set: { privateHtml, publicHtml, updatedAt: new Date(updatedAt) },
+          set: { privateHtml, publicHtml, markdown, updatedAt: new Date(updatedAt) },
         }),
         db.insert(domainEventsTable).values(toD1DomainEventRow(event)),
       ]);

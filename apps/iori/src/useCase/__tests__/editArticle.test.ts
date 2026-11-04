@@ -1,0 +1,65 @@
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
+
+import { ActorId } from '../../domain/actor/actorId.ts';
+import type { Article, ArticleResolver, ArticleWithBodyEditedStore } from '../../domain/article/article.ts';
+import { ArticleId } from '../../domain/article/articleId.ts';
+import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
+import { EditArticleUseCase } from '../editArticle.ts';
+
+const userId = UserId.generate();
+const article: Article = {
+  articleId: ArticleId.generate(),
+  authorActorId: ActorId.generate(),
+  authorUserId: userId,
+  rootPostId: null,
+  title: 'Before',
+  status: 'draft',
+  createdAt: Instant.orThrow(1_000),
+  publishedAt: null,
+  unpublishedAt: null,
+};
+
+const setup = (edited: boolean) => {
+  const articleResolver: ArticleResolver = { resolve: async () => RA.ok(article) };
+  const store = vi.fn<ArticleWithBodyEditedStore['store']>(async () => RA.ok({ edited }));
+  const useCase = EditArticleUseCase.create({
+    articleResolver,
+    articleWithBodyEditedStore: { store },
+    renderMarkdown: async (markdown) => `<p>${markdown}</p>`,
+  });
+  return { useCase, store };
+};
+
+describe('EditArticleUseCase', () => {
+  it('タイトルが変わったときは article.titleChanged と本文のイベントを渡す', async () => {
+    const { useCase, store } = setup(true);
+
+    const result = await useCase.run({ userId, articleId: article.articleId, title: 'After', markdown: 'body' });
+
+    expect(result).toMatchObject({ ok: true, val: { article: { title: 'After' } } });
+    expect(store.mock.calls[0]![0]).toMatchObject({ eventName: 'article.titleChanged' });
+    expect(store.mock.calls[0]![1]).toMatchObject({ eventName: 'articleBody.written' });
+  });
+
+  it('タイトルが今と同じなら article.titleChanged を渡さない', async () => {
+    const { useCase, store } = setup(true);
+
+    const result = await useCase.run({ userId, articleId: article.articleId, title: 'Before', markdown: 'body' });
+
+    expect(result).toMatchObject({ ok: true, val: { article: { title: 'Before' } } });
+    expect(store.mock.calls[0]![0]).toBeUndefined();
+  });
+
+  it('ストアが書き込めなかったら（その間に公開された）ArticleInvalidStatusError を返す', async () => {
+    const { useCase } = setup(false);
+
+    const result = await useCase.run({ userId, articleId: article.articleId, title: 'After', markdown: 'body' });
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'ArticleInvalidStatusError', detail: { currentStatus: 'published' } },
+    });
+  });
+});

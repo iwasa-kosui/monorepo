@@ -42,12 +42,13 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const digestHeaderResolverByUserIdAndDigestDate = createD1DigestHeaderResolverByUserIdAndDigestDate(db);
   const articleResolver = createD1ArticleResolver(db);
+  const articleBodyResolver = createD1ArticleBodyResolver(db);
   const createDailyDigest = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeaderResolverByUserIdAndDigestDate,
     latestDigestHeaderResolverByUserId: createD1LatestDigestHeaderResolverByUserId(db),
     articleResolver,
-    articleBodyResolver: createD1ArticleBodyResolver(db),
+    articleBodyResolver,
     articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
     draftArticleWithDependentsDeletedStore: createD1DraftArticleWithDependentsDeletedStore(db),
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
@@ -79,6 +80,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     requestDigest: RequestDigestUseCase.create({
       digestHeaderResolverByUserIdAndDigestDate,
       articleResolver,
+      articleBodyResolver,
       digestRequestUsageRecorder: createD1DigestRequestUsageRecorder(db),
       createDailyDigestUseCase: createDailyDigest,
       now,

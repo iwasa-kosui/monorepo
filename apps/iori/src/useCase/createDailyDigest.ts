@@ -16,6 +16,7 @@ import {
   Digest,
   DigestAlreadyPublishedError,
   type DigestCreatedStore,
+  DigestDraftEditedError,
   type DigestHeader,
   type DigestHeaderResolverByUserIdAndDigestDate,
   type DigestParseError,
@@ -126,6 +127,7 @@ type Err =
   | DigestParseError
   | DigestStoreFailedError
   | DigestAlreadyPublishedError
+  | DigestDraftEditedError
   | ArticleNotFoundError;
 
 export type CreateDailyDigestUseCase = UseCase<Input, Ok, Err>;
@@ -333,6 +335,14 @@ const create = ({
     const notReplaceable = () =>
       trigger === 'scheduled' ? RA.ok(skipped()) : RA.err(DigestAlreadyPublishedError.create(digestDate));
 
+    const editedDraft = () => {
+      if (trigger === 'scheduled') {
+        console.info('iori digest: the draft was edited, so generation was skipped.', { digestDate });
+        return RA.ok(skipped());
+      }
+      return RA.err(DigestDraftEditedError.create(digestDate));
+    };
+
     const existing = await digestHeaderResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
     let replacing: DigestHeader | undefined;
     if (existing.val !== undefined) {
@@ -344,6 +354,10 @@ const create = ({
         return RA.err(ArticleNotFoundError.create(existing.val.articleId));
       } else if (!isDraft) {
         return RA.err(DigestAlreadyPublishedError.create(digestDate));
+      }
+      const existingBody = await articleBodyResolver.resolve(existing.val.articleId);
+      if (existingArticle.val !== undefined && Article.isBodyEdited(existingArticle.val, existingBody.val)) {
+        return editedDraft();
       }
       replacing = existing.val;
     }
@@ -463,6 +477,7 @@ const create = ({
       const replacingArticle = await articleResolver.resolve(replacing.articleId);
       if (replacingArticle.val?.status !== 'draft') return notReplaceable();
       const body = await articleBodyResolver.resolve(replacing.articleId);
+      if (Article.isBodyEdited(replacingArticle.val, body.val)) return editedDraft();
       const deleted = await draftArticleWithDependentsDeletedStore.store(
         Article.deleteArticle(replacedAt)(replacing.articleId),
         body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(replacing.articleId),

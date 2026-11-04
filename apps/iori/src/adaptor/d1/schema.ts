@@ -336,6 +336,7 @@ export const articleBodiesTable = sqliteTable('article_bodies', {
   articleId: text('articleId').primaryKey().references(() => articlesTable.articleId),
   privateHtml: text('privateHtml').notNull(),
   publicHtml: text('publicHtml').notNull(),
+  markdown: text('markdown'),
   updatedAt: timestamp().notNull(),
 });
 
