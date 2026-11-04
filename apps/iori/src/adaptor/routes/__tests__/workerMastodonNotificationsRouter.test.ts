@@ -72,6 +72,28 @@ describe('GET /api/v1/notifications', () => {
     });
   });
 
+  it('既定の types に reblog が入り、types[] と exclude_types[] でも指定できる', async () => {
+    const t = await seedNotifications();
+    const reblog = t.seed.addRepostNotification(t.me.userId, t.bob.actorId, t.myPost.postId, 7_000);
+
+    const [defaults, only, excluded] = await Promise.all([
+      t.get('/api/v1/notifications'),
+      t.get('/api/v1/notifications?types[]=reblog'),
+      t.get('/api/v1/notifications?exclude_types[]=reblog'),
+    ]);
+
+    expect(await t.typesOf(defaults)).toEqual(['reblog', 'follow', 'mention', 'favourite']);
+    const body = ((await only.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
+    expect(body).toHaveLength(1);
+    expect(body[0]).toMatchObject({
+      id: reblog,
+      type: 'reblog',
+      status: { id: t.myPost.postId },
+      account: { id: t.bob.actorId },
+    });
+    expect(await t.typesOf(excluded)).toEqual(['follow', 'mention', 'favourite']);
+  });
+
   it('types[] と exclude_types[] で絞り込み、未知の type は無視する', async () => {
     const t = await seedNotifications();
 

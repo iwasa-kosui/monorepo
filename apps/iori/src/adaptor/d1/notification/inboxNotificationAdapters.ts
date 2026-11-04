@@ -22,6 +22,9 @@ import type {
   ReplyNotificationDeletedStore,
   ReplyNotificationsResolverByOriginalPostId,
   ReplyNotificationsResolverByReplyPostId,
+  RepostNotification,
+  RepostNotificationCreatedStore,
+  RepostNotificationResolverByRecipientAndActorIdAndPostId,
 } from '../../../domain/notification/notification.ts';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
@@ -35,6 +38,7 @@ import {
   notificationFollowsTable,
   notificationLikesTable,
   notificationRepliesTable,
+  notificationRepostsTable,
   notificationsTable,
 } from '../schema.ts';
 
@@ -129,6 +133,21 @@ export const createD1ReplyNotificationCreatedStore = (db: IoriD1Db): ReplyNotifi
   },
 });
 
+export const createD1RepostNotificationCreatedStore = (db: IoriD1Db): RepostNotificationCreatedStore => ({
+  store: async (event) => {
+    await db.batch([
+      db.insert(notificationsTable).values(notificationRow(event.aggregateState, event.occurredAt)),
+      db.insert(notificationRepostsTable).values({
+        notificationId: event.aggregateState.notificationId,
+        reposterActorId: event.aggregateState.reposterActorId,
+        repostedPostId: event.aggregateState.repostedPostId,
+      }),
+      db.insert(domainEventsTable).values(eventRow(event)),
+    ]);
+    return RA.ok(undefined);
+  },
+});
+
 const createDeletedStore = <
   TEvent extends {
     eventId: string;
@@ -169,6 +188,7 @@ const subtypeTables = [
   notificationFollowsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationRepostsTable,
 ] as const;
 
 const markerNotifications = eq(mastodonMarkersTable.timeline, 'notifications');
@@ -339,4 +359,35 @@ export const createD1ReplyNotificationsResolverByOriginalPostId = (
 ): ReplyNotificationsResolverByOriginalPostId => ({
   resolve: async ({ originalPostId }) =>
     RA.ok((await replyQuery(db).where(eq(notificationRepliesTable.originalPostId, originalPostId))).map(toReply)),
+});
+
+type RepostRow = {
+  notifications: typeof notificationsTable.$inferSelect;
+  notification_reposts: typeof notificationRepostsTable.$inferSelect;
+};
+const toRepost = (row: RepostRow): RepostNotification => ({
+  type: 'repost',
+  notificationId: NotificationId.orThrow(row.notifications.notificationId),
+  recipientUserId: row.notifications.recipientUserId as UserId,
+  isRead: row.notifications.isRead === 1,
+  reposterActorId: row.notification_reposts.reposterActorId as ActorId,
+  repostedPostId: row.notification_reposts.repostedPostId as PostId,
+});
+const repostQuery = (db: IoriD1Db) =>
+  db.select().from(notificationRepostsTable)
+    .innerJoin(notificationsTable, eq(notificationRepostsTable.notificationId, notificationsTable.notificationId));
+
+export const createD1RepostNotificationResolverByRecipientAndActorIdAndPostId = (
+  db: IoriD1Db,
+): RepostNotificationResolverByRecipientAndActorIdAndPostId => ({
+  resolve: async ({ recipientUserId, reposterActorId, repostedPostId }) => {
+    const [row] = await repostQuery(db).where(
+      and(
+        eq(notificationsTable.recipientUserId, recipientUserId),
+        eq(notificationRepostsTable.reposterActorId, reposterActorId),
+        eq(notificationRepostsTable.repostedPostId, repostedPostId),
+      ),
+    ).limit(1);
+    return RA.ok(row === undefined ? undefined : toRepost(row));
+  },
 });

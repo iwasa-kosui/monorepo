@@ -25,6 +25,13 @@ const FEED_SOURCE_ID = '00000000-0000-4000-8000-0000000000f1';
 const rss = (title: string) =>
   `<?xml version="1.0"?><rss version="2.0"><channel><title>feed</title><item><title>${title}</title><link>https://example.com/${title}</link><guid>guid-${title}</guid><description>desc ${title}</description><pubDate>Wed, 04 Nov 2026 20:50:00 GMT</pubDate></item></channel></rss>`;
 
+const rssItems = (titles: ReadonlyArray<string>) =>
+  `<?xml version="1.0"?><rss version="2.0"><channel><title>feed</title>${
+    titles.map((title) =>
+      `<item><title>${title}</title><link>https://example.com/${title}</link><guid>guid-${title}</guid><description>desc ${title}</description><pubDate>Wed, 04 Nov 2026 20:50:00 GMT</pubDate></item>`
+    ).join('')
+  }</channel></rss>`;
+
 const basis = (index: number) => Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === index ? 1 : 0));
 
 const setup = (options: { ai?: 'working' | 'failing' | 'none'; feedBody?: string } = {}) => {
@@ -171,9 +178,9 @@ describe('collectFeedsTask', () => {
     expect(info).toHaveBeenCalledWith('iori feed entries embedded.', { embedded: 0, skipped: 0, remaining: 0 });
   });
 
-  it('21:00 に取得した記事が、同じ cron の実行の中で埋め込まれ、21:30 の毎朝の生成のおすすめの候補に入る', async () => {
+  it('21:00 に取得した記事が、同じ cron の実行の中で埋め込まれ、21:30 の毎朝の生成のトピックの記事のおすすめに入る', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const t = setup();
+    const t = setup({ feedBody: rssItems(['fresh1', 'fresh2', 'fresh3']) });
     const seed = createMastodonSeed(t.fixture);
     const me = seed.addLocalActor('kosui');
     t.fixture.sqlite.prepare(
@@ -200,7 +207,10 @@ describe('collectFeedsTask', () => {
     const items = t.fixture.sqlite.prepare('SELECT title, score FROM digest_items').all() as Array<
       { title: string; score: number }
     >;
-    expect(items.map((item) => item.title)).toEqual(['fresh']);
+    expect(items.map((item) => item.title).sort()).toEqual(['fresh1', 'fresh2', 'fresh3']);
     expect(items[0]!.score).toBeCloseTo(1, 3);
+    expect(
+      t.fixture.sqlite.prepare('SELECT count(*) AS n FROM digest_topics WHERE embedding IS NOT NULL').get(),
+    ).toEqual({ n: 7 });
   });
 });

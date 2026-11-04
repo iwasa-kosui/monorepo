@@ -5,6 +5,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Article, ArticlePublishedStore, ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBody, ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
+import { Digest, type DigestResolverByArticleId } from '../../domain/digest/digest.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -18,7 +19,36 @@ import {
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
-const setup = (options: Readonly<{ rootPostId: PostId | null; hasBody: boolean }>) => {
+type DigestKind = 'none' | 'topic' | 'summary' | 'legacySummary';
+
+const createDigest = (kind: DigestKind, article: Article): Digest | undefined => {
+  if (kind === 'none') return undefined;
+  const created = Digest.create({
+    userId: article.authorUserId,
+    digestDate: '2026-08-05',
+    articleId: article.articleId,
+    trigger: 'scheduled',
+    topicKey: kind === 'topic' ? 'genai' : 'summary',
+    items: kind === 'summary'
+      ? []
+      : [{
+        feedEntryId: 'e1',
+        url: 'https://example.com/1',
+        title: '1',
+        rank: 1,
+        score: null,
+        summary: null,
+        reasonInterestSourceId: null,
+        feedback: null,
+        feedbackAt: null,
+      }],
+    trends: [],
+  }, Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')));
+  if (!created.ok) throw new Error('unexpected');
+  return created.val.aggregateState;
+};
+
+const setup = (options: Readonly<{ rootPostId: PostId | null; hasBody: boolean; digest?: DigestKind }>) => {
   const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
   const session: Session = {
     sessionId: crypto.randomUUID() as Session['sessionId'],
@@ -65,6 +95,10 @@ const setup = (options: Readonly<{ rootPostId: PostId | null; hasBody: boolean }
   const articleBodyResolver: ArticleBodyResolver = {
     resolve: resolveBody as unknown as ArticleBodyResolver['resolve'],
   };
+  const digest = createDigest(options.digest ?? 'none', article);
+  const digestResolverByArticleId: DigestResolverByArticleId = {
+    resolve: vi.fn(async () => RA.ok(digest)) as unknown as DigestResolverByArticleId['resolve'],
+  };
   const deps = {
     sessionResolver,
     userResolver,
@@ -72,6 +106,7 @@ const setup = (options: Readonly<{ rootPostId: PostId | null; hasBody: boolean }
     articleResolver,
     articlePublishedStore,
     articleBodyResolver,
+    digestResolverByArticleId,
   };
   return { deps, session, article, articlePublishedStore, resolveBody };
 };
@@ -120,6 +155,39 @@ describe('PublishArticleUseCase', () => {
 
     expect(result.ok).toBe(true);
     expect(resolveBody).not.toHaveBeenCalled();
+    expect(articlePublishedStore.store).toHaveBeenCalledTimes(1);
+  });
+
+  it('新形式のまとめ（項目を持たない summary の digest）の article は DigestSummaryNotPublishableError で拒否する', async () => {
+    const { deps, session, article, articlePublishedStore } = setup({
+      rootPostId: null,
+      hasBody: true,
+      digest: 'summary',
+    });
+
+    const result = await PublishArticleUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      articleId: article.articleId,
+      ctx: createMockRequestContext(),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'DigestSummaryNotPublishableError', message: 'このまとめは公開できません' },
+    });
+    expect(articlePublishedStore.store).not.toHaveBeenCalled();
+  });
+
+  it.each(['legacySummary', 'topic'] as const)('%s の digest の article は公開できる', async (digest) => {
+    const { deps, session, article, articlePublishedStore } = setup({ rootPostId: null, hasBody: true, digest });
+
+    const result = await PublishArticleUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      articleId: article.articleId,
+      ctx: createMockRequestContext(),
+    });
+
+    expect(result.ok).toBe(true);
     expect(articlePublishedStore.store).toHaveBeenCalledTimes(1);
   });
 });

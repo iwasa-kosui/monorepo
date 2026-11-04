@@ -12,6 +12,7 @@ import {
   notificationFollowsTable,
   notificationLikesTable,
   notificationRepliesTable,
+  notificationRepostsTable,
   type notificationsTable,
 } from '../schema.ts';
 
@@ -29,7 +30,7 @@ export const loadNotificationItems = async (
 ): Promise<NotificationItem[]> => {
   const idsOf = (type: Notification['type']) =>
     rows.filter((row) => row.type === type).map((row) => row.notificationId);
-  const [likes, follows, reacts, replies] = await Promise.all([
+  const [likes, follows, reacts, replies, reposts] = await Promise.all([
     rowsByNotificationId(
       idsOf('like'),
       (ids) => db.select().from(notificationLikesTable).where(inArray(notificationLikesTable.notificationId, ids)),
@@ -47,6 +48,10 @@ export const loadNotificationItems = async (
       idsOf('reply'),
       (ids) => db.select().from(notificationRepliesTable).where(inArray(notificationRepliesTable.notificationId, ids)),
     ),
+    rowsByNotificationId(
+      idsOf('repost'),
+      (ids) => db.select().from(notificationRepostsTable).where(inArray(notificationRepostsTable.notificationId, ids)),
+    ),
   ]);
 
   return rows.flatMap((row): NotificationItem[] => {
@@ -63,6 +68,7 @@ export const loadNotificationItems = async (
     const follow = follows.get(row.notificationId);
     const react = reacts.get(row.notificationId);
     const reply = replies.get(row.notificationId);
+    const repost = reposts.get(row.notificationId);
     if (row.type === 'like' && like !== undefined) {
       return toItem({
         ...base,
@@ -91,6 +97,14 @@ export const loadNotificationItems = async (
         replierActorId: ActorId.orThrow(reply.replierActorId),
         replyPostId: PostId.orThrow(reply.replyPostId),
         originalPostId: PostId.orThrow(reply.originalPostId),
+      });
+    }
+    if (row.type === 'repost' && repost !== undefined) {
+      return toItem({
+        ...base,
+        type: 'repost',
+        reposterActorId: ActorId.orThrow(repost.reposterActorId),
+        repostedPostId: PostId.orThrow(repost.repostedPostId),
       });
     }
     return [];

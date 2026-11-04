@@ -13,6 +13,7 @@ const payload = () => ({
   digestDate: '2026-11-05',
   articleId: ArticleId.generate(),
   trigger: 'scheduled' as const,
+  topicKey: 'summary',
   items: [{
     feedEntryId: 'entry-1',
     url: 'https://example.com/a',
@@ -36,7 +37,13 @@ describe('Digest', () => {
     expect(created.val).toMatchObject({
       aggregateName: 'digest',
       eventName: 'digest.created',
-      aggregateState: { digestDate: '2026-11-05', createdAt: now, pushSentAt: null, trigger: 'scheduled' },
+      aggregateState: {
+        digestDate: '2026-11-05',
+        createdAt: now,
+        pushSentAt: null,
+        trigger: 'scheduled',
+        topicKey: 'summary',
+      },
     });
     expect(created.val.aggregateState.items).toHaveLength(1);
     expect(created.val.aggregateState.items[0]!.digestItemId).toEqual(expect.any(String));

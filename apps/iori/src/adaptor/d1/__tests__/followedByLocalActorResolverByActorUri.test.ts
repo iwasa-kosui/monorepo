@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import { Follow } from '../../../domain/follow/follow.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import { createD1FollowedByLocalActorResolverByActorUri } from '../follow/followedByLocalActorResolverByActorUri.ts';
+import { createD1FollowRequestedStore } from '../follow/followRequestedStore.ts';
+import { createD1UndoFollowingProcessedStore } from '../follow/undoFollowingProcessedStore.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -62,6 +67,39 @@ describe('createD1FollowedByLocalActorResolverByActorUri', () => {
 
     const result = await createD1FollowedByLocalActorResolverByActorUri(t.db).resolve({
       actorUri: 'https://unknown.example/users/carol',
+    });
+
+    expect(result).toEqual({ ok: true, val: false });
+  });
+
+  it('ローカルの actor が FollowRequestedStore でフォローを申請した直後に true を返す', async () => {
+    const t = setup();
+    const kosui = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+
+    await createD1FollowRequestedStore(t.db).store(
+      Follow.requestFollow(
+        { followerId: ActorId.orThrow(kosui.actorId), followingId: ActorId.orThrow(alice.actorId) },
+        Instant.now(),
+      ),
+    );
+    const result = await createD1FollowedByLocalActorResolverByActorUri(t.db).resolve({
+      actorUri: 'https://remote.example/users/alice',
+    });
+
+    expect(result).toEqual({ ok: true, val: true });
+  });
+
+  it('UndoFollowingProcessedStore でフォローを解除した後は false を返す', async () => {
+    const t = setup();
+    const kosui = t.seed.addLocalActor('kosui');
+    const alice = t.seed.addRemoteActor('alice');
+    const follow = { followerId: ActorId.orThrow(kosui.actorId), followingId: ActorId.orThrow(alice.actorId) };
+
+    await createD1FollowRequestedStore(t.db).store(Follow.requestFollow(follow, Instant.now()));
+    await createD1UndoFollowingProcessedStore(t.db).store(Follow.undoFollow(follow, Instant.now()));
+    const result = await createD1FollowedByLocalActorResolverByActorUri(t.db).resolve({
+      actorUri: 'https://remote.example/users/alice',
     });
 
     expect(result).toEqual({ ok: true, val: false });

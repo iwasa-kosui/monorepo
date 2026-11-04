@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Document, Note } from '@fedify/vocab';
+import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
@@ -8,7 +8,6 @@ import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { PostImageCreatedStore } from '../domain/image/image.ts';
-import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
@@ -19,6 +18,7 @@ import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
+import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -160,13 +160,7 @@ const create = ({
             actors: note?.attributionIds,
             tos: note?.toIds,
             ccs: note?.ccIds,
-            attachments: images.map(
-              (image) =>
-                new Document({
-                  url: new URL(image.url, origin),
-                  mediaType: getMimeTypeFromUrl(image.url),
-                }),
-            ),
+            attachments: images.map((image) => toImageDocument(image, origin)),
           }),
         );
         return RA.ok(undefined);
@@ -193,13 +187,7 @@ const create = ({
           actors: note.attributionIds,
           tos: note.toIds,
           ccs: note.ccIds,
-          attachments: images.map(
-            (image) =>
-              new Document({
-                url: new URL(image.url, origin),
-                mediaType: getMimeTypeFromUrl(image.url),
-              }),
-          ),
+          attachments: images.map((image) => toImageDocument(image, origin)),
         });
 
         // Send to each relay's inbox

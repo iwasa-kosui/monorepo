@@ -6,14 +6,15 @@ import { htmlToMarkdown } from './htmlToMarkdown.ts';
 
 const digest = buildDigestBodies({
   radar: undefined,
-  entries: [
+  recommendations: [
     {
       title: 'First article',
       url: 'https://example.com/first',
       summary: '一行目\n二行目',
-      hatenaBookmarkCount: 12,
+      fromHatena: false,
+      reason: { scope: 'kosui', label: 'https://kosui.me/posts/a', url: 'https://kosui.me/posts/a' },
     },
-    { title: 'Second article', url: 'https://example.com/second', summary: null, hatenaBookmarkCount: null },
+    { title: 'Second article', url: 'https://example.com/second', summary: null, fromHatena: false, reason: null },
   ],
   timelineTrends: [],
   hatenaTrends: [],
@@ -23,11 +24,12 @@ describe('htmlToMarkdown', () => {
   it('ダイジェストの本文を見出しと箇条書きとリンクの Markdown にする', () => {
     expect(htmlToMarkdown(digest.privateHtml)).toBe(
       [
-        '## 新着',
+        '## あなたへのおすすめ',
         '',
-        '-   [First article](https://example.com/first)（はてなブックマーク 12）  ',
+        '-   [First article](https://example.com/first)  ',
         '    一行目  ',
-        '    二行目',
+        '    二行目  ',
+        '    関心の根拠: [https://kosui.me/posts/a](https://kosui.me/posts/a)',
         '-   [Second article](https://example.com/second)',
       ].join('\n'),
     );
@@ -36,8 +38,8 @@ describe('htmlToMarkdown', () => {
   it('変換した Markdown を HTML に戻しても見出し、リンク、箇条書き、改行が残る', async () => {
     const html = await PostContent.fromMarkdown(htmlToMarkdown(digest.privateHtml));
 
-    expect(html).toContain('<h2>新着</h2>');
-    expect(html).toContain('<a href="https://example.com/first">First article</a>（はてなブックマーク 12）');
+    expect(html).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(html).toContain('<a href="https://example.com/first">First article</a>');
     expect(html).toContain('<br />');
     expect(html.match(/<li>/g)).toHaveLength(2);
   });
