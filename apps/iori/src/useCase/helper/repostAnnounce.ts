@@ -1,5 +1,6 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Announce, Article as FedifyArticle, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import type { Temporal } from '@js-temporal/polyfill';
 
 import type { ArticleResolverByRootPostId } from '../../domain/article/article.ts';
 import type { PostId } from '../../domain/post/postId.ts';
@@ -13,18 +14,20 @@ export const repostAnnounceUri = (
 ): URL => new URL(`#announces/${repostId}`, ctx.getActorUri(username));
 
 export const createRepostAnnounce = (
-  { ctx, username, id, object, authorActorUri }: Readonly<{
+  { ctx, username, id, object, authorActorUri, published }: Readonly<{
     ctx: RequestContext<unknown>;
     username: Username;
     id: URL;
     object: URL;
     authorActorUri: URL | undefined;
+    published?: Temporal.Instant;
   }>,
 ): Announce =>
   new Announce({
     id,
     actor: ctx.getActorUri(username),
     object,
+    published,
     to: PUBLIC_COLLECTION,
     ccs: authorActorUri === undefined
       ? [ctx.getFollowersUri(username)]

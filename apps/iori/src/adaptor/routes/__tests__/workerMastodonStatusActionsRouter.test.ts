@@ -250,6 +250,10 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(announce).toBeInstanceOf(Announce);
     expect(announce.id?.href).toBe(`${ORIGIN}/users/${t.me.username}#announces/${row.repostId}`);
     expect(announce.objectId?.href).toBe(`${ORIGIN}/users/${t.me.username}/posts/${t.local.postId}`);
+    const repostCreatedAt = (t.sqlite.prepare('SELECT createdAt FROM reposts WHERE repostId = ?').get(row.repostId) as {
+      createdAt: number;
+    }).createdAt;
+    expect(announce.published?.epochMilliseconds).toBe(repostCreatedAt);
     expect(announce.toIds.map((id) => id.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
     expect(announce.ccIds.map((id) => id.href)).toEqual([
       `${ORIGIN}/users/${t.me.username}`,
@@ -324,6 +328,10 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
       `${ORIGIN}/users/${t.me.username}/followers`,
     ]);
     expect(sent[1]!.activity).toBe(announce);
+    const repostCreatedAt = (t.sqlite.prepare('SELECT createdAt FROM reposts WHERE postId = ?').get(
+      t.publicNote.postId,
+    ) as { createdAt: number }).createdAt;
+    expect(announce.published?.epochMilliseconds).toBe(repostCreatedAt);
     expect(t.count('reposts')).toBe(2);
   });
 

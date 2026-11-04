@@ -1,6 +1,7 @@
 import { type RequestContext } from '@fedify/fedify';
 import { isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
+import { Temporal } from '@js-temporal/polyfill';
 
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
@@ -186,6 +187,7 @@ const create = ({
                 id: announceId,
                 object: objectUri,
                 authorActorUri: ctx.getActorUri(postAuthor.val.username),
+                published: Temporal.Instant.fromEpochMilliseconds(now),
               }),
             );
             return RA.ok(repostId);
@@ -283,6 +285,7 @@ const create = ({
             id: announceId,
             object: result.id,
             authorActorUri: author.id,
+            published: Temporal.Instant.fromEpochMilliseconds(now),
           });
           await ctx.sendActivity({ identifier: user.username }, author, announce);
           await ctx.sendActivity({ identifier: user.username }, 'followers', announce);
