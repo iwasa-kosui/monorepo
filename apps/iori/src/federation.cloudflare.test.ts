@@ -556,9 +556,13 @@ describe('decideQueueFailureAction for inbox fetch timeouts', () => {
     expect(decideQueueFailureAction(fetchTimeout(), 3, messageType)).toEqual({ type: 'retry' });
   });
 
-  it('applies the outbox delays to a fetch timeout in an outbox message', () => {
-    expect(decideQueueFailureAction(fetchTimeout(), 2, 'outbox')).toEqual({ type: 'retry', delaySeconds: 600 });
-  });
+  it.each(['outbox', 'fanout'] as const)(
+    'applies the delivery delays to a fetch timeout in a %s message',
+    (messageType) => {
+      expect(decideQueueFailureAction(fetchTimeout(), 2, messageType)).toEqual({ type: 'retry', delaySeconds: 600 });
+      expect(decideQueueFailureAction(fetchTimeout(), 3, messageType)).toEqual({ type: 'retry', delaySeconds: 3600 });
+    },
+  );
 });
 
 describe('processCloudflareFedifyMessages retry delays', () => {
