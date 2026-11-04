@@ -75,6 +75,12 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
         }
       },
       err: (err) => {
+        if (err.type === 'RemotePostAuthorMismatchError') {
+          getLogger().warn(
+            `Ignored Create activity for a post owned by another actor: ${objectUri} existing=${err.detail.existingActorId} actor=${err.detail.actorId}`,
+          );
+          return;
+        }
         getLogger().warn(
           `Failed to process Create activity: ${objectUri} - ${err}`,
         );

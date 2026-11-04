@@ -83,6 +83,38 @@ describe('createOnCreate', () => {
     return addRemotePostUseCase.run;
   };
 
+  it('does not throw when the post is owned by another actor', async () => {
+    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi' });
+    const addRemotePostUseCase = {
+      run: vi.fn(async () =>
+        RA.err({
+          type: 'RemotePostAuthorMismatchError',
+          message: 'mismatch',
+          detail: { uri: 'https://remote.example/posts/1', existingActorId: 'actor-other', actorId: 'actor-alice' },
+        })
+      ),
+    };
+    const fetchReplyNotesRecursiveUseCase = { run: vi.fn() };
+    const listener = createOnCreate({
+      origin,
+      inboxActorResolver: {
+        resolve: async () =>
+          RA.ok({
+            actor: { followersId } as never,
+            actorIdentity: {} as never,
+            documentLoaderOptions: { documentLoader: vi.fn() as never },
+          }),
+      } as never,
+      addRemotePostUseCase: addRemotePostUseCase as never,
+      fetchReplyNotesRecursiveUseCase: fetchReplyNotesRecursiveUseCase as never,
+    });
+    const create = { getObject: vi.fn(async () => note), ...noRecipients } as unknown as Create;
+
+    await expect(listener({ lookupObject: vi.fn() } as never, create)).resolves.toBeUndefined();
+
+    expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
+  });
+
   it.each<[string, { tos?: URL[]; ccs?: URL[] }]>([
     ['public', { tos: [publicUri], ccs: [followersId] }],
     ['unlisted', { tos: [followersId], ccs: [publicUri] }],

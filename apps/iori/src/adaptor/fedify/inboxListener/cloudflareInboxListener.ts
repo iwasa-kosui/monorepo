@@ -26,12 +26,14 @@ import { createD1FollowAcceptedStore } from '../../d1/follow/followAcceptedStore
 import { createD1FollowResolver } from '../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../d1/image/postImageCreatedStore.ts';
+import { createD1PostImagesResolverByPostId } from '../../d1/image/postImagesResolver.ts';
 import { createD1LikesResolverByPostId } from '../../d1/like/likesResolverByPostId.ts';
 import { createD1LocalLikeDeletedStore } from '../../d1/like/localLikeDeletedStore.ts';
 import { createD1RemoteLikeCreatedStore } from '../../d1/like/remoteLikeCreatedStore.ts';
 import { createD1RemoteLikeDeletedStore } from '../../d1/like/remoteLikeDeletedStore.ts';
 import { createD1RemoteLikeResolverByActivityUri } from '../../d1/like/remoteLikeResolverByActivityUri.ts';
 import { createD1LinkPreviewCreatedStore } from '../../d1/linkPreview/linkPreviewCreatedStore.ts';
+import { createD1LinkPreviewsResolverByPostId } from '../../d1/linkPreview/linkPreviewsResolverByPostId.ts';
 import {
   createD1EmojiReactNotificationCreatedStore,
   createD1EmojiReactNotificationDeletedStore,
@@ -192,16 +194,21 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin,
         postCreatedStore,
+        postResolverByUri,
         postImageCreatedStore: createD1PostImageCreatedStore(db),
+        postImagesResolver: createD1PostImagesResolverByPostId(db),
         remoteActorCreatedStore,
         logoUriUpdatedStore,
         actorResolverByUri,
         timelineItemCreatedStore,
+        timelineItemsResolverByPostId: createD1TimelineItemsResolverByPostId(db),
         localPostResolverByUri,
         replyNotificationCreatedStore: createD1ReplyNotificationCreatedStore(db),
+        replyNotificationsResolverByReplyPostId: createD1ReplyNotificationsResolverByReplyPostId(db),
         pushSubscriptionsResolver,
         webPushSender,
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
+        linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
         ogpFetcher: createOgpFetcher(),
       }),
       fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({

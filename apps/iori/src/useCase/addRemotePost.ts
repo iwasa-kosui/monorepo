@@ -4,17 +4,23 @@ import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
-import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
+import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
+import type {
+  LinkPreview,
+  LinkPreviewCreatedStore,
+  LinkPreviewsResolverByPostId,
+} from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import {
   Notification,
   type ReplyNotification,
   type ReplyNotificationCreatedStore,
+  type ReplyNotificationsResolverByReplyPostId,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
 import {
@@ -22,12 +28,17 @@ import {
   type LocalPostResolverByUri,
   Post,
   type PostCreatedStore,
+  type PostResolverByUri,
+  type RemotePost,
   type RemotePostAttachment,
-  type RemotePostCreated,
 } from '../domain/post/post.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
-import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
+import {
+  TimelineItem,
+  type TimelineItemCreatedStore,
+  type TimelineItemsResolverByPostId,
+} from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
@@ -51,43 +62,72 @@ type Input = Readonly<{
 }>;
 
 type Ok = Readonly<{
-  post: RemotePostCreated;
+  post: RemotePost;
   actor: Actor;
 }>;
 
-type Err = never;
+export type RemotePostAuthorMismatchError = Readonly<{
+  type: 'RemotePostAuthorMismatchError';
+  message: string;
+  detail: {
+    uri: string;
+    existingActorId: ActorId;
+    actorId: ActorId;
+  };
+}>;
+
+export const RemotePostAuthorMismatchError = {
+  create: (detail: { uri: string; existingActorId: ActorId; actorId: ActorId }): RemotePostAuthorMismatchError => ({
+    type: 'RemotePostAuthorMismatchError',
+    message:
+      `The post with URI "${detail.uri}" belongs to actor "${detail.existingActorId}", not to actor "${detail.actorId}".`,
+    detail,
+  }),
+} as const;
+
+type Err = RemotePostAuthorMismatchError;
 
 export type AddRemotePostUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   origin: string;
   postCreatedStore: PostCreatedStore;
+  postResolverByUri: PostResolverByUri;
   postImageCreatedStore: PostImageCreatedStore;
+  postImagesResolver: PostImagesResolverByPostId;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  timelineItemsResolverByPostId: TimelineItemsResolverByPostId;
   localPostResolverByUri: LocalPostResolverByUri;
   replyNotificationCreatedStore: ReplyNotificationCreatedStore;
+  replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
+  linkPreviewsResolver: LinkPreviewsResolverByPostId;
   ogpFetcher: OgpFetcher;
 }>;
 
 const create = ({
   origin,
   postCreatedStore,
+  postResolverByUri,
   postImageCreatedStore,
+  postImagesResolver,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
   actorResolverByUri,
   timelineItemCreatedStore,
+  timelineItemsResolverByPostId,
   localPostResolverByUri,
   replyNotificationCreatedStore,
+  replyNotificationsResolverByReplyPostId,
   pushSubscriptionsResolver,
   webPushSender,
   linkPreviewCreatedStore,
+  linkPreviewsResolver,
   ogpFetcher,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
@@ -102,7 +142,16 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(actorIdentity)),
-      RA.andBind('post', ({ actor, content, uri, inReplyToUri, visibility, recipientActorUris }) => {
+      RA.andBind('saved', async ({ actor, content, uri, inReplyToUri, visibility, recipientActorUris }) => {
+        const existing = await postResolverByUri.resolve({ uri });
+        if (existing.ok && existing.val) {
+          if (existing.val.actorId !== actor.id) {
+            return RA.err(
+              RemotePostAuthorMismatchError.create({ uri, existingActorId: existing.val.actorId, actorId: actor.id }),
+            );
+          }
+          return RA.ok({ post: existing.val });
+        }
         const createPost = Post.createRemotePost(now)({
           content,
           uri,
@@ -111,26 +160,53 @@ const create = ({
           visibility,
           recipientActorUris,
         });
-        return postCreatedStore.store(createPost).then(() => RA.ok(createPost));
+        try {
+          await postCreatedStore.store(createPost);
+        } catch (error) {
+          let resolved;
+          try {
+            resolved = await postResolverByUri.resolve({ uri });
+          } catch {
+            throw error;
+          }
+          if (resolved.ok && resolved.val) {
+            if (resolved.val.actorId !== actor.id) {
+              return RA.err(
+                RemotePostAuthorMismatchError.create({ uri, existingActorId: resolved.val.actorId, actorId: actor.id }),
+              );
+            }
+            return RA.ok({ post: resolved.val });
+          }
+          throw error;
+        }
+        return RA.ok({ post: createPost.aggregateState });
       }),
-      RA.andThrough(({ post, actor }) => {
+      RA.andThrough(async ({ saved: { post }, actor }) => {
+        const existingItems = await timelineItemsResolverByPostId.resolve({ postId: post.postId });
+        if (existingItems.ok && existingItems.val.some((item) => item.type === 'post' && item.actorId === actor.id)) {
+          return RA.ok(undefined);
+        }
         const timelineItemEvent = TimelineItem.createTimelineItem({
           timelineItemId: TimelineItemId.generate(),
           type: 'post',
           actorId: actor.id,
-          postId: post.aggregateState.postId,
+          postId: post.postId,
           repostId: null,
           createdAt: now,
         }, now);
         return timelineItemCreatedStore.store(timelineItemEvent);
       }),
-      RA.andThrough(async ({ post, attachments }) => {
+      RA.andThrough(async ({ saved: { post }, attachments }) => {
         if (attachments.length === 0) {
+          return RA.ok(undefined);
+        }
+        const existingImages = await postImagesResolver.resolve(post.postId);
+        if (existingImages.ok && existingImages.val.length > 0) {
           return RA.ok(undefined);
         }
         const images: PostImage[] = attachments.map((attachment) => ({
           imageId: ImageId.generate(),
-          postId: post.aggregateState.postId,
+          postId: post.postId,
           url: attachment.url,
           altText: attachment.altText,
           createdAt: now,
@@ -139,11 +215,16 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Fetch and store link previews
-      RA.andThrough(async ({ post, content }) => {
+      RA.andThrough(async ({ saved: { post }, content }) => {
         const excludeHost = new URL(origin).host;
         const urls = extractUrlsFromHtml(content, excludeHost);
 
         if (urls.length === 0) {
+          return RA.ok(undefined);
+        }
+
+        const existingPreviews = await linkPreviewsResolver.resolve(post.postId);
+        if (existingPreviews.ok && existingPreviews.val.length > 0) {
           return RA.ok(undefined);
         }
 
@@ -159,7 +240,7 @@ const create = ({
             if (ogp.title ?? ogp.description) {
               linkPreviews.push({
                 linkPreviewId: LinkPreviewId.generate(),
-                postId: post.aggregateState.postId,
+                postId: post.postId,
                 url: urls[i],
                 title: ogp.title,
                 description: ogp.description,
@@ -179,16 +260,25 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Create reply notification if this is a reply to a local post
-      RA.andThrough(async ({ post, actor, inReplyToUri }) => {
+      RA.andBind('replyNotificationCreated', async ({ saved: { post }, actor, inReplyToUri }) => {
         if (!inReplyToUri) {
-          return RA.ok(undefined);
+          return RA.ok(false);
         }
         const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
         if (!originalPostResult.ok || !originalPostResult.val) {
           // Not a local post, skip notification
-          return RA.ok(undefined);
+          return RA.ok(false);
         }
         const originalPost: LocalPost = originalPostResult.val;
+        const existingNotifications = await replyNotificationsResolverByReplyPostId.resolve({
+          replyPostId: post.postId,
+        });
+        if (
+          existingNotifications.ok
+          && existingNotifications.val.some((existing) => existing.originalPostId === originalPost.postId)
+        ) {
+          return RA.ok(false);
+        }
         // Create reply notification
         const notificationId = NotificationId.generate();
         const notification: ReplyNotification = {
@@ -197,16 +287,16 @@ const create = ({
           recipientUserId: originalPost.userId,
           isRead: false,
           replierActorId: actor.id,
-          replyPostId: post.aggregateState.postId,
+          replyPostId: post.postId,
           originalPostId: originalPost.postId,
         };
         const event = Notification.createReplyNotification(notification, now);
         await replyNotificationCreatedStore.store(event);
-        return RA.ok(undefined);
+        return RA.ok(true);
       }),
       // Send web push notification for reply
-      RA.andThrough(async ({ actor, inReplyToUri }) => {
-        if (!inReplyToUri) {
+      RA.andThrough(async ({ replyNotificationCreated, actor, inReplyToUri }) => {
+        if (!replyNotificationCreated || !inReplyToUri) {
           return RA.ok(undefined);
         }
         const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
@@ -229,7 +319,7 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.map(({ post, actor }) => ({ post, actor })),
+      RA.map(({ saved: { post }, actor }) => ({ post, actor })),
     );
   };
 
