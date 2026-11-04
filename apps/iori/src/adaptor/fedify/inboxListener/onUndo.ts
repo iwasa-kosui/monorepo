@@ -49,25 +49,37 @@ const handleUndoFollow = async (deps: OnUndoDeps, ctx: InboxContext<unknown>, un
   );
 };
 
-const handleUndoLike = async (deps: OnUndoDeps, like: Like) => {
+const isSameOrigin = (a: URL, b: URL) => a.origin === b.origin;
+
+const handleUndoLike = async (deps: OnUndoDeps, undo: Undo, like: Like) => {
   if (!like.id) {
     getLogger().warn('Undo Like activity has no Like id');
     return;
   }
   const likeActivityUri = like.id.href;
 
-  return RA.flow(
-    RA.ok({ likeActivityUri }),
-    RA.andThen(({ likeActivityUri }) => deps.removeReceivedLikeUseCase.run({ likeActivityUri })),
-    RA.match({
-      ok: () => {
-        getLogger().info(`Processed Undo Like: ${likeActivityUri}`);
-      },
-      err: (err) => {
-        getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(err)}`);
-      },
-    }),
-  );
+  const likeResult = await deps.removeReceivedLikeUseCase.run({ likeActivityUri });
+  if (likeResult.ok) {
+    getLogger().info(`Processed Undo Like: ${likeActivityUri}`);
+    return;
+  }
+  if (likeResult.err.type !== 'LikeNotFoundError') {
+    getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(likeResult.err)}`);
+    return;
+  }
+
+  const actorId = undo.actorId;
+  if (actorId == null || !isSameOrigin(actorId, like.id)) {
+    getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(likeResult.err)}`);
+    return;
+  }
+
+  const emojiReactResult = await deps.removeReceivedEmojiReactUseCase.run({ emojiReactActivityUri: likeActivityUri });
+  if (emojiReactResult.ok) {
+    getLogger().info(`Processed Undo Like as EmojiReact: ${likeActivityUri}`);
+    return;
+  }
+  getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(emojiReactResult.err)}`);
 };
 
 const handleUndoAnnounce = async (deps: OnUndoDeps, announce: Announce) => {
@@ -143,7 +155,7 @@ export const createOnUndo = (deps: OnUndoDeps) => async (ctx: InboxContext<unkno
   }
 
   if (object instanceof Like) {
-    return handleUndoLike(deps, object);
+    return handleUndoLike(deps, undo, object);
   }
 
   if (object instanceof Announce) {
