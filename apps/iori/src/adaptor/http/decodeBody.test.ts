@@ -28,6 +28,16 @@ describe('decodeBody charset from Content-Type', () => {
   });
 });
 
+describe('decodeBody windows-1252 header', () => {
+  it.each(['ISO-8859-1', 'latin1', 'windows-1252'])('reads a UTF-8 body as UTF-8 when the header says %s', (label) => {
+    expect(decodeBody(bytesOf(ascii('日本語')), `text/html; charset=${label}`)).toBe('日本語');
+  });
+
+  it('reads a latin1 body as windows-1252 when the header says ISO-8859-1', () => {
+    expect(decodeBody(Uint8Array.from([0xE9]), 'text/html; charset=ISO-8859-1')).toBe('\u00E9');
+  });
+});
+
 describe('decodeBody charset from meta', () => {
   it('reads <meta charset> when Content-Type has no charset', () => {
     const body = bytesOf('<html><head><meta charset="Shift_JIS"><title>', NIHONGO_SJIS, '</title>');
@@ -89,6 +99,11 @@ describe('decodeBody fallbacks', () => {
   it('reads the meta charset when the Content-Type charset is unknown', () => {
     const body = bytesOf('<meta charset="Shift_JIS">', NIHONGO_SJIS);
     expect(decodeBody(body, 'text/html; charset=no-such-charset')).toBe('<meta charset="Shift_JIS">日本語');
+  });
+
+  it('reads a meta x-user-defined charset as windows-1252', () => {
+    const body = bytesOf('<meta charset="x-user-defined">', [0xE9]);
+    expect(decodeBody(body, 'text/html')).toBe('<meta charset="x-user-defined">\u00E9');
   });
 
   it('falls back to utf-8 when both the Content-Type charset and the meta charset are unknown', () => {

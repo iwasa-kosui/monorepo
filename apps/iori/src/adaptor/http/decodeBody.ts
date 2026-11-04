@@ -10,6 +10,15 @@ const createDecoder = (label: string): TextDecoder | undefined => {
   }
 };
 
+const decodeStrictUtf8 = (bytes: Uint8Array): string | undefined => {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (error) {
+    if (error instanceof TypeError) return undefined;
+    throw error;
+  }
+};
+
 const bomEncoding = (bytes: Uint8Array): string | undefined => {
   if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return 'utf-8';
   if (bytes[0] === 0xFF && bytes[1] === 0xFE) return 'utf-16le';
@@ -57,15 +66,18 @@ export const decodeBody = (bytes: Uint8Array, contentType: string | null | undef
 
   const { mediaType, charset } = parseContentType(contentType);
   const headerDecoder = charset === undefined ? undefined : createDecoder(charset);
-  if (headerDecoder !== undefined) return headerDecoder.decode(bytes);
+  if (headerDecoder !== undefined) {
+    if (headerDecoder.encoding !== 'windows-1252') return headerDecoder.decode(bytes);
+    return decodeStrictUtf8(bytes) ?? headerDecoder.decode(bytes);
+  }
 
   if (mediaType === '' || HTML_MEDIA_TYPES.includes(mediaType)) {
     const label = sniffMetaCharset(bytes);
     const metaDecoder = label === undefined ? undefined : createDecoder(label);
     if (metaDecoder !== undefined) {
-      return metaDecoder.encoding.startsWith('utf-16')
-        ? new TextDecoder('utf-8').decode(bytes)
-        : metaDecoder.decode(bytes);
+      if (metaDecoder.encoding.startsWith('utf-16')) return new TextDecoder('utf-8').decode(bytes);
+      if (metaDecoder.encoding === 'x-user-defined') return new TextDecoder('windows-1252').decode(bytes);
+      return metaDecoder.decode(bytes);
     }
   }
 
