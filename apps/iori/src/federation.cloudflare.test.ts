@@ -3,6 +3,7 @@ import { SendActivityError } from '@fedify/fedify';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
+import z from 'zod/v4';
 
 import { createActorDispatcher } from './adaptor/fedify/actorDispatcherFactory.ts';
 import { createOutboxDispatcher } from './adaptor/fedify/outboxDispatcherFactory.ts';
@@ -126,6 +127,17 @@ describe('createCloudflareFederationRuntime', () => {
       openRegistrations: false,
       usage: { users: { total: 1 } },
     });
+  });
+
+  it('defines the refetchRelayForwardedNote task', async () => {
+    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
+
+    expect(() =>
+      federation.defineTask('refetchRelayForwardedNote', {
+        schema: z.object({}),
+        handler: () => undefined,
+      })
+    ).toThrow(TypeError);
   });
 });
 
