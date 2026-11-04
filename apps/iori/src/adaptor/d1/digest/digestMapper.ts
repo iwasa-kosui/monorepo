@@ -15,7 +15,10 @@ export const reconstructDigest = async (db: IoriD1Db, header: DigestHeader): Pro
   ]);
   return Digest.parseOrThrow({
     ...header,
-    items,
+    items: items.map(({ feedbackAt, ...item }) => ({
+      ...item,
+      feedbackAt: feedbackAt === null ? null : feedbackAt.getTime(),
+    })),
     trends: trends.map(({ digestId: _digestId, ...trend }) => trend),
   });
 };

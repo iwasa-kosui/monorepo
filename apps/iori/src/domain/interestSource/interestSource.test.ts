@@ -31,6 +31,8 @@ describe('InterestSource', () => {
       kosui_external: 0.8,
       own_post: 0.5,
       own_like: 0.7,
+      feedback_positive: 1.0,
+      feedback_negative: 1.0,
     });
   });
 
@@ -100,5 +102,63 @@ describe('InterestSource', () => {
     const embedded = InterestSource.embed(created(), new Float32Array(3), later);
 
     expect(embedded.ok).toBe(false);
+  });
+
+  describe('copyEmbedding', () => {
+    const embedding = Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === 0 ? 1 : 0));
+    const copyPayload = (kind: InterestSourceKind = 'feedback_positive') => ({
+      userId: UserId.generate(),
+      kind,
+      ref: 'https://example.com/a',
+      contentHash: hash,
+      occurredAt: later,
+      embedding,
+    });
+
+    it('既存の行が無ければ新しい ID で、埋め込み済み、未削除の interestSource.embeddingCopied を返す', () => {
+      const result = InterestSource.copyEmbedding(undefined, copyPayload('feedback_negative'), later);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.val).toMatchObject({
+        aggregateName: 'interestSource',
+        eventName: 'interestSource.embeddingCopied',
+        aggregateState: {
+          kind: 'feedback_negative',
+          weight: 1.0,
+          occurredAt: later,
+          embeddedAt: later,
+          deletedAt: null,
+          createdAt: later,
+          updatedAt: later,
+        },
+        eventPayload: { kind: 'feedback_negative', ref: 'https://example.com/a', embedding, embeddedAt: later },
+      });
+    });
+
+    it('既存の行があればその ID と createdAt を保ち、削除を戻す', () => {
+      const existing = { ...created('feedback_positive'), deletedAt: now };
+
+      const result = InterestSource.copyEmbedding(existing, { ...copyPayload(), userId: existing.userId }, later);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.val.aggregateState).toMatchObject({
+        interestSourceId: existing.interestSourceId,
+        createdAt: now,
+        updatedAt: later,
+        deletedAt: null,
+      });
+    });
+
+    it('次元が合わない embedding は拒否する', () => {
+      const result = InterestSource.copyEmbedding(
+        undefined,
+        { ...copyPayload(), embedding: new Float32Array(3) },
+        later,
+      );
+
+      expect(result.ok).toBe(false);
+    });
   });
 });

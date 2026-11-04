@@ -9,7 +9,15 @@ import { UserId } from '../user/userId.ts';
 import { Embedding, type EmbeddingDimensionsError } from './embedding.ts';
 import { InterestSourceId } from './interestSourceId.ts';
 
-export const interestSourceKinds = ['kosui_post', 'kosui_talk', 'kosui_external', 'own_post', 'own_like'] as const;
+export const interestSourceKinds = [
+  'kosui_post',
+  'kosui_talk',
+  'kosui_external',
+  'own_post',
+  'own_like',
+  'feedback_positive',
+  'feedback_negative',
+] as const;
 const kindZodType = z.enum(interestSourceKinds);
 export type InterestSourceKind = z.output<typeof kindZodType>;
 
@@ -19,6 +27,8 @@ const weights: Readonly<Record<InterestSourceKind, number>> = {
   kosui_external: 0.8,
   own_post: 0.5,
   own_like: 0.7,
+  feedback_positive: 1.0,
+  feedback_negative: 1.0,
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +39,8 @@ const halfLivesMs: Readonly<Record<InterestSourceKind, number>> = {
   kosui_external: 730 * DAY_MS,
   own_post: 180 * DAY_MS,
   own_like: 90 * DAY_MS,
+  feedback_positive: 90 * DAY_MS,
+  feedback_negative: 90 * DAY_MS,
 };
 
 const zodType = z
@@ -81,6 +93,20 @@ export type InterestSourceEmbedded = InterestSourceEvent<
   InterestSource,
   'interestSource.embedded',
   { interestSourceId: InterestSourceId; embedding: Float32Array; embeddedAt: Instant }
+>;
+
+export type InterestSourceEmbeddingCopied = InterestSourceEvent<
+  InterestSource,
+  'interestSource.embeddingCopied',
+  {
+    interestSourceId: InterestSourceId;
+    kind: InterestSourceKind;
+    ref: string;
+    contentHash: string;
+    occurredAt: Instant;
+    embedding: Float32Array;
+    embeddedAt: Instant;
+  }
 >;
 
 export type CreateInterestSourcePayload = Readonly<{
@@ -169,12 +195,67 @@ const embed = (
   );
 };
 
+export type CopyEmbeddingPayload = Readonly<{
+  userId: UserId;
+  kind: InterestSourceKind;
+  ref: string;
+  contentHash: string;
+  occurredAt: Instant;
+  embedding: Float32Array;
+}>;
+
+const copyEmbedding = (
+  existing: InterestSource | undefined,
+  payload: CopyEmbeddingPayload,
+  now: Instant,
+): Result<InterestSourceEmbeddingCopied, ParseError | EmbeddingDimensionsError> => {
+  const validated = Embedding.validate(payload.embedding);
+  if (!validated.ok) return validated;
+  const parsed = schema.parse({
+    interestSourceId: existing?.interestSourceId ?? InterestSourceId.generate(),
+    userId: payload.userId,
+    kind: payload.kind,
+    ref: payload.ref,
+    contentHash: payload.contentHash,
+    weight: weights[payload.kind],
+    occurredAt: payload.occurredAt,
+    embeddedAt: now,
+    deletedAt: null,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  });
+  if (!parsed.ok) return parsed;
+  const source = parsed.val;
+  return ok(
+    InterestSourceEvent.create(
+      toAggregateId(source),
+      source,
+      'interestSource.embeddingCopied',
+      {
+        interestSourceId: source.interestSourceId,
+        kind: source.kind,
+        ref: source.ref,
+        contentHash: source.contentHash,
+        occurredAt: source.occurredAt,
+        embedding: validated.val,
+        embeddedAt: now,
+      },
+      now,
+    ),
+  );
+};
+
 export type InterestSourceCreatedStore = Agg.Store<InterestSourceCreated>;
 export type InterestSourceContentChangedStore = Agg.Store<InterestSourceContentChanged>;
 export type InterestSourceDeletedStore = Agg.Store<InterestSourceDeleted>;
 export type InterestSourceEmbeddedStore = Agg.Store<InterestSourceEmbedded>;
+export type InterestSourceEmbeddingCopiedStore = Agg.Store<InterestSourceEmbeddingCopied>;
 export type InterestSourcesResolverByUserIdAndKind = Agg.Resolver<
   { userId: UserId; kind: InterestSourceKind },
+  ReadonlyArray<InterestSource>
+>;
+export type InterestSourcesResolverByUserIdAndRefAndKinds = Agg.Resolver<
+  { userId: UserId; ref: string; kinds: ReadonlyArray<InterestSourceKind> },
   ReadonlyArray<InterestSource>
 >;
 export type InterestSourcesResolverByUserIdAndKindIncludingDeleted = Agg.Resolver<
@@ -194,5 +275,6 @@ export const InterestSource = {
   changeContent,
   markDeleted,
   embed,
+  copyEmbedding,
   toAggregateId,
 } as const;

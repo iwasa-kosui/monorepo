@@ -79,6 +79,8 @@ const dot = (a: Float32Array, b: Float32Array): number => {
 const decay = (material: InterestVector, now: Instant): number =>
   2 ** (-Math.max(0, now - material.occurredAt) / InterestSource.halfLivesMs[material.kind]);
 
+const isNegative = (material: Pick<InterestVector, 'kind'>): boolean => material.kind === 'feedback_negative';
+
 const sumOfLargest = (values: Float64Array, count: number): number => {
   values.sort();
   let sum = 0;
@@ -88,6 +90,52 @@ const sumOfLargest = (values: Float64Array, count: number): number => {
 
 const roundScore = (score: number): number => Math.round(score * SCORE_DECIMAL_FACTOR);
 
+type NeighborScore = Readonly<{ size: number; score: number; reasonIndex: number }>;
+
+const scoreNeighbors = (
+  article: ArticleVector,
+  articleInverseNorm: number,
+  materials: ReadonlyArray<InterestVector>,
+  group: ReadonlyArray<number>,
+  materialInverseNorms: Float64Array,
+  materialFactors: Float64Array,
+  neighborSimilarities: Float64Array,
+  neighborIndexes: Int32Array,
+): NeighborScore => {
+  let size = 0;
+  let weakest = 0;
+  let reasonIndex = -1;
+  let reasonSimilarity = -Infinity;
+  for (const j of group) {
+    const material = materials[j]!;
+    if (material.embedding.length !== article.embedding.length) continue;
+    const similarity = dot(article.embedding, material.embedding) * articleInverseNorm * materialInverseNorms[j]!;
+    if (Number.isNaN(similarity)) continue;
+    if (
+      similarity > reasonSimilarity
+      || (similarity === reasonSimilarity
+        && material.interestSourceId < materials[reasonIndex]!.interestSourceId)
+    ) {
+      reasonSimilarity = similarity;
+      reasonIndex = j;
+    }
+    if (size < RECOMMENDATION_NEIGHBOR_COUNT) {
+      neighborSimilarities[size] = similarity;
+      neighborIndexes[size] = j;
+      size++;
+      if (size === RECOMMENDATION_NEIGHBOR_COUNT) weakest = indexOfMinimum(neighborSimilarities);
+    } else if (similarity > neighborSimilarities[weakest]!) {
+      neighborSimilarities[weakest] = similarity;
+      neighborIndexes[weakest] = j;
+      weakest = indexOfMinimum(neighborSimilarities);
+    }
+  }
+  if (size === 0) return { size, score: 0, reasonIndex };
+  const contributions = new Float64Array(size);
+  for (let k = 0; k < size; k++) contributions[k] = neighborSimilarities[k]! * materialFactors[neighborIndexes[k]!]!;
+  return { size, score: sumOfLargest(contributions, RECOMMENDATION_CONTRIBUTION_COUNT), reasonIndex };
+};
+
 const scoreArticles = ({
   materials,
   articles,
@@ -95,6 +143,10 @@ const scoreArticles = ({
   limit = RECOMMENDATION_DEFAULT_LIMIT,
 }: ScoreArticlesInput): ReadonlyArray<ScoredArticle> => {
   if (materials.length === 0 || articles.length === 0 || limit <= 0) return [];
+  const positives: number[] = [];
+  const negatives: number[] = [];
+  materials.forEach((material, index) => (isNegative(material) ? negatives : positives).push(index));
+  if (positives.length === 0) return [];
   const materialInverseNorms = Float64Array.from(materials, (material) => inverseNorm(material.embedding));
   const materialFactors = Float64Array.from(materials, (material) => material.weight * decay(material, now));
   const neighborSimilarities = new Float64Array(RECOMMENDATION_NEIGHBOR_COUNT);
@@ -103,42 +155,35 @@ const scoreArticles = ({
   const scored: Array<ScoredArticle & Readonly<{ bucket: number; bookmarks: number }>> = [];
   for (const article of articles) {
     const articleInverseNorm = inverseNorm(article.embedding);
-    let size = 0;
-    let weakest = 0;
-    let reasonIndex = -1;
-    let reasonSimilarity = -Infinity;
-    for (let j = 0; j < materials.length; j++) {
-      const material = materials[j]!;
-      if (material.embedding.length !== article.embedding.length) continue;
-      const similarity = dot(article.embedding, material.embedding) * articleInverseNorm * materialInverseNorms[j]!;
-      if (Number.isNaN(similarity)) continue;
-      if (
-        similarity > reasonSimilarity
-        || (similarity === reasonSimilarity
-          && material.interestSourceId < materials[reasonIndex]!.interestSourceId)
-      ) {
-        reasonSimilarity = similarity;
-        reasonIndex = j;
-      }
-      if (size < RECOMMENDATION_NEIGHBOR_COUNT) {
-        neighborSimilarities[size] = similarity;
-        neighborIndexes[size] = j;
-        size++;
-        if (size === RECOMMENDATION_NEIGHBOR_COUNT) weakest = indexOfMinimum(neighborSimilarities);
-      } else if (similarity > neighborSimilarities[weakest]!) {
-        neighborSimilarities[weakest] = similarity;
-        neighborIndexes[weakest] = j;
-        weakest = indexOfMinimum(neighborSimilarities);
-      }
-    }
-    if (size === 0) continue;
-    const contributions = new Float64Array(size);
-    for (let k = 0; k < size; k++) contributions[k] = neighborSimilarities[k]! * materialFactors[neighborIndexes[k]!]!;
-    const score = sumOfLargest(contributions, RECOMMENDATION_CONTRIBUTION_COUNT);
+    const positive = scoreNeighbors(
+      article,
+      articleInverseNorm,
+      materials,
+      positives,
+      materialInverseNorms,
+      materialFactors,
+      neighborSimilarities,
+      neighborIndexes,
+    );
+    if (positive.size === 0) continue;
+    const negative = negatives.length === 0
+      ? undefined
+      : scoreNeighbors(
+        article,
+        articleInverseNorm,
+        materials,
+        negatives,
+        materialInverseNorms,
+        materialFactors,
+        neighborSimilarities,
+        neighborIndexes,
+      );
+    const score = positive.score - Math.max(0, negative?.score ?? 0);
+    if (score <= 0) continue;
     scored.push({
       feedEntryId: article.feedEntryId,
       score,
-      reasonInterestSourceId: materials[reasonIndex]!.interestSourceId,
+      reasonInterestSourceId: materials[positive.reasonIndex]!.interestSourceId,
       bucket: roundScore(score),
       bookmarks: article.hatenaBookmarkCount ?? 0,
     });
@@ -157,4 +202,5 @@ const scoreArticles = ({
 
 export const Recommendation = {
   scoreArticles,
+  isNegative,
 } as const;

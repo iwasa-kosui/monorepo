@@ -52,6 +52,8 @@ describe('InterestSource.halfLivesMs', () => {
     expect(days('kosui_external')).toBe(730);
     expect(days('own_post')).toBe(180);
     expect(days('own_like')).toBe(90);
+    expect(days('feedback_positive')).toBe(90);
+    expect(days('feedback_negative')).toBe(90);
   });
 });
 
@@ -199,16 +201,113 @@ describe('Recommendation.scoreArticles', () => {
 
   it('次元が合わない組と、大きさが 0 のベクトルは寄与しない', () => {
     const result = score({
-      materials: [material(1, { embedding: [1, 0, 0] }), material(2, { embedding: [0, 0] })],
+      materials: [
+        material(1, { embedding: [1, 0, 0] }),
+        material(2, { embedding: [0, 0] }),
+        material(3, { embedding: [1, 0], weight: 0.5 }),
+      ],
       articles: [article(1, { embedding: [1, 0] })],
     });
 
-    expect(result).toEqual([{ feedEntryId: entryId(1), score: 0, reasonInterestSourceId: sourceId(2) }]);
+    expect(result).toEqual([{ feedEntryId: entryId(1), score: 0.5, reasonInterestSourceId: sourceId(3) }]);
+  });
+
+  it('点数が 0 の記事は返さない', () => {
+    const result = score({
+      materials: [material(1, { embedding: [0, 0] })],
+      articles: [article(1, { embedding: [1, 0] })],
+    });
+
+    expect(result).toEqual([]);
   });
 
   it('どの材料とも次元が合わない記事は返さない', () => {
     const result = score({ materials: [material(1, { embedding: [1, 0, 0] })], articles: [article(1)] });
 
     expect(result).toEqual([]);
+  });
+
+  describe('関心なしの材料', () => {
+    const positive = material(1, { embedding: [1, 0] });
+    const negative = (
+      n: number,
+      embedding: number[],
+      overrides: Partial<Omit<InterestVector, 'embedding'>> = {},
+    ) => material(n, { kind: 'feedback_negative', embedding, ...overrides });
+
+    it('負の材料に近い記事は、点数を負の材料の寄与ぶん下げる', () => {
+      const articles = [article(1, { embedding: [1, 1] }), article(2, { embedding: [1, 0] })];
+
+      const without = score({ materials: [positive], articles });
+      const withNegative = score({ materials: [positive, negative(2, [0, 1], { weight: 0.3 })], articles });
+
+      const scoreOf = (result: typeof without, n: number) => result.find((r) => r.feedEntryId === entryId(n))!.score;
+      expect(scoreOf(withNegative, 1)).toBeCloseTo(scoreOf(without, 1) - 0.3 * Math.SQRT1_2, 6);
+      expect(scoreOf(withNegative, 2)).toBeCloseTo(scoreOf(without, 2), 6);
+    });
+
+    it('負の材料の寄与が正の材料の寄与以上になる記事は外す', () => {
+      const result = score({
+        materials: [positive, negative(2, [1, 0])],
+        articles: [article(1, { embedding: [1, 0] }), article(2, { embedding: [0, 1] })],
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('負の材料の寄与は、類似度の上位 5 件の和までにする', () => {
+      const negatives = Array.from({ length: 8 }, (_, i) => negative(i + 10, [1, 0], { weight: i + 1 }));
+
+      const result = score({ materials: [material(1, { weight: 100 }), ...negatives], articles: [article(1)] });
+
+      expect(result[0]?.score).toBeCloseTo(100 - (8 + 7 + 6 + 5 + 4), 6);
+    });
+
+    it('負の材料の減衰は kind の半減期で計算する', () => {
+      const occurredAt = Instant.orThrow(NOW - 90 * DAY_MS);
+
+      const result = score({
+        materials: [material(1, { weight: 2 }), negative(2, [1, 0], { occurredAt })],
+        articles: [article(1)],
+      });
+
+      expect(result[0]?.score).toBeCloseTo(2 - 0.5, 6);
+    });
+
+    it('負の材料と逆向きの記事の点数は上げない', () => {
+      const result = score({
+        materials: [positive, negative(2, [-1, 0])],
+        articles: [article(1, { embedding: [1, 0] })],
+      });
+
+      expect(result[0]?.score).toBeCloseTo(1, 6);
+    });
+
+    it('関心の根拠には負の材料を選ばない', () => {
+      const result = score({
+        materials: [material(1, { embedding: [1, 1] }), negative(2, [1, 0.01], { weight: 0.01 })],
+        articles: [article(1, { embedding: [1, 0] })],
+      });
+
+      expect(result[0]?.reasonInterestSourceId).toBe(sourceId(1));
+    });
+
+    it('正の材料と次元が合わない記事は、負の材料と比べられても返さない', () => {
+      const result = score({
+        materials: [material(1, { embedding: [1, 0, 0] }), negative(2, [1, 0])],
+        articles: [article(1, { embedding: [1, 0] })],
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('正の材料が無く負の材料だけなら空にする', () => {
+      const result = score({
+        materials: [negative(1, [1, 0]), negative(2, [0, 1])],
+        articles: [article(1), article(2, { embedding: [0, 1] })],
+      });
+
+      expect(result).toEqual([]);
+    });
   });
 });

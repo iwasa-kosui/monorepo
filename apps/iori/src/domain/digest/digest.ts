@@ -1,4 +1,4 @@
-import type { Result } from '@iwasa-kosui/result';
+import { err, ok, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -21,6 +21,13 @@ export const DigestTrigger = {
   zodType: digestTriggerZodType,
 } as const;
 
+export const digestFeedbackKinds = ['interested', 'not_interested'] as const;
+const digestFeedbackZodType = z.enum(digestFeedbackKinds);
+export type DigestFeedback = z.output<typeof digestFeedbackZodType>;
+export const DigestFeedback = {
+  zodType: digestFeedbackZodType,
+} as const;
+
 const digestItemZodType = z.object({
   digestItemId: DigestItemId.zodType,
   feedEntryId: z.string().min(1),
@@ -30,7 +37,8 @@ const digestItemZodType = z.object({
   score: z.number().nullable(),
   summary: z.string().nullable(),
   reasonInterestSourceId: z.string().nullable(),
-  feedback: z.string().nullable(),
+  feedback: digestFeedbackZodType.nullable(),
+  feedbackAt: z.nullable(Instant.zodType),
 });
 export type DigestItem = z.output<typeof digestItemZodType>;
 
@@ -87,6 +95,11 @@ export type DigestPushSent = DigestEvent<
   'digest.pushSent',
   { digestId: DigestId; pushSentAt: Instant }
 >;
+export type DigestItemFeedbackGiven = DigestEvent<
+  Digest,
+  'digest.itemFeedbackGiven',
+  { digestItemId: DigestItemId; feedback: DigestFeedback | null; feedbackAt: Instant | null }
+>;
 export type DigestExpired = DigestEvent<
   undefined,
   'digest.expired',
@@ -129,6 +142,59 @@ const recordPushSent = (digest: Digest, now: Instant): DigestPushSent => {
   );
 };
 
+export type DigestItemNotFoundError = Readonly<{
+  type: 'DigestItemNotFoundError';
+  message: string;
+  detail: { digestItemId: DigestItemId };
+}>;
+
+export const DigestItemNotFoundError = {
+  create: (digestItemId: DigestItemId): DigestItemNotFoundError => ({
+    type: 'DigestItemNotFoundError',
+    message: `The digest item "${digestItemId}" is not found.`,
+    detail: { digestItemId },
+  }),
+} as const;
+
+export type DigestArticlePublishedError = Readonly<{
+  type: 'DigestArticlePublishedError';
+  message: string;
+  detail: { articleId: ArticleId };
+}>;
+
+export const DigestArticlePublishedError = {
+  create: (articleId: ArticleId): DigestArticlePublishedError => ({
+    type: 'DigestArticlePublishedError',
+    message: `The article "${articleId}" of the digest has already been published.`,
+    detail: { articleId },
+  }),
+} as const;
+
+const giveFeedback = (
+  digest: Digest,
+  digestItemId: DigestItemId,
+  feedback: DigestFeedback,
+  now: Instant,
+): Result<DigestItemFeedbackGiven, DigestItemNotFoundError> => {
+  const item = digest.items.find((candidate) => candidate.digestItemId === digestItemId);
+  if (item === undefined) return err(DigestItemNotFoundError.create(digestItemId));
+  const next = item.feedback === feedback ? null : feedback;
+  const feedbackAt = next === null ? null : now;
+  const updated: Digest = {
+    ...digest,
+    items: digest.items.map((candidate) =>
+      candidate.digestItemId === digestItemId ? { ...candidate, feedback: next, feedbackAt } : candidate
+    ),
+  };
+  return ok(DigestEvent.create(
+    toAggregateId(updated),
+    updated,
+    'digest.itemFeedbackGiven',
+    { digestItemId, feedback: next, feedbackAt },
+    now,
+  ));
+};
+
 const expire = (header: Pick<DigestHeader, 'digestId' | 'digestDate'>, now: Instant): DigestExpired =>
   DigestEvent.create(
     toAggregateId(header),
@@ -140,6 +206,7 @@ const expire = (header: Pick<DigestHeader, 'digestId' | 'digestDate'>, now: Inst
 
 export type DigestCreatedStore = Agg.Store<DigestCreated>;
 export type DigestPushSentStore = Agg.Store<DigestPushSent>;
+export type DigestItemFeedbackGivenStore = Agg.Store<DigestItemFeedbackGiven>;
 export type DigestExpiredStore = Agg.Store<DigestExpired>;
 export type DigestHeaderResolverByUserIdAndDigestDate = Agg.Resolver<
   { userId: UserId; digestDate: string },
@@ -156,6 +223,7 @@ export type DigestResolverByUserIdAndDigestDate = Agg.Resolver<
   Digest | undefined
 >;
 export type DigestResolverByUserId = Agg.Resolver<UserId, Digest | undefined>;
+export type DigestResolverByDigestItemId = Agg.Resolver<DigestItemId, Digest | undefined>;
 export type DigestHeadersResolverByDigestDateBefore = Agg.Resolver<
   { digestDateBefore: string; limit: number },
   ReadonlyArray<DigestHeader>
@@ -179,6 +247,7 @@ export const Digest = {
   ...schema,
   create,
   recordPushSent,
+  giveFeedback,
   expire,
   toAggregateId,
 } as const;

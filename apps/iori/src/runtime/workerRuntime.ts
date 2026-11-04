@@ -27,6 +27,8 @@ import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/artic
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
+import { createD1DigestItemFeedbackGivenStore } from '../adaptor/d1/digest/digestItemFeedbackGivenStore.ts';
+import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
@@ -35,6 +37,7 @@ import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiRe
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
@@ -45,6 +48,9 @@ import { createD1FollowRequestedStore } from '../adaptor/d1/follow/followRequest
 import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../adaptor/d1/image/postImageCreatedStore.ts';
+import { createD1InterestSourceDeletedStore } from '../adaptor/d1/interestSource/interestSourceDeletedStore.ts';
+import { createD1InterestSourceEmbeddingCopiedStore } from '../adaptor/d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
+import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../adaptor/d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
 import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../adaptor/d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
@@ -131,6 +137,7 @@ import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebP
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
+import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
@@ -148,6 +155,7 @@ import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -389,6 +397,16 @@ export const createWorkerRuntimePorts = async (
         digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
       }),
       requestDigestUseCase: createDigestUseCases(env).requestDigest,
+      giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
+        articleResolver,
+        digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
+        feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
+        interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),
+        interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
+        interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
+        digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
+        now: Instant.now,
+      }),
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({

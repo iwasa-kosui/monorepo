@@ -12,8 +12,10 @@ import { createD1InterestSourceContentChangedStore } from '../interestSource/int
 import { createD1InterestSourceCreatedStore } from '../interestSource/interestSourceCreatedStore.ts';
 import { createD1InterestSourceDeletedStore } from '../interestSource/interestSourceDeletedStore.ts';
 import { createD1InterestSourceEmbeddedStore } from '../interestSource/interestSourceEmbeddedStore.ts';
+import { createD1InterestSourceEmbeddingCopiedStore } from '../interestSource/interestSourceEmbeddingCopiedStore.ts';
 import { createD1InterestSourcesResolverByUserIdAndKind } from '../interestSource/interestSourcesResolverByUserIdAndKind.ts';
 import { createD1InterestSourcesResolverByUserIdAndKindsPendingEmbedding } from '../interestSource/interestSourcesResolverByUserIdAndKindsPendingEmbedding.ts';
+import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
 import { interestSourcesTable } from '../schema.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -230,5 +232,91 @@ describe('interestSource の Store と Resolver', () => {
     expect(pending.val.map((source) => source.ref).sort()).toEqual(['c', 'd', 'e']);
     expect(limited.val).toHaveLength(1);
     expect(none.val).toEqual([]);
+  });
+
+  describe('embeddingCopied と ByUserIdAndRefAndKinds', () => {
+    const embedding = Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => Math.sin(i) * 0.5);
+    const copy = (userId: string, kind: InterestSourceKind, ref: string, existing?: InterestSource) => {
+      const copied = InterestSource.copyEmbedding(
+        existing,
+        { userId: userId as UserId, kind, ref, contentHash: 'c'.repeat(64), occurredAt: later, embedding },
+        later,
+      );
+      if (!copied.ok) throw new Error('unexpected');
+      return copied.val;
+    };
+
+    it('行が無ければ埋め込み済みで作り、ベクトルをイベントに残さない', async () => {
+      const { fixture, db, me, eventNames } = setup();
+
+      await createD1InterestSourceEmbeddingCopiedStore(db).store(copy(me.userId, 'feedback_positive', 'https://a'));
+
+      const [stored] = await db.select().from(interestSourcesTable);
+      expect(stored).toMatchObject({
+        kind: 'feedback_positive',
+        ref: 'https://a',
+        weight: 1,
+        contentHash: 'c'.repeat(64),
+      });
+      expect(Array.from(stored!.embedding!)).toEqual(Array.from(embedding));
+      expect(stored?.embeddedAt?.getTime()).toBe(later);
+      expect(stored?.deletedAt).toBeNull();
+      expect(eventNames()).toEqual(['interestSource.embeddingCopied']);
+      const row = fixture.sqlite.prepare('SELECT eventPayload FROM domain_events').get() as { eventPayload: string };
+      expect(JSON.parse(row.eventPayload)).not.toHaveProperty('embedding');
+    });
+
+    it('削除済みの行があれば、同じ行の deletedAt を NULL に戻して occurredAt と embedding を更新する', async () => {
+      const { fixture, db, me, createEvent, seedSources } = setup();
+      const [source] = await seedSources([createEvent(me.userId, 'feedback_positive', 'https://a')]);
+      await createD1InterestSourceDeletedStore(db).store(InterestSource.markDeleted(source!, now));
+
+      await createD1InterestSourceEmbeddingCopiedStore(db).store(
+        copy(me.userId, 'feedback_positive', 'https://a', { ...source!, deletedAt: now }),
+      );
+
+      expect(fixture.sqlite.prepare('SELECT count(*) AS n FROM interest_sources').get()).toEqual({ n: 1 });
+      const [stored] = await db.select().from(interestSourcesTable);
+      expect(stored).toMatchObject({ interestSourceId: source!.interestSourceId, contentHash: 'c'.repeat(64) });
+      expect(stored?.deletedAt).toBeNull();
+      expect(stored?.occurredAt.getTime()).toBe(later);
+      expect(stored?.createdAt.getTime()).toBe(now);
+      expect(Array.from(stored!.embedding!)).toEqual(Array.from(embedding));
+    });
+
+    it('ByUserIdAndRefAndKinds は削除済みを含め、他人と他の ref と他の kind を返さない', async () => {
+      const { db, me, other, createEvent, seedSources } = setup();
+      const [positive, negative] = await seedSources([
+        createEvent(me.userId, 'feedback_positive', 'https://a'),
+        createEvent(me.userId, 'feedback_negative', 'https://a'),
+        createEvent(me.userId, 'feedback_positive', 'https://b'),
+        createEvent(me.userId, 'kosui_post', 'https://a'),
+        createEvent(other.userId, 'feedback_positive', 'https://a'),
+      ]);
+      await createD1InterestSourceDeletedStore(db).store(InterestSource.markDeleted(negative!, later));
+
+      const resolved = await createD1InterestSourcesResolverByUserIdAndRefAndKinds(db).resolve({
+        userId: me.userId as UserId,
+        ref: 'https://a',
+        kinds: ['feedback_positive', 'feedback_negative'],
+      });
+
+      expect(resolved.ok && resolved.val.map((source) => source.interestSourceId).sort()).toEqual(
+        [positive!.interestSourceId, negative!.interestSourceId].sort(),
+      );
+      expect(resolved.ok && resolved.val.find((source) => source.kind === 'feedback_negative')?.deletedAt).toBe(later);
+    });
+
+    it('ByUserIdAndRefAndKinds は kinds が空なら空を返す', async () => {
+      const { db, me } = setup();
+
+      const resolved = await createD1InterestSourcesResolverByUserIdAndRefAndKinds(db).resolve({
+        userId: me.userId as UserId,
+        ref: 'https://a',
+        kinds: [],
+      });
+
+      expect(resolved.ok && resolved.val).toEqual([]);
+    });
   });
 });

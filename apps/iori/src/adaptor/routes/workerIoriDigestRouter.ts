@@ -1,11 +1,13 @@
 import { type Context, Hono } from 'hono';
 
-import type {
-  Digest,
-  DigestResolverByUserId,
-  DigestResolverByUserIdAndDigestDate,
-  DigestTrend,
+import {
+  type Digest,
+  DigestFeedback,
+  type DigestResolverByUserId,
+  type DigestResolverByUserIdAndDigestDate,
+  type DigestTrend,
 } from '../../domain/digest/digest.ts';
+import { DigestItemId } from '../../domain/digest/digestItemId.ts';
 import type {
   HatenaTrendsResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
@@ -18,12 +20,18 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
+import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { readRequestBody, type RequestBody } from './helper/requestBody.ts';
-import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+import { bodyString, readRequestBody, type RequestBody } from './helper/requestBody.ts';
+import {
+  getMastodonPrincipal,
+  isSameOriginRequest,
+  type MastodonAuthEnv,
+  type MastodonAuthn,
+} from './mastodonAuthn.ts';
 
 export type WorkerIoriDigestRouterDeps = Readonly<{
   authn: MastodonAuthn;
@@ -34,6 +42,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
+  giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -66,6 +75,7 @@ export type IoriDigestRequestResponse = Readonly<{
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
+const digestItemNotFound = { error: 'Digest item not found' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
 const digestDatePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -127,6 +137,7 @@ export const createWorkerIoriDigestRouter = ({
   digestSubscriptionResolverByUserId,
   saveDigestSubscriptionUseCase,
   requestDigestUseCase,
+  giveDigestItemFeedbackUseCase,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -177,6 +188,39 @@ export const createWorkerIoriDigestRouter = ({
       const saved = await saveDigestSubscriptionUseCase.run({ userId, enabled });
       return saved.ok ? c.json(toSubscriptionBody(saved.val)) : c.json(internalServerError, 500);
     })
+    .post(
+      '/iori/v1/digest-items/:digestItemId/feedback',
+      async (c, next) => {
+        if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
+          return c.json({ error: 'Forbidden' }, 403);
+        }
+        await next();
+      },
+      authn.requireUser(writeAccounts),
+      async (c) => {
+        const userId = userIdOf(c);
+        if (userId === undefined) return c.json(invalidToken, 401);
+        const feedback = DigestFeedback.zodType.safeParse(bodyString(await readRequestBody(c), 'feedback'));
+        if (!feedback.success) return c.json({ error: 'Validation failed: feedback' }, 400);
+        const digestItemId = DigestItemId.parse(c.req.param('digestItemId'));
+        if (!digestItemId.ok) return c.json(digestItemNotFound, 404);
+        const given = await giveDigestItemFeedbackUseCase.run({
+          userId,
+          digestItemId: digestItemId.val,
+          feedback: feedback.data,
+        });
+        if (given.ok) return c.redirect(`/articles/${given.val.articleId}`, 303);
+        if (!('type' in given.err)) return c.json(internalServerError, 500);
+        switch (given.err.type) {
+          case 'DigestItemNotFoundError':
+            return c.json(digestItemNotFound, 404);
+          case 'DigestArticlePublishedError':
+            return c.json({ error: 'Digest already published' }, 409);
+          default:
+            return c.json(internalServerError, 500);
+        }
+      },
+    )
     .post('/iori/v1/digests', authn.requireUser(writeAccounts), async (c) => {
       const userId = userIdOf(c);
       if (userId === undefined) return c.json(invalidToken, 401);

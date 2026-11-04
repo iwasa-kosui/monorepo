@@ -97,6 +97,13 @@ export const createWorkerIoriArticlesRouter = ({
     if (!digest.ok || digest.val === undefined) return undefined;
     return {
       digestDate: digest.val.digestDate,
+      items: digest.val.items.map(({ digestItemId, rank, url, title, feedback }) => ({
+        digestItemId,
+        rank,
+        url,
+        title,
+        feedback,
+      })),
       excluded: {
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,

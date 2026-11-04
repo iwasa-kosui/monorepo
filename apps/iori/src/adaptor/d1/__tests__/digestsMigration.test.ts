@@ -74,6 +74,22 @@ describe('digests migration', () => {
     expect(() => insertTrend('digest-1', 'timeline_link', 1)).not.toThrow();
   });
 
+  it('digest_items に feedbackAt を持たせ、既存の行では NULL にする', () => {
+    const { fixture, insertDigest, insertItem } = setup();
+    insertDigest('digest-1', '2026-11-05');
+    insertItem('item-1', 'digest-1', 1);
+
+    fixture.sqlite.prepare('UPDATE digest_items SET feedback = ?, feedbackAt = ? WHERE digestItemId = ?')
+      .run('interested', 3_000, 'item-1');
+    insertItem('item-2', 'digest-1', 2);
+
+    expect(fixture.sqlite.prepare('SELECT digestItemId, feedback, feedbackAt FROM digest_items ORDER BY rank').all())
+      .toEqual([
+        { digestItemId: 'item-1', feedback: 'interested', feedbackAt: 3_000 },
+        { digestItemId: 'item-2', feedback: null, feedbackAt: null },
+      ]);
+  });
+
   it('feedEntryId には外部キーがなく、feed_entries に無い id の item を入れられる', () => {
     const { insertDigest, insertItem } = setup();
     insertDigest('digest-1', '2026-11-05');

@@ -18,7 +18,13 @@ export const createD1DigestCreatedStore = (db: IoriD1Db): DigestCreatedStore => 
             createdAt: new Date(createdAt),
             pushSentAt: pushSentAt === null ? null : new Date(pushSentAt),
           }),
-          ...items.map((item) => db.insert(digestItemsTable).values({ ...item, digestId: digest.digestId })),
+          ...items.map(({ feedbackAt, ...item }) =>
+            db.insert(digestItemsTable).values({
+              ...item,
+              feedbackAt: feedbackAt === null ? null : new Date(feedbackAt),
+              digestId: digest.digestId,
+            })
+          ),
           ...trends.map((trend) => db.insert(digestTrendsTable).values({ ...trend, digestId: digest.digestId })),
           db.insert(domainEventsTable).values(toD1DomainEventRow(event)),
         ];

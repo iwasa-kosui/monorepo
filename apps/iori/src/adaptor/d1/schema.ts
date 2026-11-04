@@ -492,6 +492,7 @@ export const digestItemsTable = sqliteTable('digest_items', {
   summary: text('summary'),
   reasonInterestSourceId: text('reasonInterestSourceId'),
   feedback: text('feedback'),
+  feedbackAt: timestamp(),
 }, (table) => [
   uniqueIndex('digest_items_digest_id_rank_unique').on(table.digestId, table.rank),
 ]);
