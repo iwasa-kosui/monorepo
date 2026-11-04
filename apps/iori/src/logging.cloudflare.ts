@@ -11,7 +11,22 @@ const ldSignatureFailureDebugMessages: ReadonlySet<string> = new Set([
 const keyFetchFailureDebugMessages: ReadonlySet<string> = new Set([
   'Failed to fetch key {keyId}.',
   'Failed to verify; key {keyId} returned an invalid object.',
+  'Entry {keyId} found in cache, but it is unavailable.',
+  'Failed to decode key {keyId}: {error}',
+  'Failed to verify; object {keyId} returned an {actorType}, but has no key matching {keyId}.',
+  'Failed to verify; key {keyId} has no publicKeyPem field.',
+  'Failed to verify; the document served at {documentUrl} claims to be the actor {actorId}, which belongs to another origin.',
+  'Failed to verify; the owner {claimedOwnerId} that key {keyId} claims does not list the key as its own.',
+  'The owner ({claimedOwnerId}) that key {keyId} claims could not be resolved.',
+  'The owner ({claimedOwnerId}) that key {keyId} claims does not list the key as its own.',
 ]);
+
+const inboxLdSignatureNormalizeFailureMessage =
+  'Failed to normalize JSON-LD for Linked Data Signatures; deferring to another authentication path only if it verifies:\n{error}';
+const inboxLdSignatureNotVerifiedMessage = 'Linked Data Signatures are not verified.';
+
+const hasSignatureKey = (json: unknown): boolean =>
+  typeof json === 'object' && json !== null && !Array.isArray(json) && 'signature' in json;
 
 configureSync({
   reset: true,
@@ -26,6 +41,10 @@ configureSync({
     onlyKeyFetchFailureDebug: (record) =>
       record.level !== 'debug'
       || (typeof record.rawMessage === 'string' && keyFetchFailureDebugMessages.has(record.rawMessage)),
+    onlyInboxLdSignatureDebug: (record) =>
+      record.level !== 'debug'
+      || record.rawMessage === inboxLdSignatureNormalizeFailureMessage
+      || (record.rawMessage === inboxLdSignatureNotVerifiedMessage && hasSignatureKey(record.properties.json)),
   },
   loggers: [
     // debug には署名や鍵の詳細が出るため info 以上に限る
@@ -44,6 +63,13 @@ configureSync({
       sinks: ['console'],
       parentSinks: 'override',
       filters: ['onlyKeyFetchFailureDebug'],
+    },
+    {
+      category: ['fedify', 'federation', 'inbox'],
+      lowestLevel: 'debug',
+      sinks: ['console'],
+      parentSinks: 'override',
+      filters: ['onlyInboxLdSignatureDebug'],
     },
     { category: ['logtape', 'meta'], lowestLevel: 'warning', sinks: ['console'], parentSinks: 'override' },
   ],

@@ -95,6 +95,117 @@ describe('logging.cloudflare', () => {
     expect(debug).toHaveBeenCalledTimes(2);
   });
 
+  it('writes the key resolution failure debug records of the fedify key logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const key = getLogger(['fedify', 'sig', 'key']);
+    const keyId = 'https://relay.example/actor#main-key';
+
+    key.debug('Entry {keyId} found in cache, but it is unavailable.', { keyId });
+    expect(debug).toHaveBeenCalledTimes(1);
+
+    key.debug('Failed to decode key {keyId}: {error}', { keyId, failure: 'invalid', error: new Error('x') });
+    expect(debug).toHaveBeenCalledTimes(2);
+
+    key.debug('Failed to verify; object {keyId} returned an {actorType}, but has no key matching {keyId}.', {
+      keyId,
+      actorType: 'Application',
+    });
+    expect(debug).toHaveBeenCalledTimes(3);
+
+    key.debug('Failed to verify; key {keyId} has no publicKeyPem field.', { keyId });
+    expect(debug).toHaveBeenCalledTimes(4);
+
+    key.debug(
+      'Failed to verify; the document served at {documentUrl} claims to be the actor {actorId}, which belongs to another origin.',
+      { keyId, documentUrl: 'https://relay.example/actor', actorId: 'https://other.example/actor' },
+    );
+    expect(debug).toHaveBeenCalledTimes(5);
+  });
+
+  it('writes the key owner verification failure debug records of the fedify key logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const key = getLogger(['fedify', 'sig', 'key']);
+    const properties = {
+      keyId: 'https://relay.example/actor#main-key',
+      claimedOwnerId: 'https://other.example/actor',
+    };
+
+    key.debug(
+      'Failed to verify; the owner {claimedOwnerId} that key {keyId} claims does not list the key as its own.',
+      properties,
+    );
+    expect(debug).toHaveBeenCalledTimes(1);
+
+    key.debug('The owner ({claimedOwnerId}) that key {keyId} claims could not be resolved.', properties);
+    expect(debug).toHaveBeenCalledTimes(2);
+
+    key.debug('The owner ({claimedOwnerId}) that key {keyId} claims does not list the key as its own.', properties);
+    expect(debug).toHaveBeenCalledTimes(3);
+  });
+
+  it('writes only the LD signature debug records of the fedify inbox logger', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const inbox = getLogger(['fedify', 'federation', 'inbox']);
+
+    inbox.debug(
+      'Failed to normalize JSON-LD for Linked Data Signatures; deferring to another authentication path only if it verifies:\n{error}',
+      { recipient: 'alice', error: new Error('x') },
+    );
+    expect(debug).toHaveBeenCalledTimes(1);
+
+    inbox.debug('Linked Data Signatures are not verified.', {
+      recipient: 'alice',
+      json: { content: 'post body', signature: { type: 'RsaSignature2017' } },
+    });
+    expect(debug).toHaveBeenCalledTimes(2);
+
+    inbox.debug('Activity {activityId} is not verified.', { activityId: 'https://remote.example/activities/1' });
+    inbox.debug('Some unrelated debug record with {json}', { json: { content: 'post body' } });
+    expect(debug).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the not verified record of the fedify inbox logger when the activity has no signature key', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const inbox = getLogger(['fedify', 'federation', 'inbox']);
+
+    inbox.debug('Linked Data Signatures are not verified.', { recipient: 'alice', json: { content: 'post body' } });
+
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('drops the not verified record of the fedify inbox logger when json is missing or not an object', async () => {
+    await import('./logging.cloudflare.ts');
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const inbox = getLogger(['fedify', 'federation', 'inbox']);
+
+    inbox.debug('Linked Data Signatures are not verified.', { recipient: 'alice' });
+    inbox.debug('Linked Data Signatures are not verified.', { recipient: 'alice', json: null });
+    inbox.debug('Linked Data Signatures are not verified.', { recipient: 'alice', json: 'signature' });
+    inbox.debug('Linked Data Signatures are not verified.', { recipient: 'alice', json: [{ signature: {} }] });
+
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('writes info and above of the fedify inbox logger once each', async () => {
+    await import('./logging.cloudflare.ts');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const inbox = getLogger(['fedify', 'federation', 'inbox']);
+
+    inbox.info('inbox info');
+    inbox.warn('inbox warn');
+    inbox.error('inbox error');
+
+    expect(info).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+  });
+
   it('writes info and above of the fedify key logger once each', async () => {
     await import('./logging.cloudflare.ts');
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
