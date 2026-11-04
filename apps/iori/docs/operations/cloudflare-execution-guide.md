@@ -518,6 +518,8 @@ dry-run が遅いとき、または apply が時間切れで失敗したとき�
 
 Cron の削除は、Worker の環境変数 `IORI_PRUNE_FEDERATED_POSTS` が `enabled` のときだけ動きます。初期値は `disabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。削除を有効にするには、作業者が template の値を `enabled` に変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
 
+作業者は、`IORI_PRUNE_FEDERATED_POSTS` を `enabled` にする前に、dry-run が出す `candidates` と `to_delete` を確かめます。Cron が1日に消せる投稿は、最大8,000件です。federated で受け取る投稿が1日に8,000件を超えると、消し残しが溜まります。除外理由に当たる古い投稿は、消えずに残ります。Cron は、実行のたびにそれらの投稿を読み直します。このため、除外される件数が多いと、D1 の rows read が増えます。作業者は、有効にした後に、Cloudflare のダッシュボードで D1 の rows read を確かめます。
+
 Cron は3時間ごとに動き、1回で最大1,000件を消します。内訳は、50件ずつ最大20回です。消す投稿は、federated で最後に受け取った時刻から7日より前のリモート投稿で、次の除外理由のどれにも当たらないものです。Cron は `domain_events` に書き込みません。
 
 作業者は、`environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。
