@@ -45,6 +45,27 @@ describe('saveFederatedNote', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
+  it('passes the summary and sensitive flag of the Note to the upserter', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+    const note = createNote().clone({ summary: 'ネタバレ注意', sensitive: true });
+
+    await saveFederatedNote(deps, { note, relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: 'ネタバレ注意', sensitive: true }),
+    );
+  });
+
+  it('passes null and false to the upserter when the Note has no content warning', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: null, sensitive: false }),
+    );
+  });
+
   it('does not store a federated timeline item when the post is already in the federated timeline', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps({ postId: 'post-1' });
 

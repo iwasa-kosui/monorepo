@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "38015ce2-183c-4cc4-b768-79e234f4bcd6",
-  "prevId": "9212c1f3-4dda-450a-a58b-e652ec5fd47c",
+  "prevId": "f87ce660-18da-442d-a18c-0d4383840fc2",
   "tables": {
     "actors": {
       "name": "actors",
@@ -3115,6 +3115,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sensitive": {
+          "name": "sensitive",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         }
       },
       "indexes": {

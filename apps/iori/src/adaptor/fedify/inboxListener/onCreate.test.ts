@@ -166,6 +166,27 @@ describe('createOnCreate', () => {
     );
   });
 
+  it('records the summary and sensitive flag of the Note', async () => {
+    const note = new Note({
+      id: new URL('https://remote.example/posts/1'),
+      content: 'hi',
+      summary: 'ネタバレ注意',
+      sensitive: true,
+    });
+
+    const addRemotePost = await run(note);
+
+    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: 'ネタバレ注意', sensitive: true }));
+  });
+
+  it('records null and false when the Note has no content warning', async () => {
+    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi' });
+
+    const addRemotePost = await run(note);
+
+    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: false }));
+  });
+
   it('records no recipients when no local actor is addressed', async () => {
     const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', tos: [publicUri] });
 

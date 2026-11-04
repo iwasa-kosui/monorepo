@@ -55,3 +55,26 @@ export const ActorNotFoundError = {
     detail: { uri },
   }),
 } as const;
+
+export type UndoActorMismatchError = Readonly<{
+  type: 'UndoActorMismatchError';
+  message: string;
+  detail: {
+    activityUri: string;
+    storedActorUri: string;
+    undoActorUri: string;
+  };
+}>;
+
+export const UndoActorMismatchError = {
+  create: ({ activityUri, storedActorUri, undoActorUri }: {
+    activityUri: string;
+    storedActorUri: string;
+    undoActorUri: string;
+  }): UndoActorMismatchError => ({
+    type: 'UndoActorMismatchError',
+    message:
+      `The undo actor "${undoActorUri}" does not match the actor "${storedActorUri}" of the activity "${activityUri}".`,
+    detail: { activityUri, storedActorUri, undoActorUri },
+  }),
+} as const;

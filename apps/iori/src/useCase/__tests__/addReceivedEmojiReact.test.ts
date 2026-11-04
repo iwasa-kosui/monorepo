@@ -46,6 +46,8 @@ describe('AddReceivedEmojiReactUseCase', () => {
     const postResolver = createMockPostResolver();
     const post: LocalPost = {
       type: 'local',
+      summary: null,
+      sensitive: false,
       postId: PostId.generate(),
       actorId: crypto.randomUUID() as ActorId,
       userId: crypto.randomUUID() as LocalPost['userId'],

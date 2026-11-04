@@ -75,6 +75,8 @@ describe('GetRemoteActorPostsUseCase', () => {
       const posts: PostWithAuthor[] = [
         {
           type: 'remote',
+          summary: null,
+          sensitive: false,
           postId: crypto.randomUUID() as PostId,
           actorId: remoteActor.id,
           content: 'Remote post content',

@@ -87,6 +87,8 @@ const author = {
 const localPost: PostWithAuthor = {
   ...author,
   type: 'local',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: authorActorId,
   content: '<p>hello</p>',
@@ -98,6 +100,8 @@ const localPost: PostWithAuthor = {
 const remotePost: PostWithAuthor = {
   ...author,
   type: 'remote',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: authorActorId,
   content: '<p>remote</p>',
@@ -162,6 +166,21 @@ describe('toStatus', () => {
 
     expect(StatusSchema.safeParse(status).success).toBe(true);
     expect(status.uri).toBe('https://remote.example/users/alice/statuses/1');
+  });
+
+  it('puts the summary and sensitive flag of a remote post into spoiler_text and sensitive', () => {
+    const status = toStatus({ ...remotePost, summary: 'ネタバレ注意', sensitive: true }, options);
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.spoiler_text).toBe('ネタバレ注意');
+    expect(status.sensitive).toBe(true);
+  });
+
+  it('keeps sensitive true when the post has no summary', () => {
+    const status = toStatus({ ...remotePost, summary: null, sensitive: true }, options);
+
+    expect(status.spoiler_text).toBe('');
+    expect(status.sensitive).toBe(true);
   });
 
   it('uses public for a local post', () => {

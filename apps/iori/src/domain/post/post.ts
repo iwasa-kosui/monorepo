@@ -22,6 +22,8 @@ const localPostZodType = z.object({
   createdAt: Instant.zodType,
   userId: UserId.zodType,
   inReplyToUri: z.nullable(z.string()),
+  summary: z.nullable(z.string()),
+  sensitive: z.boolean(),
 });
 const remotePostZodType = z.object({
   type: z.literal('remote'),
@@ -32,6 +34,8 @@ const remotePostZodType = z.object({
   uri: z.string(),
   inReplyToUri: z.nullable(z.string()),
   visibility: z.nullable(Visibility.zodType),
+  summary: z.nullable(z.string()),
+  sensitive: z.boolean(),
 });
 
 export type LocalPost = z.infer<typeof localPostZodType>;
@@ -75,7 +79,9 @@ export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId;
 
 const createPost = (now: Instant) =>
 (
-  payload: Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'> & { inReplyToUri?: string | null },
+  payload:
+    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive'>
+    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean },
 ): PostCreated => {
   const postId = PostId.generate();
   const post: LocalPost = {
@@ -84,6 +90,8 @@ const createPost = (now: Instant) =>
     type: 'local',
     createdAt: now,
     inReplyToUri: payload.inReplyToUri ?? null,
+    summary: payload.summary ?? null,
+    sensitive: payload.sensitive ?? false,
   };
   return PostEvent.create(
     postId,
@@ -97,8 +105,13 @@ const createPost = (now: Instant) =>
 const createRemotePost = (now: Instant) =>
 (
   payload:
-    & Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri'>
-    & { inReplyToUri?: string | null; recipientActorUris?: ReadonlyArray<string> },
+    & Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive'>
+    & {
+      inReplyToUri?: string | null;
+      summary?: string | null;
+      sensitive?: boolean;
+      recipientActorUris?: ReadonlyArray<string>;
+    },
 ): RemotePostCreated => {
   const { recipientActorUris = [], ...postPayload } = payload;
   const postId = PostId.generate();
@@ -108,6 +121,8 @@ const createRemotePost = (now: Instant) =>
     type: 'remote',
     createdAt: now,
     inReplyToUri: postPayload.inReplyToUri ?? null,
+    summary: postPayload.summary ?? null,
+    sensitive: postPayload.sensitive ?? false,
   };
   return PostEvent.create(
     postId,
@@ -157,6 +172,8 @@ export type RemotePostIdentity = Readonly<{
     profile?: RemoteActorProfile;
   }>;
   inReplyToUri?: string | null;
+  summary?: string | null;
+  sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
   attachments?: readonly RemotePostAttachment[];

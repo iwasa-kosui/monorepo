@@ -103,6 +103,8 @@ export const postsTable = sqliteTable('posts', {
   createdAt: timestamp().notNull(),
   type: text('type').notNull(),
   deletedAt: timestamp(),
+  summary: text('summary'),
+  sensitive: integer('sensitive', { mode: 'boolean' }).notNull().default(false),
 }, (table) => [
   index('posts_actor_id_idx').on(table.actorId),
   index('posts_created_at_post_id_idx').on(table.createdAt, table.postId),

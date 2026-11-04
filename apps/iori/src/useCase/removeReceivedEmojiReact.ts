@@ -1,5 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { ActorResolverById } from '../adaptor/pg/actor/actorResolverById.ts';
+import { ActorNotFoundError, UndoActorMismatchError } from '../domain/actor/actor.ts';
 import {
   EmojiReact,
   type EmojiReactDeletedStore,
@@ -11,22 +13,25 @@ import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   emojiReactActivityUri: string;
+  actorUri: string;
 }>;
 
 type Ok = Readonly<{
   emojiReact: EmojiReact;
 }>;
 
-type Err = EmojiReactNotFoundError;
+type Err = EmojiReactNotFoundError | ActorNotFoundError | UndoActorMismatchError;
 
 export type RemoveReceivedEmojiReactUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
+  actorResolverById: ActorResolverById;
   emojiReactDeletedStore: EmojiReactDeletedStore;
   emojiReactResolverByActivityUri: EmojiReactResolverByActivityUri;
 }>;
 
 const create = ({
+  actorResolverById,
   emojiReactDeletedStore,
   emojiReactResolverByActivityUri,
 }: Deps): RemoveReceivedEmojiReactUseCase => {
@@ -39,9 +44,28 @@ const create = ({
         'emojiReact',
         ({ emojiReactActivityUri }) => emojiReactResolverByActivityUri.resolve({ emojiReactActivityUri }),
       ),
-      RA.andThen(({ emojiReact, emojiReactActivityUri }) => {
+      RA.andThen(({ emojiReact, emojiReactActivityUri, actorUri }) => {
         if (!emojiReact) {
           return RA.err(EmojiReactNotFoundError.create({ emojiReactActivityUri }));
+        }
+        return RA.ok({ emojiReact, emojiReactActivityUri, actorUri });
+      }),
+      RA.andBind('storedActor', ({ emojiReact }) => actorResolverById.resolve(emojiReact.actorId)),
+      RA.andThen(({ emojiReact, storedActor, actorUri, emojiReactActivityUri }): RA<
+        { emojiReact: EmojiReact },
+        ActorNotFoundError | UndoActorMismatchError
+      > => {
+        if (!storedActor) {
+          return RA.err(ActorNotFoundError.create(emojiReact.actorId));
+        }
+        if (storedActor.uri !== actorUri) {
+          return RA.err(
+            UndoActorMismatchError.create({
+              activityUri: emojiReactActivityUri,
+              storedActorUri: storedActor.uri,
+              undoActorUri: actorUri,
+            }),
+          );
         }
         return RA.ok({ emojiReact });
       }),

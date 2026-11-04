@@ -59,6 +59,8 @@ type Input = Readonly<{
   actorIdentity: ActorIdentity;
   attachments: RemotePostAttachment[];
   inReplyToUri?: string | null;
+  summary?: string | null;
+  sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
 }>;
@@ -147,45 +149,54 @@ const create = ({
           remoteActorProfileUpdatedStore,
           actorResolverByUri,
         })(actorIdentity)),
-      RA.andBind('saved', async ({ actor, content, uri, inReplyToUri, visibility, recipientActorUris }) => {
-        const existing = await postResolverByUri.resolve({ uri });
-        if (existing.ok && existing.val) {
-          if (existing.val.actorId !== actor.id) {
-            return RA.err(
-              RemotePostAuthorMismatchError.create({ uri, existingActorId: existing.val.actorId, actorId: actor.id }),
-            );
-          }
-          return RA.ok({ post: existing.val });
-        }
-        const createPost = Post.createRemotePost(now)({
-          content,
-          uri,
-          actorId: actor.id,
-          inReplyToUri,
-          visibility,
-          recipientActorUris,
-        });
-        try {
-          await postCreatedStore.store(createPost);
-        } catch (error) {
-          let resolved;
-          try {
-            resolved = await postResolverByUri.resolve({ uri });
-          } catch {
-            throw error;
-          }
-          if (resolved.ok && resolved.val) {
-            if (resolved.val.actorId !== actor.id) {
+      RA.andBind(
+        'saved',
+        async ({ actor, content, uri, inReplyToUri, summary, sensitive, visibility, recipientActorUris }) => {
+          const existing = await postResolverByUri.resolve({ uri });
+          if (existing.ok && existing.val) {
+            if (existing.val.actorId !== actor.id) {
               return RA.err(
-                RemotePostAuthorMismatchError.create({ uri, existingActorId: resolved.val.actorId, actorId: actor.id }),
+                RemotePostAuthorMismatchError.create({ uri, existingActorId: existing.val.actorId, actorId: actor.id }),
               );
             }
-            return RA.ok({ post: resolved.val });
+            return RA.ok({ post: existing.val });
           }
-          throw error;
-        }
-        return RA.ok({ post: createPost.aggregateState });
-      }),
+          const createPost = Post.createRemotePost(now)({
+            content,
+            uri,
+            actorId: actor.id,
+            inReplyToUri,
+            summary,
+            sensitive,
+            visibility,
+            recipientActorUris,
+          });
+          try {
+            await postCreatedStore.store(createPost);
+          } catch (error) {
+            let resolved;
+            try {
+              resolved = await postResolverByUri.resolve({ uri });
+            } catch {
+              throw error;
+            }
+            if (resolved.ok && resolved.val) {
+              if (resolved.val.actorId !== actor.id) {
+                return RA.err(
+                  RemotePostAuthorMismatchError.create({
+                    uri,
+                    existingActorId: resolved.val.actorId,
+                    actorId: actor.id,
+                  }),
+                );
+              }
+              return RA.ok({ post: resolved.val });
+            }
+            throw error;
+          }
+          return RA.ok({ post: createPost.aggregateState });
+        },
+      ),
       RA.andThrough(async ({ saved: { post }, actor }) => {
         const existingItems = await timelineItemsResolverByPostId.resolve({ postId: post.postId });
         if (existingItems.ok && existingItems.val.some((item) => item.type === 'post' && item.actorId === actor.id)) {
