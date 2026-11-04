@@ -15,11 +15,11 @@ pnpm --filter kosui-me generate:talks
 
 pnpm --filter '*' build
 pnpm --filter '*' tsc --noEmit
-pnpm --filter iori run typecheck
+pnpm --filter iori run typecheck  # apps/iori を変更したとき
 pnpm --filter '*' lint:fix
 pnpm --filter '*' format
 pnpm --filter '*' test:ci
-pnpm --filter iori run test:workerd
+pnpm --filter iori run test:workerd  # apps/iori を変更したとき
 ```
 
 #### 実行ルール
