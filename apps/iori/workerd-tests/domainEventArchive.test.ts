@@ -77,6 +77,7 @@ describe('domain event archive on workerd', () => {
     expect(written.ok).toBe(true);
     const object = await bucket!.get(key);
     expect(object?.customMetadata).toEqual({ row_count: '2' });
+    expect(object?.checksums.sha256).toEqual(await crypto.subtle.digest('SHA-256', encodeDomainEventsParquet(events)));
     expect(await parquetReadObjects({ file: await object!.arrayBuffer() })).toEqual(expectedRows);
     await bucket!.delete(key);
   });

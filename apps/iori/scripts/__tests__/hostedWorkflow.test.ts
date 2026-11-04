@@ -227,15 +227,17 @@ it('relays only the fixed move-unfollowed-reposts notices to the public log', as
 it('relays only the fixed domain-events-stats notices to the public log', async () => {
   const writes = captureStderr();
   const accepted = [
-    'IORI_NOTICE domain-events-stats summary total=120000 oldest=2026-08-01T00:00:00.000Z newest=2026-11-05T01:02:03.456Z older_than_7d=100000 avg_bytes=850 max_bytes=64000',
-    'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=120000 oldest=2026-08-01T00:00:00.000Z newest=2026-11-05T01:02:03.456Z older_than_7d=100000 avg_bytes=850 max_bytes=64000 created_at_skew_actors=3',
+    'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
     'IORI_NOTICE domain-events-stats day=2026-11-05 count=1234',
     'IORI_NOTICE domain-events-stats event=timelineItem.deleted count=42',
   ];
   const rejected = [
     'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0',
-    'IORI_NOTICE domain-events-stats summary total=-1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
-    'IORI_NOTICE domain-events-stats summary total=1 oldest=yesterday newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=-1',
+    'IORI_NOTICE domain-events-stats summary total=-1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=yesterday newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
     'IORI_NOTICE domain-events-stats day=2026-11-05 count=1 extra=1',
     'IORI_NOTICE domain-events-stats day=yesterday count=1',
     'IORI_NOTICE domain-events-stats event=../secret count=1',

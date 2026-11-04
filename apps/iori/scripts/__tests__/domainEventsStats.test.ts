@@ -54,6 +54,19 @@ const addEvent = (
     occurredAt,
   );
 };
+const addActor = (fixture: Fixture, actorId: string) =>
+  fixture.sqlite.prepare('INSERT INTO actors (actorId, uri, inboxUrl, type) VALUES (?, ?, ?, ?)').run(
+    actorId,
+    `https://example.com/${actorId}`,
+    `https://example.com/${actorId}/inbox`,
+    'Person',
+  );
+const addActorEvent = (fixture: Fixture, aggregateId: string, occurredAt: number, eventName: string) => {
+  sequence += 1;
+  fixture.sqlite.prepare(
+    'INSERT INTO domain_events (eventId, aggregateId, aggregateName, aggregateState, eventName, eventPayload, occurredAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(`event-${sequence}`, aggregateId, 'actor', null, eventName, null, occurredAt);
+};
 const build = () => {
   const fixture = createSqliteD1Fixture();
   addEvent(fixture, now - 40 * DAY, 'post.created', { payload: 'x'.repeat(100) });
@@ -188,11 +201,31 @@ describe('domain-events-stats result', () => {
     addEvent(fixture, now - 10, 'a.b', { state: 's'.repeat(10), payload: 'p'.repeat(20) });
     addEvent(fixture, now - 20, 'a.b');
     const rowBytes = (eventId: string, aggregateId: string, state: number, payload: number) =>
-      eventId.length + aggregateId.length + 'aggregate'.length + 'a.b'.length + state + payload + 8;
+      Buffer.byteLength(eventId) + Buffer.byteLength(aggregateId) + 'aggregate'.length + 'a.b'.length + state + payload
+      + 8;
     const first = rowBytes(`event-${sequence - 1}`, `{"id":"${sequence - 1}"}`, 10, 20);
     const second = rowBytes(`event-${sequence}`, `{"id":"${sequence}"}`, 0, 0);
     const { outputs } = await run(fixture);
     expect(JSON.parse(outputs[0]).rowBytes).toEqual({ average: Math.round((first + second) / 2), max: first });
+  });
+  it('counts the actors whose earliest event is not actor.created or that have no actor.created', async () => {
+    const fixture = createSqliteD1Fixture();
+    for (const actorId of ['older', 'older-raw', 'clean', 'clean-raw', 'only-other', 'no-events']) {
+      addActor(fixture, actorId);
+    }
+    addActorEvent(fixture, '"older"', now - 20 * DAY, 'post.created');
+    addActorEvent(fixture, '"older"', now - 10 * DAY, 'actor.created');
+    addActorEvent(fixture, 'older-raw', now - 20 * DAY, 'post.created');
+    addActorEvent(fixture, 'older-raw', now - 10 * DAY, 'actor.created');
+    addActorEvent(fixture, '"clean"', now - 10 * DAY, 'actor.created');
+    addActorEvent(fixture, '"clean"', now - 5 * DAY, 'post.created');
+    addActorEvent(fixture, 'clean-raw', now - 10 * DAY, 'actor.created');
+    addActorEvent(fixture, 'clean-raw', now - 5 * DAY, 'post.created');
+    addActorEvent(fixture, '"only-other"', now - 5 * DAY, 'post.created');
+    const { outputs, notices, error } = await run(fixture);
+    expect(error).toBeUndefined();
+    expect(JSON.parse(outputs[0]).createdAtSkewActors).toBe(4);
+    expect(notices[0]).toMatch(/ max_bytes=\d+ created_at_skew_actors=4$/);
   });
   it('reports an empty table without failing', async () => {
     const { outputs, notices, error } = await run(createSqliteD1Fixture());
@@ -205,15 +238,16 @@ describe('domain-events-stats result', () => {
       dailyCounts: [],
       eventNameCounts: [],
       rowBytes: { average: null, max: null },
+      createdAtSkewActors: 0,
     });
     expect(notices).toEqual([
-      'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+      'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
     ]);
   });
   it('prints the fixed notice lines', async () => {
     const { notices } = await run(build());
     expect(notices[0]).toMatch(
-      /^IORI_NOTICE domain-events-stats summary total=7 oldest=\S+ newest=\S+ older_than_7d=4 avg_bytes=\d+ max_bytes=\d+$/,
+      /^IORI_NOTICE domain-events-stats summary total=7 oldest=\S+ newest=\S+ older_than_7d=4 avg_bytes=\d+ max_bytes=\d+ created_at_skew_actors=0$/,
     );
     expect(notices.slice(1).every((line) => /^IORI_NOTICE domain-events-stats (?:day|event)=\S+ count=\d+$/.test(line)))
       .toBe(true);

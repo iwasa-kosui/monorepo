@@ -5,6 +5,7 @@ import { Instant } from '../instant/instant.ts';
 
 export const ARCHIVE_RETENTION_DAYS = 7;
 export const ARCHIVE_SCHEMA_VERSION = 1;
+export const ARCHIVE_BYTE_BUDGET = 16 * 1024 * 1024;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const ARCHIVE_RETAINED_EVENT_NAMES = ['actor.created'] as const;
@@ -21,6 +22,76 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
   'pushSubscription.created',
 ] as const;
 
+export const ARCHIVE_PLAIN_EVENT_NAMES = [
+  'actor.created',
+  'actor.logoUriUpdated',
+  'article.created',
+  'article.deleted',
+  'article.published',
+  'article.titleChanged',
+  'article.unpublished',
+  'articleBody.deleted',
+  'articleBody.written',
+  'digest.created',
+  'digest.expired',
+  'digest.itemFeedbackGiven',
+  'digest.pushSent',
+  'digestSubscription.saved',
+  'digestTopic.created',
+  'digestTopic.embedded',
+  'emojiReact.emojiReactCreated',
+  'emojiReact.emojiReactDeleted',
+  'federatedTimelineItem.created',
+  'federatedTimelineItem.deleted',
+  'feedEntry.bookmarkCountUpdated',
+  'feedEntry.collected',
+  'feedEntry.embedded',
+  'feedEntry.expired',
+  'feedSource.created',
+  'feedSource.fetchFailed',
+  'feedSource.fetched',
+  'follow.followAccepted',
+  'follow.followRequested',
+  'follow.undoFollowingProcessed',
+  'interestSource.contentChanged',
+  'interestSource.created',
+  'interestSource.deleted',
+  'interestSource.embedded',
+  'interestSource.embeddingCopied',
+  'like.localLikeCreated',
+  'like.localLikeDeleted',
+  'like.remoteLikeCreated',
+  'like.remoteLikeDeleted',
+  'marker.markerSaved',
+  'mediaUpload.created',
+  'mediaUpload.descriptionUpdated',
+  'mute.muteCreated',
+  'mute.muteDeleted',
+  'notification.emojiReactNotificationCreated',
+  'notification.emojiReactNotificationDeleted',
+  'notification.followNotificationCreated',
+  'notification.likeNotificationCreated',
+  'notification.likeNotificationDeleted',
+  'notification.notificationDismissed',
+  'notification.notificationsCleared',
+  'notification.notificationsRead',
+  'notification.replyNotificationCreated',
+  'notification.replyNotificationDeleted',
+  'notification.repostNotificationCreated',
+  'post.created',
+  'post.deleted',
+  'post.remotePostCreated',
+  'pushSubscription.deleted',
+  'relay.subscriptionAccepted',
+  'relay.subscriptionRequested',
+  'relay.unsubscribed',
+  'repost.repostCreated',
+  'repost.repostDeleted',
+  'timelineItem.created',
+  'timelineItem.deleted',
+  'user.created',
+] as const;
+
 export const ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES = ['session.started'] as const;
 
 export type AggregateIdHasher = (aggregateId: string) => Promise<string>;
@@ -35,7 +106,7 @@ export type ArchivedDomainEvent = Readonly<{
   occurredAt: Instant;
 }>;
 
-export type ArchivableDomainEventsCondition = Readonly<{ cutoff: Instant; limit: number }>;
+export type ArchivableDomainEventsCondition = Readonly<{ cutoff: Instant; limit: number; byteBudget: number }>;
 export type ArchivableDomainEventsResolver = Agg.Resolver<
   ArchivableDomainEventsCondition,
   ReadonlyArray<ArchivedDomainEvent>
@@ -56,6 +127,7 @@ export type ArchivedDomainEventsRange = Readonly<{
   first: ArchivedDomainEvent;
   last: ArchivedDomainEvent;
   cutoff: Instant;
+  count: number;
 }>;
 export type ArchivedDomainEventsDeleter = Readonly<{
   deleteRange: (range: ArchivedDomainEventsRange) => RA<number, never>;
@@ -70,11 +142,18 @@ const takeSameUtcDay = (events: ReadonlyArray<ArchivedDomainEvent>): ReadonlyArr
   return events.filter((event) => utcDay(event.occurredAt) === day);
 };
 
+const isPlain = (eventName: string): boolean => (ARCHIVE_PLAIN_EVENT_NAMES as readonly string[]).includes(eventName);
+
+const unknownEventNames = (events: ReadonlyArray<ArchivedDomainEvent>): ReadonlyArray<string> =>
+  [...new Set(events.map((event) => event.eventName))].filter((eventName) =>
+    !isPlain(eventName) && !(ARCHIVE_REDACTED_EVENT_NAMES as readonly string[]).includes(eventName)
+  );
+
 const redact =
   (hashAggregateId: AggregateIdHasher) => async (event: ArchivedDomainEvent): Promise<ArchivedDomainEvent> => {
-    const redacted: ArchivedDomainEvent = (ARCHIVE_REDACTED_EVENT_NAMES as readonly string[]).includes(event.eventName)
-      ? { ...event, aggregateState: null, eventPayload: null }
-      : event;
+    const redacted: ArchivedDomainEvent = isPlain(event.eventName)
+      ? event
+      : { ...event, aggregateState: null, eventPayload: null };
     return (ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES as readonly string[]).includes(event.eventName)
       ? { ...redacted, aggregateId: `sha256:${await hashAggregateId(event.aggregateId)}` }
       : redacted;
@@ -93,6 +172,7 @@ const cutoffOf = (now: Instant): Instant => Instant.addDuration(now, -ARCHIVE_RE
 
 export const DomainEventArchive = {
   takeSameUtcDay,
+  unknownEventNames,
   redact,
   objectKey,
   cutoffOf,

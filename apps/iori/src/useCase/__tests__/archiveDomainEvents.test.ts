@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 import { parquetReadObjects } from 'hyparquet';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sha256Hex } from '../../adaptor/crypto/sha256Hex.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
@@ -21,9 +21,14 @@ import { ArchiveDomainEventsUseCase } from '../archiveDomainEvents.ts';
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 5, 19, 0));
 const at = (day: number, hour: number, minute = 0) => Date.UTC(2026, 9, day, hour, minute);
 
+beforeEach(() => {
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+});
 afterEach(() => vi.restoreAllMocks());
 
-const setup = (options: Readonly<{ batchSize?: number; now?: () => Instant }> = {}) => {
+const setup = (
+  options: Readonly<{ batchSize?: number; now?: () => Instant; byteBudget?: number; maxBatches?: number }> = {},
+) => {
   const fixture = createSqliteD1Fixture();
   const { sqlite } = fixture;
   const addEvent = (
@@ -59,6 +64,8 @@ const setup = (options: Readonly<{ batchSize?: number; now?: () => Instant }> = 
       aggregateIdHasher: sha256Hex,
       now: options.now ?? (() => NOW),
       batchSize: options.batchSize,
+      byteBudget: options.byteBudget,
+      maxBatches: options.maxBatches,
     });
   return { sqlite, addEvent, remainingIds, written, realDeleter, create } as const;
 };
@@ -119,6 +126,81 @@ describe('ArchiveDomainEventsUseCase', () => {
     }
     expect(events.at(-1)).toMatchObject({ aggregateState: '{"a":1}', eventPayload: '{"b":2}' });
     expect(remainingIds()).toEqual([]);
+  });
+
+  it('範囲の中に後から行が入ると何も消さず、行は D1 に残る', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { addEvent, remainingIds, create } = setup();
+    addEvent('a1', at(20, 1));
+    addEvent('a3', at(20, 3));
+    const lateInsertingWriter: DomainEventArchiveWriter = {
+      write: async () => {
+        addEvent('a2', at(20, 2));
+        return RA.ok(undefined);
+      },
+    };
+
+    const result = await create({ writer: lateInsertingWriter }).run();
+
+    expect(result).toMatchObject({ ok: true, val: { archived: 0, objects: 0, stoppedBy: 'deleteMismatch' } });
+    expect(remainingIds()).toEqual(['a1', 'a2', 'a3']);
+    expect(error).toHaveBeenCalledWith('iori domain events archive: deleted count differs from archived count.', {
+      count: 2,
+      deleted: 0,
+      key: `domain-events/v1/year=2026/month=10/day=20/${at(20, 1)}-a1.parquet`,
+    });
+  });
+
+  it('バイトの予算を超える手前でバッチを区切る', async () => {
+    const { addEvent, remainingIds, written, create } = setup({ byteBudget: 200 });
+    for (const [index, id] of ['a1', 'a2', 'a3', 'a4', 'a5'].entries()) {
+      addEvent(id, at(20, index + 1), 'post.created', null, 'x'.repeat(100));
+    }
+
+    await create().run();
+
+    expect(written.map((batch) => batch.events.map((event) => event.eventId))).toEqual([['a1', 'a2'], ['a3', 'a4'], [
+      'a5',
+    ]]);
+    expect(remainingIds()).toEqual([]);
+  });
+
+  it('バッチ数の上限に達したら batchLimit で止まり、各バッチの鍵と件数を出す', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { addEvent, remainingIds, written, create } = setup({ batchSize: 1, maxBatches: 2 });
+    addEvent('a1', at(20, 1));
+    addEvent('a2', at(20, 2));
+    addEvent('a3', at(20, 3));
+
+    const result = await create().run();
+
+    expect(result).toMatchObject({ ok: true, val: { archived: 2, objects: 2, stoppedBy: 'batchLimit' } });
+    expect(remainingIds()).toEqual(['a3']);
+    expect(log.mock.calls).toEqual(written.map((batch) => [
+      'iori domain events archive: batch archived.',
+      { key: batch.key, count: 1 },
+    ]));
+  });
+
+  it('許可の一覧にも秘密の一覧にも無いイベントは NULL にして書き、名前ごとに1回だけ警告する', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { addEvent, written, create } = setup({ batchSize: 1 });
+    addEvent('n1', at(20, 1), 'newThing.happened', '{"s":1}', '{"p":1}');
+    addEvent('n2', at(20, 2), 'newThing.happened', '{"s":2}', '{"p":2}');
+    addEvent('p1', at(20, 3), 'post.created');
+
+    await create().run();
+
+    expect(written.flatMap((batch) => batch.events)).toMatchObject([
+      { eventId: 'n1', aggregateState: null, eventPayload: null },
+      { eventId: 'n2', aggregateState: null, eventPayload: null },
+      { eventId: 'p1', aggregateState: '{"a":1}', eventPayload: '{"b":2}' },
+    ]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'iori domain events archive: unknown event name, aggregate_state and event_payload are NULL.',
+      { eventName: 'newThing.happened' },
+    );
   });
 
   it('R2 への書き込みに失敗したら D1 から消さずに止まる', async () => {
@@ -200,7 +282,10 @@ describe('ArchiveDomainEventsUseCase', () => {
     expect(puts).toHaveLength(2);
     expect(puts[1]!.key).toBe(puts[0]!.key);
     expect(new Uint8Array(puts[1]!.body)).toEqual(new Uint8Array(puts[0]!.body));
-    expect(puts[0]!.options).toEqual({ customMetadata: { row_count: '2' } });
+    expect(puts[0]!.options).toEqual({
+      customMetadata: { row_count: '2' },
+      sha256: await crypto.subtle.digest('SHA-256', puts[0]!.body),
+    });
     expect(remainingIds()).toEqual([]);
     const rows = await parquetReadObjects({ file: puts[0]!.body });
     expect(rows.map((row) => row.event_id)).toEqual(['a1', 'a2']);

@@ -11,12 +11,14 @@ export const ARCHIVE_AGE_MS = 7 * DAY_MS;
 const DAILY_WINDOW_DAYS = 30;
 const EVENT_NAME_LIMIT = 30;
 const ROW_BYTES =
-  'length(eventId) + length(aggregateId) + length(aggregateName) + length(eventName) + COALESCE(length(aggregateState), 0) + COALESCE(length(eventPayload), 0) + 8';
+  'length(CAST(eventId AS BLOB)) + length(CAST(aggregateId AS BLOB)) + length(CAST(aggregateName AS BLOB)) + length(CAST(eventName AS BLOB)) + COALESCE(length(CAST(aggregateState AS BLOB)), 0) + COALESCE(length(CAST(eventPayload AS BLOB)), 0) + 8';
+const CREATED_AT_SKEW_ACTORS =
+  `(SELECT COUNT(*) FROM (SELECT MIN(e.occurredAt) AS first_at, MIN(CASE WHEN e.eventName = 'actor.created' THEN e.occurredAt END) AS created_at FROM actors a LEFT JOIN domain_events e ON e.aggregateId IN (a.actorId, '"' || a.actorId || '"') GROUP BY a.actorId) WHERE created_at IS NULL OR first_at < created_at)`;
 
 export const summarySql = (now) =>
   `SELECT COUNT(*) AS total, MIN(occurredAt) AS oldest, MAX(occurredAt) AS newest, COALESCE(SUM(CASE WHEN occurredAt < ${
     now - ARCHIVE_AGE_MS
-  } THEN 1 ELSE 0 END), 0) AS older_than_archive_age, AVG(${ROW_BYTES}) AS avg_bytes, MAX(${ROW_BYTES}) AS max_bytes FROM domain_events`;
+  } THEN 1 ELSE 0 END), 0) AS older_than_archive_age, AVG(${ROW_BYTES}) AS avg_bytes, MAX(${ROW_BYTES}) AS max_bytes, ${CREATED_AT_SKEW_ACTORS} AS created_at_skew_actors FROM domain_events`;
 export const dailySql = (now) =>
   `SELECT strftime('%Y-%m-%d', occurredAt / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM domain_events WHERE occurredAt >= ${
     Math.floor(now / DAY_MS) * DAY_MS - (DAILY_WINDOW_DAYS - 1) * DAY_MS
@@ -70,6 +72,7 @@ export const buildStats = ({ results, now }) => {
       average: avgBytes === null ? null : Math.round(avgBytes),
       max: nullableInteger(summary.max_bytes),
     },
+    createdAtSkewActors: integer(summary.created_at_skew_actors),
   };
 };
 
@@ -78,7 +81,7 @@ export const noticeLines = (stats) => [
     stats.newestOccurredAt ?? 'none'
   } older_than_7d=${stats.olderThanArchiveAge.count} avg_bytes=${stats.rowBytes.average ?? 0} max_bytes=${
     stats.rowBytes.max ?? 0
-  }`,
+  } created_at_skew_actors=${stats.createdAtSkewActors}`,
   ...stats.dailyCounts.map((item) => `IORI_NOTICE domain-events-stats day=${item.day} count=${item.count}`),
   ...stats.eventNameCounts.map((item) => `IORI_NOTICE domain-events-stats event=${item.eventName} count=${item.count}`),
 ];

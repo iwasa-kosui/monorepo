@@ -14,7 +14,10 @@ export const archiveDomainEventsTask: ScheduledTask = {
     if (env.EVENT_ARCHIVE_ENABLED !== 'true') return;
     const useCase = createArchiveDomainEventsUseCase(env);
     const result = await useCase.run();
-    if (result.val.stoppedBy === 'drained' || result.val.stoppedBy === 'timeBudget') {
+    if (
+      result.val.stoppedBy === 'drained' || result.val.stoppedBy === 'timeBudget'
+      || result.val.stoppedBy === 'batchLimit'
+    ) {
       console.log('iori domain events archived.', result.val);
     }
   },

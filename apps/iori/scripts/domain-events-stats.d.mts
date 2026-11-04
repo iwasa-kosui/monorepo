@@ -12,6 +12,7 @@ export type DomainEventsStats = {
   dailyCounts: Array<{ day: string; count: number }>;
   eventNameCounts: Array<{ eventName: string; count: number }>;
   rowBytes: { average: number | null; max: number | null };
+  createdAtSkewActors: number;
 };
 export function buildStats(options: { results: unknown; now: number }): DomainEventsStats;
 export function noticeLines(stats: DomainEventsStats): string[];
