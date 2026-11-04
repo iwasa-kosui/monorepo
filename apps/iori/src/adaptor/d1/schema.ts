@@ -375,6 +375,7 @@ export const federatedTimelineItemsTable = sqliteTable('federated_timeline_items
   index('federated_timeline_items_received_at_idx').on(table.receivedAt),
   index('federated_timeline_items_received_at_id_idx').on(table.receivedAt, table.federatedTimelineItemId),
   index('federated_timeline_items_post_id_idx').on(table.postId),
+  uniqueIndex('federated_timeline_items_post_id_relay_id_unique').on(table.postId, table.relayId),
 ]);
 
 export const oauthApplicationsTable = sqliteTable('oauth_applications', {

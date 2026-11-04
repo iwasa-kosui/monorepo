@@ -134,6 +134,13 @@
       "when": 1769305839208,
       "tag": "0018_public_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793785112071,
+      "tag": "0019_crazy_jackal",
+      "breakpoints": true
     }
   ]
 }

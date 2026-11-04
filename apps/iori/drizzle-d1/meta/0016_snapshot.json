@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "029f955a-6f78-4e9b-886c-b8a9b5d75a7f",
+  "id": "30779a4b-357a-440a-a6c0-0ea37055b218",
   "prevId": "71990bbd-5b37-4844-9ea2-6edbd1e22d28",
   "tables": {
     "actors": {
@@ -192,13 +192,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "markdown": {
-          "name": "markdown",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "updatedAt": {
@@ -988,6 +981,14 @@
             "postId"
           ],
           "isUnique": false
+        },
+        "federated_timeline_items_post_id_relay_id_unique": {
+          "name": "federated_timeline_items_post_id_relay_id_unique",
+          "columns": [
+            "postId",
+            "relayId"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
