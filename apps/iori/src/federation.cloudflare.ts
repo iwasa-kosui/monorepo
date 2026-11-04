@@ -236,9 +236,10 @@ export const processCloudflareFedifyQueueBatch = async (
 
   await processCloudflareFedifyMessages(
     batch,
-    async (body) => {
+    async (body, recordMessageType) => {
       // orderingKv を渡していないので、shouldProcess は常に true で release も返らない
       const { message } = await runtime.queue.processMessage(body);
+      recordMessageType(message?.type);
       await runtime.federation.processQueuedTask(undefined, message);
     },
   );
@@ -255,15 +256,25 @@ export const queueRetryDelaySeconds = (attempts: number): number =>
     ? QUEUE_RETRY_DELAY_SECONDS_SECOND
     : QUEUE_RETRY_DELAY_SECONDS_REST;
 
+export type QueueMessageType = Message['type'];
+
 export type QueueFailureAction = Readonly<
-  | { type: 'retry'; delaySeconds: number }
+  | { type: 'retry'; delaySeconds?: number }
   | { type: 'drop'; statusCode: number }
 >;
 
 const isPermanentClientErrorStatus = (statusCode: number): boolean =>
   statusCode >= 400 && statusCode <= 499 && statusCode !== 408 && statusCode !== 429;
 
-export const decideQueueFailureAction = (error: unknown, attempts: number): QueueFailureAction => {
+// 404/410 と Retry-After 付きの 429/503 は Fedify が処理するので、ここには届かない
+export const decideQueueFailureAction = (
+  error: unknown,
+  attempts: number,
+  messageType: QueueMessageType | undefined,
+): QueueFailureAction => {
+  if (messageType !== 'outbox' && messageType !== 'fanout') {
+    return { type: 'retry' };
+  }
   if (error instanceof SendActivityError && isPermanentClientErrorStatus(error.statusCode)) {
     return attempts <= 1
       ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
@@ -274,16 +285,19 @@ export const decideQueueFailureAction = (error: unknown, attempts: number): Queu
 
 export const processCloudflareFedifyMessages = async (
   batch: MessageBatch<unknown>,
-  processTask: (message: Message) => Promise<void>,
+  processTask: (body: Message, recordMessageType: (type: QueueMessageType | undefined) => void) => Promise<void>,
 ): Promise<void> => {
   for (const message of batch.messages) {
+    let messageType: QueueMessageType | undefined;
     try {
-      await processTask(message.body as Message);
+      await processTask(message.body as Message, (type) => {
+        messageType = type;
+      });
       message.ack();
     } catch (error) {
       console.error('Fedify queued task failed.', describeQueueFailure(error));
       const attempts = message.attempts ?? 1;
-      const action = decideQueueFailureAction(error, attempts);
+      const action = decideQueueFailureAction(error, attempts, messageType);
       if (action.type === 'drop') {
         console.error('Fedify queued task dropped after a client error response.', {
           statusCode: action.statusCode,
@@ -291,7 +305,11 @@ export const processCloudflareFedifyMessages = async (
         });
         message.ack();
       } else {
-        message.retry({ delaySeconds: action.delaySeconds });
+        if (action.delaySeconds === undefined) {
+          message.retry();
+        } else {
+          message.retry({ delaySeconds: action.delaySeconds });
+        }
       }
     }
   }
