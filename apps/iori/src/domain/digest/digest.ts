@@ -51,6 +51,8 @@ const digestTrendZodType = z.object({
 });
 export type DigestTrend = z.output<typeof digestTrendZodType>;
 
+export const SUMMARY_DIGEST_TOPIC_KEY = 'summary';
+
 const digestDateZodType = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('DigestDate');
 
 const digestHeaderZodType = z.object({
@@ -61,6 +63,7 @@ const digestHeaderZodType = z.object({
   createdAt: Instant.zodType,
   pushSentAt: z.nullable(Instant.zodType),
   trigger: digestTriggerZodType,
+  topicKey: z.string().min(1),
 });
 export type DigestHeader = z.output<typeof digestHeaderZodType>;
 
@@ -111,6 +114,7 @@ export type CreateDigestPayload = Readonly<{
   digestDate: string;
   articleId: ArticleId;
   trigger: DigestTrigger;
+  topicKey: string;
   items: ReadonlyArray<Omit<DigestItem, 'digestItemId'>>;
   trends: ReadonlyArray<DigestTrend>;
 }>;
@@ -208,13 +212,28 @@ export type DigestCreatedStore = Agg.Store<DigestCreated>;
 export type DigestPushSentStore = Agg.Store<DigestPushSent>;
 export type DigestItemFeedbackGivenStore = Agg.Store<DigestItemFeedbackGiven>;
 export type DigestExpiredStore = Agg.Store<DigestExpired>;
-export type DigestHeaderResolverByUserIdAndDigestDate = Agg.Resolver<
+export type DigestHeadersResolverByUserIdAndDigestDate = Agg.Resolver<
   { userId: UserId; digestDate: string },
-  DigestHeader | undefined
+  ReadonlyArray<DigestHeader>
+>;
+export type DigestTopicEntry = Readonly<{
+  topicKey: string;
+  name: string;
+  articleId: ArticleId;
+  itemCount: number;
+}>;
+export type DigestTopicEntriesResolverByUserIdAndDigestDate = Agg.Resolver<
+  { userId: UserId; digestDate: string },
+  ReadonlyArray<DigestTopicEntry>
 >;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
+export type DigestResolverByArticleId = Agg.Resolver<ArticleId, Digest | undefined>;
+export type DigestItemUrlsResolverByUserId = Agg.Resolver<
+  { userId: UserId; excludingDigestIds: ReadonlyArray<DigestId> },
+  ReadonlyArray<string>
+>;
 export type LatestDigestHeaderResolverByUserId = Agg.Resolver<
-  { userId: UserId; excludingDigestId: DigestId | undefined },
+  { userId: UserId; digestDateBefore: string },
   DigestHeader | undefined
 >;
 export type DigestHeadersResolverByArticleIds = Agg.Resolver<ReadonlyArray<ArticleId>, ReadonlyArray<DigestHeader>>;

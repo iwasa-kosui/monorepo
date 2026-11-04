@@ -7,14 +7,17 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestCreatedStore } from '../adaptor/d1/digest/digestCreatedStore.ts';
 import { createD1DigestExpiredStore } from '../adaptor/d1/digest/digestExpiredStore.ts';
-import { createD1DigestHeaderResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestHeaderResolverByUserIdAndDigestDate.ts';
 import { createD1DigestHeadersResolverByDigestDateBefore } from '../adaptor/d1/digest/digestHeadersResolverByDigestDateBefore.ts';
+import { createD1DigestHeadersResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestHeadersResolverByUserIdAndDigestDate.ts';
+import { createD1DigestItemUrlsResolverByUserId } from '../adaptor/d1/digest/digestItemUrlsResolverByUserId.ts';
 import { createD1DigestPushSentStore } from '../adaptor/d1/digest/digestPushSentStore.ts';
 import { createD1LatestDigestHeaderResolverByUserId } from '../adaptor/d1/digest/latestDigestHeaderResolverByUserId.ts';
 import { createD1DigestRequestUsageRecorder } from '../adaptor/d1/digestRequest/digestRequestUsageRecorder.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
+import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
+import { createD1DigestTopicEmbeddedStore } from '../adaptor/d1/digestTopic/digestTopicEmbeddedStore.ts';
+import { createD1DigestTopicsResolverByUserId } from '../adaptor/d1/digestTopic/digestTopicsResolverByUserId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
-import { createD1NewFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/newFeedEntriesResolverByFetchedSince.ts';
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
@@ -23,12 +26,14 @@ import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
+import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { Username } from '../domain/user/username.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateDailyDigestUseCase } from '../useCase/createDailyDigest.ts';
+import { EnsureDefaultDigestTopicsUseCase } from '../useCase/ensureDefaultDigestTopics.ts';
 import { ExpireDigestsUseCase } from '../useCase/expireDigests.ts';
 import { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -40,19 +45,28 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
   const db = createD1Db(env.DB);
   const now = Instant.now;
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
-  const digestHeaderResolverByUserIdAndDigestDate = createD1DigestHeaderResolverByUserIdAndDigestDate(db);
+  const digestHeadersResolverByUserIdAndDigestDate = createD1DigestHeadersResolverByUserIdAndDigestDate(db);
+  const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
   const createDailyDigest = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
-    digestHeaderResolverByUserIdAndDigestDate,
+    digestHeadersResolverByUserIdAndDigestDate,
     latestDigestHeaderResolverByUserId: createD1LatestDigestHeaderResolverByUserId(db),
+    digestItemUrlsResolverByUserId: createD1DigestItemUrlsResolverByUserId(db),
+    digestTopicsResolverByUserId,
+    ensureDefaultDigestTopicsUseCase: EnsureDefaultDigestTopicsUseCase.create({
+      digestTopicsResolverByUserId,
+      digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),
+      digestTopicEmbeddedStore: createD1DigestTopicEmbeddedStore(db),
+      textEmbedder: workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi),
+      now,
+    }),
     articleResolver,
     articleBodyResolver,
     articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
     draftArticleWithDependentsDeletedStore: createD1DraftArticleWithDependentsDeletedStore(db),
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
-    newFeedEntriesResolverByFetchedSince: createD1NewFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
     interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
@@ -78,7 +92,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     userResolverByUsername: createD1UserResolverByUsername(db),
     createDailyDigest,
     requestDigest: RequestDigestUseCase.create({
-      digestHeaderResolverByUserIdAndDigestDate,
+      digestHeadersResolverByUserIdAndDigestDate,
       articleResolver,
       articleBodyResolver,
       digestRequestUsageRecorder: createD1DigestRequestUsageRecorder(db),

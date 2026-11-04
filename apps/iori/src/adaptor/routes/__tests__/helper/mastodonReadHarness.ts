@@ -54,6 +54,7 @@ import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestI
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../../../d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReactCreatedStore.ts';
@@ -471,6 +472,7 @@ export const setupReadApi = (
           authn,
           digestResolverByUserIdAndDigestDate: createD1DigestResolverByUserIdAndDigestDate(db),
           digestResolverByUserId: createD1DigestResolverByUserId(db),
+          digestTopicEntriesResolverByUserIdAndDigestDate: createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db),
           timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
           hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
           digestSubscriptionResolverByUserId,

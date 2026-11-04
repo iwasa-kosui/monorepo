@@ -29,9 +29,11 @@ import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../adaptor/d1/digest/digestItemFeedbackGivenStore.ts';
+import { createD1DigestResolverByArticleId } from '../adaptor/d1/digest/digestResolverByArticleId.ts';
 import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
@@ -394,6 +396,7 @@ export const createWorkerRuntimePorts = async (
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),
+      digestTopicEntriesResolverByUserIdAndDigestDate: createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db),
       timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
       hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
       digestSubscriptionResolverByUserId,
@@ -560,9 +563,8 @@ export const createWorkerRuntimePorts = async (
         articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
-      digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
       digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
-      digestResolverByUserIdAndDigestDate,
+      digestResolverByArticleId: createD1DigestResolverByArticleId(db),
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,

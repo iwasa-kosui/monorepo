@@ -13,10 +13,6 @@ export type RadarFeedEntriesResolverByFetchedSince = Agg.Resolver<
   { fetchedSince: Instant; limit: number },
   ReadonlyArray<FeedEntry>
 >;
-export type NewFeedEntriesResolverByFetchedSince = Agg.Resolver<
-  { fetchedSince: Instant; limit: number },
-  ReadonlyArray<FeedEntry>
->;
 export type HatenaTrendsResolverByFetchedSince = Agg.Resolver<
   { fetchedSince: Instant; limit: number },
   ReadonlyArray<TrendCandidate>

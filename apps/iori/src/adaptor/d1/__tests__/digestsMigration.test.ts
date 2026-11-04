@@ -9,10 +9,15 @@ const setup = () => {
   fixture.sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run('article-1', author.actorId, author.userId, null, 'title', 'draft', 1_000, null, null);
-  const insertDigest = (digestId: string, digestDate: string, userId: string = author.userId) =>
+  const insertDigest = (
+    digestId: string,
+    digestDate: string,
+    userId: string = author.userId,
+    topicKey: string = 'summary',
+  ) =>
     fixture.sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
-    ).run(digestId, userId, digestDate, 'article-1', 2_000, null);
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
+    ).run(digestId, userId, digestDate, 'article-1', 2_000, null, topicKey);
   const insertItem = (digestItemId: string, digestId: string, rank: number) =>
     fixture.sqlite.prepare(
       'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -47,13 +52,15 @@ describe('digests migration', () => {
     ]);
   });
 
-  it('同じ (userId, digestDate) の digest は一意制約で拒否し、別の日付は入れられる', () => {
+  it('同じ (userId, digestDate, topicKey) の digest は一意制約で拒否し、別の日付と別の topicKey は入れられる', () => {
     const { insertDigest } = setup();
 
     insertDigest('digest-1', '2026-11-05');
 
     expect(() => insertDigest('digest-2', '2026-11-05')).toThrow(/UNIQUE/);
     expect(() => insertDigest('digest-3', '2026-11-06')).not.toThrow();
+    expect(() => insertDigest('digest-4', '2026-11-05', undefined, 'genai')).not.toThrow();
+    expect(() => insertDigest('digest-5', '2026-11-05', undefined, 'genai')).toThrow(/UNIQUE/);
   });
 
   it('同じ (digestId, rank) の item は一意制約で拒否する', () => {

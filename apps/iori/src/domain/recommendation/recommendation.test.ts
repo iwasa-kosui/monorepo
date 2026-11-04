@@ -311,3 +311,22 @@ describe('Recommendation.scoreArticles', () => {
     });
   });
 });
+
+describe('Recommendation.cosineSimilarity', () => {
+  it('同じ向きなら 1、直交なら 0、逆向きなら -1 を返す', () => {
+    expect(Recommendation.cosineSimilarity(Float32Array.from([2, 0]), Float32Array.from([5, 0]))).toBeCloseTo(1);
+    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([0, 3]))).toBeCloseTo(0);
+    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([-2, 0]))).toBeCloseTo(-1);
+  });
+
+  it('ベクトルの長さにかかわらず、角度だけで決まる', () => {
+    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 1]), Float32Array.from([0, 4]))).toBeCloseTo(
+      Math.SQRT1_2,
+    );
+  });
+
+  it('零ベクトルや次元の違うベクトルとの類似度は 0 にする', () => {
+    expect(Recommendation.cosineSimilarity(Float32Array.from([0, 0]), Float32Array.from([1, 1]))).toBe(0);
+    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([1, 0, 0]))).toBe(0);
+  });
+});

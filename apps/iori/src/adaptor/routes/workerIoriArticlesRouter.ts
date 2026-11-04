@@ -8,11 +8,7 @@ import type { PublishedArticlesWithAuthorResolver } from '../../domain/article/a
 import { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import type {
-  DigestHeaderResolverByArticleId,
-  DigestHeadersResolverByArticleIds,
-  DigestResolverByUserIdAndDigestDate,
-} from '../../domain/digest/digest.ts';
+import type { DigestHeadersResolverByArticleIds, DigestResolverByArticleId } from '../../domain/digest/digest.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
@@ -48,9 +44,8 @@ export type WorkerIoriArticlesRouterDeps = Readonly<{
   editArticleUseCase: EditArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
   articleBodyResolver?: ArticleBodyResolver;
-  digestHeaderResolverByArticleId?: DigestHeaderResolverByArticleId;
   digestHeadersResolverByArticleIds?: DigestHeadersResolverByArticleIds;
-  digestResolverByUserIdAndDigestDate?: DigestResolverByUserIdAndDigestDate;
+  digestResolverByArticleId?: DigestResolverByArticleId;
   actorResolverByUserId?: ActorResolverByUserId;
   publishOgImage?: (article: Article) => Promise<void>;
   deleteOgImage?: (articleId: ArticleId) => Promise<void>;
@@ -78,9 +73,8 @@ export const createWorkerIoriArticlesRouter = ({
   editArticleUseCase,
   publishedArticlesResolver,
   articleBodyResolver,
-  digestHeaderResolverByArticleId,
   digestHeadersResolverByArticleIds,
-  digestResolverByUserIdAndDigestDate,
+  digestResolverByArticleId,
   actorResolverByUserId,
   publishOgImage,
   deleteOgImage,
@@ -96,19 +90,13 @@ export const createWorkerIoriArticlesRouter = ({
 
   const resolveDigestExclusions = async (article: Article, viewerUserId: UserId | undefined) => {
     if (viewerUserId === undefined || article.authorUserId !== viewerUserId) return undefined;
-    if (digestHeaderResolverByArticleId === undefined || digestResolverByUserIdAndDigestDate === undefined) {
-      return undefined;
-    }
-    const header = await digestHeaderResolverByArticleId.resolve(article.articleId);
-    if (!header.ok || header.val === undefined) return undefined;
-    const digest = await digestResolverByUserIdAndDigestDate.resolve({
-      userId: header.val.userId,
-      digestDate: header.val.digestDate,
-    });
+    if (digestResolverByArticleId === undefined) return undefined;
+    const digest = await digestResolverByArticleId.resolve(article.articleId);
     if (!digest.ok || digest.val === undefined) return undefined;
     const body = await articleBodyResolver?.resolve(article.articleId);
     return {
       digestDate: digest.val.digestDate,
+      topicKey: digest.val.topicKey,
       edited: Article.isBodyEdited(article, body?.ok ? body.val : undefined),
       items: digest.val.items.map(({ digestItemId, rank, url, title, feedback }) => ({
         digestItemId,
@@ -120,7 +108,7 @@ export const createWorkerIoriArticlesRouter = ({
       excluded: {
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,
-        hatenaCounts: digest.val.items.length > 0,
+        hatenaCounts: false,
         recommendations: digest.val.items.some((item) => item.reasonInterestSourceId !== null),
       },
     };

@@ -13,6 +13,7 @@ describe('D1 schema', () => {
       'digestItemsTable',
       'digestRequestUsagesTable',
       'digestSubscriptionsTable',
+      'digestTopicsTable',
       'digestTrendsTable',
       'digestsTable',
       'domainEventsTable',

@@ -715,12 +715,18 @@ describe('createWorkerIoriArticlesRouter', () => {
       unpublishedAt: null,
     });
 
-    const createDigest = (article: Article, itemCount: number, reasonInterestSourceId: string | null = null) => {
+    const createDigest = (
+      article: Article,
+      itemCount: number,
+      reasonInterestSourceId: string | null = null,
+      topicKey = 'genai',
+    ) => {
       const created = Digest.create({
         userId: authorUserId,
         digestDate: '2026-11-05',
         articleId: article.articleId,
         trigger: 'scheduled',
+        topicKey,
         items: Array.from({ length: itemCount }, (_, index) => ({
           feedEntryId: `entry-${index + 1}`,
           url: `https://example.com/${index + 1}`,
@@ -766,15 +772,11 @@ describe('createWorkerIoriArticlesRouter', () => {
           resolve: async () =>
             RA.ok({ articles: [{ ...article, status: 'published' }], authorUsername: Username.orThrow('kosui') }),
         },
-        digestHeaderResolverByArticleId: {
-          resolve: async (id) => RA.ok(digest?.articleId === id ? digest : undefined),
-        },
         digestHeadersResolverByArticleIds: {
           resolve: async (ids) => RA.ok(digest !== undefined && ids.includes(digest.articleId) ? [digest] : []),
         },
-        digestResolverByUserIdAndDigestDate: {
-          resolve: async ({ userId, digestDate }) =>
-            RA.ok(digest?.userId === userId && digest.digestDate === digestDate ? digest : undefined),
+        digestResolverByArticleId: {
+          resolve: async (id) => RA.ok(digest?.articleId === id ? digest : undefined),
         },
       });
       return { app, auth };
@@ -797,6 +799,7 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect(body.digest).toEqual({
         digestDate: '2026-11-05',
+        topicKey: 'genai',
         edited: false,
         items: [1, 2].map((rank) => ({
           digestItemId: expect.any(String),
@@ -805,8 +808,59 @@ describe('createWorkerIoriArticlesRouter', () => {
           title: `entry ${rank}`,
           feedback: null,
         })),
-        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true, recommendations: false },
+        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: false, recommendations: false },
       });
+    });
+
+    it('まとめの article を開くと topicKey に summary を返し、項目を持たない', async () => {
+      const article = createArticle('draft');
+      const t = createDigestApp(article, createDigest(article, 0, null, 'summary'));
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({ topicKey: 'summary', items: [] });
+    });
+
+    it('同じ日の別の digest ではなく、開いた article に結び付いた digest の項目を返す', async () => {
+      const summaryArticle = createArticle('draft');
+      const topicArticle = createArticle('draft');
+      const summary = createDigest(summaryArticle, 0, null, 'summary');
+      const topic = createDigest(topicArticle, 2, null, 'genai');
+      const t = createDigestApp(topicArticle, topic);
+      const byArticleId = new Map([[summary.articleId, summary], [topic.articleId, topic]]);
+      const app = createApp(t.auth.authn, {
+        articleBodyResolver: {
+          resolve: async () =>
+            RA.ok({
+              articleId: topicArticle.articleId,
+              privateHtml: '<p>private</p>',
+              publicHtml: '<p>public</p>',
+              markdown: null,
+              updatedAt: createdAt,
+            }),
+        },
+        getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
+          articleResolver: { resolve: async (id) => RA.ok(id === topicArticle.articleId ? topicArticle : undefined) },
+          threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
+          articleBodyResolver: {
+            resolve: async () =>
+              RA.ok({
+                articleId: topicArticle.articleId,
+                privateHtml: '<p>private</p>',
+                publicHtml: '<p>public</p>',
+                markdown: null,
+                updatedAt: createdAt,
+              }),
+          },
+        }),
+        digestResolverByArticleId: { resolve: async (id) => RA.ok(byArticleId.get(id)) },
+      });
+
+      const body = await (await app.request(`${articlesPath}/${topicArticle.articleId}`, {
+        headers: { Cookie: t.auth.cookieFor(authorUserId) },
+      })).json() as Record<string, unknown>;
+
+      expect(body.digest).toMatchObject({ topicKey: 'genai', items: [{ rank: 1 }, { rank: 2 }] });
     });
 
     it('本文を編集済みなら edited を true にする', async () => {
@@ -848,9 +902,9 @@ describe('createWorkerIoriArticlesRouter', () => {
       expect(body.digest).toMatchObject({ excluded: { recommendations: true } });
     });
 
-    it('新着の項目がなければ hatenaCounts を false にする', async () => {
+    it('項目があっても hatenaCounts は false にする', async () => {
       const article = createArticle('draft');
-      const t = createDigestApp(article, createDigest(article, 0));
+      const t = createDigestApp(article, createDigest(article, 2));
 
       const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
 

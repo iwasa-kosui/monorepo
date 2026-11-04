@@ -1,5 +1,8 @@
+import { SUMMARY_DIGEST_TOPIC_KEY } from '../../domain/digest/digest.ts';
+
 export type DigestPublishNotice = Readonly<{
   digestDate: string;
+  topicKey: string;
   edited: boolean;
   excluded: Readonly<{
     timelineLinks: number;
@@ -9,7 +12,15 @@ export type DigestPublishNotice = Readonly<{
   }>;
 }>;
 
-export const buildDigestPublishConfirmMessage = ({ edited, excluded }: DigestPublishNotice): string | undefined => {
+const UNPUBLISHABLE_NOTICE = 'この記事は公開を想定していません。';
+
+export const buildDigestPublishConfirmMessage = (notice: DigestPublishNotice): string | undefined => {
+  const message = buildExclusionMessage(notice);
+  if (notice.topicKey !== SUMMARY_DIGEST_TOPIC_KEY) return message;
+  return [UNPUBLISHABLE_NOTICE, message ?? '公開しますか？'].join('\n');
+};
+
+const buildExclusionMessage = ({ edited, excluded }: DigestPublishNotice): string | undefined => {
   if (edited) return ['編集した本文をそのまま公開します。', '公開しますか？'].join('\n');
   const lines = [
     ...(excluded.timelineLinks > 0 ? [`・みんなの関心（iori のタイムライン）${excluded.timelineLinks} 件`] : []),
