@@ -72,6 +72,21 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
   } as const;
 };
 
+const embedPendingFeedEntries = async (embedFeedEntries: EmbedFeedEntriesUseCase): Promise<void> => {
+  try {
+    const result = await embedFeedEntries.run();
+    if (!result.ok) {
+      console.error('iori feed entries: embedding failed.', { message: result.err.message });
+      return;
+    }
+    console.info('iori feed entries embedded.', result.val);
+  } catch (error) {
+    console.error('iori feed entries: embedding failed.', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 export const collectFeedsTask: ScheduledTask = {
   name: 'collectFeeds',
   run: async ({ env }) => {
@@ -81,6 +96,7 @@ export const collectFeedsTask: ScheduledTask = {
       const summary = await useCases.collectFeedEntries.run();
       console.info('iori feeds collected.', summary.val);
     } finally {
+      await embedPendingFeedEntries(useCases.embedFeedEntries);
       const refreshed = await useCases.refreshHatenaBookmarkCounts.run();
       console.info('iori hatena bookmark counts refreshed.', refreshed.val);
     }
@@ -94,15 +110,5 @@ export const detectRadarVolumeTask: ScheduledTask = {
     await useCases.ensureDefaultFeedSources.run();
     const summary = await useCases.detectRadarVolume.run();
     console.info('iori radar volume detected.', summary.val);
-  },
-};
-
-export const embedFeedEntriesTask: ScheduledTask = {
-  name: 'embedFeedEntries',
-  run: async ({ env }) => {
-    const useCases = createFeedUseCases(env);
-    const result = await useCases.embedFeedEntries.run();
-    if (!result.ok) throw new Error(result.err.message);
-    console.info('iori feed entries embedded.', result.val);
   },
 };

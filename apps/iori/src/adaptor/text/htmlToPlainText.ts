@@ -52,5 +52,6 @@ export const htmlToPlainText = (html: string, maxChars: number): string => {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return Array.from(text).slice(0, Math.max(0, maxChars)).join('');
+  const limit = Math.max(0, maxChars);
+  return Array.from(text.slice(0, limit * 2)).slice(0, limit).join('');
 };

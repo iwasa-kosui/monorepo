@@ -1,6 +1,6 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
-import { collectFeedsTask, detectRadarVolumeTask, embedFeedEntriesTask } from './feedTasks.ts';
+import { collectFeedsTask, detectRadarVolumeTask } from './feedTasks.ts';
 import {
   embedOwnInterestSourcesTask,
   syncKosuiInterestSourcesTask,
@@ -21,7 +21,6 @@ export const scheduledTasks: ScheduledTaskTable = {
     collectFeedsTask,
     syncOwnInterestSourcesTask,
     embedOwnInterestSourcesTask,
-    embedFeedEntriesTask,
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],

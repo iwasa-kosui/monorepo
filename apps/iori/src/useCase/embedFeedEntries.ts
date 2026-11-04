@@ -1,6 +1,8 @@
 import { RA } from '@iwasa-kosui/result';
 
+import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
 import {
+  FEED_ENTRY_EMBEDDING_TEXT_MAX_CHARS,
   type FeedEntriesResolverByFetchedSincePendingEmbedding,
   FeedEntry,
   type FeedEntryEmbedded,
@@ -21,7 +23,7 @@ const HOUR_MS = 60 * 60 * 1000;
 
 type Input = void;
 
-type Ok = Readonly<{ embedded: number; skipped: number }>;
+type Ok = Readonly<{ embedded: number; skipped: number; remaining: number }>;
 
 export type EmbedFeedEntriesUseCase = UseCase<Input, Ok, AiError>;
 
@@ -39,17 +41,23 @@ const create = ({
   now,
 }: Deps): EmbedFeedEntriesUseCase => {
   const run = async (): RA<Ok, AiError> => {
-    if (textEmbedder === undefined) return RA.ok({ embedded: 0, skipped: 0 });
+    if (textEmbedder === undefined) return RA.ok({ embedded: 0, skipped: 0, remaining: 0 });
     const pending = await feedEntriesResolverByFetchedSincePendingEmbedding.resolve({
       fetchedSince: Instant.addDuration(now(), -FEED_ENTRY_EMBEDDING_WINDOW_HOURS * HOUR_MS),
       limit: FEED_ENTRY_EMBEDDING_BATCH_SIZE * FEED_ENTRY_EMBEDDING_MAX_BATCHES,
     });
     let embedded = 0;
     let skipped = 0;
+    let remaining = 0;
     for (const entries of chunk(pending.val, FEED_ENTRY_EMBEDDING_BATCH_SIZE)) {
       const vectors = await embedTextsOneByOneOnFailure(
         textEmbedder,
-        entries.map(FeedEntry.toEmbeddingText),
+        entries.map((entry) =>
+          FeedEntry.toEmbeddingText({
+            title: entry.title,
+            description: htmlToPlainText(entry.description, FEED_ENTRY_EMBEDDING_TEXT_MAX_CHARS),
+          })
+        ),
         (index, error) => {
           console.error('iori feed entries: embedding an entry failed.', {
             feedEntryId: entries[index]!.feedEntryId,
@@ -59,7 +67,8 @@ const create = ({
       );
       if (!vectors.ok) {
         if (embedded === 0) return vectors;
-        skipped = pending.val.length - embedded;
+        skipped += entries.length;
+        remaining = pending.val.length - embedded - skipped;
         break;
       }
       const timestamp = now();
@@ -82,7 +91,7 @@ const create = ({
       embedded += events.length;
       skipped += entries.length - events.length;
     }
-    return RA.ok({ embedded, skipped });
+    return RA.ok({ embedded, skipped, remaining });
   };
 
   return { run };

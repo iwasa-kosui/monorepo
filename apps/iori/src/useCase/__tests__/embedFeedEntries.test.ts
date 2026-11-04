@@ -57,15 +57,24 @@ describe('EmbedFeedEntriesUseCase', () => {
     const inside = addEntry(1, NOW - 47 * HOUR_MS, 'タイトル', '説明');
     addEntry(2, NOW - 49 * HOUR_MS);
 
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 1, skipped: 0 } });
+    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 1, skipped: 0, remaining: 0 } });
 
     expect(stub.calls).toHaveLength(1);
     expect(stub.calls[0]?.model).toBe(INTEREST_EMBEDDING_MODEL);
     expect(stub.calls[0]?.texts).toEqual(['タイトル\n説明']);
     expect(embeddedRows()).toEqual([{ feedEntryId: inside, embeddedAt: NOW, bytes: 4096 }]);
 
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0 } });
+    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0, remaining: 0 } });
     expect(stub.calls).toHaveLength(1);
+  });
+
+  it('description の HTML タグを取り除いた平文を、title と結合して埋め込む', async () => {
+    const { stub, embed, addEntry } = setup();
+    addEntry(1, NOW, 'タイトル', '<p>Hello <b>world</b> &amp; <a href="https://example.com/x">link</a></p>');
+
+    await embed.run();
+
+    expect(stub.calls[0]?.texts).toEqual(['タイトル\nHello world & link']);
   });
 
   it('文字列は先頭 2,000 コードポイントで切る', async () => {
@@ -85,12 +94,12 @@ describe('EmbedFeedEntriesUseCase', () => {
 
     expect(await embed.run()).toEqual({
       ok: true,
-      val: { embedded: FEED_ENTRY_EMBEDDING_BATCH_SIZE * FEED_ENTRY_EMBEDDING_MAX_BATCHES, skipped: 0 },
+      val: { embedded: FEED_ENTRY_EMBEDDING_BATCH_SIZE * FEED_ENTRY_EMBEDDING_MAX_BATCHES, skipped: 0, remaining: 0 },
     });
 
     expect(stub.calls.map((call) => call.texts.length)).toEqual([100, 100, 100, 100, 100]);
     expect(pendingCount()).toBe(20);
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 20, skipped: 0 } });
+    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 20, skipped: 0, remaining: 0 } });
     expect(pendingCount()).toBe(0);
   });
 
@@ -121,7 +130,7 @@ describe('EmbedFeedEntriesUseCase', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     for (let n = 1; n <= 3; n += 1) addEntry(n);
 
-    expect(await buildEmbed(partial).run()).toEqual({ ok: true, val: { embedded: 2, skipped: 1 } });
+    expect(await buildEmbed(partial).run()).toEqual({ ok: true, val: { embedded: 2, skipped: 1, remaining: 0 } });
 
     expect(calls).toEqual([3, 1, 1, 1]);
     expect(pendingCount()).toBe(1);
@@ -140,7 +149,7 @@ describe('EmbedFeedEntriesUseCase', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     for (let n = 1; n <= 3; n += 1) addEntry(n);
 
-    expect(await buildEmbed(mixed).run()).toEqual({ ok: true, val: { embedded: 2, skipped: 1 } });
+    expect(await buildEmbed(mixed).run()).toEqual({ ok: true, val: { embedded: 2, skipped: 1, remaining: 0 } });
 
     expect(error).toHaveBeenCalledWith(
       'iori feed entries: the embedding was not stored.',
@@ -153,7 +162,7 @@ describe('EmbedFeedEntriesUseCase', () => {
     const { embed, addEntry, pendingCount } = setup({ textEmbedder: null });
     addEntry(1);
 
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0 } });
+    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0, remaining: 0 } });
     expect(pendingCount()).toBe(1);
   });
 
@@ -179,14 +188,45 @@ describe('EmbedFeedEntriesUseCase', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     for (let n = 1; n <= 150; n += 1) addEntry(n, NOW - n);
 
-    expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 100, skipped: 50 } });
+    expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 100, skipped: 50, remaining: 0 } });
     expect(pendingCount()).toBe(50);
+  });
+
+  it('途中の回で全件失敗したら、その回の件数を skipped に、まだ試していない件数を remaining に数える', async () => {
+    let call = 0;
+    const flaky: TextEmbedder = {
+      embed: async ({ texts }) =>
+        ++call === 1
+          ? Result.ok(texts.map(() => Array.from({ length: 1024 }, () => 1)))
+          : Result.err({ type: 'AiError', message: 'unavailable' }),
+    };
+    const { buildEmbed, addEntry, pendingCount } = setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (let n = 1; n <= 250; n += 1) addEntry(n, NOW - n);
+
+    expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 100, skipped: 100, remaining: 50 } });
+    expect(pendingCount()).toBe(150);
+  });
+
+  it('前の回の失敗を、後の回の失敗で上書きせずに skipped に足す', async () => {
+    let call = 0;
+    const flaky: TextEmbedder = {
+      embed: async ({ texts }) =>
+        ++call === 1
+          ? Result.ok(texts.map((_, i) => Array.from({ length: i === 0 ? 512 : 1024 }, () => 1)))
+          : Result.err({ type: 'AiError', message: 'unavailable' }),
+    };
+    const { buildEmbed, addEntry } = setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (let n = 1; n <= 250; n += 1) addEntry(n, NOW - n);
+
+    expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 99, skipped: 101, remaining: 50 } });
   });
 
   it('対象が無ければ embed を呼ばない', async () => {
     const { stub, embed } = setup();
 
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0 } });
+    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0, remaining: 0 } });
     expect(stub.calls).toEqual([]);
   });
 });
