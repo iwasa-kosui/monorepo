@@ -24,7 +24,7 @@ const setup = (status: string) => {
   ).run(created.articleId, author.actorId, author.userId, null, 'Before', status, createdAt, null, null);
   fixture.sqlite.prepare('INSERT INTO article_bodies(articleId,privateHtml,publicHtml,updatedAt) VALUES (?,?,?,?)')
     .run(created.articleId, '<p>old private</p>', '<p>old public</p>', createdAt);
-  const edit = (title: string | undefined) =>
+  const edit = (title: string | undefined, baseUpdatedAt: Instant = createdAt) =>
     createD1ArticleWithBodyEditedStore(fixture.db).store(
       title === undefined ? undefined : Article.changeArticleTitle(now)(created, title).val as never,
       ArticleBody.writeArticleBody(now)({
@@ -33,6 +33,7 @@ const setup = (status: string) => {
         publicHtml: '<p>new</p>',
         markdown: 'new',
       }),
+      baseUpdatedAt,
     );
   const title = () => (fixture.sqlite.prepare('SELECT title FROM articles').get() as { title: string }).title;
   const body = () =>
@@ -40,7 +41,9 @@ const setup = (status: string) => {
   const eventNames = () =>
     (fixture.sqlite.prepare('SELECT eventName FROM domain_events ORDER BY rowid').all() as Array<{ eventName: string }>)
       .map((row) => row.eventName);
-  return { edit, title, body, eventNames };
+  const overwriteBody = (updatedAt: number) =>
+    fixture.sqlite.prepare('UPDATE article_bodies SET publicHtml = ?, updatedAt = ?').run('<p>other</p>', updatedAt);
+  return { edit, title, body, eventNames, overwriteBody };
 };
 
 describe('createD1ArticleWithBodyEditedStore', () => {
@@ -83,5 +86,30 @@ describe('createD1ArticleWithBodyEditedStore', () => {
       updatedAt: createdAt,
     });
     expect(eventNames()).toEqual([]);
+  });
+
+  it.each(['draft', 'unpublished'])(
+    '%s でも、版が編集の開始時と違えば（間に別の保存があれば）何も変えず edited を false にする',
+    async (status) => {
+      const { edit, title, body, eventNames, overwriteBody } = setup(status);
+      overwriteBody(3_000);
+
+      const result = await edit('After');
+
+      expect(result).toEqual({ ok: true, val: { edited: false } });
+      expect(title()).toBe('Before');
+      expect(body()).toMatchObject({ publicHtml: '<p>other</p>', updatedAt: 3_000 });
+      expect(eventNames()).toEqual([]);
+    },
+  );
+
+  it('版が一致すれば、本文の updatedAt を書き込んだ版にする', async () => {
+    const { edit, body, overwriteBody } = setup('draft');
+    overwriteBody(3_000);
+
+    const result = await edit(undefined, Instant.orThrow(3_000));
+
+    expect(result).toEqual({ ok: true, val: { edited: true } });
+    expect(body()).toMatchObject({ publicHtml: '<p>new</p>', updatedAt: now });
   });
 });

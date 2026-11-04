@@ -482,6 +482,8 @@ export const setupReadApi = (
           }),
           requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
             .requestDigest,
+          deepDiveDigestItemUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
+            .deepDiveDigestItem,
           giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
             articleResolver: createD1ArticleResolver(db),
             digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),

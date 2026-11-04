@@ -47,6 +47,7 @@ const ArticleDetailPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editMarkdown, setEditMarkdown] = useState('');
+  const [editBaseUpdatedAt, setEditBaseUpdatedAt] = useState(0);
 
   const getArticleIdFromUrl = () => {
     const pathParts = window.location.pathname.split('/');
@@ -142,6 +143,7 @@ const ArticleDetailPage = () => {
       } else {
         setEditTitle(result.title);
         setEditMarkdown(result.markdown);
+        setEditBaseUpdatedAt(result.updatedAt);
         setIsEditing(true);
       }
     } catch (err) {
@@ -159,7 +161,7 @@ const ArticleDetailPage = () => {
       const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: editTitle, markdown: editMarkdown }),
+        body: JSON.stringify({ title: editTitle, markdown: editMarkdown, baseUpdatedAt: editBaseUpdatedAt }),
       });
       const result = await res.json();
 

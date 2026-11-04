@@ -515,6 +515,36 @@ export const digestItemsTable = sqliteTable('digest_items', {
   uniqueIndex('digest_items_digest_id_rank_unique').on(table.digestId, table.rank),
 ]);
 
+export const digestDeepDivesTable = sqliteTable('digest_deep_dives', {
+  deepDiveId: text('deepDiveId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  digestItemId: text('digestItemId').notNull(),
+  articleId: text('articleId').notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('digest_deep_dives_digest_item_id_unique').on(table.digestItemId),
+]);
+
+export const digestDeepDiveTurnsTable = sqliteTable('digest_deep_dive_turns', {
+  turnId: text('turnId').primaryKey(),
+  deepDiveId: text('deepDiveId').notNull().references(() => digestDeepDivesTable.deepDiveId),
+  turnNumber: integer('turnNumber').notNull(),
+  instruction: text('instruction').notNull(),
+  resultMarkdown: text('resultMarkdown').notNull(),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('digest_deep_dive_turns_deep_dive_id_turn_number_unique').on(table.deepDiveId, table.turnNumber),
+]);
+
+export const digestDeepDiveUsagesTable = sqliteTable('digest_deep_dive_usages', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  day: text('day').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.day] }),
+]);
+
 export const digestTrendsTable = sqliteTable('digest_trends', {
   digestId: text('digestId').notNull().references(() => digestsTable.digestId),
   kind: text('kind').notNull(),
@@ -593,6 +623,9 @@ export const schema = {
   digestTopicsTable,
   digestRequestUsagesTable,
   digestItemsTable,
+  digestDeepDivesTable,
+  digestDeepDiveTurnsTable,
+  digestDeepDiveUsagesTable,
   digestTrendsTable,
   interestSourcesTable,
 } as const;

@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, sql } from 'drizzle-orm';
 
 import type { ArticleWithBodyEditedStore } from '../../../domain/article/article.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -9,13 +9,17 @@ import { articleBodiesTable, articlesTable, domainEventsTable } from '../schema.
 const editableStatuses = ['draft', 'unpublished'];
 
 export const createD1ArticleWithBodyEditedStore = (db: IoriD1Db): ArticleWithBodyEditedStore => ({
-  store: async (titleChanged, bodyWritten) => {
+  store: async (titleChanged, bodyWritten, baseUpdatedAt) => {
     const { articleId, privateHtml, publicHtml, markdown, updatedAt } = bodyWritten.aggregateState;
     const articleIsEditable = and(
       eq(articlesTable.articleId, articleId),
       inArray(articlesTable.status, editableStatuses),
     );
-    const insertEventIfEditable = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
+    const bodyIsWritten = and(
+      eq(articleBodiesTable.articleId, articleId),
+      eq(articleBodiesTable.updatedAt, new Date(updatedAt)),
+    );
+    const insertEventIfWritten = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
       const row = toD1DomainEventRow(event);
       return db.insert(domainEventsTable).select(
         db.select({
@@ -26,28 +30,25 @@ export const createD1ArticleWithBodyEditedStore = (db: IoriD1Db): ArticleWithBod
           eventName: sql<string>`${row.eventName}`.as('eventName'),
           eventPayload: sql<string>`${row.eventPayload}`.as('eventPayload'),
           occurredAt: sql<Date>`${row.occurredAt.getTime()}`.as('occurredAt'),
-        }).from(articlesTable).where(articleIsEditable),
+        }).from(articleBodiesTable).where(bodyIsWritten),
       );
     };
     await db.batch([
-      db.insert(articleBodiesTable).select(
-        db.select({
-          articleId: sql<string>`${articleId}`.as('articleId'),
-          privateHtml: sql<string>`${privateHtml}`.as('privateHtml'),
-          publicHtml: sql<string>`${publicHtml}`.as('publicHtml'),
-          markdown: sql<string | null>`${markdown}`.as('markdown'),
-          updatedAt: sql<Date>`${updatedAt}`.as('updatedAt'),
-        }).from(articlesTable).where(articleIsEditable),
-      ).onConflictDoUpdate({
-        target: articleBodiesTable.articleId,
-        set: { privateHtml, publicHtml, markdown, updatedAt: new Date(updatedAt) },
-      }),
-      insertEventIfEditable(bodyWritten),
+      db.update(articleBodiesTable)
+        .set({ privateHtml, publicHtml, markdown, updatedAt: new Date(updatedAt) })
+        .where(and(
+          eq(articleBodiesTable.articleId, articleId),
+          eq(articleBodiesTable.updatedAt, new Date(baseUpdatedAt)),
+          exists(db.select({ one: sql`1` }).from(articlesTable).where(articleIsEditable)),
+        )),
+      insertEventIfWritten(bodyWritten),
       ...(titleChanged === undefined
         ? []
         : [
-          db.update(articlesTable).set({ title: titleChanged.aggregateState.title }).where(articleIsEditable),
-          insertEventIfEditable(titleChanged),
+          db.update(articlesTable).set({ title: titleChanged.aggregateState.title }).where(
+            and(articleIsEditable, exists(db.select({ one: sql`1` }).from(articleBodiesTable).where(bodyIsWritten))),
+          ),
+          insertEventIfWritten(titleChanged),
         ]),
     ]);
     const [written] = await db.select({ eventId: domainEventsTable.eventId }).from(domainEventsTable).where(

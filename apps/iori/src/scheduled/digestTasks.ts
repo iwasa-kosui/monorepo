@@ -11,28 +11,40 @@ import { createD1DigestHeadersResolverByDigestDateBefore } from '../adaptor/d1/d
 import { createD1DigestHeadersResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestHeadersResolverByUserIdAndDigestDate.ts';
 import { createD1DigestItemUrlsResolverByUserId } from '../adaptor/d1/digest/digestItemUrlsResolverByUserId.ts';
 import { createD1DigestPushSentStore } from '../adaptor/d1/digest/digestPushSentStore.ts';
+import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/digestResolverByDigestItemId.ts';
 import { createD1LatestDigestHeaderResolverByUserId } from '../adaptor/d1/digest/latestDigestHeaderResolverByUserId.ts';
+import { createD1DigestDeepDiveBodyWrittenStore } from '../adaptor/d1/digestDeepDive/digestDeepDiveBodyWrittenStore.ts';
+import { createD1DigestDeepDiveResolverByDigestItemId } from '../adaptor/d1/digestDeepDive/digestDeepDiveResolverByDigestItemId.ts';
+import { createD1DigestDeepDiveUsageRecorder } from '../adaptor/d1/digestDeepDive/digestDeepDiveUsageRecorder.ts';
 import { createD1DigestRequestUsageRecorder } from '../adaptor/d1/digestRequest/digestRequestUsageRecorder.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
 import { createD1DigestTopicEmbeddedStore } from '../adaptor/d1/digestTopic/digestTopicEmbeddedStore.ts';
 import { createD1DigestTopicsResolverByUserId } from '../adaptor/d1/digestTopic/digestTopicsResolverByUserId.ts';
+import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
+import { createD1FeedEntryResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
+import { createD1InterestSourceResolverByUserIdAndInterestSourceId } from '../adaptor/d1/interestSource/interestSourceResolverByUserIdAndInterestSourceId.ts';
+import { createD1LikedPostContentsResolverByLikeIds } from '../adaptor/d1/interestSource/likedPostContentsResolverByLikeIds.ts';
+import { createD1PostContentsResolverByPostIds } from '../adaptor/d1/interestSource/postContentsResolverByPostIds.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1InterestVectorsResolverByUserId } from '../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
 import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
+import { htmlToMarkdown } from '../adaptor/text/htmlToMarkdown.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { Username } from '../domain/user/username.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateDailyDigestUseCase } from '../useCase/createDailyDigest.ts';
+import { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts';
 import { EnsureDefaultDigestTopicsUseCase } from '../useCase/ensureDefaultDigestTopics.ts';
 import { ExpireDigestsUseCase } from '../useCase/expireDigests.ts';
 import { RequestDigestUseCase } from '../useCase/requestDigest.ts';
@@ -90,6 +102,26 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
   return {
     userResolverByUsername: createD1UserResolverByUsername(db),
     createDailyDigest,
+    deepDiveDigestItem: DeepDiveDigestItemUseCase.create({
+      digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
+      articleResolver,
+      articleBodyResolver,
+      digestDeepDiveResolverByDigestItemId: createD1DigestDeepDiveResolverByDigestItemId(db),
+      digestDeepDiveUsageRecorder: createD1DigestDeepDiveUsageRecorder(db),
+      digestDeepDiveBodyWrittenStore: createD1DigestDeepDiveBodyWrittenStore(db),
+      feedEntryResolverByFeedEntryId: createD1FeedEntryResolverByFeedEntryId(db),
+      feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
+      recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+      interestSourceResolverByUserIdAndInterestSourceId: createD1InterestSourceResolverByUserIdAndInterestSourceId(db),
+      postContentsResolverByPostIds: createD1PostContentsResolverByPostIds(db),
+      likedPostContentsResolverByLikeIds: createD1LikedPostContentsResolverByLikeIds(db),
+      safeFetcher: createSafeFetcher(),
+      textGenerator: workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi),
+      htmlToMarkdown,
+      renderMarkdown: renderMarkdownToUnsanitizedHtml,
+      now,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    }),
     requestDigest: RequestDigestUseCase.create({
       digestHeadersResolverByUserIdAndDigestDate,
       articleResolver,

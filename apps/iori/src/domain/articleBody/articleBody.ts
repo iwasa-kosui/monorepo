@@ -52,10 +52,28 @@ const writeArticleBody = (now: Instant) => (payload: Omit<ArticleBody, 'updatedA
 const deleteArticleBody = (now: Instant) => (articleId: ArticleId): ArticleBodyDeleted =>
   ArticleBodyEvent.create(articleId, undefined, 'articleBody.deleted', { articleId, deletedAt: now }, now);
 
+const nextUpdatedAt = (now: Instant, baseUpdatedAt: Instant): Instant =>
+  Instant.orThrow(Math.max(now, baseUpdatedAt + 1));
+
+export type ArticleBodyConflictError = Readonly<{
+  type: 'ArticleBodyConflictError';
+  message: string;
+  detail: { articleId: ArticleId };
+}>;
+
+export const ArticleBodyConflictError = {
+  create: (articleId: ArticleId): ArticleBodyConflictError => ({
+    type: 'ArticleBodyConflictError',
+    message: '本文が更新されています。読み込み直してください',
+    detail: { articleId },
+  }),
+} as const;
+
 export const ArticleBody = {
   ...schema,
   writeArticleBody,
   deleteArticleBody,
+  nextUpdatedAt,
 } as const;
 
 export type ArticleBodyWrittenStore = Agg.Store<ArticleBodyWritten>;
