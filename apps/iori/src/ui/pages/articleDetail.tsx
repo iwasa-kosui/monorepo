@@ -22,7 +22,7 @@ type ArticleData = {
   article: Article;
   thread: PostWithAuthor[];
   body?: { html: string };
-  digest?: DigestPublishNotice & { items: DigestFeedbackItem[] };
+  digest?: Omit<DigestPublishNotice, 'items'> & { items: DigestFeedbackItem[] };
 };
 
 const feedbackButtons: ReadonlyArray<Readonly<{ value: DigestFeedbackValue; label: string; pressedClass: string }>> = [

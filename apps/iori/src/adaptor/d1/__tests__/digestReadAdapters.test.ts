@@ -8,9 +8,11 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../digest/digestHeadersResolverByArticleIds.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../digest/digestItemFeedbackGivenStore.ts';
+import { createD1DigestResolverByArticleId } from '../digest/digestResolverByArticleId.ts';
 import { createD1DigestResolverByDigestItemId } from '../digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../digest/digestResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../digestSubscription/digestSubscriptionSavedStore.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -21,16 +23,20 @@ const setup = () => {
   const seed = createMastodonSeed(fixture);
   const me = seed.addLocalActor('me');
   const other = seed.addLocalActor('other');
-  const addDigest = (owner: { userId: string; actorId: string }, digestDate: string) => {
+  const addDigest = (
+    owner: { userId: string; actorId: string },
+    digestDate: string,
+    options: { topicKey?: string; itemCount?: number } = {},
+  ) => {
     const digestId = crypto.randomUUID();
     const articleId = crypto.randomUUID();
     fixture.sqlite.prepare(
       'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
     ).run(articleId, owner.actorId, owner.userId, null, 'title', 'draft', 1_000, null, null);
     fixture.sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
-    ).run(digestId, owner.userId, digestDate, articleId, 2_000, null);
-    for (const rank of [3, 1, 2]) {
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
+    ).run(digestId, owner.userId, digestDate, articleId, 2_000, null, options.topicKey ?? 'summary');
+    for (const rank of [3, 1, 2].filter((candidate) => candidate <= (options.itemCount ?? 3))) {
       fixture.sqlite.prepare(
         'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
       ).run(
@@ -52,7 +58,11 @@ const setup = () => {
     }
     return { digestId, articleId: ArticleId.orThrow(articleId) };
   };
-  return { fixture, db: fixture.db, me, other, addDigest };
+  const addTopic = (owner: { userId: string }, topicKey: string, name: string, sortOrder: number) =>
+    fixture.sqlite.prepare(
+      'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(owner.userId, topicKey, name, `${name}の説明`, null, null, sortOrder, 1, 1, 1);
+  return { fixture, db: fixture.db, me, other, addDigest, addTopic };
 };
 
 const valueOf = <T>(result: { ok: boolean; val?: T }): T => {
@@ -111,6 +121,102 @@ describe('digest の読み取り resolver', () => {
     const { db, me } = setup();
 
     expect(valueOf(await createD1DigestResolverByUserId(db).resolve(me.userId as UserId))).toBeUndefined();
+  });
+
+  it('ユーザーと日付で引くと、同じ日のトピックの digest ではなくまとめを返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-05', { topicKey: 'genai' });
+    const summary = addDigest(me, '2026-11-05');
+    addDigest(me, '2026-11-05', { topicKey: 'security' });
+
+    const digest = valueOf(
+      await createD1DigestResolverByUserIdAndDigestDate(db).resolve({
+        userId: me.userId as UserId,
+        digestDate: '2026-11-05',
+      }),
+    );
+
+    expect(digest).toMatchObject({ digestId: summary.digestId, topicKey: 'summary' });
+  });
+
+  it('その日にトピックの digest しかなければ、ユーザーと日付で引いても undefined を返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-05', { topicKey: 'genai' });
+
+    const digest = await createD1DigestResolverByUserIdAndDigestDate(db).resolve({
+      userId: me.userId as UserId,
+      digestDate: '2026-11-05',
+    });
+
+    expect(valueOf(digest)).toBeUndefined();
+  });
+
+  it('ユーザーで引くと、より新しい日のトピックの digest ではなく、まとめのある最新の日の digest を返す', async () => {
+    const { db, me, addDigest } = setup();
+    const summary = addDigest(me, '2026-11-04');
+    addDigest(me, '2026-11-05', { topicKey: 'genai' });
+
+    const digest = valueOf(await createD1DigestResolverByUserId(db).resolve(me.userId as UserId));
+
+    expect(digest).toMatchObject({ digestId: summary.digestId, topicKey: 'summary' });
+  });
+
+  it('article の ID で引くと、まとめでもトピックでも、その article に結び付いた digest を items と trends 付きで返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-05');
+    const topic = addDigest(me, '2026-11-05', { topicKey: 'genai' });
+
+    const digest = valueOf(await createD1DigestResolverByArticleId(db).resolve(topic.articleId));
+
+    expect(digest).toMatchObject({ digestId: topic.digestId, topicKey: 'genai' });
+    expect(digest?.items.map((item) => item.rank)).toEqual([1, 2, 3]);
+    expect(digest?.trends).toHaveLength(3);
+  });
+
+  it('digest に結び付かない article の ID では undefined を返す', async () => {
+    const { db } = setup();
+
+    expect(valueOf(await createD1DigestResolverByArticleId(db).resolve(ArticleId.generate()))).toBeUndefined();
+  });
+
+  it('その日のトピックの一覧は、まとめを除き、項目数の多い順、同数なら sortOrder の順にして返す', async () => {
+    const { db, me, other, addDigest, addTopic } = setup();
+    addTopic(me, 'genai', '生成 AI', 0);
+    addTopic(me, 'security', 'セキュリティ', 1);
+    addTopic(me, 'design', '設計', 2);
+    addDigest(me, '2026-11-05');
+    const genai = addDigest(me, '2026-11-05', { topicKey: 'genai', itemCount: 2 });
+    const security = addDigest(me, '2026-11-05', { topicKey: 'security', itemCount: 3 });
+    const design = addDigest(me, '2026-11-05', { topicKey: 'design', itemCount: 2 });
+    addDigest(me, '2026-11-04', { topicKey: 'genai' });
+    addDigest(other, '2026-11-05', { topicKey: 'genai' });
+
+    const entries = valueOf(
+      await createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db).resolve({
+        userId: me.userId as UserId,
+        digestDate: '2026-11-05',
+      }),
+    );
+
+    expect(entries).toEqual([
+      { topicKey: 'security', name: 'セキュリティ', articleId: security.articleId, itemCount: 3 },
+      { topicKey: 'genai', name: '生成 AI', articleId: genai.articleId, itemCount: 2 },
+      { topicKey: 'design', name: '設計', articleId: design.articleId, itemCount: 2 },
+    ]);
+  });
+
+  it('その日にトピックの digest がなければ、トピックの一覧は空の配列を返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-05');
+
+    const entries = valueOf(
+      await createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db).resolve({
+        userId: me.userId as UserId,
+        digestDate: '2026-11-05',
+      }),
+    );
+
+    expect(entries).toEqual([]);
   });
 
   it('article の ID の集まりで引くと、該当する digest のヘッダーだけを返す', async () => {

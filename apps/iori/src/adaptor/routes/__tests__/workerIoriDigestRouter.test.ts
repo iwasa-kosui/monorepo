@@ -12,7 +12,7 @@ const seedDigest = (
   t: ReturnType<typeof setupReadApi>,
   owner: { userId: string; actorId: string },
   digestDate: string,
-  options: { pushSentAt?: number | null } = {},
+  options: { pushSentAt?: number | null; topicKey?: string; itemCount?: number } = {},
 ) => {
   const digestId = crypto.randomUUID();
   const articleId = crypto.randomUUID();
@@ -20,14 +20,52 @@ const seedDigest = (
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(articleId, owner.actorId, owner.userId, null, `ダイジェスト ${digestDate}`, 'draft', 1_000, null, null);
   t.sqlite.prepare(
-    'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
+    'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
   )
-    .run(digestId, owner.userId, digestDate, articleId, Date.UTC(2026, 10, 4, 21, 30), options.pushSentAt ?? null);
+    .run(
+      digestId,
+      owner.userId,
+      digestDate,
+      articleId,
+      Date.UTC(2026, 10, 4, 21, 30),
+      options.pushSentAt ?? null,
+      options.topicKey ?? 'summary',
+    );
   const insertItem = t.sqlite.prepare(
     'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
   );
-  insertItem.run(crypto.randomUUID(), digestId, 'entry-2', 'https://example.com/b', 'B', 2, null, null, null, null);
-  insertItem.run(crypto.randomUUID(), digestId, 'entry-1', 'https://example.com/a', 'A', 1, 0.5, '要約 A', null, null);
+  const itemCount = options.itemCount ?? 2;
+  if (itemCount >= 2) {
+    insertItem.run(crypto.randomUUID(), digestId, 'entry-2', 'https://example.com/b', 'B', 2, null, null, null, null);
+  }
+  if (itemCount >= 1) {
+    insertItem.run(
+      crypto.randomUUID(),
+      digestId,
+      'entry-1',
+      'https://example.com/a',
+      'A',
+      1,
+      0.5,
+      '要約 A',
+      null,
+      null,
+    );
+  }
+  for (let rank = 3; rank <= itemCount; rank += 1) {
+    insertItem.run(
+      crypto.randomUUID(),
+      digestId,
+      `entry-${rank}`,
+      `https://example.com/${rank}`,
+      `Item ${rank}`,
+      rank,
+      null,
+      null,
+      null,
+      null,
+    );
+  }
   const insertTrend = t.sqlite.prepare(
     'INSERT INTO digest_trends(digestId,kind,rank,url,title,count) VALUES (?,?,?,?,?,?)',
   );
@@ -37,17 +75,30 @@ const seedDigest = (
   return { digestId, articleId };
 };
 
+const seedTopic = (
+  t: ReturnType<typeof setupReadApi>,
+  owner: { userId: string },
+  topicKey: string,
+  name: string,
+  sortOrder: number,
+) =>
+  t.sqlite.prepare(
+    'INSERT OR IGNORE INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+  ).run(owner.userId, topicKey, name, `${name}の説明`, null, null, sortOrder, 1, 1, 1);
+
 const expectedDigest = (digestDate: string, ids: { digestId: string; articleId: string }) => ({
   digest: {
     digestId: ids.digestId,
     digestDate,
     articleId: ids.articleId,
+    topicKey: 'summary',
     createdAt: '2026-11-04T21:30:00.000Z',
     pushSentAt: null,
     items: [
       { rank: 1, url: 'https://example.com/a', title: 'A', summary: '要約 A', feedEntryId: 'entry-1' },
       { rank: 2, url: 'https://example.com/b', title: 'B', summary: null, feedEntryId: 'entry-2' },
     ],
+    topics: [],
     trends: {
       timelineLinks: [{ rank: 1, url: 'https://example.com/t1', title: 'T1', count: 3 }],
       hatena: [
@@ -174,6 +225,100 @@ describe('iori のダイジェスト API', () => {
       const response = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('トピックの digest', () => {
+    const seedDay = (t: ReturnType<typeof setupReadApi>, me: { userId: string; actorId: string }, date: string) => {
+      seedTopic(t, me, 'genai', '生成 AI とエージェント', 0);
+      seedTopic(t, me, 'security', 'セキュリティ', 1);
+      seedTopic(t, me, 'design', '設計と開発プロセス', 2);
+      const summary = seedDigest(t, me, date, { itemCount: 0 });
+      const genai = seedDigest(t, me, date, { topicKey: 'genai', itemCount: 3 });
+      const security = seedDigest(t, me, date, { topicKey: 'security', itemCount: 4 });
+      const design = seedDigest(t, me, date, { topicKey: 'design', itemCount: 3 });
+      return { summary, genai, security, design };
+    };
+
+    it('/:date はまとめの digest を返し、トピックの記事を項目数の多い順、同数なら sortOrder の順で付ける', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      const ids = seedDay(t, me, '2026-11-05');
+
+      const response = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        digest: {
+          digestId: ids.summary.digestId,
+          articleId: ids.summary.articleId,
+          topicKey: 'summary',
+          items: [],
+          topics: [
+            { topicKey: 'security', name: 'セキュリティ', articleId: ids.security.articleId, itemCount: 4 },
+            { topicKey: 'genai', name: '生成 AI とエージェント', articleId: ids.genai.articleId, itemCount: 3 },
+            { topicKey: 'design', name: '設計と開発プロセス', articleId: ids.design.articleId, itemCount: 3 },
+          ],
+        },
+      });
+    });
+
+    it('/latest もまとめの digest を返し、トピックの記事の一覧を付ける', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedDay(t, me, '2026-11-04');
+      const ids = seedDay(t, me, '2026-11-05');
+
+      const response = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
+
+      const body = await response.json() as {
+        digest: { articleId: string; topicKey: string; topics: Array<{ topicKey: string; articleId: string }> };
+      };
+      expect(body.digest).toMatchObject({ articleId: ids.summary.articleId, topicKey: 'summary' });
+      expect(body.digest.topics.map((topic) => topic.articleId)).toEqual([
+        ids.security.articleId,
+        ids.genai.articleId,
+        ids.design.articleId,
+      ]);
+    });
+
+    it('トピックの digest しかない日は、まとめがないので 404 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedTopic(t, me, 'genai', '生成 AI とエージェント', 0);
+      seedDigest(t, me, '2026-11-05', { topicKey: 'genai', itemCount: 3 });
+
+      const latest = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
+      const byDate = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
+
+      expect(latest.status).toBe(404);
+      expect(byDate.status).toBe(404);
+    });
+
+    it('トピックの定義が消えていても、topicKey を name にして一覧に残す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedDigest(t, me, '2026-11-05', { itemCount: 0 });
+      const orphan = seedDigest(t, me, '2026-11-05', { topicKey: 'retired', itemCount: 3 });
+
+      const response = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
+
+      expect(await response.json()).toMatchObject({
+        digest: { topics: [{ topicKey: 'retired', name: 'retired', articleId: orphan.articleId, itemCount: 3 }] },
+      });
+    });
+
+    it('他の日のトピックの記事を一覧に混ぜない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedDay(t, me, '2026-11-04');
+      const ids = seedDay(t, me, '2026-11-05');
+
+      const response = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
+
+      const body = await response.json() as { digest: { topics: Array<{ articleId: string }> } };
+      expect(body.digest.topics).toHaveLength(3);
+      expect(body.digest.topics.map((topic) => topic.articleId)).not.toContain(ids.summary.articleId);
     });
   });
 
@@ -412,6 +557,21 @@ describe('iori のダイジェスト API', () => {
       return { now, today: Instant.toJstDate(now) };
     };
     const post = (headers: Record<string, string>) => ({ method: 'POST', headers });
+    const seedEmbeddedTopic = (t: ReturnType<typeof setupReadApi>, owner: { userId: string }) =>
+      t.sqlite.prepare(
+        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        owner.userId,
+        'genai',
+        '生成 AI',
+        '生成 AI の説明',
+        new Uint8Array(EMBEDDING_DIMENSIONS * 4),
+        1,
+        0,
+        1,
+        1,
+        1,
+      );
     const insertUsage = (
       t: ReturnType<typeof setupReadApi>,
       userId: string,
@@ -443,6 +603,7 @@ describe('iori のダイジェスト API', () => {
     it('digest を作って 201 で返し、trigger を requested にして回数を 1 つ数える', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       const { now, today } = freezeNow();
 
       const response = await t.request('/api/iori/v1/digests', post(me.bearer));
@@ -472,9 +633,27 @@ describe('iori のダイジェスト API', () => {
       ]);
     });
 
+    it('埋め込みのある有効なトピックが無ければ 503 にして、何も作らず、回数は予約のまま残す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { today } = freezeNow();
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Digest topics unavailable' });
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digests').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM articles').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT day, count FROM digest_request_usages').all()).toEqual([{
+        day: today,
+        count: 1,
+      }]);
+    });
+
     it('その日の draft の digest があれば置き換えて、replaced を true にする', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       const { today } = freezeNow();
       const old = seedDigest(t, me, today);
 
@@ -493,6 +672,7 @@ describe('iori のダイジェスト API', () => {
     it('実行環境の waitUntil に、結果を返すのと同じ生成の Promise を渡す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
+      seedEmbeddedTopic(t, me);
       freezeNow();
       const waitUntil = vi.fn();
 
@@ -573,6 +753,7 @@ describe('iori のダイジェスト API', () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
       const other = t.seed.addLocalActor('other');
+      seedEmbeddedTopic(t, me);
       const { now, today } = freezeNow();
       insertUsage(t, other.userId, today, 3, now);
 

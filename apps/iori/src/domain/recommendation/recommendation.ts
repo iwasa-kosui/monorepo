@@ -76,6 +76,9 @@ const dot = (a: Float32Array, b: Float32Array): number => {
   return sum;
 };
 
+const cosineSimilarity = (a: Float32Array, b: Float32Array): number =>
+  a.length === b.length ? dot(a, b) * inverseNorm(a) * inverseNorm(b) : 0;
+
 const decay = (material: InterestVector, now: Instant): number =>
   2 ** (-Math.max(0, now - material.occurredAt) / InterestSource.halfLivesMs[material.kind]);
 
@@ -203,4 +206,5 @@ const scoreArticles = ({
 export const Recommendation = {
   scoreArticles,
   isNegative,
+  cosineSimilarity,
 } as const;

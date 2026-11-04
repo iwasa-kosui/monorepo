@@ -13,4 +13,5 @@ export const reconstructDigestHeader = (row: typeof digestsTable.$inferSelect): 
   createdAt: Instant.orThrow(row.createdAt.getTime()),
   pushSentAt: row.pushSentAt === null ? null : Instant.orThrow(row.pushSentAt.getTime()),
   trigger: DigestTrigger.zodType.parse(row.trigger),
+  topicKey: row.topicKey,
 });

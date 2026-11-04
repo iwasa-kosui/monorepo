@@ -25,12 +25,13 @@ const recordingDb = () => {
 
 const now = Instant.orThrow(Date.UTC(2026, 10, 4, 21, 30));
 
-const createDigest = () => {
+const createDigest = (topicKey = 'summary') => {
   const created = Digest.create({
     userId: UserId.generate(),
     digestDate: '2026-11-05',
     articleId: ArticleId.generate(),
     trigger: 'scheduled',
+    topicKey,
     items: [
       {
         feedEntryId: 'e1',
@@ -77,6 +78,21 @@ describe('digest stores', () => {
     ]);
     expect(batches[0]![0]).toMatchObject({ values: { digestDate: '2026-11-05', pushSentAt: null } });
     expect(batches[0]![4]).toMatchObject({ values: { eventName: 'digest.created' } });
+  });
+
+  it('作成ストアは複数の digest の書き込みを、topicKey を付けて1回の batch にまとめる', async () => {
+    const { db, batches } = recordingDb();
+
+    await createD1DigestCreatedStore(db).store(createDigest('genai'), createDigest('summary'));
+
+    expect(batches).toHaveLength(1);
+    const statements = batches[0] as Array<{ table: unknown; values: Record<string, unknown> }>;
+    expect(statements).toHaveLength(10);
+    expect(
+      statements.filter((statement) => statement.table === digestsTable).map((statement) => statement.values.topicKey),
+    )
+      .toEqual(['genai', 'summary']);
+    expect(statements.filter((statement) => statement.table === domainEventsTable)).toHaveLength(2);
   });
 
   it('push 記録ストアは pushSentAt の更新と domain event を1回の batch で書く', async () => {
