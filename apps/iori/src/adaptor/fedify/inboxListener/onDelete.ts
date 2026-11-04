@@ -77,6 +77,16 @@ async (
   const objectUri = objectId.href;
   logger.info(`Received Delete activity for: ${objectUri}`);
 
+  const senderId = del.actorId;
+  if (!senderId || senderId.origin !== objectId.origin) {
+    logger.warn(
+      `Ignored Delete activity whose sender does not match the object origin: sender=${
+        senderId?.href ?? 'none'
+      } object=${objectUri}`,
+    );
+    return;
+  }
+
   // Find the remote post
   const remotePostResult = await deps.remotePostResolverByUri.resolve({ uri: objectUri });
   const remotePost = remotePostResult.ok ? remotePostResult.val : undefined;

@@ -127,7 +127,10 @@ describe('createOnDelete', () => {
       let finished = false;
       const processing = createOnDelete(deps)(
         {} as never,
-        { objectId: new URL('https://remote.example/posts/1') } as never,
+        {
+          actorId: new URL('https://remote.example/users/alice'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
       );
       const observed = processing.then(() => {
         finished = true;
@@ -160,4 +163,85 @@ describe('createOnDelete', () => {
       expect(calls.at(-1)).toBe('post');
     },
   );
+
+  describe('sender check', () => {
+    const buildDeps = () => {
+      const postId = PostId.generate();
+      const actorId = ActorId.generate();
+      const empty = { resolve: async () => RA.ok([]) };
+      const postDeletedStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const noopStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const remotePostResolverByUri = {
+        resolve: vi.fn(async () =>
+          RA.ok({
+            type: 'remote' as const,
+            postId,
+            actorId,
+            content: 'remote post',
+            createdAt: Date.now() as never,
+            uri: 'https://remote.example/posts/1',
+            inReplyToUri: null,
+            visibility: null,
+          })
+        ),
+      };
+      const deps = {
+        remotePostResolverByUri,
+        timelineItemsResolverByPostId: empty,
+        likeNotificationsResolverByPostId: empty,
+        emojiReactNotificationsResolverByPostId: empty,
+        replyNotificationsResolverByReplyPostId: empty,
+        replyNotificationsResolverByOriginalPostId: empty,
+        repostsResolverByPostId: empty,
+        likesResolverByPostId: empty,
+        emojiReactsResolverByPostId: empty,
+        federatedTimelineItemsResolverByPostId: empty,
+        timelineItemDeletedStore: noopStore,
+        likeNotificationDeletedStore: noopStore,
+        emojiReactNotificationDeletedStore: noopStore,
+        replyNotificationDeletedStore: noopStore,
+        repostDeletedStore: noopStore,
+        localLikeDeletedStore: noopStore,
+        remoteLikeDeletedStore: noopStore,
+        emojiReactDeletedStore: noopStore,
+        federatedTimelineItemDeletedStore: noopStore,
+        postDeletedStore,
+      } satisfies OnDeleteDeps;
+      return { deps, postDeletedStore, remotePostResolverByUri };
+    };
+
+    it('deletes the post when the sender is on the same origin as the object', async () => {
+      const { deps, postDeletedStore } = buildDeps();
+      await createOnDelete(deps)(
+        {} as never,
+        {
+          actorId: new URL('https://remote.example/users/alice'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
+      );
+      expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not delete the post when the sender is on a different origin', async () => {
+      const { deps, postDeletedStore, remotePostResolverByUri } = buildDeps();
+      await createOnDelete(deps)(
+        {} as never,
+        {
+          actorId: new URL('https://evil.example/users/mallory'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
+      );
+      expect(remotePostResolverByUri.resolve).not.toHaveBeenCalled();
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not delete the post when the sender is missing', async () => {
+      const { deps, postDeletedStore } = buildDeps();
+      await createOnDelete(deps)(
+        {} as never,
+        { actorId: null, objectId: new URL('https://remote.example/posts/1') } as never,
+      );
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+  });
 });
