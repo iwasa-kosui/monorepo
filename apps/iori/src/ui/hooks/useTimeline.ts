@@ -11,6 +11,7 @@ import {
 import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
 import { appendUniqueById } from './appendUnique.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
+import { canStartLoadMore } from './loadMoreGuard.ts';
 import { stateAfterFetchFailure } from './timelineFailure.ts';
 
 const ACCOUNT_LIST_LIMIT = 80;
@@ -50,6 +51,7 @@ export const useTimeline = (): UseTimelineReturn => {
   const [state, setState] = useState<TimelineState>({ status: 'loading' });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isLoadingMoreRef = useRef(false);
+  const isReloadingRef = useRef(false);
   const generationRef = useRef(0);
 
   const loadAccountLists = useCallback(async (accountId: string, generation: number) => {
@@ -75,10 +77,12 @@ export const useTimeline = (): UseTimelineReturn => {
     async (isManualRefresh: boolean) => {
       const generation = startGeneration(generationRef);
       isLoadingMoreRef.current = false;
+      isReloadingRef.current = true;
       if (isManualRefresh) setIsRefreshing(true);
       try {
         const [page, me] = await Promise.all([fetchHomeTimeline(), fetchVerifyCredentials()]);
         if (isStaleGeneration(generationRef, generation)) return;
+        isReloadingRef.current = false;
         setState((prev) => ({
           status: 'success',
           data: {
@@ -93,6 +97,7 @@ export const useTimeline = (): UseTimelineReturn => {
         await loadAccountLists(me.id, generation);
       } catch (error) {
         if (isStaleGeneration(generationRef, generation)) return;
+        isReloadingRef.current = false;
         setIsRefreshing(false);
         if (!isManualRefresh) {
           setState((prev) => stateAfterFetchFailure(prev, false, errorMessage(error)));
@@ -111,7 +116,7 @@ export const useTimeline = (): UseTimelineReturn => {
   const refresh = useCallback(() => loadFirstPage(true), [loadFirstPage]);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (isLoadingMoreRef.current) return;
+    if (!canStartLoadMore(isLoadingMoreRef.current === true, isReloadingRef.current === true, maxId.length > 0)) return;
     isLoadingMoreRef.current = true;
     const generation = currentGeneration(generationRef);
     try {
