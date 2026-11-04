@@ -18,6 +18,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
+import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
@@ -32,6 +33,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   digestSubscriptionResolverByUserId: DigestSubscriptionResolverByUserId;
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
+  requestDigestUseCase: RequestDigestUseCase;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -54,6 +56,13 @@ export type IoriDigestResponse = Readonly<{
 }>;
 
 export type IoriDigestSubscriptionResponse = Readonly<{ subscription: Readonly<{ enabled: boolean }> }>;
+
+export type IoriDigestRequestResponse = Readonly<{
+  digestId: string;
+  articleId: string;
+  digestDate: string;
+  replaced: boolean;
+}>;
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
@@ -89,6 +98,16 @@ const toSubscriptionBody = (subscription: Pick<DigestSubscription, 'enabled'> | 
     subscription: { enabled: subscription?.enabled ?? true },
   }) satisfies IoriDigestSubscriptionResponse;
 
+const keepAlive = (c: Context<MastodonAuthEnv>, promise: Promise<unknown>): void => {
+  let executionCtx: Context<MastodonAuthEnv>['executionCtx'] | undefined;
+  try {
+    executionCtx = c.executionCtx;
+  } catch {
+    executionCtx = undefined;
+  }
+  executionCtx?.waitUntil(promise);
+};
+
 const readEnabled = (body: RequestBody): boolean | undefined => {
   const enabled = body.enabled;
   if (typeof enabled === 'boolean') return enabled;
@@ -107,6 +126,7 @@ export const createWorkerIoriDigestRouter = ({
   hatenaTrendsResolverByFetchedSince,
   digestSubscriptionResolverByUserId,
   saveDigestSubscriptionUseCase,
+  requestDigestUseCase,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -156,4 +176,30 @@ export const createWorkerIoriDigestRouter = ({
       if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
       const saved = await saveDigestSubscriptionUseCase.run({ userId, enabled });
       return saved.ok ? c.json(toSubscriptionBody(saved.val)) : c.json(internalServerError, 500);
+    })
+    .post('/iori/v1/digests', authn.requireUser(writeAccounts), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const generation = requestDigestUseCase.run({ userId });
+      keepAlive(c, generation);
+      const requested = await generation;
+      if (requested.ok) {
+        const { digestId, articleId, digestDate, replaced } = requested.val;
+        return c.json({ digestId, articleId, digestDate, replaced } satisfies IoriDigestRequestResponse, 201);
+      }
+      const { err } = requested;
+      if (!('type' in err)) return c.json(internalServerError, 500);
+      switch (err.type) {
+        case 'DigestAlreadyPublishedError':
+          return c.json({ error: 'Digest already published' }, 409);
+        case 'DigestRequestLimitError':
+          c.header('Retry-After', String(err.retryAfterSeconds));
+          return err.reason === 'daily_limit'
+            ? c.json({ error: err.message }, 429)
+            : c.json({ error: 'Digest request too soon' }, 409);
+        case 'ArticleNotFoundError':
+          return c.json(internalServerError, 500);
+        default:
+          return c.json(internalServerError, 500);
+      }
     });

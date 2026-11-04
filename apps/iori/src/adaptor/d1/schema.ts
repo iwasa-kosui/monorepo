@@ -463,9 +463,19 @@ export const digestsTable = sqliteTable('digests', {
   articleId: text('articleId').notNull().references(() => articlesTable.articleId),
   createdAt: timestamp().notNull(),
   pushSentAt: timestamp(),
+  trigger: text('trigger').notNull().default('scheduled'),
 }, (table) => [
   uniqueIndex('digests_user_id_digest_date_unique').on(table.userId, table.digestDate),
   index('digests_digest_date_idx').on(table.digestDate),
+]);
+
+export const digestRequestUsagesTable = sqliteTable('digest_request_usages', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  day: text('day').notNull(),
+  count: integer('count').notNull(),
+  lastRequestedAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.day] }),
 ]);
 
 export const digestItemsTable = sqliteTable('digest_items', {
@@ -558,6 +568,7 @@ export const schema = {
   feedEntriesTable,
   digestSubscriptionsTable,
   digestsTable,
+  digestRequestUsagesTable,
   digestItemsTable,
   digestTrendsTable,
   interestSourcesTable,

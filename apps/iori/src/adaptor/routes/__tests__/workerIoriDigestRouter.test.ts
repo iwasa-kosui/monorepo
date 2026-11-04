@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { secondsUntilNextJstDay } from '../../../domain/aiSummary/usageLimit.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -394,6 +396,167 @@ describe('iori のダイジェスト API', () => {
       expect(t.sqlite.prepare('SELECT enabled FROM digest_subscriptions WHERE userId = ?').get(other.userId)).toEqual({
         enabled: 0,
       });
+    });
+  });
+
+  describe('POST /api/iori/v1/digests', () => {
+    afterEach(() => vi.useRealTimers());
+
+    const freezeNow = () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const now = Instant.orThrow(Date.now());
+      vi.setSystemTime(now);
+      return { now, today: Instant.toJstDate(now) };
+    };
+    const post = (headers: Record<string, string>) => ({ method: 'POST', headers });
+    const insertUsage = (
+      t: ReturnType<typeof setupReadApi>,
+      userId: string,
+      day: string,
+      count: number,
+      lastRequestedAt: number,
+    ) =>
+      t.sqlite.prepare('INSERT INTO digest_request_usages(userId,day,count,lastRequestedAt) VALUES (?,?,?,?)')
+        .run(userId, day, count, lastRequestedAt);
+
+    it('認証なしだと 401 にする', async () => {
+      const t = setupReadApi();
+
+      const response = await t.request('/api/iori/v1/digests', post({}));
+
+      expect(response.status).toBe(401);
+    });
+
+    it('write:accounts を満たさない scope のトークンを 403 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(403);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digests').get()).toEqual({ n: 0 });
+    });
+
+    it('digest を作って 201 で返し、trigger を requested にして回数を 1 つ数える', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { now, today } = freezeNow();
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(201);
+      const body = (await response.json()) as { digestId: string; articleId: string };
+      expect(body).toEqual({
+        digestId: expect.any(String),
+        articleId: expect.any(String),
+        digestDate: today,
+        replaced: false,
+      });
+      expect(t.sqlite.prepare('SELECT digestId, articleId, userId, trigger, pushSentAt FROM digests').all()).toEqual([
+        {
+          digestId: body.digestId,
+          articleId: body.articleId,
+          userId: me.userId,
+          trigger: 'requested',
+          pushSentAt: null,
+        },
+      ]);
+      expect(t.sqlite.prepare('SELECT status FROM articles WHERE articleId = ?').get(body.articleId)).toEqual({
+        status: 'draft',
+      });
+      expect(t.sqlite.prepare('SELECT day, count, lastRequestedAt FROM digest_request_usages').all()).toEqual([
+        { day: today, count: 1, lastRequestedAt: now },
+      ]);
+    });
+
+    it('その日の draft の digest があれば置き換えて、replaced を true にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { today } = freezeNow();
+      const old = seedDigest(t, me, today);
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(201);
+      const body = (await response.json()) as { digestId: string; replaced: boolean };
+      expect(body.replaced).toBe(true);
+      expect(body.digestId).not.toBe(old.digestId);
+      expect(t.sqlite.prepare('SELECT digestId FROM digests').all()).toEqual([{ digestId: body.digestId }]);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM articles WHERE articleId = ?').get(old.articleId)).toEqual({
+        n: 0,
+      });
+    });
+
+    it('実行環境の waitUntil に、結果を返すのと同じ生成の Promise を渡す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      freezeNow();
+      const waitUntil = vi.fn();
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer), { waitUntil } as never);
+
+      expect(response.status).toBe(201);
+      expect(waitUntil).toHaveBeenCalledTimes(1);
+      expect(waitUntil.mock.calls[0]![0]).toBeInstanceOf(Promise);
+    });
+
+    it.each(['published', 'unpublished'])(
+      'その日の digest の article が %s なら 409 にして、回数を数えず何も変えない',
+      async (status) => {
+        const t = setupReadApi();
+        const me = await t.signIn('write:accounts');
+        const { today } = freezeNow();
+        const old = seedDigest(t, me, today);
+        t.sqlite.prepare('UPDATE articles SET status = ? WHERE articleId = ?').run(status, old.articleId);
+
+        const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+        expect(response.status).toBe(409);
+        expect(await response.json()).toEqual({ error: 'Digest already published' });
+        expect(t.sqlite.prepare('SELECT digestId FROM digests').all()).toEqual([{ digestId: old.digestId }]);
+        expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_request_usages').get()).toEqual({ n: 0 });
+      },
+    );
+
+    it('1 日の上限に達していたら 429 と、翌日までの秒数の Retry-After にして、digest を作らない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { now, today } = freezeNow();
+      insertUsage(t, me.userId, today, 3, now - 60 * 60 * 1000);
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBe(String(secondsUntilNextJstDay(now)));
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digests').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT count FROM digest_request_usages').get()).toEqual({ count: 3 });
+    });
+
+    it('前回から 120 秒たっていなければ 409 と、残り秒数の Retry-After にして、digest を作らない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { now, today } = freezeNow();
+      insertUsage(t, me.userId, today, 1, now - 30_000);
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Retry-After')).toBe('90');
+      expect(await response.json()).toEqual({ error: 'Digest request too soon' });
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digests').get()).toEqual({ n: 0 });
+      expect(t.sqlite.prepare('SELECT count FROM digest_request_usages').get()).toEqual({ count: 1 });
+    });
+
+    it('他人の回数は数えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const other = t.seed.addLocalActor('other');
+      const { now, today } = freezeNow();
+      insertUsage(t, other.userId, today, 3, now);
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(201);
     });
   });
 });

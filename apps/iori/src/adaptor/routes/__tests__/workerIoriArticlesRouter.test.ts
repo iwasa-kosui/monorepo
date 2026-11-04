@@ -716,6 +716,7 @@ describe('createWorkerIoriArticlesRouter', () => {
         userId: authorUserId,
         digestDate: '2026-11-05',
         articleId: article.articleId,
+        trigger: 'scheduled',
         items: Array.from({ length: itemCount }, (_, index) => ({
           feedEntryId: `entry-${index + 1}`,
           url: `https://example.com/${index + 1}`,
