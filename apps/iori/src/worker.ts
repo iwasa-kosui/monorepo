@@ -11,6 +11,7 @@ import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
+import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
@@ -182,6 +183,14 @@ export default {
           '/api',
           createWorkerAuthApiRouter({
             signInUseCase: runtime.auth.signInUseCase,
+            createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
+          }),
+        );
+        app.route(
+          '/auth',
+          createWorkerAuthFormRouter({
+            signInUseCase: runtime.auth.signInUseCase,
+            signUpUseCase: runtime.core.signUpUseCase,
             createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
           }),
         );
