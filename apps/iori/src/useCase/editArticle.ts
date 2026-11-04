@@ -5,6 +5,7 @@ import { sanitizeArticleBody } from '../adaptor/routes/helper/sanitizeArticleBod
 import {
   Article,
   ArticleInvalidStatusError,
+  ArticleNotFoundError,
   type ArticleParseError,
   type ArticleResolver,
   type ArticleWithBodyEditedStore,
@@ -68,6 +69,9 @@ const create = ({
     });
     const stored = await articleWithBodyEditedStore.store(titleChanged?.val, bodyWritten);
     if (!stored.val.edited) {
+      const current = await articleResolver.resolve(articleId);
+      if (!current.ok) return current;
+      if (current.val === undefined) return RA.err(ArticleNotFoundError.create(articleId));
       return RA.err(ArticleInvalidStatusError.create(articleId, 'published', ['draft', 'unpublished']));
     }
     return RA.ok({

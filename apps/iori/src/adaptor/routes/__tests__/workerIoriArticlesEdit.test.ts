@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
 import { buildDigestBodies } from '../../../domain/digest/digestBody.ts';
-import { PostContent } from '../../../domain/post/postContent.ts';
+import { renderMarkdownToUnsanitizedHtml } from '../../../domain/post/postContent.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createMockRequestContext } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
 import { EditArticleUseCase } from '../../../useCase/editArticle.ts';
@@ -102,7 +102,7 @@ const setup = () => {
           editArticleUseCase: EditArticleUseCase.create({
             articleResolver: createD1ArticleResolver(db),
             articleWithBodyEditedStore: createD1ArticleWithBodyEditedStore(db),
-            renderMarkdown: PostContent.fromMarkdown,
+            renderMarkdown: renderMarkdownToUnsanitizedHtml,
           }),
           publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
           createContext: () => createMockRequestContext(),
@@ -196,6 +196,24 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     expect(response.status).toBe(200);
     const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
     expect(body!.publicHtml).not.toContain('script');
+  });
+
+  it('h4 以下の見出し、水平線、GFM の表を保存した HTML に残す', async () => {
+    const t = setup();
+    const author = t.addAuthor('alice');
+    const articleId = t.addArticle(author);
+
+    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
+      title: 'タイトル',
+      markdown: '#### 小見出し\n\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |',
+    });
+
+    expect(response.status).toBe(200);
+    const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
+    expect(body!.publicHtml).toContain('<h4>小見出し</h4>');
+    expect(body!.publicHtml).toContain('<hr />');
+    expect(body!.publicHtml).toContain('<table>');
+    expect(body!.publicHtml).toContain('<td>1</td>');
   });
 
   it('unpublished の記事も更新できる', async () => {
@@ -366,6 +384,24 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     const response = await t.getEdit(articleId, headers);
 
     await expect(response.json()).resolves.toEqual(valid);
+  });
+
+  it('table を含む publicHtml を開いて、そのまま保存しても table が残る', async () => {
+    const t = setup();
+    const author = t.addAuthor('alice');
+    const articleId = t.addArticle(author, {
+      publicHtml: '<h2>表</h2><table><thead><tr><th>a</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>',
+    });
+    const headers = { Cookie: t.cookieFor(author.userId), ...sameOrigin };
+
+    const opened = await (await t.getEdit(articleId, headers)).json() as { title: string; markdown: string };
+    const response = await t.put(articleId, headers, opened);
+
+    expect(response.status).toBe(200);
+    const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
+    expect(body!.publicHtml).toContain('<h2>表</h2>');
+    expect(body!.publicHtml).toContain('<table>');
+    expect(body!.publicHtml).toContain('<td>1</td>');
   });
 
   it('他の人の記事は 404、published は 409、認証がなければ 401 にする', async () => {

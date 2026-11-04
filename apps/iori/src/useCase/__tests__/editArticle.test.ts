@@ -21,9 +21,13 @@ const article: Article = {
   unpublishedAt: null,
 };
 
-const setup = (edited: boolean) => {
-  const articleResolver: ArticleResolver = { resolve: async () => RA.ok(article) };
-  const store = vi.fn<ArticleWithBodyEditedStore['store']>(async () => RA.ok({ edited }));
+const setup = (edited: boolean, resolveAfterStore: () => Article | undefined = () => article) => {
+  let stored = false;
+  const articleResolver: ArticleResolver = { resolve: async () => RA.ok(stored ? resolveAfterStore() : article) };
+  const store = vi.fn<ArticleWithBodyEditedStore['store']>(async () => {
+    stored = true;
+    return RA.ok({ edited });
+  });
   const useCase = EditArticleUseCase.create({
     articleResolver,
     articleWithBodyEditedStore: { store },
@@ -60,6 +64,17 @@ describe('EditArticleUseCase', () => {
     expect(result).toMatchObject({
       ok: false,
       err: { type: 'ArticleInvalidStatusError', detail: { currentStatus: 'published' } },
+    });
+  });
+
+  it('ストアが書き込めず、記事が消えていたら ArticleNotFoundError を返す', async () => {
+    const { useCase } = setup(false, () => undefined);
+
+    const result = await useCase.run({ userId, articleId: article.articleId, title: 'After', markdown: 'body' });
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'ArticleNotFoundError', detail: { articleId: article.articleId } },
     });
   });
 });

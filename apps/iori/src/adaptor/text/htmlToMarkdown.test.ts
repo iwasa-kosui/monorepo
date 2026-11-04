@@ -51,6 +51,13 @@ describe('htmlToMarkdown', () => {
     );
   });
 
+  it('table は HTML のまま Markdown の中に残す', () => {
+    const table =
+      '<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>';
+
+    expect(htmlToMarkdown(`<p>before</p>${table}`)).toBe(`before\n\n${table}`);
+  });
+
   it('空の HTML は空文字にする', () => {
     expect(htmlToMarkdown('')).toBe('');
   });

@@ -141,7 +141,7 @@ import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
-import { PostContent } from '../domain/post/postContent.ts';
+import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
@@ -532,7 +532,7 @@ export const createWorkerRuntimePorts = async (
       editArticleUseCase: EditArticleUseCase.create({
         articleResolver,
         articleWithBodyEditedStore: createD1ArticleWithBodyEditedStore(db),
-        renderMarkdown: PostContent.fromMarkdown,
+        renderMarkdown: renderMarkdownToUnsanitizedHtml,
       }),
       articleBodyResolver,
       publishArticleUseCase: PublishArticleUseCase.create({

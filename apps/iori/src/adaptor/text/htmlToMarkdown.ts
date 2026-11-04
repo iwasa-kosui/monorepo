@@ -7,5 +7,6 @@ const service = new TurndownService({
   codeBlockStyle: 'fenced',
   emDelimiter: '*',
 });
+service.keep(['table']);
 
 export const htmlToMarkdown = (html: string): string => service.turndown(createDocument(html).body).trim();
