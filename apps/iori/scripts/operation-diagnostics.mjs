@@ -18,6 +18,9 @@ export const OPERATION_STAGES = Object.freeze([
   'move-reposts',
   'move-reposts-resolve',
   'move-reposts-query',
+  'delete-posts',
+  'delete-posts-resolve',
+  'delete-posts-query',
 ]);
 export const operationFailureLines = (stage, error) => {
   const stageWord = OPERATION_STAGES.includes(stage) ? stage : 'unclassified';

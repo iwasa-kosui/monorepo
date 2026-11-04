@@ -26,6 +26,8 @@ const operations = Object.freeze({
   'delete-rehearsal-d1': 'delete-rehearsal-d1.mjs',
   'move-unfollowed-reposts-dry-run': 'move-unfollowed-reposts.mjs',
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
+  'delete-blocked-domain-posts-dry-run': 'delete-blocked-domain-posts.mjs',
+  'delete-blocked-domain-posts': 'delete-blocked-domain-posts.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -120,6 +122,8 @@ const rehearsalNoticeLine =
   /^IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse[1-5] state=(?:present|absent|empty|not-empty|ambiguous|check-failed|deleted|delete-failed|remaining)$/;
 const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
+const deleteBlockedDomainNoticeLine =
+  /^IORI_NOTICE delete-blocked-domain-posts (?:mode=dry-run domain=baraag\.net posts=\d{1,9} remote_posts=\d{1,9} timeline_items=\d{1,9} federated_items=\d{1,9} reposts=\d{1,9} likes=\d{1,9} emoji_reacts=\d{1,9} notifications=\d{1,9} images=\d{1,9} articles_skipped=\d{1,9} actors=\d{1,9} follows_out=\d{1,9} follows_in=\d{1,9} mutes=\d{1,9}|mode=apply deleted_posts=\d{1,9} deleted_timeline_items=\d{1,9})$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -152,6 +156,7 @@ const writeDiagnosticLine = async line => {
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
       && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line)
+      && !deleteBlockedDomainNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);
