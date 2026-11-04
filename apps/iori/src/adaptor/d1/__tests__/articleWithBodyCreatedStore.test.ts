@@ -33,6 +33,7 @@ describe('createD1ArticleWithBodyCreatedStore', () => {
       articleId: articleCreated.aggregateState.articleId,
       privateHtml: '<p>private</p>',
       publicHtml: '<p>public</p>',
+      markdown: null,
     });
 
     await createD1ArticleWithBodyCreatedStore(db).store(articleCreated, bodyWritten);

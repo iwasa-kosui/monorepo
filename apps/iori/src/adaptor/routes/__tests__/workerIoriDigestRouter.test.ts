@@ -521,6 +521,25 @@ describe('iori のダイジェスト API', () => {
       },
     );
 
+    it('その日の digest の draft の本文が編集済みなら 409 にして、回数を数えず何も変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { today } = freezeNow();
+      const old = seedDigest(t, me, today);
+      t.sqlite.prepare(
+        'INSERT INTO article_bodies(articleId,privateHtml,publicHtml,markdown,updatedAt) VALUES (?,?,?,?,?)',
+      )
+        .run(old.articleId, '<p>edited</p>', '<p>edited</p>', 'edited', 2_000);
+
+      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: 'Digest draft edited' });
+      expect(t.sqlite.prepare('SELECT digestId FROM digests').all()).toEqual([{ digestId: old.digestId }]);
+      expect(t.sqlite.prepare('SELECT articleId FROM article_bodies').all()).toEqual([{ articleId: old.articleId }]);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_request_usages').get()).toEqual({ n: 0 });
+    });
+
     it('1 日の上限に達していたら 429 と、翌日までの秒数の Retry-After にして、digest を作らない', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');

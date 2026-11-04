@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "014da612-2863-49be-ad28-e007a2687382",
-  "prevId": "30779a4b-357a-440a-a6c0-0ea37055b218",
+  "id": "9212c1f3-4dda-450a-a58b-e652ec5fd47c",
+  "prevId": "cb051041-f4a6-408e-b632-a9956cc58e31",
   "tables": {
     "actors": {
       "name": "actors",
@@ -192,6 +192,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "markdown": {
+          "name": "markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "updatedAt": {
@@ -2405,7 +2412,16 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "notification_reposts_reposter_post_unique": {
+          "name": "notification_reposts_reposter_post_unique",
+          "columns": [
+            "reposterActorId",
+            "repostedPostId"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "notification_reposts_notificationId_notifications_notificationId_fk": {
           "name": "notification_reposts_notificationId_notifications_notificationId_fk",

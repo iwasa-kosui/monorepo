@@ -7,8 +7,9 @@ const notice = (excluded: {
   hatena: number;
   hatenaCounts: boolean;
   recommendations?: boolean;
-}) => ({
+}, edited = false) => ({
   digestDate: '2026-11-05',
+  edited,
   excluded: { recommendations: false, ...excluded },
 });
 
@@ -39,6 +40,19 @@ describe('buildDigestPublishConfirmMessage', () => {
     expect(message).not.toContain('はてなブックマーク数の表示');
     expect(message).not.toContain('おすすめ');
     expect(message).not.toContain('iori の投稿といいね');
+  });
+
+  it('編集済みなら除く項目を並べず、編集した本文をそのまま公開すると伝える', () => {
+    expect(
+      buildDigestPublishConfirmMessage(
+        notice({ timelineLinks: 3, hatena: 2, hatenaCounts: true, recommendations: true }, true),
+      ),
+    ).toBe(['編集した本文をそのまま公開します。', '公開しますか？'].join('\n'));
+  });
+
+  it('編集済みなら除く項目が 0 件でも確認の文面を返す', () => {
+    expect(buildDigestPublishConfirmMessage(notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false }, true)))
+      .toBe(['編集した本文をそのまま公開します。', '公開しますか？'].join('\n'));
   });
 
   it('除く項目がなければ確認の文面を返さない', () => {

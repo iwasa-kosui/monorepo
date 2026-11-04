@@ -136,7 +136,7 @@ describe('EmbedFeedEntriesUseCase', () => {
     expect(pendingCount()).toBe(1);
     expect(error).toHaveBeenCalledWith(
       'iori feed entries: embedding an entry failed.',
-      expect.objectContaining({ message: 'unavailable' }),
+      expect.objectContaining({ errorMessage: 'unavailable' }),
     );
   });
 
@@ -153,7 +153,7 @@ describe('EmbedFeedEntriesUseCase', () => {
 
     expect(error).toHaveBeenCalledWith(
       'iori feed entries: the embedding was not stored.',
-      expect.objectContaining({ message: expect.stringContaining('1024') }),
+      expect.objectContaining({ errorMessage: expect.stringContaining('1024') }),
     );
     expect(pendingCount()).toBe(1);
   });

@@ -29,6 +29,7 @@ import type {
   ArticleWithDependentsDeletedStore,
   DraftArticleWithDependentsDeletedStore,
 } from '../../domain/article/article.ts';
+import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { DigestCreatedStore, DigestTrigger } from '../../domain/digest/digest.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../domain/interestSource/embedding.ts';
@@ -76,6 +77,7 @@ const setup = (
     articleWithDependentsDeletedStore?: (db: IoriD1Db) => ArticleWithDependentsDeletedStore;
     draftArticleWithDependentsDeletedStore?: (db: IoriD1Db) => DraftArticleWithDependentsDeletedStore;
     articleResolver?: (db: IoriD1Db) => ArticleResolver;
+    articleBodyResolver?: (db: IoriD1Db) => ArticleBodyResolver;
   } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
@@ -94,7 +96,7 @@ const setup = (
     digestHeaderResolverByUserIdAndDigestDate: createD1DigestHeaderResolverByUserIdAndDigestDate(db),
     latestDigestHeaderResolverByUserId: createD1LatestDigestHeaderResolverByUserId(db),
     articleResolver: (options.articleResolver ?? createD1ArticleResolver)(db),
-    articleBodyResolver: createD1ArticleBodyResolver(db),
+    articleBodyResolver: (options.articleBodyResolver ?? createD1ArticleBodyResolver)(db),
     articleWithDependentsDeletedStore: (options.articleWithDependentsDeletedStore
       ?? createD1ArticleWithDependentsDeletedStore)(db),
     draftArticleWithDependentsDeletedStore: (options.draftArticleWithDependentsDeletedStore
@@ -196,6 +198,7 @@ const setup = (
     return result.val;
   };
   const setArticleStatus = (status: string) => sqlite.prepare('UPDATE articles SET status = ?').run(status);
+  const editArticleBody = () => sqlite.prepare('UPDATE article_bodies SET updatedAt = updatedAt + 1').run();
 
   return {
     fixture,
@@ -217,6 +220,7 @@ const setup = (
     run,
     runResult,
     setArticleStatus,
+    editArticleBody,
   };
 };
 
@@ -450,7 +454,7 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     ]);
     expect(error).toHaveBeenCalledWith(
       'iori digest: summarizing an entry failed.',
-      expect.objectContaining({ message: 'boom' }),
+      expect.objectContaining({ errorMessage: 'boom' }),
     );
   });
 
@@ -966,7 +970,7 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(result).toMatchObject({ ok: false, err: { type: 'DigestStoreFailedError' } });
     expect(error).toHaveBeenCalledWith(
       'iori digest: deleting the article left by the failed digest failed.',
-      expect.objectContaining({ message: 'delete failed' }),
+      expect.objectContaining({ errorMessage: 'delete failed' }),
     );
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
   });
@@ -1037,7 +1041,7 @@ describe('CreateDailyDigestUseCase: Web Push', () => {
     expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: NOW }]);
     expect(error).toHaveBeenCalledWith(
       'iori digest: sending a web push failed.',
-      expect.objectContaining({ message: 'gone', statusCode: 410 }),
+      expect.objectContaining({ errorMessage: 'gone', statusCode: 410 }),
     );
   });
 
@@ -1191,6 +1195,69 @@ describe('CreateDailyDigestUseCase: requested', () => {
       expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
     },
   );
+
+  describe.each(
+    [
+      ['requested', { ok: false, err: { type: 'DigestDraftEditedError', detail: { digestDate: '2026-11-05' } } }],
+      ['scheduled', { ok: true, val: { status: 'skipped' } }],
+    ] as const,
+  )('編集済みの draft があるとき (%s)', (trigger, expected) => {
+    const expectKept = (t: ReturnType<typeof setup>, first: { digestId?: string; articleId?: string }) => {
+      expect(t.all('SELECT digestId, articleId FROM digests')).toEqual([
+        { digestId: first.digestId, articleId: first.articleId },
+      ]);
+      expect(t.all('SELECT articleId, status FROM articles')).toEqual([
+        { articleId: first.articleId, status: 'draft' },
+      ]);
+      expect(t.all('SELECT articleId FROM article_bodies')).toEqual([{ articleId: first.articleId }]);
+      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
+        { n: 0 },
+      ]);
+    };
+
+    it('何も消さずに、requested はエラーを返し、scheduled は console.info に出して skipped を返す', async () => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const t = setup();
+      const first = await t.run('requested');
+      t.editArticleBody();
+      t.clock.value = (NOW + HOUR) as typeof NOW;
+
+      const result = await t.runResult(trigger);
+
+      expect(result).toMatchObject(expected);
+      expectKept(t, first);
+      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
+    });
+
+    it('生成の途中で編集されても、削除の直前に取り直した本文で気づき、何も消さない', async () => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const calls = { count: 0 };
+      const hooks: { edit?: () => void } = {};
+      const t = setup({
+        articleBodyResolver: (db) => {
+          const real = createD1ArticleBodyResolver(db);
+          return {
+            resolve: (articleId) => {
+              calls.count += 1;
+              if (calls.count === 2) hooks.edit?.();
+              return real.resolve(articleId);
+            },
+          };
+        },
+      });
+      const first = await t.run('requested');
+      t.clock.value = (NOW + HOUR) as typeof NOW;
+      hooks.edit = () => t.editArticleBody();
+      calls.count = 0;
+
+      const result = await t.runResult(trigger);
+
+      expect(calls.count).toBe(2);
+      expect(result).toMatchObject(expected);
+      expectKept(t, first);
+      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
+    });
+  });
 
   describe.each(
     [

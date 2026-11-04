@@ -61,6 +61,7 @@ describe('D1 article body adapters', () => {
       articleId: ArticleId.generate(),
       privateHtml: '<p>private</p>',
       publicHtml: '<p>public</p>',
+      markdown: 'public',
     });
 
     await createD1ArticleBodyWrittenStore(db).store(written);
@@ -70,7 +71,12 @@ describe('D1 article body adapters', () => {
       {
         kind: 'upsert',
         table: articleBodiesTable,
-        values: { articleId: written.aggregateId, privateHtml: '<p>private</p>', publicHtml: '<p>public</p>' },
+        values: {
+          articleId: written.aggregateId,
+          privateHtml: '<p>private</p>',
+          publicHtml: '<p>public</p>',
+          markdown: 'public',
+        },
       },
       { kind: 'insert', table: domainEventsTable, values: { eventName: 'articleBody.written' } },
     ]);

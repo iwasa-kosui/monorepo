@@ -61,7 +61,7 @@ const create = ({
         (index, error) => {
           console.error('iori feed entries: embedding an entry failed.', {
             feedEntryId: entries[index]!.feedEntryId,
-            message: error.message,
+            errorMessage: error.message,
           });
         },
       );
@@ -81,7 +81,7 @@ const create = ({
         else {
           console.error('iori feed entries: the embedding was not stored.', {
             feedEntryId: entry.feedEntryId,
-            message: event.err.message,
+            errorMessage: event.err.message,
           });
         }
       });

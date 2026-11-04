@@ -54,6 +54,8 @@ const createApp = (authn: MastodonAuthn, deps: Partial<Omit<WorkerIoriArticlesRo
           publishArticleUseCase: unused,
           unpublishArticleUseCase: unused,
           deleteArticleUseCase: unused,
+          getArticleForEditUseCase: unused,
+          editArticleUseCase: unused,
           publishedArticlesResolver: { resolve: async () => RA.ok({ articles: [], authorUsername: null }) },
           createContext: () => createMockRequestContext(),
           ...deps,
@@ -545,6 +547,7 @@ describe('createWorkerIoriArticlesRouter', () => {
                 articleId: article.articleId,
                 privateHtml: '<p>private</p><script>alert(1)</script>',
                 publicHtml: '<p>public</p><img src="https://example.com/a.png">',
+                markdown: null,
                 updatedAt: createdAt,
               }),
           },
@@ -739,21 +742,24 @@ describe('createWorkerIoriArticlesRouter', () => {
       return created.val.aggregateState;
     };
 
-    const createDigestApp = (article: Article, digest: Digest | undefined) => {
+    const createDigestApp = (article: Article, digest: Digest | undefined, bodyUpdatedAt: Instant = createdAt) => {
       const auth = createAuth();
+      const articleBodyResolver = {
+        resolve: async () =>
+          RA.ok({
+            articleId: article.articleId,
+            privateHtml: '<p>private</p>',
+            publicHtml: '<p>public</p>',
+            markdown: null,
+            updatedAt: bodyUpdatedAt,
+          }),
+      };
       const app = createApp(auth.authn, {
+        articleBodyResolver,
         getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
           articleResolver: { resolve: async (id) => RA.ok(id === article.articleId ? article : undefined) },
           threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
-          articleBodyResolver: {
-            resolve: async () =>
-              RA.ok({
-                articleId: article.articleId,
-                privateHtml: '<p>private</p>',
-                publicHtml: '<p>public</p>',
-                updatedAt: createdAt,
-              }),
-          },
+          articleBodyResolver,
         }),
         getArticlesUseCase: { run: async () => RA.ok({ articles: [article], authorUsername: 'kosui' }) },
         publishedArticlesResolver: {
@@ -791,6 +797,7 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect(body.digest).toEqual({
         digestDate: '2026-11-05',
+        edited: false,
         items: [1, 2].map((rank) => ({
           digestItemId: expect.any(String),
           rank,
@@ -800,6 +807,15 @@ describe('createWorkerIoriArticlesRouter', () => {
         })),
         excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: true, recommendations: false },
       });
+    });
+
+    it('本文を編集済みなら edited を true にする', async () => {
+      const article = createArticle('draft');
+      const t = createDigestApp(article, createDigest(article, 2), Instant.orThrow(createdAt + 1));
+
+      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
+
+      expect(body.digest).toMatchObject({ edited: true });
     });
 
     it('反応した項目は feedback を返す', async () => {

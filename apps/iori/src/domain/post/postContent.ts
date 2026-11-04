@@ -56,13 +56,16 @@ const createRenderer = (highlighter: HighlighterCore): Renderer => {
   return renderer;
 };
 
+export const renderMarkdownToUnsanitizedHtml = async (markdown: string): Promise<string> => {
+  const highlighter = await getHighlighter();
+  const marked = new Marked({ renderer: createRenderer(highlighter) });
+  return marked.parse(markdown, { async: false }) as string;
+};
+
 /**
  * PostContent - Markdown to HTML conversion service
  */
 export const PostContent = {
-  fromMarkdown: async (markdown: string): Promise<string> => {
-    const highlighter = await getHighlighter();
-    const marked = new Marked({ renderer: createRenderer(highlighter) });
-    return sanitizePostContent(marked.parse(markdown, { async: false }) as string);
-  },
+  fromMarkdown: async (markdown: string): Promise<string> =>
+    sanitizePostContent(await renderMarkdownToUnsanitizedHtml(markdown)),
 } as const;

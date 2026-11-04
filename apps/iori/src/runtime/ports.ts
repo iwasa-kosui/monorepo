@@ -18,6 +18,7 @@ import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domai
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import type {
   DigestHeaderResolverByArticleId,
   DigestHeadersResolverByArticleIds,
@@ -64,7 +65,9 @@ import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
+import type { EditArticleUseCase } from '../useCase/editArticle.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
@@ -193,6 +196,9 @@ export type IoriArticlesRuntimePorts = Readonly<{
   createArticleUseCase: CreateArticleUseCase;
   createArticleWithBodyUseCase: CreateArticleWithBodyUseCase;
   updateArticleBodyUseCase: UpdateArticleBodyUseCase;
+  getArticleForEditUseCase: GetArticleForEditUseCase;
+  editArticleUseCase: EditArticleUseCase;
+  articleBodyResolver: ArticleBodyResolver;
   publishArticleUseCase: PublishArticleUseCase;
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;

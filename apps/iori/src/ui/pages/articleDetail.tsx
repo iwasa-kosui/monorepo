@@ -3,6 +3,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { postToStatus } from '../legacyConversion.ts';
 import { buildDigestPublishConfirmMessage, type DigestPublishNotice } from './digestPublishConfirm.ts';
@@ -41,6 +42,11 @@ const ArticleDetailPage = () => {
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editMarkdown, setEditMarkdown] = useState('');
 
   const getArticleIdFromUrl = () => {
     const pathParts = window.location.pathname.split('/');
@@ -123,6 +129,53 @@ const ArticleDetailPage = () => {
     }
   };
 
+  const handleStartEdit = async () => {
+    if (!data) return;
+
+    setIsLoadingEdit(true);
+    try {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/edit`);
+      const result = await res.json();
+
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        setEditTitle(result.title);
+        setEditMarkdown(result.markdown);
+        setIsEditing(true);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setIsLoadingEdit(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!data) return;
+
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitle, markdown: editMarkdown }),
+      });
+      const result = await res.json();
+
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        await fetchArticle();
+        setIsEditing(false);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
       year: 'numeric',
@@ -185,6 +238,54 @@ const ArticleDetailPage = () => {
   }
 
   const { article, thread, body } = data;
+  const canEdit = isLoggedIn
+    && (article.status === 'draft' || article.status === 'unpublished')
+    && article.rootPostId === null
+    && body !== undefined;
+
+  if (isEditing) {
+    return (
+      <div class='flex flex-col h-full'>
+        <div class='flex items-center justify-between mb-4 flex-shrink-0'>
+          <h1 class='text-xl font-bold text-charcoal dark:text-white'>記事を編集する</h1>
+          <div class='flex items-center gap-2'>
+            <button
+              type='button'
+              onClick={() => setIsEditing(false)}
+              disabled={isSaving}
+              class='px-4 py-2 bg-sand hover:bg-sand-light disabled:opacity-50 text-charcoal text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+            >
+              キャンセル
+            </button>
+            <button
+              type='button'
+              onClick={handleSave}
+              disabled={isSaving || editTitle.trim() === '' || editMarkdown.trim() === ''}
+              class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+            >
+              {isSaving ? '保存中...' : '保存する'}
+            </button>
+          </div>
+        </div>
+        <input
+          type='text'
+          value={editTitle}
+          maxLength={200}
+          disabled={isSaving}
+          placeholder='タイトル'
+          onInput={(e) => setEditTitle((e.target as HTMLInputElement).value)}
+          class='w-full mb-4 px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset text-xl font-bold'
+        />
+        <MarkdownEditor
+          value={editMarkdown}
+          onChange={setEditMarkdown}
+          disabled={isSaving}
+          placeholder='本文を Markdown で書く'
+          minHeight='400px'
+        />
+      </div>
+    );
+  }
 
   return (
     <div class='flex flex-col h-full'>
@@ -206,6 +307,16 @@ const ArticleDetailPage = () => {
         </a>
         {isLoggedIn && (
           <div class='flex items-center gap-2'>
+            {canEdit && (
+              <button
+                type='button'
+                onClick={handleStartEdit}
+                disabled={isLoadingEdit}
+                class='px-4 py-2 bg-sand hover:bg-sand-light disabled:opacity-50 text-charcoal text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+              >
+                {isLoadingEdit ? '読み込み中...' : '編集する'}
+              </button>
+            )}
             {article.status === 'draft' || article.status === 'unpublished'
               ? (
                 <button

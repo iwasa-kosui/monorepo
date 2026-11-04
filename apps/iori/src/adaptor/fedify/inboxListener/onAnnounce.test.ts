@@ -76,7 +76,14 @@ const createDeps = (relay: unknown, article: unknown = undefined) => {
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
   };
-  return { deps: deps as never, documentLoader, addReceivedRepostUseCase, remotePostUpserter, articleResolver };
+  return {
+    deps: deps as never,
+    documentLoader,
+    addReceivedRepostUseCase,
+    remotePostUpserter,
+    articleResolver,
+    federatedTimelineItemCreatedStore,
+  };
 };
 
 const imageAttachments = [
@@ -201,6 +208,37 @@ describe('createOnAnnounce', () => {
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }));
   });
 
+  it('creates one federated timeline item from a relay Announce', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps({
+      status: 'accepted',
+      actorUri: 'https://relay.example/actor',
+      relayId: 'relay-1',
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+  });
+
+  it('does not save a relay Announce whose Note attribution is on another origin', async () => {
+    const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps({
+      status: 'accepted',
+      actorUri: 'https://relay.example/actor',
+      relayId: 'relay-1',
+    });
+    const note = createNote([]).clone({
+      attribution: new Person({
+        id: new URL('https://other.example/users/alice'),
+        inbox: new URL('https://other.example/users/alice/inbox'),
+      }),
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
   describe('Announce of a local object', () => {
     const noteId = crypto.randomUUID();
     const articleId = crypto.randomUUID();
@@ -223,7 +261,11 @@ describe('createOnAnnounce', () => {
     });
 
     it('passes a local Article to the local branch with the root post id of the article', async () => {
-      const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined, { articleId, rootPostId });
+      const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined, {
+        articleId,
+        rootPostId,
+        status: 'published',
+      });
 
       await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
 
@@ -238,12 +280,27 @@ describe('createOnAnnounce', () => {
     });
 
     it('stops without calling the use case when the Article has no root post', async () => {
-      const { deps, addReceivedRepostUseCase } = createDeps(undefined, { articleId, rootPostId: null });
+      const { deps, addReceivedRepostUseCase } = createDeps(undefined, {
+        articleId,
+        rootPostId: null,
+        status: 'published',
+      });
 
       await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
 
       expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
     });
+
+    it.each(['unpublished', 'draft'] as const)(
+      'stops without calling the use case when the Article is %s',
+      async (status) => {
+        const { deps, addReceivedRepostUseCase } = createDeps(undefined, { articleId, rootPostId, status });
+
+        await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
+
+        expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+      },
+    );
 
     it('stops without calling the use case when the Article does not exist', async () => {
       const { deps, addReceivedRepostUseCase } = createDeps(undefined, undefined);

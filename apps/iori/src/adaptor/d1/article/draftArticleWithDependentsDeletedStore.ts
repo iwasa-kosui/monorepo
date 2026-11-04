@@ -20,8 +20,10 @@ export const createD1DraftArticleWithDependentsDeletedStore = (
   store: async (articleDeleted, bodyDeleted, digestExpired) => {
     const { articleId } = articleDeleted.eventPayload;
     const { digestId } = digestExpired.eventPayload;
+    const bodyIsUnedited =
+      sql`NOT EXISTS (SELECT 1 FROM article_bodies WHERE article_bodies.articleId = ${articleId} AND article_bodies.updatedAt > articles.createdAt)`;
     const articleIsDraft =
-      sql`EXISTS (SELECT 1 FROM articles WHERE articles.articleId = ${articleId} AND articles.status = 'draft')`;
+      sql`EXISTS (SELECT 1 FROM articles WHERE articles.articleId = ${articleId} AND articles.status = 'draft' AND ${bodyIsUnedited})`;
     const insertEventIfDraft = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
       const row = toD1DomainEventRow(event);
       return db.insert(domainEventsTable).select(
@@ -33,7 +35,9 @@ export const createD1DraftArticleWithDependentsDeletedStore = (
           eventName: sql<string>`${row.eventName}`.as('eventName'),
           eventPayload: sql<string>`${row.eventPayload}`.as('eventPayload'),
           occurredAt: sql<Date>`${row.occurredAt.getTime()}`.as('occurredAt'),
-        }).from(articlesTable).where(and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'))),
+        }).from(articlesTable).where(
+          and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'), bodyIsUnedited),
+        ),
       );
     };
     await runBatch(db, [
@@ -44,7 +48,9 @@ export const createD1DraftArticleWithDependentsDeletedStore = (
       db.delete(articleBodiesTable).where(and(eq(articleBodiesTable.articleId, articleId), articleIsDraft)),
       ...(bodyDeleted === undefined ? [] : [insertEventIfDraft(bodyDeleted)]),
       insertEventIfDraft(articleDeleted),
-      db.delete(articlesTable).where(and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'))),
+      db.delete(articlesTable).where(
+        and(eq(articlesTable.articleId, articleId), eq(articlesTable.status, 'draft'), bodyIsUnedited),
+      ),
     ]);
     const [remaining] = await db.select({ articleId: articlesTable.articleId }).from(articlesTable).where(
       eq(articlesTable.articleId, articleId),

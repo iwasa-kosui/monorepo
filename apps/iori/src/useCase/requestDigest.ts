@@ -1,9 +1,11 @@
 import { RA } from '@iwasa-kosui/result';
 
-import { ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
+import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import {
   DigestAlreadyPublishedError,
+  DigestDraftEditedError,
   type DigestHeaderResolverByUserIdAndDigestDate,
 } from '../domain/digest/digest.ts';
 import type { DigestId } from '../domain/digest/digestId.ts';
@@ -47,6 +49,7 @@ export type RequestDigestUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   digestHeaderResolverByUserIdAndDigestDate: DigestHeaderResolverByUserIdAndDigestDate;
   articleResolver: ArticleResolver;
+  articleBodyResolver: ArticleBodyResolver;
   digestRequestUsageRecorder: DigestRequestUsageRecorder;
   createDailyDigestUseCase: CreateDailyDigestUseCase;
   now: () => Instant;
@@ -55,6 +58,7 @@ type Deps = Readonly<{
 const create = ({
   digestHeaderResolverByUserIdAndDigestDate,
   articleResolver,
+  articleBodyResolver,
   digestRequestUsageRecorder,
   createDailyDigestUseCase,
   now,
@@ -68,6 +72,8 @@ const create = ({
       const article = await articleResolver.resolve(existing.val.articleId);
       if (article.val === undefined) return RA.err(ArticleNotFoundError.create(existing.val.articleId));
       if (article.val.status !== 'draft') return RA.err(DigestAlreadyPublishedError.create(digestDate));
+      const body = await articleBodyResolver.resolve(existing.val.articleId);
+      if (Article.isBodyEdited(article.val, body.val)) return RA.err(DigestDraftEditedError.create(digestDate));
     }
 
     const reservation = await digestRequestUsageRecorder.reserve({ userId, day: digestDate, now: requestedAt });

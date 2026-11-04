@@ -5,8 +5,9 @@ import { z } from 'zod/v4';
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import type { PublishedArticlesWithAuthorResolver } from '../../domain/article/article.ts';
-import type { Article } from '../../domain/article/article.ts';
+import { Article } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
+import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type {
   DigestHeaderResolverByArticleId,
   DigestHeadersResolverByArticleIds,
@@ -18,6 +19,8 @@ import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { CreateArticleUseCase } from '../../useCase/createArticle.ts';
 import type { DeleteArticleUseCase } from '../../useCase/deleteArticle.ts';
+import type { EditArticleUseCase } from '../../useCase/editArticle.ts';
+import type { GetArticleForEditUseCase } from '../../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import type { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
@@ -27,6 +30,7 @@ import { readRequestBody } from './helper/requestBody.ts';
 import { sanitizeArticleBody } from './helper/sanitizeArticleBody.ts';
 import {
   getMastodonPrincipal,
+  isSameOriginRequest,
   type MastodonAuthEnv,
   type MastodonAuthn,
   rejectUnlessTokenScope,
@@ -40,7 +44,10 @@ export type WorkerIoriArticlesRouterDeps = Readonly<{
   publishArticleUseCase: PublishArticleUseCase;
   unpublishArticleUseCase: UnpublishArticleUseCase;
   deleteArticleUseCase: DeleteArticleUseCase;
+  getArticleForEditUseCase: GetArticleForEditUseCase;
+  editArticleUseCase: EditArticleUseCase;
   publishedArticlesResolver: PublishedArticlesWithAuthorResolver;
+  articleBodyResolver?: ArticleBodyResolver;
   digestHeaderResolverByArticleId?: DigestHeaderResolverByArticleId;
   digestHeadersResolverByArticleIds?: DigestHeadersResolverByArticleIds;
   digestResolverByUserIdAndDigestDate?: DigestResolverByUserIdAndDigestDate;
@@ -55,6 +62,7 @@ const invalidArticleId = { error: 'Invalid article ID' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeStatuses = Scope.orThrow('write:statuses');
 const createArticleBody = z.object({ rootPostId: PostId.zodType, title: z.string().min(1).max(200) });
+const editArticleBody = z.object({ title: z.string(), markdown: z.string().min(1).max(100_000) });
 
 const userIdOf = (c: Context<MastodonAuthEnv>): UserId | undefined => getMastodonPrincipal(c)?.userId ?? undefined;
 
@@ -66,7 +74,10 @@ export const createWorkerIoriArticlesRouter = ({
   publishArticleUseCase,
   unpublishArticleUseCase,
   deleteArticleUseCase,
+  getArticleForEditUseCase,
+  editArticleUseCase,
   publishedArticlesResolver,
+  articleBodyResolver,
   digestHeaderResolverByArticleId,
   digestHeadersResolverByArticleIds,
   digestResolverByUserIdAndDigestDate,
@@ -95,8 +106,10 @@ export const createWorkerIoriArticlesRouter = ({
       digestDate: header.val.digestDate,
     });
     if (!digest.ok || digest.val === undefined) return undefined;
+    const body = await articleBodyResolver?.resolve(article.articleId);
     return {
       digestDate: digest.val.digestDate,
+      edited: Article.isBodyEdited(article, body?.ok ? body.val : undefined),
       items: digest.val.items.map(({ digestItemId, rank, url, title, feedback }) => ({
         digestItemId,
         rank,
@@ -224,6 +237,43 @@ export const createWorkerIoriArticlesRouter = ({
       if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
       return c.json({ error: result.err.message }, 400);
     })
+    .get('/iori/v1/articles/:articleId/edit', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const articleId = ArticleId.parse(c.req.param('articleId'));
+      if (!articleId.ok) return c.json(invalidArticleId, 400);
+      const result = await getArticleForEditUseCase.run({ userId, articleId: articleId.val });
+      if (result.ok) return c.json({ title: result.val.title, markdown: result.val.markdown });
+      if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
+      return c.json({ error: result.err.message }, 409);
+    })
+    .put(
+      '/iori/v1/articles/:articleId',
+      async (c, next) => {
+        if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
+          return c.json({ error: 'Forbidden' }, 403);
+        }
+        await next();
+      },
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const userId = userIdOf(c);
+        if (userId === undefined) return c.json(invalidToken, 401);
+        const articleId = ArticleId.parse(c.req.param('articleId'));
+        if (!articleId.ok) return c.json(invalidArticleId, 400);
+        const body = editArticleBody.safeParse(await readRequestBody(c));
+        if (!body.success) {
+          return c.json({
+            error: `Validation failed: ${body.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
+          }, 400);
+        }
+        const result = await editArticleUseCase.run({ userId, articleId: articleId.val, ...body.data });
+        if (result.ok) return c.json({ article: result.val.article });
+        if (!('type' in result.err)) return c.json({ error: `Validation failed: title (${result.err.message})` }, 400);
+        if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
+        return c.json({ error: result.err.message }, 409);
+      },
+    )
     .delete('/iori/v1/articles/:articleId', authn.requireUser(writeStatuses), async (c) => {
       const userId = userIdOf(c);
       if (userId === undefined) return c.json(invalidToken, 401);

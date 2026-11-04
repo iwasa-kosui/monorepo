@@ -92,7 +92,7 @@ const create = ({
     if (fetched.ok && fetched.val.body !== undefined) return fetched.val.body;
     console.warn('iori interest sources: fetching the markdown failed, so the description is used instead.', {
       url,
-      message: fetched.ok ? 'The response had no body.' : fetched.err.message,
+      errorMessage: fetched.ok ? 'The response had no body.' : fetched.err.message,
     });
     return undefined;
   };
@@ -181,7 +181,7 @@ const create = ({
       const result = await embedInterestSources({ textEmbedder, interestSourceEmbeddedStore, now }, targets);
       if (result.ok) embedded = result.val;
       else {console.error('iori interest sources: embedding the kosui.me entries failed.', {
-          message: result.err.message,
+          errorMessage: result.err.message,
         });}
     }
     return RA.ok({ created, changed, deleted, embedded });

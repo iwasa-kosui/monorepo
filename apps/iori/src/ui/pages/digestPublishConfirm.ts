@@ -1,5 +1,6 @@
 export type DigestPublishNotice = Readonly<{
   digestDate: string;
+  edited: boolean;
   excluded: Readonly<{
     timelineLinks: number;
     hatena: number;
@@ -8,7 +9,8 @@ export type DigestPublishNotice = Readonly<{
   }>;
 }>;
 
-export const buildDigestPublishConfirmMessage = ({ excluded }: DigestPublishNotice): string | undefined => {
+export const buildDigestPublishConfirmMessage = ({ edited, excluded }: DigestPublishNotice): string | undefined => {
+  if (edited) return ['編集した本文をそのまま公開します。', '公開しますか？'].join('\n');
   const lines = [
     ...(excluded.timelineLinks > 0 ? [`・みんなの関心（iori のタイムライン）${excluded.timelineLinks} 件`] : []),
     ...(excluded.hatena > 0 ? [`・みんなの関心（はてなブックマーク）${excluded.hatena} 件`] : []),

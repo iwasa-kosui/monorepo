@@ -20,6 +20,7 @@ export const createD1ArticleWithBodyCreatedStore = (db: IoriD1Db): ArticleWithBo
         articleId: body.articleId,
         privateHtml: body.privateHtml,
         publicHtml: body.publicHtml,
+        markdown: body.markdown,
         updatedAt: new Date(body.updatedAt),
       }),
       db.insert(domainEventsTable).values(toD1DomainEventRow(articleCreated)),

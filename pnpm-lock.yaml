@@ -49,6 +49,9 @@ importers:
       '@logtape/logtape':
         specifier: 2.4.2
         version: 2.4.2
+      '@mixmark-io/domino':
+        specifier: 2.2.0
+        version: 2.2.0
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
@@ -91,6 +94,9 @@ importers:
       shiki:
         specifier: 3.21.0
         version: 3.21.0
+      turndown:
+        specifier: 7.2.5
+        version: 7.2.5
       web-push:
         specifier: 3.6.7
         version: 3.6.7
@@ -131,6 +137,9 @@ importers:
       '@types/sharp':
         specifier: 0.32.0
         version: 0.32.0
+      '@types/turndown':
+        specifier: 5.0.6
+        version: 5.0.6
       '@types/web-push':
         specifier: 3.6.4
         version: 3.6.4
@@ -2548,6 +2557,9 @@ packages:
   '@mermaid-js/parser@1.0.0':
     resolution: {integrity: sha512-vvK0Hi/VWndxoh03Mmz6wa1KDriSPjS2XMZL/1l19HFwygiObEEoEwSDxOqyLzzAI6J2PU3261JjTMTO7x+BPw==}
 
+  '@mixmark-io/domino@2.2.0':
+    resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
+
   '@multiformats/base-x@4.0.1':
     resolution: {integrity: sha512-eMk0b9ReBbV23xXU693TAIrLyeO5iTgBZGSJfpqriG8UkYvr/hC9u9pyMlAakDNHWmbhMZCDs6KQO0jzKD8OTw==}
 
@@ -3922,6 +3934,9 @@ packages:
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
+  '@types/turndown@5.0.6':
+    resolution: {integrity: sha512-ru00MoyeeouE5BX4gRL+6m/BsDfbRayOskWqUvh7CLGW+UXxHQItqALa38kKnOiZPqJrtzJUgAC2+F0rL1S4Pg==}
 
   '@types/unist@2.0.11':
     resolution: {integrity: sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==}
@@ -8365,6 +8380,10 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  turndown@7.2.5:
+    resolution: {integrity: sha512-EKZvCCFHh8sWttpAMs10U6niZFJ2cpz8LkCPlylxoG4JcHF50J7EHnnBW3AY1qXtUMu7kDjCp7dnggB1sIbqEQ==}
+    engines: {node: '>=18', npm: '>=9'}
+
   twoslash-protocol@0.3.6:
     resolution: {integrity: sha512-FHGsJ9Q+EsNr5bEbgG3hnbkvEBdW5STgPU824AHUjB4kw0Dn4p8tABT7Ncg1Ie6V0+mDg3Qpy41VafZXcQhWMA==}
 
@@ -11174,6 +11193,8 @@ snapshots:
     dependencies:
       langium: 4.2.1
 
+  '@mixmark-io/domino@2.2.0': {}
+
   '@multiformats/base-x@4.0.1': {}
 
   '@napi-rs/wasm-runtime@0.2.12':
@@ -13146,6 +13167,8 @@ snapshots:
 
   '@types/trusted-types@2.0.7':
     optional: true
+
+  '@types/turndown@5.0.6': {}
 
   '@types/unist@2.0.11': {}
 
@@ -18853,6 +18876,10 @@ snapshots:
       get-tsconfig: 4.10.1
     optionalDependencies:
       fsevents: 2.3.3
+
+  turndown@7.2.5:
+    dependencies:
+      '@mixmark-io/domino': 2.2.0
 
   twoslash-protocol@0.3.6: {}
 

@@ -1,0 +1,1 @@
+ALTER TABLE `article_bodies` ADD `markdown` text;
