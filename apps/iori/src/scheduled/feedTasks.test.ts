@@ -103,13 +103,6 @@ describe('scheduledTasks', () => {
     expect(tasks).toContain(collectFeedsTask);
     expect(tasks.map((task) => task.name)).not.toContain('embedFeedEntries');
   });
-
-  it('3 時間ごとの cron は embedOwnInterestSources を syncOwnInterestSources の完了後に走らせる', () => {
-    const tasks = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!;
-    const embed = tasks.find((task) => task.name === 'embedOwnInterestSources');
-    expect(embed?.after).toBe('syncOwnInterestSources');
-    expect(tasks.map((task) => task.name)).toContain('syncOwnInterestSources');
-  });
 });
 
 describe('collectFeedsTask', () => {

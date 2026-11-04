@@ -44,6 +44,9 @@ export const dispatchScheduled = async (
   const runs = new Map<string, Promise<void>>();
   const results = await Promise.allSettled(tasks.map((task) => {
     const prerequisite = task.after === undefined ? undefined : runs.get(task.after);
+    if (task.after !== undefined && prerequisite === undefined) {
+      console.warn('iori scheduled task prerequisite not found.', { cron, task: task.name, after: task.after });
+    }
     const run = prerequisite === undefined
       ? task.run(context)
       : prerequisite.catch(() => undefined).then(() => task.run(context));

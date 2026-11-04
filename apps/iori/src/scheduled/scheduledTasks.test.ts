@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { dispatchScheduled, type ScheduledTaskContext } from './scheduledTasks.ts';
+import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
 
 const context: ScheduledTaskContext = {
   env: {} as never,
@@ -107,6 +107,20 @@ describe('dispatchScheduled', () => {
     });
   });
 
+  it('warns and runs the task without a prerequisite when after names no task', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const run = vi.fn(async () => undefined);
+    await dispatchScheduled('0 * * * *', {
+      '0 * * * *': [{ name: 'embed', after: 'missing', run }],
+    }, context);
+    expect(run).toHaveBeenCalledWith(context);
+    expect(warn).toHaveBeenCalledWith('iori scheduled task prerequisite not found.', {
+      cron: '0 * * * *',
+      task: 'embed',
+      after: 'missing',
+    });
+  });
+
   it('logs a failure of the task that runs after its prerequisite under its own name', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const failure = new Error('embed boom');
@@ -121,5 +135,26 @@ describe('dispatchScheduled', () => {
       task: 'embed',
       error: failure,
     });
+  });
+});
+
+describe('scheduledTasks', () => {
+  const entries = Object.entries(scheduledTasks);
+
+  it.each(entries)('%s has no duplicate task names', (_cron, tasks) => {
+    const names = tasks.map((task) => task.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it.each(entries)('%s runs each task with after only after the task it names', (_cron, tasks) => {
+    tasks.forEach((task, index) => {
+      if (task.after === undefined) return;
+      expect(tasks.slice(0, index).map((earlier) => earlier.name)).toContain(task.after);
+    });
+  });
+
+  it('runs embedOwnInterestSources after syncOwnInterestSources in the 3-hourly cron', () => {
+    const tasks = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!;
+    expect(tasks.find((task) => task.name === 'embedOwnInterestSources')?.after).toBe('syncOwnInterestSources');
   });
 });
