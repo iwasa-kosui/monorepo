@@ -157,4 +157,8 @@ describe('scheduledTasks', () => {
     const tasks = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!;
     expect(tasks.find((task) => task.name === 'embedOwnInterestSources')?.after).toBe('syncOwnInterestSources');
   });
+
+  it('registers archiveDomainEvents in the 19:00 daily cron', () => {
+    expect(scheduledTasks['0 19 * * *']?.map((task) => task.name)).toEqual(['archiveDomainEvents']);
+  });
 });

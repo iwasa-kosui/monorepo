@@ -65,6 +65,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['delete-rehearsal-d1', 'delete-rehearsal-d1.mjs'],
       ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
+      ['domain-events-stats', 'domain-events-stats.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -219,6 +220,27 @@ it('relays only the fixed move-unfollowed-reposts notices to the public log', as
     'IORI_NOTICE move-unfollowed-reposts mode=delete created=1 deleted=1',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=1234567890 deleted=1',
     ' IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed domain-events-stats notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE domain-events-stats summary total=120000 oldest=2026-08-01T00:00:00.000Z newest=2026-11-05T01:02:03.456Z older_than_7d=100000 avg_bytes=850 max_bytes=64000',
+    'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1234',
+    'IORI_NOTICE domain-events-stats event=timelineItem.deleted count=42',
+  ];
+  const rejected = [
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=-1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=yesterday newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1 extra=1',
+    'IORI_NOTICE domain-events-stats day=yesterday count=1',
+    'IORI_NOTICE domain-events-stats event=../secret count=1',
+    'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));

@@ -49,6 +49,9 @@ it('pins the operation stage vocabulary', () => {
     'move-reposts',
     'move-reposts-resolve',
     'move-reposts-query',
+    'events-stats',
+    'events-stats-resolve',
+    'events-stats-query',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });
@@ -239,6 +242,7 @@ it('prints the consumer script detail and state-mismatch of a real readActiveRes
     '/d1/database/db-id': { uuid: 'db-id', name: identity.names.d1 },
     '/storage/kv/namespaces/kv-id': { id: 'kv-id', title: identity.names.kv },
     [`/r2/buckets/${identity.names.uploads}`]: { name: identity.names.uploads },
+    [`/r2/buckets/${identity.names.eventArchive}`]: { name: identity.names.eventArchive },
     [`/r2/buckets/${identity.names.transfer}`]: { name: identity.names.transfer },
     [`/r2/buckets/${identity.names.transfer}/domains/managed`]: { enabled: false },
     '/queues/queue-id': queueResponse('queue-id', identity.names.queue, [consumer], false),
@@ -277,7 +281,7 @@ it('prints deploy-failed for a real deployment that the command reports as faile
       vars: admissionEnvironment,
       d1_databases: [{ database_id: 'db' }],
       kv_namespaces: [{ id: 'kv' }],
-      r2_buckets: [{ bucket_name: identity.names.uploads }],
+      r2_buckets: [{ bucket_name: identity.names.uploads }, { bucket_name: identity.names.eventArchive }],
       queues: { producers: [{ queue: identity.names.queue }] },
     }),
   );
@@ -311,7 +315,7 @@ describe('a real deployment with D1 migrations', () => {
         vars: admissionEnvironment,
         d1_databases: [{ binding: 'DB', database_id: 'db' }],
         kv_namespaces: [{ id: 'kv' }],
-        r2_buckets: [{ bucket_name: identity.names.uploads }],
+        r2_buckets: [{ bucket_name: identity.names.uploads }, { bucket_name: identity.names.eventArchive }],
         queues: { producers: [{ queue: identity.names.queue }] },
       }),
     );

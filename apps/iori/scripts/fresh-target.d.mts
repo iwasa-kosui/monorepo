@@ -5,7 +5,9 @@ export type TargetIdentity =
     {
       backendKey: string;
       workerName: string;
-      names: Readonly<{ d1: string; uploads: string; kv: string; queue: string; dlq: string; transfer: string }>;
+      names: Readonly<
+        { d1: string; uploads: string; eventArchive: string; kv: string; queue: string; dlq: string; transfer: string }
+      >;
     }
   >;
 export function createTargetIdentity(input: TargetInput): TargetIdentity;

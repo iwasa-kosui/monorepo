@@ -72,6 +72,7 @@ export const deployReviewedWorkerVersion = async (
       || rendered.d1_databases?.[0]?.database_id !== resources.d1Id
       || rendered.kv_namespaces?.[0]?.id !== resources.kvId
       || rendered.r2_buckets?.[0]?.bucket_name !== identity.names.uploads
+      || rendered.r2_buckets?.[1]?.bucket_name !== identity.names.eventArchive
       || rendered.queues?.producers?.[0]?.queue !== identity.names.queue
     ) throw new Error('Admission configuration mismatch.');
     signal.throwIfAborted();

@@ -118,10 +118,11 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
   };
   const readResourceState = async ({ d1Id, kvId, queueId, dlqId, consumerAttached = false }) => {
     if (![d1Id, kvId, queueId, dlqId].every(safeId) || queueId === dlqId) fail('state-mismatch', ['resource-input']);
-    const [d1, kv, uploads, transfer, queue, dlq] = await Promise.all([
+    const [d1, kv, uploads, eventArchive, transfer, queue, dlq] = await Promise.all([
       get(`${root}/d1/database/${d1Id}`),
       get(`${root}/storage/kv/namespaces/${kvId}`),
       get(`${root}/r2/buckets/${identity.names.uploads}`),
+      get(`${root}/r2/buckets/${identity.names.eventArchive}`),
       get(`${root}/r2/buckets/${identity.names.transfer}`),
       get(`${root}/queues/${queueId}`),
       get(`${root}/queues/${dlqId}`),
@@ -132,7 +133,10 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     };
     if (d1.uuid !== d1Id || d1.name !== identity.names.d1) note('resource-d1');
     if (kv.id !== kvId || kv.title !== identity.names.kv) note('resource-kv');
-    if (uploads.name !== identity.names.uploads || transfer.name !== identity.names.transfer) note('resource-r2');
+    if (
+      uploads.name !== identity.names.uploads || eventArchive.name !== identity.names.eventArchive
+      || transfer.name !== identity.names.transfer
+    ) note('resource-r2');
     for (const [q, id, name] of [[queue, queueId, identity.names.queue], [dlq, dlqId, identity.names.dlq]]) {
       if (q.queue_id !== id || q.queue_name !== name) note('resource-queue-identity');
       if (q.settings?.delivery_paused !== (id !== queueId)) note('resource-queue-paused');
@@ -221,6 +225,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     const expected = [
       { name: 'DB', type: 'd1', id: resources.d1Id },
       { name: 'UPLOADS', type: 'r2_bucket', bucket_name: identity.names.uploads },
+      { name: 'EVENT_ARCHIVE', type: 'r2_bucket', bucket_name: identity.names.eventArchive },
       { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: resources.kvId },
       { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: identity.names.queue },
       { name: 'ASSETS', type: 'assets' },
@@ -238,6 +243,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     }
     const extraNames = new Set([
       'VAPID_SUBJECT',
+      'EVENT_ARCHIVE_ENABLED',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
