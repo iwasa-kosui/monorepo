@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "52846923-a18d-4d19-af96-64a12e9bbca8",
-  "prevId": "71990bbd-5b37-4844-9ea2-6edbd1e22d28",
+  "id": "014da612-2863-49be-ad28-e007a2687382",
+  "prevId": "30779a4b-357a-440a-a6c0-0ea37055b218",
   "tables": {
     "actors": {
       "name": "actors",
@@ -981,6 +981,14 @@
             "postId"
           ],
           "isUnique": false
+        },
+        "federated_timeline_items_post_id_relay_id_unique": {
+          "name": "federated_timeline_items_post_id_relay_id_unique",
+          "columns": [
+            "postId",
+            "relayId"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
