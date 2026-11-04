@@ -22,6 +22,18 @@ const requireSession = (): string => {
   return sessionCookie!;
 };
 
+const createStatus = async (cookie: string, status: string): Promise<string> => {
+  const created = await SELF.fetch(`${origin}/api/v1/statuses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: origin },
+    body: JSON.stringify({ status }),
+  });
+  expect(created.status).toBe(200);
+  const body = await created.json<{ id: string }>();
+  expect(body.id).toBeTruthy();
+  return body.id;
+};
+
 describe('iori Worker on workerd', () => {
   it('responds 200 on /health', async () => {
     const response = await SELF.fetch(`${origin}/health`);
@@ -54,17 +66,10 @@ describe('iori Worker on workerd', () => {
     expect(rejected.status).toBe(401);
   });
 
-  it('creates a post through POST /posts and lists it on the timeline', async () => {
+  it('creates a post through POST /api/v1/statuses and lists it on the timeline', async () => {
     const cookie = requireSession();
 
-    const created = await SELF.fetch(`${origin}/posts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
-      body: new URLSearchParams({ content: 'hello from workerd' }),
-      redirect: 'manual',
-    });
-    expect(created.status).toBe(302);
-    expect(created.headers.get('Location')).toBe('/');
+    await createStatus(cookie, 'hello from workerd');
 
     const timeline = await SELF.fetch(`${origin}/api/v1/home`, { headers: { Cookie: cookie } });
     expect(timeline.status).toBe(200);
@@ -138,23 +143,14 @@ describe('iori Worker on workerd', () => {
 
     it('seeds a published, a draft, and an unpublished article', async () => {
       const cookie = requireSession();
-      for (const content of ['article root 1', 'article root 2', 'article root 3']) {
-        const created = await SELF.fetch(`${origin}/posts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
-          body: new URLSearchParams({ content }),
-          redirect: 'manual',
-        });
-        expect(created.status).toBe(302);
-      }
+      const [published, draft, unpublished] = [
+        await createStatus(cookie, 'article root 1'),
+        await createStatus(cookie, 'article root 2'),
+        await createStatus(cookie, 'article root 3'),
+      ];
       const author = await env.DB.prepare('SELECT actorId, userId FROM local_actors LIMIT 1').first<
         { actorId: string; userId: string }
       >();
-      const roots = await env.DB.prepare(
-        'SELECT postId FROM posts WHERE postId NOT IN (SELECT rootPostId FROM articles) LIMIT 3',
-      ).all<{ postId: string }>();
-      expect(roots.results).toHaveLength(3);
-      const [published, draft, unpublished] = roots.results.map((root) => root.postId);
       const insert = env.DB.prepare(
         'INSERT INTO articles (articleId, authorActorId, authorUserId, rootPostId, title, status, createdAt, publishedAt, unpublishedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );

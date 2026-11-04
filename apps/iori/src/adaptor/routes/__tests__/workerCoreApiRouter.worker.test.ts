@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
 import { createWorkerCoreApiRouter } from '../workerCoreApiRouter.ts';
@@ -6,10 +6,7 @@ import { createWorkerCoreApiRouter } from '../workerCoreApiRouter.ts';
 const sessionCookie = 'sessionId=4dc530d6-d06c-4b4a-a021-0e1aee0b6d82';
 
 const createDeps = () => ({
-  subscribePushUseCase: { run: vi.fn() },
-  unsubscribePushUseCase: { run: vi.fn() },
   vapidPublicKey: 'public-key',
-  createContext: vi.fn(() => ({})),
 });
 
 describe('createWorkerCoreApiRouter', () => {
@@ -28,11 +25,6 @@ describe('createWorkerCoreApiRouter', () => {
       app.request('/api/v1/remote-users/not-an-id/posts'),
       app.request('/api/v1/users/not valid/posts'),
       app.request('/api/v1/push/vapid-public-key'),
-      app.request('/api/v1/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      }),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
@@ -40,7 +32,6 @@ describe('createWorkerCoreApiRouter', () => {
       404,
       404,
       200,
-      400,
     ]);
   });
 

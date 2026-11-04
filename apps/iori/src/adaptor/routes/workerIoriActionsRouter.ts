@@ -12,13 +12,13 @@ import { PostId } from '../../domain/post/postId.ts';
 import type { AllRelaysResolver } from '../../domain/relay/relay.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
+import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import type { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { type StatusAssembler, StatusAssemblyError } from '../mastodon/statusAssembler.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody } from './helper/requestBody.ts';
-import { sanitize } from './helper/sanitize.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerIoriActionsRouterDeps = Readonly<{
@@ -29,6 +29,7 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
+  subscribePushUseCase: SubscribePushUseCase;
   allRelaysResolver: AllRelaysResolver;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
@@ -41,8 +42,13 @@ const read = Scope.orThrow('read');
 const write = Scope.orThrow('write');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
+const push = Scope.orThrow('push');
 const emojiSchema = z.string().min(1).max(128);
 const urlSchema = z.string().url();
+const pushSubscriptionSchema = z.object({
+  endpoint: z.url(),
+  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
 
@@ -75,6 +81,7 @@ export const createWorkerIoriActionsRouter = ({
   sendEmojiReactUseCase,
   undoEmojiReactUseCase,
   subscribeRelayUseCase,
+  subscribePushUseCase,
   allRelaysResolver,
   createContext,
 }: WorkerIoriActionsRouterDeps): Hono<MastodonAuthEnv> => {
@@ -139,7 +146,7 @@ export const createWorkerIoriActionsRouter = ({
       if (typeof markdown !== 'string') {
         return c.json(validationFailed('markdown'), 422);
       }
-      return c.json({ html: sanitize(await PostContent.fromMarkdown(markdown)) });
+      return c.json({ html: await PostContent.fromMarkdown(markdown) });
     })
     .put('/iori/v1/statuses/:id/reactions/:emoji', authn.requireUser(writeFavourites), async (c) => {
       const acting = await resolveActingPost(c);
@@ -191,5 +198,22 @@ export const createWorkerIoriActionsRouter = ({
       return subscribed.ok
         ? c.json({ success: true, relay: subscribed.val })
         : c.json({ error: `Failed to subscribe to relay: ${JSON.stringify(subscribed.err)}` }, 400);
+    })
+    .post('/iori/v1/push/subscribe', authn.requireUser(push), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const subscription = pushSubscriptionSchema.safeParse(await readRequestBody(c));
+      if (!subscription.success) {
+        return c.json(validationFailed('subscription'), 422);
+      }
+      const subscribed = await subscribePushUseCase.run({
+        userId,
+        endpoint: subscription.data.endpoint,
+        p256dhKey: subscription.data.keys.p256dh,
+        authKey: subscription.data.keys.auth,
+      });
+      return subscribed.ok ? c.json({ success: true }) : c.json({ error: subscribed.err.message }, 400);
     });
 };

@@ -30,7 +30,6 @@ import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMast
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerPageActionsRouter.ts';
-import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
 import { ArticleId } from './domain/article/articleId.ts';
@@ -173,13 +172,6 @@ export default {
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(
-          '/posts',
-          createWorkerPostsRouter({
-            createPostUseCase: runtime.posting.createPostUseCase,
-            createContext: (postRequest) => runtime.federation.createContext(postRequest, undefined),
-          }),
-        );
-        app.route(
           '/api',
           createWorkerAuthApiRouter({
             signInUseCase: runtime.auth.signInUseCase,
@@ -204,7 +196,6 @@ export default {
           '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
-            createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
           }),
         );
         const authn = createMastodonAuthn({
@@ -266,6 +257,7 @@ export default {
             ...runtime.mastodon,
             ...runtime.socialActions,
             subscribeRelayUseCase: runtime.mutesRelays.subscribeRelayUseCase,
+            subscribePushUseCase: runtime.core.subscribePushUseCase,
             allRelaysResolver: runtime.mutesRelays.allRelaysResolver,
             authn,
             createContext,

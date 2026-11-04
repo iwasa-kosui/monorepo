@@ -68,6 +68,16 @@ describe('POST /api/iori/v1/preview', () => {
     expect(body.html).not.toContain('<script>');
   });
 
+  it('素の URL は href を残した a タグにする', async () => {
+    const t = await seedReactions('write:statuses');
+
+    const response = await preview(t, t.me.bearer, { markdown: 'https://example.com/path' });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { html: string };
+    expect(body.html).toContain('href="https://example.com/path"');
+  });
+
   it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
     const t = await seedReactions();
     const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
@@ -398,5 +408,80 @@ describe('GET と POST /api/iori/v1/relays', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Validation failed: url' });
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/iori/v1/push/subscribe', () => {
+  const endpoint = 'https://push.example/endpoint/1';
+  const subscription = { endpoint, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } };
+  const subscribe = (t: Awaited<ReturnType<typeof seedReactions>>, headers: Record<string, string>, body: unknown) => {
+    const { path, init } = jsonPost('/api/iori/v1/push/subscribe', headers, body);
+    return t.request(path, init);
+  };
+  const stored = (t: Awaited<ReturnType<typeof seedReactions>>) =>
+    t.sqlite.prepare('SELECT userId, endpoint, p256dhKey, authKey FROM push_subscriptions').all();
+
+  it('Bearer の利用者の購読を保存し、success を返す', async () => {
+    const t = await seedReactions('push');
+
+    const response = await subscribe(t, t.me.bearer, subscription);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(stored(t)).toEqual([
+      { userId: t.me.userId, endpoint, p256dhKey: 'p256dh-key', authKey: 'auth-key' },
+    ]);
+  });
+
+  it('購読済みの endpoint は 400 にして増やさない', async () => {
+    const t = await seedReactions('push');
+    await subscribe(t, t.me.bearer, subscription);
+
+    const response = await subscribe(t, t.me.bearer, subscription);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'This endpoint is already subscribed.' });
+    expect(stored(t)).toHaveLength(1);
+  });
+
+  it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
+    const t = await seedReactions();
+    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
+
+    const missing = await subscribe(t, cookie, subscription);
+    const same = await subscribe(t, { ...cookie, Origin: ORIGIN }, subscription);
+
+    expect([missing.status, same.status]).toEqual([403, 200]);
+    expect(stored(t)).toHaveLength(1);
+  });
+
+  it('トークンがないと 401、push を満たさないスコープは 403 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      subscribe(t, {}, subscription),
+      subscribe(t, { Authorization: 'Bearer invalid' }, subscription),
+      subscribe(t, await t.bearerFor('read write'), subscription),
+      subscribe(t, await t.bearerFor('write:statuses'), subscription),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
+    expect(stored(t)).toEqual([]);
+  });
+
+  it.each([
+    ['本文がない', {}],
+    ['endpoint が URL でない', { endpoint: 'not a url', keys: subscription.keys }],
+    ['keys がない', { endpoint }],
+    ['p256dh が空', { endpoint, keys: { p256dh: '', auth: 'auth-key' } }],
+    ['auth がない', { endpoint, keys: { p256dh: 'p256dh-key' } }],
+  ])('%s と 422 にする', async (_name, body) => {
+    const t = await seedReactions('push');
+
+    const response = await subscribe(t, t.me.bearer, body);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Validation failed: subscription' });
+    expect(stored(t)).toEqual([]);
   });
 });

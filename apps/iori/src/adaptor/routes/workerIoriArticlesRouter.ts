@@ -14,6 +14,7 @@ import type {
 } from '../../domain/digest/digest.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { CreateArticleUseCase } from '../../useCase/createArticle.ts';
 import type { DeleteArticleUseCase } from '../../useCase/deleteArticle.ts';
@@ -23,7 +24,6 @@ import type { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
 import type { UnpublishArticleUseCase } from '../../useCase/unpublishArticle.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { readRequestBody } from './helper/requestBody.ts';
-import { sanitize } from './helper/sanitize.ts';
 import { sanitizeArticleBody } from './helper/sanitizeArticleBody.ts';
 import {
   getMastodonPrincipal,
@@ -135,7 +135,7 @@ export const createWorkerIoriArticlesRouter = ({
       const digest = await resolveDigestExclusions(result.val.article, viewerUserId);
       return c.json({
         article: result.val.article,
-        thread: result.val.thread.map((post) => ({ ...post, content: sanitize(post.content) })),
+        thread: result.val.thread.map((post) => ({ ...post, content: sanitizePostContent(post.content) })),
         ...(result.val.body === undefined ? {} : { body: { html: sanitizeArticleBody(result.val.body.html) } }),
         ...(digest === undefined ? {} : { digest }),
       });
