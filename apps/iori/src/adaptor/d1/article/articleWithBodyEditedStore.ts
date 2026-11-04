@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, exists, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { ArticleWithBodyEditedStore } from '../../../domain/article/article.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -18,6 +18,7 @@ export const createD1ArticleWithBodyEditedStore = (db: IoriD1Db): ArticleWithBod
     const bodyIsWritten = and(
       eq(articleBodiesTable.articleId, articleId),
       eq(articleBodiesTable.updatedAt, new Date(updatedAt)),
+      markdown === null ? isNull(articleBodiesTable.markdown) : eq(articleBodiesTable.markdown, markdown),
     );
     const insertEventIfWritten = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
       const row = toD1DomainEventRow(event);

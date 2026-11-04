@@ -139,6 +139,22 @@ describe('createD1DigestDeepDiveBodyWrittenStore', () => {
     expect(eventNames()).toEqual(['articleBody.written', 'digestDeepDive.started']);
   });
 
+  it('同じ ms の版で 2 つの書き込みが競合したら、負けた側はイベントも深掘りも往復も書かず written を false にする', async () => {
+    const { store, resolver, digestItemId, bodyAt, started, rows, body, eventNames } = setup();
+    const winner = started('勝ち', t1);
+    const loser = started('負け', t1);
+
+    const first = await store.store(winner, bodyAt(t1, '- winner'), createdAt);
+    const second = await store.store(loser, bodyAt(t1, '- loser'), createdAt);
+
+    expect(first).toEqual({ ok: true, val: { written: true } });
+    expect(second).toEqual({ ok: true, val: { written: false } });
+    expect(body()).toEqual({ markdown: '- winner', updatedAt: t1 });
+    expect(rows('SELECT instruction FROM digest_deep_dive_turns')).toEqual([{ instruction: '勝ち' }]);
+    expect(eventNames()).toEqual(['articleBody.written', 'digestDeepDive.started']);
+    expect((await resolver.resolve(digestItemId)).val).toEqual(winner.aggregateState);
+  });
+
   it('確認の後、書き込みの前に published になっていたら、何も書かず written を false にする', async () => {
     const { store, bodyAt, started, rows, body, eventNames } = setup('published');
 

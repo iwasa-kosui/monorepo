@@ -12,4 +12,5 @@ export type DigestDeepDiveReservation =
 export type DigestDeepDiveUsageRecorder = Readonly<{
   reserve: (input: Readonly<{ userId: UserId; day: string; now: Instant }>) => RA<DigestDeepDiveReservation, never>;
   remaining: (input: Readonly<{ userId: UserId; day: string }>) => RA<number, never>;
+  release: (input: Readonly<{ userId: UserId; day: string }>) => RA<void, never>;
 }>;

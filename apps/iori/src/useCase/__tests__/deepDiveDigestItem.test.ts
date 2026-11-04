@@ -14,7 +14,7 @@ import { createD1FeedEntryResolverByFeedEntryId } from '../../adaptor/d1/feedEnt
 import { createD1InterestSourceResolverByUserIdAndInterestSourceId } from '../../adaptor/d1/interestSource/interestSourceResolverByUserIdAndInterestSourceId.ts';
 import { createD1LikedPostContentsResolverByLikeIds } from '../../adaptor/d1/interestSource/likedPostContentsResolverByLikeIds.ts';
 import { createD1PostContentsResolverByPostIds } from '../../adaptor/d1/interestSource/postContentsResolverByPostIds.ts';
-import { createD1RecommendableArticlesResolverByFetchedSince } from '../../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
+import { createD1RelatedArticlesResolverByEmbedding } from '../../adaptor/d1/recommendation/relatedArticlesResolverByEmbedding.ts';
 import { htmlToMarkdown } from '../../adaptor/text/htmlToMarkdown.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import { DigestItemId } from '../../domain/digest/digestItemId.ts';
@@ -52,7 +52,13 @@ const vector = (angle: number): Float32Array => {
 };
 
 type Options = Readonly<
-  { status?: string; markdown?: string | null; publicHtml?: string; reasonInterestSourceId?: string }
+  {
+    status?: string;
+    markdown?: string | null;
+    publicHtml?: string;
+    reasonInterestSourceId?: string;
+    withoutAi?: boolean;
+  }
 >;
 
 const setup = (options: Options = {}) => {
@@ -153,12 +159,12 @@ const setup = (options: Options = {}) => {
     digestDeepDiveBodyWrittenStore: createD1DigestDeepDiveBodyWrittenStore(db),
     feedEntryResolverByFeedEntryId: createD1FeedEntryResolverByFeedEntryId(db),
     feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
-    recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+    relatedArticlesResolverByEmbedding: createD1RelatedArticlesResolverByEmbedding(db),
     interestSourceResolverByUserIdAndInterestSourceId: createD1InterestSourceResolverByUserIdAndInterestSourceId(db),
     postContentsResolverByPostIds: createD1PostContentsResolverByPostIds(db),
     likedPostContentsResolverByLikeIds: createD1LikedPostContentsResolverByLikeIds(db),
     safeFetcher: { fetchText } as never,
-    textGenerator: { summarize: vi.fn() as never, generate },
+    textGenerator: options.withoutAi === true ? undefined : { summarize: vi.fn() as never, generate },
     htmlToMarkdown,
     renderMarkdown: async (markdown) => `<p>${markdown}</p>`,
     now: () => NOW,
@@ -299,41 +305,113 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(input).toContain('<document>\n元の記事の本文\n');
     });
 
-    it('AI の出力に項目のリンクが無ければ、元のリンク行を先頭に足す', async () => {
+    it('AI の出力に項目のリンクが無ければ、元のリンク行を先頭に足し、続く行をインデントする', async () => {
       const t = setup();
       t.generate.mockResolvedValueOnce(RA.ok('リンクの無い深掘り') as never);
 
       const result = await t.run('b');
 
-      expect(result.ok && result.val.markdown).toContain(`- [B](${urlOf('b')})  \nリンクの無い深掘り`);
+      expect(result.ok && result.val.markdown).toContain(`- [B](${urlOf('b')})  \n  リンクの無い深掘り`);
       expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
-        { resultMarkdown: `- [B](${urlOf('b')})  \nリンクの無い深掘り` },
+        { resultMarkdown: `- [B](${urlOf('b')})  \n  リンクの無い深掘り` },
       ]);
     });
 
-    it('AI の出力が空なら、元のリンク行だけにする', async () => {
+    it('AI の出力にかたまりの前後の文があれば、項目のかたまりだけを使う', async () => {
       const t = setup();
-      t.generate.mockResolvedValueOnce(RA.ok('  \n') as never);
+      t.generate.mockResolvedValueOnce(
+        RA.ok(`以下が結果です。\n\n- [B](${urlOf('b')})\n  深掘りの結果\n\n以上です。`) as never,
+      );
+
+      await t.run('b');
+
+      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
+        { resultMarkdown: `- [B](${urlOf('b')})\n  深掘りの結果` },
+      ]);
+    });
+
+    it('AI の出力の 2 行目以降でインデントの無い行には、半角スペース 2 つを足す', async () => {
+      const t = setup();
+      t.generate.mockResolvedValueOnce(RA.ok(`- [B](${urlOf('b')})\n本文 1\n  本文 2`) as never);
+
+      await t.run('b');
+
+      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
+        { resultMarkdown: `- [B](${urlOf('b')})\n  本文 1\n  本文 2` },
+      ]);
+    });
+
+    it('AI の出力のかたまりに見出しの行があれば DigestDeepDiveGenerationFailedError を返し、本文を変えず回数も戻す', async () => {
+      const t = setup();
+      t.generate.mockResolvedValueOnce(RA.ok(`- [B](${urlOf('b')})\n    # 見出し\n    本文`) as never);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await t.run('b');
 
-      expect(result.ok && result.val.markdown).toBe(
-        BODY_MARKDOWN.replace(`- [B](${urlOf('b')})  \n  要約 b`, `- [B](${urlOf('b')})`),
-      );
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
+      expect(t.body().updatedAt).toBe(CREATED_AT);
+      expect(t.usageCount()).toBe(0);
+      error.mockRestore();
     });
 
-    it('<think> のブロックを取り除き、6,000 文字で切る', async () => {
+    it('AI の出力の 2 行目以降に、同じダイジェストのほかの項目へのリンクがあれば失敗する', async () => {
       const t = setup();
       t.generate.mockResolvedValueOnce(
-        RA.ok(`<think>考え中</think>- [B](${urlOf('b')})\n${'あ'.repeat(7_000)}`) as never,
+        RA.ok(`- [B](${urlOf('b')})\n  深掘り\n  - [C](${urlOf('c')})`) as never,
+      );
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await t.run('b');
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
+      expect(t.body().updatedAt).toBe(CREATED_AT);
+      expect(t.rows('SELECT count(*) AS n FROM digest_deep_dive_turns')).toEqual([{ n: 0 }]);
+      error.mockRestore();
+    });
+
+    it('AI の出力が空なら、本文が空のため失敗し、本文を変えず回数も戻す', async () => {
+      const t = setup();
+      t.generate.mockResolvedValueOnce(RA.ok('  \n') as never);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await t.run('b');
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
+      expect(t.body().updatedAt).toBe(CREATED_AT);
+      expect(t.usageCount()).toBe(0);
+      error.mockRestore();
+    });
+
+    it('AI の出力の Markdown の画像を取り除く', async () => {
+      const t = setup();
+      t.generate.mockResolvedValueOnce(
+        RA.ok(
+          `- [B](${urlOf('b')})\n  ![図](https://img.example/x.png)\n  深掘り ![b](https://img.example/y.png)`,
+        ) as never,
+      );
+
+      await t.run('b');
+
+      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
+        { resultMarkdown: `- [B](${urlOf('b')})\n  深掘り` },
+      ]);
+    });
+
+    it('<think> のブロックを取り除き、6,000 文字を超えるときは行の境目で切る', async () => {
+      const t = setup();
+      const lines = Array.from({ length: 100 }, () => 'あ'.repeat(100));
+      t.generate.mockResolvedValueOnce(
+        RA.ok(`<think>考え中</think>- [B](${urlOf('b')})\n${lines.join('\n')}`) as never,
       );
 
       await t.run('b');
 
       const [turn] = t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns') as Array<{ resultMarkdown: string }>;
-      expect(Array.from(turn!.resultMarkdown)).toHaveLength(6_000);
+      expect(Array.from(turn!.resultMarkdown).length).toBeLessThanOrEqual(6_000);
+      expect(Array.from(turn!.resultMarkdown).length).toBeGreaterThan(5_800);
       expect(turn!.resultMarkdown.startsWith(`- [B](${urlOf('b')})`)).toBe(true);
       expect(turn!.resultMarkdown).not.toContain('考え中');
+      expect(turn!.resultMarkdown.split('\n').slice(1).every((line) => line === `  ${'あ'.repeat(100)}`)).toBe(true);
     });
 
     it('AI が失敗したら DigestDeepDiveGenerationFailedError を返し、本文を変えない', async () => {
@@ -346,6 +424,7 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
       expect(t.body().updatedAt).toBe(CREATED_AT);
       expect(t.rows('SELECT count(*) AS n FROM digest_deep_dives')).toEqual([{ n: 0 }]);
+      expect(t.usageCount()).toBe(0);
       error.mockRestore();
     });
   });
@@ -422,9 +501,10 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(t.body()).toMatchObject({ markdown: '- 別の保存', updatedAt: 3_000 });
       expect(t.rows('SELECT count(*) AS n FROM digest_deep_dives')).toEqual([{ n: 0 }]);
       expect(t.rows('SELECT count(*) AS n FROM digest_deep_dive_turns')).toEqual([{ n: 0 }]);
+      expect(t.usageCount()).toBe(0);
     });
 
-    it('AI の生成の間に公開されたら ArticleInvalidStatusError を返し、本文を変えない', async () => {
+    it('AI の生成の間に公開されたら ArticleInvalidStatusError を返し、本文を変えず回数も戻す', async () => {
       const t = setup();
       t.generate.mockImplementationOnce(async () => {
         t.sqlite.prepare('UPDATE articles SET status = ?').run('published');
@@ -435,6 +515,7 @@ describe('DeepDiveDigestItemUseCase', () => {
 
       expect(result).toMatchObject({ ok: false, err: { type: 'ArticleInvalidStatusError' } });
       expect(t.body().updatedAt).toBe(CREATED_AT);
+      expect(t.usageCount()).toBe(0);
     });
 
     it('保存のたびに本文の版が進み、前の応答の updatedAt で続けて依頼できる', async () => {
@@ -542,6 +623,89 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(input).toContain('<request>\n事例も\n</request>');
     });
 
+    it('AI が使えないときは DigestDeepDiveGenerationFailedError を返し、回数を予約しない', async () => {
+      const t = setup({ withoutAi: true });
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await t.run('a');
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
+      expect(t.rows('SELECT count(*) AS n FROM digest_deep_dive_usages')).toEqual([{ n: 0 }]);
+      error.mockRestore();
+    });
+
+    it('新しい深掘りが AI の失敗で返ったときは、予約した回数を戻す', async () => {
+      const t = setup();
+      t.generate.mockResolvedValueOnce(RA.err({ type: 'AiError', message: 'model overloaded' }) as never);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await t.run('a');
+      const retried = await t.run('a');
+
+      expect(retried).toMatchObject({ ok: true, val: { turnNumber: 1, dailyRemaining: 2 } });
+      expect(t.usageCount()).toBe(1);
+      error.mockRestore();
+    });
+
+    it('続きの往復が失敗したときは、予約していないので回数を戻さない', async () => {
+      const t = setup();
+      const first = await t.run('a');
+      if (!first.ok) throw new Error('first failed');
+      t.generate.mockResolvedValueOnce(RA.err({ type: 'AiError', message: 'model overloaded' }) as never);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const second = await t.run('a', first.val.updatedAt);
+
+      expect(second).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
+      expect(t.usageCount()).toBe(1);
+      error.mockRestore();
+    });
+
+    it('続きの往復が版の衝突で返ったときも、回数を戻さない', async () => {
+      const t = setup();
+      const first = await t.run('a');
+      if (!first.ok) throw new Error('first failed');
+      t.generate.mockImplementationOnce(async () => {
+        t.sqlite.prepare('UPDATE article_bodies SET markdown = ?, updatedAt = ?').run('- 別の保存', 3_000);
+        return RA.ok(`- [A](${urlOf('a')})\n  深掘り`) as never;
+      });
+
+      const second = await t.run('a', first.val.updatedAt);
+
+      expect(second).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveConflictError' } });
+      expect(t.usageCount()).toBe(1);
+    });
+
+    it('同じ項目への依頼が重なり、先に保存された側に負けて DigestDeepDiveConflictError になっても、回数は 1 回分だけ使われる', async () => {
+      const t = setup();
+      let winner: Awaited<ReturnType<typeof t.run>> | undefined;
+      t.generate.mockImplementationOnce(async () => {
+        winner = await t.run('a');
+        return RA.ok(`- [A](${urlOf('a')})\n  負けた側の結果`) as never;
+      });
+
+      const loser = await t.run('a');
+
+      expect(winner?.ok).toBe(true);
+      expect(loser).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveConflictError' } });
+      expect(t.usageCount()).toBe(1);
+      expect(t.rows('SELECT count(*) AS n FROM digest_deep_dives')).toEqual([{ n: 1 }]);
+      expect(t.rows('SELECT instruction, resultMarkdown FROM digest_deep_dive_turns')).toEqual([
+        { instruction: '', resultMarkdown: `- [A](${urlOf('a')})\n  深掘りの結果` },
+      ]);
+    });
+
+    it('古い版での 2 回目の依頼は、AI を呼ぶ前に DigestDeepDiveConflictError になり、回数は 1 回分のまま', async () => {
+      const t = setup();
+      await t.run('a');
+
+      const second = await t.run('a');
+
+      expect(second).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveConflictError' } });
+      expect(t.generate).toHaveBeenCalledTimes(1);
+      expect(t.usageCount()).toBe(1);
+    });
+
     it('最初の依頼にはこれまでの依頼と結果を渡さない', async () => {
       const t = setup();
 
@@ -552,7 +716,7 @@ describe('DeepDiveDigestItemUseCase', () => {
   });
 
   describe('締め切り', () => {
-    it('45 秒の締め切りを設定し、超えたら DigestDeepDiveTimeoutError を返して、予約した回数は戻さない', async () => {
+    it('45 秒の締め切りを設定し、超えたら DigestDeepDiveTimeoutError を返して、予約した回数を戻す', async () => {
       const t = setup();
       t.generate.mockImplementationOnce(() => new Promise(() => {}));
 
@@ -563,7 +727,7 @@ describe('DeepDiveDigestItemUseCase', () => {
 
       expect(t.sleep).toHaveBeenCalledWith(45_000);
       expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveTimeoutError' } });
-      expect(t.usageCount()).toBe(1);
+      expect(t.usageCount()).toBe(0);
       expect(t.body().updatedAt).toBe(CREATED_AT);
     });
 

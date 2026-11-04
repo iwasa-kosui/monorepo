@@ -24,14 +24,14 @@ const setup = (status: string) => {
   ).run(created.articleId, author.actorId, author.userId, null, 'Before', status, createdAt, null, null);
   fixture.sqlite.prepare('INSERT INTO article_bodies(articleId,privateHtml,publicHtml,updatedAt) VALUES (?,?,?,?)')
     .run(created.articleId, '<p>old private</p>', '<p>old public</p>', createdAt);
-  const edit = (title: string | undefined, baseUpdatedAt: Instant = createdAt) =>
+  const edit = (title: string | undefined, baseUpdatedAt: Instant = createdAt, markdown = 'new') =>
     createD1ArticleWithBodyEditedStore(fixture.db).store(
       title === undefined ? undefined : Article.changeArticleTitle(now)(created, title).val as never,
       ArticleBody.writeArticleBody(now)({
         articleId: created.articleId,
         privateHtml: '<p>new</p>',
         publicHtml: '<p>new</p>',
-        markdown: 'new',
+        markdown,
       }),
       baseUpdatedAt,
     );
@@ -102,6 +102,19 @@ describe('createD1ArticleWithBodyEditedStore', () => {
       expect(eventNames()).toEqual([]);
     },
   );
+
+  it('同じ ms の版で 2 つの編集が競合したら、負けた側はタイトルもイベントも書かず edited を false にする', async () => {
+    const { edit, title, body, eventNames } = setup('draft');
+
+    const first = await edit(undefined, createdAt, 'winner');
+    const second = await edit('Loser', createdAt, 'loser');
+
+    expect(first).toEqual({ ok: true, val: { edited: true } });
+    expect(second).toEqual({ ok: true, val: { edited: false } });
+    expect(title()).toBe('Before');
+    expect(body()).toMatchObject({ markdown: 'winner', updatedAt: now });
+    expect(eventNames()).toEqual(['articleBody.written']);
+  });
 
   it('版が一致すれば、本文の updatedAt を書き込んだ版にする', async () => {
     const { edit, body, overwriteBody } = setup('draft');

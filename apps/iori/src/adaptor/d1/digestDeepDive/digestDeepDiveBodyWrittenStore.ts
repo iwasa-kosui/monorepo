@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, exists, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { DigestDeepDiveBodyWrittenStore } from '../../../domain/digestDeepDive/digestDeepDive.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -25,6 +25,7 @@ export const createD1DigestDeepDiveBodyWrittenStore = (db: IoriD1Db): DigestDeep
     const bodyIsWritten = and(
       eq(articleBodiesTable.articleId, articleId),
       eq(articleBodiesTable.updatedAt, new Date(updatedAt)),
+      markdown === null ? isNull(articleBodiesTable.markdown) : eq(articleBodiesTable.markdown, markdown),
     );
     const insertEventIfWritten = (event: Parameters<typeof toD1DomainEventRow>[0]) => {
       const row = toD1DomainEventRow(event);

@@ -32,6 +32,7 @@ import { createD1TimelineLinkTrendsResolverByUserId } from '../adaptor/d1/linkPr
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1InterestVectorsResolverByUserId } from '../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
 import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
+import { createD1RelatedArticlesResolverByEmbedding } from '../adaptor/d1/recommendation/relatedArticlesResolverByEmbedding.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { htmlToMarkdown } from '../adaptor/text/htmlToMarkdown.ts';
@@ -111,7 +112,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
       digestDeepDiveBodyWrittenStore: createD1DigestDeepDiveBodyWrittenStore(db),
       feedEntryResolverByFeedEntryId: createD1FeedEntryResolverByFeedEntryId(db),
       feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
-      recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+      relatedArticlesResolverByEmbedding: createD1RelatedArticlesResolverByEmbedding(db),
       interestSourceResolverByUserIdAndInterestSourceId: createD1InterestSourceResolverByUserIdAndInterestSourceId(db),
       postContentsResolverByPostIds: createD1PostContentsResolverByPostIds(db),
       likedPostContentsResolverByLikeIds: createD1LikedPostContentsResolverByLikeIds(db),

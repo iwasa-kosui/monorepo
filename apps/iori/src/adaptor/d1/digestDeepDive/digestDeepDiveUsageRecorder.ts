@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, gt, lt, sql } from 'drizzle-orm';
 
 import { secondsUntilNextJstDay } from '../../../domain/aiSummary/usageLimit.ts';
 import {
@@ -29,5 +29,15 @@ export const createD1DigestDeepDiveUsageRecorder = (db: IoriD1Db): DigestDeepDiv
       .from(digestDeepDiveUsagesTable)
       .where(and(eq(digestDeepDiveUsagesTable.userId, userId), eq(digestDeepDiveUsagesTable.day, day)));
     return RA.ok(Math.max(0, DIGEST_DEEP_DIVE_DAILY_LIMIT - (row?.count ?? 0)));
+  },
+  release: async ({ userId, day }) => {
+    await db.update(digestDeepDiveUsagesTable)
+      .set({ count: sql`${digestDeepDiveUsagesTable.count} - 1` })
+      .where(and(
+        eq(digestDeepDiveUsagesTable.userId, userId),
+        eq(digestDeepDiveUsagesTable.day, day),
+        gt(digestDeepDiveUsagesTable.count, 0),
+      ));
+    return RA.ok(undefined);
   },
 });

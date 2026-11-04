@@ -1,3 +1,5 @@
+import { err, ok, type Result } from '@iwasa-kosui/result';
+
 export type DigestItemBlock = Readonly<{ start: number; end: number; text: string }>;
 
 const LIST_ITEM = /^(\s*)(?:[-*+]|\d+[.)])\s+/;
@@ -46,3 +48,59 @@ export const findDigestItemBlock = (markdown: string, url: string): DigestItemBl
 
 export const replaceDigestItemBlock = (markdown: string, block: DigestItemBlock, replacement: string): string =>
   `${markdown.slice(0, block.start)}${replacement}${markdown.slice(block.end)}`;
+
+export type DeepDiveOutputRejected = Readonly<{ reason: string }>;
+
+type NormalizeDeepDiveOutputOptions = Readonly<{
+  url: string;
+  linkLine: string;
+  otherUrls: ReadonlyArray<string>;
+  maxChars: number;
+}>;
+
+const OUTPUT_HEADING = /^\s*#{1,6}(?:\s|$)/;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)]*\)/g;
+const UNINDENTED = /^\S/;
+
+const rejected = (reason: string): Result<never, DeepDiveOutputRejected> => err({ reason });
+
+const cutAtLineBoundary = (lines: ReadonlyArray<string>, maxChars: number): ReadonlyArray<string> => {
+  const kept: string[] = [];
+  let length = 0;
+  for (const line of lines) {
+    length += Array.from(line).length + (kept.length === 0 ? 0 : 1);
+    if (length > maxChars && kept.length > 0) break;
+    kept.push(line);
+  }
+  return kept;
+};
+
+const isBlank = (lines: ReadonlyArray<string>): boolean => lines.every((line) => line.trim() === '');
+
+export const normalizeDeepDiveOutput = (
+  output: string,
+  { url, linkLine, otherUrls, maxChars }: NormalizeDeepDiveOutputOptions,
+): Result<string, DeepDiveOutputRejected> => {
+  const target = findDigestItemBlock(output, url) === undefined ? `${linkLine}\n${output.trim()}` : output;
+  const found = findDigestItemBlock(target, url);
+  if (found === undefined) return rejected('the output does not contain the item link');
+  const lines = found.text
+    .split('\n')
+    .flatMap((line) => {
+      const stripped = line.replace(MARKDOWN_IMAGE, '');
+      return stripped.trim() === '' && line.trim() !== '' ? [] : [stripped];
+    })
+    .join('\n')
+    .trimEnd()
+    .split('\n');
+  const rest = lines.slice(1);
+  if (rest.some((line) => OUTPUT_HEADING.test(line))) return rejected('the output contains a heading');
+  const indented = rest.map((line) => (UNINDENTED.test(line) ? `  ${line}` : line));
+  const restText = indented.join('\n');
+  if (otherUrls.some((otherUrl) => findDigestItemBlock(restText, otherUrl) !== undefined)) {
+    return rejected('the output contains a link to another item');
+  }
+  const kept = cutAtLineBoundary([lines[0]!, ...indented], maxChars);
+  if (isBlank(kept.slice(1))) return rejected('the output has no body');
+  return ok(kept.join('\n'));
+};

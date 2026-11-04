@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findDigestItemBlock, replaceDigestItemBlock } from './digestItemBlock.ts';
+import { findDigestItemBlock, normalizeDeepDiveOutput, replaceDigestItemBlock } from './digestItemBlock.ts';
 
 const markdown = [
   '## あなたへのおすすめ',
@@ -108,5 +108,93 @@ describe('replaceDigestItemBlock', () => {
     expect(replaced).toBe(
       markdown.replace('-   [B](https://example.com/b)  \n    要約 B', '- [B](https://example.com/b)\n  深掘り'),
     );
+  });
+});
+
+describe('normalizeDeepDiveOutput', () => {
+  const url = 'https://example.com/a';
+  const other = 'https://example.com/b';
+  const linkLine = `- [A](${url})  `;
+  const normalize = (output: string, options: { maxChars?: number } = {}) =>
+    normalizeDeepDiveOutput(output, { url, linkLine, otherUrls: [other], maxChars: options.maxChars ?? 6_000 });
+
+  it('項目のリンクを含むかたまりだけを使い、前後を捨てる', () => {
+    const result = normalize(`前置き\n\n- [A](${url})\n  本文\n\n後書き`);
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  本文` });
+  });
+
+  it('項目のリンクが無ければ、元のリンク行を先頭に足して同じ検査をする', () => {
+    const result = normalize('  \n本文 1\n本文 2\n');
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})  \n  本文 1\n  本文 2` });
+  });
+
+  it('リンクが無く、先頭に足したリンク行の後に本文が続かなければ失敗する', () => {
+    expect(normalize('   ')).toMatchObject({ ok: false });
+  });
+
+  it('かたまりの中に見出しの行があれば失敗する', () => {
+    const result = normalize(`- [A](${url})\n    # 見出し\n    本文`);
+
+    expect(result).toMatchObject({ ok: false, err: { reason: expect.stringContaining('heading') } });
+  });
+
+  it('かたまりの外にある見出しの行は、見出しから後ろを捨てる', () => {
+    const result = normalize(`- [A](${url})\n  本文\n## 見出し\n後ろ`);
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  本文` });
+  });
+
+  it('2 行目以降でインデントの無い行には半角スペース 2 つを足し、空行とインデントのある行は変えない', () => {
+    const result = normalize(`- [A](${url})\n本文 1\n\n  本文 2\n    本文 3`);
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  本文 1\n\n  本文 2\n    本文 3` });
+  });
+
+  it('2 行目以降に同じダイジェストのほかの項目へのリスト項目のリンクがあれば失敗する', () => {
+    const result = normalize(`- [A](${url})\n  本文\n  - [B](${other})`);
+
+    expect(result).toMatchObject({ ok: false, err: { reason: expect.stringContaining('another item') } });
+  });
+
+  it('ほかの項目の URL でも、リスト項目でない本文中のリンクは失敗にしない', () => {
+    const result = normalize(`- [A](${url})\n  参考 [B](${other})`);
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  参考 [B](${other})` });
+  });
+
+  it('リンク行を除いた本文が空なら失敗する', () => {
+    expect(normalize(`- [A](${url})`)).toMatchObject({
+      ok: false,
+      err: { reason: expect.stringContaining('no body') },
+    });
+    expect(normalize(`- [A](${url})\n   \n`)).toMatchObject({ ok: false });
+  });
+
+  it('Markdown の画像をすべて取り除き、画像だけの行は行ごと消す', () => {
+    const result = normalize(`- [A](${url})\n  ![図](https://img.example/x.png)\n  本文 ![b](c) 続き\n  ![d](e)`);
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  本文  続き` });
+  });
+
+  it('上限を超えるときは、行の境目で切り、行の途中では切らない', () => {
+    const result = normalize(`- [A](${url})\n  あいうえお\n  かきくけこ\n  さしすせそ`, {
+      maxChars: `- [A](${url})\n  あいうえお\n  かきくけ`.length,
+    });
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  あいうえお` });
+  });
+
+  it('上限の文字数はコードポイントで数える', () => {
+    const result = normalize(`- [A](${url})\n  😀😀😀\n  😀😀😀`, { maxChars: `- [A](${url})\n  😀😀😀`.length - 3 });
+
+    expect(result).toEqual({ ok: true, val: `- [A](${url})\n  😀😀😀` });
+  });
+
+  it('1 行目の後の最初の行だけで上限を超えて本文が残らなければ失敗する', () => {
+    const result = normalize(`- [A](${url})\n  ${'あ'.repeat(100)}`, { maxChars: 50 });
+
+    expect(result).toMatchObject({ ok: false, err: { reason: expect.stringContaining('no body') } });
   });
 });

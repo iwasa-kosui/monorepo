@@ -11,9 +11,12 @@ import {
   DigestItemNotFoundError,
   type DigestResolverByDigestItemId,
 } from '../domain/digest/digest.ts';
-import { findDigestItemBlock, replaceDigestItemBlock } from '../domain/digest/digestItemBlock.ts';
+import {
+  findDigestItemBlock,
+  normalizeDeepDiveOutput,
+  replaceDigestItemBlock,
+} from '../domain/digest/digestItemBlock.ts';
 import type { DigestItemId } from '../domain/digest/digestItemId.ts';
-import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
 import {
   DIGEST_DEEP_DIVE_MAX_TURNS,
   DigestDeepDive,
@@ -37,10 +40,9 @@ import type {
 import type { InterestSourceResolverByUserIdAndInterestSourceId } from '../domain/interestSource/interestSource.ts';
 import { LikeId } from '../domain/like/likeId.ts';
 import { PostId } from '../domain/post/postId.ts';
-import {
-  type RecommendableArticle,
-  type RecommendableArticlesResolverByFetchedSince,
-  Recommendation,
+import type {
+  RecommendableArticle,
+  RelatedArticlesResolverByEmbedding,
 } from '../domain/recommendation/recommendation.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
@@ -142,7 +144,7 @@ type Deps = Readonly<{
   digestDeepDiveBodyWrittenStore: DigestDeepDiveBodyWrittenStore;
   feedEntryResolverByFeedEntryId: FeedEntryResolverByFeedEntryId;
   feedEntryEmbeddingResolverByFeedEntryId: FeedEntryEmbeddingResolverByFeedEntryId;
-  recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
+  relatedArticlesResolverByEmbedding: RelatedArticlesResolverByEmbedding;
   interestSourceResolverByUserIdAndInterestSourceId: InterestSourceResolverByUserIdAndInterestSourceId;
   postContentsResolverByPostIds: PostContentsResolverByPostIds;
   likedPostContentsResolverByLikeIds: LikedPostContentsResolverByLikeIds;
@@ -161,6 +163,14 @@ const wrapDocument = (label: string, text: string): string =>
 
 const toLinkLine = (block: string): string => block.split('\n')[0]!;
 
+type Reservation = Readonly<{ userId: UserId; day: string }>;
+
+type Attempt = {
+  expired: boolean;
+  committing: boolean;
+  reservation: Reservation | undefined;
+};
+
 const create = ({
   digestResolverByDigestItemId,
   articleResolver,
@@ -170,7 +180,7 @@ const create = ({
   digestDeepDiveBodyWrittenStore,
   feedEntryResolverByFeedEntryId,
   feedEntryEmbeddingResolverByFeedEntryId,
-  recommendableArticlesResolverByFetchedSince,
+  relatedArticlesResolverByEmbedding,
   interestSourceResolverByUserIdAndInterestSourceId,
   postContentsResolverByPostIds,
   likedPostContentsResolverByLikeIds,
@@ -199,16 +209,13 @@ const create = ({
   ): Promise<ReadonlyArray<RecommendableArticle>> => {
     const embedding = await feedEntryEmbeddingResolverByFeedEntryId.resolve(item.feedEntryId);
     if (embedding.val === undefined) return [];
-    const recent = await recommendableArticlesResolverByFetchedSince.resolve({
+    const related = await relatedArticlesResolverByEmbedding.resolve({
+      embedding: embedding.val,
       fetchedSince: Instant.addDuration(at, -RELATED_WINDOW_MS),
+      excludingUrl: item.url,
+      limit: RELATED_LIMIT,
     });
-    const ownUrl = normalizeDigestUrl(item.url);
-    return recent.val
-      .filter((article) => article.feedEntryId !== item.feedEntryId && normalizeDigestUrl(article.url) !== ownUrl)
-      .map((article) => ({ article, score: Recommendation.cosineSimilarity(embedding.val!, article.embedding) }))
-      .sort((a, b) => b.score - a.score || (a.article.feedEntryId < b.article.feedEntryId ? -1 : 1))
-      .slice(0, RELATED_LIMIT)
-      .map(({ article }) => article);
+    return related.val;
   };
 
   const collectInterestText = async (userId: UserId, item: DigestItem): Promise<string | undefined> => {
@@ -235,9 +242,16 @@ const create = ({
     return source.val.ref;
   };
 
-  const execute = async (
+  const releaseReservation = async (attempt: Attempt): Promise<void> => {
+    const { reservation } = attempt;
+    if (reservation === undefined) return;
+    attempt.reservation = undefined;
+    await digestDeepDiveUsageRecorder.release(reservation);
+  };
+
+  const executeAttempt = async (
     { userId, digestItemId, instruction, baseUpdatedAt }: Input,
-    isExpired: () => boolean,
+    attempt: Attempt,
   ): Promise<Result<Ok, Err>> => {
     const startedAt = now();
     const day = Instant.toJstDate(startedAt);
@@ -261,20 +275,21 @@ const create = ({
     const block = findDigestItemBlock(markdown, item.url);
     if (block === undefined) return RA.err(DigestItemNotInBodyError.create(digestItemId));
 
+    if (textGenerator === undefined) return RA.err(DigestDeepDiveGenerationFailedError.create('AI is unavailable'));
+
     const existing = await digestDeepDiveResolverByDigestItemId.resolve(digestItemId);
     let dailyRemaining: number;
     if (existing.val === undefined) {
       const reservation = await digestDeepDiveUsageRecorder.reserve({ userId, day, now: startedAt });
       if (!reservation.val.allowed) return RA.err(DigestDeepDiveLimitError.create(reservation.val.retryAfterSeconds));
       dailyRemaining = reservation.val.remaining;
+      attempt.reservation = { userId, day };
     } else {
       if (DigestDeepDive.isTurnLimitReached(existing.val)) {
         return RA.err(DigestDeepDiveTurnLimitError.create(existing.val.deepDiveId));
       }
       dailyRemaining = (await digestDeepDiveUsageRecorder.remaining({ userId, day })).val;
     }
-
-    if (textGenerator === undefined) return RA.err(DigestDeepDiveGenerationFailedError.create('AI is unavailable'));
 
     const [sourceText, related, interestText] = await Promise.all([
       collectSourceText(item),
@@ -317,11 +332,22 @@ const create = ({
       return RA.err(DigestDeepDiveGenerationFailedError.create(generated.err.message));
     }
 
-    const output = stripThinkBlocks(generated.val);
-    const resultBlock = limitChars(
-      findDigestItemBlock(output, item.url) === undefined ? `${toLinkLine(block.text)}\n${output}`.trim() : output,
-      BLOCK_MAX_CHARS,
-    );
+    const normalized = normalizeDeepDiveOutput(stripThinkBlocks(generated.val), {
+      url: item.url,
+      linkLine: toLinkLine(block.text),
+      otherUrls: digest.val.items
+        .filter((candidate) => candidate.digestItemId !== digestItemId && candidate.url !== item.url)
+        .map((candidate) => candidate.url),
+      maxChars: BLOCK_MAX_CHARS,
+    });
+    if (!normalized.ok) {
+      console.error('iori digest deep dive: the generated block was rejected.', {
+        digestItemId,
+        reason: normalized.err.reason,
+      });
+      return RA.err(DigestDeepDiveGenerationFailedError.create(normalized.err.reason));
+    }
+    const resultBlock = normalized.val;
     const nextMarkdown = replaceDigestItemBlock(markdown, block, resultBlock);
 
     const writtenAt = ArticleBody.nextUpdatedAt(now(), baseUpdatedAt);
@@ -340,7 +366,8 @@ const create = ({
       : DigestDeepDive.addTurn(existing.val, { instruction, resultMarkdown: resultBlock }, writtenAt);
     if (!recorded.ok) return recorded;
 
-    if (isExpired()) return RA.err(DigestDeepDiveTimeoutError.create());
+    if (attempt.expired) return RA.err(DigestDeepDiveTimeoutError.create());
+    attempt.committing = true;
     const stored = await digestDeepDiveBodyWrittenStore.store(recorded.val, bodyWritten, baseUpdatedAt);
     if (!stored.val.written) return failedToWrite(articleId);
 
@@ -366,16 +393,29 @@ const create = ({
     return RA.err(DigestDeepDiveConflictError.create(articleId));
   };
 
+  const execute = async (input: Input, attempt: Attempt): Promise<Result<Ok, Err>> => {
+    try {
+      const result = await executeAttempt(input, attempt);
+      if (!result.ok) await releaseReservation(attempt);
+      return result;
+    } catch (error) {
+      await releaseReservation(attempt);
+      throw error;
+    }
+  };
+
   const run = async (input: Input): Promise<Result<Ok, Err>> => {
-    let expired = false;
+    const attempt: Attempt = { expired: false, committing: false, reservation: undefined };
     const outcome = await Promise.race([
-      execute(input, () => expired),
+      execute(input, attempt),
       sleep(DEADLINE_MS).then(() => {
-        expired = true;
+        attempt.expired = true;
         return 'timedOut' as const;
       }),
     ]);
-    return outcome === 'timedOut' ? RA.err(DigestDeepDiveTimeoutError.create()) : outcome;
+    if (outcome !== 'timedOut') return outcome;
+    if (!attempt.committing) await releaseReservation(attempt);
+    return RA.err(DigestDeepDiveTimeoutError.create());
   };
 
   return { run };

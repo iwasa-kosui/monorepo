@@ -197,6 +197,15 @@ const ArticleDetailPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: deepDiveInstruction, baseUpdatedAt: data.body.updatedAt }),
       });
+      if (res.status === 504) {
+        await fetchArticle();
+        setDeepDiveMessage({
+          digestItemId,
+          text: '時間がかかったため、結果を確かめられませんでした。本文を読み込み直しました。',
+          isError: true,
+        });
+        return;
+      }
       const result = await res.json();
 
       if ('error' in result) {

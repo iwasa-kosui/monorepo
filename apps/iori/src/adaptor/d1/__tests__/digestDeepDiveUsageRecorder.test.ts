@@ -94,4 +94,51 @@ describe('createD1DigestDeepDiveUsageRecorder', () => {
     expect(after).toEqual({ ok: true, val: 2 });
     expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([{ count: 1 }]);
   });
+
+  it('release は count を 1 つ戻し、戻した分だけまた予約できる', async () => {
+    const { db, sqlite, seed } = setup();
+    const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
+    const recorder = createD1DigestDeepDiveUsageRecorder(db);
+    for (let i = 0; i < 3; i += 1) await recorder.reserve({ userId, day, now });
+
+    const released = await recorder.release({ userId, day });
+    const again = await recorder.reserve({ userId, day, now });
+
+    expect(released).toEqual({ ok: true, val: undefined });
+    expect(again).toEqual({ ok: true, val: { allowed: true, remaining: 0 } });
+    expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([{ count: 3 }]);
+  });
+
+  it('release は count が 0 のとき負にせず、行が無い日には行を作らない', async () => {
+    const { db, sqlite, seed } = setup();
+    const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
+    const recorder = createD1DigestDeepDiveUsageRecorder(db);
+
+    await recorder.release({ userId, day });
+    expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([]);
+
+    await recorder.reserve({ userId, day, now });
+    await recorder.release({ userId, day });
+    await recorder.release({ userId, day });
+    expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([{ count: 0 }]);
+  });
+
+  it('release は指定した日と利用者の count だけを戻す', async () => {
+    const { db, sqlite, seed } = setup();
+    const kosui = UserId.orThrow(seed.addLocalActor('kosui').userId);
+    const alice = UserId.orThrow(seed.addLocalActor('alice').userId);
+    const recorder = createD1DigestDeepDiveUsageRecorder(db);
+    await recorder.reserve({ userId: kosui, day, now });
+    await recorder.reserve({ userId: alice, day, now });
+    await recorder.reserve({ userId: kosui, day: '2026-11-05', now });
+
+    await recorder.release({ userId: kosui, day });
+
+    expect(
+      sqlite.prepare('SELECT day, count FROM digest_deep_dive_usages WHERE userId = ? ORDER BY day').all(kosui),
+    ).toEqual([{ day: '2026-11-04', count: 0 }, { day: '2026-11-05', count: 1 }]);
+    expect(
+      sqlite.prepare('SELECT count FROM digest_deep_dive_usages WHERE userId = ?').all(alice),
+    ).toEqual([{ count: 1 }]);
+  });
 });
