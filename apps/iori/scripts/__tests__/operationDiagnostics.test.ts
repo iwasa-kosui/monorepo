@@ -49,6 +49,9 @@ it('pins the operation stage vocabulary', () => {
     'move-reposts',
     'move-reposts-resolve',
     'move-reposts-query',
+    'prune-posts',
+    'prune-posts-resolve',
+    'prune-posts-query',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });
