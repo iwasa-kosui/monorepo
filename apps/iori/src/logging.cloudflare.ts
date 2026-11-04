@@ -11,6 +11,16 @@ const ldSignatureFailureDebugMessages: ReadonlySet<string> = new Set([
 const keyFetchFailureDebugMessages: ReadonlySet<string> = new Set([
   'Failed to fetch key {keyId}.',
   'Failed to verify; key {keyId} returned an invalid object.',
+  'Entry {keyId} found in cache, but it is unavailable.',
+  'Failed to decode key {keyId}: {error}',
+  'Failed to verify; object {keyId} returned an {actorType}, but has no key matching {keyId}.',
+  'Failed to verify; key {keyId} has no publicKeyPem field.',
+  'Failed to verify; the document served at {documentUrl} claims to be the actor {actorId}, which belongs to another origin.',
+]);
+
+const inboxLdSignatureDebugMessages: ReadonlySet<string> = new Set([
+  'Failed to normalize JSON-LD for Linked Data Signatures; deferring to another authentication path only if it verifies:\n{error}',
+  'Linked Data Signatures are not verified.',
 ]);
 
 configureSync({
@@ -26,6 +36,9 @@ configureSync({
     onlyKeyFetchFailureDebug: (record) =>
       record.level !== 'debug'
       || (typeof record.rawMessage === 'string' && keyFetchFailureDebugMessages.has(record.rawMessage)),
+    onlyInboxLdSignatureDebug: (record) =>
+      record.level !== 'debug'
+      || (typeof record.rawMessage === 'string' && inboxLdSignatureDebugMessages.has(record.rawMessage)),
   },
   loggers: [
     // debug には署名や鍵の詳細が出るため info 以上に限る
@@ -44,6 +57,13 @@ configureSync({
       sinks: ['console'],
       parentSinks: 'override',
       filters: ['onlyKeyFetchFailureDebug'],
+    },
+    {
+      category: ['fedify', 'federation', 'inbox'],
+      lowestLevel: 'debug',
+      sinks: ['console'],
+      parentSinks: 'override',
+      filters: ['onlyInboxLdSignatureDebug'],
     },
     { category: ['logtape', 'meta'], lowestLevel: 'warning', sinks: ['console'], parentSinks: 'override' },
   ],
