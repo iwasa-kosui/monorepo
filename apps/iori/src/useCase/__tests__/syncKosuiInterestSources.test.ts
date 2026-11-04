@@ -206,7 +206,7 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
     expect(rowOf(POST_URL).contentHash).toBe(await sha256Hex('記事 A\n記事の説明'));
     expect(warn).toHaveBeenCalledWith(
       'iori interest sources: fetching the markdown failed, so the description is used instead.',
-      { url: POST_URL, message: `no such page: ${POST_URL}.md` },
+      { url: POST_URL, errorMessage: `no such page: ${POST_URL}.md` },
     );
   });
 
@@ -339,7 +339,7 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
 
     expect(first).toEqual({ ok: true, val: { created: 3, changed: 0, deleted: 0, embedded: 0 } });
     expect(error).toHaveBeenCalledWith('iori interest sources: embedding the kosui.me entries failed.', {
-      message: 'unavailable',
+      errorMessage: 'unavailable',
     });
     expect(rows().every((row) => row.embeddedAt === null && row.bytes === null)).toBe(true);
 
@@ -372,7 +372,7 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
     expect(error).toHaveBeenCalledWith('iori interest sources: embedding an entry failed.', {
       interestSourceId: expect.any(String),
       kind: 'kosui_talk',
-      message: 'entry failed',
+      errorMessage: 'entry failed',
     });
   });
 
@@ -389,7 +389,7 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
     expect(result).toEqual({ ok: true, val: { created: 3, changed: 0, deleted: 0, embedded: 2 } });
     expect(error).toHaveBeenCalledWith(
       'iori interest sources: the embedding was not stored.',
-      expect.objectContaining({ message: expect.stringContaining('1024') }),
+      expect.objectContaining({ errorMessage: expect.stringContaining('1024') }),
     );
     expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
   });

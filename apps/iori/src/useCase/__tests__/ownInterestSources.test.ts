@@ -299,7 +299,7 @@ describe('EmbedOwnInterestSourcesUseCase', () => {
 
     expect(error).toHaveBeenCalledWith(
       'iori interest sources: the embedding was not stored.',
-      expect.objectContaining({ kind: 'own_post', message: expect.stringContaining('1024') }),
+      expect.objectContaining({ kind: 'own_post', errorMessage: expect.stringContaining('1024') }),
     );
     expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
   });

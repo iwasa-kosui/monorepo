@@ -156,7 +156,7 @@ describe('collectFeedsTask', () => {
 
     await expect(collectFeedsTask.run(t.context(COLLECT_TIME))).resolves.toBeUndefined();
 
-    expect(error).toHaveBeenCalledWith('iori feed entries: embedding failed.', { message: 'unavailable' });
+    expect(error).toHaveBeenCalledWith('iori feed entries: embedding failed.', { errorMessage: 'unavailable' });
     expect(info).toHaveBeenCalledWith('iori feeds collected.', expect.objectContaining({ collected: 1 }));
     expect(t.embeddedTitles()).toEqual([]);
   });

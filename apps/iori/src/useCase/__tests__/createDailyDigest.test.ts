@@ -450,7 +450,7 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     ]);
     expect(error).toHaveBeenCalledWith(
       'iori digest: summarizing an entry failed.',
-      expect.objectContaining({ message: 'boom' }),
+      expect.objectContaining({ errorMessage: 'boom' }),
     );
   });
 
@@ -966,7 +966,7 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(result).toMatchObject({ ok: false, err: { type: 'DigestStoreFailedError' } });
     expect(error).toHaveBeenCalledWith(
       'iori digest: deleting the article left by the failed digest failed.',
-      expect.objectContaining({ message: 'delete failed' }),
+      expect.objectContaining({ errorMessage: 'delete failed' }),
     );
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
   });
@@ -1037,7 +1037,7 @@ describe('CreateDailyDigestUseCase: Web Push', () => {
     expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: NOW }]);
     expect(error).toHaveBeenCalledWith(
       'iori digest: sending a web push failed.',
-      expect.objectContaining({ message: 'gone', statusCode: 410 }),
+      expect.objectContaining({ errorMessage: 'gone', statusCode: 410 }),
     );
   });
 
