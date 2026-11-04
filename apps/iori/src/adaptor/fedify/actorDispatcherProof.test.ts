@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
-import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
-import { ActorDispatcher } from './actorDispatcher.ts';
 import { createActorDispatcher } from './actorDispatcherFactory.ts';
 
 const ORIGIN = 'https://iori.example';
@@ -43,12 +41,6 @@ describe('ユーザーの actor が送る活動の proof', () => {
         userResolverByUsername: { resolve: async () => RA.ok(user) },
         actorResolverByUserId: { resolve: async () => RA.ok(actor) },
       }).dispatch,
-    'Node 版': () => {
-      vi.spyOn(GetUserProfileUseCase, 'getInstance').mockReturnValue(
-        { run: async () => RA.ok({ user, actor }) } as never,
-      );
-      return ActorDispatcher.getInstance().dispatch;
-    },
   };
 
   it.each(Object.entries(dispatchers))(
