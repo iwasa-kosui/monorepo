@@ -1,4 +1,5 @@
-import { type DocumentLoader, isActor, Note } from '@fedify/fedify';
+import { isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

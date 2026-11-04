@@ -67,6 +67,12 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('abc', 0)).toBe('');
   });
 
+  it('cuts a very long input to maxChars, whether it is astral or not', () => {
+    expect(htmlToPlainText(`<p>${'a'.repeat(2_000_000)}</p>`, 5)).toBe('aaaaa');
+    expect(htmlToPlainText('\u{1F600}'.repeat(1_000_000), 5)).toBe('\u{1F600}'.repeat(5));
+    expect(htmlToPlainText(`${'\u{1F600}a'.repeat(100)}`, 150)).toBe('\u{1F600}a'.repeat(75));
+  });
+
   fcTest.prop([fc.string(), fc.integer({ min: 0, max: 50 })])(
     'leaves no tag shape and respects maxChars',
     (text, maxChars) => {

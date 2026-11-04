@@ -1,4 +1,4 @@
-import { EmojiReact, Note, Person } from '@fedify/fedify';
+import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';
@@ -23,12 +23,13 @@ const seedReactions = async (scope = 'read write') => {
     Number(
       (t.sqlite.prepare(`SELECT count(*) AS n FROM emoji_reacts WHERE ${where}`).get() as { n: number | bigint }).n,
     );
-  const serveRemoteNote = (note: { uri: string }) =>
+  const serveRemoteNote = (note: { uri: string }, tags: Emoji[] = []) =>
     t.federation.lookupObject.mockResolvedValue(
       new Note({
         id: new URL(note.uri),
         content: 'remote',
         to: new URL('https://www.w3.org/ns/activitystreams#Public'),
+        tags,
         attribution: new Person({
           id: new URL(`https://remote.example/users/${alice.username}`),
           inbox: new URL(`https://remote.example/users/${alice.username}/inbox`),
@@ -66,6 +67,16 @@ describe('POST /api/iori/v1/preview', () => {
     const body = await response.json() as { html: string };
     expect(body.html).toContain('<strong>bold</strong>');
     expect(body.html).not.toContain('<script>');
+  });
+
+  it('素の URL は href を残した a タグにする', async () => {
+    const t = await seedReactions('write:statuses');
+
+    const response = await preview(t, t.me.bearer, { markdown: 'https://example.com/path' });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { html: string };
+    expect(body.html).toContain('href="https://example.com/path"');
   });
 
   it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
@@ -156,6 +167,24 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     expect(t.count()).toBe(0);
   });
 
+  it('リモートが URL 付きで付けた同名の反応と 1 件にまとめ、取り消すとリモートの分だけが残る', async () => {
+    const t = await seedReactions();
+    const url = 'https://remote.example/emoji/wave.png';
+    t.seed.addEmojiReact(t.alice.actorId, t.local.postId, ':wave:', url);
+
+    const put = await t.put(t.local.postId);
+    const del = await t.del(t.local.postId);
+
+    expect(put.status).toBe(200);
+    expect(StatusSchema.parse(await put.json())).toMatchObject({
+      iori: { reactions: [{ emoji: ':wave:', count: 2, url, me: true }] },
+    });
+    expect(del.status).toBe(200);
+    expect(StatusSchema.parse(await del.json())).toMatchObject({
+      iori: { reactions: [{ emoji: ':wave:', count: 1, url, me: false }] },
+    });
+  });
+
   it('未反応でもエラーにせず、現在の状態を返す', async () => {
     const t = await seedReactions();
 
@@ -178,6 +207,129 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toBeInstanceOf(EmojiReact);
+  });
+
+  describe('リモートの投稿へのカスタム絵文字の反応', () => {
+    const emojiTag = (name: string, url: string) =>
+      new Emoji({
+        id: new URL(`https://remote.example/emojis/${name.replaceAll(':', '')}`),
+        name,
+        icon: new Image({ url: new URL(url), mediaType: 'image/png' }),
+      });
+    const selfEmojiImageUrl = (t: Awaited<ReturnType<typeof seedReactions>>, emoji: string) =>
+      (t.sqlite.prepare('SELECT emojiImageUrl FROM emoji_reacts WHERE actorId = ? AND emoji = ?').get(
+        t.me.actorId,
+        emoji,
+      ) as { emojiImageUrl: string | null }).emojiImageUrl;
+    const sentReact = (t: Awaited<ReturnType<typeof seedReactions>>) => {
+      const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
+      expect(sent).toHaveLength(1);
+      return sent[0] as EmojiReact;
+    };
+    const tagsOf = async (react: EmojiReact) => {
+      const tags: Emoji[] = [];
+      for await (const tag of react.getTags()) {
+        tags.push(tag as Emoji);
+      }
+      return tags;
+    };
+
+    it('投稿に同名の Emoji があるとき、tag に同じ Emoji を付けて送り、icon の url を保存する', async () => {
+      const t = await seedReactions();
+      const url = 'https://remote.example/emoji/wave.png';
+      t.serveRemoteNote(t.publicNote, [
+        emojiTag(':other:', 'https://remote.example/emoji/other.png'),
+        emojiTag(':wave:', url),
+      ]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(StatusSchema.parse(await response.json())).toMatchObject({
+        iori: { reactions: [{ emoji: ':wave:', count: 1, url, me: true }] },
+      });
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      expect(tags[0]).toBeInstanceOf(Emoji);
+      expect(tags[0]!.name?.toString()).toBe(':wave:');
+      expect((await tags[0]!.getIcon())?.url?.toString()).toBe(url);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
+    });
+
+    it('投稿に同名の Emoji が無いとき、tag なしで送り、emojiImageUrl は null にする', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':other:', 'https://remote.example/emoji/other.png')]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('icon の url が https でないときは採用せず、tag なしで送る', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'http://remote.example/emoji/wave.png')]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('Emoji の icon の取得が失敗しても、反応は成功し、tag なしで送って emojiImageUrl は null にする', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [
+        new Emoji({
+          id: new URL('https://remote.example/emojis/wave'),
+          name: ':wave:',
+          icon: new URL('https://remote.example/emoji/wave-icon'),
+        }),
+      ]);
+      t.federation.getDocumentLoader.mockResolvedValue(async () => {
+        throw new Error('icon fetch failed');
+      });
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('icon の mediaType が image/ で始まらないときは、url は採用して tag を付け、mediaType は付けない', async () => {
+      const t = await seedReactions();
+      const url = 'https://remote.example/emoji/wave.png';
+      t.serveRemoteNote(t.publicNote, [
+        new Emoji({
+          id: new URL('https://remote.example/emojis/wave'),
+          name: ':wave:',
+          icon: new Image({ url: new URL(url), mediaType: 'text/html' }),
+        }),
+      ]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      const icon = await tags[0]!.getIcon();
+      expect(icon?.url?.toString()).toBe(url);
+      expect(icon?.mediaType).toBeNull();
+      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
+    });
+
+    it('Unicode 絵文字の反応は tag なしで送る', async () => {
+      const t = await seedReactions();
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'https://remote.example/emoji/wave.png')]);
+
+      const response = await t.put(t.publicNote.postId, '👍');
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, '👍')).toBeNull();
+    });
   });
 
   it('リモートの投稿を取得できないときは 502 にする', async () => {
@@ -398,5 +550,80 @@ describe('GET と POST /api/iori/v1/relays', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Validation failed: url' });
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/iori/v1/push/subscribe', () => {
+  const endpoint = 'https://push.example/endpoint/1';
+  const subscription = { endpoint, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } };
+  const subscribe = (t: Awaited<ReturnType<typeof seedReactions>>, headers: Record<string, string>, body: unknown) => {
+    const { path, init } = jsonPost('/api/iori/v1/push/subscribe', headers, body);
+    return t.request(path, init);
+  };
+  const stored = (t: Awaited<ReturnType<typeof seedReactions>>) =>
+    t.sqlite.prepare('SELECT userId, endpoint, p256dhKey, authKey FROM push_subscriptions').all();
+
+  it('Bearer の利用者の購読を保存し、success を返す', async () => {
+    const t = await seedReactions('push');
+
+    const response = await subscribe(t, t.me.bearer, subscription);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(stored(t)).toEqual([
+      { userId: t.me.userId, endpoint, p256dhKey: 'p256dh-key', authKey: 'auth-key' },
+    ]);
+  });
+
+  it('購読済みの endpoint は 400 にして増やさない', async () => {
+    const t = await seedReactions('push');
+    await subscribe(t, t.me.bearer, subscription);
+
+    const response = await subscribe(t, t.me.bearer, subscription);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'This endpoint is already subscribed.' });
+    expect(stored(t)).toHaveLength(1);
+  });
+
+  it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
+    const t = await seedReactions();
+    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
+
+    const missing = await subscribe(t, cookie, subscription);
+    const same = await subscribe(t, { ...cookie, Origin: ORIGIN }, subscription);
+
+    expect([missing.status, same.status]).toEqual([403, 200]);
+    expect(stored(t)).toHaveLength(1);
+  });
+
+  it('トークンがないと 401、push を満たさないスコープは 403 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      subscribe(t, {}, subscription),
+      subscribe(t, { Authorization: 'Bearer invalid' }, subscription),
+      subscribe(t, await t.bearerFor('read write'), subscription),
+      subscribe(t, await t.bearerFor('write:statuses'), subscription),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
+    expect(stored(t)).toEqual([]);
+  });
+
+  it.each([
+    ['本文がない', {}],
+    ['endpoint が URL でない', { endpoint: 'not a url', keys: subscription.keys }],
+    ['keys がない', { endpoint }],
+    ['p256dh が空', { endpoint, keys: { p256dh: '', auth: 'auth-key' } }],
+    ['auth がない', { endpoint, keys: { p256dh: 'p256dh-key' } }],
+  ])('%s と 422 にする', async (_name, body) => {
+    const t = await seedReactions('push');
+
+    const response = await subscribe(t, t.me.bearer, body);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Validation failed: subscription' });
+    expect(stored(t)).toEqual([]);
   });
 });

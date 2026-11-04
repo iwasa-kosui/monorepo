@@ -1,4 +1,5 @@
-import { EmojiReact as FedifyEmojiReact, isActor, Note, type RequestContext, Undo } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { EmojiReact as FedifyEmojiReact, isActor, Note, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 

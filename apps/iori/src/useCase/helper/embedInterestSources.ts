@@ -9,8 +9,9 @@ import {
 import { chunk } from '../../helper/chunk.ts';
 import type { AiError } from '../../ports/aiError.ts';
 import type { TextEmbedder } from '../../ports/textEmbedder.ts';
+import { embedTextsOneByOneOnFailure, INTEREST_EMBEDDING_MODEL } from './embedTexts.ts';
 
-export const INTEREST_EMBEDDING_MODEL = '@cf/baai/bge-m3';
+export { INTEREST_EMBEDDING_MODEL };
 
 const EVENTS_PER_STORE = 50;
 
@@ -22,46 +23,21 @@ type Deps = Readonly<{
 
 export type EmbedTarget = Readonly<{ source: InterestSource; text: string }>;
 
-const embedTexts = async (
-  textEmbedder: TextEmbedder,
-  texts: ReadonlyArray<string>,
-): RA<ReadonlyArray<ReadonlyArray<number>>, AiError> => {
-  const embedded = await textEmbedder.embed({ model: INTEREST_EMBEDDING_MODEL, texts });
-  if (!embedded.ok) return embedded;
-  if (embedded.val.length !== texts.length) {
-    return RA.err({
-      type: 'AiError',
-      message: `The embedder returned ${embedded.val.length} embeddings for ${texts.length} texts.`,
-    });
-  }
-  return embedded;
-};
-
 export const embedInterestSources = async (
   { textEmbedder, interestSourceEmbeddedStore, now }: Deps,
   targets: ReadonlyArray<EmbedTarget>,
 ): RA<number, AiError> => {
   if (targets.length === 0) return RA.ok(0);
-  const batch = await embedTexts(textEmbedder, targets.map(({ text }) => text));
-  const vectors: Array<ReadonlyArray<number> | undefined> = [];
-  if (batch.ok) vectors.push(...batch.val);
-  else {
-    let lastError = batch.err;
-    for (const { source, text } of targets) {
-      const single = await embedTexts(textEmbedder, [text]);
-      if (single.ok) vectors.push(single.val[0]);
-      else {
-        lastError = single.err;
-        vectors.push(undefined);
-        console.error('iori interest sources: embedding an entry failed.', {
-          interestSourceId: source.interestSourceId,
-          kind: source.kind,
-          message: single.err.message,
-        });
-      }
-    }
-    if (vectors.every((vector) => vector === undefined)) return RA.err(lastError);
-  }
+  const embedded = await embedTextsOneByOneOnFailure(textEmbedder, targets.map(({ text }) => text), (index, error) => {
+    const { source } = targets[index]!;
+    console.error('iori interest sources: embedding an entry failed.', {
+      interestSourceId: source.interestSourceId,
+      kind: source.kind,
+      message: error.message,
+    });
+  });
+  if (!embedded.ok) return embedded;
+  const vectors = embedded.val;
   const timestamp = now();
   const events: InterestSourceEmbedded[] = [];
   targets.forEach(({ source }, index) => {

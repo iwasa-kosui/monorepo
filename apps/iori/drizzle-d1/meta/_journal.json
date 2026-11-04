@@ -99,6 +99,13 @@
       "when": 1793749000000,
       "tag": "0013_digest_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793750133536,
+      "tag": "0014_feed_entry_embeddings",
+      "breakpoints": true
     }
   ]
 }

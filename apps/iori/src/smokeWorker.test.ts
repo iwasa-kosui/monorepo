@@ -38,6 +38,7 @@ describe('runSmokeChecks', () => {
       bundle: true,
       format: 'esm',
       loader: { '.wasm': 'empty' },
+      alias: { undici: new URL('../workers/iori/empty-module.mjs', import.meta.url).pathname },
       metafile: true,
       platform: 'node',
       target: 'es2022',

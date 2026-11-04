@@ -12,6 +12,7 @@ await build({
   format: 'esm',
   platform: 'browser',
   target: 'es2022',
+  alias: { undici: './workers/iori/empty-module.mjs' },
   conditions: ['workerd', 'worker', 'browser'],
   mainFields: ['browser', 'module', 'main'],
   external: ['cloudflare:*', ...builtinModules, ...builtinModules.map((name) => `node:${name}`)],

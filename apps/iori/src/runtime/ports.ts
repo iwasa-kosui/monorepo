@@ -36,6 +36,7 @@ import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId, MutedActorsResolverByUserIdWithPagination } from '../domain/mute/mute.ts';
 import type {
   NotificationCountResolverSinceMarker,
+  NotificationIdsResolverByUserIdAndCreatedAt,
   NotificationResolverByUserIdAndId,
   NotificationsResolverByPage,
 } from '../domain/notification/notification.ts';
@@ -91,7 +92,6 @@ import type { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import type { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
-import type { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import type { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
@@ -150,6 +150,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   notificationsResolverByPage: NotificationsResolverByPage;
   notificationResolverByUserIdAndId: NotificationResolverByUserIdAndId;
   notificationCountResolverSinceMarker: NotificationCountResolverSinceMarker;
+  notificationIdsResolverByUserIdAndCreatedAt: NotificationIdsResolverByUserIdAndCreatedAt;
   markersResolverByUserId: MarkersResolverByUserId;
   saveMarkersUseCase: SaveMarkersUseCase;
   uploadMediaUseCase: UploadMediaUseCase;
@@ -197,7 +198,6 @@ export type IoriArticlesRuntimePorts = Readonly<{
   digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
   digestHeadersResolverByArticleIds: DigestHeadersResolverByArticleIds;
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
-  sessionResolver: SessionResolver;
   actorResolverByUserId: ActorResolverByUserId;
   publishOgImage: (article: Article) => Promise<void>;
   deleteOgImage: (articleId: ArticleId) => Promise<void>;
@@ -213,7 +213,6 @@ export type IoriCoreRuntimePorts = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
-  unsubscribePushUseCase: UnsubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
   vapidPublicKey: string | undefined;

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { UserId } from './domain/user/userId.ts';
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
 import { createWorkerPageFallback } from './workerPageFallback.ts';
-import { renderBottomNav, renderPostModal, renderSidebar } from './workerPageNav.tsx';
+import { renderBottomNav, renderSidebar } from './workerPageNav.tsx';
 
 describe('createWorkerPageFallback', () => {
   it('renders mapped client entries and the resolved session identity', async () => {
@@ -48,7 +48,7 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('.bg-decoration');
   });
 
-  it('renders the Sidebar, BottomNav and PostModal only when logged in', async () => {
+  it('renders the Sidebar and BottomNav only when logged in, without a static post modal', async () => {
     const loggedIn = await (await createWorkerPageFallback(new Request('https://worker.test/'), {
       isLoggedIn: true,
       userId: UserId.generate(),
@@ -59,10 +59,11 @@ describe('createWorkerPageFallback', () => {
 
     expect(loggedIn).toContain(await renderSidebar(true));
     expect(loggedIn).toContain(await renderBottomNav(true));
-    expect(loggedIn).toContain(await renderPostModal());
     expect(loggedIn).toContain('<aside class="hidden md:flex fixed left-0 top-0 h-full flex-col p-4">');
     expect(loggedIn).toContain('md:hidden fixed bottom-0 left-0 right-0');
-    expect(loggedIn).toContain('id="post-modal"');
+    expect(loggedIn).toContain('href="/#post-modal"');
+    expect(loggedIn).not.toContain('id="post-modal"');
+    expect(loggedIn).not.toContain('action="/posts"');
     expect(loggedIn).toContain('pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16');
     expect(loggedOut).not.toContain('<aside');
     expect(loggedOut).not.toContain('md:hidden fixed bottom-0');
@@ -83,7 +84,7 @@ describe('createWorkerPageFallback', () => {
     const html = await renderBottomNav(true);
     const home = html.indexOf('href="/"');
     const notifications = html.indexOf('href="/notifications"');
-    const post = html.indexOf('href="#post-modal"');
+    const post = html.indexOf('href="/#post-modal"');
 
     expect(home).toBeGreaterThanOrEqual(0);
     expect(notifications).toBeGreaterThan(home);

@@ -1,5 +1,5 @@
 import type { RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Create } from '@fedify/fedify';
+import { Article as FedifyArticle, Create } from '@fedify/vocab';
 import { RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
@@ -16,17 +16,17 @@ import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  articleId: ArticleId;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    articleId: ArticleId;
+    ctx: RequestContext<unknown>;
+  }>;
 
 const Ok = Schema.create(
   z.object({
@@ -75,15 +75,13 @@ const create = ({
   articleBodyResolver,
 }: Deps): PublishArticleUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input): Promise<Result<Ok, Err>> =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       RA.andBind('existingArticle', async ({ articleId }) => {
         const article = await articleResolver.resolve(articleId);

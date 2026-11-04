@@ -1,4 +1,4 @@
-import { Announce, Like, Note, Person, Undo } from '@fedify/fedify';
+import { Announce, Like, Note, Person, Undo } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';

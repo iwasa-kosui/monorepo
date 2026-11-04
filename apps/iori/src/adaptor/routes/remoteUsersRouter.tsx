@@ -1,4 +1,4 @@
-import { Follow, Undo } from '@fedify/fedify';
+import { Follow, Undo } from '@fedify/vocab';
 import { sValidator } from '@hono/standard-validator';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';

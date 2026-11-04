@@ -7,7 +7,7 @@ export type QueueTransaction = Readonly<{
 export type QueueStorage = Readonly<{
   initialize: () => Promise<void>;
   enqueue: (message: unknown, options?: MessageQueueEnqueueOptions) => Promise<void>;
-  enqueueMany: (messages: unknown[], options?: MessageQueueEnqueueOptions) => Promise<void>;
+  enqueueMany: (messages: readonly unknown[], options?: MessageQueueEnqueueOptions) => Promise<void>;
   depth: () => Promise<number>;
   transaction: (run: (transaction: QueueTransaction) => Promise<void>) => Promise<void>;
 }>;
@@ -46,7 +46,7 @@ export class ControlledQueue implements MessageQueue {
       this.#enqueueWork--;
     }
   }
-  async enqueueMany(messages: unknown[], options?: MessageQueueEnqueueOptions) {
+  async enqueueMany(messages: readonly unknown[], options?: MessageQueueEnqueueOptions) {
     this.#enqueueWork++;
     try {
       await this.storage.enqueueMany(messages, options);

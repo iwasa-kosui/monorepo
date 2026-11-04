@@ -442,11 +442,14 @@ export const feedEntriesTable = sqliteTable('feed_entries', {
   publishedAt: timestamp(),
   hatenaBookmarkCount: integer('hatenaBookmarkCount'),
   fetchedAt: timestamp().notNull(),
+  embedding: embeddingBlob('embedding'),
+  embeddedAt: timestamp(),
 }, (table) => [
   uniqueIndex('feed_entries_feed_source_guid_unique').on(table.feedSourceId, table.guid),
   index('feed_entries_url_idx').on(table.url),
   index('feed_entries_published_at_idx').on(table.publishedAt),
   index('feed_entries_fetched_at_idx').on(table.fetchedAt),
+  index('feed_entries_embedded_at_fetched_at_idx').on(table.embeddedAt, table.fetchedAt),
 ]);
 
 export const digestSubscriptionsTable = sqliteTable('digest_subscriptions', {

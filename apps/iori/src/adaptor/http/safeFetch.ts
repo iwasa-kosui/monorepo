@@ -1,5 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 
+import { decodeBody } from './decodeBody.ts';
+
 export const SAFE_FETCH_USER_AGENT = 'iori-digest/1.0 (+https://blog.kosui.me)';
 
 export type SafeFetchOptions = Readonly<{
@@ -15,6 +17,7 @@ export type SafeFetchResult = Readonly<{
   etag: string | null;
   lastModified: string | null;
   finalUrl: string;
+  contentType?: string;
 }>;
 
 export type SafeFetchErrorReason =
@@ -87,9 +90,8 @@ const readBody = async (
   }
   if (response.body === null) return '';
   const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
+  const chunks: Uint8Array[] = [];
   let received = 0;
-  let text = '';
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -98,9 +100,15 @@ const readBody = async (
       await reader.cancel();
       return safeFetchError('too_large', `Response is larger than ${maxBytes} bytes.`);
     }
-    text += decoder.decode(value, { stream: true });
+    chunks.push(value);
   }
-  return text + decoder.decode();
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return decodeBody(bytes, response.headers.get('Content-Type'));
 };
 
 export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
@@ -143,11 +151,13 @@ export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
           }
           continue;
         }
+        const contentType = response.headers.get('Content-Type') ?? undefined;
         const meta = {
           status: response.status,
           etag: response.headers.get('ETag'),
           lastModified: response.headers.get('Last-Modified'),
           finalUrl: target.href,
+          ...(contentType === undefined ? {} : { contentType }),
         };
         if (response.status === 304) {
           await response.body?.cancel();

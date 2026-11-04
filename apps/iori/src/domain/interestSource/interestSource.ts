@@ -21,6 +21,16 @@ const weights: Readonly<Record<InterestSourceKind, number>> = {
   own_like: 0.7,
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const halfLivesMs: Readonly<Record<InterestSourceKind, number>> = {
+  kosui_post: 730 * DAY_MS,
+  kosui_talk: 730 * DAY_MS,
+  kosui_external: 730 * DAY_MS,
+  own_post: 180 * DAY_MS,
+  own_like: 90 * DAY_MS,
+};
+
 const zodType = z
   .object({
     interestSourceId: InterestSourceId.zodType,
@@ -179,6 +189,7 @@ export type InterestSourcesResolverByUserIdAndKindsPendingEmbedding = Agg.Resolv
 export const InterestSource = {
   ...schema,
   weights,
+  halfLivesMs,
   create,
   changeContent,
   markDeleted,

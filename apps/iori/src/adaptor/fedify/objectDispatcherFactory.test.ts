@@ -1,4 +1,5 @@
-import { Article as FedifyArticle, Note, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Article as FedifyArticle, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 

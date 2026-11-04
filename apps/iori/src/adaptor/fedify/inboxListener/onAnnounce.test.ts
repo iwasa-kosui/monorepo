@@ -1,4 +1,4 @@
-import { type Announce, Document, Note, Person } from '@fedify/fedify';
+import { type Announce, Document, Note, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 

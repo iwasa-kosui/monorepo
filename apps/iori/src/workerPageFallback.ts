@@ -1,5 +1,5 @@
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
-import { renderBottomNav, renderPostModal, renderSidebar } from './workerPageNav.tsx';
+import { renderBottomNav, renderSidebar } from './workerPageNav.tsx';
 
 export const SITE_DESCRIPTION = 'A microblog by kosui';
 
@@ -55,9 +55,9 @@ export const createWorkerPageFallback = async (
   const page = pageForPath(new URL(request.url).pathname);
   if (page === undefined) return undefined;
   const isLoggedIn = identity?.isLoggedIn ?? /(?:^|;\s*)sessionId=/.test(request.headers.get('Cookie') ?? '');
-  const [sidebar, bottomNav, postModal] = isLoggedIn
-    ? await Promise.all([renderSidebar(isLoggedIn), renderBottomNav(isLoggedIn), renderPostModal()])
-    : ['', '', ''];
+  const [sidebar, bottomNav] = isLoggedIn
+    ? await Promise.all([renderSidebar(isLoggedIn), renderBottomNav(isLoggedIn)])
+    : ['', ''];
   const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -93,7 +93,6 @@ export const createWorkerPageFallback = async (
   }"></div>
     </main>
     ${bottomNav}
-    ${postModal}
   </body>
 </html>`;
   return new Response(request.method === 'HEAD' ? null : html, {

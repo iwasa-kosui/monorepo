@@ -1,4 +1,4 @@
-import { Follow } from '@fedify/fedify';
+import { Follow } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { RelayFollow } from './relayFollow.ts';

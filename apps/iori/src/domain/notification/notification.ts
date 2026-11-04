@@ -485,6 +485,11 @@ export type NotificationResolverByUserIdAndId = Agg.Resolver<
   NotificationItem | undefined
 >;
 
+export type NotificationIdsResolverByUserIdAndCreatedAt = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; createdAt: Instant }>,
+  NotificationId[]
+>;
+
 export type NotificationCountResolverSinceMarker = Agg.Resolver<
   Readonly<{ userId: UserId; types: ReadonlyArray<Notification['type']>; limit: number }>,
   number
