@@ -94,7 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -546,6 +546,60 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 | `cutoff_ms`    | 実行時刻の7日前を示すミリ秒の epoch                                                                 |
 
 `local_likes` から `article` までは、除外理由ごとの件数です。1件の投稿が複数の除外理由に当たる場合、operation はその投稿を当たる理由すべてで数えます。このため、除外理由の件数の合計は、`candidates` から `to_delete` を引いた値より大きくなることがあります。
+
+#### ensure-event-archive-bucket でドメインイベント退避用の R2 バケットを作る
+
+`ensure-event-archive-bucket` は、ドメインイベントの退避先になる非公開の R2 バケット `iori-<environment>-<generation>-event-archive` を、まだ無いときだけ作る operation です。Terraform の定義にこのバケットを足す変更は、すでにある generation にバケットを作りません。このため、その変更を配備すると、`deploy-worker` の読み戻しがバケットの不在で止まります。作業者は、この operation で先にバケットを作ります。
+
+この operation は、バケットを作る以外のことをしません。バケットの削除も、公開設定も、カスタムドメインも、Worker のコードも、D1 も、Terraform の状態も変えません。作成の要求は、バケット名だけを送ります。`location` と `jurisdiction` は送りません。Terraform の `cloudflare_r2_bucket` も名前だけを指定するので、この operation は同じ指定に合わせています。
+
+job が受け取る secret は、次の2つです。
+
+| job の環境変数          | 元の GitHub secret                 |
+| ----------------------- | ---------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | `CLOUDFLARE_ACCOUNT_ID`            |
+| `CLOUDFLARE_API_TOKEN`  | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` |
+
+作業者は、dispatch する前に、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` に R2 の書き込み権限があることを確かめます。権限が無い token では、バケットの作成が 403 で失敗します。
+
+手順は次のとおりです。
+
+1. 作業者は、`deploy-iori-worker.yml` を `operation=ensure-event-archive-bucket`、`environment=<production か staging>`、`main_sha=<最新の main の SHA>`、対象の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。`migration_main_sha` は、空にするか `main_sha` と同じ値にします。
+2. 承認者は、job の承認待ちを承認します。
+3. `environment` が `staging` の場合、job は D1 の一覧から `iori-staging-<generation>` を探します。見つからなければ、job は何も作らずに `state=staging-not-running` を出して成功します。同じ名前が2件あれば、job は失敗します。`environment` が `production` の場合、job はこの確認をせず、常に次へ進みます。
+4. job は、Cloudflare API でバケットを読みます。バケットがあれば `state=exists` を出します。バケットが無ければ（404）、job はバケットを作って `state=created` を出します。作成の要求が 409 を返した場合、同じ名前のバケットがすでにあるので、job は `state=create-conflict` を出して続けます。
+5. job は、もう一度バケットを読み、名前が期待どおりであることを確かめます。一致すれば `state=verified` を出して成功します。
+
+同じ入力で何度でも dispatch し直せます。バケットがあれば、job は書き込みを送りません。
+
+公開ログに出る `IORI_NOTICE` の行は、`IORI_NOTICE event-archive-bucket environment=<production か staging> state=<状態>` の形です。`state` には、`exists`、`created`、`create-conflict`、`verified`、`staging-not-running`、`event-archive-bucket-forbidden` のどれかが入ります。
+
+`event-archive-bucket-forbidden` は、Cloudflare API が、バケットの読み取りか作成の要求に 401 か 403 を返したことを示します。この語が出たとき、作業者は、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の権限を確かめます。具体的には、token に R2 の書き込み権限があるか、token が有効かを見ます。権限を足した後に、同じ入力で dispatch し直します。
+
+失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を出します。`stage` は次のとおりです。
+
+| `stage`                  | 時点                                                    |
+| ------------------------ | ------------------------------------------------------- |
+| `archive-bucket`         | 入力の検査（environment、account ID、generation）の途中 |
+| `archive-bucket-resolve` | staging の D1 を一覧で探している途中                    |
+| `archive-bucket-read`    | 最初にバケットを読んでいる途中                          |
+| `archive-bucket-create`  | バケットを作っている途中                                |
+| `archive-bucket-verify`  | 作成後にバケットを読み戻している途中                    |
+
+`reason` には、次の語が出ます。
+
+| `reason`                                     | 意味                                                                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `config-invalid`                             | `IORI_ENVIRONMENT`、`CLOUDFLARE_ACCOUNT_ID`、`IORI_GENERATION` の形式が正しくありません |
+| `credentials-missing`                        | account ID か API token が空です                                                        |
+| `api-forbidden`                              | Cloudflare API が 401 か 403 を返しました。API token の権限を確かめます                 |
+| `r2-http-<status>`、`r2-request`、`r2-shape` | API が `<status>` を返したか、要求が失敗したか、応答の形が想定と違います                |
+| `resource-ambiguous`                         | staging の同じ名前の D1 が2件あります                                                   |
+| `resource-missing`                           | 作成した後に読み戻しても、バケットが見つかりません                                      |
+| `identity-mismatch`                          | 読み戻したバケットの名前が、期待する名前と一致しません                                  |
+| `aborted`                                    | 時間切れか中断で止まりました                                                            |
+
+この operation は、バケットを足す Terraform の変更を merge する前に実行します。作業者は、対象にするすべての generation で `state=verified` を確かめてから、その変更を merge します。順序は、この operation の PR を merge し、operation を dispatch し、その後で Terraform の変更を merge する流れです。
 
 ## 6. 中断と引き継ぎ
 
