@@ -93,6 +93,8 @@ describe('createWorkerIoriArticlesRouter', () => {
           article: { ...article, status: 'published' as const, publishedAt: createdAt },
           thread: [{
             type: 'local',
+            summary: null,
+            sensitive: false,
             postId: rootPostId,
             actorId,
             userId: authorUserId,

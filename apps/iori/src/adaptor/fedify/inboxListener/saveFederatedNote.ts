@@ -11,6 +11,7 @@ import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/feder
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import type { RelayId } from '../../../domain/relay/relayId.ts';
+import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import { extractAttachments } from './extractAttachments.ts';
@@ -78,6 +79,7 @@ export const saveFederatedNote = async (
   const postResult = await deps.remotePostUpserter.resolve({
     uri: note.id.href,
     content: contentText,
+    ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),
     recipientActorUris: extractRecipientActorUris([note], deps.origin),
     attachments,

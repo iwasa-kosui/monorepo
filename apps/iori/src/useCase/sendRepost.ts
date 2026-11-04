@@ -3,6 +3,7 @@ import { isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
+import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -236,6 +237,7 @@ const create = ({
           const remotePostResult = await remotePostUpserter.resolve({
             uri: objectUri,
             content: String(result.content ?? ''),
+            ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),
             authorIdentity: {

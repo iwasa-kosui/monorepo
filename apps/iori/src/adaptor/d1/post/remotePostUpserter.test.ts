@@ -64,6 +64,25 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('records the summary and sensitive flag of a new post', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      summary: 'ネタバレ注意',
+      sensitive: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val).toMatchObject({ summary: 'ネタバレ注意', sensitive: true });
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aggregateState: expect.objectContaining({ summary: 'ネタバレ注意', sensitive: true }),
+      }),
+    );
+  });
+
   it('passes the recipients of a new post to the store', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 

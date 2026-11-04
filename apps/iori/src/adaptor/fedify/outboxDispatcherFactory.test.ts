@@ -25,6 +25,8 @@ describe('createOutboxDispatcher', () => {
     const actorId = ActorId.generate();
     const post: LocalPost = {
       type: 'local',
+      summary: null,
+      sensitive: false,
       postId: PostId.generate(),
       actorId,
       content:
