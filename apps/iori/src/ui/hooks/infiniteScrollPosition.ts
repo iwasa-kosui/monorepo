@@ -6,6 +6,16 @@ export const isNearScrollEnd = (
   scrollHeight: number,
 ): boolean => scrollY + innerHeight >= scrollHeight - NEAR_END_THRESHOLD_PX;
 
+export const shouldLoadNow = (
+  cursor: string | undefined,
+  isNearEnd: boolean,
+): cursor is string => cursor !== undefined && isNearEnd;
+
+export const shouldAutoLoadCursor = (
+  cursor: string | undefined,
+  lastAutoLoadedCursor: string | undefined,
+): boolean => cursor !== undefined && cursor !== lastAutoLoadedCursor;
+
 export const isNearDocumentEnd = (): boolean =>
   isNearScrollEnd(
     window.scrollY,
