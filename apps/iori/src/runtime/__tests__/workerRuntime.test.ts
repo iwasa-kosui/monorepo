@@ -65,7 +65,6 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.likedPostIdsResolverByActorIdWithPagination.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.mutedActorsResolverByUserIdWithPagination.resolve).toBeTypeOf('function');
     expect(runtime.core.subscribePushUseCase.run).toBeTypeOf('function');
-    expect(runtime.core.unsubscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.uploads).toBeDefined();
     expect(runtime.federation).toBeDefined();
   });

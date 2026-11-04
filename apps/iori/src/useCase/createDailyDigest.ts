@@ -170,7 +170,7 @@ const removeDocumentTags = (text: string): string => {
 
 export const limitSummary = (summary: string): string => {
   const lines = summary
-    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/https?:\/\/[\x21-\x7E]+/gi, '')
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '')

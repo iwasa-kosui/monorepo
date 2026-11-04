@@ -115,6 +115,8 @@ const create = () => {
 
   return createInboxListener({
     onAccept: {
+      origin: Env.getInstance().ORIGIN,
+      relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
       inboxActorResolver,
       acceptRelaySubscriptionUseCase: AcceptRelaySubscriptionUseCase.create({
         relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),

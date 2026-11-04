@@ -1,5 +1,7 @@
 import { Follow } from '@fedify/fedify';
 
+export const RELAY_FOLLOW_ID_HASH_PREFIX = '#RelayFollow/';
+
 const PUBLIC_IRI = 'https://www.w3.org/ns/activitystreams#Public';
 
 const expandPublic = (value: unknown): unknown => value === 'as:Public' ? PUBLIC_IRI : value;

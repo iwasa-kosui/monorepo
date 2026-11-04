@@ -47,7 +47,6 @@ const runtime = vi.hoisted(() => ({
     sendReplyUseCase: {},
     deletePostUseCase: {},
     subscribePushUseCase: {},
-    unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
   },
   mutesRelays: {
@@ -84,6 +83,7 @@ describe('Task 7 Worker route mounting', () => {
         executionContext,
       ),
       worker.fetch(new Request('https://worker.test/api/v1/notifications'), env, executionContext),
+      worker.fetch(new Request('https://worker.test/api/iori/v1/articles/not-an-id'), env, executionContext),
       worker.fetch(new Request('https://worker.test/api/v1/articles/not-an-id'), env, executionContext),
       worker.fetch(
         new Request('https://worker.test/api/v1/mute', {
@@ -94,7 +94,7 @@ describe('Task 7 Worker route mounting', () => {
         env,
         executionContext,
       ),
-      worker.fetch(new Request('https://worker.test/api/v1/relays'), env, executionContext),
+      worker.fetch(new Request('https://worker.test/api/iori/v1/relays'), env, executionContext),
       worker.fetch(
         new Request('https://worker.test/remote-users/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/follow', {
           method: 'POST',
@@ -104,7 +104,7 @@ describe('Task 7 Worker route mounting', () => {
       ),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 401, 404]);
+    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 404, 401, 404]);
     expect(await responses[1]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });

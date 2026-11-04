@@ -21,11 +21,15 @@ import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAc
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
+import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
+import { SubscribePushUseCase } from '../../../../useCase/subscribePush.ts';
+import { SubscribeRelayUseCase } from '../../../../useCase/subscribeRelay.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { createTranslatePostUseCase } from '../../../../useCase/translatePost.ts';
+import { UndoEmojiReactUseCase } from '../../../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
 import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
@@ -48,6 +52,9 @@ import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolve
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
+import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReactCreatedStore.ts';
+import { createD1EmojiReactDeletedStore } from '../../../d1/emojiReact/emojiReactDeletedStore.ts';
+import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
@@ -80,6 +87,7 @@ import {
   createD1ReplyNotificationCreatedStore,
 } from '../../../d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../../../d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../../../d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../../../d1/notification/notificationsResolverByPage.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
@@ -93,8 +101,13 @@ import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
+import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
+import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelaysResolver.ts';
+import { createD1AllRelaysResolver } from '../../../d1/relay/allRelaysResolver.ts';
+import { createD1RelayResolverByActorUri } from '../../../d1/relay/relayResolverByActorUri.ts';
+import { createD1RelaySubscriptionRequestedStore } from '../../../d1/relay/relaySubscriptionRequestedStore.ts';
 import { createD1RepostCreatedStore } from '../../../d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../../../d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../../../d1/repost/repostResolver.ts';
@@ -109,6 +122,7 @@ import { createD1UserResolver } from '../../../d1/user/userResolver.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
+import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
@@ -168,7 +182,8 @@ export const setupReadApi = (
         to: new URL('https://www.w3.org/ns/activitystreams#Public'),
       })
     ),
-    getDocumentLoader: vi.fn(async () => ({})),
+    getDocumentLoader: vi.fn(async (): Promise<unknown> => ({})),
+    getActorKeyPairs: vi.fn(async () => []),
     lookupObject: vi.fn(async (): Promise<unknown> => null),
   };
   const createContext = () => federation as never;
@@ -435,6 +450,7 @@ export const setupReadApi = (
         createWorkerMastodonMarkersRouter({
           authn,
           markersResolverByUserId,
+          notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
           saveMarkersUseCase: SaveMarkersUseCase.create({
             markersResolverByUserId,
             markerSavedStore: createD1MarkerSavedStore(db),
@@ -456,6 +472,43 @@ export const setupReadApi = (
           }),
           requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
             .requestDigest,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriActionsRouter({
+          authn,
+          actorResolverByUserId,
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
+          sendEmojiReactUseCase: SendEmojiReactUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            emojiReactCreatedStore: createD1EmojiReactCreatedStore(db),
+            emojiReactResolverByActorAndPostAndEmoji: createD1EmojiReactResolverByActorAndPostAndEmoji(db),
+            postResolver,
+          }),
+          undoEmojiReactUseCase: UndoEmojiReactUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
+            emojiReactResolverByActorAndPostAndEmoji: createD1EmojiReactResolverByActorAndPostAndEmoji(db),
+            postResolver,
+          }),
+          subscribeRelayUseCase: SubscribeRelayUseCase.create({
+            relayResolverByActorUri: createD1RelayResolverByActorUri(db),
+            relaySubscriptionRequestedStore: createD1RelaySubscriptionRequestedStore(db),
+          }),
+          subscribePushUseCase: SubscribePushUseCase.create({
+            sessionResolver,
+            userResolver,
+            pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
+            pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
+          }),
+          allRelaysResolver: createD1AllRelaysResolver(db),
+          createContext,
         }),
       );
       root.route('/api', createWorkerMastodonFallbackRouter());

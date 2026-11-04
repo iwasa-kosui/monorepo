@@ -1,46 +1,40 @@
-import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import { resolveNextPath } from './signInNext.ts';
+const FALLBACK_ERROR_MESSAGE = '処理に失敗しました。もう一度お試しください';
+
+const ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  invalid_credentials: 'ユーザー名またはパスワードが正しくありません',
+  invalid_input: '入力内容が正しくありません。ユーザー名とパスワード（16文字以上）を確認してください',
+};
+
+const errorMessageFor = (code: string | null): string | undefined => {
+  if (code === null) return undefined;
+  return Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : FALLBACK_ERROR_MESSAGE;
+};
 
 const SignInPage = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault();
-    setError('');
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch('/api/v1/sign-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (response.ok) {
-        window.location.href = resolveNextPath(
-          new URLSearchParams(window.location.search).get('next'),
-          window.location.origin,
-        );
-        return;
-      }
-
-      const data = await response.json();
-      setError(data.error || 'Sign in failed');
-    } catch {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const params = new URLSearchParams(window.location.search);
+  const error = errorMessageFor(params.get('error'));
+  const next = params.get('next') ?? '';
+  const registered = params.get('registered') === '1';
 
   return (
     <section class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 blob-bg clay-hover-lift'>
       <h1 class='text-2xl font-bold text-terracotta-dark dark:text-terracotta-light mb-6'>Sign in</h1>
+
+      {registered && (
+        <div class='mb-6 p-4 bg-cream dark:bg-gray-700 rounded-clay shadow-clay-sm border-l-4 border-sage flex items-start gap-3'>
+          <div class='w-6 h-6 bg-sage rounded-full flex items-center justify-center flex-shrink-0 shadow-clay-sm'>
+            <span class='text-white text-xs font-bold'>&#10003;</span>
+          </div>
+          <div>
+            <p class='text-sm font-semibold text-sage-dark dark:text-sage'>Success</p>
+            <p class='text-charcoal-light dark:text-gray-400 text-sm'>
+              登録が完了しました。サインインしてください
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div class='mb-4 p-4 bg-cream dark:bg-gray-700 rounded-clay shadow-clay-sm border-l-4 border-terracotta flex items-start gap-3'>
@@ -56,13 +50,13 @@ const SignInPage = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} class='space-y-4'>
+      <form method='post' action='/auth/sign-in' class='space-y-4'>
+        <input type='hidden' name='next' value={next} />
         <div class='space-y-2'>
           <label class='text-sm font-medium text-charcoal dark:text-gray-300'>Username</label>
           <input
             type='text'
-            value={username}
-            onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
+            name='username'
             placeholder='Enter your username'
             required
             class='w-full px-4 py-3 rounded-xl bg-cream dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset focus:outline-none focus:border-terracotta focus:shadow-focus-ring dark:focus:shadow-focus-ring-dark transition-all'
@@ -72,8 +66,7 @@ const SignInPage = () => {
           <label class='text-sm font-medium text-charcoal dark:text-gray-300'>Password</label>
           <input
             type='password'
-            value={password}
-            onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
+            name='password'
             placeholder='Enter your password'
             required
             minlength={16}
@@ -83,10 +76,9 @@ const SignInPage = () => {
         </div>
         <button
           type='submit'
-          disabled={isSubmitting}
-          class='w-full px-4 py-3 bg-terracotta hover:bg-terracotta-dark text-white font-medium rounded-clay shadow-clay-btn hover:shadow-clay-btn-hover transition-all active:scale-[0.98] active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed'
+          class='w-full px-4 py-3 bg-terracotta hover:bg-terracotta-dark text-white font-medium rounded-clay shadow-clay-btn hover:shadow-clay-btn-hover transition-all active:scale-[0.98] active:translate-y-px'
         >
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
+          Sign in
         </button>
       </form>
       <p class='mt-6 text-sm text-charcoal-light dark:text-gray-400 text-center'>

@@ -67,6 +67,7 @@ import {
   createD1ReplyNotificationCreatedStore,
 } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../adaptor/d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../adaptor/d1/notification/notificationsResolverByPage.ts';
 import { createD1AccessTokenIssuedStore } from '../adaptor/d1/oauth/accessTokenIssuedStore.ts';
@@ -96,7 +97,6 @@ import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/pos
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
-import { createD1PushSubscriptionDeletedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionDeletedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1AcceptedRelaysResolver } from '../adaptor/d1/relay/acceptedRelaysResolver.ts';
@@ -170,7 +170,6 @@ import { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
-import { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
 import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
@@ -355,6 +354,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
       markersResolverByUserId,
+      notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
       saveMarkersUseCase: SaveMarkersUseCase.create({
         markersResolverByUserId,
         markerSavedStore: createD1MarkerSavedStore(db),
@@ -529,7 +529,6 @@ export const createWorkerRuntimePorts = async (
       digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
       digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
       digestResolverByUserIdAndDigestDate,
-      sessionResolver,
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,
@@ -590,12 +589,6 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
-        pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
-      }),
-      unsubscribePushUseCase: UnsubscribePushUseCase.create({
-        sessionResolver,
-        userResolver,
-        pushSubscriptionDeletedStore: createD1PushSubscriptionDeletedStore(db),
         pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
       }),
       ...remoteActorActions,

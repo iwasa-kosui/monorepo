@@ -1654,6 +1654,10 @@ describe('limitSummary', () => {
     expect(limitSummary('HTTPS://A.EXAMPLE/x')).toBe('');
   });
 
+  it('URL の直後に続く日本語は残す', () => {
+    expect(limitSummary('https://example.comを参照')).toBe('を参照');
+  });
+
   it('空行を除いて先頭 3 行にする', () => {
     expect(limitSummary('1\n\n  \n2\n3\n4\n5')).toBe('1\n2\n3');
   });
