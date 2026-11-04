@@ -73,10 +73,10 @@ export const decodeBody = (bytes: Uint8Array, contentType: string | null | undef
 
   if (mediaType === '' || HTML_MEDIA_TYPES.includes(mediaType)) {
     const label = sniffMetaCharset(bytes);
+    if (label?.trim().toLowerCase() === 'x-user-defined') return new TextDecoder('windows-1252').decode(bytes);
     const metaDecoder = label === undefined ? undefined : createDecoder(label);
     if (metaDecoder !== undefined) {
       if (metaDecoder.encoding.startsWith('utf-16')) return new TextDecoder('utf-8').decode(bytes);
-      if (metaDecoder.encoding === 'x-user-defined') return new TextDecoder('windows-1252').decode(bytes);
       return metaDecoder.decode(bytes);
     }
   }
