@@ -28,12 +28,14 @@ import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
+import { PgPostImagesResolverByPostId } from '../../pg/image/postImagesResolver.ts';
 import { PgLikesResolverByPostId } from '../../pg/like/likesResolverByPostId.ts';
 import { PgLocalLikeDeletedStore } from '../../pg/like/localLikeDeletedStore.ts';
 import { PgRemoteLikeCreatedStore } from '../../pg/like/remoteLikeCreatedStore.ts';
 import { PgRemoteLikeDeletedStore } from '../../pg/like/remoteLikeDeletedStore.ts';
 import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
 import { PgLinkPreviewCreatedStore } from '../../pg/linkPreview/linkPreviewCreatedStore.ts';
+import { PgLinkPreviewsResolverByPostId } from '../../pg/linkPreview/linkPreviewsResolver.ts';
 import { PgEmojiReactNotificationCreatedStore } from '../../pg/notification/emojiReactNotificationCreatedStore.ts';
 import { PgEmojiReactNotificationDeletedStore } from '../../pg/notification/emojiReactNotificationDeletedStore.ts';
 import { PgEmojiReactNotificationsResolverByPostId } from '../../pg/notification/emojiReactNotificationsResolverByPostId.ts';
@@ -168,16 +170,21 @@ const create = () => {
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin: Env.getInstance().ORIGIN,
         postCreatedStore: PgPostCreatedStore.getInstance(),
+        postResolverByUri: PgPostResolverByUri.getInstance(),
         postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
+        postImagesResolver: PgPostImagesResolverByPostId.getInstance(),
         remoteActorCreatedStore,
         logoUriUpdatedStore,
         actorResolverByUri,
         timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
+        timelineItemsResolverByPostId: PgTimelineItemsResolverByPostId.getInstance(),
         localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
         replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
+        replyNotificationsResolverByReplyPostId: PgReplyNotificationsResolverByReplyPostId.getInstance(),
         pushSubscriptionsResolver,
         webPushSender,
         linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
+        linkPreviewsResolver: PgLinkPreviewsResolverByPostId.getInstance(),
         ogpFetcher: createOgpFetcher(),
       }),
       fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
