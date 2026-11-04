@@ -234,7 +234,9 @@ export const notificationRepostsTable = sqliteTable('notification_reposts', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
   reposterActorId: text('reposterActorId').notNull().references(() => actorsTable.actorId),
   repostedPostId: text('repostedPostId').notNull(),
-});
+}, (table) => [
+  uniqueIndex('notification_reposts_reposter_post_unique').on(table.reposterActorId, table.repostedPostId),
+]);
 
 export const pushSubscriptionsTable = sqliteTable('push_subscriptions', {
   subscriptionId: text('subscriptionId').primaryKey(),

@@ -348,6 +348,15 @@ describe('repost 通知', () => {
     expect(otherPost.ok && otherPost.val).toBeUndefined();
   });
 
+  it('同じ (reposter, 投稿) の組で2件目の通知を作ると一意索引で失敗する', () => {
+    const t = seedReposts();
+
+    expect(() => t.seed.addRepostNotification(t.other.userId, t.alice.actorId, t.myPost.postId, 8_600))
+      .toThrow(/UNIQUE/);
+    expect(() => t.seed.addRepostNotification(t.me.userId, t.other.actorId, t.myPost.postId, 8_700))
+      .not.toThrow();
+  });
+
   it('通知の削除と全件削除で子表の行も消える', async () => {
     const t = seedReposts();
     t.seed.addRepostNotification(t.me.userId, t.alice.actorId, t.seed.uuid(), 8_500);

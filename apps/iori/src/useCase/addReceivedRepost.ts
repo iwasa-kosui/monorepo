@@ -233,7 +233,18 @@ const create = ({
             }, now);
             return timelineItemCreatedStore.store(timelineItemEvent);
           }),
-          RA.andThrough(({ post, actor }) => notifyRepost(post, actor, now)),
+          RA.andThrough(({ post, actor }) =>
+            RA.flow(
+              repostNotificationResolver.resolve({
+                recipientUserId: post.userId,
+                reposterActorId: actor.id,
+                repostedPostId: post.postId,
+              }),
+              RA.andThen((existingNotification) =>
+                existingNotification ? RA.ok(undefined) : notifyRepost(post, actor, now)
+              ),
+            )
+          ),
           RA.map(({ repost, actor }) => ({ repost, actor })),
         );
       }),

@@ -92,9 +92,12 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
         return;
       }
       const articleResult = await deps.articleResolver.resolve(articleIdResult.val);
-      const rootPostId = articleResult.ok ? articleResult.val?.rootPostId : undefined;
+      const article = articleResult.ok ? articleResult.val : undefined;
+      const rootPostId = article?.status === 'published' ? article.rootPostId : undefined;
       if (!rootPostId) {
-        getLogger().info(`Announce activity targets an article without a root post: ${objectId.href}`);
+        getLogger().info(
+          `Announce activity targets an unpublished article or one without a root post: ${objectId.href}`,
+        );
         return;
       }
       repostedPostId = rootPostId;

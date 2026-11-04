@@ -187,6 +187,21 @@ describe('AddReceivedRepostUseCase (local post)', () => {
     });
   });
 
+  it('通知が既にあり repost が無い状態（Undo 後）で再びブーストしても、repost は保存され、通知は1件のまま Web Push も送らない', async () => {
+    const deps = createDeps();
+    seedNotification(deps);
+
+    const result = await deps.run('https://remote.example.com/activities/3');
+
+    expect(result.ok).toBe(true);
+    expect(deps.repostEvents).toHaveLength(1);
+    expect(deps.reposts).toHaveLength(1);
+    expect(deps.timelineItemCreatedStore.store).toHaveBeenCalledTimes(1);
+    expect(deps.notifications).toHaveLength(1);
+    expect(deps.notificationEvents).toHaveLength(0);
+    expect(deps.webPushSender.send).not.toHaveBeenCalled();
+  });
+
   it('既存の repost があり通知が無いときは、通知と Web Push だけを作って成功で終える', async () => {
     const deps = createDeps();
     const existing = seedRepost(deps, 'https://remote.example.com/activities/1');
