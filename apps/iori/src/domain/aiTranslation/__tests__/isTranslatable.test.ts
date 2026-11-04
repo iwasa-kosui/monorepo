@@ -38,7 +38,7 @@ describe('isTranslatable', () => {
     ['unlisted', true],
     ['private', true],
     ['direct', false],
-    [null, false],
+    [null, true],
   ])('リモートの投稿は公開範囲が %s のとき %s', (visibility, expected) => {
     expect(isTranslatable(remotePost(visibility))).toBe(expected);
   });

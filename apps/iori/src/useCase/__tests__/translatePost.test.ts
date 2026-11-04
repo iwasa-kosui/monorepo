@@ -266,12 +266,9 @@ describe('TranslatePostUseCase', () => {
     expect(t.translations.store.find).not.toHaveBeenCalled();
   });
 
-  it.each<[string, PostOptions]>([
-    ['direct のリモート投稿', { visibility: 'direct' }],
-    ['公開範囲が不明のリモート投稿', { visibility: null }],
-  ])('%s は翻訳できないエラーにし、AI を呼ばず回数を数えない', async (_name, options) => {
+  it('direct のリモート投稿は翻訳できないエラーにし、AI を呼ばず回数を数えない', async () => {
     const t = setup();
-    const post = t.add(makePost('<p>Hello</p>', options));
+    const post = t.add(makePost('<p>Hello</p>', { visibility: 'direct' }));
 
     expect(await expectErr(t.translate(post.postId))).toMatchObject({ type: 'TranslationNotAllowedError' });
     expect(t.calls).toEqual([]);
@@ -281,6 +278,13 @@ describe('TranslatePostUseCase', () => {
   it.each(['public', 'unlisted', 'private'] as const)('%s のリモート投稿は翻訳できる', async (visibility) => {
     const t = setup();
     const post = t.add(makePost('<p>Hello</p>', { visibility }));
+
+    await expectOk(t.translate(post.postId));
+  });
+
+  it('公開範囲が不明のリモート投稿は private 相当として翻訳できる', async () => {
+    const t = setup();
+    const post = t.add(makePost('<p>Hello</p>', { visibility: null }));
 
     await expectOk(t.translate(post.postId));
   });
