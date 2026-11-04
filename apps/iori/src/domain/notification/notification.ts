@@ -70,11 +70,26 @@ const replyNotificationZodType = z
 export type ReplyNotification = z.output<typeof replyNotificationZodType>;
 export const ReplyNotification = Schema.create(replyNotificationZodType);
 
+const repostNotificationZodType = z
+  .object({
+    type: z.literal('repost'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    reposterActorId: ActorId.zodType,
+    repostedPostId: PostId.zodType,
+  })
+  .describe('RepostNotification');
+
+export type RepostNotification = z.output<typeof repostNotificationZodType>;
+export const RepostNotification = Schema.create(repostNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
   emojiReactNotificationZodType,
   replyNotificationZodType,
+  repostNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -318,6 +333,29 @@ export type ReplyNotificationsResolverByOriginalPostId = Agg.Resolver<
   ReplyNotification[]
 >;
 
+export type RepostNotificationCreated = NotificationEvent<
+  RepostNotification,
+  'notification.repostNotificationCreated',
+  RepostNotification
+>;
+
+const createRepostNotification = (payload: RepostNotification, now: Instant): RepostNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.repostNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type RepostNotificationCreatedStore = Agg.Store<RepostNotificationCreated>;
+
+export type RepostNotificationResolverByRecipientAndActorIdAndPostId = Agg.Resolver<
+  { recipientUserId: UserId; reposterActorId: ActorId; repostedPostId: PostId },
+  RepostNotification | undefined
+>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -417,6 +455,7 @@ export const Notification = {
   deleteEmojiReactNotification,
   createReplyNotification,
   deleteReplyNotification,
+  createRepostNotification,
   markAsRead,
   dismissNotification,
   clearNotifications,

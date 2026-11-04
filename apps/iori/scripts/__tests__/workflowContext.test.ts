@@ -230,6 +230,74 @@ it('accepts delete-rehearsal-d1 only for production without generation and run I
     );
   }
 });
+const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
+const moveReposts = (operation: string) => ({
+  ...env,
+  IORI_ENVIRONMENT: 'production',
+  IORI_GENERATION: 'prd20261102a',
+  IORI_OPERATION: operation,
+  IORI_MIGRATION_RUN_ID: '',
+  IORI_REPOST_CREATED_BEFORE_MS: '1700000000000',
+});
+it.each(moveOperations)(
+  'accepts %s only for production with a generation, a past time limit and no run ID',
+  operation => {
+    expect(parseWorkflowInvocation(moveReposts(operation))).toMatchObject({
+      operation,
+      codeSha: env.MAIN_SHA,
+      environment: 'production',
+      generation: 'prd20261102a',
+    });
+    const invalid = [
+      { IORI_ENVIRONMENT: 'staging' },
+      { IORI_GENERATION: '' },
+      { IORI_GENERATION: 'Bad-Generation' },
+      { IORI_MIGRATION_RUN_ID: 'fixture' },
+      { IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) },
+      { IORI_RECOVERY: 'destination_writes_reconciled' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '' },
+      { IORI_REPOST_CREATED_BEFORE_MS: undefined },
+      { IORI_REPOST_CREATED_BEFORE_MS: 'abc' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '1.5' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '-1' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '0' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '01700000000000' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '1700000000000 ' },
+      { IORI_REPOST_CREATED_BEFORE_MS: '99999999999999999' },
+      { IORI_REPOST_CREATED_BEFORE_MS: String(Date.now() + 60_000) },
+      { GITHUB_REF: 'refs/heads/feature' },
+      { GITHUB_EVENT_NAME: 'push' },
+    ];
+    for (const given of invalid) {
+      expect(() => parseWorkflowInvocation({ ...moveReposts(operation), ...given })).toThrow(
+        'Protected workflow invocation is invalid.',
+      );
+    }
+  },
+);
+it('compares the time limit with the given clock', () => {
+  expect(parseWorkflowInvocation(moveReposts('move-unfollowed-reposts'), { now: 1_700_000_000_000 }))
+    .toMatchObject({ operation: 'move-unfollowed-reposts' });
+  expect(() => parseWorkflowInvocation(moveReposts('move-unfollowed-reposts'), { now: 1_699_999_999_999 })).toThrow(
+    'Protected workflow invocation is invalid.',
+  );
+});
+it.each(['deploy-worker', 'put-worker-secrets', 'diagnose-source', 'delete-rehearsal-d1', 'resume-source'])(
+  'rejects the repost time limit for the operation %s',
+  operation => {
+    const base = operation === 'delete-rehearsal-d1'
+      ? { ...env, IORI_ENVIRONMENT: 'production', IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
+      : operation === 'diagnose-source'
+      ? { ...env, IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
+      : operation === 'resume-source'
+      ? { ...env, IORI_RECOVERY: 'destination_writes_reconciled' }
+      : env;
+    expect(parseWorkflowInvocation({ ...base, IORI_OPERATION: operation })).toMatchObject({ operation });
+    expect(() =>
+      parseWorkflowInvocation({ ...base, IORI_OPERATION: operation, IORI_REPOST_CREATED_BEFORE_MS: '1700000000000' })
+    ).toThrow('Protected workflow invocation is invalid.');
+  },
+);
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',

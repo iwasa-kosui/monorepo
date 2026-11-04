@@ -1,6 +1,6 @@
 export function parseWorkflowInvocation(
   env: Record<string, string | undefined>,
-  options?: { deferIdentity?: boolean },
+  options?: { deferIdentity?: boolean; now?: number },
 ): Readonly<{
   operation: string;
   codeSha: string;
@@ -14,3 +14,4 @@ export function createWorkflowDirectory(
   runnerTemp: string,
 ): Promise<Record<'base' | 'keys' | 'config' | 'logs' | 'tmp', string>>;
 export function writePrivateValue(directory: string, name: string, value: string): Promise<string>;
+export function repostCreatedBefore(value: unknown, now?: number): number | undefined;

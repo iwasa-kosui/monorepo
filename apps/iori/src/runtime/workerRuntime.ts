@@ -470,6 +470,7 @@ export const createWorkerRuntimePorts = async (
         remotePostUpserter,
         timelineItemCreatedStore,
         postResolver,
+        articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
       }),
       undoRepostUseCase: UndoRepostUseCase.create({
         sessionResolver,
@@ -481,6 +482,7 @@ export const createWorkerRuntimePorts = async (
         timelineItemResolverByRepostId: createD1TimelineItemResolverByRepostId(db),
         timelineItemDeletedStore: createD1TimelineItemDeletedStore(db),
         postResolver,
+        articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
       }),
       sendEmojiReactUseCase: SendEmojiReactUseCase.create({
         sessionResolver,

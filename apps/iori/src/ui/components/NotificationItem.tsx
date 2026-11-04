@@ -103,6 +103,67 @@ const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
   );
 };
 
+const ReblogNotificationItem = ({ notification, recipientUsername }: Props) => {
+  const { account, status } = notification;
+  const createdAt = createdAtOf(notification);
+
+  const handle = accountHandle(account);
+  const actorUrl = accountHref(account);
+  const postUrl = `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const logoUrl = safeUrl(account.avatar);
+
+  return (
+    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover transition-all clay-hover-lift'>
+      <div class='flex items-start gap-3'>
+        <div class='flex-shrink-0 w-8 h-8 rounded-xl bg-terracotta-light/30 dark:bg-terracotta-dark/30 flex items-center justify-center shadow-clay-sm'>
+          <svg
+            class='w-4 h-4 text-terracotta dark:text-terracotta-light'
+            fill='currentColor'
+            viewBox='0 0 20 20'
+          >
+            <path
+              fill-rule='evenodd'
+              d='M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z'
+              clip-rule='evenodd'
+            />
+          </svg>
+        </div>
+
+        <div class='flex-1 min-w-0'>
+          <div class='flex items-center gap-2 mb-2'>
+            <a
+              href={actorUrl}
+              class='flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1'
+            >
+              <div class='w-6 h-6 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-clay-sm'>
+                {logoUrl
+                  ? (
+                    <img
+                      src={logoUrl}
+                      alt='Actor Logo'
+                      class='w-6 h-6 rounded-full object-cover'
+                    />
+                  )
+                  : (
+                    handle.charAt(0).toUpperCase()
+                  )}
+              </div>
+              <span class='text-sm font-medium text-charcoal dark:text-white truncate'>
+                {handle}
+              </span>
+            </a>
+            <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
+              boosted your post
+            </span>
+          </div>
+
+          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} />
+        </div>
+      </div>
+    </article>
+  );
+};
+
 const FollowNotificationItem = ({ notification }: Pick<Props, 'notification'>) => {
   const { account } = notification;
   const createdAt = createdAtOf(notification);
@@ -289,6 +350,8 @@ export const NotificationItem = ({ notification, recipientUsername }: Props) => 
   switch (notification.type) {
     case 'favourite':
       return <LikeNotificationItem notification={notification} recipientUsername={recipientUsername} />;
+    case 'reblog':
+      return <ReblogNotificationItem notification={notification} recipientUsername={recipientUsername} />;
     case 'follow':
       return <FollowNotificationItem notification={notification} />;
     case IORI_EMOJI_REACTION_TYPE:
