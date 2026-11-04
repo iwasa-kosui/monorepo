@@ -3,7 +3,7 @@ import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 
 type Segment = Readonly<{ type: 'text'; text: string }> | Readonly<{ type: 'emoji'; shortcode: string; url: string }>;
 
-const SHORTCODE_PATTERN = /:([a-zA-Z0-9_]+):/g;
+const SHORTCODE_PATTERN = /:([a-zA-Z0-9_+-]+)(?=:)/g;
 
 export const splitCustomEmojiText = (text: string, emojis: readonly CustomEmoji[]): readonly Segment[] => {
   const urls = new Map<string, string>();
@@ -20,7 +20,7 @@ export const splitCustomEmojiText = (text: string, emojis: readonly CustomEmoji[
     if (url === undefined) continue;
     if (match.index > cursor) segments.push({ type: 'text', text: text.slice(cursor, match.index) });
     segments.push({ type: 'emoji', shortcode, url });
-    cursor = match.index + match[0].length;
+    cursor = match.index + match[0].length + 1;
   }
   if (cursor < text.length) segments.push({ type: 'text', text: text.slice(cursor) });
   return segments;

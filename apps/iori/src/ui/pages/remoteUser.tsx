@@ -119,24 +119,25 @@ export const RemoteUserPage = ({
 
           {account.note !== '' && (
             <div
+              data-testid='remote-user-note'
               class='mb-4 relative z-10 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
               dangerouslySetInnerHTML={{ __html: account.note }}
             />
           )}
 
           {account.fields.length > 0 && (
-            <table class='mb-4 relative z-10 w-full text-sm'>
+            <table class='mb-4 relative z-10 w-full table-fixed text-sm'>
               <tbody class='divide-y divide-sand dark:divide-gray-700'>
                 {account.fields.map((field) => (
                   <tr>
                     <th
                       scope='row'
-                      class='w-1/3 py-2 pr-4 text-left align-top font-bold text-charcoal-light dark:text-gray-400 break-words'
+                      class='w-1/3 py-2 pr-4 text-left align-top font-bold text-charcoal-light dark:text-gray-400 [overflow-wrap:anywhere]'
                     >
                       <CustomEmojiText text={field.name} emojis={account.emojis} />
                     </th>
                     <td
-                      class='py-2 align-top text-charcoal dark:text-gray-200 [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_.invisible]:visible'
+                      class='py-2 align-top text-charcoal dark:text-gray-200 [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [overflow-wrap:anywhere] [&_.invisible]:visible'
                       dangerouslySetInnerHTML={{ __html: field.value }}
                     />
                   </tr>

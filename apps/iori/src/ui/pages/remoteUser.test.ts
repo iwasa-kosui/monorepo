@@ -63,7 +63,7 @@ describe('RemoteUserPage profile', () => {
   });
 
   it('omits the note block when note is empty', () => {
-    expect(render(account())).not.toContain('prose');
+    expect(render(account())).not.toContain('remote-user-note');
   });
 
   it('shows fields as a table with name as text and value as HTML', () => {
@@ -113,6 +113,16 @@ describe('RemoteUserPage profile', () => {
 
     expect(html.match(/<img src="https:\/\/remote\.example\/emoji\/blobcat\.png"/g)).toHaveLength(2);
   });
+
+  it('turns shortcodes with hyphens into img elements', () => {
+    const hyphenated = {
+      shortcode: 'blobcat-heart',
+      url: 'https://remote.example/emoji/blobcat-heart.png',
+    } as Account['emojis'][number];
+    const html = render(account({ display_name: 'alice :blobcat-heart:', emojis: [hyphenated] }));
+
+    expect(html).toContain('<img src="https://remote.example/emoji/blobcat-heart.png"');
+  });
 });
 
 describe('CustomEmojiText', () => {
@@ -125,6 +135,13 @@ describe('CustomEmojiText', () => {
       { type: 'text', text: 'a ' },
       { type: 'emoji', shortcode: 'blobcat', url: emoji.url },
       { type: 'text', text: ' b' },
+    ]);
+  });
+
+  it('replaces a known shortcode that follows an unknown one', () => {
+    expect(splitCustomEmojiText(':unknown:blobcat:', [emoji])).toEqual([
+      { type: 'text', text: ':unknown' },
+      { type: 'emoji', shortcode: 'blobcat', url: emoji.url },
     ]);
   });
 
