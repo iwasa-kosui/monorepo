@@ -94,7 +94,17 @@ const build = ({ relayStatus = 'accepted', withRelay = true } = {}) => {
       1,
     );
   }
-  return { fixture, relayId, otherRelayId, posts: { p1, p2, p3, p4, p5, p6, p7, p8, p9 }, reposts, plainPost };
+  return {
+    fixture,
+    seed,
+    local,
+    unfollowed1,
+    relayId,
+    otherRelayId,
+    posts: { p1, p2, p3, p4, p5, p6, p7, p8, p9 },
+    reposts,
+    plainPost,
+  };
 };
 
 type Call = { method: string; path: string; sql?: string };
@@ -254,7 +264,7 @@ describe('move-unfollowed-reposts relay and database checks', () => {
 describe('move-unfollowed-reposts SQL', () => {
   it('pins the target condition', () => {
     expect(targetCondition(1234)).toBe(
-      't.type = \'repost\' AND t.deletedAt IS NULL AND t.createdAt <= 1234 AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId)',
+      't.type = \'repost\' AND t.deletedAt IS NULL AND t.createdAt <= 1234 AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId) AND NOT EXISTS (SELECT 1 FROM posts p JOIN local_actors la ON la.actorId = p.actorId WHERE p.postId = t.postId)',
     );
   });
   it('sends only SELECT statements for a dry-run and changes nothing', async () => {
@@ -270,7 +280,7 @@ describe('move-unfollowed-reposts SQL', () => {
       expect(sql).not.toContain(';');
     }
     expect(notices).toEqual([
-      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=6 posts=5 already_federated=1 to_create=4',
+      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=6 posts=5 already_federated=1 to_create=4 missing_posts=0',
     ]);
     expect(snapshot(fixture)).toEqual(beforeRun);
   });
@@ -393,7 +403,7 @@ describe('move-unfollowed-reposts apply on a SQLite fixture', () => {
     expect(second.notices).toEqual(['IORI_NOTICE move-unfollowed-reposts mode=apply created=0 deleted=0']);
     const dry = await run('dry-run', fixture, {}, { at: now + 2 });
     expect(dry.notices).toEqual([
-      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=0 posts=0 already_federated=0 to_create=0',
+      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=0 posts=0 already_federated=0 to_create=0 missing_posts=0',
     ]);
   });
   it('does not double the events when it runs again after stopping before the soft delete', async () => {
@@ -419,6 +429,63 @@ describe('move-unfollowed-reposts apply on a SQLite fixture', () => {
         'SELECT aggregateId FROM domain_events WHERE eventName = \'timelineItem.deleted\' ORDER BY aggregateId',
       );
     expect(deletedEvents(partial.fixture)).toEqual(deletedEvents(complete.fixture));
+  });
+  it('neither moves nor soft-deletes a repost of a local post by an unfollowed remote actor', async () => {
+    const { fixture, seed, local, unfollowed1 } = build();
+    const localPost = seed.addLocalPost(local, 200, { timeline: false });
+    const boost = seed.addRepost(unfollowed1.actorId, localPost.postId, 1_200);
+    const dry = await run('dry-run', fixture);
+    expect(dry.notices).toEqual([
+      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=6 posts=5 already_federated=1 to_create=4 missing_posts=0',
+    ]);
+    const { notices, error } = await run('apply', fixture);
+    expect(error).toBeUndefined();
+    expect(notices).toEqual(['IORI_NOTICE move-unfollowed-reposts mode=apply created=4 deleted=6']);
+    expect(timelineIds(fixture, `deletedAt IS NULL AND postId = '${localPost.postId}'`)).toEqual(ids(boost));
+    expect(count(fixture, 'federated_timeline_items', `postId = '${localPost.postId}'`)).toBe(0);
+    expect(count(fixture, 'domain_events', `aggregateId LIKE '%${boost.timelineItemId}%'`)).toBe(0);
+  });
+  it('soft-deletes a repost whose post is missing without creating a federated item', async () => {
+    const { fixture, seed, unfollowed1, relayId } = build();
+    const author = seed.addRemoteActor('missing-author');
+    const missing = seed.addRemotePost(author, 300);
+    const repost = seed.addRepost(unfollowed1.actorId, missing.postId, 1_300);
+    fixture.sqlite.exec('PRAGMA foreign_keys=OFF');
+    fixture.sqlite.prepare('DELETE FROM remote_posts WHERE postId = ?').run(missing.postId);
+    fixture.sqlite.prepare('DELETE FROM posts WHERE postId = ?').run(missing.postId);
+    fixture.sqlite.exec('PRAGMA foreign_keys=ON');
+    const dry = await run('dry-run', fixture);
+    expect(dry.notices).toEqual([
+      'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=7 posts=6 already_federated=1 to_create=4 missing_posts=1',
+    ]);
+    const { notices, error } = await run('apply', fixture);
+    expect(error).toBeUndefined();
+    expect(notices).toEqual(['IORI_NOTICE move-unfollowed-reposts mode=apply created=4 deleted=7']);
+    expect(timelineIds(fixture, `deletedAt = ${now} AND postId = '${missing.postId}'`)).toEqual(ids(repost));
+    expect(count(fixture, 'federated_timeline_items', `postId = '${missing.postId}'`)).toBe(0);
+    expect(count(fixture, 'federated_timeline_items', `relayId = '${relayId}'`)).toBe(4);
+  });
+  it.each([1, 2, 3])('ends in the same state when it runs again after only the first %i statements', (done) => {
+    const { fixture, relayId } = build();
+    const statements = applySql({ relayId, beforeMs: before, now });
+    for (const sql of statements.slice(0, done)) fixture.sqlite.exec(sql);
+    for (const sql of statements) fixture.sqlite.exec(sql);
+    expect(count(fixture, 'federated_timeline_items')).toBe(5);
+    expect(count(fixture, 'federated_timeline_items', `relayId = '${relayId}'`)).toBe(4);
+    expect(rows(fixture, `SELECT DISTINCT postId FROM federated_timeline_items WHERE relayId = '${relayId}'`))
+      .toHaveLength(4);
+    expect(count(fixture, 'domain_events', 'eventName = \'federatedTimelineItem.created\'')).toBe(4);
+    expect(
+      rows(
+        fixture,
+        'SELECT DISTINCT aggregateId FROM domain_events WHERE eventName = \'federatedTimelineItem.created\'',
+      ),
+    )
+      .toHaveLength(4);
+    expect(count(fixture, 'domain_events', 'eventName = \'timelineItem.deleted\'')).toBe(6);
+    expect(rows(fixture, 'SELECT DISTINCT aggregateId FROM domain_events WHERE eventName = \'timelineItem.deleted\''))
+      .toHaveLength(6);
+    expect(count(fixture, 'timeline_items', `deletedAt = ${now}`)).toBe(6);
   });
   it('fails with the query stage and prints no notice when the apply request is rejected', async () => {
     const { fixture } = build();

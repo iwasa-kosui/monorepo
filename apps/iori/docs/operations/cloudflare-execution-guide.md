@@ -497,9 +497,20 @@ job が受け取る secret は、次の2つです。
 
 #### move-unfollowed-reposts でフォローしていない actor の repost を federated に移す
 
-`move-unfollowed-reposts-dry-run` は、本番の D1 の `timeline_items` から、フォローしていない remote actor の repost（`createdAt` が `repost_created_before_ms` 以下で、まだ論理削除されていないもの）を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=<N> posts=<N> already_federated=<N> to_create=<N>` の行を出します。`move-unfollowed-reposts` は、同じ条件の repost について、federated の項目（relay は `https://relay.fedibird.com/actor` で、`accepted` のもの）と `federatedTimelineItem.created` のイベントを足し、`timelineItem.deleted` のイベントを足してから、`deletedAt` を立てます。この operation は `IORI_NOTICE move-unfollowed-reposts mode=apply created=<N> deleted=<N>` の行を出します。
+`move-unfollowed-reposts-dry-run` は、本番の D1 の `timeline_items` から、フォローしていない remote actor の repost（`createdAt` が `repost_created_before_ms` 以下で、まだ論理削除されていないもの）を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=<N> posts=<N> already_federated=<N> to_create=<N> missing_posts=<N>` の行を出します。`move-unfollowed-reposts` は、同じ条件の repost について、federated の項目（relay は `https://relay.fedibird.com/actor` で、`accepted` のもの）と `federatedTimelineItem.created` のイベントを足し、`timelineItem.deleted` のイベントを足してから、`deletedAt` を立てます。この operation は `IORI_NOTICE move-unfollowed-reposts mode=apply created=<N> deleted=<N>` の行を出します。
+
+対象の範囲は、次のとおりです。
+
+- `posts` に無い `postId` を持つ repost は、federated の項目を作らずに、論理削除だけします。dry-run の `missing_posts` は、この repost の件数です。
+- ローカルの投稿への boost は、対象にしません。フォローしていない remote actor が、ローカルの投稿を boost した repost も、移さず、論理削除もしません。
+- relay が `accepted` になる前に、relay の actor 自身の Announce から作られた repost も、対象になります。この repost は、federated に移す先として正しいものです。
+- apply が出す `created` と `deleted` は、その回の実行で足した件数です。前の実行で足した分は、含みません。
 
 作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation`、`repost_created_before_ms=<ミリ秒の epoch。未来の時刻は不可>` で dispatch します。`migration_run_id` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `move-unfollowed-reposts` を dispatch します。途中で失敗した場合も、同じ入力で `move-unfollowed-reposts` を dispatch し直せます。2回目以降は、すでに足した項目とイベントを足しません。
+
+`move-unfollowed-reposts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。途中で失敗しても、同じ入力で `move-unfollowed-reposts` を再実行すれば、最終状態はそろいます。
+
+dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。`deletedAt` の条件があるので、段階的に実行しても、同じ repost を二重に処理しません。
 
 ## 6. 中断と引き継ぎ
 

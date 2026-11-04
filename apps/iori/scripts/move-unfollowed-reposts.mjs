@@ -29,7 +29,7 @@ const DELETED_EVENT_EXISTS = (id) =>
   `EXISTS (SELECT 1 FROM domain_events e WHERE e.aggregateName = 'timelineItem' AND e.eventName = 'timelineItem.deleted' AND e.aggregateId = json_object('timelineItemId', ${id}))`;
 
 export const targetCondition = (beforeMs) =>
-  `t.type = 'repost' AND t.deletedAt IS NULL AND t.createdAt <= ${beforeMs} AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId)`;
+  `t.type = 'repost' AND t.deletedAt IS NULL AND t.createdAt <= ${beforeMs} AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId) AND NOT EXISTS (SELECT 1 FROM posts p JOIN local_actors la ON la.actorId = p.actorId WHERE p.postId = t.postId)`;
 const targetPosts = (beforeMs) =>
   `SELECT t.postId AS postId, MIN(t.createdAt) AS receivedAt FROM timeline_items t WHERE ${
     targetCondition(beforeMs)
@@ -45,7 +45,9 @@ export const dryRunSql = (beforeMs) =>
     targetCondition(beforeMs)
   }) g WHERE ${FEDERATED_ITEM_EXISTS('g.postId')}) AS already_federated, (SELECT COUNT(*) FROM (${
     targetPosts(beforeMs)
-  }) g WHERE NOT ${FEDERATED_ITEM_EXISTS('g.postId')}) AS to_create`;
+  }) g WHERE NOT ${FEDERATED_ITEM_EXISTS('g.postId')}) AS to_create, (SELECT COUNT(*) FROM timeline_items t WHERE ${
+    targetCondition(beforeMs)
+  } AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.postId = t.postId)) AS missing_posts`;
 const itemJson = (alias) =>
   `json_object('federatedTimelineItemId', ${alias}.federatedTimelineItemId, 'postId', ${alias}.postId, 'relayId', ${alias}.relayId, 'receivedAt', ${alias}.receivedAt)`;
 export const applySql = ({ relayId, beforeMs, now }) => [
@@ -147,7 +149,9 @@ export const moveUnfollowedReposts = async ({
     notice(
       `IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=${count(row, 'targets')} posts=${
         count(row, 'posts')
-      } already_federated=${count(row, 'already_federated')} to_create=${count(row, 'to_create')}`,
+      } already_federated=${count(row, 'already_federated')} to_create=${count(row, 'to_create')} missing_posts=${
+        count(row, 'missing_posts')
+      }`,
     );
     return;
   }

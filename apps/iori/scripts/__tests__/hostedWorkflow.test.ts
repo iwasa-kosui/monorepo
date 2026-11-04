@@ -205,14 +205,15 @@ it('relays only the fixed rehearsal D1 notice for the five rehearsal names to th
 it('relays only the fixed move-unfollowed-reposts notices to the public log', async () => {
   const writes = captureStderr();
   const accepted = [
-    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=9400 posts=3000 already_federated=10 to_create=2990',
-    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=0 posts=0 already_federated=0 to_create=0',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=9400 posts=3000 already_federated=10 to_create=2990 missing_posts=5',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=0 posts=0 already_federated=0 to_create=0 missing_posts=0',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=2990 deleted=9400',
   ];
   const rejected = [
     'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1',
-    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=-1 posts=1 already_federated=1 to_create=1',
-    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1 to_create=1 extra=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1 to_create=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=-1 posts=1 already_federated=1 to_create=1 missing_posts=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1 to_create=1 missing_posts=1 extra=1',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1 postId=12345678-1234-4234-8234-123456789012',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=1',
     'IORI_NOTICE move-unfollowed-reposts mode=delete created=1 deleted=1',
