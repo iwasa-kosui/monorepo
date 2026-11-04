@@ -529,7 +529,6 @@ export const createWorkerRuntimePorts = async (
       digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
       digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
       digestResolverByUserIdAndDigestDate,
-      sessionResolver,
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,

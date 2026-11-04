@@ -197,7 +197,6 @@ export type IoriArticlesRuntimePorts = Readonly<{
   digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
   digestHeadersResolverByArticleIds: DigestHeadersResolverByArticleIds;
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
-  sessionResolver: SessionResolver;
   actorResolverByUserId: ActorResolverByUserId;
   publishOgImage: (article: Article) => Promise<void>;
   deleteOgImage: (articleId: ArticleId) => Promise<void>;

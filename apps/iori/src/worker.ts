@@ -9,11 +9,11 @@ import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts'
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
-import { createWorkerArticlesApiRouter } from './adaptor/routes/workerArticlesApiRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
+import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
@@ -202,13 +202,6 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerArticlesApiRouter({
-            ...runtime.articles,
-            createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
-          }),
-        );
-        app.route(
-          '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
             createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
@@ -274,6 +267,14 @@ export default {
             ...runtime.socialActions,
             subscribeRelayUseCase: runtime.mutesRelays.subscribeRelayUseCase,
             allRelaysResolver: runtime.mutesRelays.allRelaysResolver,
+            authn,
+            createContext,
+          }),
+        );
+        app.route(
+          '/api',
+          createWorkerIoriArticlesRouter({
+            ...runtime.articles,
             authn,
             createContext,
           }),

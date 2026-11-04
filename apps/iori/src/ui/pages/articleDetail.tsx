@@ -42,7 +42,7 @@ const ArticleDetailPage = () => {
     }
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`);
+      const res = await fetch(`/api/iori/v1/articles/${articleId}`);
       const result = await res.json();
 
       if ('error' in result) {
@@ -69,7 +69,7 @@ const ArticleDetailPage = () => {
 
     setIsPublishing(true);
     try {
-      const res = await fetch(`/api/v1/articles/${data.article.articleId}/publish`, {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/publish`, {
         method: 'POST',
       });
       const result = await res.json();
@@ -91,7 +91,7 @@ const ArticleDetailPage = () => {
 
     setIsUnpublishing(true);
     try {
-      const res = await fetch(`/api/v1/articles/${data.article.articleId}/unpublish`, {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/unpublish`, {
         method: 'POST',
       });
       const result = await res.json();
