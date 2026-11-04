@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
+import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
+import { ActorDispatcher } from './actorDispatcher.ts';
 import { createActorDispatcher } from './actorDispatcherFactory.ts';
 
 const ORIGIN = 'https://iori.example';
@@ -21,67 +23,81 @@ describe('ユーザーの actor が送る活動の proof', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it('actor 文書の assertionMethods から鍵を取得して検証できる', async () => {
-    const rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const ed25519 = await generateCryptoKeyPair('Ed25519');
-    const userId = UserId.generate();
-    const actorId = ActorId.generate();
-    const actorDispatcher = createActorDispatcher({
-      userResolverByUsername: { resolve: async () => RA.ok({ id: userId, username: Username.orThrow('kosui') }) },
-      actorResolverByUserId: {
-        resolve: async () =>
-          RA.ok({
-            id: actorId,
-            userId,
-            type: 'local' as const,
-            uri: `${ORIGIN}/users/kosui`,
-            inboxUrl: `${ORIGIN}/users/kosui/inbox`,
-          }),
-      },
-    });
-    const federation = createFederation<void>({
-      kv: new MemoryKvStore(),
-      origin: ORIGIN,
-      firstKnock: 'draft-cavage-http-signatures-12',
-      allowPrivateAddress: true,
-    });
-    federation
-      .setActorDispatcher('/users/{identifier}', actorDispatcher.dispatch)
-      .setKeyPairsDispatcher(async () => [rsa, ed25519]);
-    federation.setInboxListeners('/users/{identifier}/inbox', '/inbox');
-    federation.setOutboxDispatcher('/users/{identifier}/outbox', () => ({ items: [] }));
-    federation.setFollowersDispatcher('/users/{identifier}/followers', () => ({ items: [] }));
-    const ctx = federation.createContext(new Request(`${ORIGIN}/`), undefined);
-    const actorUri = ctx.getActorUri('kosui');
+  const userId = UserId.generate();
+  const actorId = ActorId.generate();
+  const actor = {
+    id: actorId,
+    userId,
+    type: 'local' as const,
+    uri: `${ORIGIN}/users/kosui`,
+    inboxUrl: `${ORIGIN}/users/kosui/inbox`,
+  };
+  const user = { id: userId, username: Username.orThrow('kosui') };
+  const dispatchers = {
+    'Cloudflare 版': () =>
+      createActorDispatcher({
+        userResolverByUsername: { resolve: async () => RA.ok(user) },
+        actorResolverByUserId: { resolve: async () => RA.ok(actor) },
+      }).dispatch,
+    'Node 版': () => {
+      vi.spyOn(GetUserProfileUseCase, 'getInstance').mockReturnValue(
+        { run: async () => RA.ok({ user, actor }) } as never,
+      );
+      return ActorDispatcher.getInstance().dispatch;
+    },
+  };
 
-    await ctx.sendActivity(
-      { identifier: 'kosui' },
-      { id: new URL('https://remote.example/users/bob'), inboxId: new URL(REMOTE_INBOX) },
-      new Follow({
-        id: new URL(`${ORIGIN}/activities/follow-1`),
-        actor: actorUri,
-        object: new URL('https://remote.example/users/bob'),
-        to: new URL('https://remote.example/users/bob'),
-      }),
-    );
+  it.each(Object.entries(dispatchers))(
+    '%s: actor 文書の assertionMethods から鍵を取得して検証できる',
+    async (_name, createDispatch) => {
+      const rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+      const ed25519 = await generateCryptoKeyPair('Ed25519');
+      const dispatch = createDispatch();
+      const federation = createFederation<void>({
+        kv: new MemoryKvStore(),
+        origin: ORIGIN,
+        firstKnock: 'draft-cavage-http-signatures-12',
+        allowPrivateAddress: true,
+      });
+      federation
+        .setActorDispatcher('/users/{identifier}', dispatch)
+        .setKeyPairsDispatcher(async () => [rsa, ed25519]);
+      federation.setInboxListeners('/users/{identifier}/inbox', '/inbox');
+      federation.setOutboxDispatcher('/users/{identifier}/outbox', () => ({ items: [] }));
+      federation.setFollowersDispatcher('/users/{identifier}/followers', () => ({ items: [] }));
+      const ctx = federation.createContext(new Request(`${ORIGIN}/`), undefined);
+      const actorUri = ctx.getActorUri('kosui');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const sent = JSON.parse(await fetchMock.mock.calls[0][0].clone().text()) as Record<string, unknown>;
-    expect(sent.proof).toBeDefined();
-    const actorResponse = await federation.fetch(
-      new Request(actorUri, { headers: { Accept: 'application/activity+json' } }),
-      { contextData: undefined },
-    );
-    expect(actorResponse.status).toBe(200);
-    const actorDocument = await actorResponse.json();
-    const documentLoader = async (url: string) => {
-      if (!url.startsWith(actorUri.href)) throw new Error(`unexpected document: ${url}`);
-      return { contextUrl: null, document: actorDocument, documentUrl: url };
-    };
+      await ctx.sendActivity(
+        { identifier: 'kosui' },
+        { id: new URL('https://remote.example/users/bob'), inboxId: new URL(REMOTE_INBOX) },
+        new Follow({
+          id: new URL(`${ORIGIN}/activities/follow-1`),
+          actor: actorUri,
+          object: new URL('https://remote.example/users/bob'),
+          to: new URL('https://remote.example/users/bob'),
+        }),
+      );
 
-    expect(await verifyObject(Activity, detachSignature(sent), { documentLoader })).not.toBeNull();
-  });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const sent = JSON.parse(await fetchMock.mock.calls[0][0].clone().text()) as Record<string, unknown>;
+      expect(sent.proof).toBeDefined();
+      const actorResponse = await federation.fetch(
+        new Request(actorUri, { headers: { Accept: 'application/activity+json' } }),
+        { contextData: undefined },
+      );
+      expect(actorResponse.status).toBe(200);
+      const actorDocument = await actorResponse.json();
+      const documentLoader = async (url: string) => {
+        if (!url.startsWith(actorUri.href)) throw new Error(`unexpected document: ${url}`);
+        return { contextUrl: null, document: actorDocument, documentUrl: url };
+      };
+
+      expect(await verifyObject(Activity, detachSignature(sent), { documentLoader })).not.toBeNull();
+    },
+  );
 });
