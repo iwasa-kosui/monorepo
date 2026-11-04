@@ -7,10 +7,8 @@ const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/
 
 const linkTargets = (url: string): ReadonlyArray<string> => {
   const bases = new Set([url]);
-  try {
+  if (URL.canParse(url)) {
     bases.add(new URL(url).href);
-  } catch {
-    // The original URL is the only candidate.
   }
   return [...bases].flatMap((base) => [base, base.replace(/([()])/g, '\\$1')]);
 };
