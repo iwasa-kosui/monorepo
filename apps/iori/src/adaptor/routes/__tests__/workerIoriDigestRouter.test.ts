@@ -880,6 +880,7 @@ describe('iori のダイジェスト API', () => {
       ['embedding が未計算', { embedding: null }],
       ['feed_entries の行が期限切れで無い', { entry: false }],
     ])('feed_entries に %s ときは、反応だけ保存して材料を作らない', async (_, options) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
       const { digestItemId } = seedFeedbackDigest(t, me, options);
@@ -889,6 +890,42 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(303);
       expect(feedbackOf(t, digestItemId).feedback).toBe('interested');
       expect(sourcesOf(t)).toEqual([]);
+      expect(warn).toHaveBeenCalledWith('iori digest feedback: the feed entry has no embedding.', {
+        digestItemId,
+        feedEntryId: 'entry-1',
+      });
+      warn.mockRestore();
+    });
+
+    it('公開済みの記事の項目への反応は 409 にし、digest_items と interest_sources を変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId, articleId } = seedFeedbackDigest(t, me);
+      t.sqlite.prepare('UPDATE articles SET status = ?, publishedAt = ? WHERE articleId = ?')
+        .run('published', 2_000, articleId);
+
+      const response = await give(t, digestItemId, cookieOf(me), 'interested');
+
+      expect(response.status).toBe(409);
+      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
+      expect(sourcesOf(t)).toEqual([]);
+      expect(
+        t.sqlite.prepare('SELECT eventName FROM domain_events WHERE eventName = \'digest.itemFeedbackGiven\'').all(),
+      ).toEqual([]);
+    });
+
+    it('公開後に非公開へ戻した記事の項目への反応は、303 で受け付ける', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:accounts');
+      const { digestItemId, articleId } = seedFeedbackDigest(t, me);
+      t.sqlite.prepare('UPDATE articles SET status = ?, unpublishedAt = ? WHERE articleId = ?')
+        .run('unpublished', 3_000, articleId);
+
+      const response = await give(t, digestItemId, cookieOf(me), 'interested');
+
+      expect(response.status).toBe(303);
+      expect(feedbackOf(t, digestItemId).feedback).toBe('interested');
+      expect(sourcesOf(t).map(({ kind }) => kind)).toEqual(['feedback_positive']);
     });
 
     it('埋め込みが無い記事の反応を切り替えると、反対の材料は消す', async () => {

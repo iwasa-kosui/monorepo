@@ -48,6 +48,7 @@ import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryU
 import { createD1AiTranslationUsageRecorder } from '../../../d1/aiTranslation/aiTranslationUsageRecorder.ts';
 import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTranslationStore.ts';
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
+import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
@@ -480,6 +481,7 @@ export const setupReadApi = (
           requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
             .requestDigest,
           giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
+            articleResolver: createD1ArticleResolver(db),
             digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
             feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
             interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),

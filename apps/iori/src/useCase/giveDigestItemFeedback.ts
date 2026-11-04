@@ -1,8 +1,10 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import {
   Digest,
+  DigestArticlePublishedError,
   type DigestFeedback,
   type DigestItemFeedbackGivenStore,
   DigestItemNotFoundError,
@@ -35,11 +37,12 @@ type Input = Readonly<{ userId: UserId; digestItemId: DigestItemId; feedback: Di
 
 type Ok = Readonly<{ articleId: ArticleId; feedback: DigestFeedback | null }>;
 
-type Err = DigestItemNotFoundError | InterestSourceParseError | EmbeddingDimensionsError;
+type Err = DigestItemNotFoundError | DigestArticlePublishedError | InterestSourceParseError | EmbeddingDimensionsError;
 
 export type GiveDigestItemFeedbackUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
+  articleResolver: ArticleResolver;
   digestResolverByDigestItemId: DigestResolverByDigestItemId;
   feedEntryEmbeddingResolverByFeedEntryId: FeedEntryEmbeddingResolverByFeedEntryId;
   interestSourcesResolverByUserIdAndRefAndKinds: InterestSourcesResolverByUserIdAndRefAndKinds;
@@ -50,6 +53,7 @@ type Deps = Readonly<{
 }>;
 
 const create = ({
+  articleResolver,
   digestResolverByDigestItemId,
   feedEntryEmbeddingResolverByFeedEntryId,
   interestSourcesResolverByUserIdAndRefAndKinds,
@@ -64,6 +68,10 @@ const create = ({
     if (digest === undefined || digest.userId !== userId) return RA.err(DigestItemNotFoundError.create(digestItemId));
     const item = digest.items.find((candidate) => candidate.digestItemId === digestItemId);
     if (item === undefined) return RA.err(DigestItemNotFoundError.create(digestItemId));
+
+    const article = await articleResolver.resolve(digest.articleId);
+    if (article.val === undefined) return RA.err(DigestItemNotFoundError.create(digestItemId));
+    if (article.val.status === 'published') return RA.err(DigestArticlePublishedError.create(digest.articleId));
 
     const timestamp = now();
     const given = Digest.giveFeedback(digest, digestItemId, feedback, timestamp);
@@ -83,7 +91,12 @@ const create = ({
 
     if (targetKind !== undefined) {
       const embedding = await feedEntryEmbeddingResolverByFeedEntryId.resolve(item.feedEntryId);
-      if (embedding.val !== undefined) {
+      if (embedding.val === undefined) {
+        console.warn('iori digest feedback: the feed entry has no embedding.', {
+          digestItemId,
+          feedEntryId: item.feedEntryId,
+        });
+      } else {
         const copied = InterestSource.copyEmbedding(
           existing.val.find((source) => source.kind === targetKind),
           {

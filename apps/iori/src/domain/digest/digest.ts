@@ -156,6 +156,20 @@ export const DigestItemNotFoundError = {
   }),
 } as const;
 
+export type DigestArticlePublishedError = Readonly<{
+  type: 'DigestArticlePublishedError';
+  message: string;
+  detail: { articleId: ArticleId };
+}>;
+
+export const DigestArticlePublishedError = {
+  create: (articleId: ArticleId): DigestArticlePublishedError => ({
+    type: 'DigestArticlePublishedError',
+    message: `The article "${articleId}" of the digest has already been published.`,
+    detail: { articleId },
+  }),
+} as const;
+
 const giveFeedback = (
   digest: Digest,
   digestItemId: DigestItemId,

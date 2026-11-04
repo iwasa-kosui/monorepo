@@ -398,6 +398,7 @@ export const createWorkerRuntimePorts = async (
       }),
       requestDigestUseCase: createDigestUseCases(env).requestDigest,
       giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
+        articleResolver,
         digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
         feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
         interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),

@@ -210,9 +210,15 @@ export const createWorkerIoriDigestRouter = ({
           feedback: feedback.data,
         });
         if (given.ok) return c.redirect(`/articles/${given.val.articleId}`, 303);
-        return 'type' in given.err && given.err.type === 'DigestItemNotFoundError'
-          ? c.json(digestItemNotFound, 404)
-          : c.json(internalServerError, 500);
+        if (!('type' in given.err)) return c.json(internalServerError, 500);
+        switch (given.err.type) {
+          case 'DigestItemNotFoundError':
+            return c.json(digestItemNotFound, 404);
+          case 'DigestArticlePublishedError':
+            return c.json({ error: 'Digest already published' }, 409);
+          default:
+            return c.json(internalServerError, 500);
+        }
       },
     )
     .post('/iori/v1/digests', authn.requireUser(writeAccounts), async (c) => {
