@@ -202,6 +202,11 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     onCreate: {
       origin,
       inboxActorResolver,
+      followedByLocalActorResolverByActorUri: createD1FollowedByLocalActorResolverByActorUri(db),
+      acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+      remotePostUpserter,
+      federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
+      federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin,
         postCreatedStore,
