@@ -94,6 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -493,6 +494,12 @@ job が受け取る secret は、次の2つです。
 | `aborted`                                    | 時間切れか中断で止まりました                                                                    |
 
 失敗した場合、削除できた D1 は戻りません。作業者は、`IORI_NOTICE` の行で残っている対象を確かめ、原因を直してから `delete-rehearsal-d1` を dispatch し直します。`absent` の対象は、再実行でも飛ばされます。
+
+#### move-unfollowed-reposts でフォローしていない actor の repost を federated に移す
+
+`move-unfollowed-reposts-dry-run` は、本番の D1 の `timeline_items` から、フォローしていない remote actor の repost（`createdAt` が `repost_created_before_ms` 以下で、まだ論理削除されていないもの）を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=<N> posts=<N> already_federated=<N> to_create=<N>` の行を出します。`move-unfollowed-reposts` は、同じ条件の repost について、federated の項目（relay は `https://relay.fedibird.com/actor` で、`accepted` のもの）と `federatedTimelineItem.created` のイベントを足し、`timelineItem.deleted` のイベントを足してから、`deletedAt` を立てます。この operation は `IORI_NOTICE move-unfollowed-reposts mode=apply created=<N> deleted=<N>` の行を出します。
+
+作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation`、`repost_created_before_ms=<ミリ秒の epoch。未来の時刻は不可>` で dispatch します。`migration_run_id` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `move-unfollowed-reposts` を dispatch します。途中で失敗した場合も、同じ入力で `move-unfollowed-reposts` を dispatch し直せます。2回目以降は、すでに足した項目とイベントを足しません。
 
 ## 6. 中断と引き継ぎ
 

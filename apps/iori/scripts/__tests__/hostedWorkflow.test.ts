@@ -63,6 +63,8 @@ it('maps the operations to their fixed scripts', async () => {
       ['restart-failed-source', 'restart-failed-source.mjs'],
       ['diagnose-source', 'diagnose-source.mjs'],
       ['delete-rehearsal-d1', 'delete-rehearsal-d1.mjs'],
+      ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
+      ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -196,6 +198,26 @@ it('relays only the fixed rehearsal D1 notice for the five rehearsal names to th
     'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=unknown',
     'IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=present uuid=12345678-1234-4234-8234-123456789012',
     ' IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse1 state=present',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed move-unfollowed-reposts notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=9400 posts=3000 already_federated=10 to_create=2990',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=0 posts=0 already_federated=0 to_create=0',
+    'IORI_NOTICE move-unfollowed-reposts mode=apply created=2990 deleted=9400',
+  ];
+  const rejected = [
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=-1 posts=1 already_federated=1 to_create=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=1 posts=1 already_federated=1 to_create=1 extra=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1 postId=12345678-1234-4234-8234-123456789012',
+    'IORI_NOTICE move-unfollowed-reposts mode=apply created=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=delete created=1 deleted=1',
+    'IORI_NOTICE move-unfollowed-reposts mode=apply created=1234567890 deleted=1',
+    ' IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));
