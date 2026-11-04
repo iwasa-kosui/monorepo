@@ -23,6 +23,8 @@ export const createD1LocalPostResolverByUri = (db: IoriD1Db, origin: string): Lo
         createdAt: row.posts.createdAt.getTime(),
         userId: row.local_posts.userId,
         inReplyToUri: row.local_posts.inReplyToUri,
+        summary: row.posts.summary,
+        sensitive: row.posts.sensitive,
       }),
     );
   },

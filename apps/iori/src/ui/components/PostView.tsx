@@ -84,6 +84,11 @@ export const PostView = (
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState('');
   const canTranslate = isLoggedIn === true && post.visibility !== 'direct' && post.language === 'und';
+  const [isSpoilerOpen, setIsSpoilerOpen] = useState(false);
+  const [isSensitiveMediaShown, setIsSensitiveMediaShown] = useState(false);
+  const hasSpoiler = post.spoiler_text !== '';
+  const isContentHidden = hasSpoiler && !isSpoilerOpen;
+  const isMediaConcealed = !hasSpoiler && post.sensitive && !isSensitiveMediaShown;
 
   // Generate link to post detail page
   const postDetailLink = isLocalPost ? statusHref(post) : safeAbsoluteUrl(post.uri);
@@ -297,20 +302,54 @@ export const PostView = (
           </div>
         </div>
         <div>
-          <div
-            class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
-          {isTranslationShown && translation !== null && (
-            <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
-              <div
-                class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
-                dangerouslySetInnerHTML={{ __html: translation.content }}
-              />
-              <p class='text-xs text-warm-gray-dark dark:text-gray-500'>Workers AI で翻訳</p>
+          {hasSpoiler && (
+            <div class='mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
+              <p class='text-sm text-charcoal dark:text-gray-200 break-words'>{post.spoiler_text}</p>
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsSpoilerOpen(!isSpoilerOpen);
+                }}
+                class='text-sm text-terracotta hover:underline dark:text-terracotta-light'
+              >
+                {isSpoilerOpen ? '閉じる' : 'もっと見る'}
+              </button>
             </div>
           )}
-          {images.length > 0 && (
+          {!isContentHidden && (
+            <>
+              <div
+                class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
+                dangerouslySetInnerHTML={{ __html: post.content }}
+              />
+              {isTranslationShown && translation !== null && (
+                <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
+                  <div
+                    class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
+                    dangerouslySetInnerHTML={{ __html: translation.content }}
+                  />
+                  <p class='text-xs text-warm-gray-dark dark:text-gray-500'>Workers AI で翻訳</p>
+                </div>
+              )}
+            </>
+          )}
+          {!isContentHidden && images.length > 0 && isMediaConcealed && (
+            <div class='mt-3 flex items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
+              <p class='text-sm text-charcoal dark:text-gray-200'>センシティブな画像があります</p>
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsSensitiveMediaShown(true);
+                }}
+                class='text-sm text-terracotta hover:underline dark:text-terracotta-light'
+              >
+                表示する
+              </button>
+            </div>
+          )}
+          {!isContentHidden && images.length > 0 && !isMediaConcealed && (
             <div
               class={`mt-3 grid gap-2 ${
                 images.length === 1
@@ -343,7 +382,7 @@ export const PostView = (
             </div>
           )}
           {/* Link previews */}
-          {linkPreviews.length > 0 && (
+          {!isContentHidden && linkPreviews.length > 0 && (
             <div class='mt-3 space-y-2'>
               {linkPreviews.map((preview, index) => (
                 <LinkPreviewCard key={`${preview.url}#${index}`} preview={preview} />

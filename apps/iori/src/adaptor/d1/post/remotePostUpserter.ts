@@ -42,6 +42,8 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       uri: identity.uri,
       actorId: actor.val.id,
       inReplyToUri: identity.inReplyToUri,
+      summary: identity.summary,
+      sensitive: identity.sensitive,
       visibility: identity.visibility,
       recipientActorUris: identity.recipientActorUris,
     });

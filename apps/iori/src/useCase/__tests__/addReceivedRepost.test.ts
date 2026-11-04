@@ -95,6 +95,8 @@ describe('AddReceivedRepostUseCase (local post)', () => {
       content: '<p>hello</p>',
       createdAt: Instant.orThrow(1),
       inReplyToUri: null,
+      summary: null,
+      sensitive: false,
     };
     postResolver.setPost(post);
 

@@ -29,6 +29,8 @@ describe('createWorkerTimelinePostingApiRouter', () => {
       content: '<img src=x onerror=alert(1)><p>Timeline post</p><script>alert(1)</script>',
       createdAt: Instant.now(),
       inReplyToUri: null,
+      summary: null,
+      sensitive: false,
       type: 'local' as const,
       username: user.username,
       logoUri: undefined,

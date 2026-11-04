@@ -28,6 +28,7 @@ const status = (id: string, overrides: Partial<Status> = {}): Status =>
     uri: `https://iori.example/users/kosui/posts/${id}`,
     account: localAccount,
     content: `<p>content of ${id}</p>`,
+    spoiler_text: '',
     in_reply_to_id: null,
     ...overrides,
   }) as Status;
@@ -71,6 +72,27 @@ describe('NotificationItem', () => {
     expect(html).toContain('replied to your post');
     expect(html).toContain('<p>content of reply-1</p>');
     expect(html).toContain('href="/users/kosui/posts/p1"');
+  });
+
+  it('renders the spoiler text instead of the content for a post with a content warning', () => {
+    const html = render(notification({
+      type: 'favourite',
+      status: status('p4', { spoiler_text: 'spoiler topic' }),
+    }));
+
+    expect(html).toContain('CW: spoiler topic');
+    expect(html).not.toContain('content of p4');
+  });
+
+  it('escapes html in the spoiler text', () => {
+    const html = render(notification({
+      type: 'mention',
+      status: status('p5', { spoiler_text: '<img src=x onerror=alert(1)>' }),
+    }));
+
+    expect(html).toContain('CW: &lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('content of p5');
   });
 
   it('renders a follow without a post', () => {
