@@ -7,6 +7,7 @@ import {
   type Message,
   type MessageQueue,
   type MessageQueueEnqueueOptions,
+  SendActivityError,
 } from '@fedify/fedify';
 import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
 
@@ -243,6 +244,34 @@ export const processCloudflareFedifyQueueBatch = async (
   );
 };
 
+const QUEUE_RETRY_DELAY_SECONDS_FIRST = 60;
+const QUEUE_RETRY_DELAY_SECONDS_SECOND = 600;
+const QUEUE_RETRY_DELAY_SECONDS_REST = 3600;
+
+export const queueRetryDelaySeconds = (attempts: number): number =>
+  attempts <= 1
+    ? QUEUE_RETRY_DELAY_SECONDS_FIRST
+    : attempts === 2
+    ? QUEUE_RETRY_DELAY_SECONDS_SECOND
+    : QUEUE_RETRY_DELAY_SECONDS_REST;
+
+export type QueueFailureAction = Readonly<
+  | { type: 'retry'; delaySeconds: number }
+  | { type: 'drop'; statusCode: number }
+>;
+
+const isPermanentClientErrorStatus = (statusCode: number): boolean =>
+  statusCode >= 400 && statusCode <= 499 && statusCode !== 408 && statusCode !== 429;
+
+export const decideQueueFailureAction = (error: unknown, attempts: number): QueueFailureAction => {
+  if (error instanceof SendActivityError && isPermanentClientErrorStatus(error.statusCode)) {
+    return attempts <= 1
+      ? { type: 'retry', delaySeconds: QUEUE_RETRY_DELAY_SECONDS_FIRST }
+      : { type: 'drop', statusCode: error.statusCode };
+  }
+  return { type: 'retry', delaySeconds: queueRetryDelaySeconds(attempts) };
+};
+
 export const processCloudflareFedifyMessages = async (
   batch: MessageBatch<unknown>,
   processTask: (message: Message) => Promise<void>,
@@ -253,7 +282,17 @@ export const processCloudflareFedifyMessages = async (
       message.ack();
     } catch (error) {
       console.error('Fedify queued task failed.', describeQueueFailure(error));
-      message.retry();
+      const attempts = message.attempts ?? 1;
+      const action = decideQueueFailureAction(error, attempts);
+      if (action.type === 'drop') {
+        console.error('Fedify queued task dropped after a client error response.', {
+          statusCode: action.statusCode,
+          attempts,
+        });
+        message.ack();
+      } else {
+        message.retry({ delaySeconds: action.delaySeconds });
+      }
     }
   }
 };
