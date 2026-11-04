@@ -15,6 +15,7 @@ import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceived
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
 import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
+import { PgActorResolverById } from '../../pg/actor/actorResolverById.ts';
 import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
 import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
@@ -218,6 +219,7 @@ const create = () => {
     },
     onDelete: {
       remotePostResolverByUri: PgPostResolverByUri.getInstance(),
+      actorResolverById: PgActorResolverById.getInstance(),
       timelineItemsResolverByPostId: PgTimelineItemsResolverByPostId.getInstance(),
       likeNotificationsResolverByPostId: PgLikeNotificationsResolverByPostId.getInstance(),
       emojiReactNotificationsResolverByPostId: PgEmojiReactNotificationsResolverByPostId.getInstance(),

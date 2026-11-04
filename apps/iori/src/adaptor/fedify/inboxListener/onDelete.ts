@@ -37,9 +37,11 @@ import {
   type TimelineItemsResolverByPostId,
 } from '../../../domain/timeline/timelineItem.ts';
 import { settleAll } from '../../../helper/settleAll.ts';
+import type { ActorResolverById } from '../../pg/actor/actorResolverById.ts';
 
 export type OnDeleteDeps = Readonly<{
   remotePostResolverByUri: PostResolverByUri;
+  actorResolverById: ActorResolverById;
   timelineItemsResolverByPostId: TimelineItemsResolverByPostId;
   likeNotificationsResolverByPostId: LikeNotificationsResolverByPostId;
   emojiReactNotificationsResolverByPostId: EmojiReactNotificationsResolverByPostId;
@@ -93,6 +95,15 @@ async (
 
   if (!remotePost) {
     logger.info(`No remote post found for URI: ${objectUri}`);
+    return;
+  }
+
+  const actorResult = await deps.actorResolverById.resolve(remotePost.actorId);
+  const author = actorResult.ok ? actorResult.val : undefined;
+  if (!author || author.uri !== senderId.href) {
+    logger.warn(
+      `Ignored Delete activity whose sender is not the author of the post: sender=${senderId.href} object=${objectUri}`,
+    );
     return;
   }
 

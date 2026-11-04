@@ -9,6 +9,7 @@ import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNote
 import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
+import { createD1ActorResolverById } from '../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
 import { createD1LogoUriUpdatedStore } from '../../d1/actor/logoUriUpdatedStore.ts';
@@ -231,6 +232,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     },
     onDelete: {
       remotePostResolverByUri: postResolverByUri,
+      actorResolverById: createD1ActorResolverById(db),
       timelineItemsResolverByPostId: createD1TimelineItemsResolverByPostId(db),
       likeNotificationsResolverByPostId: createD1LikeNotificationsResolverByPostId(db),
       emojiReactNotificationsResolverByPostId: createD1EmojiReactNotificationsResolverByPostId(db),

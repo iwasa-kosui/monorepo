@@ -13,6 +13,15 @@ import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createOnDelete, type OnDeleteDeps } from './onDelete.ts';
 
+const remoteAuthor = {
+  type: 'remote' as const,
+  uri: 'https://remote.example/users/alice',
+  inboxUrl: 'https://remote.example/users/alice/inbox',
+  url: undefined,
+  username: 'alice',
+  logoUri: undefined,
+};
+
 describe('createOnDelete', () => {
   it.each([false, true])(
     'settles all reference writes before completing the handler (early failure: %s)',
@@ -46,6 +55,9 @@ describe('createOnDelete', () => {
               inReplyToUri: null,
               visibility: null,
             }),
+        },
+        actorResolverById: {
+          resolve: async () => RA.ok({ ...remoteAuthor, id: actorId }),
         },
         timelineItemsResolverByPostId: {
           resolve: async () =>
@@ -165,7 +177,7 @@ describe('createOnDelete', () => {
   );
 
   describe('sender check', () => {
-    const buildDeps = () => {
+    const buildDeps = (author: typeof remoteAuthor | null = remoteAuthor) => {
       const postId = PostId.generate();
       const actorId = ActorId.generate();
       const empty = { resolve: async () => RA.ok([]) };
@@ -185,8 +197,12 @@ describe('createOnDelete', () => {
           })
         ),
       };
+      const actorResolverById = {
+        resolve: vi.fn(async () => RA.ok(author ? { ...author, id: actorId } : undefined)),
+      };
       const deps = {
         remotePostResolverByUri,
+        actorResolverById,
         timelineItemsResolverByPostId: empty,
         likeNotificationsResolverByPostId: empty,
         emojiReactNotificationsResolverByPostId: empty,
@@ -210,7 +226,7 @@ describe('createOnDelete', () => {
       return { deps, postDeletedStore, remotePostResolverByUri };
     };
 
-    it('deletes the post when the sender is on the same origin as the object', async () => {
+    it('deletes the post when the sender is the author of the post', async () => {
       const { deps, postDeletedStore } = buildDeps();
       await createOnDelete(deps)(
         {} as never,
@@ -232,6 +248,30 @@ describe('createOnDelete', () => {
         } as never,
       );
       expect(remotePostResolverByUri.resolve).not.toHaveBeenCalled();
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not delete the post when another actor on the same origin sends the Delete', async () => {
+      const { deps, postDeletedStore } = buildDeps();
+      await createOnDelete(deps)(
+        {} as never,
+        {
+          actorId: new URL('https://remote.example/users/mallory'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
+      );
+      expect(postDeletedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not delete the post when the author actor cannot be resolved', async () => {
+      const { deps, postDeletedStore } = buildDeps(null);
+      await createOnDelete(deps)(
+        {} as never,
+        {
+          actorId: new URL('https://remote.example/users/alice'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
+      );
       expect(postDeletedStore.store).not.toHaveBeenCalled();
     });
 
