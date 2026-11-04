@@ -227,7 +227,7 @@ export const NotificationGroupSchema = z.object({
   group_key: z.string(),
   notifications_count: z.number().int().positive(),
   type: NotificationSchema.shape.type,
-  most_recent_notification_id: z.string(),
+  most_recent_notification_id: z.number().int(),
   page_min_id: z.string(),
   page_max_id: z.string(),
   latest_page_notification_at: z.string(),

@@ -25,7 +25,13 @@ import type {
   V1NotificationPolicy,
 } from '../mastodon/entities.ts';
 import type { StatusAssembler } from '../mastodon/statusAssembler.ts';
-import { selectDomainTypes, targetPostIdOf, toNotification, triggerActorIdOf } from '../mastodon/toNotification.ts';
+import {
+  selectDomainTypes,
+  targetPostIdOf,
+  toGroupedNotificationId,
+  toNotification,
+  triggerActorIdOf,
+} from '../mastodon/toNotification.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import {
   linkHeaderOf,
@@ -87,7 +93,7 @@ const toGroup = (notification: Notification): NotificationGroup => ({
   group_key: `ungrouped-${notification.id}`,
   notifications_count: 1,
   type: notification.type,
-  most_recent_notification_id: notification.id,
+  most_recent_notification_id: toGroupedNotificationId(notification.id, Date.parse(notification.created_at)),
   page_min_id: notification.id,
   page_max_id: notification.id,
   latest_page_notification_at: notification.created_at,

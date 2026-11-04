@@ -10,6 +10,9 @@ import { linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
 
 const jsonHeaders = (bearer: Record<string, string>) => ({ ...bearer, 'Content-Type': 'application/json' });
 
+const groupedIdOf = (notificationId: string, createdAt: number): number =>
+  createdAt * 1024 + (Number.parseInt(notificationId.slice(0, 3), 16) >> 2);
+
 const seedNotifications = async () => {
   const t = setupReadApi();
   const me = await t.signIn('read write');
@@ -26,9 +29,17 @@ const seedNotifications = async () => {
     others: t.seed.addLikeNotification(other.userId, alice.actorId, myPost.postId, 6_000),
   };
   const get = (path: string, headers: Record<string, string> = me.bearer) => t.request(path, { headers });
+  const addFollowNotificationWithId = (notificationId: string, createdAt: number) => {
+    t.sqlite.prepare(
+      'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+    )
+      .run(notificationId, me.userId, 'follow', 0, createdAt);
+    t.sqlite.prepare('INSERT INTO notification_follows(notificationId,followerActorId) VALUES (?,?)')
+      .run(notificationId, alice.actorId);
+  };
   const typesOf = async (response: Response) =>
     ((await response.json()) as Array<{ type: string }>).map((item) => item.type);
-  return { ...t, me, other, alice, bob, myPost, aliceReply, ids, get, typesOf };
+  return { ...t, me, other, alice, bob, myPost, aliceReply, ids, get, typesOf, addFollowNotificationWithId };
 };
 
 describe('GET /api/v1/notifications', () => {
@@ -179,7 +190,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.follow}`,
         notifications_count: 1,
         type: 'follow',
-        most_recent_notification_id: t.ids.follow,
+        most_recent_notification_id: groupedIdOf(t.ids.follow, 4_000),
         page_min_id: t.ids.follow,
         page_max_id: t.ids.follow,
         latest_page_notification_at: '1970-01-01T00:00:04.000Z',
@@ -189,7 +200,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.reply}`,
         notifications_count: 1,
         type: 'mention',
-        most_recent_notification_id: t.ids.reply,
+        most_recent_notification_id: groupedIdOf(t.ids.reply, 3_000),
         page_min_id: t.ids.reply,
         page_max_id: t.ids.reply,
         latest_page_notification_at: '1970-01-01T00:00:03.000Z',
@@ -200,7 +211,7 @@ describe('GET /api/v2/notifications', () => {
         group_key: `ungrouped-${t.ids.like}`,
         notifications_count: 1,
         type: 'favourite',
-        most_recent_notification_id: t.ids.like,
+        most_recent_notification_id: groupedIdOf(t.ids.like, 2_000),
         page_min_id: t.ids.like,
         page_max_id: t.ids.like,
         latest_page_notification_at: '1970-01-01T00:00:02.000Z',
@@ -240,6 +251,55 @@ describe('GET /api/v2/notifications', () => {
       v1.headers.get('Link')?.replace(/\/v2\//g, '/v1/'),
     );
     expect(GroupedNotificationsResultsSchema.parse(await v2.json()).notification_groups).toHaveLength(2);
+  });
+
+  it('most_recent_notification_id は整数で、同じミリ秒の通知でも重複しない', async () => {
+    const t = await seedNotifications();
+    const sameMillisecondHigh = 'f0000000-0000-4000-8000-000000000001';
+    const sameMillisecondMid = '80000000-0000-4000-8000-000000000002';
+    t.addFollowNotificationWithId(sameMillisecondHigh, 4_000);
+    t.addFollowNotificationWithId(sameMillisecondMid, 4_000);
+
+    const response = await t.get('/api/v2/notifications');
+
+    const body = GroupedNotificationsResultsSchema.parse(await response.json());
+    const values = body.notification_groups.map((group) => group.most_recent_notification_id);
+    expect(values).toHaveLength(5);
+    expect(new Set(values).size).toBe(values.length);
+    expect(values.every((value) => Number.isSafeInteger(value))).toBe(true);
+    expect(body.notification_groups.slice(0, 3).map((group) => group.page_max_id)).toEqual([
+      sameMillisecondHigh,
+      sameMillisecondMid,
+      t.ids.follow,
+    ]);
+    expect(values.slice(0, 3)).toEqual([
+      groupedIdOf(sameMillisecondHigh, 4_000),
+      groupedIdOf(sameMillisecondMid, 4_000),
+      groupedIdOf(t.ids.follow, 4_000),
+    ]);
+  });
+
+  it('2 ページ取得しても most_recent_notification_id がページをまたいで狭義に減っていく', async () => {
+    const t = await seedNotifications();
+    t.addFollowNotificationWithId('f0000000-0000-4000-8000-000000000001', 4_000);
+    t.addFollowNotificationWithId('80000000-0000-4000-8000-000000000002', 3_000);
+
+    const first = await t.get('/api/v2/notifications?limit=2');
+    const next = linkOf(first, 'next');
+    const second = await t.get(`${next?.pathname}${next?.search}`);
+
+    const valuesOf = async (response: Response) =>
+      GroupedNotificationsResultsSchema.parse(await response.json()).notification_groups.map((group) =>
+        group.most_recent_notification_id
+      );
+    const firstValues = await valuesOf(first);
+    const secondValues = await valuesOf(second);
+    expect(firstValues).toHaveLength(2);
+    expect(secondValues).toHaveLength(2);
+    for (const values of [firstValues, secondValues]) {
+      expect(values[0]!).toBeGreaterThan(values[1]!);
+    }
+    expect(Math.min(...firstValues)).toBeGreaterThan(Math.max(...secondValues));
   });
 
   it('read:notifications がないトークンは 403 にする', async () => {

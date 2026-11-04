@@ -7,7 +7,7 @@ import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { type Account, NotificationSchema, RelationshipSchema } from './entities.ts';
-import { selectDomainTypes, toNotification } from './toNotification.ts';
+import { selectDomainTypes, toGroupedNotificationId, toNotification } from './toNotification.ts';
 import { toRelationship } from './toRelationship.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
@@ -122,6 +122,28 @@ describe('selectDomainTypes', () => {
     expect(select(['favourite', 'bogus'])).toEqual(['like']);
     expect(select([], ['follow', 'bogus'])).toEqual(['like', 'reply']);
     expect(select(['reblog'])).toEqual([]);
+  });
+});
+
+describe('toGroupedNotificationId', () => {
+  const id = (prefix: string) => `${prefix}00000-0000-4000-8000-000000000000`;
+
+  it('is larger for a notification created later', () => {
+    expect(toGroupedNotificationId(id('fff'), 1_000)).toBeLessThan(toGroupedNotificationId(id('000'), 1_001));
+  });
+
+  it('follows the order of the uuid within the same millisecond', () => {
+    const low = toGroupedNotificationId(id('1a2'), 5_000);
+    const high = toGroupedNotificationId(id('1a8'), 5_000);
+
+    expect(low).not.toBe(high);
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('stays a safe integer for the current time and the largest uuid prefix', () => {
+    const result = toGroupedNotificationId(id('fff'), Date.now());
+
+    expect(Number.isSafeInteger(result)).toBe(true);
   });
 });
 
