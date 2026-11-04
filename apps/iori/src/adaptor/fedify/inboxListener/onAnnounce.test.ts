@@ -56,7 +56,13 @@ const createDeps = (relay: unknown) => {
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
   };
-  return { deps: deps as never, documentLoader, addReceivedRepostUseCase, remotePostUpserter };
+  return {
+    deps: deps as never,
+    documentLoader,
+    addReceivedRepostUseCase,
+    remotePostUpserter,
+    federatedTimelineItemCreatedStore,
+  };
 };
 
 const imageAttachments = [
@@ -179,5 +185,36 @@ describe('createOnAnnounce', () => {
 
     expect(ctxDocumentLoader).toHaveBeenCalled();
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }));
+  });
+
+  it('creates one federated timeline item from a relay Announce', async () => {
+    const { deps, federatedTimelineItemCreatedStore } = createDeps({
+      status: 'accepted',
+      actorUri: 'https://relay.example/actor',
+      relayId: 'relay-1',
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+  });
+
+  it('does not save a relay Announce whose Note attribution is on another origin', async () => {
+    const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps({
+      status: 'accepted',
+      actorUri: 'https://relay.example/actor',
+      relayId: 'relay-1',
+    });
+    const note = createNote([]).clone({
+      attribution: new Person({
+        id: new URL('https://other.example/users/alice'),
+        inbox: new URL('https://other.example/users/alice/inbox'),
+      }),
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 });

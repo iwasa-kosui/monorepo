@@ -8,9 +8,6 @@ import type {
   FederatedTimelineItemCreatedStore,
   FederatedTimelineItemResolverByPostId,
 } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
-import { FederatedTimelineItem } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
-import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
@@ -19,6 +16,7 @@ import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { extractAttachments } from './extractAttachments.ts';
+import { saveFederatedNote } from './saveFederatedNote.ts';
 
 export type OnAnnounceDeps = Readonly<{
   origin: string;
@@ -192,8 +190,6 @@ const processRelayAnnounce = async (
   activity: Announce,
   relay: Relay,
 ) => {
-  const now = Instant.now();
-
   getLogger().info(`Processing relay Announce from: ${relay.actorUri}`);
 
   const note = await activity.getObject();
@@ -202,73 +198,5 @@ const processRelayAnnounce = async (
     return;
   }
 
-  if (!note.id) {
-    getLogger().warn('Relay Announce Note has no id');
-    return;
-  }
-
-  // Get the note's author
-  const author = await note.getAttribution();
-  if (!author || !isActor(author)) {
-    getLogger().warn(`Could not resolve Note author for relay: ${note.id.href}`);
-    return;
-  }
-
-  if (!author.id || !author.inboxId) {
-    getLogger().warn(`Note author has no id or inbox for relay: ${note.id.href}`);
-    return;
-  }
-
-  const contentText = String(note.content ?? '');
-  const authorIcon = await author.getIcon();
-  const attachments = await extractAttachmentsOrEmpty(note, ctx.documentLoader);
-
-  // Upsert the remote post using the existing upserter
-  // Use the remote post upserter to create/get the post
-  const postResult = await deps.remotePostUpserter.resolve({
-    uri: note.id.href,
-    content: contentText,
-    visibility: extractVisibility(note, author.followersId),
-    recipientActorUris: extractRecipientActorUris([note], deps.origin),
-    attachments,
-    authorIdentity: {
-      uri: author.id.href,
-      inboxUrl: author.inboxId.href,
-      url: author.url instanceof URL ? author.url.href : undefined,
-      username: typeof author.preferredUsername === 'string'
-        ? author.preferredUsername
-        : author.preferredUsername?.toString(),
-      logoUri: authorIcon?.url instanceof URL ? authorIcon.url.href : undefined,
-    },
-    inReplyToUri: null,
-  });
-
-  if (!postResult.ok) {
-    getLogger().warn(`Failed to upsert remote post for relay: ${note.id.href}`);
-    return;
-  }
-
-  const post = postResult.val;
-
-  // Check if this post already exists in federated timeline
-  const existingItemResult = await deps.federatedTimelineItemResolverByPostId.resolve({ postId: post.postId });
-
-  if (existingItemResult.ok && existingItemResult.val) {
-    getLogger().info(`Post already in federated timeline: ${post.postId}`);
-    return;
-  }
-
-  // Create federated timeline item
-  const event = FederatedTimelineItem.createFederatedTimelineItem(
-    {
-      federatedTimelineItemId: FederatedTimelineItemId.generate(),
-      postId: post.postId,
-      relayId: relay.relayId,
-      receivedAt: now,
-    },
-    now,
-  );
-
-  await deps.federatedTimelineItemCreatedStore.store(event);
-  getLogger().info(`Created federated timeline item for relay post: ${post.postId}`);
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader: ctx.documentLoader });
 };
