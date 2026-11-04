@@ -5,6 +5,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import { toAcceptableEmojiImageUrl } from '../domain/emojiReact/emojiImageUrl.ts';
 import {
   AlreadyReactedError,
   EmojiReact,
@@ -68,12 +69,13 @@ const findEmojiImage = async (
       }
       const icon = await tag.getIcon({ documentLoader });
       const url = icon?.url instanceof URL ? icon.url : icon?.url?.href;
-      if (url?.protocol !== 'https:') {
+      const acceptableUrl = toAcceptableEmojiImageUrl(url?.href);
+      if (acceptableUrl === null) {
         continue;
       }
       return {
         ...(tag.id ? { id: tag.id } : {}),
-        url,
+        url: new URL(acceptableUrl),
         ...(icon?.mediaType?.startsWith('image/') ? { mediaType: icon.mediaType } : {}),
       };
     }
