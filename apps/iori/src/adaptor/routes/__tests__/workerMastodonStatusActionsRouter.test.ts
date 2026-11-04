@@ -30,7 +30,12 @@ const seedActions = async () => {
       }),
     );
   const aliceInbox = new URL(`https://remote.example/users/${alice.username}/inbox`);
-  return { ...t, aliceInbox, me, alice, local, publicNote, post, count, serveRemoteNote };
+  const sentActivities = () =>
+    t.federation.sendActivity.mock.calls.map((call) => {
+      const [sender, recipient, activity] = call as unknown as [unknown, unknown, unknown];
+      return { sender, recipient, activity };
+    });
+  return { ...t, aliceInbox, me, alice, local, publicNote, post, count, serveRemoteNote, sentActivities };
 };
 
 describe('POST /api/v1/statuses/:id/favourite と /unfavourite', () => {
@@ -237,7 +242,42 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
       reblogged: true,
     });
     expect(t.count('timeline_items', `repostId='${row.repostId}' AND deletedAt IS NULL`)).toBe(1);
-    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.sender).toEqual({ identifier: t.me.username });
+    expect(sent[0]!.recipient).toBe('followers');
+    const announce = sent[0]!.activity as Announce;
+    expect(announce).toBeInstanceOf(Announce);
+    expect(announce.id?.href).toBe(`${ORIGIN}/users/${t.me.username}#announces/${row.repostId}`);
+    expect(announce.objectId?.href).toBe(`${ORIGIN}/users/${t.me.username}/posts/${t.local.postId}`);
+    expect(announce.toIds.map((id) => id.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    expect(announce.ccIds.map((id) => id.href)).toEqual([
+      `${ORIGIN}/users/${t.me.username}`,
+      `${ORIGIN}/users/${t.me.username}/followers`,
+    ]);
+    expect(
+      (t.sqlite.prepare('SELECT announceActivityUri FROM reposts WHERE repostId = ?').get(row.repostId) as {
+        announceActivityUri: string | null;
+      }).announceActivityUri,
+    ).toBe(`${ORIGIN}/users/${t.me.username}#announces/${row.repostId}`);
+  });
+
+  it('公開済みの Article の根投稿をブーストすると、Article の URI を object にして followers へ Announce を送る', async () => {
+    const t = await seedActions();
+    const articleId = t.seed.uuid();
+    t.sqlite.prepare(
+      'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(articleId, t.me.actorId, t.me.userId, t.local.postId, 'title', 'published', 1_000, 1_000);
+
+    const response = await t.post(`/api/v1/statuses/${t.local.postId}/reblog`);
+
+    expect(response.status).toBe(200);
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.recipient).toBe('followers');
+    expect((sent[0]!.activity as Announce).objectId?.href).toBe(
+      `${ORIGIN}/users/${t.me.username}/posts/${articleId}`,
+    );
   });
 
   it('ブースト済みでもエラーにせず、同じ ID のブーストを返して reposts を増やさない', async () => {
@@ -265,9 +305,25 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
       reblog: { id: t.publicNote.postId, visibility: 'public', reblogged: true },
     });
     expect(second.status).toBe(200);
-    const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
-    expect(sent).toHaveLength(2);
-    expect(sent[0]).toBeInstanceOf(Announce);
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(4);
+    expect(sent.map((call) => call.recipient)).toEqual([
+      expect.objectContaining({ inboxId: t.aliceInbox }),
+      'followers',
+      expect.objectContaining({ inboxId: t.aliceInbox }),
+      'followers',
+    ]);
+    for (const call of sent) {
+      expect(call.sender).toEqual({ identifier: t.me.username });
+      expect(call.activity).toBeInstanceOf(Announce);
+    }
+    const announce = sent[0]!.activity as Announce;
+    expect(announce.objectId?.href).toBe(t.publicNote.uri);
+    expect(announce.ccIds.map((id) => id.href)).toEqual([
+      `https://remote.example/users/${t.alice.username}`,
+      `${ORIGIN}/users/${t.me.username}/followers`,
+    ]);
+    expect(sent[1]!.activity).toBe(announce);
     expect(t.count('reposts')).toBe(2);
   });
 
@@ -365,14 +421,24 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(response.status).toBe(200);
     expect(t.count('reposts')).toBe(0);
     expect(t.count('timeline_items', 'type=\'repost\' AND deletedAt IS NULL')).toBe(0);
-    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
-    const [, recipient, undo] = t.federation.sendActivity.mock.calls[1] as unknown as [unknown, unknown, unknown];
-    expect(recipient).toEqual({
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(4);
+    expect(sent[2]!.recipient).toEqual({
       id: new URL(`https://remote.example/users/${t.alice.username}`),
       inboxId: t.aliceInbox,
     });
+    expect(sent[3]!.recipient).toBe('followers');
+    const undo = sent[2]!.activity;
     expect(undo).toBeInstanceOf(Undo);
-    expect(await (undo as Undo).getObject()).toBeInstanceOf(Announce);
+    expect(sent[3]!.activity).toBe(undo);
+    const announce = await (undo as Undo).getObject();
+    expect(announce).toBeInstanceOf(Announce);
+    expect((announce as Announce).objectId?.href).toBe(t.publicNote.uri);
+    expect((announce as Announce).ccIds.map((id) => id.href)).toEqual([
+      `https://remote.example/users/${t.alice.username}`,
+      `${ORIGIN}/users/${t.me.username}/followers`,
+    ]);
+    expect((announce as Announce).id).toEqual((sent[0]!.activity as Announce).id);
   });
 
   it('ブーストを取り消し、元の Status を返して reposts と timeline_items を消す', async () => {
@@ -390,6 +456,15 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     });
     expect(t.count('reposts')).toBe(0);
     expect(t.count('timeline_items', 'type=\'repost\' AND deletedAt IS NULL')).toBe(0);
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.recipient).toBe('followers');
+    const undo = sent[1]!.activity as Undo;
+    expect(undo).toBeInstanceOf(Undo);
+    const announce = (await undo.getObject()) as Announce;
+    expect(announce).toBeInstanceOf(Announce);
+    expect(announce.objectId?.href).toBe(`${ORIGIN}/users/${t.me.username}/posts/${t.local.postId}`);
+    expect(announce.id).toEqual((sent[0]!.activity as Announce).id);
   });
 
   it('未ブーストでもエラーにせず、現在の状態を返す', async () => {
@@ -410,7 +485,7 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
 
     expect(response.status).toBe(200);
     const sent = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[2]);
-    expect(sent[1]).toBeInstanceOf(Undo);
+    expect(sent[2]).toBeInstanceOf(Undo);
     expect(t.count('reposts')).toBe(0);
   });
 

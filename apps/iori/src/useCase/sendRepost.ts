@@ -1,10 +1,11 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Announce, isActor, Note } from '@fedify/vocab';
+import { isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Post, PostNotFoundError, PostResolver, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -21,7 +22,8 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import { createRepostAnnounce, repostAnnounceUri, resolveLocalPostObjectUri } from './helper/repostAnnounce.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -71,6 +73,7 @@ type Deps = Readonly<{
   remotePostUpserter: RemotePostUpserter;
   timelineItemCreatedStore: TimelineItemCreatedStore;
   postResolver: PostResolver;
+  articleResolverByRootPostId: ArticleResolverByRootPostId;
 }>;
 
 const create = ({
@@ -83,10 +86,12 @@ const create = ({
   remotePostUpserter,
   timelineItemCreatedStore,
   postResolver,
+  articleResolverByRootPostId,
 }: Deps): SendRepostUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
+  const resolveUser = resolveUserWith(userResolver);
 
   const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
     RA.flow(
@@ -131,17 +136,25 @@ const create = ({
       // Create, store Repost and TimelineItem
       RA.andBind(
         'createdRepostId',
-        async ({ actor, postId, post, ctx, user }): RA<RepostId, RemoteNoteLookupError | RepostNotAllowedError> => {
+        async (
+          { actor, postId, post, ctx, user },
+        ): RA<RepostId, RemoteNoteLookupError | RepostNotAllowedError | UserNotFoundError> => {
           const repostId = RepostId.generate();
 
-          // For local posts, no ActivityPub needed
+          const announceId = repostAnnounceUri(ctx, user.username, repostId);
+
           if (post.type === 'local') {
+            const postAuthor = await resolveUser(post.userId);
+            if (!postAuthor.ok) {
+              return postAuthor;
+            }
+
             const repostCreated = Repost.createRepost(
               {
                 repostId,
                 actorId: actor.id,
                 postId,
-                announceActivityUri: null,
+                announceActivityUri: announceId.href,
               },
               now,
             );
@@ -158,6 +171,23 @@ const create = ({
             }, now);
             await timelineItemCreatedStore.store(timelineItemEvent);
 
+            const objectUri = await resolveLocalPostObjectUri({
+              ctx,
+              authorUsername: postAuthor.val.username,
+              postId,
+              articleResolverByRootPostId,
+            });
+            await ctx.sendActivity(
+              { identifier: user.username },
+              'followers',
+              createRepostAnnounce({
+                ctx,
+                username: user.username,
+                id: announceId,
+                object: objectUri,
+                authorActorUri: ctx.getActorUri(postAuthor.val.username),
+              }),
+            );
             return RA.ok(repostId);
           }
 
@@ -225,17 +255,12 @@ const create = ({
 
           const remotePost: RemotePost = remotePostResult.val;
 
-          const announceActivityUri = new URL(
-            `#announces/${repostId}`,
-            ctx.getActorUri(user.username),
-          ).href;
-
           const repostCreated = Repost.createRepost(
             {
               repostId,
               actorId: actor.id,
               postId: remotePost.postId,
-              announceActivityUri,
+              announceActivityUri: announceId.href,
             },
             now,
           );
@@ -252,24 +277,15 @@ const create = ({
           }, now);
           await timelineItemCreatedStore.store(timelineItemEvent);
 
-          // Send the Announce activity
-          const actorUri = ctx.getActorUri(user.username);
-          const followersUri = new URL(`${actorUri.href}/followers`);
-
-          await ctx.sendActivity(
-            { username: user.username },
-            author,
-            new Announce({
-              id: new URL(
-                `#announces/${repostCreated.aggregateState.repostId}`,
-                actorUri,
-              ),
-              actor: actorUri,
-              object: result.id,
-              to: new URL('https://www.w3.org/ns/activitystreams#Public'),
-              cc: followersUri,
-            }),
-          );
+          const announce = createRepostAnnounce({
+            ctx,
+            username: user.username,
+            id: announceId,
+            object: result.id,
+            authorActorUri: author.id,
+          });
+          await ctx.sendActivity({ identifier: user.username }, author, announce);
+          await ctx.sendActivity({ identifier: user.username }, 'followers', announce);
           return RA.ok(repostId);
         },
       ),

@@ -303,6 +303,7 @@ const app = new Hono()
         remotePostUpserter: PgRemotePostUpserter.getInstance(),
         timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
       });
 
       const result = await useCase.run({
@@ -350,6 +351,7 @@ const app = new Hono()
         timelineItemResolverByRepostId: PgTimelineItemResolverByRepostId.getInstance(),
         timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
       });
 
       const result = await useCase.run({
