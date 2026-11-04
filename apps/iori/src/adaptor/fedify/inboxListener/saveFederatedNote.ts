@@ -132,5 +132,5 @@ export const saveFederatedNote = async (
     }
     throw error;
   }
-  getLogger().info(`Created federated timeline item for relay post: ${post.postId}`);
+  getLogger().info(`Created federated timeline item for federated post: ${post.postId}`);
 };

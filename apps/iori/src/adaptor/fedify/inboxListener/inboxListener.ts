@@ -25,6 +25,7 @@ import { PgFederatedTimelineItemDeletedStore } from '../../pg/federatedTimeline/
 import { PgFederatedTimelineItemResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
 import { PgFederatedTimelineItemsResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemsResolverByPostId.ts';
 import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
+import { PgFollowedByLocalActorResolverByActorUri } from '../../pg/follow/followedByLocalActorResolverByActorUri.ts';
 import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
 import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
 import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
@@ -54,6 +55,7 @@ import { PgPostResolver } from '../../pg/post/postResolver.ts';
 import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
 import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { PgAcceptedRelaysResolver } from '../../pg/relay/acceptedRelaysResolver.ts';
 import { PgRelayResolverByActorUri } from '../../pg/relay/relayResolverByActorUri.ts';
 import { PgRelaySubscriptionAcceptedStore } from '../../pg/relay/relaySubscriptionAcceptedStore.ts';
 import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
@@ -220,6 +222,8 @@ const create = () => {
     onAnnounce: {
       origin: Env.getInstance().ORIGIN,
       relayResolverByActorUri: PgRelayResolverByActorUri.getInstance(),
+      followedByLocalActorResolverByActorUri: PgFollowedByLocalActorResolverByActorUri.getInstance(),
+      acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
       inboxActorResolver,
       addReceivedRepostUseCase,
       remotePostUpserter,

@@ -53,6 +53,7 @@ export type FollowAcceptedStore = Agg.Store<FollowAccepted>;
 export type UndoFollowingProcessedStore = Agg.Store<UndoFollowingProcessed>;
 export type FollowRequestedStore = Agg.Store<FollowRequested>;
 export type FollowResolver = Agg.Resolver<FollowAggregateId, Follow | undefined>;
+export type FollowedByLocalActorResolverByActorUri = Agg.Resolver<{ actorUri: string }, boolean>;
 export const Follow = {
   ...schema,
   acceptFollow,
