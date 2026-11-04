@@ -4,6 +4,7 @@ import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import { toAcceptableEmojiImageUrl } from '../domain/emojiReact/emojiImageUrl.ts';
 import {
   AlreadyReactedError,
   EmojiReact,
@@ -123,6 +124,9 @@ const create = ({
           logoUriUpdatedStore,
           actorResolverByUri,
         })(reactorIdentity)),
+      RA.andThen(({ emojiImageUrl, ...rest }) =>
+        RA.ok({ ...rest, emojiImageUrl: toAcceptableEmojiImageUrl(emojiImageUrl) })
+      ),
       RA.andBind('emojiReact', ({ actor, reactedPostId, emojiReactActivityUri, emoji, emojiImageUrl }) => {
         const emojiReactId = EmojiReactId.generate();
         const emojiReact: EmojiReact = {
@@ -131,7 +135,7 @@ const create = ({
           postId: reactedPostId,
           emoji,
           emojiReactActivityUri,
-          emojiImageUrl: emojiImageUrl ?? null,
+          emojiImageUrl,
         };
         const event = EmojiReact.createEmojiReact(emojiReact, now);
         return RA.flow(emojiReactCreatedStore.store(event), RA.map(() => emojiReact));
@@ -146,7 +150,7 @@ const create = ({
           reactorActorId: actor.id,
           reactedPostId: post.postId,
           emoji,
-          emojiImageUrl: emojiImageUrl ?? null,
+          emojiImageUrl,
         };
         const event = Notification.createEmojiReactNotification(notification, now);
         return emojiReactNotificationCreatedStore.store(event);

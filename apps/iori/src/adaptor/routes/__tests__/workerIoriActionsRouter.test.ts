@@ -1,6 +1,7 @@
 import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
 import { describe, expect, it, vi } from 'vitest';
 
+import { EMOJI_IMAGE_URL_MAX_LENGTH } from '../../../domain/emojiReact/emojiImageUrl.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -276,6 +277,37 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(response.status).toBe(200);
       expect(await tagsOf(sentReact(t))).toHaveLength(0);
       expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    const httpsUrlOfLength = (length: number) => {
+      const prefix = 'https://remote.example/emoji/';
+      return `${prefix}${'a'.repeat(length - prefix.length)}`;
+    };
+
+    it('icon の url が上限を 1 文字超えるときは採用せず、tag なしで送る', async () => {
+      const t = await seedReactions();
+      const url = httpsUrlOfLength(EMOJI_IMAGE_URL_MAX_LENGTH + 1);
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', url)]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      expect(await tagsOf(sentReact(t))).toHaveLength(0);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
+    });
+
+    it('icon の url が上限ちょうどのときは採用し、tag を付けて送り、url を保存する', async () => {
+      const t = await seedReactions();
+      const url = httpsUrlOfLength(EMOJI_IMAGE_URL_MAX_LENGTH);
+      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', url)]);
+
+      const response = await t.put(t.publicNote.postId);
+
+      expect(response.status).toBe(200);
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      expect((await tags[0]!.getIcon())?.url?.toString()).toBe(url);
+      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
     });
 
     it('Emoji の icon の取得が失敗しても、反応は成功し、tag なしで送って emojiImageUrl は null にする', async () => {
