@@ -16,12 +16,17 @@ const keyFetchFailureDebugMessages: ReadonlySet<string> = new Set([
   'Failed to verify; object {keyId} returned an {actorType}, but has no key matching {keyId}.',
   'Failed to verify; key {keyId} has no publicKeyPem field.',
   'Failed to verify; the document served at {documentUrl} claims to be the actor {actorId}, which belongs to another origin.',
+  'Failed to verify; the owner {claimedOwnerId} that key {keyId} claims does not list the key as its own.',
+  'The owner ({claimedOwnerId}) that key {keyId} claims could not be resolved.',
+  'The owner ({claimedOwnerId}) that key {keyId} claims does not list the key as its own.',
 ]);
 
-const inboxLdSignatureDebugMessages: ReadonlySet<string> = new Set([
-  'Failed to normalize JSON-LD for Linked Data Signatures; deferring to another authentication path only if it verifies:\n{error}',
-  'Linked Data Signatures are not verified.',
-]);
+const inboxLdSignatureNormalizeFailureMessage =
+  'Failed to normalize JSON-LD for Linked Data Signatures; deferring to another authentication path only if it verifies:\n{error}';
+const inboxLdSignatureNotVerifiedMessage = 'Linked Data Signatures are not verified.';
+
+const hasSignatureKey = (json: unknown): boolean =>
+  typeof json === 'object' && json !== null && !Array.isArray(json) && 'signature' in json;
 
 configureSync({
   reset: true,
@@ -38,7 +43,8 @@ configureSync({
       || (typeof record.rawMessage === 'string' && keyFetchFailureDebugMessages.has(record.rawMessage)),
     onlyInboxLdSignatureDebug: (record) =>
       record.level !== 'debug'
-      || (typeof record.rawMessage === 'string' && inboxLdSignatureDebugMessages.has(record.rawMessage)),
+      || record.rawMessage === inboxLdSignatureNormalizeFailureMessage
+      || (record.rawMessage === inboxLdSignatureNotVerifiedMessage && hasSignatureKey(record.properties.json)),
   },
   loggers: [
     // debug には署名や鍵の詳細が出るため info 以上に限る
