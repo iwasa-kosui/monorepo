@@ -1,12 +1,17 @@
-import { hc } from 'hono/client';
 import { useCallback, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import { deleteStatus, failureMessage, favourite, reblog, unfavourite, unreblog } from '../api/mastodonClient.ts';
+import {
+  deleteStatus,
+  failureMessage,
+  favourite,
+  react,
+  reblog,
+  unfavourite,
+  unreact,
+  unreblog,
+} from '../api/mastodonClient.ts';
 import { withReblogged, withUpdatedStatus } from '../api/status.ts';
-
-const client = hc<APIRouterType>('/api');
 
 type StatusUpdater = (
   postId: string,
@@ -151,55 +156,47 @@ export const usePostActions = ({
   const emojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
-      const res = await client.v1.react.$post({ json: { postId, emoji } });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setMyReactions((prev) => {
-          const newMap = new Map(prev);
-          const existing = newMap.get(postId) ?? [];
-          if (!existing.includes(emoji)) {
-            newMap.set(postId, [...existing, emoji]);
-          }
-          return newMap;
-        });
-      } else if ('error' in result) {
-        console.error('Failed to react:', result.error);
-        alert(`Failed to react: ${result.error}`);
-      }
+      const updated = await react(postId, emoji);
+      updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+      updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
+      setMyReactions((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(postId) ?? [];
+        if (!existing.includes(emoji)) {
+          newMap.set(postId, [...existing, emoji]);
+        }
+        return newMap;
+      });
     } catch (error) {
       console.error('Failed to react:', error);
-      alert('Failed to add reaction. Please try again.');
+      alert(failureMessage('add reaction', error));
     } finally {
       setEmojiReactingPostId(null);
     }
-  }, []);
+  }, [updateTimelineItem, updateThreadPost]);
 
   const undoEmojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
-      const res = await client.v1.react.$delete({ json: { postId, emoji } });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setMyReactions((prev) => {
-          const newMap = new Map(prev);
-          const existing = newMap.get(postId) ?? [];
-          newMap.set(
-            postId,
-            existing.filter((e) => e !== emoji),
-          );
-          return newMap;
-        });
-      } else if ('error' in result) {
-        console.error('Failed to undo react:', result.error);
-        alert(`Failed to undo reaction: ${result.error}`);
-      }
+      const updated = await unreact(postId, emoji);
+      updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+      updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
+      setMyReactions((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(postId) ?? [];
+        newMap.set(
+          postId,
+          existing.filter((e) => e !== emoji),
+        );
+        return newMap;
+      });
     } catch (error) {
       console.error('Failed to undo react:', error);
-      alert('Failed to remove reaction. Please try again.');
+      alert(failureMessage('remove reaction', error));
     } finally {
       setEmojiReactingPostId(null);
     }
-  }, []);
+  }, [updateTimelineItem, updateThreadPost]);
 
   return {
     actionState: {

@@ -11,6 +11,7 @@ import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
+import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
@@ -26,11 +27,9 @@ import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMasto
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
 import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMastodonTranslateRouter.ts';
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
-import { createWorkerMutesRelaysApiRouter } from './adaptor/routes/workerMutesRelaysApiRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerPageActionsRouter.ts';
 import { createWorkerPostsRouter } from './adaptor/routes/workerPostsRouter.tsx';
-import { createWorkerSocialActionsApiRouter } from './adaptor/routes/workerSocialActionsApiRouter.ts';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
 import { ArticleId } from './domain/article/articleId.ts';
@@ -194,20 +193,6 @@ export default {
         );
         app.route(
           '/api',
-          createWorkerSocialActionsApiRouter({
-            ...runtime.socialActions,
-            createContext: (socialRequest) => runtime.federation.createContext(socialRequest, undefined),
-          }),
-        );
-        app.route(
-          '/api',
-          createWorkerMutesRelaysApiRouter({
-            ...runtime.mutesRelays,
-            createContext: (relayRequest) => runtime.federation.createContext(relayRequest, undefined),
-          }),
-        );
-        app.route(
-          '/api',
           createWorkerCoreApiRouter({
             ...runtime.core,
             createContext: (coreRequest) => runtime.federation.createContext(coreRequest, undefined),
@@ -268,10 +253,21 @@ export default {
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route(
           '/api',
+          createWorkerIoriActionsRouter({
+            ...runtime.mastodon,
+            ...runtime.socialActions,
+            subscribeRelayUseCase: runtime.mutesRelays.subscribeRelayUseCase,
+            allRelaysResolver: runtime.mutesRelays.allRelaysResolver,
+            authn,
+            createContext,
+          }),
+        );
+        app.route(
+          '/api',
           createWorkerIoriArticlesRouter({
             ...runtime.articles,
             authn,
-            createContext: (articleRequest) => runtime.federation.createContext(articleRequest, undefined),
+            createContext,
           }),
         );
         app.route('/api', createWorkerMastodonNotificationsRouter({ ...runtime.mastodon, authn }));

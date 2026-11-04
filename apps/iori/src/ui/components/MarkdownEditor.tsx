@@ -23,23 +23,31 @@ export const MarkdownEditor = ({
 }: Props) => {
   const [activeTab, setActiveTab] = useState<TabMode>('markdown');
   const [previewHtml, setPreviewHtml] = useState('');
+  const [previewError, setPreviewError] = useState('');
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const fetchPreview = async (markdown: string) => {
     if (!markdown.trim()) {
       setPreviewHtml('');
+      setPreviewError('');
       return;
     }
     setIsLoadingPreview(true);
     try {
-      const res = await fetch('/api/v1/preview', {
+      const res = await fetch('/api/iori/v1/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdown }),
       });
+      if (!res.ok) {
+        setPreviewHtml('');
+        setPreviewError(`プレビューを表示できませんでした（${res.status}）`);
+        return;
+      }
       const data = await res.json();
       if (data.html) {
         setPreviewHtml(data.html);
+        setPreviewError('');
       }
     } catch (error) {
       console.error('Failed to fetch preview:', error);
@@ -113,6 +121,12 @@ export const MarkdownEditor = ({
                 ? (
                   <p class='text-charcoal-light dark:text-gray-500'>
                     Loading preview...
+                  </p>
+                )
+                : previewError
+                ? (
+                  <p class='text-red-600 dark:text-red-400'>
+                    {previewError}
                   </p>
                 )
                 : previewHtml
