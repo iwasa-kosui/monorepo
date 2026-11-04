@@ -15,6 +15,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import { PostId } from '../../../domain/post/postId.ts';
 import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -212,7 +213,11 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
   }
 
   const contentText = String(note.content ?? '');
-  const authorIcon = await author.getIcon();
+  const authorIdentity = await ActorIdentity.fromFedifyActor(author, documentLoaderOptions);
+  if (!authorIdentity.ok) {
+    getLogger().warn(`Could not read Note author: ${note.id.href}`);
+    return;
+  }
   const attachments = await extractAttachmentsOrEmpty(
     note,
     documentLoaderOptions.documentLoader ?? ctx.documentLoader,
@@ -230,15 +235,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
         visibility: extractVisibility(note, author.followersId),
         recipientActorUris: extractRecipientActorUris([note], deps.origin),
         attachments,
-        authorIdentity: {
-          uri: author.id.href,
-          inboxUrl: author.inboxId.href,
-          url: author.url instanceof URL ? author.url.href : undefined,
-          username: typeof author.preferredUsername === 'string'
-            ? author.preferredUsername
-            : author.preferredUsername?.toString(),
-          logoUri: authorIcon?.url instanceof URL ? authorIcon.url.href : undefined,
-        },
+        authorIdentity: authorIdentity.val,
       },
     }),
     RA.match({

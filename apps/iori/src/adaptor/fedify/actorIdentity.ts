@@ -24,7 +24,12 @@ export const PROFILE_LIMITS = {
   summary: 10_000,
   fields: 16,
   emojis: 50,
+  fieldName: 255,
+  fieldValue: 2048,
+  emojiUrl: 2048,
 } as const;
+
+const EMOJI_SHORTCODE_PATTERN = /^[A-Za-z0-9_+-]{2,}$/;
 
 export type ActorIdentity = Readonly<{
   uri: string;
@@ -93,7 +98,10 @@ const readFields = async (
     );
     return (attachments as PropertyValue[]).flatMap((property): RemoteActorProfileField[] => {
       const name = toText(property.name);
-      return name === null ? [] : [{ name, value: toText(property.value) ?? '' }];
+      return name === null ? [] : [{
+        name: truncate(name, PROFILE_LIMITS.fieldName) ?? '',
+        value: truncate(toText(property.value), PROFILE_LIMITS.fieldValue) ?? '',
+      }];
     });
   } catch {
     return undefined;
@@ -110,8 +118,10 @@ const readEmojis = async (
     for (const tag of tags as Emoji[]) {
       const name = toText(tag.name);
       const href = toHref((await tag.getIcon(options))?.url);
-      if (name === null || !href) continue;
-      emojis.push({ shortcode: name.replace(/^:|:$/g, ''), url: href });
+      if (name === null || !href || href.length > PROFILE_LIMITS.emojiUrl) continue;
+      const shortcode = name.replace(/^:|:$/g, '');
+      if (!EMOJI_SHORTCODE_PATTERN.test(shortcode)) continue;
+      emojis.push({ shortcode, url: href });
     }
     return emojis;
   } catch {

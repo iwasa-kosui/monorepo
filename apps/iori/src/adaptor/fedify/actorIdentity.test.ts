@@ -91,6 +91,72 @@ describe('ActorIdentity.fromFedifyActor のプロフィール', () => {
     expect(identity.profile?.emojis).toHaveLength(PROFILE_LIMITS.emojis);
   });
 
+  it('プロフィール項目の name は 255 字、value は 2048 字で切り詰める', async () => {
+    const identity = await identityOf(
+      new Person({
+        id,
+        inbox,
+        attachments: [new PropertyValue({ name: 'n'.repeat(300), value: 'v'.repeat(3000) })],
+      }),
+    );
+
+    expect(identity.profile?.fields).toEqual([
+      { name: 'n'.repeat(PROFILE_LIMITS.fieldName), value: 'v'.repeat(PROFILE_LIMITS.fieldValue) },
+    ]);
+  });
+
+  it('url が 2048 字を超える絵文字を捨てる', async () => {
+    const longUrl = new URL(`https://remote.example/${'a'.repeat(PROFILE_LIMITS.emojiUrl)}.png`);
+    const identity = await identityOf(
+      new Person({
+        id,
+        inbox,
+        tags: [
+          new Emoji({ name: ':long:', icon: new Image({ url: longUrl }) }),
+          new Emoji({ name: ':blob:', icon: new Image({ url: new URL('https://remote.example/blob.png') }) }),
+        ],
+      }),
+    );
+
+    expect(identity.profile?.emojis).toEqual([{ shortcode: 'blob', url: 'https://remote.example/blob.png' }]);
+  });
+
+  it('shortcode に使えない文字や 1 文字の shortcode の絵文字を捨てる', async () => {
+    const icon = new Image({ url: new URL('https://remote.example/e.png') });
+    const identity = await identityOf(
+      new Person({
+        id,
+        inbox,
+        tags: [
+          new Emoji({ name: ':bl<ob>:', icon }),
+          new Emoji({ name: ':bl"ob:', icon }),
+          new Emoji({ name: ':blob:cat:', icon }),
+          new Emoji({ name: ':blob cat:', icon }),
+          new Emoji({ name: ':a:', icon }),
+          new Emoji({ name: ':blob_cat2:', icon }),
+        ],
+      }),
+    );
+
+    expect(identity.profile?.emojis).toEqual([{ shortcode: 'blob_cat2', url: 'https://remote.example/e.png' }]);
+  });
+
+  it('shortcode にハイフンとプラスを含む絵文字は残す', async () => {
+    const icon = new Image({ url: new URL('https://remote.example/e.png') });
+    const identity = await identityOf(
+      new Person({
+        id,
+        inbox,
+        tags: [new Emoji({ name: ':blobcat-heart:', icon }), new Emoji({ name: ':plus+one:', icon })],
+      }),
+    );
+
+    expect(identity.profile?.emojis).toEqual([
+      { shortcode: 'blobcat-heart', url: 'https://remote.example/e.png' },
+      { shortcode: 'plus+one', url: 'https://remote.example/e.png' },
+    ]);
+  });
+
   it('getAttachments が失敗しても読めた分だけで identity を返し、fields は読まなかった扱いにする', async () => {
     const actor = new Person({ id, inbox, name: 'Alice' });
     vi.spyOn(actor, 'getAttachments').mockImplementation(() => {

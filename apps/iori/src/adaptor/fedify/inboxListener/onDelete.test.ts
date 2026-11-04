@@ -196,6 +196,8 @@ describe('createOnDelete', () => {
             uri: 'https://remote.example/posts/1',
             inReplyToUri: null,
             visibility: null,
+            summary: null,
+            sensitive: false,
           })
         ),
       };
