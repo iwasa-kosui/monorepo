@@ -217,6 +217,23 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     expect(thread.descendants.map(post => post.postId)).toEqual([postIdOf(richIndex), postIdOf(parentIndex)]);
   });
 
+  it('merges reactions of the same name into one entry even when only some rows carry an image URL', async () => {
+    const { db, sqlite } = setup();
+    const insert = (reactId: string, actorId: string, emoji: string, imageUrl: string | null) =>
+      sqlite.prepare(
+        'INSERT INTO emoji_reacts(emojiReactId,actorId,postId,emoji,emojiImageUrl,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(reactId, actorId, postIdOf(4), emoji, imageUrl, 1);
+    insert(id(5311), remoteActorId, ':x:', 'https://remote.test/emoji/x.png');
+    insert(id(5312), viewerActorId, ':x:', null);
+
+    const post = (await resolvePostsWithAuthorByIds(db, [postIdOf(4) as PostId], viewerActorId))
+      .get(postIdOf(4) as PostId);
+
+    expect(post?.reactions).toEqual([
+      { emoji: ':x:', emojiImageUrl: 'https://remote.test/emoji/x.png', count: 2 },
+    ]);
+  });
+
   it('keeps the federated timeline resolver posts identical to the thread resolver result', async () => {
     const { db } = setup();
     const result = unwrap(

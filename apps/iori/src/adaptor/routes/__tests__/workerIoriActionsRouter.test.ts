@@ -166,6 +166,24 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     expect(t.count()).toBe(0);
   });
 
+  it('リモートが URL 付きで付けた同名の反応と 1 件にまとめ、取り消すとリモートの分だけが残る', async () => {
+    const t = await seedReactions();
+    const url = 'https://remote.example/emoji/wave.png';
+    t.seed.addEmojiReact(t.alice.actorId, t.local.postId, ':wave:', url);
+
+    const put = await t.put(t.local.postId);
+    const del = await t.del(t.local.postId);
+
+    expect(put.status).toBe(200);
+    expect(StatusSchema.parse(await put.json())).toMatchObject({
+      iori: { reactions: [{ emoji: ':wave:', count: 2, url, me: true }] },
+    });
+    expect(del.status).toBe(200);
+    expect(StatusSchema.parse(await del.json())).toMatchObject({
+      iori: { reactions: [{ emoji: ':wave:', count: 1, url, me: false }] },
+    });
+  });
+
   it('未反応でもエラーにせず、現在の状態を返す', async () => {
     const t = await seedReactions();
 
