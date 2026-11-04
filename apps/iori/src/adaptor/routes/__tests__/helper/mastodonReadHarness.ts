@@ -25,6 +25,7 @@ import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../../../../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../../../../useCase/sendRepost.ts';
+import { SubscribePushUseCase } from '../../../../useCase/subscribePush.ts';
 import { SubscribeRelayUseCase } from '../../../../useCase/subscribeRelay.ts';
 import { createSummarizeTimelineUseCase } from '../../../../useCase/summarizeTimeline.ts';
 import { createTranslatePostUseCase } from '../../../../useCase/translatePost.ts';
@@ -99,6 +100,8 @@ import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
+import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
+import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelaysResolver.ts';
 import { createD1AllRelaysResolver } from '../../../d1/relay/allRelaysResolver.ts';
@@ -495,6 +498,12 @@ export const setupReadApi = (
           subscribeRelayUseCase: SubscribeRelayUseCase.create({
             relayResolverByActorUri: createD1RelayResolverByActorUri(db),
             relaySubscriptionRequestedStore: createD1RelaySubscriptionRequestedStore(db),
+          }),
+          subscribePushUseCase: SubscribePushUseCase.create({
+            sessionResolver,
+            userResolver,
+            pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
+            pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

@@ -94,7 +94,8 @@ describe('createWorkerIoriArticlesRouter', () => {
             postId: rootPostId,
             actorId,
             userId: authorUserId,
-            content: '<p>thread</p><script>alert(1)</script>',
+            content:
+              '<p>thread <a href="https://example.com/x" onclick="alert(1)">link</a></p><script>alert(1)</script>',
             createdAt,
             inReplyToUri: null,
             username: Username.orThrow('kosui'),
@@ -173,7 +174,7 @@ describe('createWorkerIoriArticlesRouter', () => {
     expect(getArticlesUseCase.run).toHaveBeenCalledExactlyOnceWith({ userId: authorUserId });
     await expect(detail.json()).resolves.toMatchObject({
       article: { status: 'published' },
-      thread: [{ content: '<p>thread</p>' }],
+      thread: [{ content: '<p>thread <a href="https://example.com/x">link</a></p>' }],
     });
     await expect(create.json()).resolves.toEqual({ article });
     expect(createArticleUseCase.run).toHaveBeenCalledExactlyOnceWith({

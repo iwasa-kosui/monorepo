@@ -91,7 +91,6 @@ import type { UndoEmojiReactUseCase } from '../useCase/undoEmojiReact.ts';
 import type { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
-import type { UnsubscribePushUseCase } from '../useCase/unsubscribePush.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import type { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
@@ -212,7 +211,6 @@ export type IoriCoreRuntimePorts = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
-  unsubscribePushUseCase: UnsubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
   vapidPublicKey: string | undefined;

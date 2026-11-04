@@ -2,7 +2,6 @@ import type { FC } from 'hono/jsx';
 
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
 import { BottomNav } from './ui/components/BottomNav.tsx';
-import { PostModal } from './ui/components/PostModal.tsx';
 import { Sidebar } from './ui/components/Sidebar.tsx';
 
 type OGPMetadata = {
@@ -301,7 +300,6 @@ export const Layout: FC<LayoutProps> = (props) => {
         {isLoggedIn && <Sidebar isLoggedIn={isLoggedIn} />}
         <main class='max-w-2xl mx-auto px-6 py-8 relative'>{props.children}</main>
         {isLoggedIn && <BottomNav isLoggedIn={isLoggedIn} />}
-        {isLoggedIn && <PostModal />}
       </body>
     </html>
   );
@@ -375,7 +373,6 @@ export const LayoutClient: FC<{
         {isLoggedIn && <Sidebar isLoggedIn={isLoggedIn} />}
         <main class='max-w-2xl mx-auto px-6 py-8 relative'>{props.children}</main>
         {isLoggedIn && <BottomNav isLoggedIn={isLoggedIn} />}
-        {isLoggedIn && <PostModal />}
       </body>
     </html>
   );

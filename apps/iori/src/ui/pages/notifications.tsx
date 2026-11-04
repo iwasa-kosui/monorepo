@@ -85,7 +85,7 @@ const PushSubscriptionSection = () => {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      await fetch('/api/v1/push/subscribe', {
+      await fetch('/api/iori/v1/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscription.toJSON()),

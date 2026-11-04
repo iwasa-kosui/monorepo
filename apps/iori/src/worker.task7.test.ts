@@ -47,7 +47,6 @@ const runtime = vi.hoisted(() => ({
     sendReplyUseCase: {},
     deletePostUseCase: {},
     subscribePushUseCase: {},
-    unsubscribePushUseCase: {},
     vapidPublicKey: 'public-key',
   },
   mutesRelays: {
