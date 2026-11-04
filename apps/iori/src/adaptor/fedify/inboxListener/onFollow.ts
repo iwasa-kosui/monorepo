@@ -37,10 +37,13 @@ export const createOnFollow = (deps: OnFollowDeps) => async (ctx: InboxContext<u
     }),
     RA.andBind('username', ({ object }) => Username.parse(object.identifier)),
     RA.andThrough(async ({ username, object }) => {
-      await deps.acceptFollowRequestUseCase.run({
+      const accepted = await deps.acceptFollowRequestUseCase.run({
         username,
         follower: followerIdentity,
       });
+      if (!accepted.ok && object.identifier !== INSTANCE_ACTOR_IDENTIFIER) {
+        return RA.err(new Error(accepted.err.message));
+      }
       const accept = new Accept({
         actor: activity.objectId,
         to: activity.actorId,
