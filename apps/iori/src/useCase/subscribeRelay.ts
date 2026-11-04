@@ -1,7 +1,8 @@
 import type { RequestContext } from '@fedify/fedify';
+import { Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
-import { RELAY_FOLLOW_ID_HASH_PREFIX, RelayFollow } from '../adaptor/fedify/relayFollow.ts';
+import { RELAY_FOLLOW_ID_HASH_PREFIX } from '../adaptor/fedify/relayFollow.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../adaptor/fedify/sharedKeyDispatcher.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -42,7 +43,7 @@ const sendFollowActivity = async (
       id: new URL(relay.actorUri),
       inboxId: new URL(relay.inboxUrl),
     },
-    new RelayFollow({
+    new Follow({
       id: new URL(`/${RELAY_FOLLOW_ID_HASH_PREFIX}${crypto.randomUUID()}`, actorUri.origin),
       actor: actorUri,
       object: new URL('https://www.w3.org/ns/activitystreams#Public'),

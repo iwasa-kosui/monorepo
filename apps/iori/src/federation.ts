@@ -5,7 +5,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import postgres from 'postgres';
 
-import { ActorDispatcher } from './adaptor/fedify/actorDispatcher.ts';
+import { createActorDispatcher } from './adaptor/fedify/actorDispatcherFactory.ts';
 import { FollowersDispatcher } from './adaptor/fedify/followersDispatcher.ts';
 import { InboxListener } from './adaptor/fedify/inboxListener/inboxListener.ts';
 import { KeyPairsDispatcher } from './adaptor/fedify/keyPairsDispatcher.ts';
@@ -14,7 +14,9 @@ import { OutboxDispatcher } from './adaptor/fedify/outboxDispatcher.ts';
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { ControlledQueue } from './adaptor/node/source/controlledQueue.ts';
 import { postgresQueueStorage } from './adaptor/node/source/postgresQueueStorage.ts';
+import { PgActorResolverByUserId } from './adaptor/pg/actor/actorResolverByUserId.ts';
 import { PgConfig } from './adaptor/pg/pgConfig.ts';
+import { PgUserResolverByUsername } from './adaptor/pg/user/userResolverByUsername.ts';
 import { Username } from './domain/user/username.ts';
 import { Env } from './env.ts';
 import { createContextLoaderFactory } from './federationContext.ts';
@@ -68,7 +70,10 @@ const create = () => {
 
   const followersDispatcher = FollowersDispatcher.getInstance();
   const outboxDispatcher = OutboxDispatcher.getInstance();
-  const actorDispatcher = ActorDispatcher.getInstance();
+  const actorDispatcher = createActorDispatcher({
+    userResolverByUsername: PgUserResolverByUsername.getInstance(),
+    actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+  });
   const keyPairsDispatcher = KeyPairsDispatcher.getInstance();
 
   federation
