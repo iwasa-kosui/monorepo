@@ -32,6 +32,9 @@ const escapeHtml = (text: string): string =>
 const marker = (n: number): string => `⟦${n}⟧`;
 const paragraphMarker = (n: number): string => `⟪${n}⟫`;
 
+const toHalfWidthDigits = (text: string): string =>
+  text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
+
 const KEPT_REMAINDER = /^(?:RE|QT):$/i;
 
 export type TranslationParagraph =
@@ -54,7 +57,7 @@ const normalizeParagraph = (text: string): string =>
 
 const renderParagraph = (text: string, resolve: (n: number) => string | undefined): string =>
   escapeHtml(text)
-    .replace(/⟦\s*(\d+)\s*⟧/g, (_match, digits: string) => resolve(Number(digits)) ?? '')
+    .replace(/⟦\s*([0-9０-９]+)\s*⟧/g, (_match, digits: string) => resolve(Number(toHalfWidthDigits(digits))) ?? '')
     .trim()
     .replace(/\n/g, '<br>');
 
@@ -97,7 +100,7 @@ export const truncateTranslationSource = (
 ): Readonly<{ source: TranslationSource; truncated: boolean }> => {
   const chars = Array.from(source.text);
   if (chars.length <= maxChars) return { source, truncated: false };
-  const text = chars.slice(0, maxChars).join('').replace(/[⟦⟪]\d*$/, '').trimEnd();
+  const text = chars.slice(0, maxChars).join('').replace(/[⟦⟪][0-9０-９]*$/, '').trimEnd();
   const kept = Array.from(text.matchAll(/⟦(\d+)⟧/g)).reduce((max, match) => Math.max(max, Number(match[1])), 0);
   const keptParagraphs = Array.from(text.matchAll(/⟪\d+⟫/g)).length;
   const translateIndexes = source.paragraphs.flatMap((paragraph, index) =>
@@ -131,8 +134,8 @@ export const fromTranslatedText = (
       return anchor;
     });
   const normalized = text.replace(/\r\n?/g, '\n');
-  const [preamble = '', ...rest] = tidy(normalized).split(/⟪\s*(\d+)\s*⟫/);
-  const numbers = rest.filter((_part, index) => index % 2 === 0).map(Number);
+  const [preamble = '', ...rest] = tidy(normalized).split(/⟪\s*([0-9０-９]+)\s*⟫/);
+  const numbers = rest.filter((_part, index) => index % 2 === 0).map((digits) => Number(toHalfWidthDigits(digits)));
   const segments = rest.filter((_part, index) => index % 2 === 1);
   const translateCount = paragraphs.filter((paragraph) => paragraph.kind === 'translate').length;
   const marked = preamble.trim() === ''
@@ -148,7 +151,7 @@ export const fromTranslatedText = (
       else pieces.push({ html: rendered[next++] ?? '', translated: true });
     }
   } else {
-    const group = tidy(normalized.replace(/⟪\s*\d+\s*⟫[^\S\n]*/g, ''))
+    const group = tidy(normalized.replace(/⟪\s*[0-9０-９]+\s*⟫[^\S\n]*/g, '\n\n'))
       .split(/\n{2,}/)
       .map((segment) => ({ html: render(segment), translated: true }));
     let placed = false;

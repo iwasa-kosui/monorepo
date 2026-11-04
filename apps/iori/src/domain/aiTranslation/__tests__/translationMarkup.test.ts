@@ -149,6 +149,10 @@ describe('fromTranslatedText', () => {
     expect(fromTranslatedText('⟦ 1 ⟧', single([link]))).toBe(`<p>${link}</p>`);
   });
 
+  it('リンクの印が全角数字でも元の <a> に戻す', () => {
+    expect(fromTranslatedText('⟦１⟧ を見て', single([link]))).toBe(`<p>${link} を見て</p>`);
+  });
+
   it('toTranslationSource の結果をそのまま戻すと元のリンクと段落を保つ', () => {
     const source = toTranslationSource(`<p>${mention} hi<br>${link}</p><p>${hashtag}</p>`);
 
@@ -182,8 +186,18 @@ describe('fromTranslatedText の段落の印', () => {
     expect(fromTranslatedText('⟪2⟫ 二\n\n⟪1⟫ 一\n\n⟪3⟫ 三', three)).toBe('<p>二</p><p>一</p><p>三</p>');
   });
 
-  it('余分な番号の印があるときも空行で分ける', () => {
-    expect(fromTranslatedText('⟪1⟫ 一\n⟪2⟫ 二\n⟪3⟫ 三\n⟪4⟫ 四', three)).toBe('<p>一<br>二<br>三<br>四</p>');
+  it('余分な番号の印があるときは印をそろえずに、印の位置と空行で分ける', () => {
+    expect(fromTranslatedText('⟪1⟫ 一\n⟪2⟫ 二\n⟪3⟫ 三\n⟪4⟫ 四', three)).toBe('<p>一</p><p>二</p><p>三</p><p>四</p>');
+  });
+
+  it('印が揃わず切り替えたとき、段落の間が1つの改行でも印の位置で段落が分かれる', () => {
+    expect(fromTranslatedText('⟪1⟫ 一\n⟪1⟫ 二\n⟪3⟫ 三', three)).toBe('<p>一</p><p>二</p><p>三</p>');
+  });
+
+  it('段落の印が全角数字でも、印で段落に分ける', () => {
+    const two = toTranslationSource('<p>one</p><p>two</p>');
+
+    expect(fromTranslatedText('⟪１⟫ 一\n⟪２⟫ 二', two)).toBe('<p>一</p><p>二</p>');
   });
 
   it('印の前に文章があるときは空行で分ける', () => {
