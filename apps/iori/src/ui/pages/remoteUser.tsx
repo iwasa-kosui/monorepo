@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import {
@@ -16,6 +17,7 @@ import {
   unmute,
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId, withUpdatedStatus } from '../api/status.ts';
+import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
@@ -36,6 +38,14 @@ type Props = Readonly<{
   isTogglingFollow: boolean;
 }>;
 
+const isDefaultHeader = (header: string): boolean => {
+  try {
+    return new URL(header, 'https://base.invalid').pathname === DEFAULT_HEADER_PATH;
+  } catch {
+    return false;
+  }
+};
+
 export const RemoteUserPage = ({
   account,
   statuses,
@@ -52,15 +62,25 @@ export const RemoteUserPage = ({
   isTogglingFollow,
 }: Props) => {
   const handle = account.acct;
-  const displayName = account.username;
+  const hasDisplayName = account.display_name.trim() !== '';
+  const displayName = hasDisplayName ? account.display_name : account.username;
 
   const logoUrl = safeUrl(account.avatar);
+  const rawHeaderUrl = safeUrl(account.header);
+  const headerUrl = rawHeaderUrl !== undefined && !isDefaultHeader(rawHeaderUrl) ? rawHeaderUrl : undefined;
   const profileUrl = safeUrl(account.url);
 
   return (
     <>
       <section class='mb-8'>
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
+          {headerUrl && (
+            <img
+              src={headerUrl}
+              alt='ヘッダー画像'
+              class='w-full h-32 object-cover rounded-xl mb-4 relative z-10'
+            />
+          )}
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
               {logoUrl
@@ -77,11 +97,53 @@ export const RemoteUserPage = ({
             </div>
             <div class='flex-1 min-w-0'>
               <h1 class='text-2xl font-bold text-charcoal dark:text-white truncate'>
-                {displayName}
+                <CustomEmojiText text={displayName} emojis={account.emojis} />
               </h1>
               <p class='text-charcoal-light dark:text-gray-400 truncate'>@{handle}</p>
+              {(account.bot || account.locked) && (
+                <p class='mt-1 flex items-center gap-2 text-xs'>
+                  {account.bot && (
+                    <span class='rounded-full bg-sand-light dark:bg-gray-700 px-2 py-0.5 text-charcoal-light dark:text-gray-300'>
+                      bot
+                    </span>
+                  )}
+                  {account.locked && (
+                    <span class='rounded-full bg-sand-light dark:bg-gray-700 px-2 py-0.5 text-charcoal-light dark:text-gray-300'>
+                      🔒 承認制
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
+
+          {account.note !== '' && (
+            <div
+              class='mb-4 relative z-10 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
+              dangerouslySetInnerHTML={{ __html: account.note }}
+            />
+          )}
+
+          {account.fields.length > 0 && (
+            <table class='mb-4 relative z-10 w-full text-sm'>
+              <tbody class='divide-y divide-sand dark:divide-gray-700'>
+                {account.fields.map((field) => (
+                  <tr>
+                    <th
+                      scope='row'
+                      class='w-1/3 py-2 pr-4 text-left align-top font-bold text-charcoal-light dark:text-gray-400 break-words'
+                    >
+                      <CustomEmojiText text={field.name} emojis={account.emojis} />
+                    </th>
+                    <td
+                      class='py-2 align-top text-charcoal dark:text-gray-200 [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_.invisible]:visible'
+                      dangerouslySetInnerHTML={{ __html: field.value }}
+                    />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
           <div class='flex items-center gap-3'>
             {isLoggedIn

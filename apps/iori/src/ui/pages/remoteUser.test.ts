@@ -1,0 +1,136 @@
+import { jsx } from 'hono/jsx';
+import { describe, expect, it } from 'vitest';
+
+import type { Account } from '../../adaptor/mastodon/entities.ts';
+import { CustomEmojiText, splitCustomEmojiText } from '../components/CustomEmojiText.tsx';
+import { RemoteUserPage } from './remoteUser.tsx';
+
+const emoji = { shortcode: 'blobcat', url: 'https://remote.example/emoji/blobcat.png' } as Account['emojis'][number];
+
+const account = (overrides: Partial<Account> = {}): Account =>
+  ({
+    id: 'a1',
+    username: 'alice',
+    acct: 'alice@remote.example',
+    url: 'https://remote.example/@alice',
+    uri: 'https://remote.example/users/alice',
+    display_name: 'alice',
+    note: '',
+    avatar: 'https://iori.example/default-avatar.png',
+    header: 'https://iori.example/default-header.png',
+    locked: false,
+    bot: false,
+    fields: [],
+    emojis: [],
+    ...overrides,
+  }) as Account;
+
+const render = (a: Account): string =>
+  String(jsx(RemoteUserPage, {
+    account: a,
+    statuses: [],
+    isFollowing: false,
+    isMuted: false,
+    isLoggedIn: false,
+    onLike: async () => {},
+    onFollow: async () => {},
+    onUnfollow: async () => {},
+    onMute: async () => {},
+    onUnmute: async () => {},
+    likingPostId: null,
+    isMuting: false,
+    isTogglingFollow: false,
+  }));
+
+describe('RemoteUserPage profile', () => {
+  it('shows the display name with the handle below it', () => {
+    const html = render(account({ display_name: 'Alice Liddell' }));
+
+    expect(html).toContain('Alice Liddell');
+    expect(html).toContain('@alice@remote.example');
+  });
+
+  it('falls back to the username when display_name is empty', () => {
+    const html = render(account({ display_name: '' }));
+
+    expect(html).toContain('>alice</h1>');
+  });
+
+  it('shows the note as sanitized HTML', () => {
+    const html = render(account({ note: '<p>自己紹介です</p>' }));
+
+    expect(html).toContain('<p>自己紹介です</p>');
+  });
+
+  it('omits the note block when note is empty', () => {
+    expect(render(account())).not.toContain('prose');
+  });
+
+  it('shows fields as a table with name as text and value as HTML', () => {
+    const html = render(account({
+      fields: [{ name: 'Web', value: '<a href="https://example.com">example.com</a>', verified_at: null }],
+    }));
+
+    expect(html).toContain('<table');
+    expect(html).toContain('Web');
+    expect(html).toContain('<a href="https://example.com">example.com</a>');
+  });
+
+  it('does not render fields when there are none', () => {
+    expect(render(account())).not.toContain('<table');
+  });
+
+  it('shows bot and locked badges only when set', () => {
+    const plain = render(account());
+    expect(plain).not.toContain('承認制');
+    expect(plain).not.toContain('>bot<');
+
+    const flagged = render(account({ bot: true, locked: true }));
+    expect(flagged).toContain('>bot<');
+    expect(flagged).toContain('承認制');
+  });
+
+  it('shows the header image unless it is the default one', () => {
+    expect(render(account())).not.toContain('ヘッダー画像');
+    expect(render(account({ header: 'https://remote.example/header.png' }))).toContain(
+      'src="https://remote.example/header.png"',
+    );
+  });
+
+  it('escapes HTML in display_name', () => {
+    const html = render(account({ display_name: '<script>alert(1)</script>' }));
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('turns :shortcode: in display_name and field names into img elements', () => {
+    const html = render(account({
+      display_name: 'alice :blobcat:',
+      emojis: [emoji],
+      fields: [{ name: ':blobcat: Web', value: 'x', verified_at: null }],
+    }));
+
+    expect(html.match(/<img src="https:\/\/remote\.example\/emoji\/blobcat\.png"/g)).toHaveLength(2);
+  });
+});
+
+describe('CustomEmojiText', () => {
+  it('keeps unknown shortcodes as text', () => {
+    expect(splitCustomEmojiText('hi :unknown:', [emoji])).toEqual([{ type: 'text', text: 'hi :unknown:' }]);
+  });
+
+  it('splits text around known shortcodes', () => {
+    expect(splitCustomEmojiText('a :blobcat: b', [emoji])).toEqual([
+      { type: 'text', text: 'a ' },
+      { type: 'emoji', shortcode: 'blobcat', url: emoji.url },
+      { type: 'text', text: ' b' },
+    ]);
+  });
+
+  it('ignores emojis whose url is not http(s)', () => {
+    const unsafe = { shortcode: 'x', url: 'javascript:alert(1)' } as Account['emojis'][number];
+
+    expect(String(jsx(CustomEmojiText, { text: ':x:', emojis: [unsafe] }))).toBe(':x:');
+  });
+});
