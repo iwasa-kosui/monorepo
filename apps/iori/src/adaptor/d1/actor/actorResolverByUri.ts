@@ -7,6 +7,7 @@ import { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import { actorsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
+import { toRemoteActorProfileFields } from './remoteActorProfileColumns.ts';
 
 export const createD1ActorResolverByUri = (db: IoriD1Db): ActorResolverByUri => ({
   resolve: (uri) =>
@@ -28,6 +29,7 @@ export const createD1ActorResolverByUri = (db: IoriD1Db): ActorResolverByUri => 
             url: row.remote_actors.url ?? undefined,
             username: row.remote_actors.username ?? undefined,
             logoUri: row.actors.logoUri ?? undefined,
+            ...toRemoteActorProfileFields(row.remote_actors),
           };
         }
         if (row.local_actors !== null) {

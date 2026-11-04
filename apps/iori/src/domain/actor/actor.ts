@@ -7,6 +7,7 @@ import type { ActorId } from './actorId.ts';
 import { LocalActor } from './localActor.ts';
 import { RemoteActor } from './remoteActor.ts';
 import { updateLogoUri } from './updateLogoUri.ts';
+import { updateRemoteActorProfile } from './updateProfile.ts';
 
 export type { LocalActor } from './localActor.ts';
 export type { RemoteActor } from './remoteActor.ts';
@@ -15,6 +16,7 @@ export type Actor = LocalActor | RemoteActor;
 export const Actor = {
   zodType: z.union([LocalActor.zodType, RemoteActor.zodType]).describe('Actor'),
   updateLogoUri,
+  updateRemoteActorProfile,
   match: <T, U>({ onLocal, onRemote }: {
     onLocal: (localActor: LocalActor) => T;
     onRemote: (remoteActor: RemoteActor) => U;

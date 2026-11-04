@@ -57,6 +57,14 @@ export const remoteActorsTable = sqliteTable('remote_actors', {
   actorId: text('actorId').primaryKey().references(() => actorsTable.actorId),
   url: text('url'),
   username: text('username'),
+  displayName: text('displayName'),
+  summary: text('summary'),
+  headerUri: text('headerUri'),
+  actorType: text('actorType'),
+  manuallyApprovesFollowers: integer('manuallyApprovesFollowers', { mode: 'boolean' }),
+  publishedAt: integer('publishedAt', { mode: 'timestamp_ms' }),
+  fields: text('fields'),
+  emojis: text('emojis'),
 });
 
 export const followsTable = sqliteTable('follows', {

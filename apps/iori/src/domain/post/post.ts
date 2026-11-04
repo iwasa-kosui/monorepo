@@ -2,6 +2,7 @@ import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
+import type { RemoteActorProfile } from '../actor/remoteActor.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { ImageId } from '../image/imageId.ts';
@@ -153,6 +154,7 @@ export type RemotePostIdentity = Readonly<{
     url?: string;
     username?: string;
     logoUri?: string;
+    profile?: RemoteActorProfile;
   }>;
   inReplyToUri?: string | null;
   visibility: Visibility | null;

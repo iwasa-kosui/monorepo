@@ -143,4 +143,95 @@ describe('toAccount', () => {
     expect(account.url).toBe(account.uri);
     expect(AccountSchema.safeParse(account).success).toBe(true);
   });
+
+  describe('remote actor profile', () => {
+    const profiled: RemoteActor = {
+      ...remoteActor,
+      displayName: 'Alice <b>A</b>',
+      summary: '<p>hello</p><script>alert(1)</script>',
+      headerUri: 'https://remote.example/header.png',
+      actorType: 'Service',
+      manuallyApprovesFollowers: true,
+      publishedAt: Date.UTC(2020, 1, 3, 4, 5, 6),
+      fields: [{ name: 'Web <i>', value: '<a href="https://alice.example">alice</a><script>x</script>' }],
+      emojis: [{ shortcode: 'blob', url: 'https://remote.example/blob.png' }],
+    };
+
+    it('outputs each profile item', () => {
+      const account = toAccount({ type: 'remote', actor: profiled }, options);
+
+      expect(AccountSchema.safeParse(account).success).toBe(true);
+      expect(account).toMatchObject({
+        display_name: 'Alice <b>A</b>',
+        header: 'https://remote.example/header.png',
+        header_static: 'https://remote.example/header.png',
+        locked: true,
+        bot: true,
+        group: false,
+        created_at: '2020-02-03T04:05:06.000Z',
+        emojis: [{
+          shortcode: 'blob',
+          url: 'https://remote.example/blob.png',
+          static_url: 'https://remote.example/blob.png',
+          visible_in_picker: false,
+        }],
+      });
+      expect(account.fields).toHaveLength(1);
+      expect(account.fields[0]?.name).toBe('Web <i>');
+      expect(account.fields[0]?.verified_at).toBeNull();
+    });
+
+    it('removes scripts from note and the value of fields', () => {
+      const account = toAccount({ type: 'remote', actor: profiled }, options);
+
+      expect(account.note).toContain('hello');
+      expect(account.note).not.toContain('script');
+      expect(account.fields[0]?.value).toContain('alice');
+      expect(account.fields[0]?.value).not.toContain('script');
+    });
+
+    it('marks Application as a bot and Group as a group', () => {
+      expect(toAccount({ type: 'remote', actor: { ...remoteActor, actorType: 'Application' } }, options)).toMatchObject(
+        {
+          bot: true,
+          group: false,
+        },
+      );
+      expect(toAccount({ type: 'remote', actor: { ...remoteActor, actorType: 'Group' } }, options)).toMatchObject({
+        bot: false,
+        group: true,
+      });
+    });
+
+    it('falls back to the current values when the profile is empty', () => {
+      const account = toAccount({ type: 'remote', actor: remoteActor }, options);
+
+      expect(account).toMatchObject({
+        display_name: 'alice',
+        note: '',
+        header: options.defaultHeaderUrl,
+        locked: false,
+        fields: [],
+        emojis: [],
+        bot: false,
+        group: false,
+        created_at: '2025-01-02T03:04:05.000Z',
+      });
+    });
+
+    it('uses the default header and drops emojis whose url is unsafe', () => {
+      const account = toAccount({
+        type: 'remote',
+        actor: {
+          ...profiled,
+          headerUri: 'javascript:alert(1)',
+          emojis: [{ shortcode: 'bad', url: 'javascript:alert(1)' }],
+        },
+      }, options);
+
+      expect(account.header).toBe(options.defaultHeaderUrl);
+      expect(account.header_static).toBe(options.defaultHeaderUrl);
+      expect(account.emojis).toEqual([]);
+    });
+  });
 });
