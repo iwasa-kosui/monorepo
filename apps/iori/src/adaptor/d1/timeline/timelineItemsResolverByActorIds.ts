@@ -209,6 +209,8 @@ export const createD1TimelineItemsResolverByActorIds = (
             createdAt: row.posts.createdAt.getTime(),
             userId: row.local_posts.userId,
             inReplyToUri: row.local_posts.inReplyToUri,
+            summary: row.posts.summary,
+            sensitive: row.posts.sensitive,
             type: 'local',
           })
           : row.remote_posts !== null
@@ -220,6 +222,8 @@ export const createD1TimelineItemsResolverByActorIds = (
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
             visibility: toVisibility(row.remote_posts.visibility),
+            summary: row.posts.summary,
+            sensitive: row.posts.sensitive,
             type: 'remote',
           })
           : (() => {

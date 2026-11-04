@@ -135,6 +135,19 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('records the summary and sensitive of the announced Note in a remote Announce', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ summary: 'spoiler', sensitive: true });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ summary: 'spoiler', sensitive: true }),
+      }),
+    );
+  });
+
   it('records the visibility of the announced Note in a remote Announce', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined);
     const note = createNote([]).clone({ ccs: [new URL('https://www.w3.org/ns/activitystreams#Public')] });
@@ -344,6 +357,23 @@ describe('createOnAnnounce', () => {
     });
     expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
     expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  it('rejects without saving anything when checking whether a local actor follows the announcer fails', async () => {
+    const {
+      deps,
+      addReceivedRepostUseCase,
+      federatedTimelineItemCreatedStore,
+      followedByLocalActorResolverByActorUri,
+      inboxActorResolver,
+    } = createDeps(undefined, false, [{ relayId: 'relay-1' }]);
+    followedByLocalActorResolverByActorUri.resolve.mockResolvedValue(RA.err(new Error('db down')) as never);
+
+    await expect(createOnAnnounce(deps)(createCtx(), createActivity(createNote([])))).rejects.toThrow();
+
+    expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
   it('saves a remote Announce from an actor a local actor follows', async () => {

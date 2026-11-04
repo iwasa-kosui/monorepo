@@ -94,7 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -511,6 +511,41 @@ job が受け取る secret は、次の2つです。
 `move-unfollowed-reposts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。途中で失敗しても、同じ入力で `move-unfollowed-reposts` を再実行すれば、最終状態はそろいます。
 
 dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。`deletedAt` の条件があるので、段階的に実行しても、同じ repost を二重に処理しません。
+
+#### prune-federated-posts-dry-run で federated の古い remote 投稿の削除対象を数える
+
+`prune-federated-posts-dry-run` は、本番の D1 に SELECT だけを送り、Worker の Cron が消す投稿の件数を事前に数える operation です。apply の operation はありません。削除は Worker の Cron が担当します。
+
+Cron の削除は、Worker の環境変数 `IORI_PRUNE_FEDERATED_POSTS` が `enabled` のときだけ動きます。初期値は `disabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。削除を有効にするには、作業者が template の値を `enabled` に変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
+
+作業者は、`IORI_PRUNE_FEDERATED_POSTS` を `enabled` にする前に、dry-run が出す `candidates` と `to_delete` を確かめます。Cron が1日に消せる投稿は、最大8,000件です。federated で受け取る投稿が1日に8,000件を超えると、消し残しが溜まります。除外理由に当たる古い投稿は、消えずに残ります。Cron は、実行のたびにそれらの投稿を読み直します。このため、除外される件数が多いと、D1 の rows read が増えます。作業者は、有効にした後に、Cloudflare のダッシュボードで D1 の rows read を確かめます。
+
+Cron は3時間ごとに動き、1回で最大1,000件を消します。内訳は、50件ずつ最大20回です。消す投稿は、federated で最後に受け取った時刻から7日より前のリモート投稿で、次の除外理由のどれにも当たらないものです。Cron は `domain_events` に書き込みません。
+
+作業者は、`environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。
+
+この operation は、次の形式の行を出します。
+
+```text
+IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> local_emoji=<n> home=<n> local_repost=<n> reply=<n> notification=<n> article=<n> to_delete=<n> cutoff_ms=<ms>
+```
+
+各ラベルの意味は、次のとおりです。
+
+| ラベル         | 意味                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `candidates`   | federated で最後に受け取った時刻が `cutoff_ms` より前のリモート投稿の件数。投稿の作成時刻は見ません |
+| `local_likes`  | ローカルのユーザーがいいねした投稿の件数                                                            |
+| `local_emoji`  | ローカルのユーザーが絵文字リアクションを付けた投稿の件数                                            |
+| `home`         | ホームタイムラインに、論理削除されていない項目がある投稿の件数                                      |
+| `local_repost` | ローカルのユーザーが repost した投稿の件数                                                          |
+| `reply`        | ローカルの投稿がこの投稿に返信している投稿、またはこの投稿がローカルの投稿への返信である投稿の件数  |
+| `notification` | 通知が指している投稿の件数                                                                          |
+| `article`      | 記事のルートになっている投稿の件数                                                                  |
+| `to_delete`    | どの除外理由にも当たらない投稿の件数。Cron が消す件数の見込みです                                   |
+| `cutoff_ms`    | 実行時刻の7日前を示すミリ秒の epoch                                                                 |
+
+`local_likes` から `article` までは、除外理由ごとの件数です。1件の投稿が複数の除外理由に当たる場合、operation はその投稿を当たる理由すべてで数えます。このため、除外理由の件数の合計は、`candidates` から `to_delete` を引いた値より大きくなることがあります。
 
 ## 6. 中断と引き継ぎ
 

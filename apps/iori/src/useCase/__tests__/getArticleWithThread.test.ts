@@ -235,6 +235,8 @@ describe('GetArticleWithThreadUseCase', () => {
     const postBase = {
       createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
       inReplyToUri: null,
+      summary: null,
+      sensitive: false,
       username: Username.orThrow('alice'),
       logoUri: undefined,
       liked: false,

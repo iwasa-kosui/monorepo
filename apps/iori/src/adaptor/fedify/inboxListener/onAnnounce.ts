@@ -15,6 +15,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import { PostId } from '../../../domain/post/postId.ts';
 import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
@@ -105,9 +106,17 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   if (!localObject) {
     const followedResult = await deps.followedByLocalActorResolverByActorUri.resolve({ actorUri: actorId.href });
-    if (followedResult.ok && !followedResult.val) {
+    if (!followedResult.ok) {
+      getLogger().warn(
+        `Failed to determine whether a local actor follows ${actorId.href}; failing the Announce to retry: ${activity.id?.href} - ${
+          String(followedResult.err)
+        }`,
+      );
+      throw new Error(`Failed to determine whether a local actor follows ${actorId.href}`);
+    }
+    if (!followedResult.val) {
       getLogger().info(
-        `Skipping Announce activity from an actor no local actor follows: ${actorId.href} (${activity.id?.href})`,
+        `Not creating a repost for an Announce from an actor no local actor follows; trying to save it to the federated timeline as a relay-forwarded boost: ${actorId.href} (${activity.id?.href})`,
       );
       await saveForwardedAnnounce(deps, ctx, activity);
       return;
@@ -217,6 +226,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       remotePostIdentity: {
         uri: note.id.href,
         content: contentText,
+        ...extractContentWarning(note),
         visibility: extractVisibility(note, author.followersId),
         recipientActorUris: extractRecipientActorUris([note], deps.origin),
         attachments,

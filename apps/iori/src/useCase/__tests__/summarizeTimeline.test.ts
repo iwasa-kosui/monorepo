@@ -53,6 +53,8 @@ const makePost = (content: string, options: PostOptions = {}): PostWithAuthor =>
     content,
     createdAt: Instant.orThrow(options.createdAt ?? NOW - 60_000),
     inReplyToUri: null,
+    summary: null,
+    sensitive: false,
     username: Username.parseOrThrow(options.username ?? 'alice'),
     logoUri: undefined,
     liked: false,

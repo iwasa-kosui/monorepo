@@ -4,6 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
+import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
@@ -146,6 +147,7 @@ const create = ({
         content: String(note.content ?? ''),
         authorIdentity,
         inReplyToUri: noteInReplyToUri,
+        ...extractContentWarning(note),
         visibility,
         recipientActorUris,
       });
