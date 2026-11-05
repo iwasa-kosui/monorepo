@@ -278,6 +278,17 @@ describe('createOnCreate', () => {
       expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
     });
 
+    it.each<[string, URL | undefined, string | null]>([
+      ['the reply target', new URL('https://remote.example/p/0'), 'https://remote.example/p/0'],
+      ['null for a Create that is not a reply', undefined, null],
+    ])('passes %s as inReplyToUri when saving to the federated timeline', async (_name, replyTarget, expected) => {
+      const { listener, create, remotePostUpserter } = setup(false, [{ relayId: 'relay-1' }]);
+
+      await listener(createCtx(), create(createNote({ tos: [publicUri] }, replyTarget)));
+
+      expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ inReplyToUri: expected }));
+    });
+
     it('does not fetch the reply thread when saving to the federated timeline', async () => {
       const { listener, create, fetchReplyNotesRecursiveUseCase } = setup(false, [{ relayId: 'relay-1' }]);
 

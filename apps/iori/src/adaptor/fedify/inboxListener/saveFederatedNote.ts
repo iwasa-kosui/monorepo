@@ -27,6 +27,7 @@ export type SaveFederatedNoteInput = Readonly<{
   relayId: RelayId;
   documentLoader: DocumentLoader;
   actorId?: URL;
+  inReplyToUri?: string | null;
 }>;
 
 const extractAttachmentsOrEmpty = async (
@@ -43,7 +44,7 @@ const extractAttachmentsOrEmpty = async (
 
 export const saveFederatedNote = async (
   deps: SaveFederatedNoteDeps,
-  { note, relayId, documentLoader, actorId }: SaveFederatedNoteInput,
+  { note, relayId, documentLoader, actorId, inReplyToUri }: SaveFederatedNoteInput,
 ): Promise<void> => {
   const now = Instant.now();
 
@@ -90,7 +91,7 @@ export const saveFederatedNote = async (
         : author.preferredUsername?.toString(),
       logoUri: authorIcon?.url instanceof URL ? authorIcon.url.href : undefined,
     },
-    inReplyToUri: null,
+    inReplyToUri: inReplyToUri ?? null,
   });
 
   if (!postResult.ok) {

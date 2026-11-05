@@ -37,11 +37,12 @@ export type OnCreateDeps = Readonly<{
 
 const saveForwardedCreate = async (
   deps: OnCreateDeps,
-  { note, actorId, visibility, documentLoader }: Readonly<{
+  { note, actorId, visibility, documentLoader, inReplyToUri }: Readonly<{
     note: Note;
     actorId: URL;
     visibility: Visibility | null;
     documentLoader: DocumentLoader;
+    inReplyToUri: string | null;
   }>,
 ) => {
   if (!Visibility.isVisibleToAnonymous(visibility)) {
@@ -49,12 +50,21 @@ const saveForwardedCreate = async (
     return;
   }
   const relaysResult = await deps.acceptedRelaysResolver.resolve();
-  if (!relaysResult.ok || relaysResult.val.length !== 1) {
+  if (!relaysResult.ok) {
+    getLogger().warn(
+      `Failed to resolve accepted relays for a forwarded Create: ${String(relaysResult.err)} (${note.id?.href})`,
+    );
+    return;
+  }
+  if (relaysResult.val.length !== 1) {
+    getLogger().info(
+      `Not saving a forwarded Create to the federated timeline because the number of accepted relays is not one: ${relaysResult.val.length} (${note.id?.href})`,
+    );
     return;
   }
   const [relay] = relaysResult.val;
 
-  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId });
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId, inReplyToUri });
 };
 
 export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<unknown>, activity: Create) => {
@@ -109,7 +119,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       getLogger().info(
         `Not creating a home timeline item for a Create from an actor no local actor follows; trying to save it to the federated timeline as a relay-forwarded post: ${actorId.href} (${activity.id?.href})`,
       );
-      await saveForwardedCreate(deps, { note: object, actorId, visibility, documentLoader });
+      await saveForwardedCreate(deps, { note: object, actorId, visibility, documentLoader, inReplyToUri });
       return;
     }
   }
