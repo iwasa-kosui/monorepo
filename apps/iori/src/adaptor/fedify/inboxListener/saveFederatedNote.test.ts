@@ -45,6 +45,18 @@ describe('saveFederatedNote', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
+  it('fetches the author and attachments of the Note with the given document loader', async () => {
+    const { deps } = createDeps();
+    const note = createNote();
+    const getAttribution = vi.spyOn(note, 'getAttribution');
+    const getAttachments = vi.spyOn(note, 'getAttachments');
+
+    await saveFederatedNote(deps, { note, relayId, documentLoader });
+
+    expect(getAttribution).toHaveBeenCalledWith({ documentLoader });
+    expect(getAttachments).toHaveBeenCalledWith({ documentLoader });
+  });
+
   it('passes the summary and sensitive flag of the Note to the upserter', async () => {
     const { deps, remotePostUpserter } = createDeps();
     const note = createNote().clone({ summary: 'ネタバレ注意', sensitive: true });

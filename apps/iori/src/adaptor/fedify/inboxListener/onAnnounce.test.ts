@@ -2,7 +2,10 @@ import { type Announce, Document, Note, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 import { createOnAnnounce } from './onAnnounce.ts';
+
+const signedDocumentLoader = vi.fn();
 
 const createNote = (attachments: (Document | URL)[]) =>
   new Note({
@@ -24,10 +27,12 @@ const createActivity = (note: Note) =>
     getObject: vi.fn(async () => note),
   }) as unknown as Announce;
 
-const createCtx = (documentLoader: unknown = vi.fn(), parsedUri: unknown = null) =>
+const createCtx = (documentLoader: unknown = vi.fn(), parsedUri: unknown = null, recipient: string | null = null) =>
   ({
     parseUri: vi.fn(() => parsedUri),
     documentLoader,
+    recipient,
+    getDocumentLoader: vi.fn(async () => signedDocumentLoader),
   }) as never;
 
 const createLocalActivity = (objectUri: string) =>
@@ -118,6 +123,86 @@ describe('createOnAnnounce', () => {
         }),
       }),
     );
+  });
+
+  it('fetches the object of a remote Announce with the document loader of the inbox actor resolver', async () => {
+    const { deps, documentLoader } = createDeps(undefined);
+    const activity = createActivity(createNote([]));
+
+    await createOnAnnounce(deps)(createCtx(), activity);
+
+    expect(activity.getObject).toHaveBeenCalledWith({ documentLoader });
+  });
+
+  it('fetches the object of a relay Announce with the document loader signed by the recipient', async () => {
+    const { deps } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+    const ctx = createCtx(vi.fn(), null, 'kosui');
+    const activity = createActivity(createNote([]));
+
+    await createOnAnnounce(deps)(ctx, activity);
+
+    expect((ctx as { getDocumentLoader: unknown }).getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+    expect(activity.getObject).toHaveBeenCalledWith({ documentLoader: signedDocumentLoader });
+  });
+
+  it('fetches the object of a relay Announce with the document loader signed by the instance actor on the shared inbox', async () => {
+    const { deps } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+    const ctx = createCtx();
+    const activity = createActivity(createNote([]));
+
+    await createOnAnnounce(deps)(ctx, activity);
+
+    expect((ctx as { getDocumentLoader: unknown }).getDocumentLoader).toHaveBeenCalledWith({
+      identifier: INSTANCE_ACTOR_IDENTIFIER,
+    });
+    expect(activity.getObject).toHaveBeenCalledWith({ documentLoader: signedDocumentLoader });
+  });
+
+  it('fetches the object of an unfollowed actor Announce with the signed document loader', async () => {
+    const { deps } = createDeps(undefined, false, [{ relayId: 'relay-1', actorUri: 'https://relay.example/actor' }]);
+    const ctx = createCtx(vi.fn(), null, 'kosui');
+    const activity = createActivity(createNote([]));
+
+    await createOnAnnounce(deps)(ctx, activity);
+
+    expect((ctx as { getDocumentLoader: unknown }).getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+    expect(activity.getObject).toHaveBeenCalledWith({ documentLoader: signedDocumentLoader });
+  });
+
+  it('fetches the author and attachments of a remote Announce with the document loader of the inbox actor resolver', async () => {
+    const { deps, documentLoader } = createDeps(undefined);
+    const note = createNote([]);
+    const getAttribution = vi.spyOn(note, 'getAttribution');
+    const getAttachments = vi.spyOn(note, 'getAttachments');
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(getAttribution).toHaveBeenCalledWith({ documentLoader });
+    expect(getAttachments).toHaveBeenCalledWith({ documentLoader });
+  });
+
+  it('fetches the attachments of a relay Announce with the signed document loader', async () => {
+    const { deps, remotePostUpserter } = createDeps({ status: 'accepted', actorUri: 'https://relay.example/actor' });
+    const note = createNote([]);
+    const getAttachments = vi.spyOn(note, 'getAttachments');
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+    expect(getAttachments).toHaveBeenCalledWith({ documentLoader: signedDocumentLoader });
+  });
+
+  it('fetches the attachments of an unfollowed actor Announce with the signed document loader', async () => {
+    const { deps, remotePostUpserter } = createDeps(undefined, false, [
+      { relayId: 'relay-1', actorUri: 'https://relay.example/actor' },
+    ]);
+    const note = createNote([]);
+    const getAttachments = vi.spyOn(note, 'getAttachments');
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+    expect(getAttachments).toHaveBeenCalledWith({ documentLoader: signedDocumentLoader });
   });
 
   it('passes attachments of a relay Announce to remotePostUpserter', async () => {
@@ -252,7 +337,9 @@ describe('createOnAnnounce', () => {
       throw new Error('load failed');
     });
 
-    await createOnAnnounce(deps)(createCtx(ctxDocumentLoader), createActivity(note));
+    const ctx = { ...(createCtx() as object), getDocumentLoader: vi.fn(async () => ctxDocumentLoader) } as never;
+
+    await createOnAnnounce(deps)(ctx, createActivity(note));
 
     expect(ctxDocumentLoader).toHaveBeenCalled();
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }));
