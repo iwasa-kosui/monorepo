@@ -17,6 +17,7 @@ import { createD1ActorResolverByUserId } from './adaptor/d1/actor/actorResolverB
 import { createD1ActorsResolverByFollowingId } from './adaptor/d1/actor/actorsResolverByFollowingId.ts';
 import { createD1LogoUriUpdatedStore } from './adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from './adaptor/d1/actor/remoteActorCreatedStore.ts';
+import { createD1RemoteActorProfileUpdatedStore } from './adaptor/d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1ArticleResolver } from './adaptor/d1/article/articleResolver.ts';
 import { createD1ArticleBodyResolver } from './adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1Db } from './adaptor/d1/client.ts';
@@ -219,6 +220,7 @@ export const createCloudflareFederationRuntime = async (
       postImageCreatedStore: createD1PostImageCreatedStore(db),
       remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
       logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+      remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
       actorResolverByUri: createD1ActorResolverByUri(db),
     }),
     federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
