@@ -18,10 +18,19 @@ import type {
   DigestSubscription,
   DigestSubscriptionResolverByUserId,
 } from '../../domain/digestSubscription/digestSubscription.ts';
+import type {
+  DigestTopicNotFoundError,
+  DigestTopicParseError,
+  DigestTopicsResolverByUserId,
+  StoredDigestTopic,
+} from '../../domain/digestTopic/digestTopic.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import type { AddDigestTopicUseCase } from '../../useCase/addDigestTopic.ts';
+import type { ChangeDigestTopicEnabledUseCase } from '../../useCase/changeDigestTopicEnabled.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
+import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
@@ -46,6 +55,10 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
   giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
+  digestTopicsResolverByUserId: DigestTopicsResolverByUserId;
+  addDigestTopicUseCase: AddDigestTopicUseCase;
+  editDigestTopicUseCase: EditDigestTopicUseCase;
+  changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -78,9 +91,19 @@ export type IoriDigestRequestResponse = Readonly<{
   replaced: boolean;
 }>;
 
+export type IoriDigestTopicBody = Readonly<{
+  topicKey: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  sortOrder: number;
+  embedded: boolean;
+}>;
+
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
 const digestItemNotFound = { error: 'Digest item not found' } as const;
+const digestTopicNotFound = { error: 'Digest topic not found' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
 const digestDatePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -110,6 +133,15 @@ const toDigestBody = (digest: Digest, topics: ReadonlyArray<DigestTopicEntry>): 
   },
 });
 
+const toTopicBody = (topic: StoredDigestTopic): IoriDigestTopicBody => ({
+  topicKey: topic.topicKey,
+  name: topic.name,
+  description: topic.description,
+  enabled: topic.enabled,
+  sortOrder: topic.sortOrder,
+  embedded: topic.embedding !== null,
+});
+
 const toSubscriptionBody = (subscription: Pick<DigestSubscription, 'enabled'> | undefined) =>
   ({
     subscription: { enabled: subscription?.enabled ?? true },
@@ -133,6 +165,18 @@ const readEnabled = (body: RequestBody): boolean | undefined => {
   return undefined;
 };
 
+const requireSameOriginForCookie = async (c: Context<MastodonAuthEnv>, next: () => Promise<void>) => {
+  if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  await next();
+};
+
+const topicErrorResponse = (c: Context<MastodonAuthEnv>, err: DigestTopicNotFoundError | DigestTopicParseError) =>
+  'type' in err
+    ? c.json(digestTopicNotFound, 404)
+    : c.json({ error: `Validation failed: ${err.message}` }, 400);
+
 const userIdOf = (c: Context<MastodonAuthEnv>): UserId | undefined => getMastodonPrincipal(c)?.userId ?? undefined;
 
 export const createWorkerIoriDigestRouter = ({
@@ -146,6 +190,10 @@ export const createWorkerIoriDigestRouter = ({
   saveDigestSubscriptionUseCase,
   requestDigestUseCase,
   giveDigestItemFeedbackUseCase,
+  digestTopicsResolverByUserId,
+  addDigestTopicUseCase,
+  editDigestTopicUseCase,
+  changeDigestTopicEnabledUseCase,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -208,12 +256,7 @@ export const createWorkerIoriDigestRouter = ({
     })
     .post(
       '/iori/v1/digest-items/:digestItemId/feedback',
-      async (c, next) => {
-        if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
-          return c.json({ error: 'Forbidden' }, 403);
-        }
-        await next();
-      },
+      requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
         const userId = userIdOf(c);
@@ -268,4 +311,57 @@ export const createWorkerIoriDigestRouter = ({
         default:
           return c.json(internalServerError, 500);
       }
-    });
+    })
+    .get('/iori/v1/digest-topics', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const topics = await digestTopicsResolverByUserId.resolve(userId);
+      return topics.ok ? c.json({ topics: topics.val.map(toTopicBody) }) : c.json(internalServerError, 500);
+    })
+    .post('/iori/v1/digest-topics', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const body = await readRequestBody(c);
+      const name = bodyString(body, 'name')?.trim();
+      if (name === undefined) return c.json({ error: 'Validation failed: name' }, 400);
+      const description = bodyString(body, 'description')?.trim();
+      if (description === undefined) return c.json({ error: 'Validation failed: description' }, 400);
+      const added = await addDigestTopicUseCase.run({ userId, name, description });
+      return added.ok ? c.json({ topic: toTopicBody(added.val) }, 201) : topicErrorResponse(c, added.err);
+    })
+    .patch(
+      '/iori/v1/digest-topics/:topicKey',
+      requireSameOriginForCookie,
+      authn.requireUser(writeAccounts),
+      async (c) => {
+        const userId = userIdOf(c);
+        if (userId === undefined) return c.json(invalidToken, 401);
+        const topicKey = c.req.param('topicKey');
+        const body = await readRequestBody(c);
+        const name = bodyString(body, 'name')?.trim();
+        const description = bodyString(body, 'description')?.trim();
+        const enabled = readEnabled(body);
+        if (body.name !== undefined && name === undefined) return c.json({ error: 'Validation failed: name' }, 400);
+        if (body.description !== undefined && description === undefined) {
+          return c.json({ error: 'Validation failed: description' }, 400);
+        }
+        if (body.enabled !== undefined && enabled === undefined) {
+          return c.json({ error: 'Validation failed: enabled' }, 400);
+        }
+        if (name === undefined && description === undefined && enabled === undefined) {
+          return c.json({ error: 'Validation failed: name, description or enabled is required' }, 400);
+        }
+        let updated: StoredDigestTopic | undefined;
+        if (name !== undefined || description !== undefined) {
+          const edited = await editDigestTopicUseCase.run({ userId, topicKey, name, description });
+          if (!edited.ok) return topicErrorResponse(c, edited.err);
+          updated = edited.val;
+        }
+        if (enabled !== undefined) {
+          const changed = await changeDigestTopicEnabledUseCase.run({ userId, topicKey, enabled });
+          if (!changed.ok) return topicErrorResponse(c, changed.err);
+          updated = changed.val;
+        }
+        return updated === undefined ? c.json(internalServerError, 500) : c.json({ topic: toTopicBody(updated) });
+      },
+    );
