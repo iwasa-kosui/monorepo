@@ -610,7 +610,7 @@ job が受け取る secret は、次の2つです。
 
 - 対象の投稿は、`actors.uri` のホストが `baraag.net` か `*.baraag.net` の actor が書いた `posts` の行です。`notbaraag.net` と `baraag.net.example` は対象になりません。`local_actors` に行がある actor は対象にしません。
 - `articles.rootPostId` から参照される投稿は、対象にしません。dry-run の `articles_skipped` は、この投稿の件数です。
-- dry-run の `remote_posts` は、`remote_posts.uri` のホストが対象のドメインの行の件数です。`posts` との差を見るために出します。
+- dry-run の `remote_posts` は、対象の投稿のうち `remote_posts` に行がある投稿の件数です。`posts` との差を見るために出します。
 - actor（`actors`、`remote_actors`）と `follows` の行は、消しません。dry-run の `actors`、`follows_out`（ローカルの actor がフォローしている行）、`follows_in`（ローカルの actor がフォローされている行）、`mutes` は、残る行の件数を確かめるために出します。
 - apply が出す `deleted_posts` と `deleted_timeline_items` は、その回の実行で足した `post.deleted` のイベントと論理削除の件数です。前の実行で消した分は、含みません。
 
@@ -623,7 +623,7 @@ apply は、受信した Delete の処理（`onDelete`）と各 D1 ストアに�
 
 作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-blocked-domain-posts` を dispatch します。
 
-`delete-blocked-domain-posts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。どの文も、対象を毎回 actor から引き直し、足したイベントの有無を確かめます。このため、途中で失敗しても、同じ入力で `delete-blocked-domain-posts` を再実行すれば、最終状態はそろいます。
+`delete-blocked-domain-posts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。どの文も、対象を毎回 actor から引き直し、足したイベントの有無を確かめます。このため、途中で失敗しても、同じ入力で `delete-blocked-domain-posts` を再実行すれば、最終状態はそろいます。ただし、`/query` が全文を1つのトランザクションで実行する場合は、時間切れのたびに全体が巻き戻ります。apply が同じ失敗を繰り返すとき、作業者は再実行を続けず、文を分けて送る変更を検討します。
 
 ## 6. 中断と引き継ぎ
 
