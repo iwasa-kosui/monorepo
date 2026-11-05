@@ -32,6 +32,7 @@ import type {
 } from '../domain/digest/digestMaterial.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
+import type { AllFeedSourcesResolver } from '../domain/feedSource/feedSource.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
 import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
@@ -57,6 +58,8 @@ import type { UserResolver, UserResolverByUsername } from '../domain/user/user.t
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
+import type { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
+import type { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -179,6 +182,9 @@ export type IoriDigestRuntimePorts = Readonly<{
   requestDigestUseCase: RequestDigestUseCase;
   giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
+  allFeedSourcesResolver: AllFeedSourcesResolver;
+  addFeedSourceUseCase: AddFeedSourceUseCase;
+  changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;

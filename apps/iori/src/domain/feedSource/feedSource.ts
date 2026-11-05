@@ -28,6 +28,19 @@ const zodType = z
 const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(zodType);
 export type FeedSource = z.output<typeof zodType>;
 type ParseError = Extract<ReturnType<typeof schema.parse>, { ok: false }>['err'];
+export type FeedSourceParseError = ParseError;
+
+const newFeedSourceZodType = z
+  .object({
+    kind: z.literal('rss'),
+    url: z.url({ protocol: /^https?$/ }),
+    title: z.string().min(1).max(100),
+  })
+  .describe('NewFeedSource');
+const newFeedSourceSchema = Schema.create<z.output<typeof newFeedSourceZodType>, z.input<typeof newFeedSourceZodType>>(
+  newFeedSourceZodType,
+);
+export type NewFeedSource = z.output<typeof newFeedSourceZodType>;
 export type FeedSourceAggregateId = Readonly<{
   feedSourceId: FeedSourceId;
 }>;
@@ -54,6 +67,39 @@ export type FeedSourceFetchFailed = FeedSourceEvent<
   'feedSource.fetchFailed',
   { feedSourceId: FeedSourceId; lastError: string; lastFetchedAt: Instant }
 >;
+export type FeedSourceEnabledChanged = FeedSourceEvent<
+  FeedSource,
+  'feedSource.enabledChanged',
+  { feedSourceId: FeedSourceId; enabled: boolean; changedAt: Instant }
+>;
+
+export type FeedSourceNotFoundError = Readonly<{
+  type: 'FeedSourceNotFoundError';
+  message: string;
+  detail: { feedSourceId: FeedSourceId };
+}>;
+
+export const FeedSourceNotFoundError = {
+  create: (feedSourceId: FeedSourceId): FeedSourceNotFoundError => ({
+    type: 'FeedSourceNotFoundError',
+    message: `The feed source "${feedSourceId}" is not found.`,
+    detail: { feedSourceId },
+  }),
+} as const;
+
+export type FeedSourceAlreadyExistsError = Readonly<{
+  type: 'FeedSourceAlreadyExistsError';
+  message: string;
+  detail: { url: string };
+}>;
+
+export const FeedSourceAlreadyExistsError = {
+  create: (url: string): FeedSourceAlreadyExistsError => ({
+    type: 'FeedSourceAlreadyExistsError',
+    message: `The feed source "${url}" already exists.`,
+    detail: { url },
+  }),
+} as const;
 
 const createFeedSource = (
   payload: Pick<FeedSource, 'kind' | 'url' | 'title'>,
@@ -120,15 +166,29 @@ const recordFetchFailed = (feedSource: FeedSource, lastError: string, now: Insta
   );
 };
 
+const setEnabled = (feedSource: FeedSource, enabled: boolean, now: Instant): FeedSourceEnabledChanged => {
+  const updated: FeedSource = { ...feedSource, enabled };
+  return FeedSourceEvent.create(
+    toAggregateId(updated),
+    updated,
+    'feedSource.enabledChanged',
+    { feedSourceId: updated.feedSourceId, enabled, changedAt: now },
+    now,
+  );
+};
+
 export type FeedSourceCreatedStore = Agg.Store<FeedSourceCreated>;
 export type FeedSourceFetchedStore = Agg.Store<FeedSourceFetched>;
 export type FeedSourceFetchFailedStore = Agg.Store<FeedSourceFetchFailed>;
+export type FeedSourceEnabledChangedStore = Agg.Store<FeedSourceEnabledChanged>;
 export type AllFeedSourcesResolver = Agg.Resolver<void, ReadonlyArray<FeedSource>>;
 export type FeedSourcesResolverByEnabled = Agg.Resolver<{ enabled: boolean }, ReadonlyArray<FeedSource>>;
 
 export const FeedSource = {
   ...schema,
+  parseNew: newFeedSourceSchema.parse,
   createFeedSource,
+  setEnabled,
   recordFetched,
   recordFetchFailed,
   toAggregateId,
