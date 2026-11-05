@@ -25,6 +25,7 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
 export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'actor.created',
   'actor.logoUriUpdated',
+  'actor.profileUpdated',
   'article.created',
   'article.deleted',
   'article.published',
