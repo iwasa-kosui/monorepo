@@ -57,6 +57,10 @@ export type RecommendableArticlesResolverByFetchedSince = Agg.Resolver<
   { fetchedSince: Instant },
   ReadonlyArray<RecommendableArticle>
 >;
+export type RelatedArticlesResolverByEmbedding = Agg.Resolver<
+  { embedding: Float32Array; fetchedSince: Instant; excludingUrl: string; limit: number },
+  ReadonlyArray<RecommendableArticle>
+>;
 
 const inverseNorm = (vector: Float32Array): number => {
   let sum = 0;

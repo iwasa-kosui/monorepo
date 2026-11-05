@@ -67,6 +67,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
       ['domain-events-stats', 'domain-events-stats.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
+      ['ensure-event-archive-bucket', 'ensure-event-archive-bucket.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -270,6 +271,28 @@ it('relays only the fixed prune-federated-posts dry-run notice to the public log
     `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000 postId=12345678-1234-4234-8234-123456789012`,
     `IORI_NOTICE prune-federated-posts mode=apply candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
     ` ${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed event-archive-bucket notices to the public log', async () => {
+  const writes = captureStderr();
+  const head = 'IORI_NOTICE event-archive-bucket';
+  const accepted = [
+    ...['exists', 'created', 'create-conflict', 'verified', 'event-archive-bucket-forbidden'].map(
+      state => `${head} environment=production state=${state}`,
+    ),
+    `${head} environment=staging state=staging-not-running`,
+    `${head} environment=staging state=event-archive-bucket-forbidden`,
+  ];
+  const rejected = [
+    `${head} environment=development state=created`,
+    `${head} environment=production state=deleted`,
+    `${head} environment=production state=created name=iori-production-prd20261102a-event-archive`,
+    `${head} state=created`,
+    `${head} environment=production state=created extra=1`,
+    `${head} environment=production state=forbidden`,
+    ` ${head} environment=production state=created`,
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));

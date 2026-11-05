@@ -28,6 +28,7 @@ const operations = Object.freeze({
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
   'domain-events-stats': 'domain-events-stats.mjs',
   'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
+  'ensure-event-archive-bucket': 'ensure-event-archive-bucket.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -126,6 +127,8 @@ const statsNoticeLine =
   /^IORI_NOTICE domain-events-stats (?:summary total=\d{1,12} oldest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) newest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) older_than_7d=\d{1,12} avg_bytes=\d{1,12} max_bytes=\d{1,12} created_at_skew_actors=\d{1,12}|day=\d{4}-\d{2}-\d{2} count=\d{1,12}|event=[A-Za-z][A-Za-z0-9.]{0,63} count=\d{1,12})$/;
 const pruneNoticeLine =
   /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
+const bucketNoticeLine =
+  /^IORI_NOTICE event-archive-bucket environment=(?:production|staging) state=(?:exists|created|create-conflict|verified|staging-not-running|event-archive-bucket-forbidden)$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -158,7 +161,7 @@ const writeDiagnosticLine = async line => {
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
       && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !statsNoticeLine.test(line)
-      && !pruneNoticeLine.test(line)
+      && !pruneNoticeLine.test(line) && !bucketNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

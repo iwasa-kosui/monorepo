@@ -8,7 +8,16 @@ import type { IoriD1Db } from '../client.ts';
 import { createD1DigestCreatedStore } from '../digest/digestCreatedStore.ts';
 import { createD1DigestExpiredStore } from '../digest/digestExpiredStore.ts';
 import { createD1DigestPushSentStore } from '../digest/digestPushSentStore.ts';
-import { digestItemsTable, digestsTable, digestTrendsTable, domainEventsTable } from '../schema.ts';
+import {
+  digestDeepDivesTable,
+  digestDeepDiveTurnsTable,
+  digestItemsTable,
+  digestsTable,
+  digestTrendsTable,
+  domainEventsTable,
+} from '../schema.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
+import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const recordingDb = () => {
   const batches: unknown[][] = [];
@@ -108,17 +117,71 @@ describe('digest stores', () => {
     ]);
   });
 
-  it('削除ストアは trends、items、digest の順に消して domain event を1回の batch で書く', async () => {
+  it('削除ストアは深掘りの往復、深掘り、trends、items、digest の順に消して domain event を1回の batch で書く', async () => {
     const { db, batches } = recordingDb();
 
     await createD1DigestExpiredStore(db).store(Digest.expire(createDigest().aggregateState, now));
 
     expect(batches).toHaveLength(1);
     expect(batches[0]).toMatchObject([
+      { kind: 'delete', table: digestDeepDiveTurnsTable },
+      { kind: 'delete', table: digestDeepDivesTable },
       { kind: 'delete', table: digestTrendsTable },
       { kind: 'delete', table: digestItemsTable },
       { kind: 'delete', table: digestsTable },
       { kind: 'insert', table: domainEventsTable, values: { eventName: 'digest.expired' } },
     ]);
+  });
+
+  it('削除ストアは、消す digest の深掘りだけを消し、ほかの digest の深掘りを残す', async () => {
+    const fixture = createSqliteD1Fixture();
+    const author = createMastodonSeed(fixture).addLocalActor('kosui');
+    const { sqlite } = fixture;
+    const target = createDigest().aggregateState;
+    const addDigest = (digestId: string, digestDate: string, articleId: string) => {
+      sqlite.prepare(
+        'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+      ).run(articleId, author.actorId, author.userId, null, 'title', 'draft', 1_000, null, null);
+      sqlite.prepare(
+        'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
+      ).run(digestId, author.userId, digestDate, articleId, 2_000, null);
+    };
+    addDigest(target.digestId, '2026-11-05', target.articleId);
+    addDigest('other-digest', '2026-11-04', 'other-article');
+    const addItem = (digestItemId: string, digestId: string, rank: number) =>
+      sqlite.prepare(
+        'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        digestItemId,
+        digestId,
+        `entry-${digestItemId}`,
+        `https://example.com/${digestItemId}`,
+        'T',
+        rank,
+        null,
+        null,
+        null,
+        null,
+      );
+    const addDive = (deepDiveId: string, digestItemId: string) => {
+      sqlite.prepare(
+        'INSERT INTO digest_deep_dives(deepDiveId,userId,digestItemId,articleId,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+      ).run(deepDiveId, author.userId, digestItemId, 'a', 3_000, 3_000);
+      sqlite.prepare(
+        'INSERT INTO digest_deep_dive_turns(turnId,deepDiveId,turnNumber,instruction,resultMarkdown,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(`turn-${deepDiveId}`, deepDiveId, 1, '', '- A', 3_000);
+    };
+    addItem('item-target', target.digestId, 1);
+    addItem('item-other', 'other-digest', 1);
+    addDive('dive-target', 'item-target');
+    addDive('dive-other', 'item-other');
+
+    await createD1DigestExpiredStore(fixture.db).store(Digest.expire(target, now));
+
+    expect(sqlite.prepare('SELECT deepDiveId FROM digest_deep_dives').all()).toEqual([{ deepDiveId: 'dive-other' }]);
+    expect(sqlite.prepare('SELECT deepDiveId FROM digest_deep_dive_turns').all()).toEqual([
+      { deepDiveId: 'dive-other' },
+    ]);
+    expect(sqlite.prepare('SELECT digestItemId FROM digest_items').all()).toEqual([{ digestItemId: 'item-other' }]);
   });
 });

@@ -250,6 +250,10 @@ export type InterestSourceContentChangedStore = Agg.Store<InterestSourceContentC
 export type InterestSourceDeletedStore = Agg.Store<InterestSourceDeleted>;
 export type InterestSourceEmbeddedStore = Agg.Store<InterestSourceEmbedded>;
 export type InterestSourceEmbeddingCopiedStore = Agg.Store<InterestSourceEmbeddingCopied>;
+export type InterestSourceResolverByUserIdAndInterestSourceId = Agg.Resolver<
+  { userId: UserId; interestSourceId: string },
+  InterestSource | undefined
+>;
 export type InterestSourcesResolverByUserIdAndKind = Agg.Resolver<
   { userId: UserId; kind: InterestSourceKind },
   ReadonlyArray<InterestSource>
