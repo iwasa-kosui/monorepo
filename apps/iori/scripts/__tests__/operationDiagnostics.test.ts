@@ -52,6 +52,11 @@ it('pins the operation stage vocabulary', () => {
     'prune-posts',
     'prune-posts-resolve',
     'prune-posts-query',
+    'archive-bucket',
+    'archive-bucket-resolve',
+    'archive-bucket-read',
+    'archive-bucket-create',
+    'archive-bucket-verify',
   ]);
   expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
 });
