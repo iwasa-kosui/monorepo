@@ -74,7 +74,7 @@ export const saveFederatedNote = async (
   }
 
   const contentText = String(note.content ?? '');
-  const authorIdentity = await ActorIdentity.fromFedifyActor(author);
+  const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author for federated timeline: ${note.id.href}`);
     return;
