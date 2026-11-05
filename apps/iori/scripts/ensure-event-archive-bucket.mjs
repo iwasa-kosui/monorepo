@@ -58,17 +58,18 @@ export const ensureEventArchiveBucket = async ({ env, signal, fetchRequest = fet
       throw error;
     }
   };
-  if (environment === 'staging') {
-    const databases = matchesOf(
-      await guarded('archive-bucket-resolve', () => listDatabases(context)),
-      identity.names.d1,
-    );
-    if (databases.length === 0) {
+  const databases = matchesOf(
+    await guarded('archive-bucket-resolve', () => listDatabases(context)),
+    identity.names.d1,
+  );
+  if (databases.length === 0) {
+    if (environment === 'staging') {
       state('staging-not-running');
       return;
     }
-    if (databases.length > 1) throw fail('archive-bucket-resolve', 'resource-ambiguous', 'D1 name is ambiguous.');
+    throw fail('archive-bucket-resolve', 'resource-missing', 'D1 is missing.');
   }
+  if (databases.length > 1) throw fail('archive-bucket-resolve', 'resource-ambiguous', 'D1 name is ambiguous.');
   if (await guarded('archive-bucket-read', readBucket) !== undefined) state('exists');
   else {
     try {

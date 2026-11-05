@@ -566,7 +566,7 @@ job が受け取る secret は、次の2つです。
 
 1. 作業者は、`deploy-iori-worker.yml` を `operation=ensure-event-archive-bucket`、`environment=<production か staging>`、`main_sha=<最新の main の SHA>`、対象の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。`migration_main_sha` は、空にするか `main_sha` と同じ値にします。
 2. 承認者は、job の承認待ちを承認します。
-3. `environment` が `staging` の場合、job は D1 の一覧から `iori-staging-<generation>` を探します。見つからなければ、job は何も作らずに `state=staging-not-running` を出して成功します。同じ名前が2件あれば、job は失敗します。`environment` が `production` の場合、job はこの確認をせず、常に次へ進みます。
+3. `environment` が `staging` の場合、job は D1 の一覧から `iori-staging-<generation>` を探します。見つからなければ、job は何も作らずに `state=staging-not-running` を出して成功します。同じ名前が2件あれば、job は失敗します。`environment` が `production` の場合、job は同じ一覧から `iori-production-<generation>` を探します。見つからなければ、job は何も作らずに `reason=resource-missing` で失敗します。同じ名前が2件あっても、job は失敗します。D1 がちょうど1件あるときだけ、job は次へ進みます。
 4. job は、Cloudflare API でバケットを読みます。バケットがあれば `state=exists` を出します。バケットが無ければ（404）、job はバケットを作って `state=created` を出します。作成の要求が 409 を返した場合、同じ名前のバケットがすでにあるので、job は `state=create-conflict` を出して続けます。
 5. job は、もう一度バケットを読み、名前が期待どおりであることを確かめます。一致すれば `state=verified` を出して成功します。
 
@@ -581,23 +581,23 @@ job が受け取る secret は、次の2つです。
 | `stage`                  | 時点                                                    |
 | ------------------------ | ------------------------------------------------------- |
 | `archive-bucket`         | 入力の検査（environment、account ID、generation）の途中 |
-| `archive-bucket-resolve` | staging の D1 を一覧で探している途中                    |
+| `archive-bucket-resolve` | D1 を一覧で探している途中                               |
 | `archive-bucket-read`    | 最初にバケットを読んでいる途中                          |
 | `archive-bucket-create`  | バケットを作っている途中                                |
 | `archive-bucket-verify`  | 作成後にバケットを読み戻している途中                    |
 
 `reason` には、次の語が出ます。
 
-| `reason`                                     | 意味                                                                                    |
-| -------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `config-invalid`                             | `IORI_ENVIRONMENT`、`CLOUDFLARE_ACCOUNT_ID`、`IORI_GENERATION` の形式が正しくありません |
-| `credentials-missing`                        | account ID か API token が空です                                                        |
-| `api-forbidden`                              | Cloudflare API が 401 か 403 を返しました。API token の権限を確かめます                 |
-| `r2-http-<status>`、`r2-request`、`r2-shape` | API が `<status>` を返したか、要求が失敗したか、応答の形が想定と違います                |
-| `resource-ambiguous`                         | staging の同じ名前の D1 が2件あります                                                   |
-| `resource-missing`                           | 作成した後に読み戻しても、バケットが見つかりません                                      |
-| `identity-mismatch`                          | 読み戻したバケットの名前が、期待する名前と一致しません                                  |
-| `aborted`                                    | 時間切れか中断で止まりました                                                            |
+| `reason`                                     | 意味                                                                                          |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `config-invalid`                             | `IORI_ENVIRONMENT`、`CLOUDFLARE_ACCOUNT_ID`、`IORI_GENERATION` の形式が正しくありません       |
+| `credentials-missing`                        | account ID か API token が空です                                                              |
+| `api-forbidden`                              | Cloudflare API が 401 か 403 を返しました。API token の権限を確かめます                       |
+| `r2-http-<status>`、`r2-request`、`r2-shape` | API が `<status>` を返したか、要求が失敗したか、応答の形が想定と違います                      |
+| `resource-ambiguous`                         | 同じ名前の D1 が2件あります                                                                   |
+| `resource-missing`                           | production の D1 が見つかりません。または、作成した後に読み戻しても、バケットが見つかりません |
+| `identity-mismatch`                          | 読み戻したバケットの名前が、期待する名前と一致しません                                        |
+| `aborted`                                    | 時間切れか中断で止まりました                                                                  |
 
 この operation は、バケットを足す Terraform の変更を merge する前に実行します。作業者は、対象にするすべての generation で `state=verified` を確かめてから、その変更を merge します。順序は、この operation の PR を merge し、operation を dispatch し、その後で Terraform の変更を merge する流れです。
 

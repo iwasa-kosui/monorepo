@@ -37,7 +37,7 @@ const run = async (overrides: Record<string, string> = {}, options: Options = {}
     const text = url.toString();
     calls.push({ method, url: text, body: init.body as string | undefined, init });
     if (method === 'GET' && text.startsWith(`${root}/d1/database?`)) {
-      const items = (options.databases ?? []).map(name => ({
+      const items = (options.databases ?? [`iori-production-${generation}`]).map(name => ({
         name,
         uuid: '1'.repeat(8) + '-1111-4111-8111-' + '1'.repeat(12),
       }));
@@ -90,7 +90,7 @@ describe('ensure-event-archive-bucket', () => {
   it('succeeds without writing when the bucket already exists', async () => {
     const { calls, notices, error } = await run({}, { buckets: [bucketName('production')] });
     expect(error).toBeUndefined();
-    expect(calls.map(call => call.url)).toEqual([
+    expect(calls.map(call => call.url).filter(url => !url.includes('/d1/'))).toEqual([
       `${root}/r2/buckets/${bucketName('production')}`,
       `${root}/r2/buckets/${bucketName('production')}`,
     ]);
@@ -100,7 +100,7 @@ describe('ensure-event-archive-bucket', () => {
   it('creates the bucket with only its name when the first read is 404, then reads it back', async () => {
     const { calls, notices, error, buckets } = await run();
     expect(error).toBeUndefined();
-    expect(methods(calls)).toEqual(['GET', 'POST', 'GET']);
+    expect(methods(calls)).toEqual(['GET', 'GET', 'POST', 'GET']);
     expect(writes(calls)).toHaveLength(1);
     expect(writes(calls)[0].url).toBe(`${root}/r2/buckets`);
     expect(JSON.parse(writes(calls)[0].body!)).toEqual({ name: bucketName('production') });
@@ -115,7 +115,7 @@ describe('ensure-event-archive-bucket', () => {
   it('fails the read back when the create conflicts but the bucket is still missing', async () => {
     const { calls, notices, error } = await run({}, { postStatus: 409, postCreates: false });
     expect(error).toBeDefined();
-    expect(methods(calls)).toEqual(['GET', 'POST', 'GET']);
+    expect(methods(calls)).toEqual(['GET', 'GET', 'POST', 'GET']);
     expect(notices).toEqual([notice('create-conflict')]);
     expect(ensureFailureLines(error)).toEqual([diag('archive-bucket-verify', 'resource-missing')]);
   });
@@ -125,6 +125,12 @@ describe('ensure-event-archive-bucket', () => {
     const notices: string[] = [];
     const fetchRequest = async (url: URL, init: RequestInit) => {
       const method = String(init.method);
+      if (url.toString().includes('/d1/database')) {
+        return json([{
+          name: `iori-production-${generation}`,
+          uuid: '1'.repeat(8) + '-1111-4111-8111-' + '1'.repeat(12),
+        }]);
+      }
       calls.push(method);
       if (method === 'POST') return json(null, 409);
       if (first) {
@@ -142,11 +148,11 @@ describe('ensure-event-archive-bucket', () => {
     expect(notices).toEqual([notice('create-conflict'), notice('verified')]);
   });
   it.each(
-    [['GET', { getStatus: 403 }, 'archive-bucket-read', 1], [
+    [['GET', { getStatus: 403 }, 'archive-bucket-read', 2], [
       'POST',
       { postStatus: 403 },
       'archive-bucket-create',
-      2,
+      3,
     ]] as const,
   )(
     'fails with the fixed forbidden word when %s returns 403',
@@ -172,7 +178,7 @@ describe('ensure-event-archive-bucket', () => {
   });
   it('fails without writing on other create errors', async () => {
     const { calls, notices, error } = await run({}, { postStatus: 500 });
-    expect(methods(calls)).toEqual(['GET', 'POST']);
+    expect(methods(calls)).toEqual(['GET', 'GET', 'POST']);
     expect(notices).toEqual([]);
     expect(ensureFailureLines(error)).toEqual([diag('archive-bucket-create', 'r2-http-500')]);
   });
@@ -208,9 +214,32 @@ describe('ensure-event-archive-bucket', () => {
       expect(notices).toEqual([notice('staging-not-running', 'staging')]);
     },
   );
-  it('does not look at D1 for production', async () => {
-    const { calls } = await run();
-    expect(calls.some(call => call.url.includes('/d1/'))).toBe(false);
+  it('creates the production bucket only when exactly one D1 of the generation exists', async () => {
+    const { calls, notices, error, buckets } = await run({}, { databases: [`iori-production-${generation}`] });
+    expect(error).toBeUndefined();
+    expect(calls[0].url).toContain(`${root}/d1/database?`);
+    expect(methods(calls)).toEqual(['GET', 'GET', 'POST', 'GET']);
+    expect(buckets).toEqual([bucketName('production')]);
+    expect(notices).toEqual([notice('created'), notice('verified')]);
+  });
+  it.each([[[]], [[`iori-staging-${generation}`, 'iori-production-prd20261102b']]])(
+    'fails without touching the bucket when the production D1 is missing (%j)',
+    async (databases) => {
+      const { calls, notices, error } = await run({}, { databases });
+      expect(methods(calls)).toEqual(['GET']);
+      expect(calls[0].url).toContain(`${root}/d1/database?`);
+      expect(writes(calls)).toEqual([]);
+      expect(notices).toEqual([]);
+      expect(ensureFailureLines(error)).toEqual([diag('archive-bucket-resolve', 'resource-missing')]);
+    },
+  );
+  it('fails without touching the bucket when the production D1 is ambiguous', async () => {
+    const name = `iori-production-${generation}`;
+    const { calls, notices, error } = await run({}, { databases: [name, name] });
+    expect(methods(calls)).toEqual(['GET']);
+    expect(writes(calls)).toEqual([]);
+    expect(notices).toEqual([]);
+    expect(ensureFailureLines(error)).toEqual([diag('archive-bucket-resolve', 'resource-ambiguous')]);
   });
   it('fails on an ambiguous staging D1 and on a forbidden D1 listing', async () => {
     const name = `iori-staging-${generation}`;
