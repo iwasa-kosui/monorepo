@@ -5,7 +5,6 @@ import {
   DigestTopic,
   type DigestTopicCreated,
   type DigestTopicCreatedStore,
-  type DigestTopicEmbedded,
   type DigestTopicEmbeddedStore,
   type DigestTopicsResolverByUserId,
   type StoredDigestTopic,
@@ -13,7 +12,7 @@ import {
 import type { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
-import { embedTextsOneByOneOnFailure } from './helper/embedTexts.ts';
+import { embedDigestTopics } from './helper/embedDigestTopics.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ userId: UserId }>;
@@ -59,36 +58,8 @@ const create = ({
       return { created: createdEvents.length, embedded: 0 };
     }
 
-    const vectors = await embedTextsOneByOneOnFailure(
-      textEmbedder,
-      pending.map(DigestTopic.toEmbeddingText),
-      (index, error) => {
-        console.error('iori digest topics: embedding a topic failed.', {
-          topicKey: pending[index]!.topicKey,
-          errorMessage: error.message,
-        });
-      },
-    );
-    if (!vectors.ok) {
-      console.error('iori digest topics: embedding topics failed.', { errorMessage: vectors.err.message });
-      return { created: createdEvents.length, embedded: 0 };
-    }
-    const timestamp = now();
-    const embeddedEvents: DigestTopicEmbedded[] = [];
-    pending.forEach((topic, index) => {
-      const vector = vectors.val[index];
-      if (vector === undefined) return;
-      const event = DigestTopic.embed(topic, Float32Array.from(vector), timestamp);
-      if (event.ok) embeddedEvents.push(event.val);
-      else {
-        console.error('iori digest topics: a topic embedding was rejected.', {
-          topicKey: topic.topicKey,
-          errorMessage: event.err.message,
-        });
-      }
-    });
-    if (embeddedEvents.length > 0) await digestTopicEmbeddedStore.store(...embeddedEvents);
-    return { created: createdEvents.length, embedded: embeddedEvents.length };
+    const embedded = await embedDigestTopics({ textEmbedder, digestTopicEmbeddedStore, now }, pending);
+    return { created: createdEvents.length, embedded };
   };
 
   const run = async ({ userId }: Input): RA<Ok, Err> => {

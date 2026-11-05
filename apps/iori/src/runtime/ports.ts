@@ -31,6 +31,7 @@ import type {
   TimelineLinkTrendsResolverByUserId,
 } from '../domain/digest/digestMaterial.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
+import type { DigestTopicsResolverByUserId } from '../domain/digestTopic/digestTopic.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
@@ -57,6 +58,8 @@ import type { UserResolver, UserResolverByUsername } from '../domain/user/user.t
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
+import type { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
+import type { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
 import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -68,6 +71,7 @@ import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
+import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
@@ -178,6 +182,10 @@ export type IoriDigestRuntimePorts = Readonly<{
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
   giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
+  digestTopicsResolverByUserId: DigestTopicsResolverByUserId;
+  addDigestTopicUseCase: AddDigestTopicUseCase;
+  editDigestTopicUseCase: EditDigestTopicUseCase;
+  changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
