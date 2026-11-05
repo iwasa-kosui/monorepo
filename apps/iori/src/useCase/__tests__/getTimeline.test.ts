@@ -123,6 +123,8 @@ describe('GetTimelineUseCase', () => {
 
       const post: PostWithAuthor = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Hello, timeline!',

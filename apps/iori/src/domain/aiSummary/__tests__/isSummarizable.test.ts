@@ -9,6 +9,8 @@ import { isSummarizable } from '../isSummarizable.ts';
 
 const localPost = (): LocalPost => ({
   type: 'local',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: crypto.randomUUID() as ActorId,
   content: '<p>hello</p>',
@@ -19,6 +21,8 @@ const localPost = (): LocalPost => ({
 
 const remotePost = (visibility: Visibility | null): RemotePost => ({
   type: 'remote',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: crypto.randomUUID() as ActorId,
   content: '<p>hello</p>',

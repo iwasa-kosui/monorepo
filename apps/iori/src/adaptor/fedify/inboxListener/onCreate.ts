@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
@@ -52,6 +53,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       actorIdentity,
       attachments,
       inReplyToUri,
+      ...extractContentWarning(object),
       visibility,
       recipientActorUris,
     }),

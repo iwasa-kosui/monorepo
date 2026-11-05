@@ -66,6 +66,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
       ['domain-events-stats', 'domain-events-stats.mjs'],
+      ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
     ]
   ) {
     expect(text).toContain(`'${name}': '${script}',`);
@@ -243,6 +244,32 @@ it('relays only the fixed domain-events-stats notices to the public log', async 
     'IORI_NOTICE domain-events-stats event=../secret count=1',
     'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
     ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed prune-federated-posts dry-run notice to the public log', async () => {
+  const writes = captureStderr();
+  const head = 'IORI_NOTICE prune-federated-posts mode=dry-run';
+  const reasons = 'local_likes=2 local_emoji=1 home=3 local_repost=0 reply=4 notification=5 article=6';
+  const accepted = [
+    `${head} candidates=12000 ${reasons} to_delete=11980 cutoff_ms=1799395200000`,
+    `${head} candidates=0 local_likes=0 local_emoji=0 home=0 local_repost=0 reply=0 notification=0 article=0 to_delete=0 cutoff_ms=1799395200000`,
+  ];
+  const rejected = [
+    `${head} candidates=1 ${reasons} to_delete=1`,
+    `${head} candidates=1 ${reasons} cutoff_ms=1799395200000`,
+    `${head} candidates=1 local_likes=0 local_emoji=0 home=0 local_repost=0 reply=0 notification=0 to_delete=1 cutoff_ms=1799395200000`,
+    `${head} candidates=1 local_emoji=0 local_likes=0 home=0 local_repost=0 reply=0 notification=0 article=0 to_delete=1 cutoff_ms=1799395200000`,
+    `${head} candidates=-1 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
+    `${head} candidates=1234567890 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
+    `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=0`,
+    `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=01799395200000`,
+    `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=17993952000000000`,
+    `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000 extra=1`,
+    `${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000 postId=12345678-1234-4234-8234-123456789012`,
+    `IORI_NOTICE prune-federated-posts mode=apply candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
+    ` ${head} candidates=1 ${reasons} to_delete=1 cutoff_ms=1799395200000`,
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));

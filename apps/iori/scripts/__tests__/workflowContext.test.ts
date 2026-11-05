@@ -329,6 +329,40 @@ it.each(['deploy-worker', 'put-worker-secrets', 'diagnose-source', 'delete-rehea
     ).toThrow('Protected workflow invocation is invalid.');
   },
 );
+const prunePosts = (overrides: Record<string, string | undefined> = {}) => ({
+  ...env,
+  IORI_ENVIRONMENT: 'production',
+  IORI_GENERATION: 'prd20261102a',
+  IORI_OPERATION: 'prune-federated-posts-dry-run',
+  IORI_MIGRATION_RUN_ID: '',
+  IORI_REPOST_CREATED_BEFORE_MS: '',
+  ...overrides,
+});
+it('accepts prune-federated-posts-dry-run only for production with a generation and no other input', () => {
+  expect(parseWorkflowInvocation(prunePosts())).toMatchObject({
+    operation: 'prune-federated-posts-dry-run',
+    codeSha: env.MAIN_SHA,
+    environment: 'production',
+    generation: 'prd20261102a',
+  });
+  expect(parseWorkflowInvocation(prunePosts({ IORI_REPOST_CREATED_BEFORE_MS: undefined }))).toMatchObject({
+    operation: 'prune-federated-posts-dry-run',
+  });
+  const invalid = [
+    { IORI_ENVIRONMENT: 'staging' },
+    { IORI_GENERATION: '' },
+    { IORI_GENERATION: 'Bad-Generation' },
+    { IORI_MIGRATION_RUN_ID: 'fixture' },
+    { IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) },
+    { IORI_RECOVERY: 'destination_writes_reconciled' },
+    { IORI_REPOST_CREATED_BEFORE_MS: '1700000000000' },
+    { GITHUB_REF: 'refs/heads/feature' },
+    { GITHUB_EVENT_NAME: 'push' },
+  ];
+  for (const given of invalid) {
+    expect(() => parseWorkflowInvocation(prunePosts(given))).toThrow('Protected workflow invocation is invalid.');
+  }
+});
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',

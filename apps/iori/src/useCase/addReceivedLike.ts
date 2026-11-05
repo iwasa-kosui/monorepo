@@ -2,8 +2,9 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
-import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
+import type { RemoteActorCreatedStore, RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
   AlreadyLikedError,
@@ -31,6 +32,7 @@ type ActorIdentity = Readonly<{
   url?: string;
   username?: string;
   logoUri?: string;
+  profile?: RemoteActorProfile;
 }>;
 
 type Input = Readonly<{
@@ -71,6 +73,7 @@ type Deps = Readonly<{
   postResolver: PostResolver;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
@@ -85,6 +88,7 @@ const create = ({
   postResolver,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  remoteActorProfileUpdatedStore,
   actorResolverByUri,
   pushSubscriptionsResolver,
   webPushSender,
@@ -119,6 +123,7 @@ const create = ({
           now,
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          remoteActorProfileUpdatedStore,
           actorResolverByUri,
         })(likerIdentity)),
       RA.andBind('like', ({ actor, likedPostId, likeActivityUri }) => {

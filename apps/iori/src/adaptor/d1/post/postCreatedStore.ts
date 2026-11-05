@@ -40,6 +40,8 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
           content: post.content,
           createdAt: new Date(post.createdAt),
           type: post.type,
+          summary: post.summary,
+          sensitive: post.sensitive,
         });
         const subtypeInsert = post.type === 'local'
           ? db.insert(localPostsTable).values({

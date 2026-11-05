@@ -3,6 +3,8 @@ import { isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
+import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
+import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -232,21 +234,19 @@ const create = ({
           }
 
           // Ensure remote post exists for timeline display
-          const noteAuthorIcon = await author.getIcon();
+          const authorIdentity = await ActorIdentity.fromFedifyActor(author);
+          if (!authorIdentity.ok) {
+            return RA.err(
+              RemoteNoteLookupError.create(objectUri, authorIdentity.err.message),
+            );
+          }
           const remotePostResult = await remotePostUpserter.resolve({
             uri: objectUri,
             content: String(result.content ?? ''),
+            ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),
-            authorIdentity: {
-              uri: author.id.href,
-              inboxUrl: author.inboxId.href,
-              url: author.url instanceof URL ? author.url.href : undefined,
-              username: typeof author.preferredUsername === 'string'
-                ? author.preferredUsername
-                : author.preferredUsername?.toString(),
-              logoUri: noteAuthorIcon?.url instanceof URL ? noteAuthorIcon.url.href : undefined,
-            },
+            authorIdentity: authorIdentity.val,
           });
 
           if (!remotePostResult.ok) {

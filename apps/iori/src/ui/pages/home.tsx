@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
@@ -11,6 +10,7 @@ import { Modal } from '../components/Modal.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
+import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 
 const PullToRefreshIndicator = () => {
   const { pullToRefresh, pullThreshold, timeline } = useTimelineContext();
@@ -670,14 +670,14 @@ const TimelineList = () => {
 };
 
 const ServerTimeline = () => {
-  const [posts, setPosts] = useState<readonly Status[]>([]);
+  const { items: posts, setFirstPage } = usePublicTimeline('local');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchPosts = async () => {
       try {
         const page = await fetchPublicTimeline('local');
-        setPosts(page.items);
+        setFirstPage(page);
       } catch {
         // ignore
       } finally {

@@ -58,6 +58,14 @@ export const remoteActorsTable = sqliteTable('remote_actors', {
   actorId: text('actorId').primaryKey().references(() => actorsTable.actorId),
   url: text('url'),
   username: text('username'),
+  displayName: text('displayName'),
+  summary: text('summary'),
+  headerUri: text('headerUri'),
+  actorType: text('actorType'),
+  manuallyApprovesFollowers: integer('manuallyApprovesFollowers', { mode: 'boolean' }),
+  publishedAt: integer('publishedAt', { mode: 'timestamp_ms' }),
+  fields: text('fields'),
+  emojis: text('emojis'),
 });
 
 export const followsTable = sqliteTable('follows', {
@@ -96,6 +104,8 @@ export const postsTable = sqliteTable('posts', {
   createdAt: timestamp().notNull(),
   type: text('type').notNull(),
   deletedAt: timestamp(),
+  summary: text('summary'),
+  sensitive: integer('sensitive', { mode: 'boolean' }).notNull().default(false),
 }, (table) => [
   index('posts_actor_id_idx').on(table.actorId),
   index('posts_created_at_post_id_idx').on(table.createdAt, table.postId),
