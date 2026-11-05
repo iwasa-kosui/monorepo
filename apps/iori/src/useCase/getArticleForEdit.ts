@@ -4,6 +4,7 @@ import z from 'zod/v4';
 import { ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
 import { type EditableArticleError, resolveEditableArticleWith } from './helper/resolveEditableArticle.ts';
@@ -18,6 +19,7 @@ const Ok = Schema.create(
   z.object({
     title: z.string(),
     markdown: z.string(),
+    updatedAt: Instant.zodType,
   }),
 );
 type Ok = z.infer<typeof Ok.zodType>;
@@ -50,6 +52,7 @@ const create = ({
     return RA.ok({
       title: editable.val.title,
       markdown: body.val.markdown ?? htmlToMarkdown(body.val.publicHtml),
+      updatedAt: body.val.updatedAt,
     });
   };
 

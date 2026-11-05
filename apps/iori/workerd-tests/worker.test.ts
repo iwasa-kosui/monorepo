@@ -398,6 +398,7 @@ describe('iori Worker on workerd', () => {
         title: 'ダイジェスト',
         markdown:
           '## 新着\n\n-   [First](https://example.com/first)（はてなブックマーク 12）  \n    一行目  \n    二行目',
+        updatedAt: 1,
       });
     });
 
@@ -408,7 +409,7 @@ describe('iori Worker on workerd', () => {
       const saved = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: origin },
-        body: JSON.stringify({ title: '編集後のタイトル', markdown }),
+        body: JSON.stringify({ title: '編集後のタイトル', markdown, baseUpdatedAt: 1 }),
       });
       expect(saved.status).toBe(200);
 
@@ -419,7 +420,7 @@ describe('iori Worker on workerd', () => {
       const reopened = await SELF.fetch(`${origin}/api/iori/v1/articles/${articleId}/edit`, {
         headers: { Cookie: cookie },
       });
-      expect(await reopened.json()).toEqual({ title: '編集後のタイトル', markdown });
+      expect(await reopened.json()).toEqual({ title: '編集後のタイトル', markdown, updatedAt: expect.any(Number) });
     });
   });
 });

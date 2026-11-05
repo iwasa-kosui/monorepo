@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import type { ArticleWithDependentsDeletedStore } from '../../../domain/article/article.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -8,6 +8,8 @@ import { runBatch } from '../runBatch.ts';
 import {
   articleBodiesTable,
   articlesTable,
+  digestDeepDivesTable,
+  digestDeepDiveTurnsTable,
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
@@ -18,6 +20,10 @@ export const createD1ArticleWithDependentsDeletedStore = (db: IoriD1Db): Article
   store: async (articleDeleted, bodyDeleted, digestExpired) => {
     const { articleId } = articleDeleted.eventPayload;
     await runBatch(db, [
+      db.delete(digestDeepDiveTurnsTable).where(
+        sql`deepDiveId IN (SELECT deepDiveId FROM digest_deep_dives WHERE articleId = ${articleId})`,
+      ),
+      db.delete(digestDeepDivesTable).where(eq(digestDeepDivesTable.articleId, articleId)),
       ...(digestExpired === undefined ? [] : [
         db.delete(digestTrendsTable).where(eq(digestTrendsTable.digestId, digestExpired.eventPayload.digestId)),
         db.delete(digestItemsTable).where(eq(digestItemsTable.digestId, digestExpired.eventPayload.digestId)),

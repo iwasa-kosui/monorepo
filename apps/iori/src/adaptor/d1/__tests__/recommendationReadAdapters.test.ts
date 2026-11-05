@@ -6,11 +6,18 @@ import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts
 import type { UserId } from '../../../domain/user/userId.ts';
 import { createD1InterestVectorsResolverByUserId } from '../recommendation/interestVectorsResolverByUserId.ts';
 import { createD1RecommendableArticlesResolverByFetchedSince } from '../recommendation/recommendableArticlesResolverByFetchedSince.ts';
+import { createD1RelatedArticlesResolverByEmbedding } from '../recommendation/relatedArticlesResolverByEmbedding.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const vectorOf = (seed: number) => Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => Math.sin(i + seed));
+const angled = (angle: number) => {
+  const embedding = new Float32Array(EMBEDDING_DIMENSIONS);
+  embedding[0] = Math.cos(angle);
+  embedding[1] = Math.sin(angle);
+  return embedding;
+};
 
 const setup = () => {
   const fixture = createSqliteD1Fixture();
@@ -89,7 +96,17 @@ const setup = () => {
     (await createD1RecommendableArticlesResolverByFetchedSince(db).resolve({
       fetchedSince: Instant.orThrow(fetchedSince),
     })).val;
-  return { me, other, addSource, addFeedSource, addEntry, resolveVectors, resolveArticles };
+  const resolveRelated = async (
+    embedding: Float32Array,
+    options: { fetchedSince?: number; excludingUrl?: string; limit?: number } = {},
+  ) =>
+    (await createD1RelatedArticlesResolverByEmbedding(db).resolve({
+      embedding,
+      fetchedSince: Instant.orThrow(options.fetchedSince ?? 0),
+      excludingUrl: options.excludingUrl ?? 'https://excluded.example/none',
+      limit: options.limit ?? 5,
+    })).val;
+  return { me, other, addSource, addFeedSource, addEntry, resolveVectors, resolveArticles, resolveRelated };
 };
 
 describe('InterestVectorsResolverByUserId', () => {
@@ -187,5 +204,64 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
     const { resolveArticles } = setup();
 
     expect(await resolveArticles(0)).toEqual([]);
+  });
+});
+
+describe('RelatedArticlesResolverByEmbedding', () => {
+  it('ページをまたぐ件数でも、類似度が高い上位 limit 件を高い順に返す', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const best = new Map<number, number>([[5, 0.1], [310, 0.2], [640, 0.3], [100, 0.4], [400, 0.5]]);
+    const ids: string[] = [];
+    for (let i = 0; i < 650; i += 1) {
+      ids.push(addEntry(rss, { embedding: angled(best.get(i) ?? 1.2 + (i % 7) * 0.1) }).feedEntryId);
+    }
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([5, 310, 640, 100, 400].map((i) => ids[i]));
+  });
+
+  it('excludingUrl の記事は、正規化した URL が同じものも含めて除く', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const own = addEntry(rss, { embedding: angled(0) });
+    const near = addEntry(rss, { embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0), {
+      excludingUrl: `https://example.com/${own.feedEntryId}/?utm_source=x`,
+    });
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([near.feedEntryId]);
+  });
+
+  it('次元が 1024 でないベクトルの行は飛ばす', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const valid = addEntry(rss, { embedding: angled(0.3) });
+    addEntry(rss, { embedding: float32ToBytes(new Float32Array(8).fill(1)) });
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([valid.feedEntryId]);
+  });
+
+  it('since より前に取得した記事と、推薦の対象でない源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const radar = addFeedSource('thoughtworks_radar');
+    const recent = addEntry(rss, { fetchedAt: 10_000, embedding: angled(0.2) });
+    addEntry(rss, { fetchedAt: 9_999, embedding: angled(0.1) });
+    addEntry(radar, { fetchedAt: 10_000, embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0), { fetchedSince: 10_000 });
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([recent.feedEntryId]);
+  });
+
+  it('記事が無ければ空配列を返す', async () => {
+    const { resolveRelated } = setup();
+
+    expect(await resolveRelated(angled(0))).toEqual([]);
   });
 });
