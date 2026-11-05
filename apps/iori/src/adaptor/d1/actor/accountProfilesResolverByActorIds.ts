@@ -18,6 +18,7 @@ import {
   remoteActorsTable,
   usersTable,
 } from '../schema.ts';
+import { toRemoteActorProfileFields } from './remoteActorProfileColumns.ts';
 
 const toInstant = (value: Date | number | null | undefined): Instant | null => {
   if (value === null || value === undefined) {
@@ -113,6 +114,7 @@ export const createD1AccountProfilesResolverByActorIds = (db: IoriD1Db): Account
             url: row.remote_actors.url ?? undefined,
             username: row.remote_actors.username ?? undefined,
             logoUri: row.actors.logoUri ?? undefined,
+            ...toRemoteActorProfileFields(row.remote_actors),
           },
           stats,
         });

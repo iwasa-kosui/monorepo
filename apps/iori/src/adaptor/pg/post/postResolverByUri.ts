@@ -32,6 +32,8 @@ const getInstance = singleton((): PostResolverByUri => {
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
       visibility: null,
+      summary: null,
+      sensitive: false,
       type: 'remote',
     }));
   };

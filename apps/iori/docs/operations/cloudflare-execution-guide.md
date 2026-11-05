@@ -94,7 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
@@ -512,6 +512,95 @@ job が受け取る secret は、次の2つです。
 `move-unfollowed-reposts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。途中で失敗しても、同じ入力で `move-unfollowed-reposts` を再実行すれば、最終状態はそろいます。
 
 dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。`deletedAt` の条件があるので、段階的に実行しても、同じ repost を二重に処理しません。
+
+#### prune-federated-posts-dry-run で federated の古い remote 投稿の削除対象を数える
+
+`prune-federated-posts-dry-run` は、本番の D1 に SELECT だけを送り、Worker の Cron が消す投稿の件数を事前に数える operation です。apply の operation はありません。削除は Worker の Cron が担当します。
+
+Cron の削除は、Worker の環境変数 `IORI_PRUNE_FEDERATED_POSTS` が `enabled` のときだけ動きます。初期値は `disabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。削除を有効にするには、作業者が template の値を `enabled` に変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
+
+作業者は、`IORI_PRUNE_FEDERATED_POSTS` を `enabled` にする前に、dry-run が出す `candidates` と `to_delete` を確かめます。Cron が1日に消せる投稿は、最大8,000件です。federated で受け取る投稿が1日に8,000件を超えると、消し残しが溜まります。除外理由に当たる古い投稿は、消えずに残ります。Cron は、実行のたびにそれらの投稿を読み直します。このため、除外される件数が多いと、D1 の rows read が増えます。作業者は、有効にした後に、Cloudflare のダッシュボードで D1 の rows read を確かめます。
+
+Cron は3時間ごとに動き、1回で最大1,000件を消します。内訳は、50件ずつ最大20回です。消す投稿は、federated で最後に受け取った時刻から7日より前のリモート投稿で、次の除外理由のどれにも当たらないものです。Cron は `domain_events` に書き込みません。
+
+作業者は、`environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。
+
+この operation は、次の形式の行を出します。
+
+```text
+IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> local_emoji=<n> home=<n> local_repost=<n> reply=<n> notification=<n> article=<n> to_delete=<n> cutoff_ms=<ms>
+```
+
+各ラベルの意味は、次のとおりです。
+
+| ラベル         | 意味                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `candidates`   | federated で最後に受け取った時刻が `cutoff_ms` より前のリモート投稿の件数。投稿の作成時刻は見ません |
+| `local_likes`  | ローカルのユーザーがいいねした投稿の件数                                                            |
+| `local_emoji`  | ローカルのユーザーが絵文字リアクションを付けた投稿の件数                                            |
+| `home`         | ホームタイムラインに、論理削除されていない項目がある投稿の件数                                      |
+| `local_repost` | ローカルのユーザーが repost した投稿の件数                                                          |
+| `reply`        | ローカルの投稿がこの投稿に返信している投稿、またはこの投稿がローカルの投稿への返信である投稿の件数  |
+| `notification` | 通知が指している投稿の件数                                                                          |
+| `article`      | 記事のルートになっている投稿の件数                                                                  |
+| `to_delete`    | どの除外理由にも当たらない投稿の件数。Cron が消す件数の見込みです                                   |
+| `cutoff_ms`    | 実行時刻の7日前を示すミリ秒の epoch                                                                 |
+
+`local_likes` から `article` までは、除外理由ごとの件数です。1件の投稿が複数の除外理由に当たる場合、operation はその投稿を当たる理由すべてで数えます。このため、除外理由の件数の合計は、`candidates` から `to_delete` を引いた値より大きくなることがあります。
+
+#### ensure-event-archive-bucket でドメインイベント退避用の R2 バケットを作る
+
+`ensure-event-archive-bucket` は、ドメインイベントの退避先になる非公開の R2 バケット `iori-<environment>-<generation>-event-archive` を、まだ無いときだけ作る operation です。Terraform の定義にこのバケットを足す変更は、すでにある generation にバケットを作りません。このため、その変更を配備すると、`deploy-worker` の読み戻しがバケットの不在で止まります。作業者は、この operation で先にバケットを作ります。
+
+この operation は、バケットを作る以外のことをしません。バケットの削除も、公開設定も、カスタムドメインも、Worker のコードも、D1 も、Terraform の状態も変えません。作成の要求は、バケット名だけを送ります。`location` と `jurisdiction` は送りません。Terraform の `cloudflare_r2_bucket` も名前だけを指定するので、この operation は同じ指定に合わせています。
+
+job が受け取る secret は、次の2つです。
+
+| job の環境変数          | 元の GitHub secret                 |
+| ----------------------- | ---------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | `CLOUDFLARE_ACCOUNT_ID`            |
+| `CLOUDFLARE_API_TOKEN`  | `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` |
+
+作業者は、dispatch する前に、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` に R2 の書き込み権限があることを確かめます。権限が無い token では、バケットの作成が 403 で失敗します。
+
+手順は次のとおりです。
+
+1. 作業者は、`deploy-iori-worker.yml` を `operation=ensure-event-archive-bucket`、`environment=<production か staging>`、`main_sha=<最新の main の SHA>`、対象の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。`migration_main_sha` は、空にするか `main_sha` と同じ値にします。
+2. 承認者は、job の承認待ちを承認します。
+3. `environment` が `staging` の場合、job は D1 の一覧から `iori-staging-<generation>` を探します。見つからなければ、job は何も作らずに `state=staging-not-running` を出して成功します。同じ名前が2件あれば、job は失敗します。`environment` が `production` の場合、job は同じ一覧から `iori-production-<generation>` を探します。見つからなければ、job は何も作らずに `reason=resource-missing` で失敗します。同じ名前が2件あっても、job は失敗します。D1 がちょうど1件あるときだけ、job は次へ進みます。
+4. job は、Cloudflare API でバケットを読みます。バケットがあれば `state=exists` を出します。バケットが無ければ（404）、job はバケットを作って `state=created` を出します。作成の要求が 409 を返した場合、同じ名前のバケットがすでにあるので、job は `state=create-conflict` を出して続けます。
+5. job は、もう一度バケットを読み、名前が期待どおりであることを確かめます。一致すれば `state=verified` を出して成功します。
+
+同じ入力で何度でも dispatch し直せます。バケットがあれば、job は書き込みを送りません。
+
+公開ログに出る `IORI_NOTICE` の行は、`IORI_NOTICE event-archive-bucket environment=<production か staging> state=<状態>` の形です。`state` には、`exists`、`created`、`create-conflict`、`verified`、`staging-not-running`、`event-archive-bucket-forbidden` のどれかが入ります。
+
+`event-archive-bucket-forbidden` は、Cloudflare API が、バケットの読み取りか作成の要求に 401 か 403 を返したことを示します。この語が出たとき、作業者は、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN` の権限を確かめます。具体的には、token に R2 の書き込み権限があるか、token が有効かを見ます。権限を足した後に、同じ入力で dispatch し直します。
+
+失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を出します。`stage` は次のとおりです。
+
+| `stage`                  | 時点                                                    |
+| ------------------------ | ------------------------------------------------------- |
+| `archive-bucket`         | 入力の検査（environment、account ID、generation）の途中 |
+| `archive-bucket-resolve` | D1 を一覧で探している途中                               |
+| `archive-bucket-read`    | 最初にバケットを読んでいる途中                          |
+| `archive-bucket-create`  | バケットを作っている途中                                |
+| `archive-bucket-verify`  | 作成後にバケットを読み戻している途中                    |
+
+`reason` には、次の語が出ます。
+
+| `reason`                                     | 意味                                                                                          |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `config-invalid`                             | `IORI_ENVIRONMENT`、`CLOUDFLARE_ACCOUNT_ID`、`IORI_GENERATION` の形式が正しくありません       |
+| `credentials-missing`                        | account ID か API token が空です                                                              |
+| `api-forbidden`                              | Cloudflare API が 401 か 403 を返しました。API token の権限を確かめます                       |
+| `r2-http-<status>`、`r2-request`、`r2-shape` | API が `<status>` を返したか、要求が失敗したか、応答の形が想定と違います                      |
+| `resource-ambiguous`                         | 同じ名前の D1 が2件あります                                                                   |
+| `resource-missing`                           | production の D1 が見つかりません。または、作成した後に読み戻しても、バケットが見つかりません |
+| `identity-mismatch`                          | 読み戻したバケットの名前が、期待する名前と一致しません                                        |
+| `aborted`                                    | 時間切れか中断で止まりました                                                                  |
+
+この operation は、バケットを足す Terraform の変更を merge する前に実行します。作業者は、対象にするすべての generation で `state=verified` を確かめてから、その変更を merge します。順序は、この operation の PR を merge し、operation を dispatch し、その後で Terraform の変更を merge する流れです。
 
 #### delete-blocked-domain-posts でブロックしたドメインの保存済みの投稿を消す
 

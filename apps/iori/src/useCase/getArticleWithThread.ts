@@ -5,6 +5,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostWithAuthor, type ThreadResolver } from '../domain/post/post.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
@@ -20,7 +21,7 @@ const Ok = Schema.create(
   z.object({
     article: Article.zodType,
     thread: z.array(z.custom<PostWithAuthor>()),
-    body: z.object({ html: z.string() }).optional(),
+    body: z.object({ html: z.string(), updatedAt: Instant.zodType }).optional(),
   }),
 );
 type Ok = z.infer<typeof Ok.zodType>;
@@ -66,7 +67,7 @@ const create = ({
             return RA.err(ArticleNotFoundError.create(article.articleId));
           }
           const html = article.status === 'published' ? body.val.publicHtml : body.val.privateHtml;
-          return RA.ok({ article, thread: [], body: { html } });
+          return RA.ok({ article, thread: [], body: { html, updatedAt: body.val.updatedAt } });
         }
         const threadData = await threadResolver.resolve({
           postId: article.rootPostId,

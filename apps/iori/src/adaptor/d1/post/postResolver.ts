@@ -8,7 +8,14 @@ import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 import { toVisibility } from './toVisibility.ts';
 
 const toPost = (row: {
-  posts: { postId: string; actorId: string; content: string; createdAt: Date };
+  posts: {
+    postId: string;
+    actorId: string;
+    content: string;
+    createdAt: Date;
+    summary: string | null;
+    sensitive: boolean;
+  };
   local_posts: { userId: string; inReplyToUri: string | null } | null;
   remote_posts: { uri: string; inReplyToUri: string | null; visibility: string | null } | null;
 }): Post => {
@@ -20,6 +27,8 @@ const toPost = (row: {
       createdAt: row.posts.createdAt.getTime(),
       userId: row.local_posts.userId,
       inReplyToUri: row.local_posts.inReplyToUri,
+      summary: row.posts.summary,
+      sensitive: row.posts.sensitive,
       type: 'local',
     });
   }
@@ -32,6 +41,8 @@ const toPost = (row: {
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
       visibility: toVisibility(row.remote_posts.visibility),
+      summary: row.posts.summary,
+      sensitive: row.posts.sensitive,
       type: 'remote',
     });
   }

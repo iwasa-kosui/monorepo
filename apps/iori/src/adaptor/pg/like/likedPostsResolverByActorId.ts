@@ -199,6 +199,8 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
             createdAt: row.posts.createdAt.getTime(),
             userId: row.local_posts.userId,
             inReplyToUri: row.local_posts.inReplyToUri,
+            summary: null,
+            sensitive: false,
             type: 'local',
           });
           return {
@@ -223,6 +225,8 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
             visibility: null,
+            summary: null,
+            sensitive: false,
             type: 'remote',
           });
           return {

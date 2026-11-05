@@ -57,6 +57,14 @@ export const remoteActorsTable = sqliteTable('remote_actors', {
   actorId: text('actorId').primaryKey().references(() => actorsTable.actorId),
   url: text('url'),
   username: text('username'),
+  displayName: text('displayName'),
+  summary: text('summary'),
+  headerUri: text('headerUri'),
+  actorType: text('actorType'),
+  manuallyApprovesFollowers: integer('manuallyApprovesFollowers', { mode: 'boolean' }),
+  publishedAt: integer('publishedAt', { mode: 'timestamp_ms' }),
+  fields: text('fields'),
+  emojis: text('emojis'),
 });
 
 export const followsTable = sqliteTable('follows', {
@@ -95,6 +103,8 @@ export const postsTable = sqliteTable('posts', {
   createdAt: timestamp().notNull(),
   type: text('type').notNull(),
   deletedAt: timestamp(),
+  summary: text('summary'),
+  sensitive: integer('sensitive', { mode: 'boolean' }).notNull().default(false),
 }, (table) => [
   index('posts_actor_id_idx').on(table.actorId),
   index('posts_created_at_post_id_idx').on(table.createdAt, table.postId),
@@ -523,6 +533,36 @@ export const digestItemsTable = sqliteTable('digest_items', {
   uniqueIndex('digest_items_digest_id_rank_unique').on(table.digestId, table.rank),
 ]);
 
+export const digestDeepDivesTable = sqliteTable('digest_deep_dives', {
+  deepDiveId: text('deepDiveId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  digestItemId: text('digestItemId').notNull(),
+  articleId: text('articleId').notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('digest_deep_dives_digest_item_id_unique').on(table.digestItemId),
+]);
+
+export const digestDeepDiveTurnsTable = sqliteTable('digest_deep_dive_turns', {
+  turnId: text('turnId').primaryKey(),
+  deepDiveId: text('deepDiveId').notNull().references(() => digestDeepDivesTable.deepDiveId),
+  turnNumber: integer('turnNumber').notNull(),
+  instruction: text('instruction').notNull(),
+  resultMarkdown: text('resultMarkdown').notNull(),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('digest_deep_dive_turns_deep_dive_id_turn_number_unique').on(table.deepDiveId, table.turnNumber),
+]);
+
+export const digestDeepDiveUsagesTable = sqliteTable('digest_deep_dive_usages', {
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  day: text('day').notNull(),
+  count: integer('count').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.day] }),
+]);
+
 export const digestTrendsTable = sqliteTable('digest_trends', {
   digestId: text('digestId').notNull().references(() => digestsTable.digestId),
   kind: text('kind').notNull(),
@@ -602,6 +642,9 @@ export const schema = {
   digestTopicsTable,
   digestRequestUsagesTable,
   digestItemsTable,
+  digestDeepDivesTable,
+  digestDeepDiveTurnsTable,
+  digestDeepDiveUsagesTable,
   digestTrendsTable,
   interestSourcesTable,
 } as const;

@@ -5,6 +5,8 @@ const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
 const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
 const deleteBlockedDomainOperations = ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'];
+const pruneOperations = ['prune-federated-posts-dry-run'];
+const bucketOperations = ['ensure-event-archive-bucket'];
 const shaPattern = /^[a-f0-9]{40}$/;
 const generationPattern = /^[a-z][a-z0-9]{7,19}$/;
 const runIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
@@ -67,14 +69,16 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
       'delete-rehearsal-d1',
       ...moveOperations,
       ...deleteBlockedDomainOperations,
+      ...pruneOperations,
+      ...bucketOperations,
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (['delete-rehearsal-d1', ...moveOperations, ...deleteBlockedDomainOperations].includes(operation)
+    || (['delete-rehearsal-d1', ...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations].includes(operation)
       && env.IORI_ENVIRONMENT !== 'production')
     || (['diagnose-source', 'delete-rehearsal-d1'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
-      : [...moveOperations, ...deleteBlockedDomainOperations].includes(operation)
+      : [...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations, ...bucketOperations].includes(operation)
       ? !generationPattern.test(env.IORI_GENERATION ?? '') || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))

@@ -28,6 +28,8 @@ const operations = Object.freeze({
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
   'delete-blocked-domain-posts-dry-run': 'delete-blocked-domain-posts.mjs',
   'delete-blocked-domain-posts': 'delete-blocked-domain-posts.mjs',
+  'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
+  'ensure-event-archive-bucket': 'ensure-event-archive-bucket.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -124,6 +126,10 @@ const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
 const deleteBlockedDomainNoticeLine =
   /^IORI_NOTICE delete-blocked-domain-posts (?:mode=dry-run domain=baraag\.net posts=\d{1,9} remote_posts=\d{1,9} timeline_items=\d{1,9} federated_items=\d{1,9} reposts=\d{1,9} likes=\d{1,9} emoji_reacts=\d{1,9} notifications=\d{1,9} orphan_repost_notifications=\d{1,9} images=\d{1,9} articles_skipped=\d{1,9} actors=\d{1,9} follows_out=\d{1,9} follows_in=\d{1,9} mutes=\d{1,9}|mode=apply deleted_posts=\d{1,9} deleted_timeline_items=\d{1,9})$/;
+const pruneNoticeLine =
+  /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
+const bucketNoticeLine =
+  /^IORI_NOTICE event-archive-bucket environment=(?:production|staging) state=(?:exists|created|create-conflict|verified|staging-not-running|event-archive-bucket-forbidden)$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -155,8 +161,8 @@ const writeDiagnosticLine = async line => {
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
-      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line)
-      && !deleteBlockedDomainNoticeLine.test(line)
+      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !pruneNoticeLine.test(line)
+      && !bucketNoticeLine.test(line) && !deleteBlockedDomainNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

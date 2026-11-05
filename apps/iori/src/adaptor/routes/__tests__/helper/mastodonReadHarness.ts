@@ -44,6 +44,7 @@ import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverBy
 import { createD1ActorsResolverByFollowerId } from '../../../d1/actor/actorsResolverByFollowerId.ts';
 import { createD1LogoUriUpdatedStore } from '../../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../../d1/actor/remoteActorCreatedStore.ts';
+import { createD1RemoteActorProfileUpdatedStore } from '../../../d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1AiTranslationUsageRecorder } from '../../../d1/aiTranslation/aiTranslationUsageRecorder.ts';
 import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTranslationStore.ts';
@@ -177,6 +178,7 @@ export const setupReadApi = (
   const notificationsResolverByPage = createD1NotificationsResolverByPage(db);
   const remoteActorCreatedStore = createD1RemoteActorCreatedStore(db);
   const logoUriUpdatedStore = createD1LogoUriUpdatedStore(db);
+  const remoteActorProfileUpdatedStore = createD1RemoteActorProfileUpdatedStore(db);
   const actorResolverByUri = createD1ActorResolverByUri(db);
   const federation = {
     sendActivity: vi.fn(async () => undefined),
@@ -324,6 +326,7 @@ export const setupReadApi = (
               postImageCreatedStore: createD1PostImageCreatedStore(db),
               remoteActorCreatedStore,
               logoUriUpdatedStore,
+              remoteActorProfileUpdatedStore,
               actorResolverByUri,
             }),
             timelineItemCreatedStore,
@@ -398,6 +401,7 @@ export const setupReadApi = (
             remoteActorLookup,
             remoteActorCreatedStore,
             logoUriUpdatedStore,
+            remoteActorProfileUpdatedStore,
             actorResolverByUri,
           }),
         }),
@@ -484,6 +488,8 @@ export const setupReadApi = (
           }),
           requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
             .requestDigest,
+          deepDiveDigestItemUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
+            .deepDiveDigestItem,
           giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
             articleResolver: createD1ArticleResolver(db),
             digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),

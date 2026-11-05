@@ -21,6 +21,14 @@ export const OPERATION_STAGES = Object.freeze([
   'delete-posts',
   'delete-posts-resolve',
   'delete-posts-query',
+  'prune-posts',
+  'prune-posts-resolve',
+  'prune-posts-query',
+  'archive-bucket',
+  'archive-bucket-resolve',
+  'archive-bucket-read',
+  'archive-bucket-create',
+  'archive-bucket-verify',
 ]);
 export const operationFailureLines = (stage, error) => {
   const stageWord = OPERATION_STAGES.includes(stage) ? stage : 'unclassified';

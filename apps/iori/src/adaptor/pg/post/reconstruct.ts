@@ -38,6 +38,8 @@ export const reconstructPost = (row: PostRow): Post => {
       createdAt: row.posts.createdAt.getTime(),
       userId: row.local_posts.userId,
       inReplyToUri: row.local_posts.inReplyToUri,
+      summary: null,
+      sensitive: false,
       type: 'local',
     });
   }
@@ -51,6 +53,8 @@ export const reconstructPost = (row: PostRow): Post => {
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
       visibility: null,
+      summary: null,
+      sensitive: false,
       type: 'remote',
     });
   }
