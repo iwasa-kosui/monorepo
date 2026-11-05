@@ -574,6 +574,16 @@ describe('createWorkerIoriArticlesRouter', () => {
       expect(resolveThread).not.toHaveBeenCalled();
     });
 
+    it('body に本文の updatedAt（ms）を含める', async () => {
+      const { app, article, auth } = createBodyApp('draft');
+
+      const response = await app.request(`${articlesPath}/${article.articleId}`, {
+        headers: { Cookie: auth.cookieFor(authorUserId) },
+      });
+
+      await expect(response.json()).resolves.toMatchObject({ body: { updatedAt: createdAt } });
+    });
+
     it('匿名の published は public_html を body として返す', async () => {
       const { app, article } = createBodyApp('published');
 

@@ -332,6 +332,39 @@ it('accepts prune-federated-posts-dry-run only for production with a generation 
     expect(() => parseWorkflowInvocation(prunePosts(given))).toThrow('Protected workflow invocation is invalid.');
   }
 });
+const ensureBucket = (overrides: Record<string, string | undefined> = {}) => ({
+  ...env,
+  IORI_ENVIRONMENT: 'production',
+  IORI_GENERATION: 'prd20261102a',
+  IORI_OPERATION: 'ensure-event-archive-bucket',
+  IORI_MIGRATION_RUN_ID: '',
+  IORI_REPOST_CREATED_BEFORE_MS: '',
+  ...overrides,
+});
+it('accepts ensure-event-archive-bucket for production and staging with a generation and no other input', () => {
+  for (const environment of ['production', 'staging']) {
+    expect(parseWorkflowInvocation(ensureBucket({ IORI_ENVIRONMENT: environment }))).toMatchObject({
+      operation: 'ensure-event-archive-bucket',
+      codeSha: env.MAIN_SHA,
+      environment,
+      generation: 'prd20261102a',
+    });
+  }
+  const invalid = [
+    { IORI_ENVIRONMENT: 'development' },
+    { IORI_GENERATION: '' },
+    { IORI_GENERATION: 'Bad-Generation' },
+    { IORI_MIGRATION_RUN_ID: 'fixture' },
+    { IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) },
+    { IORI_RECOVERY: 'destination_writes_reconciled' },
+    { IORI_REPOST_CREATED_BEFORE_MS: '1700000000000' },
+    { GITHUB_REF: 'refs/heads/feature' },
+    { GITHUB_EVENT_NAME: 'push' },
+  ];
+  for (const given of invalid) {
+    expect(() => parseWorkflowInvocation(ensureBucket(given))).toThrow('Protected workflow invocation is invalid.');
+  }
+});
 const pushIdentity = {
   environment: 'production',
   generation: 'prd20261102a',

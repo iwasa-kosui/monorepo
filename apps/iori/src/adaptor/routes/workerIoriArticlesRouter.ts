@@ -13,6 +13,7 @@ import {
   type DigestResolverByArticleId,
   SUMMARY_DIGEST_TOPIC_KEY,
 } from '../../domain/digest/digest.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
@@ -61,7 +62,11 @@ const invalidArticleId = { error: 'Invalid article ID' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeStatuses = Scope.orThrow('write:statuses');
 const createArticleBody = z.object({ rootPostId: PostId.zodType, title: z.string().min(1).max(200) });
-const editArticleBody = z.object({ title: z.string(), markdown: z.string().min(1).max(100_000) });
+const editArticleBody = z.object({
+  title: z.string(),
+  markdown: z.string().min(1).max(100_000),
+  baseUpdatedAt: Instant.zodType,
+});
 
 const userIdOf = (c: Context<MastodonAuthEnv>): UserId | undefined => getMastodonPrincipal(c)?.userId ?? undefined;
 
@@ -149,7 +154,9 @@ export const createWorkerIoriArticlesRouter = ({
       return c.json({
         article: result.val.article,
         thread: result.val.thread.map((post) => ({ ...post, content: sanitizePostContent(post.content) })),
-        ...(result.val.body === undefined ? {} : { body: { html: sanitizeArticleBody(result.val.body.html) } }),
+        ...(result.val.body === undefined
+          ? {}
+          : { body: { html: sanitizeArticleBody(result.val.body.html), updatedAt: result.val.body.updatedAt } }),
         ...(digest === undefined ? {} : { digest }),
       });
     })
@@ -236,7 +243,13 @@ export const createWorkerIoriArticlesRouter = ({
       const articleId = ArticleId.parse(c.req.param('articleId'));
       if (!articleId.ok) return c.json(invalidArticleId, 400);
       const result = await getArticleForEditUseCase.run({ userId, articleId: articleId.val });
-      if (result.ok) return c.json({ title: result.val.title, markdown: result.val.markdown });
+      if (result.ok) {
+        return c.json({
+          title: result.val.title,
+          markdown: result.val.markdown,
+          updatedAt: result.val.updatedAt,
+        });
+      }
       if (result.err.type === 'ArticleNotFoundError') return c.json({ error: result.err.message }, 404);
       return c.json({ error: result.err.message }, 409);
     })

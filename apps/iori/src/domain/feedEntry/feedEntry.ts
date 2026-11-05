@@ -130,6 +130,7 @@ export type FeedEntryBookmarkCountUpdatedStore = Agg.Store<FeedEntryBookmarkCoun
 export type FeedEntryEmbeddedStore = Agg.Store<FeedEntryEmbedded>;
 export type FeedEntryExpiredStore = Agg.Store<FeedEntryExpired>;
 export type FeedEntryEmbeddingResolverByFeedEntryId = Agg.Resolver<string, Float32Array | undefined>;
+export type FeedEntryResolverByFeedEntryId = Agg.Resolver<string, FeedEntry | undefined>;
 export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<
   { feedSourceId: FeedSourceId; guids: ReadonlyArray<string> },
   ReadonlyArray<FeedEntry>

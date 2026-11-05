@@ -1,4 +1,5 @@
 import { type Context, Hono } from 'hono';
+import { z } from 'zod/v4';
 
 import {
   type Digest,
@@ -14,6 +15,7 @@ import type {
   HatenaTrendsResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
 } from '../../domain/digest/digestMaterial.ts';
+import { DIGEST_DEEP_DIVE_MAX_TURNS, DigestDeepDive } from '../../domain/digestDeepDive/digestDeepDive.ts';
 import type {
   DigestSubscription,
   DigestSubscriptionResolverByUserId,
@@ -30,6 +32,7 @@ import type { UserId } from '../../domain/user/userId.ts';
 import type { AddDigestTopicUseCase } from '../../useCase/addDigestTopic.ts';
 import type { ChangeDigestTopicEnabledUseCase } from '../../useCase/changeDigestTopicEnabled.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
+import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem.ts';
 import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
@@ -59,6 +62,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   addDigestTopicUseCase: AddDigestTopicUseCase;
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -100,12 +104,26 @@ export type IoriDigestTopicBody = Readonly<{
   embedded: boolean;
 }>;
 
+export type IoriDigestDeepDiveResponse = Readonly<{
+  markdown: string;
+  updatedAt: number;
+  turnNumber: number;
+  turnsLeft: number;
+  dailyRemaining: number;
+}>;
+
+const deepDiveRequestBody = z.object({
+  instruction: DigestDeepDive.instructionZodType.optional(),
+  baseUpdatedAt: Instant.zodType,
+});
+
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
 const digestItemNotFound = { error: 'Digest item not found' } as const;
 const digestTopicNotFound = { error: 'Digest topic not found' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
+const writeStatuses = Scope.orThrow('write:statuses');
 const digestDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 const toTrendBody = ({ rank, url, title, count }: DigestTrend): DigestTrendBody => ({ rank, url, title, count });
@@ -194,6 +212,7 @@ export const createWorkerIoriDigestRouter = ({
   addDigestTopicUseCase,
   editDigestTopicUseCase,
   changeDigestTopicEnabledUseCase,
+  deepDiveDigestItemUseCase,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -277,6 +296,67 @@ export const createWorkerIoriDigestRouter = ({
             return c.json(digestItemNotFound, 404);
           case 'DigestArticlePublishedError':
             return c.json({ error: 'Digest already published' }, 409);
+          default:
+            return c.json(internalServerError, 500);
+        }
+      },
+    )
+    .post(
+      '/iori/v1/digest-items/:digestItemId/deep-dive',
+      async (c, next) => {
+        if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
+          return c.json({ error: 'Forbidden' }, 403);
+        }
+        await next();
+      },
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const userId = userIdOf(c);
+        if (userId === undefined) return c.json(invalidToken, 401);
+        const digestItemId = DigestItemId.parse(c.req.param('digestItemId'));
+        if (!digestItemId.ok) return c.json(digestItemNotFound, 404);
+        const body = deepDiveRequestBody.safeParse(await readRequestBody(c));
+        if (!body.success) {
+          return c.json({
+            error: `Validation failed: ${body.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
+          }, 400);
+        }
+        const dived = await deepDiveDigestItemUseCase.run({
+          userId,
+          digestItemId: digestItemId.val,
+          instruction: body.data.instruction ?? '',
+          baseUpdatedAt: body.data.baseUpdatedAt,
+        });
+        if (dived.ok) {
+          const { markdown, updatedAt, turnNumber, turnsLeft, dailyRemaining } = dived.val;
+          return c.json(
+            { markdown, updatedAt, turnNumber, turnsLeft, dailyRemaining } satisfies IoriDigestDeepDiveResponse,
+          );
+        }
+        const { err } = dived;
+        if (!('type' in err)) return c.json(internalServerError, 500);
+        switch (err.type) {
+          case 'DigestItemNotFoundError':
+            return c.json(digestItemNotFound, 404);
+          case 'ArticleNotFoundError':
+            return c.json(digestItemNotFound, 404);
+          case 'ArticleInvalidStatusError':
+            return c.json({ error: 'Digest already published' }, 409);
+          case 'ArticleNotEditableError':
+            return c.json({ error: err.message }, 409);
+          case 'DigestDeepDiveConflictError':
+            return c.json({ error: err.message }, 409);
+          case 'DigestDeepDiveTurnLimitError':
+            return c.json({ error: `A deep dive accepts at most ${DIGEST_DEEP_DIVE_MAX_TURNS} turns` }, 409);
+          case 'DigestDeepDiveLimitError':
+            c.header('Retry-After', String(err.retryAfterSeconds));
+            return c.json({ error: err.message }, 429);
+          case 'DigestItemNotInBodyError':
+            return c.json({ error: err.message }, 422);
+          case 'DigestDeepDiveTimeoutError':
+            return c.json({ error: err.message }, 504);
+          case 'DigestDeepDiveGenerationFailedError':
+            return c.json({ error: err.message }, 502);
           default:
             return c.json(internalServerError, 500);
         }

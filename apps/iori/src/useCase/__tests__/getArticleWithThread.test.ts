@@ -145,6 +145,18 @@ describe('GetArticleWithThreadUseCase', () => {
       expect(deps.resolveThread).not.toHaveBeenCalled();
     });
 
+    it('body に本文の updatedAt を含める', async () => {
+      const article = createBodyArticle('draft');
+      const body = createBody(article);
+
+      const result = await GetArticleWithThreadUseCase.create(createBodyDeps(article, body)).run({
+        articleId: article.articleId,
+        viewerUserId: authorUserId,
+      });
+
+      expect(result).toMatchObject({ ok: true, val: { body: { updatedAt: body.updatedAt } } });
+    });
+
     it('作者は unpublished の private_html を取得する', async () => {
       const article = createBodyArticle('unpublished');
       const deps = createBodyDeps(article, createBody(article));

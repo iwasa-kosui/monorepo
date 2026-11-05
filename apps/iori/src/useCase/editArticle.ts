@@ -11,7 +11,7 @@ import {
   type ArticleWithBodyEditedStore,
 } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
-import { ArticleBody } from '../domain/articleBody/articleBody.ts';
+import { ArticleBody, ArticleBodyConflictError } from '../domain/articleBody/articleBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
@@ -23,6 +23,7 @@ type Input = Readonly<{
   articleId: ArticleId;
   title: string;
   markdown: string;
+  baseUpdatedAt: Instant;
 }>;
 
 const Ok = Schema.create(
@@ -33,7 +34,7 @@ const Ok = Schema.create(
 );
 type Ok = z.infer<typeof Ok.zodType>;
 
-type Err = EditableArticleError | ArticleParseError;
+type Err = EditableArticleError | ArticleParseError | ArticleBodyConflictError;
 
 export type EditArticleUseCase = UseCase<Input, Ok, Err>;
 
@@ -50,11 +51,11 @@ const create = ({
 }: Deps): EditArticleUseCase => {
   const resolveEditableArticle = resolveEditableArticleWith(articleResolver);
 
-  const run = async ({ userId, articleId, title, markdown }: Input): Promise<Result<Ok, Err>> => {
+  const run = async ({ userId, articleId, title, markdown, baseUpdatedAt }: Input): Promise<Result<Ok, Err>> => {
     const editable = await resolveEditableArticle(userId, articleId);
     if (!editable.ok) return editable;
 
-    const now = Instant.now();
+    const now = ArticleBody.nextUpdatedAt(Instant.now(), baseUpdatedAt);
     const titleChanged = title === editable.val.title
       ? undefined
       : Article.changeArticleTitle(now)(editable.val, title);
@@ -67,12 +68,15 @@ const create = ({
       publicHtml: html,
       markdown,
     });
-    const stored = await articleWithBodyEditedStore.store(titleChanged?.val, bodyWritten);
+    const stored = await articleWithBodyEditedStore.store(titleChanged?.val, bodyWritten, baseUpdatedAt);
     if (!stored.val.edited) {
       const current = await articleResolver.resolve(articleId);
       if (!current.ok) return current;
       if (current.val === undefined) return RA.err(ArticleNotFoundError.create(articleId));
-      return RA.err(ArticleInvalidStatusError.create(articleId, 'published', ['draft', 'unpublished']));
+      if (current.val.status === 'published') {
+        return RA.err(ArticleInvalidStatusError.create(articleId, 'published', ['draft', 'unpublished']));
+      }
+      return RA.err(ArticleBodyConflictError.create(articleId));
     }
     return RA.ok({
       article: titleChanged?.val.aggregateState ?? editable.val,

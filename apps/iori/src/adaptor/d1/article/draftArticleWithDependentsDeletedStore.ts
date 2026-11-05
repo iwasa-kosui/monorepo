@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { DraftArticleWithDependentsDeletedStore } from '../../../domain/article/article.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -8,6 +8,8 @@ import { runBatch } from '../runBatch.ts';
 import {
   articleBodiesTable,
   articlesTable,
+  digestDeepDivesTable,
+  digestDeepDiveTurnsTable,
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
@@ -40,7 +42,14 @@ export const createD1DraftArticleWithDependentsDeletedStore = (
         ),
       );
     };
+    const deepDiveIds = db.select({ deepDiveId: digestDeepDivesTable.deepDiveId }).from(digestDeepDivesTable).where(
+      eq(digestDeepDivesTable.articleId, articleId),
+    );
     await runBatch(db, [
+      db.delete(digestDeepDiveTurnsTable).where(
+        and(inArray(digestDeepDiveTurnsTable.deepDiveId, deepDiveIds), articleIsDraft),
+      ),
+      db.delete(digestDeepDivesTable).where(and(eq(digestDeepDivesTable.articleId, articleId), articleIsDraft)),
       db.delete(digestTrendsTable).where(and(eq(digestTrendsTable.digestId, digestId), articleIsDraft)),
       db.delete(digestItemsTable).where(and(eq(digestItemsTable.digestId, digestId), articleIsDraft)),
       db.delete(digestsTable).where(and(eq(digestsTable.digestId, digestId), articleIsDraft)),

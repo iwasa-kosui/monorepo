@@ -1499,4 +1499,75 @@ describe('iori のダイジェスト API', () => {
       ]);
     });
   });
+
+  describe('POST /api/iori/v1/digest-items/:digestItemId/deep-dive', () => {
+    const seedDeepDiveDigest = (t: ReturnType<typeof setupReadApi>, owner: { userId: string; actorId: string }) => {
+      const ids = seedDigest(t, owner, '2026-11-05');
+      t.sqlite.prepare(
+        'INSERT INTO article_bodies(articleId,privateHtml,publicHtml,markdown,updatedAt) VALUES (?,?,?,?,?)',
+      )
+        .run(ids.articleId, '<p>a</p>', '<p>a</p>', '- [A](https://example.com/a)\n  要約 A', 1_000);
+      const item = t.sqlite.prepare('SELECT digestItemId FROM digest_items WHERE digestId = ? AND rank = 1')
+        .get(ids.digestId) as { digestItemId: string };
+      return item.digestItemId;
+    };
+
+    const deepDive = (
+      t: ReturnType<typeof setupReadApi>,
+      me: { sessionId: string },
+      digestItemId: string,
+      body: unknown,
+    ) =>
+      t.request(`/api/iori/v1/digest-items/${digestItemId}/deep-dive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN },
+        body: JSON.stringify(body),
+      });
+
+    it('存在しない項目は 404 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:statuses');
+
+      const response = await deepDive(t, me, crypto.randomUUID(), { baseUpdatedAt: 1_000 });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('他の人の項目は 404 にして、回数を予約しない', async () => {
+      const t = setupReadApi();
+      const owner = t.seed.addLocalActor('alice');
+      const digestItemId = seedDeepDiveDigest(t, owner);
+      const me = await t.signIn('write:statuses');
+
+      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 1_000 });
+
+      expect(response.status).toBe(404);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_deep_dive_usages').get()).toEqual({ n: 0 });
+    });
+
+    it('本文の版が baseUpdatedAt と違えば 409 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:statuses');
+      const digestItemId = seedDeepDiveDigest(t, me);
+
+      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 999 });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ error: '本文が更新されています。読み込み直してください' });
+    });
+
+    it('Workers AI が無い環境では 502 にして、本文を変えない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:statuses');
+      const digestItemId = seedDeepDiveDigest(t, me);
+
+      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 1_000 });
+
+      expect(response.status).toBe(502);
+      expect(t.sqlite.prepare('SELECT markdown, updatedAt FROM article_bodies').get()).toEqual({
+        markdown: '- [A](https://example.com/a)\n  要約 A',
+        updatedAt: 1_000,
+      });
+    });
+  });
 });

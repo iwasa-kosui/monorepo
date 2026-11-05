@@ -135,7 +135,11 @@ const setup = () => {
   return { sqlite, addAuthor, addArticle, cookieFor, bearerFor, put, getEdit, row };
 };
 
-const valid = { title: '新しいタイトル', markdown: '## 見出し\n\n本文 [link](https://example.com/a)' };
+const valid = {
+  title: '新しいタイトル',
+  markdown: '## 見出し\n\n本文 [link](https://example.com/a)',
+  baseUpdatedAt: CREATED_AT,
+};
 
 describe('PUT /api/iori/v1/articles/:articleId', () => {
   it('著者の Cookie と同じ Origin で 200 を返し、タイトルと本文を更新して domain event を残す', async () => {
@@ -176,6 +180,7 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
       title: 'Original title',
       markdown: valid.markdown,
+      baseUpdatedAt: CREATED_AT,
     });
 
     expect(response.status).toBe(200);
@@ -193,6 +198,7 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
       title: 'タイトル',
       markdown: '本文<script>alert(1)</script>',
+      baseUpdatedAt: CREATED_AT,
     });
 
     expect(response.status).toBe(200);
@@ -208,6 +214,7 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
       title: 'タイトル',
       markdown: '#### 小見出し\n\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |',
+      baseUpdatedAt: CREATED_AT,
     });
 
     expect(response.status).toBe(200);
@@ -305,6 +312,40 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     expect(t.row('SELECT title FROM articles')).toEqual([{ title: 'Original title' }]);
   });
 
+  it('baseUpdatedAt が今の本文の版と違えば 409 にして、本文もタイトルも更新しない', async () => {
+    const t = setup();
+    const author = t.addAuthor('alice');
+    const articleId = t.addArticle(author);
+
+    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
+      ...valid,
+      baseUpdatedAt: CREATED_AT - 1,
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: '本文が更新されています。読み込み直してください' });
+    expect(t.row('SELECT title FROM articles')).toEqual([{ title: 'Original title' }]);
+    expect(t.row('SELECT markdown, updatedAt FROM article_bodies')).toEqual([
+      { markdown: null, updatedAt: CREATED_AT },
+    ]);
+    expect(t.row('SELECT count(*) AS n FROM domain_events')).toEqual([{ n: 0 }]);
+  });
+
+  it('同じ版から続けて保存すると、2 回目は 409 にして 1 回目の本文を残す', async () => {
+    const t = setup();
+    const author = t.addAuthor('alice');
+    const articleId = t.addArticle(author);
+    const headers = { Cookie: t.cookieFor(author.userId), ...sameOrigin };
+
+    const first = await t.put(articleId, headers, valid);
+    const second = await t.put(articleId, headers, { ...valid, title: '別のタイトル', markdown: '上書き' });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(409);
+    expect(t.row('SELECT title FROM articles')).toEqual([{ title: '新しいタイトル' }]);
+    expect(t.row('SELECT markdown FROM article_bodies')).toEqual([{ markdown: valid.markdown }]);
+  });
+
   it('rootPostId を持つ記事は 409 にする', async () => {
     const t = setup();
     const author = t.addAuthor('alice');
@@ -317,13 +358,16 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
   });
 
   it.each([
-    ['タイトルが空', { title: '', markdown: 'a' }],
-    ['タイトルが 201 文字', { title: 'a'.repeat(201), markdown: 'a' }],
-    ['タイトルが文字列でない', { title: 1, markdown: 'a' }],
-    ['タイトルがない', { markdown: 'a' }],
-    ['本文が空', { title: 'a', markdown: '' }],
-    ['本文がない', { title: 'a' }],
-    ['本文が長すぎる', { title: 'a', markdown: 'a'.repeat(100_001) }],
+    ['タイトルが空', { title: '', markdown: 'a', baseUpdatedAt: CREATED_AT }],
+    ['タイトルが 201 文字', { title: 'a'.repeat(201), markdown: 'a', baseUpdatedAt: CREATED_AT }],
+    ['タイトルが文字列でない', { title: 1, markdown: 'a', baseUpdatedAt: CREATED_AT }],
+    ['タイトルがない', { markdown: 'a', baseUpdatedAt: CREATED_AT }],
+    ['本文が空', { title: 'a', markdown: '', baseUpdatedAt: CREATED_AT }],
+    ['本文がない', { title: 'a', baseUpdatedAt: CREATED_AT }],
+    ['本文が長すぎる', { title: 'a', markdown: 'a'.repeat(100_001), baseUpdatedAt: CREATED_AT }],
+    ['baseUpdatedAt がない', { title: 'a', markdown: 'a' }],
+    ['baseUpdatedAt が整数でない', { title: 'a', markdown: 'a', baseUpdatedAt: 'x' }],
+    ['baseUpdatedAt が負', { title: 'a', markdown: 'a', baseUpdatedAt: -1 }],
   ])('%s ときは 400 にして更新しない', async (_name, body) => {
     const t = setup();
     const author = t.addAuthor('alice');
@@ -355,7 +399,11 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     const response = await t.getEdit(articleId, { Cookie: t.cookieFor(author.userId) });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ title: 'Original title', markdown: '# 保存した Markdown' });
+    await expect(response.json()).resolves.toEqual({
+      title: 'Original title',
+      markdown: '# 保存した Markdown',
+      updatedAt: CREATED_AT,
+    });
   });
 
   it('markdown 列が NULL なら publicHtml を Markdown に変換して返す', async () => {
@@ -373,6 +421,7 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     await expect(response.json()).resolves.toEqual({
       title: 'Original title',
       markdown: '## 新着\n\n-   [X](https://example.com/x)（はてなブックマーク 3）  \n    要約',
+      updatedAt: CREATED_AT,
     });
   });
 
@@ -385,7 +434,11 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     await t.put(articleId, headers, valid);
     const response = await t.getEdit(articleId, headers);
 
-    await expect(response.json()).resolves.toEqual(valid);
+    await expect(response.json()).resolves.toEqual({
+      title: valid.title,
+      markdown: valid.markdown,
+      updatedAt: expect.any(Number),
+    });
   });
 
   it('table を含む publicHtml を開いて、そのまま保存しても table が残る', async () => {
@@ -396,8 +449,16 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     });
     const headers = { Cookie: t.cookieFor(author.userId), ...sameOrigin };
 
-    const opened = await (await t.getEdit(articleId, headers)).json() as { title: string; markdown: string };
-    const response = await t.put(articleId, headers, opened);
+    const opened = await (await t.getEdit(articleId, headers)).json() as {
+      title: string;
+      markdown: string;
+      updatedAt: number;
+    };
+    const response = await t.put(articleId, headers, {
+      title: opened.title,
+      markdown: opened.markdown,
+      baseUpdatedAt: opened.updatedAt,
+    });
 
     expect(response.status).toBe(200);
     const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
