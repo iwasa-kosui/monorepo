@@ -328,12 +328,17 @@ describe('delete-blocked-domain-posts input checks', () => {
 
 describe('delete-blocked-domain-posts host condition', () => {
   const matches = (fixture: Fixture, uri: string) =>
-    Number((fixture.sqlite.prepare(`SELECT ${hostMatches('?')} AS matched`).get(uri, uri, uri, uri) as Row).matched);
+    Number(
+      (fixture.sqlite.prepare(`SELECT ${hostMatches('t.uri')} AS matched FROM (SELECT ? AS uri) t`).get(uri) as Row)
+        .matched,
+    );
   it.each([
     'https://baraag.net/users/a',
     'https://media.baraag.net/users/a',
     'https://a.b.baraag.net/users/a',
     'https://MEDIA.BARAAG.NET/users/a',
+    'https://baraag.net:443/users/a',
+    'https://media.baraag.net:8443/users/a',
   ])('matches %s', (uri) => {
     expect(matches(createSqliteD1Fixture(), uri)).toBe(1);
   });
@@ -347,6 +352,10 @@ describe('delete-blocked-domain-posts host condition', () => {
     'https://baraag.net',
     'https://xbaraag.net/users/a',
     'baraag.net/users/a',
+    'https://evilbaraag.net:443/users/a',
+    'https://evil.example:443/x.baraag.net/users/a',
+    'https://evil.example:443/?u=.baraag.net:443/',
+    'https://baraag.net:443',
   ])('does not match %s', (uri) => {
     expect(matches(createSqliteD1Fixture(), uri)).toBe(0);
   });
@@ -369,7 +378,7 @@ describe('delete-blocked-domain-posts dry-run', () => {
     const { notices, error } = await run('dry-run', fixture);
     expect(error).toBeUndefined();
     expect(notices).toEqual([
-      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=3 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=5 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
+      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=5 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
     ]);
   });
   it('prints zeros when nothing is left', async () => {
@@ -377,8 +386,27 @@ describe('delete-blocked-domain-posts dry-run', () => {
     await run('apply', fixture);
     const { notices } = await run('dry-run', fixture, {}, { at: now + 1 });
     expect(notices).toEqual([
-      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=0 remote_posts=1 timeline_items=0 federated_items=0 reposts=0 likes=0 emoji_reacts=0 notifications=0 images=0 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
+      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=0 remote_posts=0 timeline_items=0 federated_items=0 reposts=0 likes=0 emoji_reacts=0 notifications=0 orphan_repost_notifications=0 images=0 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
     ]);
+  });
+});
+
+describe('delete-blocked-domain-posts dry-run counts', () => {
+  it('counts the repost notifications that have no subtype row', async () => {
+    const { fixture, seed, local } = build();
+    for (const [type, createdAt] of [['repost', 20], ['repost', 21], ['like', 22]] as const) {
+      fixture.sqlite.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      ).run(seed.uuid(), local.userId, type, 0, createdAt);
+    }
+    const { notices } = await run('dry-run', fixture);
+    expect(notices[0]).toContain(' notifications=5 orphan_repost_notifications=2 ');
+  });
+  it('counts remote_posts by the same condition as the deletion', async () => {
+    const { fixture, kept } = build();
+    expect(count(fixture, 'remote_posts', `postId = '${kept.other.postId}'`)).toBe(1);
+    const { notices } = await run('dry-run', fixture);
+    expect(notices[0]).toContain(' posts=2 remote_posts=2 ');
   });
 });
 
@@ -485,6 +513,17 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     const beforeRun = state();
     await run('apply', fixture);
     expect(state()).toEqual(beforeRun);
+  });
+  it('deletes the posts of an actor whose URI carries a port', async () => {
+    const { fixture, seed } = build();
+    const ported = seed.addRemoteActor('p1', 'baraag.net:8443');
+    const post = seed.addRemotePost(ported, 140, { timeline: true });
+    const { notices } = await run('apply', fixture);
+    expect(count(fixture, 'posts', `postId = '${post.postId}'`)).toBe(0);
+    expect(count(fixture, 'remote_posts', `postId = '${post.postId}'`)).toBe(0);
+    expect(notices).toEqual([
+      'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=3 deleted_timeline_items=5',
+    ]);
   });
   it('never targets a local actor even when its URI is on the domain', async () => {
     const { fixture, kept } = build();

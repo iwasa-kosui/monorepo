@@ -24,14 +24,15 @@ const UUID_V4_SQL = [
 const EVENT_COLUMNS = '(eventId, aggregateId, aggregateName, aggregateState, eventName, eventPayload, occurredAt)';
 
 const hostOf = (uri) => `substr(${uri}, 9, instr(substr(${uri}, 9) || '/', '/') - 1)`;
+const hostnameOf = (uri) => `substr(${hostOf(uri)}, 1, instr(${hostOf(uri)} || ':', ':') - 1)`;
 export const hostMatches = (uri) =>
-  `(${uri} LIKE 'https://${TARGET_DOMAIN}/%' OR (${uri} LIKE 'https://%.${TARGET_DOMAIN}/%' AND ${
-    hostOf(uri)
+  `(${uri} LIKE 'https://%/%' AND (${hostnameOf(uri)} LIKE '${TARGET_DOMAIN}' OR ${
+    hostnameOf(uri)
   } LIKE '%.${TARGET_DOMAIN}'))`;
 export const targetActorCondition = (alias) =>
   `${hostMatches(`${alias}.uri`)} AND NOT EXISTS (SELECT 1 FROM local_actors lx WHERE lx.actorId = ${alias}.actorId)`;
 const domainPostCondition = (alias) =>
-  `EXISTS (SELECT 1 FROM actors a WHERE a.actorId = ${alias}.actorId AND ${targetActorCondition('a')})`;
+  `${alias}.actorId IN (SELECT a.actorId FROM actors a WHERE ${targetActorCondition('a')})`;
 const ARTICLE_ROOT = (alias) => `EXISTS (SELECT 1 FROM articles ar WHERE ar.rootPostId = ${alias}.postId)`;
 export const targetPostCondition = (alias) => `${domainPostCondition(alias)} AND NOT ${ARTICLE_ROOT(alias)}`;
 const TARGET_POST_IDS = `SELECT p.postId FROM posts p WHERE ${targetPostCondition('p')}`;
@@ -71,8 +72,8 @@ const ORPHAN_NOTIFICATION = ({ type, table, eventName }) =>
 export const dryRunSql = () =>
   `SELECT (SELECT COUNT(*) FROM posts p WHERE ${
     targetPostCondition('p')
-  }) AS posts, (SELECT COUNT(*) FROM remote_posts rp WHERE ${
-    hostMatches('rp.uri')
+  }) AS posts, (SELECT COUNT(*) FROM remote_posts WHERE ${
+    IN_TARGETS('postId')
   }) AS remote_posts, (SELECT COUNT(*) FROM timeline_items WHERE deletedAt IS NULL AND ${
     IN_TARGETS('postId')
   }) AS timeline_items, (SELECT COUNT(*) FROM federated_timeline_items WHERE ${
@@ -89,17 +90,19 @@ export const dryRunSql = () =>
     IN_TARGETS('reactedPostId')
   }) + (SELECT COUNT(*) FROM notification_replies WHERE ${REPLY_TARGET}) + (SELECT COUNT(*) FROM notification_reposts WHERE ${
     IN_TARGETS('repostedPostId')
-  })) AS notifications, (SELECT COUNT(*) FROM post_images WHERE ${
+  })) AS notifications, (SELECT COUNT(*) FROM notifications WHERE ${
+    ORPHAN_NOTIFICATION({ type: 'repost', table: 'notification_reposts' })
+  }) AS orphan_repost_notifications, (SELECT COUNT(*) FROM post_images WHERE ${
     IN_TARGETS('postId')
   }) AS images, (SELECT COUNT(*) FROM posts p WHERE ${domainPostCondition('p')} AND ${
     ARTICLE_ROOT('p')
   }) AS articles_skipped, (SELECT COUNT(*) FROM actors a WHERE ${
     targetActorCondition('a')
-  }) AS actors, (SELECT COUNT(*) FROM follows f WHERE EXISTS (SELECT 1 FROM local_actors la WHERE la.actorId = f.followerId) AND EXISTS (SELECT 1 FROM actors a WHERE a.actorId = f.followingId AND ${
+  }) AS actors, (SELECT COUNT(*) FROM follows f WHERE EXISTS (SELECT 1 FROM local_actors la WHERE la.actorId = f.followerId) AND f.followingId IN (SELECT a.actorId FROM actors a WHERE ${
     targetActorCondition('a')
-  })) AS follows_out, (SELECT COUNT(*) FROM follows f WHERE EXISTS (SELECT 1 FROM local_actors la WHERE la.actorId = f.followingId) AND EXISTS (SELECT 1 FROM actors a WHERE a.actorId = f.followerId AND ${
+  })) AS follows_out, (SELECT COUNT(*) FROM follows f WHERE EXISTS (SELECT 1 FROM local_actors la WHERE la.actorId = f.followingId) AND f.followerId IN (SELECT a.actorId FROM actors a WHERE ${
     targetActorCondition('a')
-  })) AS follows_in, (SELECT COUNT(*) FROM mutes m WHERE EXISTS (SELECT 1 FROM actors a WHERE a.actorId = m.mutedActorId AND ${
+  })) AS follows_in, (SELECT COUNT(*) FROM mutes m WHERE m.mutedActorId IN (SELECT a.actorId FROM actors a WHERE ${
     targetActorCondition('a')
   })) AS mutes`;
 
@@ -258,6 +261,7 @@ const DRY_RUN_KEYS = [
   'likes',
   'emoji_reacts',
   'notifications',
+  'orphan_repost_notifications',
   'images',
   'articles_skipped',
   'actors',

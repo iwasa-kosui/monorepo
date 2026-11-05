@@ -230,7 +230,7 @@ it('relays only the fixed delete-blocked-domain-posts notices to the public log'
   const dry = (domain: string, counts: string) =>
     `IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=${domain} ${counts}`;
   const counts =
-    'posts=120 remote_posts=130 timeline_items=400 federated_items=10 reposts=5 likes=3 emoji_reacts=2 notifications=7 images=9 articles_skipped=1 actors=20 follows_out=2 follows_in=3 mutes=0';
+    'posts=120 remote_posts=130 timeline_items=400 federated_items=10 reposts=5 likes=3 emoji_reacts=2 notifications=7 orphan_repost_notifications=4 images=9 articles_skipped=1 actors=20 follows_out=2 follows_in=3 mutes=0';
   const accepted = [
     dry('baraag.net', counts),
     dry('baraag.net', counts.replace(/=\d+/g, '=0')),

@@ -515,7 +515,7 @@ dry-run が遅いとき、または apply が時間切れで失敗したとき�
 
 #### delete-blocked-domain-posts でブロックしたドメインの保存済みの投稿を消す
 
-`delete-blocked-domain-posts-dry-run` は、本番の D1 から、ブロックしたドメイン `baraag.net`（とそのサブドメイン）の actor が書いた投稿を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=<N> remote_posts=<N> timeline_items=<N> federated_items=<N> reposts=<N> likes=<N> emoji_reacts=<N> notifications=<N> images=<N> articles_skipped=<N> actors=<N> follows_out=<N> follows_in=<N> mutes=<N>` の行を出します。`delete-blocked-domain-posts` は、同じ条件の投稿と、投稿に付く行を消します。この operation は `IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=<N> deleted_timeline_items=<N>` の行を出します。対象のドメインは、スクリプトの定数で固定しています。workflow の入力では指定しません。
+`delete-blocked-domain-posts-dry-run` は、本番の D1 から、ブロックしたドメイン `baraag.net`（とそのサブドメイン）の actor が書いた投稿を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=<N> remote_posts=<N> timeline_items=<N> federated_items=<N> reposts=<N> likes=<N> emoji_reacts=<N> notifications=<N> orphan_repost_notifications=<N> images=<N> articles_skipped=<N> actors=<N> follows_out=<N> follows_in=<N> mutes=<N>` の行を出します。`delete-blocked-domain-posts` は、同じ条件の投稿と、投稿に付く行を消します。この operation は `IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=<N> deleted_timeline_items=<N>` の行を出します。対象のドメインは、スクリプトの定数で固定しています。workflow の入力では指定しません。
 
 対象の範囲は、次のとおりです。
 
