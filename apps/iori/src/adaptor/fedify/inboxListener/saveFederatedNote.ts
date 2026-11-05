@@ -55,7 +55,7 @@ export const saveFederatedNote = async (
     return;
   }
 
-  const author = await note.getAttribution();
+  const author = await note.getAttribution({ documentLoader });
   if (!author || !isActor(author)) {
     getLogger().warn(`Could not resolve Note author for federated timeline: ${note.id.href}`);
     return;

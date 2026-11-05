@@ -1,4 +1,5 @@
 import { Create, Note, Person } from '@fedify/vocab';
+import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -379,6 +380,29 @@ describe('createOnCreate', () => {
       expect(addRemotePostUseCase.run).not.toHaveBeenCalled();
       expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
       expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not throw nor save to the federated timeline when fetching the author fails', async () => {
+      const { listener, create, remotePostUpserter, federatedTimelineItemCreatedStore } = setup(false, [
+        { relayId: 'relay-1' },
+      ]);
+      const note = createNote();
+      vi.spyOn(note, 'getAttribution').mockRejectedValue(
+        new FetchError('https://remote.example/users/alice', 'HTTP 410'),
+      );
+
+      await expect(listener(createCtx(), create(note))).resolves.toBeUndefined();
+
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('rethrows an error other than a fetch failure while saving to the federated timeline', async () => {
+      const { listener, create, remotePostUpserter } = setup(false, [{ relayId: 'relay-1' }]);
+      const error = new Error('db down');
+      remotePostUpserter.resolve.mockRejectedValue(error);
+
+      await expect(listener(createCtx(), create(createNote()))).rejects.toBe(error);
     });
 
     it('rejects without saving anything when checking whether a local actor follows the actor fails', async () => {

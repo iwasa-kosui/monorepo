@@ -18,6 +18,7 @@ import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { isFetchFailure } from '../relayForwardedCreate/refetchRelayForwardedNote.ts';
 import { extractAttachments } from './extractAttachments.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
@@ -65,7 +66,14 @@ const saveForwardedCreate = async (
   }
   const [relay] = relaysResult.val;
 
-  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId, inReplyToUri });
+  try {
+    await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId, inReplyToUri });
+  } catch (error) {
+    if (!isFetchFailure(error)) {
+      throw error;
+    }
+    getLogger().warn(`Failed to fetch the author of a forwarded Create: ${note.id?.href} - ${String(error)}`);
+  }
 };
 
 export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<unknown>, activity: Create) => {
