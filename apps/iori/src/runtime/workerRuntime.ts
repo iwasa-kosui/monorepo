@@ -9,6 +9,7 @@ import { createD1ActorsResolverByFollowingId } from '../adaptor/d1/actor/actorsR
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../adaptor/d1/actor/remoteActorCreatedStore.ts';
+import { createD1RemoteActorProfileUpdatedStore } from '../adaptor/d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1AiSummaryUsageRecorder } from '../adaptor/d1/aiSummary/aiSummaryUsageRecorder.ts';
 import { createD1AiTranslationUsageRecorder } from '../adaptor/d1/aiTranslation/aiTranslationUsageRecorder.ts';
 import { createD1PostTranslationStore } from '../adaptor/d1/aiTranslation/postTranslationStore.ts';
@@ -247,6 +248,7 @@ export const createWorkerRuntimePorts = async (
     postImageCreatedStore: createD1PostImageCreatedStore(db),
     remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
     logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+    remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
   });
   const mediaUploadResolver = createD1MediaUploadResolver(db);
@@ -366,6 +368,7 @@ export const createWorkerRuntimePorts = async (
         remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
         remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
         logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+        remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
       markersResolverByUserId,

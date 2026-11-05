@@ -4,6 +4,7 @@ import { getLogger } from '@logtape/logtape';
 import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../../../domain/actor/updateProfile.ts';
 import type { PostImage, PostImageCreatedStore } from '../../../domain/image/image.ts';
 import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
@@ -22,6 +23,7 @@ type Deps = Readonly<{
   postImageCreatedStore: PostImageCreatedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
 }>;
 
@@ -34,6 +36,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       now,
       remoteActorCreatedStore: deps.remoteActorCreatedStore,
       logoUriUpdatedStore: deps.logoUriUpdatedStore,
+      remoteActorProfileUpdatedStore: deps.remoteActorProfileUpdatedStore,
       actorResolverByUri: deps.actorResolverByUri,
     })(identity.authorIdentity);
     if (!actor.ok) throw new Error('Failed to upsert remote actor');

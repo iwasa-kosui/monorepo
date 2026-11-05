@@ -1,8 +1,9 @@
 import type { LocalActor, RemoteActor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Account } from './entities.ts';
+import type { Account, CustomEmoji, Field } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
+import { sanitizeStatusContent } from './sanitizeContent.ts';
 import { toDateString, toIsoString } from './time.ts';
 
 export type AccountSource =
@@ -40,6 +41,39 @@ const resolveRemoteIdentity = (actor: RemoteActor): Readonly<{ username: string;
   return { username, acct: host.length > 0 ? `${username}@${host}` : username };
 };
 
+type RemoteProfile = Readonly<{
+  displayName: string | undefined;
+  note: string;
+  headerUrl: string | undefined;
+  locked: boolean;
+  bot: boolean;
+  group: boolean;
+  fields: Field[];
+  emojis: CustomEmoji[];
+  createdAt: Instant | undefined;
+}>;
+
+const toRemoteProfile = (actor: RemoteActor, baseUrl: string): RemoteProfile => ({
+  displayName: actor.displayName,
+  note: actor.summary === undefined ? '' : sanitizeStatusContent(actor.summary),
+  headerUrl: toSafeApiUrl(actor.headerUri, baseUrl),
+  locked: actor.manuallyApprovesFollowers ?? false,
+  bot: actor.actorType === 'Service' || actor.actorType === 'Application',
+  group: actor.actorType === 'Group',
+  fields: (actor.fields ?? []).map(({ name, value }) => ({
+    name,
+    value: sanitizeStatusContent(value),
+    verified_at: null,
+  })),
+  emojis: (actor.emojis ?? []).flatMap(({ shortcode, url }): CustomEmoji[] => {
+    const safeUrl = toSafeApiUrl(url, baseUrl);
+    return safeUrl === undefined
+      ? []
+      : [{ shortcode, url: safeUrl, static_url: safeUrl, visible_in_picker: false, category: null }];
+  }),
+  createdAt: actor.publishedAt as Instant | undefined,
+});
+
 const toAccountOf = (
   props: Readonly<
     {
@@ -50,11 +84,15 @@ const toAccountOf = (
       url: string;
       fallbackPath: string;
       logoUri: string | undefined;
+      profile?: RemoteProfile;
     }
   >,
   options: ToAccountOptions,
 ): Account => {
   const avatar = toSafeApiUrl(props.logoUri, options.baseUrl) ?? options.defaultAvatarUrl;
+  const { profile } = props;
+  const header = profile?.headerUrl ?? options.defaultHeaderUrl;
+  const createdAt = profile?.createdAt ?? options.createdAt;
   const fallbackUrl = new URL(props.fallbackPath, options.baseUrl).href;
   const uri = toSafeApiUrl(props.uri, options.baseUrl) ?? fallbackUrl;
   return {
@@ -63,21 +101,21 @@ const toAccountOf = (
     acct: props.acct,
     url: toSafeApiUrl(props.url, options.baseUrl) ?? uri,
     uri,
-    display_name: props.username,
-    note: '',
+    display_name: profile?.displayName ?? props.username,
+    note: profile?.note ?? '',
     avatar,
     avatar_static: avatar,
-    header: options.defaultHeaderUrl,
-    header_static: options.defaultHeaderUrl,
-    locked: false,
-    fields: [],
-    emojis: [],
-    bot: false,
-    group: false,
+    header,
+    header_static: header,
+    locked: profile?.locked ?? false,
+    fields: profile?.fields ?? [],
+    emojis: profile?.emojis ?? [],
+    bot: profile?.bot ?? false,
+    group: profile?.group ?? false,
     discoverable: null,
     indexable: false,
     hide_collections: null,
-    created_at: toIsoString(options.createdAt),
+    created_at: toIsoString(createdAt),
     last_status_at: options.lastStatusAt === null ? null : toDateString(options.lastStatusAt),
     statuses_count: options.statusesCount,
     followers_count: options.followersCount,
@@ -108,5 +146,6 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
     url: actor.url ?? actor.uri,
     fallbackPath: `/remote-users/${actor.id}`,
     logoUri: actor.logoUri,
+    profile: toRemoteProfile(actor, options.baseUrl),
   }, options);
 };

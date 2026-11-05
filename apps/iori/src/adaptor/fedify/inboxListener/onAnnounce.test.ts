@@ -148,6 +148,32 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('passes the profile of the announced Note author in a remote Announce', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({
+      attribution: new Person({
+        id: new URL('https://remote.example/users/alice'),
+        inbox: new URL('https://remote.example/users/alice/inbox'),
+        preferredUsername: 'alice',
+        name: 'Alice',
+        summary: '<p>bio</p>',
+      }),
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({
+          authorIdentity: expect.objectContaining({
+            uri: 'https://remote.example/users/alice',
+            profile: expect.objectContaining({ displayName: 'Alice', summary: '<p>bio</p>', actorType: 'Person' }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('records the visibility of the announced Note in a remote Announce', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined);
     const note = createNote([]).clone({ ccs: [new URL('https://www.w3.org/ns/activitystreams#Public')] });
