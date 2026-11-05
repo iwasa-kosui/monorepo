@@ -151,6 +151,7 @@ export type ArticleWithBodyEditedStore = Readonly<{
   store: (
     titleChanged: ArticleTitleChanged | undefined,
     bodyWritten: ArticleBodyWritten,
+    baseUpdatedAt: Instant,
   ) => RA<{ edited: boolean }, never>;
 }>;
 export type ArticleWithDependentsDeletedStore = Readonly<{

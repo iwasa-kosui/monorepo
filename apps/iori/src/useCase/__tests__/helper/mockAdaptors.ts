@@ -19,6 +19,7 @@ import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { LocalActorCreatedStore } from '../../../domain/actor/createLocalActor.ts';
 import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdated, RemoteActorProfileUpdatedStore } from '../../../domain/actor/updateProfile.ts';
 import type {
   Article,
   ArticleDeleted,
@@ -408,6 +409,19 @@ export const createMockLogoUriUpdatedStore = (): LogoUriUpdatedStore & InMemoryS
     store: vi.fn(inMemoryStore.store) as unknown as
       & LogoUriUpdatedStore['store']
       & InMemoryStore<LogoUriUpdated>['store'],
+  };
+};
+
+export const createMockRemoteActorProfileUpdatedStore = ():
+  & RemoteActorProfileUpdatedStore
+  & InMemoryStore<RemoteActorProfileUpdated> =>
+{
+  const inMemoryStore = createInMemoryStore<RemoteActorProfileUpdated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & RemoteActorProfileUpdatedStore['store']
+      & InMemoryStore<RemoteActorProfileUpdated>['store'],
   };
 };
 

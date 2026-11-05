@@ -38,6 +38,8 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'delete-rehearsal-d1',
     'move-unfollowed-reposts-dry-run',
     'move-unfollowed-reposts',
+    'prune-federated-posts-dry-run',
+    'ensure-event-archive-bucket',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -195,6 +197,51 @@ it.each(['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'])(
     expect(parsed.env.IORI_REPOST_CREATED_BEFORE_MS).toBe('${{ inputs.repost_created_before_ms }}');
   },
 );
+it('gives prune-federated-posts-dry-run only the account and the deploy token, and no extra input', async () => {
+  const name = 'prune-federated-posts-dry-run';
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs[name];
+  const secret = (key: string) => `\${{ secrets.${key} }}`;
+  expect(job.if).toBe(`inputs.operation == '${name}'`);
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+  expect(JSON.stringify(job)).not.toMatch(/IORI_REPOST_CREATED_BEFORE_MS|repost_created_before_ms/);
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const parsed = parse(text) as {
+    on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } };
+  };
+  const options = parsed.on.workflow_dispatch.inputs.operation.options!;
+  expect(options).toContain(name);
+  expect(options.filter(option => option.startsWith('prune-federated-posts'))).toEqual([name]);
+});
+it('gives ensure-event-archive-bucket only the account and the deploy token, and no extra input', async () => {
+  const name = 'ensure-event-archive-bucket';
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs[name];
+  const secret = (key: string) => `\${{ secrets.${key} }}`;
+  expect(job.if).toBe(`inputs.operation == '${name}'`);
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+  expect(JSON.stringify(job)).not.toMatch(/IORI_REPOST_CREATED_BEFORE_MS|repost_created_before_ms/);
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const parsed = parse(text) as {
+    on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } };
+  };
+  const options = parsed.on.workflow_dispatch.inputs.operation.options!;
+  expect(options.filter(option => option === name)).toEqual([name]);
+});
 it('lets diagnose-source start without generation or run ID', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const inputs =

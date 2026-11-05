@@ -4,6 +4,7 @@ import type { RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import { actorsTable, domainEventsTable, remoteActorsTable } from '../schema.ts';
+import { toRemoteActorProfileColumns } from './remoteActorProfileColumns.ts';
 
 export const createD1RemoteActorCreatedStore = (db: IoriD1Db): RemoteActorCreatedStore => ({
   store: (event) =>
@@ -21,6 +22,7 @@ export const createD1RemoteActorCreatedStore = (db: IoriD1Db): RemoteActorCreate
             actorId: event.aggregateId,
             url: event.aggregateState.url,
             username: event.aggregateState.username,
+            ...toRemoteActorProfileColumns(event.aggregateState),
           }),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,

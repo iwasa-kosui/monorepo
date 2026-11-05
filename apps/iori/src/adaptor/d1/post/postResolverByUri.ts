@@ -21,6 +21,8 @@ export const createD1PostResolverByUri = (db: IoriD1Db): PostResolverByUri => ({
         uri: row.remote_posts.uri,
         inReplyToUri: row.remote_posts.inReplyToUri,
         visibility: toVisibility(row.remote_posts.visibility),
+        summary: row.posts.summary,
+        sensitive: row.posts.sensitive,
       }),
     );
   },

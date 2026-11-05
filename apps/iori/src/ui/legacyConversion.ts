@@ -89,8 +89,8 @@ export const postToStatus = (post: PostWithAuthor): Status => {
     }),
     content: post.content,
     visibility: 'public',
-    sensitive: false,
-    spoiler_text: '',
+    sensitive: post.sensitive,
+    spoiler_text: post.summary ?? '',
     media_attachments: (post.images ?? []).map((image, index) => ({
       id: `${post.postId}:${index}`,
       type: 'image',

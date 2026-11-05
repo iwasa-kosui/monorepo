@@ -177,6 +177,8 @@ const author: User = { id: UserId.generate(), username: Username.orThrow('kosui'
 
 const createLocalPost = (): LocalPost => ({
   type: 'local',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: ActorId.generate(),
   content: 'hello',
@@ -187,6 +189,8 @@ const createLocalPost = (): LocalPost => ({
 
 const createRemotePost = (visibility: Visibility | null): RemotePost => ({
   type: 'remote',
+  summary: null,
+  sensitive: false,
   postId: PostId.generate(),
   actorId: ActorId.generate(),
   content: 'hello',

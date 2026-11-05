@@ -62,6 +62,7 @@ import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
+import type { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts';
 import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
@@ -177,6 +178,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
   giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
+  deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;

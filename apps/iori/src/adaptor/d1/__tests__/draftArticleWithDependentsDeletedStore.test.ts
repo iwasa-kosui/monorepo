@@ -30,6 +30,12 @@ const setup = (status: string) => {
   ).run('item-1', digestId, 'entry-1', 'https://example.com/a', 'A', 1, null, null, null, null);
   fixture.sqlite.prepare('INSERT INTO digest_trends(digestId,kind,rank,url,title,count) VALUES (?,?,?,?,?,?)')
     .run(digestId, 'hatena', 1, 'https://example.com/t', 'T', 3);
+  fixture.sqlite.prepare(
+    'INSERT INTO digest_deep_dives(deepDiveId,userId,digestItemId,articleId,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+  ).run('dive-1', author.userId, 'item-1', articleId, 3_000, 3_000);
+  fixture.sqlite.prepare(
+    'INSERT INTO digest_deep_dive_turns(turnId,deepDiveId,turnNumber,instruction,resultMarkdown,createdAt) VALUES (?,?,?,?,?,?)',
+  ).run('turn-1', 'dive-1', 1, '', '- A', 3_000);
   const count = (table: string) =>
     Number((fixture.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number | bigint }).n);
   const eventNames = () =>
@@ -53,6 +59,8 @@ describe('createD1DraftArticleWithDependentsDeletedStore', () => {
     expect(result).toEqual({ ok: true, val: { deleted: true } });
     expect(count('digest_trends')).toBe(0);
     expect(count('digest_items')).toBe(0);
+    expect(count('digest_deep_dives')).toBe(0);
+    expect(count('digest_deep_dive_turns')).toBe(0);
     expect(count('digests')).toBe(0);
     expect(count('article_bodies')).toBe(0);
     expect(count('articles')).toBe(0);
@@ -69,6 +77,8 @@ describe('createD1DraftArticleWithDependentsDeletedStore', () => {
       expect(result).toEqual({ ok: true, val: { deleted: false } });
       expect(count('digest_trends')).toBe(1);
       expect(count('digest_items')).toBe(1);
+      expect(count('digest_deep_dives')).toBe(1);
+      expect(count('digest_deep_dive_turns')).toBe(1);
       expect(count('digests')).toBe(1);
       expect(count('article_bodies')).toBe(1);
       expect(count('articles')).toBe(1);
@@ -85,6 +95,8 @@ describe('createD1DraftArticleWithDependentsDeletedStore', () => {
     expect(result).toEqual({ ok: true, val: { deleted: false } });
     expect(count('digest_trends')).toBe(1);
     expect(count('digest_items')).toBe(1);
+    expect(count('digest_deep_dives')).toBe(1);
+    expect(count('digest_deep_dive_turns')).toBe(1);
     expect(count('digests')).toBe(1);
     expect(count('article_bodies')).toBe(1);
     expect(count('articles')).toBe(1);

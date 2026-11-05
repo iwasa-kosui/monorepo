@@ -27,6 +27,7 @@
     "IORI_ADMISSION_MODE": "__IORI_ADMISSION_MODE__",
     "IORI_ADMISSION_IDENTITY": "__IORI_ADMISSION_IDENTITY__",
     "VAPID_SUBJECT": "__VAPID_SUBJECT__",
+    "IORI_PRUNE_FEDERATED_POSTS": "disabled",
   },
   "d1_databases": [
     {

@@ -26,6 +26,8 @@ const operations = Object.freeze({
   'delete-rehearsal-d1': 'delete-rehearsal-d1.mjs',
   'move-unfollowed-reposts-dry-run': 'move-unfollowed-reposts.mjs',
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
+  'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
+  'ensure-event-archive-bucket': 'ensure-event-archive-bucket.mjs',
 });
 const sourceInvocation = (env) => {
   if (
@@ -120,6 +122,10 @@ const rehearsalNoticeLine =
   /^IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse[1-5] state=(?:present|absent|empty|not-empty|ambiguous|check-failed|deleted|delete-failed|remaining)$/;
 const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
+const pruneNoticeLine =
+  /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
+const bucketNoticeLine =
+  /^IORI_NOTICE event-archive-bucket environment=(?:production|staging) state=(?:exists|created|create-conflict|verified|staging-not-running|event-archive-bucket-forbidden)$/;
 const hostedReasons = [
   ['Invalid source invocation.', 'invalid-source-invocation'],
   ['Protected workflow invocation is invalid.', 'invalid-invocation'],
@@ -151,7 +157,8 @@ const writeDiagnosticLine = async line => {
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
-      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line)
+      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !pruneNoticeLine.test(line)
+      && !bucketNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

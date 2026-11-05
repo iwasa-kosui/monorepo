@@ -9,10 +9,12 @@ import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNote
 import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
+import { createD1ActorResolverById } from '../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
 import { createD1LogoUriUpdatedStore } from '../../d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../../d1/actor/remoteActorCreatedStore.ts';
+import { createD1RemoteActorProfileUpdatedStore } from '../../d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1ArticleResolver } from '../../d1/article/articleResolver.ts';
 import type { IoriD1Db } from '../../d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../../d1/emojiReact/emojiReactCreatedStore.ts';
@@ -89,6 +91,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const remoteActorCreatedStore = createD1RemoteActorCreatedStore(db);
   const logoUriUpdatedStore = createD1LogoUriUpdatedStore(db);
+  const remoteActorProfileUpdatedStore = createD1RemoteActorProfileUpdatedStore(db);
   const postResolver = createD1PostResolver(db);
   const postResolverByUri = createD1PostResolverByUri(db);
   const postCreatedStore = createD1PostCreatedStore(db);
@@ -99,6 +102,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     postImageCreatedStore: createD1PostImageCreatedStore(db),
     remoteActorCreatedStore,
     logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
     actorResolverByUri,
   });
   const pushSubscriptionsResolver = createD1PushSubscriptionsResolverByUserId(db);
@@ -119,6 +123,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     postResolver,
     remoteActorCreatedStore,
     logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
@@ -130,6 +135,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     postResolver,
     remoteActorCreatedStore,
     logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
@@ -144,6 +150,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     remotePostUpserter,
     remoteActorCreatedStore,
     logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
     actorResolverByUri,
     timelineItemCreatedStore,
     pushSubscriptionsResolver,
@@ -173,6 +180,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         remoteActorCreatedStore,
         userResolverByUsername: createD1UserResolverByUsername(db),
         logoUriUpdatedStore,
+        remoteActorProfileUpdatedStore,
         followNotificationCreatedStore: createD1FollowNotificationCreatedStore(db),
         pushSubscriptionsResolver,
         webPushSender,
@@ -187,6 +195,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         userResolverByUsername: createD1UserResolverByUsername(db),
       }),
       removeReceivedLikeUseCase: RemoveReceivedLikeUseCase.create({
+        actorResolverById: createD1ActorResolverById(db),
         remoteLikeDeletedStore: createD1RemoteLikeDeletedStore(db),
         remoteLikeResolverByActivityUri: createD1RemoteLikeResolverByActivityUri(db),
       }),
@@ -195,6 +204,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         repostResolverByActivityUri: createD1RepostResolverByActivityUri(db),
       }),
       removeReceivedEmojiReactUseCase: RemoveReceivedEmojiReactUseCase.create({
+        actorResolverById: createD1ActorResolverById(db),
         emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
         emojiReactResolverByActivityUri,
       }),
@@ -215,6 +225,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         postImagesResolver: createD1PostImagesResolverByPostId(db),
         remoteActorCreatedStore,
         logoUriUpdatedStore,
+        remoteActorProfileUpdatedStore,
         actorResolverByUri,
         timelineItemCreatedStore,
         timelineItemsResolverByPostId: createD1TimelineItemsResolverByPostId(db),
@@ -236,6 +247,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     },
     onDelete: {
       remotePostResolverByUri: postResolverByUri,
+      actorResolverById: createD1ActorResolverById(db),
       timelineItemsResolverByPostId: createD1TimelineItemsResolverByPostId(db),
       likeNotificationsResolverByPostId: createD1LikeNotificationsResolverByPostId(db),
       emojiReactNotificationsResolverByPostId: createD1EmojiReactNotificationsResolverByPostId(db),

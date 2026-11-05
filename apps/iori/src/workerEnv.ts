@@ -15,4 +15,5 @@ export type IoriWorkerEnv = Readonly<{
   STAGING_ACCESS_TOKEN?: string;
   IORI_ADMISSION_MODE?: string;
   IORI_ADMISSION_IDENTITY?: string;
+  IORI_PRUNE_FEDERATED_POSTS?: string;
 }>;

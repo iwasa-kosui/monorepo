@@ -1,6 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { SafeFetcher, SafeFetchResult } from '../adaptor/http/safeFetch.ts';
+import type { SafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
 import type { WebPushSender } from '../adaptor/webPush/webPush.ts';
 import {
@@ -59,6 +59,7 @@ import type { TextGenerator } from '../ports/textGenerator.ts';
 import { runWithConcurrency } from './collectFeedEntries.ts';
 import type { CreateArticleWithBodyUseCase } from './createArticleWithBody.ts';
 import type { EnsureDefaultDigestTopicsUseCase } from './ensureDefaultDigestTopics.ts';
+import { fetchArticleBodyText } from './helper/fetchArticleBodyText.ts';
 import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -76,11 +77,7 @@ const SUMMARY_OUTPUT_MAX_CHARS = 300;
 const REQUESTED_DEADLINE_MS = 25_000;
 const SUMMARY_MIN_REMAINING_MS = 3_000;
 const SUMMARY_DEADLINE_MARGIN_MS = 1_000;
-const BODY_FETCH_MAX_BYTES = 5 * 1024 * 1024;
-const BODY_HTML_MAX_CHARS = 524_288;
-const BODY_FETCH_MAX_REDIRECTS = 3;
 const BODY_FETCH_CONCURRENCY = 10;
-const BODY_MEDIA_TYPES_HTML: ReadonlySet<string> = new Set(['text/html', 'application/xhtml+xml']);
 const TOPIC_ITEMS_LIMIT = 5;
 const TOPIC_MIN_ITEMS = 3;
 const TOPICS_PER_DAY_LIMIT = 4;
@@ -176,7 +173,7 @@ export const stripThinkBlocks = (output: string): string => {
 
 const DOCUMENT_TAG = /<\/?document\s*>/gi;
 
-const removeDocumentTags = (text: string): string => {
+export const removeDocumentTags = (text: string): string => {
   const removed = text.replace(DOCUMENT_TAG, '');
   return removed === text ? text : removeDocumentTags(removed);
 };
@@ -190,18 +187,6 @@ export const limitSummary = (summary: string): string => {
     .slice(0, SUMMARY_OUTPUT_MAX_LINES)
     .join('\n');
   return Array.from(lines).slice(0, SUMMARY_OUTPUT_MAX_CHARS).join('').trim();
-};
-
-const toBodyText = (fetched: SafeFetchResult): string => {
-  if (fetched.body === undefined) return '';
-  const mediaType = fetched.contentType?.split(';')[0]?.trim().toLowerCase() ?? '';
-  if (mediaType === 'text/plain') {
-    return Array.from(fetched.body.slice(0, RECOMMENDATION_SUMMARY_INPUT_MAX_CHARS * 2))
-      .slice(0, RECOMMENDATION_SUMMARY_INPUT_MAX_CHARS)
-      .join('');
-  }
-  if (!BODY_MEDIA_TYPES_HTML.has(mediaType)) return '';
-  return htmlToPlainText(fetched.body.slice(0, BODY_HTML_MAX_CHARS), RECOMMENDATION_SUMMARY_INPUT_MAX_CHARS);
 };
 
 type SummaryTarget = Pick<FeedEntry, 'feedEntryId' | 'title' | 'description'>;
@@ -466,12 +451,10 @@ const create = ({
         selectedItems.filter((item) => item.score !== null),
         BODY_FETCH_CONCURRENCY,
         async ({ article }) => {
-          const fetched = await safeFetcher.fetchText(article.url, {
+          const text = await fetchArticleBodyText(safeFetcher, article.url, {
             timeoutMs: Math.min(BODY_FETCH_TIMEOUT_MS[trigger], remainingMs()),
-            maxBytes: BODY_FETCH_MAX_BYTES,
-            maxRedirects: BODY_FETCH_MAX_REDIRECTS,
+            maxChars: RECOMMENDATION_SUMMARY_INPUT_MAX_CHARS,
           });
-          const text = fetched.ok ? toBodyText(fetched.val) : '';
           if (text === '') {
             fallbackToDescription += 1;
             return;

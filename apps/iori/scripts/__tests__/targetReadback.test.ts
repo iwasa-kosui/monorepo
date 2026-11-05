@@ -613,6 +613,12 @@ describe('a state close to a production wrangler deployment', () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'ai' }]);
     await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
   });
+  it('accepts an IORI_PRUNE_FEDERATED_POSTS plain_text binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [
+      { name: 'IORI_PRUNE_FEDERATED_POSTS', type: 'plain_text', text: 'disabled' },
+    ]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+  });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-mismatch'));

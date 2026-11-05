@@ -10,6 +10,7 @@ export const createTargetIdentity = ({ environment, generation, accountId }) => 
   const names = {
     d1: prefix,
     uploads: `${prefix}-uploads`,
+    eventArchive: `${prefix}-event-archive`,
     kv: `${prefix}-fedify`,
     queue: `${prefix}-fedify`,
     dlq: `${prefix}-dlq`,
