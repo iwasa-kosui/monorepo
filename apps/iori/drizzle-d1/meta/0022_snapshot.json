@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "970aee95-2103-429c-a1ff-0726760f5725",
-  "prevId": "38015ce2-183c-4cc4-b768-79e234f4bcd6",
+  "prevId": "5d694e3f-3fc0-4b3e-825c-d15bac4d8234",
   "tables": {
     "actors": {
       "name": "actors",
@@ -3349,62 +3349,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "displayName": {
-          "name": "displayName",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "headerUri": {
-          "name": "headerUri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "actorType": {
-          "name": "actorType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "manuallyApprovesFollowers": {
-          "name": "manuallyApprovesFollowers",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "publishedAt": {
-          "name": "publishedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fields": {
-          "name": "fields",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "emojis": {
-          "name": "emojis",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {},
@@ -3927,6 +3871,208 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "digest_deep_dives": {
+      "name": "digest_deep_dives",
+      "columns": {
+        "deepDiveId": {
+          "name": "deepDiveId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "digestItemId": {
+          "name": "digestItemId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "articleId": {
+          "name": "articleId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "digest_deep_dives_digest_item_id_unique": {
+          "name": "digest_deep_dives_digest_item_id_unique",
+          "columns": [
+            "digestItemId"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "digest_deep_dives_userId_users_userId_fk": {
+          "name": "digest_deep_dives_userId_users_userId_fk",
+          "tableFrom": "digest_deep_dives",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "digest_deep_dive_turns": {
+      "name": "digest_deep_dive_turns",
+      "columns": {
+        "turnId": {
+          "name": "turnId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deepDiveId": {
+          "name": "deepDiveId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "turnNumber": {
+          "name": "turnNumber",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "instruction": {
+          "name": "instruction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resultMarkdown": {
+          "name": "resultMarkdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "digest_deep_dive_turns_deep_dive_id_turn_number_unique": {
+          "name": "digest_deep_dive_turns_deep_dive_id_turn_number_unique",
+          "columns": [
+            "deepDiveId",
+            "turnNumber"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "digest_deep_dive_turns_deepDiveId_digest_deep_dives_deepDiveId_fk": {
+          "name": "digest_deep_dive_turns_deepDiveId_digest_deep_dives_deepDiveId_fk",
+          "tableFrom": "digest_deep_dive_turns",
+          "tableTo": "digest_deep_dives",
+          "columnsFrom": [
+            "deepDiveId"
+          ],
+          "columnsTo": [
+            "deepDiveId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "digest_deep_dive_usages": {
+      "name": "digest_deep_dive_usages",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "day": {
+          "name": "day",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "digest_deep_dive_usages_userId_users_userId_fk": {
+          "name": "digest_deep_dive_usages_userId_users_userId_fk",
+          "tableFrom": "digest_deep_dive_usages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "digest_deep_dive_usages_userId_day_pk": {
+          "columns": [
+            "userId",
+            "day"
+          ],
+          "name": "digest_deep_dive_usages_userId_day_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     }
