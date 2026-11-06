@@ -9,6 +9,7 @@ const existing = [
   '予約した来院をキャンセルすると、来院の状態がキャンセルになる',
   '診察が終わった来院はキャンセルできない',
   'キャンセルできなかったときは、記録を残さない',
+  '来院の更新に失敗したら、記録も残らない',
 ];
 const step1 = [
   '来院をキャンセルすると、来院キャンセルの記録が1行残る',
@@ -26,7 +27,7 @@ const snapshots = [
 const errors: string[] = [];
 
 for (const { dir, green, red } of snapshots) {
-  const result = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`], {
+  const result = spawnSync(process.execPath, ['--test', `--test-reporter=${reporter}`, 'visits.test.ts'], {
     cwd: join(exercisesDir, dir),
     encoding: 'utf8',
   });
@@ -49,6 +50,19 @@ for (const { dir, green, red } of snapshots) {
   }
   if ((result.status === 0) !== (red.length === 0)) {
     errors.push(`${dir}: node --test の終了コードが想定と違います（${result.status}）`);
+  }
+  const who = spawnSync(process.execPath, ['who-cancelled.ts'], { cwd: join(exercisesDir, dir), encoding: 'utf8' });
+  if (who.status !== 0) {
+    errors.push(`${dir}: who-cancelled.ts の終了コードが 0 ではありません（${who.status}）`);
+  }
+  if (dir === 'chapter-2-step-2') {
+    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-before-events']) {
+      if (!who.stdout.includes(text)) {
+        errors.push(`${dir}: who-cancelled.ts の出力に「${text}」がありません`);
+      }
+    }
+  } else if (who.stdout.includes('受付スタッフ')) {
+    errors.push(`${dir}: who-cancelled.ts の出力に「受付スタッフ」が含まれています`);
   }
   console.log(`${dir}: green ${green.length} / red ${red.length} を想定`);
 }

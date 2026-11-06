@@ -6,6 +6,8 @@ import { cancelVisit, completeVisit, reserveVisit } from './visits.ts';
 
 const visitId = 'visit-1';
 const cancelInput = { visitId, reason: '飼い主の都合', operatedBy: '受付スタッフ' };
+const missingEvent =
+  `来院キャンセルの記録がありません（domain_events を aggregate_name = 'Visit'、aggregate_id = '${visitId}' で探しました）`;
 
 let db: DatabaseSync;
 
@@ -35,20 +37,31 @@ describe('既存の業務', () => {
     assert.throws(() => cancelVisit(db, cancelInput));
     assert.equal(eventsOf(visitId).length, 0);
   });
+
+  it('来院の更新に失敗したら、記録も残らない', () => {
+    db.exec(`
+      CREATE TRIGGER reject_update BEFORE UPDATE ON visits
+      BEGIN
+        SELECT RAISE(ABORT, '更新に失敗しました');
+      END;
+    `);
+    assert.throws(() => cancelVisit(db, cancelInput), /更新に失敗しました/);
+    assert.equal(eventsOf(visitId).length, 0);
+  });
 });
 
 describe('第2章 ステップ1', () => {
   it('来院をキャンセルすると、来院キャンセルの記録が1行残る', () => {
     cancelVisit(db, cancelInput);
     const events = eventsOf(visitId);
-    assert.equal(events.length, 1, 'domain_events に来院キャンセルの記録がありません');
+    assert.equal(events.length, 1, missingEvent);
     assert.equal(events[0]?.event_name, 'VisitCancelled');
   });
 
   it('キャンセルの記録に、キャンセル後の来院の状態が残る', () => {
     cancelVisit(db, cancelInput);
     const event = eventsOf(visitId)[0];
-    assert.ok(event, 'domain_events に来院キャンセルの記録がありません');
+    assert.ok(event, missingEvent);
     assert.equal(JSON.parse(String(event.aggregate_props)).status, 'cancelled');
   });
 
@@ -76,9 +89,17 @@ describe('第2章 ステップ2', () => {
       FROM domain_events
       WHERE aggregate_name = 'Visit' AND aggregate_id = ?
     `).get(visitId);
-    assert.ok(answer, 'この来院がキャンセルになった記録がありません');
-    assert.equal(answer.operated_by, cancelInput.operatedBy, 'キャンセルした人を答えられません');
-    assert.equal(answer.reason, cancelInput.reason, 'キャンセルの理由を答えられません');
+    assert.ok(answer, missingEvent);
+    assert.equal(
+      answer.operated_by,
+      cancelInput.operatedBy,
+      'キャンセルした人を答えられません（payload の operatedBy を読みました）',
+    );
+    assert.equal(
+      answer.reason,
+      cancelInput.reason,
+      'キャンセルの理由を答えられません（payload の reason を読みました）',
+    );
     assert.equal(answer.event_name, 'VisitCancelled');
     assert.ok(!Number.isNaN(Date.parse(String(answer.event_at))), 'キャンセルした時刻を答えられません');
   });
