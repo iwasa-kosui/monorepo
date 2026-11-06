@@ -56,6 +56,9 @@
 .content th {
   background: #f3f4f6;
 }
+.content .decision-table th, .content .decision-table td {
+  min-width: 9rem;
+}
 .content :not(pre) > code {
   border-radius: 0.25rem;
   background: #f3f4f6;

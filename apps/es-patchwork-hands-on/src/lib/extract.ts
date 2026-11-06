@@ -14,6 +14,26 @@ export const extractLines = (source: string, startPrefix: string, endPrefix: str
 export const extractExport = (source: string, name: string): string =>
   extractLines(source, `export const ${name} =`, '};');
 
+export const extractFrom = (source: string, startPrefix: string): string => {
+  const lines = source.split('\n');
+  const start = lines.findIndex((line) => line.startsWith(startPrefix));
+  if (start === -1) {
+    throw new Error(`切り出しの開始行が見つかりません: ${startPrefix}`);
+  }
+  return lines.slice(start).join('\n').trimEnd();
+};
+
+export const extractHtmlSection = (html: string, heading: string): string => {
+  const section = html.split(/(?=<h2[\s>])/).find((part) => {
+    const title = /^<h2[^>]*>(.*?)<\/h2>/s.exec(part)?.[1];
+    return title === heading;
+  });
+  if (section === undefined) {
+    throw new Error(`切り出す節が見つかりません: ${heading}`);
+  }
+  return section.trim();
+};
+
 const blanks: readonly (readonly [string, string])[] = [
   [`      'VisitCancelled',`, '      /* event_name */,'],
   ['      input.visitId,', '      /* aggregate_id */,'],

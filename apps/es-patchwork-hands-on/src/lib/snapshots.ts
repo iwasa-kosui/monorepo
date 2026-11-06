@@ -1,4 +1,4 @@
-import { extractExport, extractLines, toInsertTemplate } from './extract';
+import { extractExport, extractFrom, extractLines, toInsertTemplate } from './extract';
 
 const sources = import.meta.glob<string>('/exercises/chapter-*/*.ts', {
   query: '?raw',
@@ -16,6 +16,9 @@ const readSnapshot = (snapshot: string, file: string): string => {
 
 export const cancelVisitOf = (snapshot: string): string =>
   extractExport(readSnapshot(snapshot, 'visits.ts'), 'cancelVisit');
+
+export const readFunctionsOf = (snapshot: string, firstFunction: string): string =>
+  extractFrom(readSnapshot(snapshot, 'visits.ts'), `export const ${firstFunction} =`);
 
 export const insertTemplate = (): string => toInsertTemplate(readSnapshot('chapter-2-step-1', 'visits.ts'));
 

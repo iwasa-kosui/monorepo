@@ -1,0 +1,13 @@
+---
+import { compiledContent } from '../../exercises/chapter-4-decision-table.md';
+import { extractHtmlSection } from '../lib/extract';
+
+interface Props {
+  heading: string;
+}
+
+const { heading } = Astro.props;
+const html = extractHtmlSection(await compiledContent(), heading);
+---
+
+<div class="decision-table"><Fragment set:html={html} /></div>

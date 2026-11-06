@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { extractExport, extractLines, toInsertTemplate } from './extract';
+import { extractExport, extractFrom, extractHtmlSection, extractLines, toInsertTemplate } from './extract';
+import { cancelVisitOf, readFunctionsOf } from './snapshots';
 
 const read = (path: string): string => readFileSync(new URL(`../../exercises/${path}`, import.meta.url), 'utf8');
 
@@ -28,6 +29,55 @@ describe('extractLines', () => {
     const code = extractLines(read('chapter-2-step-2/who-cancelled.ts'), 'const rows =', '`).all();');
     expect(code).toContain(`payload ->> '$.operatedBy'`);
     expect(code).toContain(`payload ->> '$.reason'`);
+  });
+});
+
+describe('extractFrom', () => {
+  it('開始行からソースの末尾までを返し、末尾の空白を落とす', () => {
+    expect(extractFrom('a\nb\nc\n\n', 'b')).toBe('b\nc');
+  });
+
+  it('開始行が無ければビルドを止める', () => {
+    expect(() => extractFrom('a\nb', 'z')).toThrow('開始行');
+  });
+});
+
+describe('extractHtmlSection', () => {
+  const html = '<p>前文</p><h2 id="a">甲</h2><p>1</p><h2 id="b">乙</h2><p>2</p>';
+
+  it('見出しから次の見出しの手前までを返す', () => {
+    expect(extractHtmlSection(html, '甲')).toBe('<h2 id="a">甲</h2><p>1</p>');
+  });
+
+  it('最後の節は末尾までを返す', () => {
+    expect(extractHtmlSection(html, '乙')).toBe('<h2 id="b">乙</h2><p>2</p>');
+  });
+
+  it('見出しが無ければビルドを止める', () => {
+    expect(() => extractHtmlSection(html, '丙')).toThrow('切り出す節が見つかりません');
+  });
+});
+
+describe('cancelVisitOf', () => {
+  it('集計テーブルの更新処理は開始と完成で同じ', () => {
+    expect(cancelVisitOf('chapter-4-summary-table-start')).toBe(cancelVisitOf('chapter-4-summary-table-done'));
+  });
+});
+
+describe('readFunctionsOf', () => {
+  it.each([
+    ['chapter-4-summary-table-done', 'explainCancellationCount', [
+      'explainCancellationCount',
+      'verifyCancellationCount',
+    ]],
+    ['chapter-4-external-sync-done', 'findSendRecords', ['findSendRecords', 'findUnconfirmedSends']],
+    ['chapter-4-audit-log-done', 'explainChange', ['explainChange', 'findChangesWithoutReason']],
+  ])('%s の読み取り関数を切り出す', (snapshot, first, names) => {
+    const code = readFunctionsOf(snapshot, first);
+    expect(code).not.toContain('第4章で実装します');
+    for (const name of names) {
+      expect(code).toContain(name);
+    }
   });
 });
 
