@@ -72,3 +72,7 @@
   cursor: pointer;
   font-weight: 700;
 }
+
+.content .code-block pre {
+  padding-top: 2.75rem;
+}

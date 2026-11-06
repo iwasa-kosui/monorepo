@@ -26,8 +26,15 @@ for (const block of document.querySelectorAll('.code-block')) {
   if (button === null || pre === null) continue;
   button.hidden = false;
   button.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(pre.textContent ?? '');
-    button.textContent = 'コピーしました';
+    try {
+      await navigator.clipboard.writeText(pre.textContent ?? '');
+      button.textContent = 'コピーしました';
+    } catch {
+      button.textContent = 'コピーできませんでした';
+    }
+    setTimeout(() => {
+      button.textContent = 'コピー';
+    }, 2000);
   });
 }
 </script>

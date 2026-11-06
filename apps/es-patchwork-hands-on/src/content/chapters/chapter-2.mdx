@@ -9,7 +9,7 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 
 ### 更新処理の中で記録する
 
-`visits` の行には、キャンセルした人と理由がありません。`cancelVisit` は呼び出し元からこの2つを受け取れるので、この演習では更新処理の中でイベントを記録します。
+`visits` の行には、キャンセルした人と理由がありません。`cancelVisit` の呼び出し元はこの2つを知っています。ステップ2で引数に足せるので、この演習では更新処理の中でイベントを記録します。
 
 ### 同じトランザクションに入れる
 
@@ -46,7 +46,7 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 | `/* aggregate_name */` | `'Visit'` |
 | `/* aggregate_props */` | `JSON.stringify(cancelled)` |
 
-`node --test visits.test.ts` を実行します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。
+`node --test visits.test.ts` を実行します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。第1章と同じく、`ℹ pass` と `ℹ fail` の行は失敗の詳細の上に出ます。
 
 <details>
 <summary>ステップ1の解答を見る</summary>

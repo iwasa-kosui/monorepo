@@ -13,7 +13,7 @@ import { cancelVisitOf } from '../../lib/snapshots';
 node --test visits.test.ts
 ```
 
-実行すると、次のように4件が成功して4件が失敗します。ここでは失敗して正常です。
+実行すると、4件が成功して4件が失敗します。ここでは失敗して正常です。次の例は出力の一部です。
 
 ```text
 ▶ 既存の業務
@@ -30,6 +30,8 @@ node --test visits.test.ts
 ℹ pass 4
 ℹ fail 4
 ```
+
+`ℹ pass` と `ℹ fail` の行は失敗の詳細の上に出ます。画面を上に戻して確かめます。
 
 `ExperimentalWarning: SQLite is an experimental feature` という警告が出ても問題ありません。
 
