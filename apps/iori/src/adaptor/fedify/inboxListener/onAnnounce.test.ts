@@ -376,6 +376,20 @@ describe('createOnAnnounce', () => {
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
+  it('does not save a remote Announce whose Note attribution is on another origin', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({
+      attribution: new Person({
+        id: new URL('https://other.example/users/alice'),
+        inbox: new URL('https://other.example/users/alice/inbox'),
+      }),
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
   describe('Announce of a local object', () => {
     const noteId = crypto.randomUUID();
     const articleId = crypto.randomUUID();

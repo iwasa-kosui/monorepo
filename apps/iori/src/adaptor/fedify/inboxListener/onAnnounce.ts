@@ -218,8 +218,13 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
+  if (author.id.origin !== note.id.origin) {
+    getLogger().warn(`Note origin does not match actor origin: ${note.id.href} - ${author.id.href}`);
+    return;
+  }
+
   const contentText = String(note.content ?? '');
-  const authorIdentity = await ActorIdentity.fromFedifyActor(author, documentLoaderOptions);
+  const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author: ${note.id.href}`);
     return;
