@@ -25,7 +25,8 @@ export const createOnReject = (deps: OnRejectDeps) => async (ctx: InboxContext<u
   const actorUri = actorId.href;
   getLogger().info(`Received Reject activity from: ${actorUri}`);
 
-  const object = await activity.getObject();
+  // 消す行は送り主へのフォローに限られるので、別 origin の埋め込みを信頼してよい
+  const object = await activity.getObject({ crossOrigin: 'trust' });
   if (!(object instanceof Follow)) {
     getLogger().info(`Reject activity object is not a Follow: ${actorUri}`);
     return;

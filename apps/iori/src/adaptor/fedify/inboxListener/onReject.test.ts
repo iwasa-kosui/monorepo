@@ -59,6 +59,38 @@ describe('createOnReject', () => {
     );
   });
 
+  it('removes the follow when the embedded Follow id has a different origin from the Reject id', async () => {
+    const { deps, followResolver, undoFollowingProcessedStore } = createDeps();
+    const followId = `${ORIGIN}/users/alice#follows/abc`;
+    const documentLoader = vi.fn(async (url: string) => ({
+      contextUrl: null,
+      documentUrl: url,
+      document: {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: LOCAL_ACTOR_URI,
+        type: 'Person',
+        preferredUsername: 'alice',
+      },
+    }));
+    const reject = await Reject.fromJsonLd({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: 'https://remote.example/activities/4',
+      type: 'Reject',
+      actor: REMOTE_ACTOR_URI,
+      object: {
+        id: followId,
+        type: 'Follow',
+        actor: LOCAL_ACTOR_URI,
+        object: REMOTE_ACTOR_URI,
+      },
+    }, { documentLoader });
+
+    await createOnReject(deps)(createCtx(), reject as Reject);
+
+    expect(followResolver.resolve).toHaveBeenCalledWith({ followerId: 'actor:local', followingId: 'actor:remote' });
+    expect(undoFollowingProcessedStore.store).toHaveBeenCalledOnce();
+  });
+
   it('does nothing when the follow does not exist', async () => {
     const { deps, undoFollowingProcessedStore } = createDeps(false);
 
