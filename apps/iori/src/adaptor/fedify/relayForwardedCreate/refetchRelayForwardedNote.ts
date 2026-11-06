@@ -29,7 +29,7 @@ export type RefetchRelayForwardedNoteDeps =
 
 type RefetchContext = Pick<Context<unknown>, 'getDocumentLoader' | 'contextLoader'>;
 
-const isFetchFailure = (error: unknown): boolean =>
+export const isFetchFailure = (error: unknown): boolean =>
   error instanceof FetchError || error instanceof UrlError
   || (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'));
 
