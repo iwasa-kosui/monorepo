@@ -43,6 +43,9 @@ import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
+import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
+import { createD1FeedSourceEnabledChangedStore } from '../adaptor/d1/feedSource/feedSourceEnabledChangedStore.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -147,6 +150,8 @@ import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
+import { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
+import { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -224,6 +229,7 @@ export const createWorkerRuntimePorts = async (
   });
   const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
+  const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -417,6 +423,17 @@ export const createWorkerRuntimePorts = async (
         interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
         interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
         digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
+        now: Instant.now,
+      }),
+      allFeedSourcesResolver,
+      addFeedSourceUseCase: AddFeedSourceUseCase.create({
+        allFeedSourcesResolver,
+        feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
+        now: Instant.now,
+      }),
+      changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase.create({
+        allFeedSourcesResolver,
+        feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
         now: Instant.now,
       }),
     },
