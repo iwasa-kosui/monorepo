@@ -10,6 +10,9 @@ describe('講師向けの資料', () => {
     const script = read('docs/instructor-script.md');
     for (const row of withTimeRanges(schedule)) {
       expect(script).toContain(row.range);
+      if (row.parts) {
+        expect(script).toContain(row.parts);
+      }
     }
   });
 
