@@ -7,7 +7,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   {
-    ignores: ['dist/**', 'node_modules/**', '.astro/**', '.wrangler/**'],
+    ignores: ['dist/**', 'node_modules/**', '.astro/**', '.wrangler/**', 'exercises/**'],
   },
   {
     plugins: {
