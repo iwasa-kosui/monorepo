@@ -9,7 +9,7 @@ import {
 import { Activity, CryptographicKey, Follow, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserNotFoundError } from '../../../domain/user/user.ts';
 import type { Username } from '../../../domain/user/username.ts';
@@ -22,8 +22,17 @@ const REMOTE_ACTOR = 'https://remote.example/users/alice';
 const REMOTE_KEY = `${REMOTE_ACTOR}#main-key`;
 const REMOTE_INBOX = `${REMOTE_ACTOR}/inbox`;
 
-describe('createOnFollow', () => {
+describe('createOnFollow', { timeout: 30_000 }, () => {
   const fetchMock = vi.fn<(request: Request) => Promise<Response>>();
+  let remoteKeyPair: CryptoKeyPair;
+  let rsa: CryptoKeyPair;
+  let ed25519: CryptoKeyPair;
+
+  beforeAll(async () => {
+    remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    ed25519 = await generateCryptoKeyPair('Ed25519');
+  }, 30_000);
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -36,9 +45,6 @@ describe('createOnFollow', () => {
 
   const setup = async (run: ReturnType<typeof vi.fn>) => {
     const contextLoader = getDocumentLoader();
-    const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const ed25519 = await generateCryptoKeyPair('Ed25519');
     const remoteActor = new Person({
       id: new URL(REMOTE_ACTOR),
       preferredUsername: 'alice',

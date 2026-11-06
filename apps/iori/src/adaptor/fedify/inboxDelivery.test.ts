@@ -8,7 +8,7 @@ import {
 } from '@fedify/fedify';
 import { Create, CryptographicKey, Follow, Multikey, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createContextLoaderFactory } from '../../federationContext.ts';
 
@@ -16,8 +16,9 @@ const ORIGIN = 'https://iori.example';
 const REMOTE_ACTOR = 'https://remote.example/users/alice';
 const REMOTE_KEY = `${REMOTE_ACTOR}#main-key`;
 
+let keyPair: CryptoKeyPair;
+
 const setup = async () => {
-  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteActor = new Person({
     id: new URL(REMOTE_ACTOR),
     preferredUsername: 'alice',
@@ -84,7 +85,11 @@ const create = () =>
     }),
   });
 
-describe('HTTP 署名つきの活動の受信', () => {
+describe('HTTP 署名つきの活動の受信', { timeout: 30_000 }, () => {
+  beforeAll(async () => {
+    keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  }, 30_000);
+
   it('個人 inbox への署名つき Follow を 202 で受け付けて listener を呼ぶ', async () => {
     const { deliver, onFollow } = await setup();
 
@@ -145,12 +150,18 @@ describe('relay が転送した活動の受信', { timeout: 30_000 }, () => {
   const RELAY_ACTOR = 'https://relay.example/actor';
   const RELAY_KEY = `${RELAY_ACTOR}#main-key`;
   const AUTHOR_PROOF_KEY = `${REMOTE_ACTOR}#ed25519-key`;
+  let relayKeyPair: CryptoKeyPair;
+  let authorKeyPair: CryptoKeyPair;
+  let authorProofKeyPair: CryptoKeyPair;
+
+  beforeAll(async () => {
+    relayKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    authorKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    authorProofKeyPair = await generateCryptoKeyPair('Ed25519');
+  }, 30_000);
 
   const setupRelay = async () => {
     const contextLoader = getDocumentLoader();
-    const relayKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const authorKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-    const authorProofKeyPair = await generateCryptoKeyPair('Ed25519');
     const relayActor = new Person({
       id: new URL(RELAY_ACTOR),
       preferredUsername: 'relay',
