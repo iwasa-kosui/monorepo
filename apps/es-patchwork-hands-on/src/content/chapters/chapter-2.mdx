@@ -15,9 +15,9 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 
 この演習では、イベントの記録を来院の更新と同じトランザクションに入れます。記録に失敗すると、来院の更新も失敗します。こうすると、記録が抜けたキャンセルは残りません。`cancelVisit` は開始時点で `withTransaction` の中にあるので、参加者はトランザクションを書き足さなくて済みます。
 
-### domain_events テーブル
+### business_events テーブル
 
-`domain_events` テーブルは開始時点の DB に用意してあります。
+`business_events` テーブルは開始時点の DB に用意してあります。
 
 | 列 | 入れるもの |
 |---|---|
@@ -25,15 +25,15 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 | `event_at` | イベントが起きた時刻 |
 | `event_name` | 起きたことの名前 |
 | `payload` | 操作した人や理由などの業務の情報（JSON） |
-| `aggregate_id` | イベントの対象の ID |
-| `aggregate_name` | イベントの対象の種類 |
-| `aggregate_props` | 変化後の状態（JSON） |
+| `target_id` | イベントの対象の ID |
+| `target_type` | イベントの対象の種類 |
+| `target_state` | 変化後の状態（JSON） |
 
 [関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
 
 ## ステップ1: キャンセルを記録する
 
-`chapter-1-start/visits.ts` の `cancelVisit` を編集します。`UPDATE visits SET status = 'cancelled'` の次の行に、次の雛形を貼り付けます。更新の後に置くのは、変化後の状態を `aggregate_props` に入れるためです。
+`chapter-1-start/visits.ts` の `cancelVisit` を編集します。`UPDATE visits SET status = 'cancelled'` の次の行に、次の雛形を貼り付けます。更新の後に置くのは、変化後の状態を `target_state` に入れるためです。
 
 <CodeBlock code={insertTemplate()} />
 
@@ -42,9 +42,9 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 | 空欄 | 値 |
 |---|---|
 | `/* event_name */` | `'VisitCancelled'` |
-| `/* aggregate_id */` | `input.visitId` |
-| `/* aggregate_name */` | `'Visit'` |
-| `/* aggregate_props */` | `JSON.stringify(cancelled)` |
+| `/* target_id */` | `input.visitId` |
+| `/* target_type */` | `'Visit'` |
+| `/* target_state */` | `JSON.stringify(cancelled)` |
 
 `node --test visits.test.ts` を実行します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。第1章と同じく、`ℹ pass` と `ℹ fail` の行は失敗の詳細の上に出ます。
 

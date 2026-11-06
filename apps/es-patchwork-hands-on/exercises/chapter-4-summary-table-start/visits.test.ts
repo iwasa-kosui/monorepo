@@ -14,13 +14,13 @@ const visitId = 'visit-1';
 const visitDate = '2026-04-01';
 const cancelInput = { visitId, reason: '飼い主の都合', operatedBy: '受付スタッフ' };
 const missingEvent =
-  `来院キャンセルの記録がありません（domain_events を aggregate_name = 'Visit'、aggregate_id = '${visitId}' で探しました）`;
+  `来院キャンセルの記録がありません（business_events を target_type = 'Visit'、target_id = '${visitId}' で探しました）`;
 
 let db: DatabaseSync;
 
 const statusOf = (id: string) => db.prepare(`SELECT status FROM visits WHERE id = ?`).get(id)?.status;
 const eventsOf = (id: string) =>
-  db.prepare(`SELECT * FROM domain_events WHERE aggregate_name = 'Visit' AND aggregate_id = ?`).all(id);
+  db.prepare(`SELECT * FROM business_events WHERE target_type = 'Visit' AND target_id = ?`).all(id);
 const cancelledCountOf = (date: string) =>
   db.prepare(`SELECT cancelled_count FROM daily_cancellation_counts WHERE visit_date = ?`).get(date)?.cancelled_count;
 
@@ -71,12 +71,12 @@ describe('第2章 ステップ1', () => {
     cancelVisit(db, cancelInput);
     const event = eventsOf(visitId)[0];
     assert.ok(event, missingEvent);
-    assert.equal(JSON.parse(String(event.aggregate_props)).status, 'cancelled');
+    assert.equal(JSON.parse(String(event.target_state)).status, 'cancelled');
   });
 
   it('記録に失敗したら、来院のキャンセルも失敗する', () => {
     db.exec(`
-      CREATE TRIGGER reject_event BEFORE INSERT ON domain_events
+      CREATE TRIGGER reject_event BEFORE INSERT ON business_events
       BEGIN
         SELECT RAISE(ABORT, '記録に失敗しました');
       END;
@@ -95,8 +95,8 @@ describe('第2章 ステップ2', () => {
         event_name,
         payload ->> '$.operatedBy' AS operated_by,
         payload ->> '$.reason' AS reason
-      FROM domain_events
-      WHERE aggregate_name = 'Visit' AND aggregate_id = ?
+      FROM business_events
+      WHERE target_type = 'Visit' AND target_id = ?
     `).get(visitId);
     assert.ok(answer, missingEvent);
     assert.equal(

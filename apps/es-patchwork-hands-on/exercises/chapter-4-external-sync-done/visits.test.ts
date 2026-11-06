@@ -15,7 +15,7 @@ import {
 const visitId = 'visit-1';
 const cancelInput = { visitId, reason: '飼い主の都合', operatedBy: '受付スタッフ' };
 const missingEvent =
-  `来院キャンセルの記録がありません（domain_events を aggregate_name = 'Visit'、aggregate_id = '${visitId}' で探しました）`;
+  `来院キャンセルの記録がありません（business_events を target_type = 'Visit'、target_id = '${visitId}' で探しました）`;
 
 let db: DatabaseSync;
 let sent: ReminderCancellationMessage[];
@@ -29,7 +29,7 @@ const sendFailing: SendReminderCancellation = async () => {
 
 const statusOf = (id: string) => db.prepare(`SELECT status FROM visits WHERE id = ?`).get(id)?.status;
 const eventsOf = (id: string) =>
-  db.prepare(`SELECT * FROM domain_events WHERE aggregate_name = 'Visit' AND aggregate_id = ?`).all(id);
+  db.prepare(`SELECT * FROM business_events WHERE target_type = 'Visit' AND target_id = ?`).all(id);
 
 beforeEach(() => {
   db = createDatabase();
@@ -79,12 +79,12 @@ describe('第2章 ステップ1', () => {
     await cancelVisit(db, send, cancelInput);
     const event = eventsOf(visitId)[0];
     assert.ok(event, missingEvent);
-    assert.equal(JSON.parse(String(event.aggregate_props)).status, 'cancelled');
+    assert.equal(JSON.parse(String(event.target_state)).status, 'cancelled');
   });
 
   it('記録に失敗したら、来院のキャンセルも失敗する', async () => {
     db.exec(`
-      CREATE TRIGGER reject_event BEFORE INSERT ON domain_events
+      CREATE TRIGGER reject_event BEFORE INSERT ON business_events
       BEGIN
         SELECT RAISE(ABORT, '記録に失敗しました');
       END;
@@ -107,8 +107,8 @@ describe('第2章 ステップ2', () => {
         event_name,
         payload ->> '$.operatedBy' AS operated_by,
         payload ->> '$.reason' AS reason
-      FROM domain_events
-      WHERE aggregate_name = 'Visit' AND aggregate_id = ?
+      FROM business_events
+      WHERE target_type = 'Visit' AND target_id = ?
     `).get(visitId);
     assert.ok(answer, missingEvent);
     assert.equal(
@@ -156,7 +156,7 @@ describe('第4章 外部システムとの同期', () => {
     const records = findSendRecords(db, visitId);
     assert.equal(records.length, 1);
     const record = records[0];
-    assert.ok(record, '送信の記録がありません（domain_events の ReminderCancellationRequested を探しました）');
+    assert.ok(record, '送信の記録がありません（business_events の ReminderCancellationRequested を探しました）');
     assert.deepEqual(record.message, { visitId, petName: 'ポチ' });
     assert.equal(record.result, 'sent');
     assert.equal(record.reason, cancelInput.reason);
@@ -169,7 +169,7 @@ describe('第4章 外部システムとの同期', () => {
   it('送信に失敗したら、失敗の理由が記録に残る', async () => {
     await assert.rejects(() => cancelVisit(db, sendFailing, cancelInput), /送信先に接続できません/);
     const record = findSendRecords(db, visitId)[0];
-    assert.ok(record, '送信の記録がありません（domain_events の ReminderCancellationRequested を探しました）');
+    assert.ok(record, '送信の記録がありません（business_events の ReminderCancellationRequested を探しました）');
     assert.equal(record.result, 'failed');
     assert.equal(record.error, '送信先に接続できません');
     assert.equal(record.reason, cancelInput.reason);
@@ -178,7 +178,7 @@ describe('第4章 外部システムとの同期', () => {
 
   it('送信の予定を記録できなければ、来院のキャンセルも外部への送信もしない', async () => {
     db.exec(`
-      CREATE TRIGGER reject_requested BEFORE INSERT ON domain_events
+      CREATE TRIGGER reject_requested BEFORE INSERT ON business_events
       WHEN NEW.event_name = 'ReminderCancellationRequested'
       BEGIN
         SELECT RAISE(ABORT, '送信の予定の記録に失敗しました');
@@ -192,7 +192,7 @@ describe('第4章 外部システムとの同期', () => {
 
   it('送信後の記録に失敗したら、結果が未確認の送信として分かる', async () => {
     db.exec(`
-      CREATE TRIGGER reject_sent BEFORE INSERT ON domain_events
+      CREATE TRIGGER reject_sent BEFORE INSERT ON business_events
       WHEN NEW.event_name = 'ReminderCancellationSent'
       BEGIN
         SELECT RAISE(ABORT, '送信結果の記録に失敗しました');

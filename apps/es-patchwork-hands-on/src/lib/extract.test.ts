@@ -86,9 +86,9 @@ describe('toInsertTemplate', () => {
     const source = read('chapter-2-step-1/visits.ts');
     const filled = toInsertTemplate(source)
       .replace('/* event_name */', `'VisitCancelled'`)
-      .replace('/* aggregate_id */', 'input.visitId')
-      .replace('/* aggregate_name */', `'Visit'`)
-      .replace('/* aggregate_props */', 'JSON.stringify(cancelled)');
+      .replace('/* target_id */', 'input.visitId')
+      .replace('/* target_type */', `'Visit'`)
+      .replace('/* target_state */', 'JSON.stringify(cancelled)');
     expect(source).toContain(filled);
   });
 

@@ -50,7 +50,7 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: 
     });
     const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
     db.prepare(`
-      INSERT INTO domain_events (event_at, event_name, payload, aggregate_id, aggregate_name, aggregate_props)
+      INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       new Date().toISOString(),
@@ -80,10 +80,10 @@ export const explainChange = (
       audit_logs.new_value AS newValue,
       audit_logs.operated_by AS operatedBy,
       audit_logs.operated_at AS operatedAt,
-      domain_events.event_name AS eventName,
-      domain_events.payload ->> '$.reason' AS reason
+      business_events.event_name AS eventName,
+      business_events.payload ->> '$.reason' AS reason
     FROM audit_logs
-    LEFT JOIN domain_events ON domain_events.payload ->> '$.auditLogId' = audit_logs.id
+    LEFT JOIN business_events ON business_events.payload ->> '$.auditLogId' = audit_logs.id
     WHERE audit_logs.id = ?
   `).get(auditLogId) as
     | {
@@ -115,8 +115,8 @@ export const findChangesWithoutReason = (
       audit_logs.operated_by AS operatedBy,
       audit_logs.operated_at AS operatedAt
     FROM audit_logs
-    LEFT JOIN domain_events ON domain_events.payload ->> '$.auditLogId' = audit_logs.id
-    WHERE domain_events.event_id IS NULL
+    LEFT JOIN business_events ON business_events.payload ->> '$.auditLogId' = audit_logs.id
+    WHERE business_events.event_id IS NULL
     ORDER BY audit_logs.id
   `).all() as {
     auditLogId: number;

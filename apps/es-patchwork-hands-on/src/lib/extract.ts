@@ -36,9 +36,9 @@ export const extractHtmlSection = (html: string, heading: string): string => {
 
 const blanks: readonly (readonly [string, string])[] = [
   [`      'VisitCancelled',`, '      /* event_name */,'],
-  ['      input.visitId,', '      /* aggregate_id */,'],
-  [`      'Visit',`, '      /* aggregate_name */,'],
-  ['      JSON.stringify(cancelled),', '      /* aggregate_props */,'],
+  ['      input.visitId,', '      /* target_id */,'],
+  [`      'Visit',`, '      /* target_type */,'],
+  ['      JSON.stringify(cancelled),', '      /* target_state */,'],
 ];
 
 export const toInsertTemplate = (stepOneSource: string): string => {

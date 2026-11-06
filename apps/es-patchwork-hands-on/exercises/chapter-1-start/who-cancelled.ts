@@ -12,13 +12,13 @@ const rows = db.prepare(`
   SELECT
     visits.id,
     visits.status,
-    domain_events.event_at,
-    domain_events.event_name,
-    domain_events.payload ->> '$.operatedBy' AS operated_by,
-    domain_events.payload ->> '$.reason' AS reason
+    business_events.event_at,
+    business_events.event_name,
+    business_events.payload ->> '$.operatedBy' AS operated_by,
+    business_events.payload ->> '$.reason' AS reason
   FROM visits
-  LEFT JOIN domain_events
-    ON domain_events.aggregate_name = 'Visit' AND domain_events.aggregate_id = visits.id
+  LEFT JOIN business_events
+    ON business_events.target_type = 'Visit' AND business_events.target_id = visits.id
   ORDER BY visits.id
 `).all();
 console.table(rows);

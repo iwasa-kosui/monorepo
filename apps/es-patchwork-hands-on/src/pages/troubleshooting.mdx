@@ -89,13 +89,13 @@ SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
 
 雛形の空欄が `/* event_name */` のように残っています。第2章の表のとおりに、4つの空欄を値で埋めます。
 
-### table domain_events has no column named
+### table business_events has no column named
 
 ```text
-Error: table domain_events has no column named event_nam
+Error: table business_events has no column named event_nam
 ```
 
-INSERT の列名に、`domain_events` テーブルにない名前があります。`named` の後ろに出ている名前が、誤っている列名です。`event_name` のように、列名を表の定義どおりに書き直します。
+INSERT の列名に、`business_events` テーブルにない名前があります。`named` の後ろに出ている名前が、誤っている列名です。`event_name` のように、列名を表の定義どおりに書き直します。
 
 ### 5 values for 6 columns
 
@@ -116,10 +116,10 @@ Error: 7 values for 6 columns
 ### NOT NULL constraint failed
 
 ```text
-Error: NOT NULL constraint failed: domain_events.aggregate_props
+Error: NOT NULL constraint failed: business_events.target_state
 ```
 
-`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `domain_events.aggregate_name` と出ます。`.run()` の引数を6個にそろえます。
+`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `business_events.target_type` と出ます。`.run()` の引数を6個にそろえます。
 
 ### Provided value cannot be bound to SQLite parameter
 
@@ -128,7 +128,7 @@ TypeError: Provided value cannot be bound to SQLite parameter 3.
 code: 'ERR_INVALID_ARG_TYPE'
 ```
 
-SQLite に渡せない値が、`.run()` の引数にあります。オブジェクトのまま渡したことが原因です。末尾の番号は、`?` の何番目かを表します。3番目は `payload`、6番目は `aggregate_props` です。その引数を `JSON.stringify(…)` で文字列にして渡します。
+SQLite に渡せない値が、`.run()` の引数にあります。オブジェクトのまま渡したことが原因です。末尾の番号は、`?` の何番目かを表します。3番目は `payload`、6番目は `target_state` です。その引数を `JSON.stringify(…)` で文字列にして渡します。
 
 ### malformed JSON
 
@@ -177,12 +177,12 @@ null !== '受付スタッフ'
 ### 来院キャンセルの記録がありません
 
 ```text
-AssertionError [ERR_ASSERTION]: 来院キャンセルの記録がありません（domain_events を aggregate_name = 'Visit'、aggregate_id = 'visit-1' で探しました）
+AssertionError [ERR_ASSERTION]: 来院キャンセルの記録がありません（business_events を target_type = 'Visit'、target_id = 'visit-1' で探しました）
 
 0 !== 1
 ```
 
-`domain_events` に、該当する行が入っていません。ステップ1の雛形をまだ貼っていないときも、この文が出ます。雛形を貼ったあとにも出るなら、`.run()` の引数の順番を確かめます。引数は、`event_at`、`event_name`、`payload`、`aggregate_id`、`aggregate_name`、`aggregate_props` の順に渡します。`payload` と `aggregate_id` を入れ替えると、`aggregate_id` が `visit-1` でない行が入るため、この文が出ます。
+`business_events` に、該当する行が入っていません。ステップ1の雛形をまだ貼っていないときも、この文が出ます。雛形を貼ったあとにも出るなら、`.run()` の引数の順番を確かめます。引数は、`event_at`、`event_name`、`payload`、`target_id`、`target_type`、`target_state` の順に渡します。`payload` と `target_id` を入れ替えると、`target_id` が `visit-1` でない行が入るため、この文が出ます。
 
 ### Expected values to be strictly equal
 
@@ -194,7 +194,7 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 - 'cancelled'
 ```
 
-テスト「キャンセルの記録に、キャンセル後の来院の状態が残る」の失敗です。INSERT が `UPDATE visits SET status = 'cancelled'` より前にあり、更新前の状態 `reserved` が `aggregate_props` に入っています。雛形を、`UPDATE visits SET status = 'cancelled'` の次の行へ移します。
+テスト「キャンセルの記録に、キャンセル後の来院の状態が残る」の失敗です。INSERT が `UPDATE visits SET status = 'cancelled'` より前にあり、更新前の状態 `reserved` が `target_state` に入っています。雛形を、`UPDATE visits SET status = 'cancelled'` の次の行へ移します。
 
 ## 第3章の表がおかしいとき
 

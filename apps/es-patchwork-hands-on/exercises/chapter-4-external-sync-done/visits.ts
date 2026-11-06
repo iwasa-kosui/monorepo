@@ -17,7 +17,7 @@ const recordEvent = (
   input: { eventName: string; payload: unknown; visitId: string; row: unknown },
 ): number => {
   const result = db.prepare(`
-    INSERT INTO domain_events (event_at, event_name, payload, aggregate_id, aggregate_name, aggregate_props)
+    INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     new Date().toISOString(),
@@ -104,13 +104,13 @@ export const findSendRecords = (
         ELSE 'unconfirmed'
       END AS result,
       finished.payload ->> '$.error' AS error
-    FROM domain_events AS requested
-    JOIN domain_events AS cancelled
+    FROM business_events AS requested
+    JOIN business_events AS cancelled
       ON cancelled.event_id = requested.payload ->> '$.causationEventId'
-    LEFT JOIN domain_events AS finished
+    LEFT JOIN business_events AS finished
       ON finished.payload ->> '$.causationEventId' = requested.event_id
       AND finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
-    WHERE requested.event_name = 'ReminderCancellationRequested' AND requested.aggregate_id = ?
+    WHERE requested.event_name = 'ReminderCancellationRequested' AND requested.target_id = ?
     ORDER BY requested.event_id
   `).all(visitId).map((row) => ({ ...row, message: JSON.parse(String(row.message)) })) as {
     requestedAt: string;
@@ -127,13 +127,13 @@ export const findUnconfirmedSends = (
 ): { visitId: string; requestedAt: string; message: ReminderCancellationMessage }[] =>
   db.prepare(`
     SELECT
-      requested.aggregate_id AS visitId,
+      requested.target_id AS visitId,
       requested.event_at AS requestedAt,
       requested.payload ->> '$.message' AS message
-    FROM domain_events AS requested
+    FROM business_events AS requested
     WHERE requested.event_name = 'ReminderCancellationRequested'
       AND NOT EXISTS (
-        SELECT 1 FROM domain_events AS finished
+        SELECT 1 FROM business_events AS finished
         WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
           AND finished.payload ->> '$.causationEventId' = requested.event_id
       )

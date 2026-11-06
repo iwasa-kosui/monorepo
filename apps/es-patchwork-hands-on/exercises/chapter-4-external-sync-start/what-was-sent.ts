@@ -12,7 +12,7 @@ await cancelVisit(db, async () => {
 }, { visitId: 'visit-2', reason: '来院前に回復したため', operatedBy: '院長' }).catch(() => undefined);
 
 db.exec(`
-  CREATE TRIGGER reject_sent BEFORE INSERT ON domain_events
+  CREATE TRIGGER reject_sent BEFORE INSERT ON business_events
   WHEN NEW.event_name = 'ReminderCancellationSent'
   BEGIN
     SELECT RAISE(ABORT, '送信結果の記録に失敗しました');

@@ -28,7 +28,7 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: 
     db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
     const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
     db.prepare(`
-      INSERT INTO domain_events (event_at, event_name, payload, aggregate_id, aggregate_name, aggregate_props)
+      INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       new Date().toISOString(),
@@ -53,11 +53,11 @@ export const explainCancellationCount = (
     SELECT
       event_id AS eventId,
       event_at AS eventAt,
-      aggregate_id AS visitId,
+      target_id AS visitId,
       payload ->> '$.reason' AS reason,
       payload ->> '$.operatedBy' AS operatedBy
-    FROM domain_events
-    WHERE event_name = 'VisitCancelled' AND aggregate_props ->> '$.visit_date' = ?
+    FROM business_events
+    WHERE event_name = 'VisitCancelled' AND target_state ->> '$.visit_date' = ?
     ORDER BY event_id
   `).all(visitDate) as { eventId: number; eventAt: string; visitId: string; reason: string; operatedBy: string }[];
 
