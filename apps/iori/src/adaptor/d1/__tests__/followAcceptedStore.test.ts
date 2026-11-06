@@ -120,6 +120,23 @@ describe('createOnAccept with the D1 stores', () => {
     await createOnAccept(deps)(ctx, accept);
     await expect(createOnAccept(deps)(ctx, accept)).resolves.toBeUndefined();
 
+    expect(countFollowAcceptedEvents(t)).toBe(2);
+    expect(countRows(t, 'follows')).toBe(1);
+  });
+
+  it('送り主へのフォローが無ければ、埋め込みの Follow の object に行があっても記録しない', async () => {
+    const { t, deps, ctx, accept } = await setupAccept();
+    t.seed.addRemoteActor('mallory');
+    const malloryDeps = {
+      ...(deps as object),
+      inboxActorResolver: {
+        resolve: vi.fn(async () => RA.ok({ actorIdentity: { uri: 'https://remote.example/users/mallory' } })),
+      },
+    } as never;
+
+    await expect(createOnAccept(malloryDeps)(ctx, accept)).resolves.toBeUndefined();
+
+    expect(countFollowAcceptedEvents(t)).toBe(0);
     expect(countRows(t, 'follows')).toBe(1);
   });
 });
