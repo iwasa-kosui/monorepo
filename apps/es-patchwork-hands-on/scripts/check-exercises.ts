@@ -47,7 +47,7 @@ const chapter4 = [
   {
     pattern: 'external-sync',
     script: 'what-was-sent.ts',
-    outputs: ['飼い主の都合', 'sent', 'failed', '送信先に接続できません'],
+    outputs: ['飼い主の都合', 'sent', 'failed', 'unconfirmed', '送信先に接続できません'],
     existing: [
       ...existing,
       ...step1,
@@ -79,7 +79,7 @@ const chapter4 = [
       '監査ログの変更から、キャンセルの業務上の理由を答えられる',
       '同じ変更でも、理由が違えば業務イベントで見分けられる',
       '業務イベントのない変更は、理由が無い変更として分かる',
-      '業務イベントは変更前後の値を持たず、監査ログへの参照で結びつく',
+      '業務イベントの payload は変更前後の値を持たず、監査ログへの参照で結びつく',
     ],
   },
 ];
@@ -117,7 +117,8 @@ const checkTests = (dir: string, green: string[], red: string[]): void => {
 const runScript = (dir: string, script: string) =>
   spawnSync(process.execPath, [script], { cwd: join(exercisesDir, dir), encoding: 'utf8' });
 
-const sharedFiles = (dir: string) => readdirSync(join(exercisesDir, dir)).filter((file) => file !== 'visits.ts').sort();
+const sharedFiles = (dir: string) =>
+  readdirSync(join(exercisesDir, dir)).filter((file) => file !== 'visits.ts' && !file.startsWith('.')).sort();
 
 const checkSharedFiles = (base: string, others: string[]): void => {
   for (const other of others) {

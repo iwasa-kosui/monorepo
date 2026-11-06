@@ -187,7 +187,7 @@ describe('第4章 監査ログ', () => {
     assert.equal(withoutReason[0]?.operatedBy, '獣医師');
   });
 
-  it('業務イベントは変更前後の値を持たず、監査ログへの参照で結びつく', () => {
+  it('業務イベントの payload は変更前後の値を持たず、監査ログへの参照で結びつく', () => {
     cancelVisit(db, cancelInput);
     const event = eventsOf(visitId)[0];
     assert.ok(event, missingEvent);
