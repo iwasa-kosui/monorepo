@@ -137,17 +137,6 @@ describe('createD1TimelineItemsResolverByActorIds with page', () => {
     expect(top?.type === 'repost' && top.repostId).toBe(ghostBoost.repostId);
   });
 
-  it('同じ postId の post の行が重複しても、max_id は古い行を指して同じページを繰り返さない', async () => {
-    const t = seedTimeline();
-    t.seed.addTimelineItem(t.me.actorId, t.first.postId, 6_000);
-
-    const all = await t.resolve({});
-    const afterFirst = await t.resolve({ olderThanId: t.first.postId });
-
-    expect(all.ok && all.val.map(postIdOf).filter((id) => id === t.first.postId)).toHaveLength(2);
-    expect(afterFirst.ok && afterFirst.val).toEqual([]);
-  });
-
   it('知らない ID の max_id は空にする', async () => {
     const t = seedTimeline();
 

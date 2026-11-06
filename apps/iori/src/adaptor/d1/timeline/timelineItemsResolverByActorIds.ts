@@ -46,7 +46,7 @@ const cursorOf = (id: string) =>
     where (${cursorItem.type} = 'post' and ${cursorItem.postId} = ${id})
       or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} = ${id})
       or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} is null and ${cursorItem.postId} = ${id})
-    order by ${cursorItem.createdAt} asc, ${cursorItem.timelineItemId} asc
+    order by ${cursorItem.createdAt} desc, ${cursorItem.timelineItemId} desc
     limit 1`;
 
 export const createD1TimelineItemsResolverByActorIds = (

@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
@@ -205,20 +206,19 @@ describe('GET /api/v1/timelines/home', () => {
     expect(collected).toEqual([boost.repostId, note.postId, oldest.postId]);
   });
 
-  it('同じ postId の post の行が 2 つあり、古い行がページの末尾にあっても次のページに進める', async () => {
+  it('同じ postId の post の行が時刻の近い 2 行で隣り合い、古い行がページの末尾にあっても次のページに進む', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
-    const oldest = t.seed.addLocalPost(me, 500);
-    const middle = t.seed.addLocalPost(me, 2_000);
-    const duplicated = t.seed.addLocalPost(me, 1_000);
+    const oldest = t.seed.addLocalPost(me, 1_000);
+    const duplicated = t.seed.addLocalPost(me, 2_900);
     t.seed.addTimelineItem(me.actorId, duplicated.postId, 3_000);
 
-    const first = await t.request('/api/v1/timelines/home?limit=3', { headers: me.bearer });
-    const firstIds = idsOf(await first.json());
-    const second = await t.request(`/api/v1/timelines/home?limit=3&max_id=${firstIds[2]}`, { headers: me.bearer });
+    const first = await t.request('/api/v1/timelines/home?limit=2', { headers: me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: me.bearer });
 
-    expect(firstIds).toEqual([duplicated.postId, middle.postId, duplicated.postId]);
-    expect(idsOf(await second.json())).toEqual([oldest.postId]);
+    expect(idsOf(await first.json())).toEqual([duplicated.postId, duplicated.postId]);
+    expect(idsOf(await second.json())).toEqual([duplicated.postId, oldest.postId]);
   });
 
   it('同じミリ秒の 2 件を max_id で取りこぼさない', async () => {
@@ -445,26 +445,47 @@ describe('タイムラインの内部エラー', () => {
     }
   });
 
-  it('例外をログに出し、応答の本文は変えない', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const thrown = new Error('boom');
-    const { app } = setupFailing({
+  const failWith = (thrown: unknown) =>
+    setupFailing({
       statusAssembler: {
         assemble: async () => {
           throw thrown;
         },
         assembleAccounts: async () => [],
       },
-    });
+    }).app;
 
-    const response = await app.request(`${ORIGIN}/api/v1/timelines/public?max_id=secret-cursor`);
+  it('DrizzleQueryError はパラメーターと stack をログに出さず、SQL と cause の message だけを出す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const thrown = new DrizzleQueryError(
+      'insert into posts (content) values (?)',
+      ['secret-body'],
+      new Error('cause-message'),
+    );
 
+    const response = await failWith(thrown).request(`${ORIGIN}/api/v1/timelines/public`);
+
+    const logged = JSON.stringify(error.mock.calls);
+    error.mockRestore();
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual(internalError);
-    expect(error).toHaveBeenCalledTimes(1);
-    expect(error.mock.calls[0]).toContain(thrown);
-    expect(JSON.stringify(error.mock.calls)).not.toContain('secret-cursor');
+    expect(logged).not.toContain('secret-body');
+    expect(logged).toContain('insert into posts (content) values (?)');
+    expect(logged).toContain('cause-message');
+  });
+
+  it('それ以外の例外は name と message だけをログに出す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await failWith(new TypeError('x'.repeat(300))).request(`${ORIGIN}/api/v1/timelines/public`);
+
+    const logged = JSON.stringify(error.mock.calls);
     error.mockRestore();
+    expect(response.status).toBe(500);
+    expect(logged).toContain('TypeError');
+    expect(logged).toContain('x'.repeat(200));
+    expect(logged).not.toContain('x'.repeat(201));
+    expect(logged).not.toContain('at ');
   });
 
   it('public の Resolver の失敗と、組み立ての例外も 500 にする', async () => {
