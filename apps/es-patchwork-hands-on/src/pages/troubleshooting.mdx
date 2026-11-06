@@ -200,21 +200,21 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 `node who-cancelled.ts` の結果で確かめます。
 
-### visit-after-events の行で event_at 以下がすべて null
+### visit-pochi の行で event_at 以下がすべて null
 
 記録を足していないコードで実行しています。`chapter-1-start` のコードにステップ1とステップ2を反映してから、もう一度実行します。終わっていないときは `chapter-2-step-2` に移動して実行します。
 
-### visit-after-events の行で operated_by と reason だけが null
+### visit-pochi の行で operated_by と reason だけが null
 
 ステップ2が終わっていません。`payload` に `reason` と `operatedBy` を入れてから、もう一度実行します。
 
-### visit-before-events の行が null
+### visit-tama の行が null
 
 ```text
-│ 1       │ 'visit-before-events' │ 'cancelled' │ null                       │ null             │ null           │ null           │
+│ 1       │ 'visit-tama'  │ 'cancelled' │ null                       │ null             │ null           │ null           │
 ```
 
-この行の null は、正しい結果です。`visit-before-events` は、記録を足す前にキャンセルされた来院です。足す前の過去は残りません。
+この行の null は、正しい結果です。`visit-tama` は、記録を足す前にキャンセルされた来院です。足す前の過去は残りません。
 
 ## 追いつけないとき
 

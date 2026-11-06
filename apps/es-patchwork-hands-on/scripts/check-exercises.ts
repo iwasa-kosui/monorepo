@@ -142,7 +142,7 @@ for (const { dir, green, red } of snapshots) {
     errors.push(`${dir}: who-cancelled.ts の終了コードが 0 ではありません（${who.status}）`);
   }
   if (dir === 'chapter-2-step-2') {
-    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-before-events']) {
+    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-tama']) {
       if (!who.stdout.includes(text)) {
         errors.push(`${dir}: who-cancelled.ts の出力に「${text}」がありません`);
       }
