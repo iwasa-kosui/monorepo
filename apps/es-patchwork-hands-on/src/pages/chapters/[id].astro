@@ -26,7 +26,10 @@ const { Content } = await render(entry);
 ---
 
 <BaseLayout title={row.title}>
-  <p><a href="/">トップページへ</a></p>
+  <p>
+    <a href="/">トップページへ</a>｜<a href="/troubleshooting/"
+    >うまく動かないとき</a>
+  </p>
   <h1>{row.title}</h1>
   <p>{row.range}{row.parts === undefined ? '' : `：${row.parts}`}</p>
   <p><strong>できるようになること：</strong>{entry.data.goal}</p>
