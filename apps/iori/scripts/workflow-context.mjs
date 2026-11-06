@@ -74,11 +74,15 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (['delete-rehearsal-d1', ...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations].includes(operation)
+    || (['delete-rehearsal-d1', ...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations].includes(
+      operation,
+    )
       && env.IORI_ENVIRONMENT !== 'production')
     || (['diagnose-source', 'delete-rehearsal-d1'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
-      : [...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations, ...bucketOperations].includes(operation)
+      : [...moveOperations, ...deleteBlockedDomainOperations, ...pruneOperations, ...bucketOperations].includes(
+          operation,
+        )
       ? !generationPattern.test(env.IORI_GENERATION ?? '') || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))
