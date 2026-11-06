@@ -9,6 +9,8 @@ title: うまく動かないとき
 
 実行結果には、複数の失敗が並ぶ場合もあります。`✖ failing tests:` の下にある最初のエラー文から項目を探して、直す操作を実行します。
 
+`✖ failing tests:` の下に `'test failed'` しかないときは、画面を上に戻して `SyntaxError` を探します。
+
 ## 環境と移動で止まったとき
 
 ### Could not find 'visits.test.ts'
@@ -76,6 +78,13 @@ Node.js のバージョンが古く、`.ts` ファイルを直接実行できま
 SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
 ℹ pass 0
 ℹ fail 1
+```
+
+`✖ failing tests:` の下には、次の文しか出ません。`SyntaxError` の文は、画面の上のほうに出ます。
+
+```text
+✖ visits.test.ts
+  'test failed'
 ```
 
 雛形の空欄が `/* event_name */` のように残っています。第2章の表のとおりに、4つの空欄を値で埋めます。
