@@ -7,7 +7,7 @@ title: うまく動かないとき
 
 # うまく動かないとき
 
-画面に出ているエラー文に近い項目を探して、直す操作を実行します。
+実行結果には、複数の失敗が並ぶ場合もあります。`✖ failing tests:` の下にある最初のエラー文から項目を探して、直す操作を実行します。
 
 ## 環境と移動で止まったとき
 
@@ -70,6 +70,16 @@ Node.js のバージョンが古く、`.ts` ファイルを直接実行できま
 
 ステップ1とステップ2の `cancelVisit` で出るエラーです。
 
+### Expression expected
+
+```text
+SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
+ℹ pass 0
+ℹ fail 1
+```
+
+雛形の空欄が `/* event_name */` のように残っています。第2章の表のとおりに、4つの空欄を値で埋めます。
+
 ### table domain_events has no column named
 
 ```text
@@ -100,7 +110,7 @@ Error: 7 values for 6 columns
 Error: NOT NULL constraint failed: domain_events.aggregate_props
 ```
 
-`.run()` に渡した値が `?` の数より少なく、`aggregate_props` に入る値がありません。`.run()` の6番目の引数に、`JSON.stringify(cancelled)` を渡します。
+`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `domain_events.aggregate_name` と出ます。`.run()` の引数を6個にそろえます。
 
 ### Provided value cannot be bound to SQLite parameter
 
@@ -118,6 +128,20 @@ Error: malformed JSON
 ```
 
 `payload` に、JSON ではない文字列が入っています。`String({})` のように、オブジェクトを `JSON.stringify` 以外の方法で文字列にすると、この文になります。`payload` を `JSON.stringify({ reason: …, operatedBy: … })` の形に直します。
+
+### 記録の失敗が更新処理に伝わっていません
+
+```text
+AssertionError [ERR_ASSERTION]: 記録の失敗が更新処理に伝わっていません
+```
+
+列名の誤りや値の数の誤りなどがあると、ほかのテストの失敗と一緒にこの文も出ます。先に出ている別のエラー文の項目を見て、そのエラーを直します。
+
+```text
+AssertionError [ERR_ASSERTION]: Missing expected exception: 記録の失敗が更新処理に伝わっていません
+```
+
+ステップ1の雛形をまだ貼っていないときに、この文が出ます。ステップ1の雛形を貼ります。
 
 ### キャンセルした人を答えられません
 
