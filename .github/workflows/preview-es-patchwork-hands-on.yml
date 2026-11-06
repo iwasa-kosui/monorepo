@@ -1,0 +1,124 @@
+name: Preview es-patchwork-hands-on
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
+    paths:
+      - "apps/es-patchwork-hands-on/**"
+      - ".github/workflows/preview-es-patchwork-hands-on.yml"
+
+concurrency:
+  group: es-patchwork-hands-on-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PREVIEW_WORKER_NAME: es-patchwork-hands-on-pr-${{ github.event.pull_request.number }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.ES_PATCHWORK_CLOUDFLARE_DEPLOY_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter es-patchwork-hands-on run build
+
+      - name: Deploy preview Worker
+        id: deploy
+        run: |
+          set -o pipefail
+          pnpm --filter es-patchwork-hands-on exec wrangler deploy --name "$PREVIEW_WORKER_NAME" 2>&1 | tee "$RUNNER_TEMP/wrangler-deploy.log"
+
+          preview_url=$(sed -nE 's#.*(https://[^[:space:]]+\.workers\.dev).*#\1#p' "$RUNNER_TEMP/wrangler-deploy.log" | tail -n 1)
+          if [ -z "$preview_url" ]; then
+            echo "Workers preview URL was not found in Wrangler output." >&2
+            exit 1
+          fi
+
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+        with:
+          script: |
+            const marker = "<!-- preview-deploy-es-patchwork-hands-on -->";
+            const body = `${marker}\n\n🚀 [es-patchwork-hands-on のプレビューを開く](${process.env.PREVIEW_URL})`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 },
+            );
+            const existingComment = comments.find(
+              (comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.includes(marker),
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+  cleanup:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Delete preview Worker
+        run: pnpm --filter es-patchwork-hands-on exec wrangler delete "$PREVIEW_WORKER_NAME" --force
