@@ -244,6 +244,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     const extraNames = new Set([
       'VAPID_SUBJECT',
       'EVENT_ARCHIVE_ENABLED',
+      'IORI_PRUNE_FEDERATED_POSTS',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
