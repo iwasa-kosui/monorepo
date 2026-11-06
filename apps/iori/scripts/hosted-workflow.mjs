@@ -125,7 +125,7 @@ const rehearsalNoticeLine =
 const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
 const deleteNoticeLine =
-  /^IORI_NOTICE delete-unfollowed-posts (?:mode=dry-run targets=\d{1,9}|mode=apply deleted=\d{1,9})$/;
+  /^IORI_NOTICE delete-unfollowed-posts (?:mode=dry-run targets=\d{1,9} federated=\d{1,9}|mode=apply deleted=\d{1,9})$/;
 const pruneNoticeLine =
   /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
 const bucketNoticeLine =

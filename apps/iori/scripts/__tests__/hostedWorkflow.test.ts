@@ -230,13 +230,20 @@ it('relays only the fixed move-unfollowed-reposts notices to the public log', as
 it('relays only the fixed delete-unfollowed-posts notices to the public log', async () => {
   const writes = captureStderr();
   const accepted = [
-    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000',
-    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000 federated=300',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0 federated=0',
     'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=20000',
   ];
   const rejected = [
     'IORI_NOTICE delete-unfollowed-posts mode=dry-run',
-    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=-1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1 targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=-1 federated=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=-1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1234567890',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1 posts=1',
     'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 posts=1',
     'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 created=1',
     'IORI_NOTICE delete-unfollowed-posts mode=apply created=1',

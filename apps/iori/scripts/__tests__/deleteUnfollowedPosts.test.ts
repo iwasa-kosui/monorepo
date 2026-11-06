@@ -219,7 +219,7 @@ describe('delete-unfollowed-posts SQL', () => {
     expect(queries[0]).toMatch(/^SELECT /);
     expect(queries[0]).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|REPLACE|DROP|ALTER|CREATE|PRAGMA|ATTACH)\b/i);
     expect(queries[0]).not.toContain(';');
-    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5']);
+    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5 federated=0']);
     expect(snapshot(fixture)).toEqual(beforeRun);
   });
   it.each(
@@ -233,10 +233,35 @@ describe('delete-unfollowed-posts SQL', () => {
   )('does not count %s', async (_label, key) => {
     const { fixture, kept } = build();
     const { notices } = await run('dry-run', fixture);
-    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5']);
+    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5 federated=0']);
     expect(rows(fixture, `${dryRunSql(before)} AND t.timelineItemId = '${kept[key].timelineItemId}'`)).toEqual([
-      { targets: 0 },
+      { targets: 0, federated: 0 },
     ]);
+  });
+  it('counts the distinct posts with a federated item among the targets', async () => {
+    const { fixture, seed, targets } = build();
+    const relayId = seed.addRelay();
+    seed.addFederatedItem(targets.u1a.postId, relayId, 1_000);
+    seed.addFederatedItem(targets.u2a.postId, relayId, 1_000);
+    fixture.sqlite.prepare(
+      'INSERT INTO timeline_items(timelineItemId,type,actorId,postId,repostId,createdAt,deletedAt) SELECT ?,type,actorId,postId,repostId,createdAt,deletedAt FROM timeline_items WHERE timelineItemId = ?',
+    ).run('duplicate-timeline-item', targets.u1a.timelineItemId!);
+    const { notices } = await run('dry-run', fixture);
+    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=6 federated=2']);
+  });
+  it('does not count a federated item whose home row is not a target', async () => {
+    const { fixture, seed, kept } = build();
+    const relayId = seed.addRelay();
+    const keptPostIds = ids(kept.followed, kept.local, kept.newer, kept.deleted, kept.repost).map((id) =>
+      String(
+        (fixture.sqlite.prepare('SELECT postId FROM timeline_items WHERE timelineItemId = ?').get(id) as {
+          postId: string;
+        }).postId,
+      )
+    );
+    for (const postId of keptPostIds) seed.addFederatedItem(postId, relayId, 1_000);
+    const { notices } = await run('dry-run', fixture);
+    expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5 federated=0']);
   });
   it('shares the same target condition and limit between the dry-run and the apply statements', async () => {
     const condition = targetCondition(before);
@@ -329,7 +354,7 @@ describe('delete-unfollowed-posts apply on a SQLite fixture', () => {
     expect(second.notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=apply deleted=0']);
     expect(count(fixture, 'domain_events')).toBe(5);
     const dry = await run('dry-run', fixture, {}, { at: now + 2 });
-    expect(dry.notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0']);
+    expect(dry.notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0 federated=0']);
   });
   it('soft-deletes a row whose event already exists without doubling the event', async () => {
     const complete = build();

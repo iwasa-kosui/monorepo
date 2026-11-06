@@ -27,7 +27,9 @@ export const targetCondition = (beforeMs) =>
   `t.type = 'post' AND t.deletedAt IS NULL AND t.createdAt <= ${beforeMs} AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId)`;
 
 export const dryRunSql = (beforeMs) =>
-  `SELECT COUNT(*) AS targets FROM timeline_items t WHERE ${targetCondition(beforeMs)}`;
+  `SELECT COUNT(*) AS targets, COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM federated_timeline_items fi WHERE fi.postId = t.postId) THEN t.postId END) AS federated FROM timeline_items t WHERE ${
+    targetCondition(beforeMs)
+  }`;
 export const applySql = ({ beforeMs, now }) => [
   `INSERT INTO domain_events (eventId, aggregateId, aggregateName, aggregateState, eventName, eventPayload, occurredAt) SELECT ${UUID_V4_SQL}, json_object('timelineItemId', t.timelineItemId), 'timelineItem', NULL, 'timelineItem.deleted', json_object('timelineItemId', t.timelineItemId), ${now} FROM timeline_items t WHERE ${
     targetCondition(beforeMs)
@@ -102,7 +104,11 @@ export const deleteUnfollowedPosts = async ({
   if (mode === 'dry-run') {
     const [result] = await query('delete-posts-query', dryRunSql(beforeMs));
     const row = result?.results?.[0];
-    notice(`IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=${count(row, 'targets')}`);
+    notice(
+      `IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=${count(row, 'targets')} federated=${
+        count(row, 'federated')
+      }`,
+    );
     return;
   }
   await query('delete-posts-query', applySql({ beforeMs, now }).join(';\n'));
