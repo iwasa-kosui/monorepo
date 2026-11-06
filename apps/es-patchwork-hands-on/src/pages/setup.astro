@@ -31,8 +31,8 @@ const listClass = 'my-4 list-disc space-y-2 pl-6 leading-7 break-words';
   <pre class={preClass}><code>node --version</code></pre>
   <p class={pClass}>
     <code class={codeClass}>v24.12.0</code>
-    以上と表示されれば準備完了です。動作は、Node.js 24.12.0、24
-    系の最新、25.4.0、26.13.0 で確かめました。macOS と Linux
+    以上と表示されたら、次の手順に進みます。動作は、Node.js
+    24.12.0、24.16.0、25.4.0、26.13.0 で確かめました。macOS と Linux
     で確かめています。Windows では確かめていません。
   </p>
 
@@ -58,11 +58,12 @@ node --test visits.test.ts</code></pre>
     の行を飛ばします。
   </p>
   <p class={pClass}>
-    結果の最後に <code class={codeClass}>pass 4</code> と <code
+    結果の途中に <code class={codeClass}>ℹ pass 4</code> と <code
       class={codeClass}
-    >fail 4</code> が出れば、準備完了です。<strong
-    >4件の失敗は正しい状態です。</strong>「第2章 ステップ1」と「第2章
-    ステップ2」のテストは、ハンズオンの中で通します。
+    >ℹ fail 4</code> の集計が出れば、準備完了です。<strong
+    >4件の失敗は正しい状態です。</strong>集計の後に failing tests
+    の一覧とエラーが続きます。集計が画面の外に流れたら、スクロールして確かめてください。「第2章
+    ステップ1」と「第2章 ステップ2」のテストは、ハンズオンの中で通します。
   </p>
 
   <h2 class={h2Class}>当日の持ち物</h2>
@@ -74,9 +75,10 @@ node --test visits.test.ts</code></pre>
   <h2 class={h2Class}>うまく動かないとき</h2>
   <ul class={listClass}>
     <li>
-      テストは <code class={codeClass}>node --test visits.test.ts</code>
-      の形で実行します。ファイルを指定しない <code class={codeClass}
-      >node --test</code> では、正しい結果になりません。
+      テストは <code class={codeClass}>chapter-1-start</code>
+      に移動してから、<code class={codeClass}>node --test visits.test.ts</code>
+      の形で実行します。<code class={codeClass}>es-patchwork-exercises</code>
+      の直下で実行すると、すべての章のテストが混ざって結果が変わります。
     </li>
     <li>
       <code class={codeClass}
@@ -94,6 +96,9 @@ node --test visits.test.ts</code></pre>
       <code class={codeClass}>pass 4</code> と <code class={codeClass}
       >fail 4</code> にならないときは、<code class={codeClass}
       >node --version</code> でバージョンを確かめてください。
+    </li>
+    <li>
+      解決しないときは、当日は講師の画面を見て進められます。演習は持ち帰って試せます。
     </li>
   </ul>
 </BaseLayout>

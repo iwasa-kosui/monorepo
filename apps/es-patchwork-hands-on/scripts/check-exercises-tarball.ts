@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 
@@ -14,6 +14,12 @@ const listFiles = (dir: string) =>
 const listAllFiles = (dir: string) => readdirSync(dir, { recursive: true, encoding: 'utf8' }).sort();
 
 const errors: string[] = [];
+
+if (
+  !readFileSync(join(appDir, 'dist', 'setup', 'index.html'), 'utf8').includes('href="/es-patchwork-exercises.tar.gz"')
+) {
+  errors.push('事前準備のページに tarball へのリンクがありません');
+}
 
 try {
   const extracted = spawnSync('tar', ['-xf', tarball, '-C', workDir], { encoding: 'utf8' });
