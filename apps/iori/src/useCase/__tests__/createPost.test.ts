@@ -105,6 +105,51 @@ describe('CreatePostUseCase', () => {
     });
 
     it.each([
+      { summary: 'cw', sensitive: true, expectedSummary: 'cw', expectedSensitive: true },
+      { summary: null, sensitive: false, expectedSummary: null, expectedSensitive: false },
+      { summary: undefined, sensitive: undefined, expectedSummary: null, expectedSensitive: false },
+    ])(
+      'summary $summary、sensitive $sensitive を保存した投稿に載せる',
+      async ({ summary, sensitive, expectedSummary, expectedSensitive }) => {
+        const deps = createDeps();
+        const user: User = {
+          id: crypto.randomUUID() as User['id'],
+          username: 'kosui' as Username,
+        };
+        const session: Session = {
+          sessionId: crypto.randomUUID() as Session['sessionId'],
+          userId: user.id,
+          expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+        };
+        const actor: LocalActor = {
+          id: crypto.randomUUID() as LocalActor['id'],
+          userId: user.id,
+          uri: 'https://example.com/users/kosui',
+          inboxUrl: 'https://example.com/inbox',
+          type: 'local',
+          logoUri: undefined,
+        };
+        setupValidUserSession(deps, user, session, actor);
+
+        const result = await CreatePostUseCase.create(deps).run({
+          sessionId: session.sessionId,
+          content: 'Hello, world!',
+          imageUrls: [],
+          summary,
+          sensitive,
+          ctx: createMockRequestContext(),
+        });
+
+        expect(result.ok).toBe(true);
+        expect(deps.postCreatedStore.items).toHaveLength(1);
+        expect(deps.postCreatedStore.items[0]?.aggregateState).toMatchObject({
+          summary: expectedSummary,
+          sensitive: expectedSensitive,
+        });
+      },
+    );
+
+    it.each([
       { imageCount: 0, description: '画像なし' },
       { imageCount: 1, description: '画像1枚' },
       { imageCount: 4, description: '画像4枚' },
