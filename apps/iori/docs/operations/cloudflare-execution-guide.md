@@ -94,7 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -511,6 +511,18 @@ job が受け取る secret は、次の2つです。
 `move-unfollowed-reposts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。途中で失敗しても、同じ入力で `move-unfollowed-reposts` を再実行すれば、最終状態はそろいます。
 
 dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。`deletedAt` の条件があるので、段階的に実行しても、同じ repost を二重に処理しません。
+
+#### delete-unfollowed-posts でフォローしていない actor の投稿を home から消す
+
+`delete-unfollowed-posts-dry-run` は、本番の D1 の `timeline_items` から、フォローしていない remote actor の投稿（`type` が `post` で、`createdAt` が `repost_created_before_ms` 以下で、まだ論理削除されていないもの）を数えます。「フォローしていない」とは、ローカルの actor が1人もフォローしていないことです。投稿の actor がローカルの actor である行は、対象にしません。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=<N>` の行を出します。`delete-unfollowed-posts` は、同じ条件の行について、`timelineItem.deleted` のイベントを足してから、`deletedAt` を立てます。この operation は `IORI_NOTICE delete-unfollowed-posts mode=apply deleted=<N>` の行を出します。
+
+`delete-unfollowed-posts` は、論理削除だけをします。`move-unfollowed-reposts` と違い、federated の項目は足さず、`federatedTimelineItem.created` のイベントも足しません。repost の行（`type` が `repost`）は、対象にしません。
+
+作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation`、`repost_created_before_ms=<ミリ秒の epoch。未来の時刻は不可>` で dispatch します。`migration_run_id` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-unfollowed-posts` を dispatch します。
+
+同じ入力で `delete-unfollowed-posts` を再実行しても安全です。`deletedAt` の条件があるので、削除済みの行は対象になりません。`timelineItem.deleted` のイベントは、同じ行にすでにあれば足しません。途中で失敗し、イベントだけが入って `deletedAt` が未設定の行が残った場合も、再実行がその行に `deletedAt` を立て、イベントは重複しません。apply が出す `deleted` は、その回の実行で `deletedAt` を立てた件数です。
+
+`delete-unfollowed-posts` は、2つの文を1回の `/query` で送ります。REST API がこの2つの文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。
 
 #### prune-federated-posts-dry-run で federated の古い remote 投稿の削除対象を数える
 

@@ -38,6 +38,8 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'delete-rehearsal-d1',
     'move-unfollowed-reposts-dry-run',
     'move-unfollowed-reposts',
+    'delete-unfollowed-posts-dry-run',
+    'delete-unfollowed-posts',
     'prune-federated-posts-dry-run',
     'ensure-event-archive-bucket',
     'recover-source',
@@ -167,7 +169,12 @@ it('gives delete-rehearsal-d1 only the account and the deploy token, and no inpu
     'repost_created_before_ms',
   ]);
 });
-it.each(['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'])(
+it.each([
+  'move-unfollowed-reposts-dry-run',
+  'move-unfollowed-reposts',
+  'delete-unfollowed-posts-dry-run',
+  'delete-unfollowed-posts',
+])(
   'gives %s only the account and the deploy token, and one optional input for the repost time limit',
   async (name) => {
     const workflow = await readWorkflow('deploy-iori-worker.yml');
