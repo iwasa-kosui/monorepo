@@ -58,6 +58,7 @@ const workerBindingToken = new Map([
   ['__D1_DATABASE_ID__', 'd1_database_id'],
   ['__KV_NAMESPACE_ID__', 'kv_namespace_id'],
   ['__R2_BUCKET_NAME__', 'r2_bucket_name'],
+  ['__R2_EVENT_ARCHIVE_BUCKET_NAME__', 'event_archive_bucket_name'],
   ['__QUEUE_NAME__', 'queue_name'],
 ]);
 

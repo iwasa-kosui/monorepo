@@ -26,6 +26,7 @@ const operations = Object.freeze({
   'delete-rehearsal-d1': 'delete-rehearsal-d1.mjs',
   'move-unfollowed-reposts-dry-run': 'move-unfollowed-reposts.mjs',
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
+  'domain-events-stats': 'domain-events-stats.mjs',
   'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
   'ensure-event-archive-bucket': 'ensure-event-archive-bucket.mjs',
 });
@@ -122,6 +123,8 @@ const rehearsalNoticeLine =
   /^IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse[1-5] state=(?:present|absent|empty|not-empty|ambiguous|check-failed|deleted|delete-failed|remaining)$/;
 const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
+const statsNoticeLine =
+  /^IORI_NOTICE domain-events-stats (?:summary total=\d{1,12} oldest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) newest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) older_than_7d=\d{1,12} avg_bytes=\d{1,12} max_bytes=\d{1,12} created_at_skew_actors=\d{1,12}|day=\d{4}-\d{2}-\d{2} count=\d{1,12}|event=[A-Za-z][A-Za-z0-9.]{0,63} count=\d{1,12})$/;
 const pruneNoticeLine =
   /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
 const bucketNoticeLine =
@@ -157,8 +160,8 @@ const writeDiagnosticLine = async line => {
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
-      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !pruneNoticeLine.test(line)
-      && !bucketNoticeLine.test(line)
+      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !statsNoticeLine.test(line)
+      && !pruneNoticeLine.test(line) && !bucketNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

@@ -1,6 +1,7 @@
 export type WorkerBindings = {
   d1_database_id: string;
   r2_bucket_name: string;
+  event_archive_bucket_name: string;
   kv_namespace_id: string;
   queue_name: string;
   worker_name: string;
