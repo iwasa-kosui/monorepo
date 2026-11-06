@@ -33,7 +33,7 @@ import { cancelVisitOf, insertTemplate } from '../../lib/snapshots';
 | `target_type` | 変更の対象の種類 | 来院以外の対象も同じテーブルに記録するため |
 | `target_state` | 変化後の状態（JSON） | その時点の状態を後から確かめるため |
 
-[関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。関連記事は、`business_events` を `domain_events`、`target_id` を `aggregate_id`、`target_type` を `aggregate_name`、`target_state` を `aggregate_props` と呼びます。
+[関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
 
 ## ステップ1: キャンセルを記録する
 

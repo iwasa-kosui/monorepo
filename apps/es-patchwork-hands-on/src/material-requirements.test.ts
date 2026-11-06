@@ -52,6 +52,12 @@ describe('PRD の受入条件', () => {
     expect(count(read('src/content/chapters/summary.mdx'), 'ドメインイベント')).toBe(1);
   });
 
+  it('関連記事の名前は summary.mdx にだけ出る', () => {
+    for (const word of ['domain_events', 'aggregate_']) {
+      expect(filesContaining(word)).toEqual(['src/content/chapters/summary.mdx']);
+    }
+  });
+
   it('イベントソーシングが出るファイルは決まった4つだけ', () => {
     expect(filesContaining('イベントソーシング')).toEqual([
       'src/content/chapters/intro.mdx',
