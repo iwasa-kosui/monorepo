@@ -63,7 +63,8 @@ export const createOnAccept = (deps: OnAcceptDeps) => async (ctx: InboxContext<u
   }
 
   // Get the object that was accepted
-  const object = await activity.getObject();
+  // 確定する行は送り主へのフォローに限られるので、別 origin の埋め込みを信頼してよい
+  const object = await activity.getObject({ crossOrigin: 'trust' });
   if (!(object instanceof Follow)) {
     getLogger().info(`Accept activity object is not a Follow: ${actorUri}`);
     return;
