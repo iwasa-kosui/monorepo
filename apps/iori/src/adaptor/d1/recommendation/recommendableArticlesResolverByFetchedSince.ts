@@ -35,6 +35,7 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
         .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
         .where(and(
           inArray(feedSourcesTable.kind, [...RECOMMENDABLE_KINDS]),
+          eq(feedSourcesTable.enabled, true),
           isNotNull(feedEntriesTable.embeddedAt),
           isNotNull(feedEntriesTable.embedding),
           gte(feedEntriesTable.fetchedAt, new Date(fetchedSince)),

@@ -14,8 +14,51 @@ describe('FeedSource.parseNew', () => {
     expect(FeedSource.parseNew({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'a' }).ok).toBe(true);
   });
 
-  it('http の URL も受け付ける', () => {
-    expect(FeedSource.parseNew({ kind: 'rss', url: 'http://example.com/feed.xml', title: 'ブログ' }).ok).toBe(true);
+  it('http の URL は受け付けない', () => {
+    expect(FeedSource.parseNew({ kind: 'rss', url: 'http://example.com/feed.xml', title: 'ブログ' }).ok).toBe(false);
+  });
+
+  it.each([
+    'https://localhost/feed.xml',
+    'https://LOCALHOST./feed.xml',
+    'https://blog.localhost/feed.xml',
+    'https://printer.local/feed.xml',
+    'https://db.internal/feed.xml',
+    'https://127.0.0.1/feed.xml',
+    'https://[::1]/',
+    'https://2130706433/',
+  ])('取得で拒否される URL %s は受け付けない', (url) => {
+    expect(FeedSource.parseNew({ kind: 'rss', url, title: 'ブログ' }).ok).toBe(false);
+  });
+
+  it.each([
+    'https://user:pass@example.com/feed.xml',
+    'https://user@example.com/feed.xml',
+    'https://:pass@example.com/feed.xml',
+  ])('資格情報つきの URL %s は受け付けない', (url) => {
+    expect(FeedSource.parseNew({ kind: 'rss', url, title: 'ブログ' }).ok).toBe(false);
+  });
+
+  it('URL が 2048 文字なら受け付け、2049 文字なら受け付けない', () => {
+    const prefix = 'https://example.com/';
+    expect(FeedSource.parseNew({ kind: 'rss', url: prefix + 'a'.repeat(2048 - prefix.length), title: 'ブログ' }).ok)
+      .toBe(true);
+    expect(FeedSource.parseNew({ kind: 'rss', url: prefix + 'a'.repeat(2049 - prefix.length), title: 'ブログ' }).ok)
+      .toBe(false);
+  });
+
+  it.each([
+    ['https://EXAMPLE.com/feed.xml', 'https://example.com/feed.xml'],
+    ['https://example.com:443/feed.xml', 'https://example.com/feed.xml'],
+    ['https://example.com/feed.xml#top', 'https://example.com/feed.xml'],
+    ['https://example.com/feed.xml#', 'https://example.com/feed.xml'],
+    ['https:example.com/feed.xml', 'https://example.com/feed.xml'],
+    ['https://example.com', 'https://example.com/'],
+    ['https://example.com/feed.xml?a=1#top', 'https://example.com/feed.xml?a=1'],
+  ])('URL %s を %s に正規化する', (url, normalized) => {
+    const parsed = FeedSource.parseNew({ kind: 'rss', url, title: 'ブログ' });
+
+    expect(parsed).toMatchObject({ ok: true, val: { url: normalized } });
   });
 
   it.each(['hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar', 'atom'])(

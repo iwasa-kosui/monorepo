@@ -1398,12 +1398,48 @@ describe('iori のダイジェスト API', () => {
       });
 
       it.each([
+        ['ホストが大文字', 'https://EXAMPLE.com/feed.xml'],
+        ['443 番ポートつき', 'https://example.com:443/feed.xml'],
+        ['fragment つき', 'https://example.com/feed.xml#top'],
+        ['スキームの後に // がない', 'https:example.com/feed.xml'],
+      ])('登録済みの URL と %s の URL が同じなら 409 にして、何も増やさない', async (_label, url) => {
+        const t = setupReadApi();
+        const me = await t.signIn('write:accounts');
+        seedSource(t);
+
+        const response = await post(t, me.bearer, { url, title: 'ブログ' });
+
+        expect(response.status).toBe(409);
+        expect(countOf(t)).toEqual({ n: 1 });
+      });
+
+      it('正規化した URL で保存する', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('write:accounts');
+
+        const response = await post(t, me.bearer, { url: 'https://EXAMPLE.com:443/feed.xml#top', title: 'ブログ' });
+
+        expect(response.status).toBe(201);
+        expect(t.sqlite.prepare('SELECT url FROM feed_sources').all()).toEqual([
+          { url: 'https://example.com/feed.xml' },
+        ]);
+      });
+
+      it.each([
         ['url がない', { title: 'ブログ' }],
         ['title がない', { url: 'https://example.com/feed.xml' }],
         ['url が文字列でない', { url: 1, title: 'ブログ' }],
         ['url が URL でない', { url: 'example', title: 'ブログ' }],
         ['url が ftp', { url: 'ftp://example.com/feed.xml', title: 'ブログ' }],
         ['url が javascript', { url: 'javascript:alert(1)', title: 'ブログ' }],
+        ['url が http', { url: 'http://example.com/feed.xml', title: 'ブログ' }],
+        ['url が localhost', { url: 'https://localhost/feed.xml', title: 'ブログ' }],
+        ['url が IPv4', { url: 'https://127.0.0.1/feed.xml', title: 'ブログ' }],
+        ['url が IPv6', { url: 'https://[::1]/', title: 'ブログ' }],
+        ['url が 10 進の IP', { url: 'https://2130706433/', title: 'ブログ' }],
+        ['url が .internal', { url: 'https://db.internal/feed.xml', title: 'ブログ' }],
+        ['url が資格情報つき', { url: 'https://user:pass@example.com/feed.xml', title: 'ブログ' }],
+        ['url が 2049 文字', { url: `https://example.com/${'a'.repeat(2029)}`, title: 'ブログ' }],
         ['title が空白だけ', { url: 'https://example.com/feed.xml', title: '  ' }],
         ['title が 101 文字', { url: 'https://example.com/feed.xml', title: 'あ'.repeat(101) }],
       ])('%s と 400 にして、何も作らない', async (_label, invalid) => {

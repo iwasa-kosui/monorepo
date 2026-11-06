@@ -15,6 +15,7 @@ export const createD1HatenaTrendsResolverByFetchedSince = (
       .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
       .where(and(
         inArray(feedSourcesTable.kind, ['hatena_hotentry', 'hatena_entrylist']),
+        eq(feedSourcesTable.enabled, true),
         gte(feedEntriesTable.fetchedAt, new Date(fetchedSince)),
       ))
       .groupBy(feedEntriesTable.url)
