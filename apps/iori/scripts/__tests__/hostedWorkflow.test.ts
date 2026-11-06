@@ -65,6 +65,8 @@ it('maps the operations to their fixed scripts', async () => {
       ['delete-rehearsal-d1', 'delete-rehearsal-d1.mjs'],
       ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
+      ['delete-unfollowed-posts-dry-run', 'delete-unfollowed-posts.mjs'],
+      ['delete-unfollowed-posts', 'delete-unfollowed-posts.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
       ['ensure-event-archive-bucket', 'ensure-event-archive-bucket.mjs'],
     ]
@@ -221,6 +223,35 @@ it('relays only the fixed move-unfollowed-reposts notices to the public log', as
     'IORI_NOTICE move-unfollowed-reposts mode=delete created=1 deleted=1',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=1234567890 deleted=1',
     ' IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed delete-unfollowed-posts notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000 federated=300',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0 federated=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=20000',
+  ];
+  const rejected = [
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1 targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=-1 federated=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=-1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1234567890',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1 posts=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 posts=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 created=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply created=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply',
+    'IORI_NOTICE delete-unfollowed-posts mode=delete deleted=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1234567890',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 postId=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));
