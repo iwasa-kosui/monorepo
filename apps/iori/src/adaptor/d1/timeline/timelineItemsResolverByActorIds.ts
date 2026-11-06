@@ -45,7 +45,8 @@ const cursorOf = (id: string) =>
   sql`select ${cursorItem.createdAt}, ${cursorItem.timelineItemId} from ${timelineItemsTable} ${cursorItem}
     where (${cursorItem.type} = 'post' and ${cursorItem.postId} = ${id})
       or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} = ${id})
-    order by ${cursorItem.createdAt} desc, ${cursorItem.timelineItemId} desc
+      or (${cursorItem.type} = 'repost' and ${cursorItem.repostId} is null and ${cursorItem.postId} = ${id})
+    order by ${cursorItem.createdAt} asc, ${cursorItem.timelineItemId} asc
     limit 1`;
 
 export const createD1TimelineItemsResolverByActorIds = (
@@ -187,15 +188,12 @@ export const createD1TimelineItemsResolverByActorIds = (
       linkPreviewsByPostId.set(preview.postId, postPreviews);
     }
 
-    const reposterInfo = new Map<string, { username: string; logoUri: string | undefined }>();
+    const reposterInfo = new Map<string, { username: string | undefined; logoUri: string | undefined }>();
     for (const reposter of reposters) {
-      const username = reposter.users?.username ?? reposter.remote_actors?.username;
-      if (username !== null && username !== undefined) {
-        reposterInfo.set(reposter.actors.actorId, {
-          username,
-          logoUri: reposter.actors.logoUri ?? undefined,
-        });
-      }
+      reposterInfo.set(reposter.actors.actorId, {
+        username: reposter.users?.username ?? reposter.remote_actors?.username ?? undefined,
+        logoUri: reposter.actors.logoUri ?? undefined,
+      });
     }
 
     const timelineItems: TimelineItemWithPost[] = rows

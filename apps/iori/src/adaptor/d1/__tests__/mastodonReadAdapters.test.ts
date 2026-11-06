@@ -106,6 +106,48 @@ describe('createD1TimelineItemsResolverByActorIds with page', () => {
     expect(since.ok && since.val.map(postIdOf)).toEqual([newestFirst[0], newestFirst[1]]);
   });
 
+  it('repostId が NULL の repost の行は postId で通常の投稿として返し、その postId を max_id に使える', async () => {
+    const t = seedTimeline();
+    const orphan = t.seed.addLocalPost(t.me, 3_500, { timeline: false });
+    t.seed.addTimelineItem(t.me.actorId, orphan.postId, 3_500, { type: 'repost', repostId: null });
+
+    const all = await t.resolve({});
+    const afterOrphan = await t.resolve({ olderThanId: orphan.postId });
+
+    expect(all.ok && all.val.map((item) => item.type)).toEqual(['repost', 'post', 'post', 'post', 'post', 'post']);
+    expect(all.ok && all.val[1]?.post.postId).toBe(orphan.postId);
+    expect(afterOrphan.ok && afterOrphan.val.map(postIdOf)).toEqual(all.ok ? all.val.slice(2).map(postIdOf) : []);
+  });
+
+  it('username が NULL の remote actor のブーストも repost の項目として返す', async () => {
+    const t = seedTimeline();
+    const ghost = t.seed.addRemoteActor('ghost');
+    t.sqlite.prepare('UPDATE remote_actors SET username = NULL WHERE actorId = ?').run(ghost.actorId);
+    const ghostBoost = t.seed.addRepost(ghost.actorId, t.first.postId, 5_000);
+
+    const result = await createD1TimelineItemsResolverByActorIds(t.db).resolve({
+      actorIds: [actorId(t.me.actorId), actorId(ghost.actorId)],
+      currentActorId: actorId(t.me.actorId),
+      createdAt: undefined,
+      mutedActorIds: [],
+      page: page({ limit: 1 }),
+    });
+
+    const top = result.ok ? result.val[0] : undefined;
+    expect(top?.type === 'repost' && top.repostId).toBe(ghostBoost.repostId);
+  });
+
+  it('同じ postId の post の行が重複しても、max_id は古い行を指して同じページを繰り返さない', async () => {
+    const t = seedTimeline();
+    t.seed.addTimelineItem(t.me.actorId, t.first.postId, 6_000);
+
+    const all = await t.resolve({});
+    const afterFirst = await t.resolve({ olderThanId: t.first.postId });
+
+    expect(all.ok && all.val.map(postIdOf).filter((id) => id === t.first.postId)).toHaveLength(2);
+    expect(afterFirst.ok && afterFirst.val).toEqual([]);
+  });
+
   it('知らない ID の max_id は空にする', async () => {
     const t = seedTimeline();
 
