@@ -17,7 +17,7 @@ const recordEvent = (
   input: { eventName: string; payload: unknown; visitId: string; row: unknown },
 ): number => {
   const result = db.prepare(`
-    INSERT INTO domain_events (event_at, event_name, payload, aggregate_id, aggregate_name, aggregate_props)
+    INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     new Date().toISOString(),

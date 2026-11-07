@@ -25,7 +25,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/build-exercises-tarball.ts",
     "preview": "wrangler dev",
     "test": "vitest",
     "test:ci": "vitest --run",

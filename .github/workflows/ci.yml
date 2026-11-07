@@ -260,5 +260,8 @@ jobs:
       - name: Build
         run: pnpm --filter es-patchwork-hands-on run build
 
+      - name: Check exercises tarball
+        run: node apps/es-patchwork-hands-on/scripts/check-exercises-tarball.ts
+
       - name: Test
         run: pnpm --filter es-patchwork-hands-on run test:ci

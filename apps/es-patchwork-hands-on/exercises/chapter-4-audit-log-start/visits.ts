@@ -50,7 +50,7 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: 
     });
     const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
     db.prepare(`
-      INSERT INTO domain_events (event_at, event_name, payload, aggregate_id, aggregate_name, aggregate_props)
+      INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       new Date().toISOString(),

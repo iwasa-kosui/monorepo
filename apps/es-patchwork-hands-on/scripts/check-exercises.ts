@@ -142,13 +142,25 @@ for (const { dir, green, red } of snapshots) {
     errors.push(`${dir}: who-cancelled.ts の終了コードが 0 ではありません（${who.status}）`);
   }
   if (dir === 'chapter-2-step-2') {
-    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-before-events']) {
+    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-tama']) {
       if (!who.stdout.includes(text)) {
         errors.push(`${dir}: who-cancelled.ts の出力に「${text}」がありません`);
       }
     }
   } else if (who.stdout.includes('受付スタッフ')) {
     errors.push(`${dir}: who-cancelled.ts の出力に「受付スタッフ」が含まれています`);
+  }
+  const show = runScript(dir, 'show-visits.ts');
+  if (show.status !== 0) {
+    errors.push(`${dir}: show-visits.ts の終了コードが 0 ではありません（${show.status}）`);
+  }
+  if (!show.stdout.includes('cancelled')) {
+    errors.push(`${dir}: show-visits.ts の出力に「cancelled」がありません`);
+  }
+  for (const text of ['受付スタッフ', '飼い主の都合']) {
+    if (show.stdout.includes(text)) {
+      errors.push(`${dir}: show-visits.ts の出力に「${text}」が含まれています`);
+    }
   }
 }
 
