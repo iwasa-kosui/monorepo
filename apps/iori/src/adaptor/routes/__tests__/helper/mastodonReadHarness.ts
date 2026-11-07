@@ -13,7 +13,9 @@ import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
+import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
+import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
@@ -73,6 +75,9 @@ import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/em
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1AllFeedSourcesResolver } from '../../../d1/feedSource/allFeedSourcesResolver.ts';
+import { createD1FeedSourceCreatedStore } from '../../../d1/feedSource/feedSourceCreatedStore.ts';
+import { createD1FeedSourceEnabledChangedStore } from '../../../d1/feedSource/feedSourceEnabledChangedStore.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../../../d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -179,6 +184,7 @@ export const setupReadApi = (
   });
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
   const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const digestTopicEmbeddedStore = createD1DigestTopicEmbeddedStore(db);
   const sessionResolver = harness.memory.sessionResolver as never;
@@ -510,6 +516,17 @@ export const setupReadApi = (
             interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
             interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
             digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
+            now: Instant.now,
+          }),
+          allFeedSourcesResolver,
+          addFeedSourceUseCase: AddFeedSourceUseCase.create({
+            allFeedSourcesResolver,
+            feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
+            now: Instant.now,
+          }),
+          changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase.create({
+            allFeedSourcesResolver,
+            feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
             now: Instant.now,
           }),
           digestTopicsResolverByUserId,

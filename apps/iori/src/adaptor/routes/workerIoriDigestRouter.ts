@@ -26,11 +26,21 @@ import type {
   DigestTopicsResolverByUserId,
   StoredDigestTopic,
 } from '../../domain/digestTopic/digestTopic.ts';
+import type {
+  AllFeedSourcesResolver,
+  FeedSource,
+  FeedSourceAlreadyExistsError,
+  FeedSourceNotFoundError,
+  FeedSourceParseError,
+} from '../../domain/feedSource/feedSource.ts';
+import { FeedSourceId } from '../../domain/feedSource/feedSourceId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { AddDigestTopicUseCase } from '../../useCase/addDigestTopic.ts';
+import type { AddFeedSourceUseCase } from '../../useCase/addFeedSource.ts';
 import type { ChangeDigestTopicEnabledUseCase } from '../../useCase/changeDigestTopicEnabled.ts';
+import type { ChangeFeedSourceEnabledUseCase } from '../../useCase/changeFeedSourceEnabled.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
 import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem.ts';
 import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
@@ -63,6 +73,9 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
+  allFeedSourcesResolver: AllFeedSourcesResolver;
+  addFeedSourceUseCase: AddFeedSourceUseCase;
+  changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -117,9 +130,20 @@ const deepDiveRequestBody = z.object({
   baseUpdatedAt: Instant.zodType,
 });
 
+export type IoriFeedSourceBody = Readonly<{
+  feedSourceId: string;
+  kind: string;
+  url: string;
+  title: string;
+  enabled: boolean;
+  lastFetchedAt: string | null;
+  lastError: string | null;
+}>;
+
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
 const digestItemNotFound = { error: 'Digest item not found' } as const;
+const feedSourceNotFound = { error: 'Feed source not found' } as const;
 const digestTopicNotFound = { error: 'Digest topic not found' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
@@ -149,6 +173,16 @@ const toDigestBody = (digest: Digest, topics: ReadonlyArray<DigestTopicEntry>): 
       hatena: digest.trends.filter((trend) => trend.kind === 'hatena').map(toTrendBody),
     },
   },
+});
+
+const toFeedSourceBody = (source: FeedSource): IoriFeedSourceBody => ({
+  feedSourceId: source.feedSourceId,
+  kind: source.kind,
+  url: source.url,
+  title: source.title,
+  enabled: source.enabled,
+  lastFetchedAt: source.lastFetchedAt === null ? null : toIsoString(source.lastFetchedAt),
+  lastError: source.lastError,
 });
 
 const toTopicBody = (topic: StoredDigestTopic): IoriDigestTopicBody => ({
@@ -190,6 +224,15 @@ const requireSameOriginForCookie = async (c: Context<MastodonAuthEnv>, next: () 
   await next();
 };
 
+const feedSourceErrorResponse = (
+  c: Context<MastodonAuthEnv>,
+  err: FeedSourceAlreadyExistsError | FeedSourceNotFoundError | FeedSourceParseError,
+) => {
+  if (!('type' in err)) return c.json({ error: `Validation failed: ${err.message}` }, 400);
+  return err.type === 'FeedSourceNotFoundError'
+    ? c.json(feedSourceNotFound, 404)
+    : c.json({ error: 'Feed source already exists' }, 409);
+};
 const topicErrorResponse = (c: Context<MastodonAuthEnv>, err: DigestTopicNotFoundError | DigestTopicParseError) =>
   'type' in err
     ? c.json(digestTopicNotFound, 404)
@@ -213,6 +256,9 @@ export const createWorkerIoriDigestRouter = ({
   editDigestTopicUseCase,
   changeDigestTopicEnabledUseCase,
   deepDiveDigestItemUseCase,
+  allFeedSourcesResolver,
+  addFeedSourceUseCase,
+  changeFeedSourceEnabledUseCase,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -392,6 +438,32 @@ export const createWorkerIoriDigestRouter = ({
           return c.json(internalServerError, 500);
       }
     })
+    .get('/iori/v1/feed-sources', authn.requireUser(readStatuses), async (c) => {
+      const sources = await allFeedSourcesResolver.resolve();
+      return sources.ok ? c.json({ sources: sources.val.map(toFeedSourceBody) }) : c.json(internalServerError, 500);
+    })
+    .post('/iori/v1/feed-sources', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
+      const body = await readRequestBody(c);
+      const url = bodyString(body, 'url')?.trim();
+      if (url === undefined) return c.json({ error: 'Validation failed: url' }, 400);
+      const title = bodyString(body, 'title')?.trim();
+      if (title === undefined) return c.json({ error: 'Validation failed: title' }, 400);
+      const added = await addFeedSourceUseCase.run({ url, title });
+      return added.ok ? c.json({ source: toFeedSourceBody(added.val) }, 201) : feedSourceErrorResponse(c, added.err);
+    })
+    .patch(
+      '/iori/v1/feed-sources/:feedSourceId',
+      requireSameOriginForCookie,
+      authn.requireUser(writeAccounts),
+      async (c) => {
+        const feedSourceId = FeedSourceId.parse(c.req.param('feedSourceId'));
+        if (!feedSourceId.ok) return c.json(feedSourceNotFound, 404);
+        const enabled = readEnabled(await readRequestBody(c));
+        if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
+        const changed = await changeFeedSourceEnabledUseCase.run({ feedSourceId: feedSourceId.val, enabled });
+        return changed.ok ? c.json({ source: toFeedSourceBody(changed.val) }) : feedSourceErrorResponse(c, changed.err);
+      },
+    )
     .get('/iori/v1/digest-topics', authn.requireUser(readStatuses), async (c) => {
       const userId = userIdOf(c);
       if (userId === undefined) return c.json(invalidToken, 401);

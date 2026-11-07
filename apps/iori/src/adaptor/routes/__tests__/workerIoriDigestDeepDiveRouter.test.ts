@@ -56,6 +56,9 @@ const setup = (run: DeepDiveDigestItemUseCase['run'] = async () => RA.ok(okValue
           editDigestTopicUseCase: unused,
           changeDigestTopicEnabledUseCase: unused,
           deepDiveDigestItemUseCase: { run: deepDive },
+          allFeedSourcesResolver: unused,
+          addFeedSourceUseCase: unused,
+          changeFeedSourceEnabledUseCase: unused,
         }),
       );
     },

@@ -14,6 +14,7 @@ export const createD1RadarFeedEntriesResolverByFetchedSince = (
       .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
       .where(and(
         eq(feedSourcesTable.kind, 'thoughtworks_radar'),
+        eq(feedSourcesTable.enabled, true),
         gte(feedEntriesTable.fetchedAt, new Date(fetchedSince)),
       ))
       .orderBy(
