@@ -230,7 +230,12 @@ it('accepts delete-rehearsal-d1 only for production without generation and run I
     );
   }
 });
-const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
+const moveOperations = [
+  'move-unfollowed-reposts-dry-run',
+  'move-unfollowed-reposts',
+  'delete-unfollowed-posts-dry-run',
+  'delete-unfollowed-posts',
+];
 const moveReposts = (operation: string) => ({
   ...env,
   IORI_ENVIRONMENT: 'production',

@@ -3,7 +3,12 @@ import { join } from 'node:path';
 
 const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-failed-source'];
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
-const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
+const moveOperations = [
+  'move-unfollowed-reposts-dry-run',
+  'move-unfollowed-reposts',
+  'delete-unfollowed-posts-dry-run',
+  'delete-unfollowed-posts',
+];
 const deleteBlockedDomainOperations = ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'];
 const pruneOperations = ['prune-federated-posts-dry-run'];
 const bucketOperations = ['ensure-event-archive-bucket'];
