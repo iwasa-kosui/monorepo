@@ -113,7 +113,7 @@ export type RepostTimelineItem = {
   post: PostWithAuthor;
   repostedBy: {
     actorId: ActorId;
-    username: string;
+    username: string | undefined;
     logoUri: string | undefined;
   };
   createdAt: Instant;

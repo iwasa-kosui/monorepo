@@ -42,6 +42,8 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'delete-unfollowed-posts',
     'prune-federated-posts-dry-run',
     'ensure-event-archive-bucket',
+    'delete-blocked-domain-posts-dry-run',
+    'delete-blocked-domain-posts',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -202,6 +204,30 @@ it.each([
       type: 'string',
     });
     expect(parsed.env.IORI_REPOST_CREATED_BEFORE_MS).toBe('${{ inputs.repost_created_before_ms }}');
+  },
+);
+it.each(['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'])(
+  'gives %s only the account and the deploy token, and no input for the target domain',
+  async (name) => {
+    const workflow = await readWorkflow('deploy-iori-worker.yml');
+    const job = workflow.jobs[name];
+    const secret = (key: string) => `\${{ secrets.${key} }}`;
+    expect(job.if).toBe(`inputs.operation == '${name}'`);
+    expect(job.needs).toBe('public-artifact-gate');
+    expect(job.environment).toBe('${{ inputs.environment }}');
+    expect(operation(job).env).toEqual({
+      CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+      CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    });
+    expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+    expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+    const parsed = parse(
+      await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8'),
+    ) as {
+      on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } };
+    };
+    expect(parsed.on.workflow_dispatch.inputs.operation.options).toContain(name);
+    expect(Object.keys(parsed.on.workflow_dispatch.inputs)).not.toContain('domain');
   },
 );
 it('gives prune-federated-posts-dry-run only the account and the deploy token, and no extra input', async () => {

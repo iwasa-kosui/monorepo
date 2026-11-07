@@ -39,6 +39,8 @@ type Input =
   & Readonly<{
     postId: PostId;
     content: string;
+    summary?: string | null;
+    sensitive?: boolean;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -139,12 +141,14 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri }) => {
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
           inReplyToUri,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
@@ -184,6 +188,8 @@ const create = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+            summary: replyPost.summary,
+            sensitive: replyPost.sensitive,
             replyTarget: new URL(inReplyToUri),
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
@@ -245,6 +251,8 @@ const create = ({
           mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
           url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+          summary: replyPost.summary,
+          sensitive: replyPost.sensitive,
           replyTarget: new URL(objectUri),
           attachments: images.map((image) => toImageDocument(image, origin)),
         });

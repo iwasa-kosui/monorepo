@@ -29,9 +29,8 @@ const setup = async () => {
 describe('POST /api/v1/statuses の検証', () => {
   const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
     ['visibility が public 以外', { status: 'hi', visibility: 'private' }],
-    ['spoiler_text が空でない', { status: 'hi', spoiler_text: 'cw' }],
-    ['sensitive が真', { status: 'hi', sensitive: true }],
-    ['sensitive が文字列の true', { status: 'hi', sensitive: 'true' }],
+    ['spoiler_text が文字列でない', { status: 'hi', spoiler_text: 1 }],
+    ['status と spoiler_text の合計が 10001 文字', { status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5001) }],
     ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
     ['status が空白だけで media_ids も空', { status: ' \n\t', media_ids: [] }],
     ['status がなく media_ids も空', {}],
@@ -92,6 +91,15 @@ describe('POST /api/v1/statuses の検証', () => {
     const t = await setup();
 
     const response = await t.json({ status: 'あ'.repeat(10000) });
+
+    expect(response.status).toBe(200);
+    expect(t.count('posts')).toBe(1);
+  });
+
+  it('status と spoiler_text の合計が 10000 文字ちょうどのとき投稿できる', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5000) });
 
     expect(response.status).toBe(200);
     expect(t.count('posts')).toBe(1);
@@ -176,6 +184,78 @@ describe('POST /api/v1/statuses', () => {
     expect(t.count('posts', `postId='${status.id}' AND actorId='${t.me.actorId}'`)).toBe(1);
     expect(t.count('timeline_items', `postId='${status.id}'`)).toBe(1);
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  describe('spoiler_text と sensitive', () => {
+    const storedOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+      t.sqlite.prepare('SELECT summary, sensitive FROM posts WHERE postId = ?').get(postId) as {
+        summary: string | null;
+        sensitive: number | bigint;
+      };
+
+    it('spoiler_text を summary に保存し、sensitive を真にして返す', async () => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', spoiler_text: 'cw' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status).toMatchObject({ spoiler_text: 'cw', sensitive: true });
+      const stored = storedOf(t, status.id);
+      expect(stored.summary).toBe('cw');
+      expect(Number(stored.sensitive)).toBe(1);
+    });
+
+    it('spoiler_text が空白だけのとき summary を null にし、sensitive を偽にする', async () => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', spoiler_text: '  ' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status).toMatchObject({ spoiler_text: '', sensitive: false });
+      const stored = storedOf(t, status.id);
+      expect(stored.summary).toBeNull();
+      expect(Number(stored.sensitive)).toBe(0);
+    });
+
+    it('sensitive だけが真のとき summary を null にして sensitive を真にする', async () => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', sensitive: true });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status).toMatchObject({ spoiler_text: '', sensitive: true });
+      const stored = storedOf(t, status.id);
+      expect(stored.summary).toBeNull();
+      expect(Number(stored.sensitive)).toBe(1);
+    });
+
+    it('sensitive が文字列の true のとき sensitive を真にする', async () => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', sensitive: 'true' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.sensitive).toBe(true);
+      expect(Number(storedOf(t, status.id).sensitive)).toBe(1);
+    });
+
+    it('返信でも spoiler_text を保存する', async () => {
+      const t = await setup();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({ status: 'reply', spoiler_text: 'cw', in_reply_to_id: parent.postId });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status).toMatchObject({ in_reply_to_id: parent.postId, spoiler_text: 'cw', sensitive: true });
+      const stored = storedOf(t, status.id);
+      expect(stored.summary).toBe('cw');
+      expect(Number(stored.sensitive)).toBe(1);
+    });
   });
 
   it('text/markdown の本文を Markdown として HTML にする', async () => {
