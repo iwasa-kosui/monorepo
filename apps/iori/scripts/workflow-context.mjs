@@ -5,6 +5,7 @@ const recoveryOperations = ['resume-source', 'release-pending-freeze', 'restart-
 const recoveryValues = ['destination_writes_not_enabled', 'destination_writes_reconciled'];
 const moveOperations = ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'];
 const statsOperations = ['domain-events-stats'];
+const deleteBlockedDomainOperations = ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'];
 const pruneOperations = ['prune-federated-posts-dry-run'];
 const bucketOperations = ['ensure-event-archive-bucket'];
 const shaPattern = /^[a-f0-9]{40}$/;
@@ -69,16 +70,30 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
       'delete-rehearsal-d1',
       ...moveOperations,
       ...statsOperations,
+      ...deleteBlockedDomainOperations,
       ...pruneOperations,
       ...bucketOperations,
       ...recoveryOperations,
     ].includes(operation)
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
-    || (['delete-rehearsal-d1', ...moveOperations, ...statsOperations, ...pruneOperations].includes(operation)
+    || ([
+      'delete-rehearsal-d1',
+      ...moveOperations,
+      ...statsOperations,
+      ...deleteBlockedDomainOperations,
+      ...pruneOperations,
+    ]
+      .includes(operation)
       && env.IORI_ENVIRONMENT !== 'production')
     || (['diagnose-source', 'delete-rehearsal-d1'].includes(operation)
       ? Boolean(env.IORI_GENERATION) || Boolean(env.IORI_MIGRATION_RUN_ID)
-      : [...moveOperations, ...statsOperations, ...pruneOperations, ...bucketOperations].includes(operation)
+      : [
+          ...moveOperations,
+          ...statsOperations,
+          ...deleteBlockedDomainOperations,
+          ...pruneOperations,
+          ...bucketOperations,
+        ].includes(operation)
       ? !generationPattern.test(env.IORI_GENERATION ?? '') || Boolean(env.IORI_MIGRATION_RUN_ID)
       : !generationPattern.test(env.IORI_GENERATION ?? '')
         || !runIdPattern.test(env.IORI_MIGRATION_RUN_ID ?? ''))

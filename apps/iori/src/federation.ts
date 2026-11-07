@@ -1,6 +1,6 @@
 import { createFederation } from '@fedify/fedify';
 import { PostgresKvStore } from '@fedify/postgres';
-import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Undo } from '@fedify/vocab';
+import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Reject, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import postgres from 'postgres';
@@ -62,6 +62,7 @@ const create = () => {
     .withIdempotency('per-origin')
     .setSharedKeyDispatcher(sharedKeyDispatcher.dispatch)
     .on(Accept, inboxListener.onAccept)
+    .on(Reject, inboxListener.onReject)
     .on(Follow, inboxListener.onFollow)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)

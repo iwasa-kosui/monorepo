@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const h2Class = 'mt-10 mb-4 text-2xl font-bold';
+const pClass = 'my-4 leading-7 break-words';
+const linkClass = 'underline';
+const codeClass =
+  'rounded bg-gray-100 px-1 py-0.5 font-mono text-sm break-words';
+const preClass =
+  'my-4 overflow-x-auto rounded bg-gray-100 p-4 font-mono text-sm';
+const listClass = 'my-4 list-disc space-y-2 pl-6 leading-7 break-words';
+---
+
+<BaseLayout title="事前準備 | もう他人ごとじゃないイベントソーシング">
+  <h1 class="mb-6 text-3xl font-bold">事前準備</h1>
+
+  <p class={pClass}>
+    このハンズオンは、参加者が環境を準備してある前提で進めます。当日に環境を準備する時間はありません。次の3つを、当日までに済ませてください。
+  </p>
+  <p class={pClass}>
+    Docker、データベース、API キーは要りません。前提知識は、SQL の UPDATE と
+    INSERT が読めることです。TypeScript は読めれば十分です。
+  </p>
+
+  <h2 class={h2Class}>1. Node.js 24.12.0 以上を入れる</h2>
+  <p class={pClass}>
+    <a class={linkClass} href="https://nodejs.org/"
+    >Node.js
+      の公式サイト</a>、または普段使っているバージョン管理ツールで入れます。次のコマンドで、バージョンを確かめます。
+  </p>
+  <pre class={preClass}><code>node --version</code></pre>
+  <p class={pClass}>
+    <code class={codeClass}>v24.12.0</code>
+    以上と表示されたら、次の手順に進みます。動作は、Node.js
+    24.12.0、24.16.0、25.4.0、26.13.0 で確かめました。macOS と Linux
+    で確かめています。Windows では確かめていません。
+  </p>
+
+  <h2 class={h2Class}>2. エディタを用意する</h2>
+  <p class={pClass}>
+    TypeScript のファイルを開けるエディタなら、どれでも使えます。
+  </p>
+
+  <h2 class={h2Class}>3. 演習を取得して動かす</h2>
+  <p class={pClass}>
+    <a class={linkClass} href="/es-patchwork-exercises.tar.gz" download
+    >es-patchwork-exercises.tar.gz
+      をダウンロード</a>します。取得には通信が要ります。会場の通信環境に頼らずに済むよう、必ず当日より前に取得してください。演習の実行に通信は要りません。npm
+    install も要りません。
+  </p>
+  <p class={pClass}>ダウンロードしたフォルダで、次のコマンドを実行します。</p>
+  <pre class={preClass}>
+<code>tar -xf es-patchwork-exercises.tar.gz
+cd es-patchwork-exercises/chapter-1-start
+node --test visits.test.ts</code></pre>
+  <p class={pClass}>
+    ブラウザがファイルを自動で展開した場合は、<code class={codeClass}>tar</code>
+    の行を飛ばします。
+  </p>
+  <p class={pClass}>
+    結果の途中に <code class={codeClass}>ℹ pass 4</code> と <code
+      class={codeClass}
+    >ℹ fail 4</code> の集計が出れば、準備完了です。<strong
+    >4件の失敗は正しい状態です。</strong>集計の後に failing tests
+    の一覧とエラーが続きます。集計が画面の外に流れたら、スクロールして確かめてください。「第2章
+    ステップ1」と「第2章 ステップ2」のテストは、ハンズオンの中で通します。
+  </p>
+
+  <h2 class={h2Class}>当日の持ち物</h2>
+  <p class={pClass}>
+    ノート PC
+    を持ってきてください。電源が使えない場合に備えて、バッテリーを充電しておいてください。
+  </p>
+
+  <h2 class={h2Class}>うまく動かないとき</h2>
+  <ul class={listClass}>
+    <li>
+      テストは <code class={codeClass}>chapter-1-start</code>
+      に移動してから、<code class={codeClass}>node --test visits.test.ts</code>
+      の形で実行します。<code class={codeClass}>Could not find</code>
+      と出たときは、<code class={codeClass}>chapter-1-start</code>
+      に移動できていません。
+    </li>
+    <li>
+      <code class={codeClass}
+      >ExperimentalWarning: SQLite is an experimental feature</code>
+      が出ても問題ありません。
+    </li>
+    <li>
+      エディタに赤線が出ても、<code class={codeClass}
+      >node --test visits.test.ts</code>
+      が動けば問題ありません。配布物に型定義のパッケージ（<code
+        class={codeClass}
+      >@types/node</code>）を入れていないためです。
+    </li>
+    <li>
+      <code class={codeClass}>pass 4</code> と <code class={codeClass}
+      >fail 4</code> にならないときは、<code class={codeClass}
+      >node --version</code> でバージョンを確かめてください。
+    </li>
+    <li>
+      解決しないときは、当日は講師の画面を見て進められます。演習は持ち帰って試せます。
+    </li>
+  </ul>
+</BaseLayout>

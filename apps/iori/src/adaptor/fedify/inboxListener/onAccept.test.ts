@@ -139,4 +139,35 @@ describe('createOnAccept', () => {
     expect(acceptRelaySubscriptionUseCase.run).not.toHaveBeenCalled();
     expect(followAcceptedStore.store).toHaveBeenCalledOnce();
   });
+
+  it('processes an Accept whose embedded Follow id has a different origin from the Accept id', async () => {
+    const { deps, followAcceptedStore } = createDeps(undefined);
+    const localActorUri = `${ORIGIN}/users/alice`;
+    const documentLoader = vi.fn(async (url: string) => ({
+      contextUrl: null,
+      documentUrl: url,
+      document: {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: localActorUri,
+        type: 'Person',
+        preferredUsername: 'alice',
+      },
+    }));
+    const accept = await Accept.fromJsonLd({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: 'https://remote.example/activities/4',
+      type: 'Accept',
+      actor: 'https://remote.example/users/bob',
+      object: {
+        id: `${localActorUri}#follows/abc`,
+        type: 'Follow',
+        actor: localActorUri,
+        object: 'https://remote.example/users/bob',
+      },
+    }, { documentLoader });
+
+    await createOnAccept(deps)(createCtx(), accept as Accept);
+
+    expect(followAcceptedStore.store).toHaveBeenCalledOnce();
+  });
 });

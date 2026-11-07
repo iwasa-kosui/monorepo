@@ -8,15 +8,19 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
+import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
+import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
+import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
+import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
@@ -58,6 +62,11 @@ import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../../../d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
+import { createD1DigestTopicCreatedStore } from '../../../d1/digestTopic/digestTopicCreatedStore.ts';
+import { createD1DigestTopicEditedStore } from '../../../d1/digestTopic/digestTopicEditedStore.ts';
+import { createD1DigestTopicEmbeddedStore } from '../../../d1/digestTopic/digestTopicEmbeddedStore.ts';
+import { createD1DigestTopicEnabledChangedStore } from '../../../d1/digestTopic/digestTopicEnabledChangedStore.ts';
+import { createD1DigestTopicsResolverByUserId } from '../../../d1/digestTopic/digestTopicsResolverByUserId.ts';
 import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../../../d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
@@ -154,6 +163,7 @@ afterEach(() => {
 export const setupReadApi = (
   options: Readonly<{
     textGenerator?: TextGenerator;
+    textEmbedder?: TextEmbedder;
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
   }> = {},
@@ -169,6 +179,8 @@ export const setupReadApi = (
   });
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
+  const digestTopicEmbeddedStore = createD1DigestTopicEmbeddedStore(db);
   const sessionResolver = harness.memory.sessionResolver as never;
   const userResolver = createD1UserResolver(db);
   const postResolver = createD1PostResolver(db);
@@ -498,6 +510,26 @@ export const setupReadApi = (
             interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
             interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
             digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
+            now: Instant.now,
+          }),
+          digestTopicsResolverByUserId,
+          addDigestTopicUseCase: AddDigestTopicUseCase.create({
+            digestTopicsResolverByUserId,
+            digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),
+            digestTopicEmbeddedStore,
+            textEmbedder: options.textEmbedder,
+            now: Instant.now,
+          }),
+          editDigestTopicUseCase: EditDigestTopicUseCase.create({
+            digestTopicsResolverByUserId,
+            digestTopicEditedStore: createD1DigestTopicEditedStore(db),
+            digestTopicEmbeddedStore,
+            textEmbedder: options.textEmbedder,
+            now: Instant.now,
+          }),
+          changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
+            digestTopicsResolverByUserId,
+            digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
             now: Instant.now,
           }),
         }),

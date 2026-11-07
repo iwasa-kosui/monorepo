@@ -548,6 +548,17 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await alices.json()).toEqual([]);
   });
 
+  it('Link の next の URL をそのまま取得すると 2 ページ目に古い投稿が返る', async () => {
+    const t = await seedAccounts();
+
+    const first = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?limit=2`, { headers: t.me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
+
+    expect(await statusIds(first)).toEqual(t.newestFirst.slice(0, 2));
+    expect(await statusIds(second)).toEqual(t.newestFirst.slice(2, 4));
+  });
+
   it('Link は絞り込む前の行から作る', async () => {
     const t = await seedAccounts();
 

@@ -97,11 +97,39 @@ describe('federationWithObjectNotFound with blocked inbox domains', () => {
   };
 
   it.each([
-    ['a relayed Create to the shared inbox', '/inbox', relayedCreate('https://crazylab.online/users/a')],
-    ['a relayed Announce to the shared inbox', '/inbox', relayedAnnounce('https://crazylab.online/users/a')],
-    ['a Create to a personal inbox', '/users/kosui/inbox', relayedCreate('https://crazylab.online/users/a')],
-    ['a Create from a subdomain', '/inbox', relayedCreate('https://social.crazylab.online/users/a')],
-  ])('answers 202 without passing %s to Fedify', async (_label, path, activity) => {
+    [
+      'a relayed Create to the shared inbox',
+      '/inbox',
+      relayedCreate('https://crazylab.online/users/a'),
+      'crazylab.online',
+    ],
+    [
+      'a relayed Announce to the shared inbox',
+      '/inbox',
+      relayedAnnounce('https://crazylab.online/users/a'),
+      'crazylab.online',
+    ],
+    [
+      'a Create to a personal inbox',
+      '/users/kosui/inbox',
+      relayedCreate('https://crazylab.online/users/a'),
+      'crazylab.online',
+    ],
+    ['a Create from a subdomain', '/inbox', relayedCreate('https://social.crazylab.online/users/a'), 'crazylab.online'],
+    [
+      'a relayed Create from baraag.net to the shared inbox',
+      '/inbox',
+      relayedCreate('https://baraag.net/users/a'),
+      'baraag.net',
+    ],
+    [
+      'a relayed Announce of baraag.net to the shared inbox',
+      '/inbox',
+      relayedAnnounce('https://baraag.net/users/a'),
+      'baraag.net',
+    ],
+    ['a Create from a baraag.net subdomain', '/inbox', relayedCreate('https://media.baraag.net/users/a'), 'baraag.net'],
+  ])('answers 202 without passing %s to Fedify', async (_label, path, activity, domain) => {
     const { fetch, info, post } = setup();
 
     const response = await post(path, JSON.stringify(activity));
@@ -109,7 +137,7 @@ describe('federationWithObjectNotFound with blocked inbox domains', () => {
     expect(response.status).toBe(202);
     expect(fetch).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith('iori inbox: dropped an activity from a blocked domain.', {
-      domain: 'crazylab.online',
+      domain,
       activityType: activity.type,
       path,
     });

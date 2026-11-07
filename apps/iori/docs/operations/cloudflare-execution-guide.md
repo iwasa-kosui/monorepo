@@ -95,6 +95,7 @@ operation が使う参照名は、次のとおりです。
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -600,6 +601,29 @@ job が受け取る secret は、次の2つです。
 | `aborted`                                    | 時間切れか中断で止まりました                                                                  |
 
 この operation は、バケットを足す Terraform の変更を merge する前に実行します。作業者は、対象にするすべての generation で `state=verified` を確かめてから、その変更を merge します。順序は、この operation の PR を merge し、operation を dispatch し、その後で Terraform の変更を merge する流れです。
+
+#### delete-blocked-domain-posts でブロックしたドメインの保存済みの投稿を消す
+
+`delete-blocked-domain-posts-dry-run` は、本番の D1 から、ブロックしたドメイン `baraag.net`（とそのサブドメイン）の actor が書いた投稿を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=<N> remote_posts=<N> timeline_items=<N> federated_items=<N> reposts=<N> likes=<N> emoji_reacts=<N> notifications=<N> orphan_repost_notifications=<N> images=<N> articles_skipped=<N> actors=<N> follows_out=<N> follows_in=<N> mutes=<N>` の行を出します。`delete-blocked-domain-posts` は、同じ条件の投稿と、投稿に付く行を消します。この operation は `IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=<N> deleted_timeline_items=<N>` の行を出します。対象のドメインは、スクリプトの定数で固定しています。workflow の入力では指定しません。
+
+対象の範囲は、次のとおりです。
+
+- 対象の投稿は、`actors.uri` のホストが `baraag.net` か `*.baraag.net` の actor が書いた `posts` の行です。`notbaraag.net` と `baraag.net.example` は対象になりません。`local_actors` に行がある actor は対象にしません。
+- `articles.rootPostId` から参照される投稿は、対象にしません。dry-run の `articles_skipped` は、この投稿の件数です。
+- dry-run の `remote_posts` は、対象の投稿のうち `remote_posts` に行がある投稿の件数です。`posts` との差を見るために出します。
+- actor（`actors`、`remote_actors`）と `follows` の行は、消しません。dry-run の `actors`、`follows_out`（ローカルの actor がフォローしている行）、`follows_in`（ローカルの actor がフォローされている行）、`mutes` は、残る行の件数を確かめるために出します。
+- apply が出す `deleted_posts` と `deleted_timeline_items` は、その回の実行で足した `post.deleted` のイベントと論理削除の件数です。前の実行で消した分は、含みません。
+
+apply は、受信した Delete の処理（`onDelete`）と各 D1 ストアにそろえて、次の順で文を実行します。
+
+1. 対象の投稿を指す `timeline_items` に `timelineItem.deleted` のイベントを足し、`deletedAt` を立てます。
+2. 対象の投稿に付く通知（like、emojiReact、reply、repost）を消します。通知の種類ごとの表を先に、`notifications` を後に消します。like、emojiReact、reply の通知には、削除のイベントを足します。repost の通知には、ドメインに削除のイベントが無いため、イベントを足しません。
+3. `reposts`、`likes`（`local_likes` と `remote_likes` が先）、`emoji_reacts`、`federated_timeline_items` のうち、対象の投稿を指す行を、各削除のイベントを足してから消します。
+4. `post_images`、`local_posts`、`remote_post_recipients`、`remote_posts`、`posts` の順に消します。`posts` を消す前に `post.deleted` のイベントを足します。`post_translations` と `link_previews` は、外部キーの cascade で消えます。
+
+作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-blocked-domain-posts` を dispatch します。
+
+`delete-blocked-domain-posts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。どの文も、対象を毎回 actor から引き直し、足したイベントの有無を確かめます。このため、途中で失敗しても、同じ入力で `delete-blocked-domain-posts` を再実行すれば、最終状態はそろいます。ただし、`/query` が全文を1つのトランザクションで実行する場合は、時間切れのたびに全体が巻き戻ります。apply が同じ失敗を繰り返すとき、作業者は再実行を続けず、文を分けて送る変更を検討します。
 
 ## 6. 中断と引き継ぎ
 

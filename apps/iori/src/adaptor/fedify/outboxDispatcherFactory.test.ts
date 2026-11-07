@@ -20,6 +20,37 @@ const createContext = () =>
   }) as unknown as RequestContext<unknown>;
 
 describe('createOutboxDispatcher', () => {
+  it.each([
+    { summary: 'cw', sensitive: true },
+    { summary: null, sensitive: false },
+  ])('summary $summary、sensitive $sensitive の投稿を Note の summary と sensitive に出す', async (fields) => {
+    const userId = UserId.generate();
+    const actorId = ActorId.generate();
+    const post: LocalPost = {
+      type: 'local',
+      ...fields,
+      postId: PostId.generate(),
+      actorId,
+      content: 'hello',
+      createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+      userId,
+      inReplyToUri: null,
+    };
+    const dispatcher = createOutboxDispatcher({
+      userResolverByUsername: {
+        resolve: vi.fn(async () => RA.ok({ id: userId, username: Username.orThrow('kosui') })),
+      } as never,
+      actorResolverByUserId: { resolve: vi.fn(async () => RA.ok({ id: actorId })) } as never,
+      postsResolverByActorId: { resolve: vi.fn(async () => RA.ok([post])) } as never,
+    });
+
+    const result = await dispatcher.dispatch(createContext(), 'kosui');
+
+    const note = (await (result.items[0] as Create).getObject()) as Note;
+    expect(note.summary?.toString() ?? null).toBe(fields.summary);
+    expect(note.sensitive).toBe(fields.sensitive);
+  });
+
   it('保存済みの生の HTML は、配送する Note の content からサニタイズして除く', async () => {
     const userId = UserId.generate();
     const actorId = ActorId.generate();

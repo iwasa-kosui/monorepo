@@ -66,6 +66,8 @@ it('maps the operations to their fixed scripts', async () => {
       ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
       ['domain-events-stats', 'domain-events-stats.mjs'],
+      ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts.mjs'],
+      ['delete-blocked-domain-posts', 'delete-blocked-domain-posts.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
       ['ensure-event-archive-bucket', 'ensure-event-archive-bucket.mjs'],
     ]
@@ -245,6 +247,34 @@ it('relays only the fixed domain-events-stats notices to the public log', async 
     'IORI_NOTICE domain-events-stats event=../secret count=1',
     'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
     ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed delete-blocked-domain-posts notices to the public log', async () => {
+  const writes = captureStderr();
+  const dry = (domain: string, counts: string) =>
+    `IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=${domain} ${counts}`;
+  const counts =
+    'posts=120 remote_posts=130 timeline_items=400 federated_items=10 reposts=5 likes=3 emoji_reacts=2 notifications=7 orphan_repost_notifications=4 images=9 articles_skipped=1 actors=20 follows_out=2 follows_in=3 mutes=0';
+  const accepted = [
+    dry('baraag.net', counts),
+    dry('baraag.net', counts.replace(/=\d+/g, '=0')),
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=120 deleted_timeline_items=400',
+  ];
+  const rejected = [
+    dry('example.com', counts),
+    dry('baraag.net', counts.replace(' mutes=0', '')),
+    dry('baraag.net', counts.replace('posts=120 ', '')),
+    dry('baraag.net', `${counts} extra=1`),
+    dry('baraag.net', counts.replace('posts=120', 'posts=-1')),
+    dry('baraag.net', counts.replace('posts=120', 'posts=1234567890')),
+    dry('baraag.net', counts.replace('mutes=0', 'mutes=x')),
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1',
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1 extra=1',
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1234567890',
+    'IORI_NOTICE delete-blocked-domain-posts mode=delete deleted_posts=1 deleted_timeline_items=1',
+    ' IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));
