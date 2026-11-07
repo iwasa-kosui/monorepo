@@ -10,7 +10,7 @@ import {
 } from '@fedify/fedify';
 import { Activity, Application, Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { INSTANCE_ACTOR_IDENTIFIER } from '../../adaptor/fedify/sharedKeyDispatcher.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -24,9 +24,10 @@ const ORIGIN = 'https://iori.example';
 const RELAY_ACTOR_URI = 'https://relay.example/actor';
 const RELAY_INBOX_URL = 'https://relay.example/inbox';
 
+let rsa: CryptoKeyPair;
+let ed25519: CryptoKeyPair;
+
 const setup = async () => {
-  const rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const ed25519 = await generateCryptoKeyPair('Ed25519');
   const federation = createFederation<unknown>({
     kv: new MemoryKvStore(),
     origin: ORIGIN,
@@ -66,8 +67,13 @@ const createRelay = () =>
 const sha256Base64 = async (body: string) =>
   Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body))).toString('base64');
 
-describe('relay への送信', () => {
+describe('relay への送信', { timeout: 30_000 }, () => {
   const fetchMock = vi.fn<(request: Request) => Promise<Response>>();
+
+  beforeAll(async () => {
+    rsa = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    ed25519 = await generateCryptoKeyPair('Ed25519');
+  }, 30_000);
 
   beforeEach(() => {
     fetchMock.mockReset();

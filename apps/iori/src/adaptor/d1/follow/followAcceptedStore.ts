@@ -10,7 +10,7 @@ export const createD1FollowAcceptedStore = (db: IoriD1Db): FollowAcceptedStore =
     RA.flow(
       fromD1(async () => {
         await db.batch([
-          db.insert(followsTable).values(event.aggregateState),
+          db.insert(followsTable).values(event.aggregateState).onConflictDoNothing(),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,
             aggregateId: JSON.stringify(event.aggregateId),

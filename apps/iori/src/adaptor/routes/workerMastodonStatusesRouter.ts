@@ -85,11 +85,8 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
     return 'Only public visibility is supported';
   }
   const spoilerText = body['spoiler_text'];
-  if (!isOmitted(spoilerText) && spoilerText !== '') {
-    return 'Content warnings are not supported';
-  }
-  if (bodyBoolean(body, 'sensitive')) {
-    return 'Sensitive is not supported';
+  if (!isOmitted(spoilerText) && typeof spoilerText !== 'string') {
+    return 'Spoiler text must be a string';
   }
   const contentType = body['content_type'];
   if (!isOmitted(contentType) && contentType !== 'text/plain' && contentType !== 'text/markdown') {
@@ -102,11 +99,17 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
   if (Object.keys(body).some((key) => key === 'poll' || key.startsWith('poll['))) {
     return 'Polls are not supported';
   }
-  const status = bodyString(body, 'status');
-  if (status !== undefined && [...status].length > MAX_STATUS_CHARACTERS) {
+  const status = bodyString(body, 'status') ?? '';
+  const characters = [...status].length + [...(bodyString(body, 'spoiler_text') ?? '')].length;
+  if (characters > MAX_STATUS_CHARACTERS) {
     return `Text character limit of ${MAX_STATUS_CHARACTERS} exceeded`;
   }
   return undefined;
+};
+
+const spoilerSummary = (body: RequestBody): string | null => {
+  const trimmed = bodyString(body, 'spoiler_text')?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
 };
 
 const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
@@ -315,9 +318,12 @@ export const createWorkerMastodonStatusesRouter = ({
       const content = body['content_type'] === 'text/markdown'
         ? await PostContent.fromMarkdown(text)
         : plainTextToHtml(text);
+      const summary = spoilerSummary(body);
       const input = {
         userId,
         content,
+        summary,
+        sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
         ctx: createContext(c.req.raw),
       };

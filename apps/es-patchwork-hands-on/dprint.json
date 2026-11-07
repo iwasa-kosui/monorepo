@@ -1,0 +1,8 @@
+{
+  "extends": "../../dprint.json",
+  "typescript": {
+    "quoteStyle": "alwaysSingle",
+    "module.sortImportDeclarations": "maintain",
+    "module.sortExportDeclarations": "maintain"
+  }
+}

@@ -1,4 +1,4 @@
-export const BLOCKED_INBOX_DOMAINS: readonly string[] = ['crazylab.online'];
+export const BLOCKED_INBOX_DOMAINS: readonly string[] = ['crazylab.online', 'baraag.net'];
 
 // Content-Length がない本文と文字数での比較は目安で、正確なバイト数の上限ではない
 const APPROX_MAX_INBOX_BODY_SIZE = 16 * 1024 * 1024;

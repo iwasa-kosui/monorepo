@@ -170,6 +170,12 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       followResolver: createD1FollowResolver(db),
       followAcceptedStore: createD1FollowAcceptedStore(db),
     },
+    onReject: {
+      inboxActorResolver,
+      actorResolverByUri,
+      followResolver: createD1FollowResolver(db),
+      undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    },
     onFollow: {
       inboxActorResolver,
       acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({

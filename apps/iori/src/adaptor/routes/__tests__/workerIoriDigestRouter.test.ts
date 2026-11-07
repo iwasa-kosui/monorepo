@@ -1,3 +1,4 @@
+import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { secondsUntilNextJstDay } from '../../../domain/aiSummary/usageLimit.ts';
@@ -5,6 +6,8 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import { sha256Hex } from '../../../helper/sha256.ts';
+import type { TextEmbedder } from '../../../ports/textEmbedder.ts';
+import { createStubEmbedder } from '../../../testing/aiStubs.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -122,6 +125,7 @@ describe('iori のダイジェスト API', () => {
     '/api/iori/v1/trends/links',
     '/api/iori/v1/trends/hatena',
     '/api/iori/v1/digest/subscription',
+    '/api/iori/v1/digest-topics',
   ];
 
   it.each(readPaths)('GET %s は認証なしだと 401 にする', async (path) => {
@@ -760,6 +764,359 @@ describe('iori のダイジェスト API', () => {
       const response = await t.request('/api/iori/v1/digests', post(me.bearer));
 
       expect(response.status).toBe(201);
+    });
+  });
+
+  describe('/api/iori/v1/digest-topics', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    const stubEmbedder = () => createStubEmbedder(EMBEDDING_DIMENSIONS).embedder;
+    const failingEmbedder: TextEmbedder = { embed: () => RA.err({ type: 'AiError', message: 'boom' }) };
+    const seed = (
+      t: ReturnType<typeof setupReadApi>,
+      userId: string,
+      topicKey: string,
+      sortOrder: number,
+      options: { embedded?: boolean; enabled?: boolean } = {},
+    ) =>
+      t.sqlite.prepare(
+        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        userId,
+        topicKey,
+        `${topicKey} の名前`,
+        `${topicKey} の説明`,
+        options.embedded === false ? null : new Uint8Array(EMBEDDING_DIMENSIONS * 4),
+        options.embedded === false ? null : 1,
+        sortOrder,
+        options.enabled === false ? 0 : 1,
+        1,
+        1,
+      );
+    const rowOf = (t: ReturnType<typeof setupReadApi>, userId: string, topicKey: string) =>
+      t.sqlite.prepare(
+        'SELECT name, description, enabled, embeddedAt, length(embedding) AS bytes FROM digest_topics WHERE userId = ? AND topicKey = ?',
+      ).get(userId, topicKey);
+    const send = (method: string, headers: Record<string, string>, body?: unknown) => ({
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const cookieOf = (me: { sessionId: string }, origin: string | null = ORIGIN) => ({
+      Cookie: `sessionId=${me.sessionId}`,
+      ...(origin === null ? {} : { Origin: origin }),
+    });
+
+    describe('GET', () => {
+      it('本人のトピックだけを sortOrder の順に、embedded 付きで返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        const other = t.seed.addLocalActor('other');
+        seed(t, me.userId, 'platform', 2, { enabled: false });
+        seed(t, me.userId, 'genai', 1, { embedded: false });
+        seed(t, other.userId, 'security', 0);
+
+        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          topics: [
+            {
+              topicKey: 'genai',
+              name: 'genai の名前',
+              description: 'genai の説明',
+              enabled: true,
+              sortOrder: 1,
+              embedded: false,
+            },
+            {
+              topicKey: 'platform',
+              name: 'platform の名前',
+              description: 'platform の説明',
+              enabled: false,
+              sortOrder: 2,
+              embedded: true,
+            },
+          ],
+        });
+      });
+
+      it('トピックが無ければ空の配列を返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
+
+        expect(await response.json()).toEqual({ topics: [] });
+      });
+    });
+
+    describe('POST', () => {
+      it('認証なしだと 401 にする', async () => {
+        const t = setupReadApi();
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', { Origin: ORIGIN }, { name: '名前', description: '説明' }),
+        );
+
+        expect(response.status).toBe(401);
+      });
+
+      it('write:accounts を満たさない scope のトークンを 403 にする', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('read:statuses');
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', me.bearer, { name: '名前', description: '説明' }),
+        );
+
+        expect(response.status).toBe(403);
+        expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_topics').get()).toEqual({ n: 0 });
+      });
+
+      it('Cookie のとき Origin がなければ 403 にし、何も作らない', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', cookieOf(me, null), { name: '名前', description: '説明' }),
+        );
+
+        expect(response.status).toBe(403);
+        expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_topics').get()).toEqual({ n: 0 });
+      });
+
+      it('201 と作ったトピックを返し、embedding を保存して、sortOrder を既存の最大値 + 1 にする', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('read:statuses write:accounts');
+        seed(t, me.userId, 'genai', 4);
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', cookieOf(me), { name: ' 新しい名前 ', description: '新しい説明' }),
+        );
+
+        expect(response.status).toBe(201);
+        const { topic } = await response.json() as { topic: { topicKey: string } };
+        expect(topic).toEqual({
+          topicKey: expect.stringMatching(/^custom-[0-9a-f]{8}$/),
+          name: '新しい名前',
+          description: '新しい説明',
+          enabled: true,
+          sortOrder: 5,
+          embedded: true,
+        });
+        expect(rowOf(t, me.userId, topic.topicKey)).toMatchObject({
+          name: '新しい名前',
+          bytes: EMBEDDING_DIMENSIONS * 4,
+        });
+      });
+
+      it('埋め込みに失敗しても 201 にして、embedded を false にする', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const t = setupReadApi({ textEmbedder: failingEmbedder });
+        const me = await t.signIn('write:accounts');
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', me.bearer, { name: '名前', description: '説明' }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toMatchObject({ topic: { embedded: false } });
+      });
+
+      it.each([
+        ['name がない', { description: '説明' }],
+        ['description がない', { name: '名前' }],
+        ['name が空白だけ', { name: '  ', description: '説明' }],
+        ['name が 41 文字', { name: 'あ'.repeat(41), description: '説明' }],
+        ['description が 301 文字', { name: '名前', description: 'あ'.repeat(301) }],
+        ['name が文字列でない', { name: 1, description: '説明' }],
+      ])('%s と 400 にして、何も作らない', async (_label, body) => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+
+        const response = await t.request('/api/iori/v1/digest-topics', send('POST', me.bearer, body));
+
+        expect(response.status).toBe(400);
+        expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_topics').get()).toEqual({ n: 0 });
+      });
+    });
+
+    describe('PATCH', () => {
+      const patch = (
+        t: ReturnType<typeof setupReadApi>,
+        topicKey: string,
+        headers: Record<string, string>,
+        body: unknown,
+      ) => t.request(`/api/iori/v1/digest-topics/${topicKey}`, send('PATCH', headers, body));
+
+      it('認証なしだと 401 にする', async () => {
+        const t = setupReadApi();
+
+        const response = await patch(t, 'genai', { Origin: ORIGIN }, { enabled: false });
+
+        expect(response.status).toBe(401);
+      });
+
+      it('write:accounts を満たさない scope のトークンを 403 にし、何も変えない', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('read:statuses');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { enabled: false });
+
+        expect(response.status).toBe(403);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 1 });
+      });
+
+      it('Cookie のとき Origin がなければ 403 にし、何も変えない', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', cookieOf(me, null), { enabled: false });
+
+        expect(response.status).toBe(403);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 1 });
+      });
+
+      it('name を変えると 200 と更新後のトピックを返し、埋め込みを作り直す', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 3, { embedded: false });
+
+        const response = await patch(t, 'genai', cookieOf(me), { name: '新しい名前' });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          topic: {
+            topicKey: 'genai',
+            name: '新しい名前',
+            description: 'genai の説明',
+            enabled: true,
+            sortOrder: 3,
+            embedded: true,
+          },
+        });
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ name: '新しい名前', bytes: EMBEDDING_DIMENSIONS * 4 });
+      });
+
+      it('description を変えて埋め込みに失敗したら、200 にして embedded を false にする', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const t = setupReadApi({ textEmbedder: failingEmbedder });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { description: '新しい説明' });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ topic: { description: '新しい説明', embedded: false } });
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({
+          description: '新しい説明',
+          embeddedAt: null,
+          bytes: null,
+        });
+      });
+
+      it('enabled だけを変えると、埋め込みを作り直さずに停止する', async () => {
+        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
+        const t = setupReadApi({ textEmbedder: stub.embedder });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { enabled: false });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ topic: { topicKey: 'genai', enabled: false, embedded: true } });
+        expect(stub.calls).toHaveLength(0);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 0, bytes: EMBEDDING_DIMENSIONS * 4 });
+      });
+
+      it('name と enabled を一緒に変えると、両方を反映する', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { name: '新しい名前', enabled: false });
+
+        expect(await response.json()).toMatchObject({ topic: { name: '新しい名前', enabled: false, embedded: true } });
+      });
+
+      it('フォームの enabled=false も受け付ける', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await t.request('/api/iori/v1/digest-topics/genai', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...me.bearer },
+          body: 'enabled=false',
+        });
+
+        expect(response.status).toBe(200);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 0 });
+      });
+
+      it('無いトピックは 404 にする', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+
+        const response = await patch(t, 'missing', me.bearer, { name: '新しい名前' });
+        const toggle = await patch(t, 'missing', me.bearer, { enabled: false });
+
+        expect(response.status).toBe(404);
+        expect(toggle.status).toBe(404);
+      });
+
+      it('他のユーザーのトピックは 404 にして、変えない', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        const other = t.seed.addLocalActor('other');
+        seed(t, other.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { name: '新しい名前', enabled: false });
+
+        expect(response.status).toBe(404);
+        expect(rowOf(t, other.userId, 'genai')).toMatchObject({ name: 'genai の名前', enabled: 1 });
+      });
+
+      it.each([
+        ['何も渡さない', {}],
+        ['name が空白だけ', { name: '   ' }],
+        ['name が 41 文字', { name: 'あ'.repeat(41) }],
+        ['description が 301 文字', { description: 'あ'.repeat(301) }],
+        ['enabled が真偽値でない', { enabled: 'maybe' }],
+        ['name が文字列でない', { name: 1 }],
+      ])('%s と 400 にして、何も変えない', async (_label, body) => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, body);
+
+        expect(response.status).toBe(400);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({
+          name: 'genai の名前',
+          enabled: 1,
+          bytes: EMBEDDING_DIMENSIONS * 4,
+        });
+      });
+
+      it('name が不正なら、一緒に渡した enabled も反映しない', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { name: 'あ'.repeat(41), enabled: false });
+
+        expect(response.status).toBe(400);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 1 });
+      });
     });
   });
 

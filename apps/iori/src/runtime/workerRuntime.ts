@@ -37,6 +37,11 @@ import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/diges
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
+import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
+import { createD1DigestTopicEditedStore } from '../adaptor/d1/digestTopic/digestTopicEditedStore.ts';
+import { createD1DigestTopicEmbeddedStore } from '../adaptor/d1/digestTopic/digestTopicEmbeddedStore.ts';
+import { createD1DigestTopicEnabledChangedStore } from '../adaptor/d1/digestTopic/digestTopicEnabledChangedStore.ts';
+import { createD1DigestTopicsResolverByUserId } from '../adaptor/d1/digestTopic/digestTopicsResolverByUserId.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
@@ -150,7 +155,9 @@ import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
+import { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
+import { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
@@ -162,6 +169,7 @@ import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { EditArticleUseCase } from '../useCase/editArticle.ts';
+import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
@@ -230,6 +238,9 @@ export const createWorkerRuntimePorts = async (
   const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
+  const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
+  const digestTopicEmbeddedStore = createD1DigestTopicEmbeddedStore(db);
+  const topicTextEmbedder = workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
@@ -434,6 +445,26 @@ export const createWorkerRuntimePorts = async (
       changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase.create({
         allFeedSourcesResolver,
         feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
+        now: Instant.now,
+      }),
+      digestTopicsResolverByUserId,
+      addDigestTopicUseCase: AddDigestTopicUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),
+        digestTopicEmbeddedStore,
+        textEmbedder: topicTextEmbedder,
+        now: Instant.now,
+      }),
+      editDigestTopicUseCase: EditDigestTopicUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicEditedStore: createD1DigestTopicEditedStore(db),
+        digestTopicEmbeddedStore,
+        textEmbedder: topicTextEmbedder,
+        now: Instant.now,
+      }),
+      changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
         now: Instant.now,
       }),
     },
