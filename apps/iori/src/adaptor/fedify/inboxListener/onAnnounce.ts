@@ -20,6 +20,7 @@ import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 import { extractAttachments } from './extractAttachments.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
@@ -51,6 +52,9 @@ const extractAttachmentsOrEmpty = async (
   }
 };
 
+const getSignedDocumentLoader = (ctx: InboxContext<unknown>) =>
+  ctx.getDocumentLoader({ identifier: ctx.recipient ?? INSTANCE_ACTOR_IDENTIFIER });
+
 const saveForwardedAnnounce = async (
   deps: OnAnnounceDeps,
   ctx: InboxContext<unknown>,
@@ -62,9 +66,10 @@ const saveForwardedAnnounce = async (
   }
   const [relay] = relaysResult.val;
 
+  const documentLoader = await getSignedDocumentLoader(ctx);
   let note;
   try {
-    note = await activity.getObject();
+    note = await activity.getObject({ documentLoader });
   } catch (error) {
     getLogger().warn(`Failed to fetch forwarded Announce object: ${activity.objectId?.href} - ${String(error)}`);
     return;
@@ -74,7 +79,7 @@ const saveForwardedAnnounce = async (
     return;
   }
 
-  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader: ctx.documentLoader });
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader });
 };
 
 export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxContext<unknown>, activity: Announce) => {
@@ -189,7 +194,8 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
   // Remote Note repost - lookup the remote note
   getLogger().info(`Processing remote Announce activity: ${objectId.href}`);
 
-  const note = await activity.getObject();
+  const documentLoader = documentLoaderOptions.documentLoader ?? await getSignedDocumentLoader(ctx);
+  const note = await activity.getObject({ documentLoader });
   if (!(note instanceof Note)) {
     getLogger().info(`Announce activity object is not a Note: ${objectId.href}`);
     return;
@@ -201,7 +207,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
   }
 
   // Get the note's author
-  const author = await note.getAttribution();
+  const author = await note.getAttribution({ documentLoader });
   if (!author || !isActor(author)) {
     getLogger().warn(`Could not resolve Note author for: ${note.id.href}`);
     return;
@@ -212,15 +218,20 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
+  if (author.id.origin !== note.id.origin) {
+    getLogger().warn(`Note origin does not match actor origin: ${note.id.href} - ${author.id.href}`);
+    return;
+  }
+
   const contentText = String(note.content ?? '');
-  const authorIdentity = await ActorIdentity.fromFedifyActor(author, documentLoaderOptions);
+  const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author: ${note.id.href}`);
     return;
   }
   const attachments = await extractAttachmentsOrEmpty(
     note,
-    documentLoaderOptions.documentLoader ?? ctx.documentLoader,
+    documentLoader,
   );
 
   return RA.flow(
@@ -267,11 +278,12 @@ const processRelayAnnounce = async (
 ) => {
   getLogger().info(`Processing relay Announce from: ${relay.actorUri}`);
 
-  const note = await activity.getObject();
+  const documentLoader = await getSignedDocumentLoader(ctx);
+  const note = await activity.getObject({ documentLoader });
   if (!(note instanceof Note)) {
     getLogger().info(`Relay Announce object is not a Note`);
     return;
   }
 
-  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader: ctx.documentLoader });
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader });
 };
