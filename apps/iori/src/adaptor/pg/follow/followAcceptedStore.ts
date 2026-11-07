@@ -10,7 +10,7 @@ const store = async (event: FollowAccepted): RA<void, never> => {
     await tx.insert(followsTable).values({
       followerId: event.aggregateState.followerId,
       followingId: event.aggregateState.followingId,
-    });
+    }).onConflictDoNothing();
     await tx.insert(domainEventsTable).values({
       eventId: event.eventId,
       aggregateId: event.aggregateId,
