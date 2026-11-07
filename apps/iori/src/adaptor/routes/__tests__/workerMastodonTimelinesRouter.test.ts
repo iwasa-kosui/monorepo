@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { DrizzleQueryError } from 'drizzle-orm';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
 import { StatusSchema } from '../../mastodon/entities.ts';
@@ -113,6 +114,111 @@ describe('GET /api/v1/timelines/home', () => {
     expect(next?.searchParams.get('limit')).toBe('2');
     expect(prev?.searchParams.get('min_id')).toBe(t.boost.repostId);
     expect(idsOf(await second.json())).toEqual([t.mine.postId]);
+  });
+
+  const seedLongHome = async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addFollow(me.actorId, bob.actorId);
+    const mine = t.seed.addLocalPost(me, 1_000);
+    const notes = [2_000, 3_000, 5_000, 7_000].map((createdAt) =>
+      t.seed.addRemotePost(alice, createdAt, { timeline: true })
+    );
+    const bobNote = t.seed.addRemotePost(bob, 6_000, { timeline: true });
+    const boostByMe = t.seed.addRepost(me.actorId, notes[0]!.postId, 4_000);
+    const boostByBob = t.seed.addRepost(bob.actorId, notes[1]!.postId, 8_000);
+    const boostByAlice = t.seed.addRepost(alice.actorId, mine.postId, 9_000);
+    const newestFirst = [
+      boostByAlice.repostId,
+      boostByBob.repostId,
+      notes[3]!.postId,
+      bobNote.postId,
+      notes[2]!.postId,
+      boostByMe.repostId,
+      notes[1]!.postId,
+      notes[0]!.postId,
+      mine.postId,
+    ];
+    return { ...t, me, newestFirst };
+  };
+
+  it('Link の next の URL をそのまま取得すると古い投稿が返り、最後は空で Link が付かない', async () => {
+    const t = await seedLongHome();
+
+    const collected: string[] = [];
+    let response = await t.request('/api/v1/timelines/home?limit=2', { headers: t.me.bearer });
+    let pages = 0;
+    while (pages < 20) {
+      const ids = idsOf(await response.json());
+      if (ids.length === 0) break;
+      collected.push(...ids);
+      const next = linkOf(response, 'next');
+      expect(next).toBeDefined();
+      response = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
+      pages++;
+    }
+
+    expect(collected).toEqual(t.newestFirst);
+    expect(new Set(collected).size).toBe(collected.length);
+    expect(response.headers.get('Link')).toBeNull();
+  });
+
+  it('本文の最後の id を max_id にしても全投稿を新しい順に重複なく辿れる', async () => {
+    const t = await seedLongHome();
+
+    const collected: string[] = [];
+    let maxId: string | undefined;
+    for (let pages = 0; pages < 20; pages++) {
+      const query = maxId === undefined ? 'limit=2' : `limit=2&max_id=${maxId}`;
+      const ids = idsOf(await (await t.request(`/api/v1/timelines/home?${query}`, { headers: t.me.bearer })).json());
+      if (ids.length === 0) break;
+      collected.push(...ids);
+      maxId = ids[ids.length - 1];
+    }
+
+    expect(collected).toEqual(t.newestFirst);
+    expect(new Set(collected).size).toBe(collected.length);
+  });
+
+  it('username が NULL の remote actor のブーストがページの末尾にあっても次のページに進める', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const ghost = t.seed.addRemoteActor('ghost');
+    t.sqlite.prepare('UPDATE remote_actors SET username = NULL WHERE actorId = ?').run(ghost.actorId);
+    t.seed.addFollow(me.actorId, ghost.actorId);
+    const oldest = t.seed.addLocalPost(me, 1_000);
+    const note = t.seed.addLocalPost(me, 2_000);
+    const boost = t.seed.addRepost(ghost.actorId, note.postId, 3_000);
+
+    const collected: string[] = [];
+    let maxId: string | undefined;
+    for (let pages = 0; pages < 5; pages++) {
+      const query = maxId === undefined ? 'limit=1' : `limit=1&max_id=${maxId}`;
+      const ids = idsOf(await (await t.request(`/api/v1/timelines/home?${query}`, { headers: me.bearer })).json());
+      if (ids.length === 0) break;
+      collected.push(...ids);
+      maxId = ids[ids.length - 1];
+    }
+
+    expect(collected).toEqual([boost.repostId, note.postId, oldest.postId]);
+  });
+
+  it('同じ postId の post の行が時刻の近い 2 行で隣り合い、古い行がページの末尾にあっても次のページに進む', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const oldest = t.seed.addLocalPost(me, 1_000);
+    const duplicated = t.seed.addLocalPost(me, 2_900);
+    t.seed.addTimelineItem(me.actorId, duplicated.postId, 3_000);
+
+    const first = await t.request('/api/v1/timelines/home?limit=2', { headers: me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: me.bearer });
+
+    expect(idsOf(await first.json())).toEqual([duplicated.postId, duplicated.postId]);
+    expect(idsOf(await second.json())).toEqual([duplicated.postId, oldest.postId]);
   });
 
   it('同じミリ秒の 2 件を max_id で取りこぼさない', async () => {
@@ -249,6 +355,22 @@ describe('GET /api/v1/timelines/public', () => {
     expect(idsOf(await allowed.json())).toEqual([t.remote.postId]);
   });
 
+  it('local の経路でも Link の next の URL をそのまま取得すると古い投稿が返る', async () => {
+    const t = await seedPublic();
+    const newer = t.seed.addLocalPost(t.me, 4_000);
+
+    const first = await t.request('/api/v1/timelines/public?local=true&limit=1', { headers: t.me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
+    const lastNext = linkOf(second, 'next');
+    const third = await t.request(`${lastNext?.pathname}${lastNext?.search}`, { headers: t.me.bearer });
+
+    expect(idsOf(await first.json())).toEqual([newer.postId]);
+    expect(idsOf(await second.json())).toEqual([t.local.postId]);
+    expect(await third.json()).toEqual([]);
+    expect(third.headers.get('Link')).toBeNull();
+  });
+
   it('remote=true はミュートした投稿者を除き、max_id と Link でページを送る', async () => {
     const t = await seedPublic();
     const bob = t.seed.addRemoteActor('bob');
@@ -321,6 +443,49 @@ describe('タイムラインの内部エラー', () => {
       expect(response.status).toBe(500);
       expect(await response.json()).toEqual(internalError);
     }
+  });
+
+  const failWith = (thrown: unknown) =>
+    setupFailing({
+      statusAssembler: {
+        assemble: async () => {
+          throw thrown;
+        },
+        assembleAccounts: async () => [],
+      },
+    }).app;
+
+  it('DrizzleQueryError はパラメーターと stack をログに出さず、SQL と cause の message だけを出す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const thrown = new DrizzleQueryError(
+      'insert into posts (content) values (?)',
+      ['secret-body'],
+      new Error('cause-message'),
+    );
+
+    const response = await failWith(thrown).request(`${ORIGIN}/api/v1/timelines/public`);
+
+    const logged = JSON.stringify(error.mock.calls);
+    error.mockRestore();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual(internalError);
+    expect(logged).not.toContain('secret-body');
+    expect(logged).toContain('insert into posts (content) values (?)');
+    expect(logged).toContain('cause-message');
+  });
+
+  it('それ以外の例外は name と message だけをログに出す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await failWith(new TypeError('x'.repeat(300))).request(`${ORIGIN}/api/v1/timelines/public`);
+
+    const logged = JSON.stringify(error.mock.calls);
+    error.mockRestore();
+    expect(response.status).toBe(500);
+    expect(logged).toContain('TypeError');
+    expect(logged).toContain('x'.repeat(200));
+    expect(logged).not.toContain('x'.repeat(201));
+    expect(logged).not.toContain('at ');
   });
 
   it('public の Resolver の失敗と、組み立ての例外も 500 にする', async () => {
