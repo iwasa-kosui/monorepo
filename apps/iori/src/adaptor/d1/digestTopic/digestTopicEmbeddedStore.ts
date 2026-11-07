@@ -18,6 +18,7 @@ export const createD1DigestTopicEmbeddedStore = (db: IoriD1Db): DigestTopicEmbed
         const matched = and(
           eq(digestTopicsTable.userId, payload.userId),
           eq(digestTopicsTable.topicKey, payload.topicKey),
+          eq(digestTopicsTable.name, event.aggregateState.name),
           eq(digestTopicsTable.description, event.aggregateState.description),
         );
         return [
