@@ -28,6 +28,8 @@ type Input =
   & PostImagesInput
   & Readonly<{
     content: string;
+    summary?: string | null;
+    sensitive?: boolean;
     ctx: RequestContext<unknown>;
   }>;
 
@@ -77,11 +79,13 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content }) => {
+      RA.andBind('postEvent', ({ actor, content, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
