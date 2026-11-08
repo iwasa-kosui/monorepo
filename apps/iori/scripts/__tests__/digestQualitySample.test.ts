@@ -249,9 +249,25 @@ describe('digest-quality-sample SQL', () => {
       expect(sql).not.toContain(';');
     }
   });
-  it('rejects a paging cursor that is not a plain identifier', () => {
-    expect(() => candidatesSql(now, '\'; DROP TABLE users; --')).toThrow('D1 query result is invalid.');
-    expect(() => materialsSql('a b')).toThrow('D1 query result is invalid.');
+  it('reads only the columns the counts and distributions need', () => {
+    const statements = [...baseStatements(now), candidatesSql(now), materialsSql()];
+    for (const sql of statements) {
+      expect(sql).not.toMatch(/\b(?:title|url|name|description|ref|feedback|digestDate|rank)\b/);
+    }
+  });
+  it('rejects a paging cursor that is not a plain identifier with the cursor-invalid reason', () => {
+    for (const build of [() => candidatesSql(now, '\'; DROP TABLE users; --'), () => materialsSql('a b')]) {
+      let caught: unknown;
+      try {
+        build();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect(sampleFailureLines(caught)).toEqual([
+        'IORI_DIAG stage=digest-quality-query program=none exit=none signal=none reason=cursor-invalid',
+      ]);
+    }
   });
   it('sends only SELECT statements to D1 and changes nothing', async () => {
     const fixture = build();
@@ -335,11 +351,7 @@ describe('ranking', () => {
     ]);
     const row = (topicKey: string, embedding: Float32Array | null) => ({
       userId: 'u',
-      digestDate: '2026-11-04',
       topicKey,
-      title: 't',
-      url: 'https://x.example',
-      feedback: null,
       embedding: embedding === null ? null : hex(embedding),
     });
     const items = scoreItems(
@@ -348,9 +360,8 @@ describe('ranking', () => {
     ).get('u')!;
     expect(items.map((item) => item.matched)).toEqual([true, false, true, null]);
     expect(items.map((item) => item.first?.topicKey ?? null)).toEqual(['ai', 'ai', 'ai', null]);
-    expect(items[0].second!.topicKey).toBe('web');
-    expect(items[0].gap).toBeCloseTo(items[0].first!.similarity - items[0].second!.similarity, 9);
-    expect(items[3]).toMatchObject({ first: null, second: null, gap: null });
+    expect(items[0].gap).toBeGreaterThan(0);
+    expect(items[3]).toMatchObject({ first: null, gap: null });
   });
 });
 
@@ -374,58 +385,24 @@ describe('digest-quality-sample result', () => {
     expect(report.users).toHaveLength(1);
     const [user] = report.users;
     expect(user.topicCounts).toEqual({ total: 4, enabled: 3, embedded: 2 });
-    expect(user.topics.map((topic: { topicKey: string }) => topic.topicKey)).toEqual(['ai', 'web', 'off', 'pending']);
     expect(user.items).toMatchObject({ total: 3, scored: 2, matched: 1 });
-    const byTitle = Object.fromEntries(user.items.details.map((item: { title: string }) => [item.title, item]));
-    expect(byTitle['title-e1']).toMatchObject({
-      adoptedTopicKey: 'ai',
-      first: { topicKey: 'ai' },
-      second: { topicKey: 'web' },
-      matched: true,
-      feedback: 'like',
-    });
-    expect(byTitle['title-e2']).toMatchObject({ adoptedTopicKey: 'ai', first: { topicKey: 'web' }, matched: false });
-    expect(byTitle['title-e3']).toMatchObject({ first: null, matched: null });
     expect(user.candidates.total).toBe(4);
     expect(user.candidates.atLeast).toEqual({ '0.40': 3, '0.45': 3, '0.50': 3, '0.55': 3, '0.60': 3 });
-    expect(user.candidates.byTopic.map((entry: { topicKey: string; count: number }) => [entry.topicKey, entry.count]))
-      .toEqual([['ai', 3], ['web', 1]]);
     expect(user.materials.total).toBe(3);
     expect(user.materials.byKind).toEqual([
       { kind: 'bookmark', total: 2, atLeast: { '0.40': 2, '0.50': 2 } },
       { kind: 'like', total: 1, atLeast: { '0.40': 0, '0.50': 0 } },
     ]);
-    expect(user.materials.low).toEqual([{ kind: 'like', ref: 'ref-m3', similarity: 0 }]);
   });
-  it('keeps the top and the bottom 30 candidates per topic, and the first 100 characters of a low material', () => {
-    const topicsByUser = parseTopics([
-      { userId: 'u', topicKey: 'ai', name: 'n', description: 'd', enabled: 1, embedded: 1, embedding: hex(vec(1, 0)) },
-    ]);
-    const candidates = scoreCandidates(
-      Array.from({ length: 40 }, (_, index) => ({
-        title: `t${index}`,
-        url: `https://x.example/${index}`,
-        embedding: hex(vec(1, index / 10)),
-      })),
-      topicsByUser,
-    );
-    const materials = scoreMaterials(
-      Array.from({ length: 120 }, (_, index) => ({
-        userId: 'u',
-        kind: 'bookmark',
-        ref: `${'r'.repeat(150)}${index}`,
-        embedding: hex(vec(0.1, 1 + index)),
-      })),
-      topicsByUser,
-    );
-    const report = buildReport({ now, topicsByUser, items: new Map(), candidates, materials });
-    const [topic] = report.users[0].candidates.byTopic;
-    expect(topic.top).toHaveLength(30);
-    expect(topic.bottom).toHaveLength(30);
-    expect(topic.top[0].title).toBe('t0');
-    expect(topic.bottom[0].title).toBe('t39');
-    expect(report.users[0].materials.low).toHaveLength(100);
-    expect(report.users[0].materials.low[0].ref).toBe('r'.repeat(100));
+  it('outputs only counts and distributions as JSON', async () => {
+    const { outputs, error } = await run(build());
+    expect(error).toBeUndefined();
+    const [user] = JSON.parse(outputs[0]).users;
+    expect(Object.keys(JSON.parse(outputs[0])).sort()).toEqual(['generatedAt', 'users']);
+    expect(Object.keys(user).sort()).toEqual(['candidates', 'items', 'materials', 'topicCounts', 'user']);
+    expect(Object.keys(user.items).sort()).toEqual(['gapHistogram', 'matched', 'scored', 'top1Histogram', 'total']);
+    expect(Object.keys(user.candidates).sort()).toEqual(['atLeast', 'gapHistogram', 'top1Histogram', 'total']);
+    expect(Object.keys(user.materials).sort()).toEqual(['byKind', 'total']);
   });
   it('pages through the candidates', async () => {
     const fixture = fixtureWithRows();
@@ -459,52 +436,73 @@ describe('digest-quality-sample public log', () => {
   ];
   const secretReport = () => {
     const topicsByUser = parseTopics([
-      {
-        userId: secrets[4],
-        topicKey: secrets[5],
-        name: secrets[2],
-        description: secrets[3],
-        enabled: 1,
-        embedded: 1,
-        embedding: hex(vec(1, 0)),
-      },
-      {
-        userId: secrets[4],
-        topicKey: 'other',
-        name: secrets[2],
-        description: secrets[3],
-        enabled: 1,
-        embedded: 1,
-        embedding: hex(vec(0, 1)),
-      },
+      { userId: secrets[4], topicKey: secrets[5], enabled: 1, embedded: 1, embedding: hex(vec(1, 0)) },
+      { userId: secrets[4], topicKey: 'other', enabled: 1, embedded: 1, embedding: hex(vec(0, 1)) },
     ]);
     const items = scoreItems([{
       userId: secrets[4],
-      digestDate: '2026-11-04',
       topicKey: secrets[5],
-      title: secrets[0],
-      url: secrets[1],
-      feedback: secrets[3],
       embedding: hex(vec(1, 0.3)),
     }], topicsByUser);
-    const candidates = scoreCandidates(
-      [{ title: secrets[0], url: secrets[1], embedding: hex(vec(1, 0.5)) }],
-      topicsByUser,
-    );
+    const candidates = scoreCandidates([{ embedding: hex(vec(1, 0.5)) }], topicsByUser);
     const materials = scoreMaterials([
-      { userId: secrets[4], kind: 'bookmark', ref: secrets[6], embedding: hex(vec(1, 0.2)) },
-      { userId: secrets[4], kind: `Secret Kind ${secrets[6]}`, ref: secrets[6], embedding: hex(vec(0, 1)) },
+      { userId: secrets[4], kind: 'bookmark', embedding: hex(vec(1, 0.2)) },
+      { userId: secrets[4], kind: `Secret Kind ${secrets[6]}`, embedding: hex(vec(0, 1)) },
     ], topicsByUser);
     return buildReport({ now, topicsByUser, items, candidates, materials });
   };
+  const secretFixture = () => {
+    const fixture = fixtureWithRows();
+    addUser(fixture, secrets[4], secrets[4]);
+    addTopic(fixture, secrets[4], secrets[5], {
+      embedding: vec(1, 0),
+      name: secrets[2],
+      description: secrets[3],
+      order: 1,
+    });
+    addTopic(fixture, secrets[4], 'other', {
+      embedding: vec(0, 1),
+      name: secrets[2],
+      description: secrets[3],
+      order: 2,
+    });
+    addSource(fixture, 'rss', 'rss');
+    fixture.sqlite.prepare(
+      'INSERT INTO feed_entries (feedEntryId, feedSourceId, guid, url, title, description, fetchedAt, embedding, embeddedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run('c1', 'rss', 'c1', secrets[1], secrets[0], secrets[3], now - DAY, bytes(vec(1, 0.5)), now);
+    fixture.sqlite.prepare(
+      'INSERT INTO digests (digestId, userId, digestDate, articleId, createdAt, topicKey) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('d1', secrets[4], '2026-11-04', 'article-d1', now - DAY, secrets[5]);
+    fixture.sqlite.prepare(
+      'INSERT INTO digest_items (digestItemId, digestId, feedEntryId, url, title, rank, feedback) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run('item-d1', 'd1', 'c1', secrets[1], secrets[0], 1, secrets[3]);
+    addMaterial(fixture, secrets[6], secrets[4], `Secret Kind ${secrets[6]}`, { embedding: vec(1, 0.2) });
+    fixture.sqlite.prepare('UPDATE interest_sources SET ref = ?').run(secrets[6]);
+    return fixture;
+  };
   it('contains none of the titles, URLs, topic names, descriptions, bodies, topic keys or user names', () => {
     const report = secretReport();
-    expect(JSON.stringify(report)).toContain(secrets[0]);
     const lines = noticeLines(report);
     const joined = lines.join('\n');
     for (const secret of secrets) expect(joined).not.toContain(secret);
     expect(joined).not.toMatch(/secret/i);
     expect(lines.every((line) => /^IORI_NOTICE digest-quality-sample /.test(line))).toBe(true);
+  });
+  it('keeps the same details out of the JSON report', () => {
+    const json = JSON.stringify(secretReport());
+    for (const secret of secrets) expect(json).not.toContain(secret);
+    expect(json).not.toMatch(/secret/i);
+  });
+  it('keeps the same details out of the standard output and the notices of a run against stored rows', async () => {
+    const { outputs, notices, error } = await run(secretFixture());
+    expect(error).toBeUndefined();
+    expect(outputs).toHaveLength(1);
+    expect(JSON.parse(outputs[0]).users).toHaveLength(1);
+    expect(JSON.parse(outputs[0]).users[0].items).toMatchObject({ total: 1, scored: 1, matched: 1 });
+    for (const text of [...outputs, ...notices]) {
+      for (const secret of secrets) expect(text).not.toContain(secret);
+      expect(text).not.toMatch(/secret/i);
+    }
   });
   it('prints counts and distributions with the fixed vocabulary', () => {
     const lines = noticeLines(secretReport());

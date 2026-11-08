@@ -6,7 +6,6 @@ export const TOP1_HISTOGRAM: { readonly start: number; readonly step: number; re
 export const GAP_HISTOGRAM: { readonly start: number; readonly step: number; readonly count: number };
 export const CANDIDATE_THRESHOLDS: readonly number[];
 export const MATERIAL_THRESHOLDS: readonly number[];
-export const MATERIAL_LOW_LIMIT: number;
 export function topicsSql(): string;
 export function itemsSql(now: number): string;
 export function candidatesSql(now: number, cursor?: string): string;
@@ -27,26 +26,14 @@ export function histogram(
 ): Histogram;
 export type Topic = {
   topicKey: string;
-  name: string;
-  description: string;
   enabled: boolean;
   embedded: boolean;
   vector: Float32Array | null;
 };
 export type TopicsByUser = Map<string, Topic[]>;
-export type ScoredItem = {
-  digestDate: string;
-  adoptedTopicKey: string;
-  title: string;
-  url: string;
-  first: RankedTopic | null;
-  second: RankedTopic | null;
-  gap: number | null;
-  matched: boolean | null;
-  feedback: string | null;
-};
-export type ScoredCandidate = { title: string; url: string; topicKey: string; similarity: number; gap: number | null };
-export type ScoredMaterial = { kind: string; ref: string; similarity: number | null };
+export type ScoredItem = { first: RankedTopic | null; gap: number | null; matched: boolean | null };
+export type ScoredCandidate = { similarity: number; gap: number | null };
+export type ScoredMaterial = { kind: string; similarity: number | null };
 export function parseTopics(rows: ReadonlyArray<Record<string, unknown>>): TopicsByUser;
 export function scoreItems(
   rows: ReadonlyArray<Record<string, unknown>>,
@@ -67,43 +54,23 @@ export type DigestQualityReport = {
   generatedAt: string;
   users: Array<{
     user: number;
-    userId: string;
     topicCounts: { total: number; enabled: number; embedded: number };
-    topics: Array<{ topicKey: string; name: string; description: string; enabled: boolean; embedded: boolean }>;
     items: {
       total: number;
       scored: number;
       matched: number;
       top1Histogram: Histogram;
       gapHistogram: Histogram;
-      details: Array<{
-        digestDate: string;
-        adoptedTopicKey: string;
-        title: string;
-        url: string;
-        first: RankedTopic | null;
-        second: RankedTopic | null;
-        gap: number | null;
-        matched: boolean | null;
-        feedback: string | null;
-      }>;
     };
     candidates: {
       total: number;
       atLeast: Record<string, number>;
       top1Histogram: Histogram;
       gapHistogram: Histogram;
-      byTopic: Array<{
-        topicKey: string;
-        count: number;
-        top: Array<{ title: string; url: string; similarity: number }>;
-        bottom: Array<{ title: string; url: string; similarity: number }>;
-      }>;
     };
     materials: {
       total: number;
       byKind: Array<{ kind: string; total: number; atLeast: Record<string, number> }>;
-      low: Array<{ kind: string; ref: string; similarity: number }>;
     };
   }>;
 };

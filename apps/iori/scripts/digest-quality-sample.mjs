@@ -15,10 +15,6 @@ export const TOP1_HISTOGRAM = Object.freeze({ start: 0.2, step: 0.05, count: 12 
 export const GAP_HISTOGRAM = Object.freeze({ start: 0, step: 0.02, count: 10 });
 export const CANDIDATE_THRESHOLDS = Object.freeze([0.4, 0.45, 0.5, 0.55, 0.6]);
 export const MATERIAL_THRESHOLDS = Object.freeze([0.4, 0.5]);
-export const MATERIAL_LOW_LIMIT = 0.45;
-const MATERIAL_LOW_MAX = 100;
-const MATERIAL_REF_LENGTH = 100;
-const CANDIDATE_LIST_SIZE = 30;
 const RECOMMENDABLE_KINDS = ['rss', 'hatena_hotentry', 'hatena_entrylist'];
 const EPSILON = 1e-9;
 const KEY = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -26,28 +22,28 @@ const HEX_LENGTH = EMBEDDING_DIMENSIONS * 8;
 const HEX_COLUMN = (column) => `CASE WHEN ${column} IS NULL THEN NULL ELSE hex(${column}) END`;
 
 export const topicsSql = () =>
-  `SELECT userId, topicKey, name, description, enabled, embeddedAt IS NOT NULL AS embedded, ${
+  `SELECT userId, topicKey, enabled, embeddedAt IS NOT NULL AS embedded, ${
     HEX_COLUMN('embedding')
   } AS embedding FROM digest_topics ORDER BY userId, sortOrder, topicKey`;
 export const itemsSql = (now) =>
-  `SELECT d.userId AS userId, d.digestDate AS digestDate, d.topicKey AS topicKey, i.rank AS rank, i.title AS title, i.url AS url, i.feedback AS feedback, ${
+  `SELECT d.userId AS userId, d.topicKey AS topicKey, ${
     HEX_COLUMN('e.embedding')
   } AS embedding FROM digests d JOIN digest_items i ON i.digestId = d.digestId LEFT JOIN feed_entries e ON e.feedEntryId = i.feedEntryId WHERE d.topicKey <> 'summary' AND d.createdAt >= ${
     now - DIGEST_WINDOW_MS
-  } ORDER BY d.userId, d.digestDate, d.topicKey, i.rank`;
+  }`;
 const after = (column, cursor) => {
   if (cursor === undefined) return '';
-  if (!KEY.test(cursor)) throw fail('digest-quality-query', 'result-invalid', 'D1 query result is invalid.');
+  if (!KEY.test(cursor)) throw fail('digest-quality-query', 'cursor-invalid', 'D1 query cursor is invalid.');
   return ` AND ${column} > '${cursor}'`;
 };
 export const candidatesSql = (now, cursor) =>
-  `SELECT e.feedEntryId AS feedEntryId, e.title AS title, e.url AS url, hex(e.embedding) AS embedding FROM feed_entries e JOIN feed_sources s ON s.feedSourceId = e.feedSourceId WHERE s.kind IN (${
+  `SELECT e.feedEntryId AS feedEntryId, hex(e.embedding) AS embedding FROM feed_entries e JOIN feed_sources s ON s.feedSourceId = e.feedSourceId WHERE s.kind IN (${
     RECOMMENDABLE_KINDS.map((kind) => `'${kind}'`).join(', ')
   }) AND s.enabled = 1 AND e.embeddedAt IS NOT NULL AND e.embedding IS NOT NULL AND e.fetchedAt >= ${
     now - CANDIDATE_WINDOW_MS
   }${after('e.feedEntryId', cursor)} ORDER BY e.feedEntryId LIMIT ${PAGE_SIZE}`;
 export const materialsSql = (cursor) =>
-  `SELECT interestSourceId, userId, kind, ref, hex(embedding) AS embedding FROM interest_sources WHERE deletedAt IS NULL AND embeddedAt IS NOT NULL AND embedding IS NOT NULL${
+  `SELECT interestSourceId, userId, kind, hex(embedding) AS embedding FROM interest_sources WHERE deletedAt IS NULL AND embeddedAt IS NOT NULL AND embedding IS NOT NULL${
     after('interestSourceId', cursor)
   } ORDER BY interestSourceId LIMIT ${PAGE_SIZE}`;
 export const baseStatements = (now) => [topicsSql(), itemsSql(now)];
@@ -59,12 +55,10 @@ const text = (value) => {
   if (typeof value !== 'string') throw invalid();
   return value;
 };
-const nullableText = (value) => value === null || value === undefined ? null : text(value);
 const rowsOf = (result) => {
   if (!Array.isArray(result?.results)) throw invalid();
   return result.results;
 };
-const round = (value, digits) => Math.round(value * 10 ** digits) / 10 ** digits;
 const atLeast = (value, threshold) => value >= threshold - EPSILON;
 
 export const hexToEmbedding = (hex) => {
@@ -126,8 +120,6 @@ export const parseTopics = (rows) => {
     const vector = hexToEmbedding(row.embedding);
     const topic = {
       topicKey: text(row.topicKey),
-      name: text(row.name),
-      description: text(row.description),
       enabled: Number(row.enabled) === 1,
       embedded: Number(row.embedded) === 1 && vector !== null,
       vector,
@@ -154,15 +146,9 @@ export const scoreItems = (rows, topicsByUser, into = new Map()) => {
     const ranked = vector === null ? null : rankTopics(vector, usable.get(userId) ?? []);
     const adopted = text(row.topicKey);
     push(into, userId, {
-      digestDate: text(row.digestDate),
-      adoptedTopicKey: adopted,
-      title: text(row.title),
-      url: text(row.url),
       first: ranked?.first ?? null,
-      second: ranked?.second ?? null,
       gap: ranked?.gap ?? null,
       matched: ranked === null ? null : ranked.first.topicKey === adopted,
-      feedback: nullableText(row.feedback),
     });
   }
   return into;
@@ -174,13 +160,7 @@ export const scoreCandidates = (rows, topicsByUser, into = new Map()) => {
     if (vector === null) continue;
     for (const [userId, topics] of usable) {
       const ranked = rankTopics(vector, topics);
-      push(into, userId, {
-        title: text(row.title),
-        url: text(row.url),
-        topicKey: ranked.first.topicKey,
-        similarity: ranked.first.similarity,
-        gap: ranked.gap,
-      });
+      push(into, userId, { similarity: ranked.first.similarity, gap: ranked.gap });
     }
   }
   return into;
@@ -191,7 +171,7 @@ export const scoreMaterials = (rows, topicsByUser, into = new Map()) => {
     const userId = text(row.userId);
     const vector = hexToEmbedding(row.embedding);
     const ranked = vector === null ? null : rankTopics(vector, usable.get(userId) ?? []);
-    push(into, userId, { kind: text(row.kind), ref: text(row.ref), similarity: ranked?.first.similarity ?? null });
+    push(into, userId, { kind: text(row.kind), similarity: ranked?.first.similarity ?? null });
   }
   return into;
 };
@@ -200,36 +180,10 @@ const countAtLeast = (values, thresholds) =>
   Object.fromEntries(
     thresholds.map((threshold) => [threshold.toFixed(2), values.filter((v) => atLeast(v, threshold)).length]),
   );
-const detail = (entry) => ({
-  digestDate: entry.digestDate,
-  adoptedTopicKey: entry.adoptedTopicKey,
-  title: entry.title,
-  url: entry.url,
-  first: entry.first === null ? null : { topicKey: entry.first.topicKey, similarity: round(entry.first.similarity, 4) },
-  second: entry.second === null
-    ? null
-    : { topicKey: entry.second.topicKey, similarity: round(entry.second.similarity, 4) },
-  gap: entry.gap === null ? null : round(entry.gap, 4),
-  matched: entry.matched,
-  feedback: entry.feedback,
-});
-const candidateView = (entry) => ({ title: entry.title, url: entry.url, similarity: round(entry.similarity, 4) });
-const byTopic = (candidates) => {
-  const groups = new Map();
-  for (const entry of candidates) push(groups, entry.topicKey, entry);
-  return [...groups].map(([topicKey, entries]) => {
-    const sorted = [...entries].sort((a, b) => b.similarity - a.similarity);
-    return {
-      topicKey,
-      count: entries.length,
-      top: sorted.slice(0, CANDIDATE_LIST_SIZE).map(candidateView),
-      bottom: sorted.slice(-CANDIDATE_LIST_SIZE).reverse().map(candidateView),
-    };
-  }).sort((a, b) => a.topicKey.localeCompare(b.topicKey));
-};
+const safeKind = (kind) => /^[a-z][a-z0-9_]{0,31}$/.test(String(kind)) ? String(kind) : 'other';
 const kindsOf = (materials) => {
   const groups = new Map();
-  for (const entry of materials) push(groups, entry.kind, entry);
+  for (const entry of materials) push(groups, safeKind(entry.kind), entry);
   return [...groups].map(([kind, entries]) => {
     const similarities = entries.filter((entry) => entry.similarity !== null).map((entry) => entry.similarity);
     const counts = countAtLeast(similarities, MATERIAL_THRESHOLDS);
@@ -250,19 +204,11 @@ export const buildReport = ({ now, topicsByUser, items, candidates, materials })
       const userMaterials = materials.get(userId) ?? [];
       return {
         user: index + 1,
-        userId,
         topicCounts: {
           total: topics.length,
           enabled: topics.filter((topic) => topic.enabled).length,
           embedded: topics.filter((topic) => topic.enabled && topic.embedded).length,
         },
-        topics: topics.map((topic) => ({
-          topicKey: topic.topicKey,
-          name: topic.name,
-          description: topic.description,
-          enabled: topic.enabled,
-          embedded: topic.embedded,
-        })),
         items: {
           total: userItems.length,
           scored: scored.length,
@@ -272,7 +218,6 @@ export const buildReport = ({ now, topicsByUser, items, candidates, materials })
             scored.filter((entry) => entry.gap !== null).map((entry) => entry.gap),
             GAP_HISTOGRAM,
           ),
-          details: userItems.map(detail),
         },
         candidates: {
           total: userCandidates.length,
@@ -282,20 +227,10 @@ export const buildReport = ({ now, topicsByUser, items, candidates, materials })
             userCandidates.filter((entry) => entry.gap !== null).map((entry) => entry.gap),
             GAP_HISTOGRAM,
           ),
-          byTopic: byTopic(userCandidates),
         },
         materials: {
           total: userMaterials.length,
           byKind: kindsOf(userMaterials),
-          low: userMaterials
-            .filter((entry) => entry.similarity !== null && entry.similarity < MATERIAL_LOW_LIMIT)
-            .sort((a, b) => a.similarity - b.similarity)
-            .slice(0, MATERIAL_LOW_MAX)
-            .map((entry) => ({
-              kind: entry.kind,
-              ref: Array.from(entry.ref).slice(0, MATERIAL_REF_LENGTH).join(''),
-              similarity: round(entry.similarity, 4),
-            })),
         },
       };
     }),
@@ -314,7 +249,6 @@ const histogramLine = (user, name, hist) =>
   }`;
 const thresholdText = (counts, thresholds) =>
   thresholds.map((threshold) => `${label('ge', threshold)}=${digits(counts[threshold.toFixed(2)])}`).join(' ');
-const safeKind = (kind) => /^[a-z][a-z0-9_]{0,31}$/.test(String(kind)) ? String(kind) : 'other';
 
 export const noticeLines = (report) => [
   `IORI_NOTICE digest-quality-sample overview users=${digits(report.users.length)}`,
@@ -333,7 +267,7 @@ export const noticeLines = (report) => [
         thresholdText(user.candidates.atLeast, CANDIDATE_THRESHOLDS)
       }`,
       ...user.materials.byKind.map((entry) =>
-        `${prefix} material kind=${safeKind(entry.kind)} total=${digits(entry.total)} ${
+        `${prefix} material kind=${entry.kind} total=${digits(entry.total)} ${
           thresholdText(entry.atLeast, MATERIAL_THRESHOLDS)
         }`
       ),
