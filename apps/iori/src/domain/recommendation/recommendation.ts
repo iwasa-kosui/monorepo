@@ -50,11 +50,12 @@ export type RecommendableArticle =
     url: string;
     title: string;
     description: string;
+    fetchedAt: Instant;
   }>;
 
 export type InterestVectorsResolverByUserId = Agg.Resolver<UserId, ReadonlyArray<StoredInterestVector>>;
 export type RecommendableArticlesResolverByFetchedSince = Agg.Resolver<
-  { fetchedSince: Instant },
+  { fetchedSince: Instant; limit?: number },
   ReadonlyArray<RecommendableArticle>
 >;
 export type RelatedArticlesResolverByEmbedding = Agg.Resolver<
