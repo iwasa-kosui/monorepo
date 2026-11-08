@@ -22,6 +22,7 @@
     "VAPID_SUBJECT": "mailto:admin@example.invalid",
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
     "IORI_BLUESKY_CROSSPOST": "disabled",
+    "IORI_BLUESKY_TIMELINE": "disabled",
   },
   "d1_databases": [
     {

@@ -21,6 +21,13 @@ export type BlueskyClient = Readonly<{
   deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
 }>;
 
+export type BlueskyQueryClient = Readonly<{
+  query: (
+    nsid: string,
+    params: Readonly<Record<string, string>>,
+  ) => RA<Readonly<Record<string, unknown>>, BlueskyClientError>;
+}>;
+
 export type BlueskyThumbnail = Readonly<{ bytes: Uint8Array; mimeType: string }>;
 
 export type BlueskyThumbnailFetcher = Readonly<{
