@@ -24,7 +24,7 @@ export const createCollectBlueskyTimelineTask = (
 });
 
 export const collectBlueskyTimelineTask = createCollectBlueskyTimelineTask((env) =>
-  createCollectBlueskyTimelineUseCase(env)
+  createCollectBlueskyTimelineUseCase(env, { holdLoginAfterFailure: true })
 );
 
 export const createExpireBlueskyTimelineTask = (

@@ -615,7 +615,9 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 
 値を変えるには、作業者が template の対象の値を変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
 
-`IORI_BLUESKY_TIMELINE` を有効にすると、Worker は3時間ごとの Cron で Bluesky の home タイムラインを取り込み、D1 の `bluesky_timeline_items` に保存します。同じタスクが、30日より古い行を消します。取り込んだ投稿は、Web UI の `/bluesky` ページに表示されます。
+`IORI_BLUESKY_TIMELINE` を有効にすると、Worker は1分ごとの Cron で Bluesky の home タイムラインを取り込み、D1 の `bluesky_timeline_items` に保存します。3時間ごとの別のタスクが、30日より古い行を消します。取り込んだ投稿は、Web UI の `/bluesky` ページに表示されます。
+
+取り込みのログインが失敗すると、Cron の取り込みは30分のあいだログインを試みません。手動の `POST /api/iori/v1/bluesky/timeline/refresh` は、この待ち時間の対象外です。
 
 #### ensure-event-archive-bucket でドメインイベント退避用の R2 バケットを作る
 

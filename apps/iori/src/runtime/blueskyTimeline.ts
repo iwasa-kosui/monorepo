@@ -1,6 +1,11 @@
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
 import {
+  createD1BlueskyLoginFailureDeletedStore,
+  createD1BlueskyLoginFailureResolver,
+  createD1BlueskyLoginFailureSavedStore,
+} from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
@@ -18,6 +23,7 @@ import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { type BlueskyCredentials, resolveBlueskyCredentials } from './blueskyCrosspost.ts';
 
 export const BLUESKY_TIMELINE_ENABLED_VALUE = 'enabled';
+export const BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE = 'timeline';
 
 export const resolveBlueskyTimelineConfig = (
   env: Pick<IoriWorkerEnv, 'IORI_BLUESKY_TIMELINE' | 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD'>,
@@ -31,7 +37,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
 
 export const createCollectBlueskyTimelineUseCase = (
   env: IoriWorkerEnv,
-  deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch }> = {},
+  deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
 ): CollectBlueskyTimelineUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
@@ -44,6 +50,13 @@ export const createCollectBlueskyTimelineUseCase = (
         appPassword: config.appPassword,
         sessionResolver: createD1BlueskySessionResolver(db),
         sessionStore: createD1BlueskySessionSavedStore(db),
+        loginFailure: deps.holdLoginAfterFailure === true
+          ? {
+            resolver: createD1BlueskyLoginFailureResolver(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+            savedStore: createD1BlueskyLoginFailureSavedStore(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+            deletedStore: createD1BlueskyLoginFailureDeletedStore(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+          }
+          : undefined,
         fetch: deps.fetch,
         now,
       }),
