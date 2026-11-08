@@ -10,6 +10,7 @@ import {
   MAX_BLUESKY_CROSSPOST_ATTEMPTS,
   MAX_BLUESKY_DELETE_ATTEMPTS,
 } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClient } from '../ports/blueskyClient.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
@@ -26,6 +27,7 @@ type Deps = Readonly<{
   crosspostsResolverByRetryable: BlueskyCrosspostsResolverByRetryable;
   crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
+  timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
   client: BlueskyClient;
   send: SendBlueskyCrosspostUseCase;
   now: () => Instant;

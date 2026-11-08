@@ -1,16 +1,13 @@
-### business_events テーブル
+import CodePlayground from '../../../components/CodePlayground.astro';
 
-`business_events` テーブルは開始時点の DB に用意してあります。各列は、次の問いに答えるために残します。
+## 記録に失敗すると、来院の更新も戻る
 
-| 列 | 入れるもの | 残す理由 |
-|---|---|---|
-| `event_id` | 業務イベントの番号。DB が連番で採番します。 | 1行を指し示すため |
-| `event_at` | 業務イベントが起きた時刻 | 「いつ」に答えるため |
-| `event_name` | 起きたことの名前 | 「何を」に答えるため |
-| `payload` | 操作した人や理由などの業務の情報（JSON） | 「誰が」「なぜ」に答えるため |
-| `target_id` | 変更の対象の ID | 問い合わせの来院の記録を探すため |
-| `target_type` | 変更の対象の種類 | 来院以外の対象も同じテーブルに記録するため |
-| `target_state` | 変化後の状態（JSON） | その時点の状態を後から確かめるため |
+「記録を失敗させて実行する」を押すと、`business_events` への記録が必ず失敗する状態で、完成した `cancelVisit` を実行します。実行の前と後で、`visits` の `status` が同じままであることを確かめます。
 
-[関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
-
+<CodePlayground
+  exercise="chapter-2-step-2"
+  editable={[]}
+  readonly={['fail-record.ts']}
+  lesson="fail-record.ts"
+  scripts={[{ file: 'fail-record.ts', label: '記録を失敗させて実行する' }]}
+/>

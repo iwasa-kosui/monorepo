@@ -1,5 +1,6 @@
 import {
   ARTICLES_URL,
+  blueskyHomeTimelineUrl,
   favouritesUrl,
   homeTimelineUrl,
   NOTIFICATION_TYPES,
@@ -10,7 +11,7 @@ import {
 export const prefetchUrlsFor = (pathname: string): readonly string[] => {
   switch (pathname) {
     case '/':
-      return [homeTimelineUrl(), verifyCredentialsUrl()];
+      return [homeTimelineUrl(), verifyCredentialsUrl(), blueskyHomeTimelineUrl()];
     case '/likes':
       return [favouritesUrl()];
     case '/notifications':

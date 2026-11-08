@@ -8,6 +8,7 @@ import { createD1BlueskyCrosspostDeletedStore } from '../../adaptor/d1/blueskyCr
 import { createD1BlueskyCrosspostResolver } from '../../adaptor/d1/blueskyCrosspost/blueskyCrosspostResolver.ts';
 import { createD1BlueskyCrosspostSavedStore } from '../../adaptor/d1/blueskyCrosspost/blueskyCrosspostSavedStore.ts';
 import { createD1BlueskyCrosspostsResolverByRetryable } from '../../adaptor/d1/blueskyCrosspost/blueskyCrosspostsResolverByRetryable.ts';
+import { createD1BlueskyTimelineItemsDeletedStore } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsDeletedStore.ts';
 import { createD1PostImagesResolverByPostId } from '../../adaptor/d1/image/postImagesResolver.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../../adaptor/d1/linkPreview/linkPreviewsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../../adaptor/d1/post/localPostResolverByUri.ts';
@@ -110,6 +111,7 @@ const setup = () => {
   const crosspostResolver = createD1BlueskyCrosspostResolver(db);
   const crosspostSavedStore = createD1BlueskyCrosspostSavedStore(db);
   const crosspostDeletedStore = createD1BlueskyCrosspostDeletedStore(db);
+  const timelineItemsDeletedStore = createD1BlueskyTimelineItemsDeletedStore(db);
   const send = SendBlueskyCrosspostUseCase.create({
     postResolver,
     userResolver: createD1UserResolver(db),
@@ -119,6 +121,7 @@ const setup = () => {
     crosspostResolver,
     crosspostSavedStore,
     crosspostDeletedStore,
+    timelineItemsDeletedStore,
     uploads,
     thumbnailFetcher,
     client,
@@ -138,6 +141,7 @@ const setup = () => {
     crosspostResolver,
     crosspostSavedStore,
     crosspostDeletedStore,
+    timelineItemsDeletedStore,
     client,
     waitUntil,
     now: () => NOW,
@@ -146,6 +150,7 @@ const setup = () => {
     crosspostsResolverByRetryable: createD1BlueskyCrosspostsResolverByRetryable(db),
     crosspostSavedStore,
     crosspostDeletedStore,
+    timelineItemsDeletedStore,
     client,
     send,
     now: () => NOW,
@@ -165,6 +170,14 @@ const setup = () => {
     );
     return { ...post, postId: post.postId as PostId };
   };
+  const insertTimelineItem = (feedItemId: string, uri: string, repostedByDid: string | null = null) =>
+    sqlite.prepare(
+      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(feedItemId, uri, 'cid', 'did:plc:abc', 'kosui.bsky.social', 'text', '[]', repostedByDid, 1, 1, 1);
+  const timelineFeedItemIds = () =>
+    (sqlite.prepare('SELECT feedItemId FROM bluesky_timeline_items ORDER BY feedItemId').all() as Array<
+      { feedItemId: string }
+    >).map(({ feedItemId }) => feedItemId);
   const row = async (postId: string) => Result.unsafeUnwrap(await crosspostResolver.resolve(postId as PostId));
   const addStoredImage = (postId: string, contentType: string, bytes: Uint8Array, alt: string | null = null) => {
     const imageId = seed.addImage(postId, `/uploads/PLACEHOLDER.png`, alt);
@@ -193,6 +206,8 @@ const setup = () => {
     retry,
     addPost,
     addStoredImage,
+    insertTimelineItem,
+    timelineFeedItemIds,
     row,
   };
 };
@@ -485,6 +500,49 @@ describe('RemoveBlueskyCrosspostUseCase', () => {
 
     expect(t.deleted).toEqual(['3k0']);
     expect(await t.row(post.postId)).toBeUndefined();
+  });
+
+  it('deleteRecord に成功したら、同じ uri の取り込み済みの行を repost も含めて消し、ほかの uri の行は残す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+    const uri = 'at://did:plc:abc/app.bsky.feed.post/3k0';
+    t.insertTimelineItem(uri, uri);
+    t.insertTimelineItem(`${uri}#repost:did:plc:b`, uri, 'did:plc:b');
+    t.insertTimelineItem('at://did:plc:other/app.bsky.feed.post/1', 'at://did:plc:other/app.bsky.feed.post/1');
+
+    await run(t.remove.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(await t.row(post.postId)).toBeUndefined();
+    expect(t.timelineFeedItemIds()).toEqual(['at://did:plc:other/app.bsky.feed.post/1']);
+  });
+
+  it('deleteRecord に失敗したら、取り込み済みの行を消さない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+    const uri = 'at://did:plc:abc/app.bsky.feed.post/3k0';
+    t.insertTimelineItem(uri, uri);
+    t.behavior.deleteRecord = () => Result.err(failure('deleteRecord failed: status 500'));
+
+    await run(t.remove.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.timelineFeedItemIds()).toEqual([uri]);
+  });
+
+  it('uri が無い行を消すときは、取り込み済みの行に触れない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await createD1BlueskyCrosspostSavedStore(t.fixture.db).save(BlueskyCrosspost.pending(post.postId, NOW));
+    t.insertTimelineItem('at://did:plc:other/app.bsky.feed.post/1', 'at://did:plc:other/app.bsky.feed.post/1');
+
+    await run(t.remove.run({ postId: post.postId }));
+
+    expect(t.timelineFeedItemIds()).toEqual(['at://did:plc:other/app.bsky.feed.post/1']);
   });
 
   it('deleteRecord に失敗したら行を残す', async () => {

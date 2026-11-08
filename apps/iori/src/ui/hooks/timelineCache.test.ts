@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
+import { emptyBlueskySource } from './homeFeed.ts';
 import {
   type CachedTimeline,
   initialTimelineState,
@@ -12,7 +13,12 @@ import type { TimelineState } from './useTimeline.ts';
 const me = { id: 'me', username: 'kosui' } as unknown as CredentialAccount;
 const status = (id: string) => ({ id }) as unknown as Status;
 
-const cached: CachedTimeline = { me, statuses: [status('1'), status('2')], nextMaxId: '2' };
+const cached: CachedTimeline = {
+  me,
+  statuses: [status('1'), status('2')],
+  nextMaxId: '2',
+  bluesky: emptyBlueskySource,
+};
 
 describe('initialTimelineState', () => {
   it('starts as loading without a cache', () => {
@@ -24,8 +30,23 @@ describe('initialTimelineState', () => {
 
     expect(state).toEqual({
       status: 'success',
-      data: { me, statuses: cached.statuses, nextMaxId: '2', followers: [], following: [] },
+      data: {
+        me,
+        statuses: cached.statuses,
+        nextMaxId: '2',
+        bluesky: emptyBlueskySource,
+        followers: [],
+        following: [],
+      },
     });
+  });
+
+  it('starts with the cached Bluesky items and cursor', () => {
+    const bluesky = { items: [], cursor: { before: 1000, beforeId: 'a' } };
+
+    const state = initialTimelineState({ ...cached, bluesky });
+
+    expect(state).toMatchObject({ status: 'success', data: { bluesky } });
   });
 });
 
@@ -36,16 +57,25 @@ describe('stateAfterFirstPage', () => {
       data: { ...(initialTimelineState(cached) as Extract<TimelineState, { status: 'success' }>).data, followers: [] },
     };
 
-    const next = stateAfterFirstPage(prev, me, [status('3')], undefined);
+    const next = stateAfterFirstPage(prev, me, [status('3')], undefined, emptyBlueskySource);
 
     expect(next).toEqual({
       status: 'success',
-      data: { me, statuses: [status('3')], nextMaxId: undefined, followers: [], following: [] },
+      data: {
+        me,
+        statuses: [status('3')],
+        nextMaxId: undefined,
+        bluesky: emptyBlueskySource,
+        followers: [],
+        following: [],
+      },
     });
   });
 
   it('builds the success state from loading', () => {
-    expect(stateAfterFirstPage({ status: 'loading' }, me, [status('1')], '1').status).toBe('success');
+    expect(stateAfterFirstPage({ status: 'loading' }, me, [status('1')], '1', emptyBlueskySource).status).toBe(
+      'success',
+    );
   });
 });
 

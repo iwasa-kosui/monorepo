@@ -1,21 +1,15 @@
 import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import { insertTemplate } from '../../../lib/snapshots';
 
-雛形の4つの空欄を、次の値で埋めます。
+## ステップ1: キャンセルを記録する
 
-| 空欄 | 値 |
-|---|---|
-| `/* event_name */` | `'VisitCancelled'` |
-| `/* target_id */` | `input.visitId` |
-| `/* target_type */` | `'Visit'` |
-| `/* target_state */` | `JSON.stringify(cancelled)` |
+次のページの編集欄で、`cancelVisit` を編集します。`UPDATE visits SET status = 'cancelled'` の次の行に、次の雛形を貼り付けます。更新の後に置くのは、変化後の状態を `target_state` に入れるためです。
 
-`node --test visits.test.ts` を実行します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。第1章と同じく、`ℹ pass` と `ℹ fail` の行は失敗の詳細の上に出ます。
+<CodeBlock code={insertTemplate()} />
 
 <details>
-<summary>ステップ1の解答を見る</summary>
+<summary>手元の Node で動かすとき</summary>
 
-<CodeBlock code={cancelVisitOf('chapter-2-step-1')} />
+`chapter-1-start/visits.ts` の `cancelVisit` を編集します。
 
 </details>
-

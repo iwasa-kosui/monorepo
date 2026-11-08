@@ -146,6 +146,10 @@ export const createDatabaseSync = (SQL: SqlJsStatic) => {
 
   return {
     DatabaseSync,
+    databases: (): Database[] => [...opened],
+    release: (database: Database): void => {
+      opened.delete(database);
+    },
     closeAll: (): void => {
       for (const database of opened) {
         database.close();

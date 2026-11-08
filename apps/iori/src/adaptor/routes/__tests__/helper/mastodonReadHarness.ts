@@ -512,6 +512,7 @@ export const setupReadApi = (
           authn,
           blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
           collectBlueskyTimelineUseCase: options.collectBlueskyTimeline,
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );
       root.route(

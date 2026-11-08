@@ -59,3 +59,12 @@ export const createEditorState = (doc: string, options: EditorOptions): EditorSt
 
 export const createEditorView = (parent: HTMLElement, state: EditorState): EditorView =>
   new EditorView({ state, parent });
+
+export const revealText = (view: EditorView, text: string): void => {
+  const index = view.state.doc.toString().indexOf(text);
+  if (index !== -1) {
+    requestAnimationFrame(() => {
+      view.dispatch({ effects: EditorView.scrollIntoView(index, { y: 'start', yMargin: 0 }) });
+    });
+  }
+};

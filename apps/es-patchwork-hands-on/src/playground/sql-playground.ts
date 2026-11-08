@@ -1,12 +1,32 @@
-import { createRuntime, RuntimeScriptError } from './client.ts';
+import { createRuntime, RuntimeScriptError, RuntimeTimeoutError } from './client.ts';
 import { applyRuntimeState, element, failureElement, query } from './dom.ts';
 import { createEditorState, createEditorView } from './editor.ts';
 import { maxSqlCellChars } from './engine/limits.ts';
 import { maxDisplayedRows } from './engine/sql-session.ts';
 import type { SqlCell, SqlRunOutcome, SqlStatementResult } from './engine/types.ts';
-import { clearSql, loadSql, saveSql } from './storage.ts';
+import { clearSql, loadEdits, loadSql, saveSql } from './storage.ts';
 
-type SqlConfig = { storageId: string; setupSql: string; initialSql: string };
+type SetupScript = {
+  files: Record<string, string>;
+  entry: string;
+  own: { storageKey: string; file: string; testFile: string } | null;
+};
+
+type SqlConfig = {
+  storageId: string;
+  setupSql: string | null;
+  setupScript: SetupScript | null;
+  initialSql: string;
+};
+
+const originMessages = {
+  own: '第2章で書いた visits.ts で、このデータベースを作りました。',
+  failing:
+    '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
+  missing: '第2章で書いた visits.ts が保存されていないので、ステップ2の完成コードでこのデータベースを作りました。',
+  unbuildable:
+    '第2章で書いた visits.ts ではデータベースを作れなかったので、ステップ2の完成コードでこのデータベースを作りました。',
+};
 
 const oneLine = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
 
@@ -71,8 +91,10 @@ const mount = (root: HTMLElement): void => {
   const resetSqlButton = query<HTMLButtonElement>(root, '[data-role="reset-sql"]');
   const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const results = query<HTMLElement>(root, '[data-role="results"]');
+  const origin = query<HTMLElement>(root, '[data-role="origin"]');
   root.setAttribute('data-mounted', '');
   let busy = false;
+  let backup: string | null = null;
   let preparedGeneration = -1;
 
   const updateControls = (): void => {
@@ -92,13 +114,60 @@ const mount = (root: HTMLElement): void => {
   const runtime = createRuntime((state) => {
     applyRuntimeState(root, state);
     updateControls();
+    if (state === 'ready' && config.setupScript !== null) {
+      void prepareOnReady();
+    }
   }, (message) => {
     show(failureElement(new RuntimeScriptError(message), ''));
   });
 
+  const passesAllTests = async (files: Readonly<Record<string, string>>, testFile: string): Promise<boolean> => {
+    try {
+      const outcome = await runtime.runCode(files, testFile);
+      return outcome.error === null && outcome.tests !== null && outcome.tests.length > 0
+        && outcome.tests.every((test) => test.status === 'pass');
+    } catch (error) {
+      if (error instanceof RuntimeTimeoutError || error instanceof RuntimeScriptError) {
+        await runtime.whenReady();
+        return false;
+      }
+      throw error;
+    }
+  };
+
+  const prepareFromScript = async (script: SetupScript): Promise<string | null> => {
+    let files = script.files;
+    let message: string | null = null;
+    if (script.own !== null) {
+      const saved = loadEdits(script.own.storageKey)[script.own.file];
+      if (saved === undefined) {
+        message = originMessages.missing;
+      } else {
+        const candidate = { ...script.files, [script.own.file]: saved };
+        const passed = await passesAllTests(candidate, script.own.testFile);
+        files = passed ? candidate : script.files;
+        message = passed ? originMessages.own : originMessages.failing;
+      }
+    }
+    let error = await runtime.setupScript(files, script.entry);
+    if (error !== null && files !== script.files) {
+      error = await runtime.setupScript(script.files, script.entry);
+      message = originMessages.unbuildable;
+    }
+    if (error === null && message !== null) {
+      origin.textContent = message;
+      origin.hidden = false;
+    }
+    return error;
+  };
+
   const prepare = async (): Promise<string | null> => {
-    const error = await runtime.setupSql(config.setupSql);
-    preparedGeneration = runtime.generation;
+    const error = config.setupScript === null
+      ? await runtime.setupSql(config.setupSql ?? '')
+      : await prepareFromScript(config.setupScript);
+    if (error === null) {
+      preparedGeneration = runtime.generation;
+    }
     return error;
   };
 
@@ -126,6 +195,14 @@ const mount = (root: HTMLElement): void => {
       updateControls();
     }
   };
+
+  const prepareOnReady = (): Promise<void> =>
+    guarded(async () => {
+      const setupError = await prepare();
+      if (setupError !== null) {
+        showSetupError(setupError);
+      }
+    });
 
   const run = (): Promise<void> =>
     guarded(async () => {
@@ -155,6 +232,8 @@ const mount = (root: HTMLElement): void => {
       label: 'SQL を入力する欄',
       onRun: () => void run(),
       onChange: (text) => {
+        backup = null;
+        restoreButton.hidden = true;
         if (text === config.initialSql) {
           clearSql(config.storageId);
         } else {
@@ -167,8 +246,6 @@ const mount = (root: HTMLElement): void => {
     query<HTMLElement>(root, '[data-role="editor"]'),
     stateFor(loadSql(config.storageId) ?? config.initialSql),
   );
-
-  let backup: string | null = null;
 
   resetSqlButton.addEventListener('click', () => {
     const before = view.state.doc.toString();
@@ -184,6 +261,13 @@ const mount = (root: HTMLElement): void => {
     }
     backup = null;
     restoreButton.hidden = true;
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      backup = null;
+      restoreButton.hidden = true;
+      view.setState(stateFor(loadSql(config.storageId) ?? config.initialSql));
+    }
   });
   runButton.addEventListener('click', () => void run());
   resetButton.addEventListener('click', () => void reset());

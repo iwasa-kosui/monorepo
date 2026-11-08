@@ -2,6 +2,8 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const checkPath = '/playground-check/';
 
+const box = (page: Page): Locator => page.locator('[data-playground]').first();
+
 const sqlBox = (page: Page): Locator => page.locator('[data-playground="sql"]');
 const codeBox = (page: Page, index: number): Locator => page.locator('[data-playground="code"]').nth(index);
 
@@ -531,20 +533,36 @@ test.describe('読み込みの失敗', () => {
   });
 });
 
+const arrowKeysStayInEditor = async (page: Page, editor: Locator): Promise<void> => {
+  const pathname = new URL(page.url()).pathname;
+  await editor.click();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    Object.assign(window, { seenKeys: seen });
+    window.addEventListener('keydown', (event) => seen.push(event.key));
+  });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(500);
+  const seen = await page.evaluate(() => (window as unknown as { seenKeys?: string[] }).seenKeys);
+  expect(seen).toEqual(['ArrowRight', 'ArrowLeft']);
+  expect(new URL(page.url()).pathname).toBe(pathname);
+};
+
 test.describe('矢印キー', () => {
   test('エディタの中で左右の矢印キーを押してもページは移動しない', async ({ page }) => {
     await openCheckPage(page);
-    await sqlBox(page).locator('.cm-content').click();
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowLeft');
-    expect(new URL(page.url()).pathname).toBe(checkPath);
-
+    await arrowKeysStayInEditor(page, sqlBox(page).locator('.cm-content'));
     const box = codeBox(page, 0);
     await box.getByRole('tab', { name: /db\.ts/ }).click();
-    await box.locator('.cm-content').click();
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowLeft');
-    expect(new URL(page.url()).pathname).toBe(checkPath);
+    await arrowKeysStayInEditor(page, box.locator('.cm-content'));
+  });
+
+  test('章のページの編集欄でも、左右の矢印キーを押してもページは移動しない', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/5/');
+    await waitUntilReady(box(page));
+    await page.waitForLoadState('load');
+    await arrowKeysStayInEditor(page, box(page).locator('.cm-content'));
   });
 
   test('エディタの外では矢印キーでページが移動する', async ({ page }) => {

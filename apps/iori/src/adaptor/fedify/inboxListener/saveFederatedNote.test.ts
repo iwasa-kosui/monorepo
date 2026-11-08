@@ -127,6 +127,29 @@ describe('saveFederatedNote', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
+  it('records the given inReplyToUri on the remote post', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, {
+      note: createNote(),
+      relayId,
+      documentLoader,
+      inReplyToUri: 'https://remote.example/notes/0',
+    });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ inReplyToUri: 'https://remote.example/notes/0' }),
+    );
+  });
+
+  it('records a null inReplyToUri when none is given', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ inReplyToUri: null }));
+  });
+
   it('treats a different port as a different origin', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps();
 

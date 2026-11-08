@@ -1,23 +1,41 @@
 import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
 import { cancelVisitOf } from '../../../lib/snapshots';
 
-## ステップ2: 理由と操作した人を記録する
+雛形の4つの空欄を、次の値で埋めます。
 
-同じ `cancelVisit` を、次の2か所で変更します。
+| 空欄 | 値 |
+|---|---|
+| `/* event_name */` | `'VisitCancelled'` |
+| `/* target_id */` | `input.visitId` |
+| `/* target_type */` | `'Visit'` |
+| `/* target_state */` | `JSON.stringify(cancelled)` |
 
-1. `input` の型に `reason: string` と `operatedBy: string` を足します。
-2. `payload` の `JSON.stringify({})` を、`reason` と `operatedBy` を持つオブジェクトに変えます。キーの名前はこのとおりにします。テストと第3章の SELECT は `$.reason` と `$.operatedBy` を読みます。
+「テストを実行する」を押します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。
 
-`node --test visits.test.ts` を実行します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
+<CodePlayground
+  exercise="chapter-1-start"
+  editable={['visits.ts']}
+  readonly={['visits.test.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  complete={{ exercise: 'chapter-2-step-1', label: 'ステップ1の完成コードを読み込む' }}
+/>
+
+<div class="detail-row">
 
 <details>
-<summary>ステップ2の解答を見る</summary>
+<summary>ステップ1の解答を見る</summary>
 
-<CodeBlock code={cancelVisitOf('chapter-2-step-2')} />
+<CodeBlock code={cancelVisitOf('chapter-2-step-1')} />
 
 </details>
 
-## 遅れたとき
+<details>
+<summary>手元の Node で動かすとき</summary>
 
-ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-1` に移動して続けます。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
+`node --test visits.test.ts` を実行します。`pass 7` と `fail 1` が出れば、ステップ1は完了です。残りの1件は「キャンセルした人と理由を答えられる」です。第1章と同じく、`ℹ pass` と `ℹ fail` の行は失敗の詳細の上に出ます。
 
+</details>
+
+</div>

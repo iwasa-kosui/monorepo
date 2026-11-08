@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "88a9328a-6972-4414-ad64-f28ba9682899",
+  "id": "a2518d4d-bc0a-44a2-acc1-88527e271671",
   "prevId": "85dcacff-0c7d-42eb-859d-bc06457ce3c3",
   "tables": {
     "actors": {
@@ -461,32 +461,15 @@
             "createdAt"
           ],
           "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "bluesky_login_failures": {
-      "name": "bluesky_login_failures",
-      "columns": {
-        "scope": {
-          "name": "scope",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
         },
-        "failedAt": {
-          "name": "failedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+        "bluesky_crossposts_uri_idx": {
+          "name": "bluesky_crossposts_uri_idx",
+          "columns": [
+            "uri"
+          ],
+          "isUnique": false
         }
       },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

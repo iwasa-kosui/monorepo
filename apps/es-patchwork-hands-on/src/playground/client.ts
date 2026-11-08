@@ -31,7 +31,9 @@ export type Runtime = {
   readonly state: RuntimeState;
   readonly generation: number;
   reload: () => void;
+  whenReady: () => Promise<void>;
   setupSql: (setupSql: string) => Promise<string | null>;
+  setupScript: (files: Readonly<Record<string, string>>, entry: string) => Promise<string | null>;
   runSql: (sql: string) => Promise<SqlRunOutcome>;
   runCode: (files: Readonly<Record<string, string>>, entry: string) => Promise<RunOutcome>;
 };
@@ -46,10 +48,22 @@ export const createRuntime = (
   let generation = 0;
   let nextId = 0;
   const pending = new Map<number, Pending>();
+  let waiters: { resolve: () => void; reject: (error: Error) => void }[] = [];
 
   const setState = (next: RuntimeState): void => {
     state = next;
     onStateChange(next);
+    if (next !== 'loading') {
+      const settled = waiters;
+      waiters = [];
+      for (const waiter of settled) {
+        if (next === 'ready') {
+          waiter.resolve();
+        } else {
+          waiter.reject(new Error('実行環境を読み込めませんでした'));
+        }
+      }
+    }
   };
 
   const rejectAll = (error: Error): void => {
@@ -167,7 +181,18 @@ export const createRuntime = (
       return generation;
     },
     reload: start,
+    whenReady: () =>
+      new Promise<void>((resolve, reject) => {
+        if (state === 'ready') {
+          resolve();
+        } else if (state === 'failed') {
+          reject(new Error('実行環境を読み込めませんでした'));
+        } else {
+          waiters.push({ resolve, reject });
+        }
+      }),
     setupSql: async (setupSql) => (await request({ type: 'sql-setup', setupSql })).error,
+    setupScript: async (files, entry) => (await request({ type: 'sql-setup-script', files, entry })).error,
     runSql: async (sql) => (await request({ type: 'sql-run', sql })).outcome,
     runCode: async (files, entry) => (await request({ type: 'code-run', files, entry })).outcome,
   };

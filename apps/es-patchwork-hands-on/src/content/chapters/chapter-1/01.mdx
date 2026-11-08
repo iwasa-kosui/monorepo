@@ -2,11 +2,26 @@
 goal: 自分のシステムで答えられない問いを1つ挙げられます。
 ---
 
+import CodePlayground from '../../../components/CodePlayground.astro';
+
 ## 来院のキャンセル理由を visits テーブルで調べる
 
-事前準備で展開したディレクトリの中にある `chapter-1-start` に移動して、次のコマンドを実行します。見るだけの人は、講師の画面で同じ結果を確かめます。
+「show-visits.ts を実行する」を押します。見るだけの人は、講師の画面で同じ結果を確かめます。
+
+<CodePlayground
+  exercise="chapter-1-start"
+  editable={[]}
+  readonly={['show-visits.ts']}
+  scripts={[{ file: 'show-visits.ts', label: 'show-visits.ts を実行する' }]}
+/>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+事前準備で展開したディレクトリの中にある `chapter-1-start` に移動して、次のコマンドを実行します。
 
 ```bash
 node show-visits.ts
 ```
 
+</details>
