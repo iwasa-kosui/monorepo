@@ -155,6 +155,7 @@ export const BlueskyCrosspost = {
 
 export const BLUESKY_CROSSPOST_PENDING_GRACE_MS = 10 * 60 * 1000;
 export const BLUESKY_CROSSPOST_RETRY_LIMIT = 20;
+export const BLUESKY_CROSSPOST_RECENT_FAILURES_LIMIT = 10;
 
 const blueskySessionZodType = z.object({
   did: z.string().min(1),
@@ -172,6 +173,18 @@ export type BlueskyCrosspostResolver = Agg.Resolver<PostId, BlueskyCrosspost | u
 export type BlueskyCrosspostsResolverByRetryable = Agg.Resolver<
   { pendingCreatedBefore: Instant; maxAttempts: number; maxDeleteAttempts: number; limit: number },
   readonly BlueskyCrosspost[]
+>;
+export type BlueskyCrosspostFailure = Readonly<
+  Pick<BlueskyCrosspost, 'postId' | 'status' | 'attempts' | 'lastError' | 'updatedAt'>
+>;
+export type BlueskyCrosspostStatusReport = Readonly<{
+  counts: Readonly<Record<BlueskyCrosspostStatus, number>>;
+  exhausted: Readonly<{ pending: number; failed: number; deleting: number }>;
+  recentFailures: readonly BlueskyCrosspostFailure[];
+}>;
+export type BlueskyCrosspostStatusReportResolver = Agg.Resolver<
+  { maxAttempts: number; maxDeleteAttempts: number; failuresLimit: number },
+  BlueskyCrosspostStatusReport
 >;
 export type BlueskyCrosspostSavedStore = Readonly<{
   save: (crosspost: BlueskyCrosspost) => RA<void, never>;

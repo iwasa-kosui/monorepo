@@ -22,12 +22,15 @@ const topic = (topicKey: string, embedding: Float32Array | null, enabled = true)
   topicKey,
   name: topicKey,
   description: topicKey,
+  examples: [],
+  excludes: [],
   embeddedAt: embedding === null ? null : Instant.orThrow(1),
   sortOrder: 0,
   enabled,
   createdAt: Instant.orThrow(1),
   updatedAt: Instant.orThrow(1),
   embedding,
+  excludeEmbedding: null,
 });
 
 const article = (n: number): RecommendableArticle =>
@@ -123,6 +126,19 @@ describe('PreviewDigestTopicsUseCase', () => {
         digestItemsTruncated: false,
       },
     });
+  });
+
+  it('テーマの除く例に近い候補記事とダイジェスト項目を excluded にし、除く例との類似度を返す', async () => {
+    const excluding = { ...topic('on', new Float32Array([1, 0])), excludeEmbedding: new Float32Array([1, 0]) };
+    const { useCase } = setup([excluding], { articles: [article(1)], items: [digestItem(1)] });
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(result.ok && result.val.candidates.byTopic[0]).toMatchObject({
+      assignedCount: 0,
+      top: [{ excludeSimilarity: 1, assignment: 'excluded' }],
+    });
+    expect(result.ok && result.val.digestItems[0]).toMatchObject({ excludeSimilarity: 1, assignment: 'excluded' });
   });
 
   it('無効なテーマと未埋め込みのテーマは、候補記事の比較に使わない', async () => {

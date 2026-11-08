@@ -687,6 +687,12 @@ describe('a state close to a production wrangler deployment', () => {
     ]);
     await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 17 });
   });
+  it('accepts the Bluesky timeline binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [
+      { name: 'IORI_BLUESKY_TIMELINE', type: 'plain_text', text: 'disabled' },
+    ]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
+  });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-mismatch'));

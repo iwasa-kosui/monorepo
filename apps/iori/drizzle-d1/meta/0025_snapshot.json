@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6ac36b42-45ac-4fb2-973b-b353999ac453",
+  "id": "58b7cec5-3c94-44c1-9c89-ee82fd4bbf73",
   "prevId": "144324cf-e301-4e03-bf52-208be223de5f",
   "tables": {
     "actors": {
@@ -982,8 +982,31 @@
           "notNull": true,
           "autoincrement": false
         },
+        "examples": {
+          "name": "examples",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "excludes": {
+          "name": "excludes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
         "embedding": {
           "name": "embedding",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "excludeEmbedding": {
+          "name": "excludeEmbedding",
           "type": "blob",
           "primaryKey": false,
           "notNull": false,
@@ -1123,59 +1146,6 @@
             "rank"
           ],
           "name": "digest_trends_digestId_kind_rank_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "digest_x_posts": {
-      "name": "digest_x_posts",
-      "columns": {
-        "digestId": {
-          "name": "digestId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rank": {
-          "name": "rank",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "feedEntryId": {
-          "name": "feedEntryId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "digest_x_posts_digestId_digests_digestId_fk": {
-          "name": "digest_x_posts_digestId_digests_digestId_fk",
-          "tableFrom": "digest_x_posts",
-          "tableTo": "digests",
-          "columnsFrom": [
-            "digestId"
-          ],
-          "columnsTo": [
-            "digestId"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "digest_x_posts_digestId_rank_pk": {
-          "columns": [
-            "digestId",
-            "rank"
-          ],
-          "name": "digest_x_posts_digestId_rank_pk"
         }
       },
       "uniqueConstraints": {},

@@ -19,6 +19,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
   DigestResolverByArticleId,
@@ -81,6 +82,7 @@ import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import type { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
@@ -113,6 +115,7 @@ import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescri
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -196,7 +199,14 @@ export type IoriDigestRuntimePorts = Readonly<{
   allFeedSourcesResolver: AllFeedSourcesResolver;
   addFeedSourceUseCase: AddFeedSourceUseCase;
   changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
+  getXFeedEntriesUseCase: GetXFeedEntriesUseCase;
   isDigestOwner: IsDigestOwner;
+}>;
+export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
+export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
+  userResolverByUsername: UserResolverByUsername;
+  blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
+  blueskyCrosspostEnabled: boolean;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -253,6 +263,8 @@ export type IoriRuntimePorts = Readonly<{
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
+  blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
+  blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;

@@ -18,12 +18,17 @@ export const embedDigestTopics = async (
   topics: ReadonlyArray<DigestTopic>,
 ): Promise<number> => {
   if (topics.length === 0) return 0;
+  const textsByTopic = topics.map(DigestTopic.toEmbeddingTexts);
+  const offsets = textsByTopic.map((_, index) =>
+    textsByTopic.slice(0, index).reduce((sum, texts) => sum + texts.length, 0)
+  );
+  const topicIndexOfText = textsByTopic.flatMap((texts, index) => texts.map(() => index));
   const vectors = await embedTextsOneByOneOnFailure(
     textEmbedder,
-    topics.map(DigestTopic.toEmbeddingText),
+    textsByTopic.flat(),
     (index, error) => {
       console.error('iori digest topics: embedding a topic failed.', {
-        topicKey: topics[index]!.topicKey,
+        topicKey: topics[topicIndexOfText[index]!]!.topicKey,
         errorMessage: error.message,
       });
     },
@@ -35,9 +40,13 @@ export const embedDigestTopics = async (
   const timestamp = now();
   const embeddedEvents: DigestTopicEmbedded[] = [];
   topics.forEach((topic, index) => {
-    const vector = vectors.val[index];
-    if (vector === undefined) return;
-    const event = DigestTopic.embed(topic, Float32Array.from(vector), timestamp);
+    const topicVectors = vectors.val.slice(offsets[index], offsets[index]! + textsByTopic[index]!.length);
+    if (topicVectors.some((vector) => vector === undefined)) return;
+    const event = DigestTopic.embed(
+      topic,
+      DigestTopic.combineEmbeddings(topic, topicVectors as ReadonlyArray<ReadonlyArray<number>>),
+      timestamp,
+    );
     if (event.ok) embeddedEvents.push(event.val);
     else {
       console.error('iori digest topics: a topic embedding was rejected.', {

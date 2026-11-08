@@ -17,12 +17,14 @@ import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
+import type { CollectBlueskyTimelineUseCase } from '../../../../useCase/collectBlueskyTimeline.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
+import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
@@ -59,6 +61,7 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
@@ -78,6 +81,7 @@ import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/em
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1XFeedEntriesResolver } from '../../../d1/feedEntry/xFeedEntriesResolver.ts';
 import { createD1AllFeedSourcesResolver } from '../../../d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../../../d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceEnabledChangedStore } from '../../../d1/feedSource/feedSourceEnabledChangedStore.ts';
@@ -152,9 +156,11 @@ import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts';
+import { createWorkerIoriBlueskyRouter } from '../../workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
+import { createWorkerIoriXPostsRouter } from '../../workerIoriXPostsRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
@@ -176,6 +182,7 @@ export const setupReadApi = (
     textEmbedder?: TextEmbedder;
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
+    collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -497,6 +504,14 @@ export const setupReadApi = (
       );
       root.route(
         '/api',
+        createWorkerIoriBlueskyRouter({
+          authn,
+          blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
+          collectBlueskyTimelineUseCase: options.collectBlueskyTimeline,
+        }),
+      );
+      root.route(
+        '/api',
         createWorkerIoriDigestRouter({
           authn,
           digestResolverByUserIdAndDigestDate: createD1DigestResolverByUserIdAndDigestDate(db),
@@ -562,6 +577,16 @@ export const setupReadApi = (
               createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db),
             now: Instant.now,
           }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriXPostsRouter({
+          authn,
+          getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
+            xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
+          }),
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );
       root.route(

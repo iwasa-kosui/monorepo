@@ -886,19 +886,46 @@ describe('iori のダイジェスト API', () => {
         similarity,
         second,
         margin,
+        excludeSimilarity: null,
         assignment: 'assigned',
       });
       expect(body.topics).toEqual([
-        { topicKey: 'genai', name: 'genai の名前', description: 'genai の説明', enabled: true, embedded: true },
+        {
+          topicKey: 'genai',
+          name: 'genai の名前',
+          description: 'genai の説明',
+          enabled: true,
+          embedded: true,
+          examples: [],
+          excludes: [],
+        },
         {
           topicKey: 'platform',
           name: 'platform の名前',
           description: 'platform の説明',
           enabled: true,
           embedded: true,
+          examples: [],
+          excludes: [],
         },
-        { topicKey: 'draft', name: 'draft の名前', description: 'draft の説明', enabled: false, embedded: true },
-        { topicKey: 'raw', name: 'raw の名前', description: 'raw の説明', enabled: true, embedded: false },
+        {
+          topicKey: 'draft',
+          name: 'draft の名前',
+          description: 'draft の説明',
+          enabled: false,
+          embedded: true,
+          examples: [],
+          excludes: [],
+        },
+        {
+          topicKey: 'raw',
+          name: 'raw の名前',
+          description: 'raw の説明',
+          enabled: true,
+          embedded: false,
+          examples: [],
+          excludes: [],
+        },
       ]);
       expect(body.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0 });
       expect(body.candidates.total).toBe(3);
@@ -945,6 +972,7 @@ describe('iori のダイジェスト API', () => {
           margin: 0.2,
           adoptedSimilarity: 0.8,
           matchesFirst: true,
+          excludeSimilarity: null,
           assignment: 'assigned',
         }),
         adopted('genai', 2, 'B', 'https://example.com/b', {
@@ -953,6 +981,7 @@ describe('iori のダイジェスト API', () => {
           margin: null,
           adoptedSimilarity: null,
           matchesFirst: null,
+          excludeSimilarity: null,
           assignment: 'noComparableTopic',
         }),
         adopted('platform', 1, 'A', 'https://example.com/a', {
@@ -961,6 +990,7 @@ describe('iori のダイジェスト API', () => {
           margin: 0.2,
           adoptedSimilarity: 0.6,
           matchesFirst: false,
+          excludeSimilarity: null,
           assignment: 'assigned',
         }),
       ]);
@@ -1176,6 +1206,8 @@ describe('iori のダイジェスト API', () => {
               enabled: true,
               sortOrder: 1,
               embedded: false,
+              examples: [],
+              excludes: [],
             },
             {
               topicKey: 'platform',
@@ -1184,8 +1216,24 @@ describe('iori のダイジェスト API', () => {
               enabled: false,
               sortOrder: 2,
               embedded: true,
+              examples: [],
+              excludes: [],
             },
           ],
+        });
+      });
+
+      it('examples と excludes を返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        seed(t, me.userId, 'genai', 0);
+        t.sqlite.prepare('UPDATE digest_topics SET examples = ?, excludes = ? WHERE userId = ?')
+          .run('["例 1","例 2"]', '["除く 1"]', me.userId);
+
+        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
+
+        expect(await response.json()).toMatchObject({
+          topics: [{ topicKey: 'genai', examples: ['例 1', '例 2'], excludes: ['除く 1'] }],
         });
       });
 
@@ -1256,11 +1304,60 @@ describe('iori のダイジェスト API', () => {
           enabled: true,
           sortOrder: 5,
           embedded: true,
+          examples: [],
+          excludes: [],
         });
         expect(rowOf(t, me.userId, topic.topicKey)).toMatchObject({
           name: '新しい名前',
           bytes: EMBEDDING_DIMENSIONS * 4,
         });
+      });
+
+      it('examples と excludes を受け取って trim して保存し、1 回の埋め込みで embedding と excludeEmbedding を作る', async () => {
+        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
+        const t = setupReadApi({ textEmbedder: stub.embedder });
+        const me = await t.signIn('read:statuses write:accounts');
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', cookieOf(me), {
+            name: '名前',
+            description: '説明',
+            examples: [' 例 1 ', '例 2'],
+            excludes: ['除く 1'],
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        const { topic } = await response.json() as { topic: { topicKey: string } };
+        expect(topic).toMatchObject({ examples: ['例 1', '例 2'], excludes: ['除く 1'], embedded: true });
+        expect(stub.calls).toHaveLength(1);
+        expect(stub.calls[0]?.texts).toEqual(['名前: 説明', '例 1', '例 2', '除く 1']);
+        expect(
+          t.sqlite.prepare(
+            'SELECT examples, excludes, length(embedding) AS bytes, length(excludeEmbedding) AS excludeBytes FROM digest_topics WHERE userId = ?',
+          ).get(me.userId),
+        ).toEqual({
+          examples: '["例 1","例 2"]',
+          excludes: '["除く 1"]',
+          bytes: EMBEDDING_DIMENSIONS * 4,
+          excludeBytes: EMBEDDING_DIMENSIONS * 4,
+        });
+      });
+
+      it('examples と excludes を省くと、空の配列で作り、excludeEmbedding を null にする', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+
+        const response = await t.request(
+          '/api/iori/v1/digest-topics',
+          send('POST', me.bearer, { name: '名前', description: '説明' }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toMatchObject({ topic: { examples: [], excludes: [] } });
+        expect(t.sqlite.prepare('SELECT excludeEmbedding FROM digest_topics WHERE userId = ?').get(me.userId))
+          .toEqual({ excludeEmbedding: null });
       });
 
       it('埋め込みに失敗しても 201 にして、embedded を false にする', async () => {
@@ -1284,6 +1381,19 @@ describe('iori のダイジェスト API', () => {
         ['name が 41 文字', { name: 'あ'.repeat(41), description: '説明' }],
         ['description が 301 文字', { name: '名前', description: 'あ'.repeat(301) }],
         ['name が文字列でない', { name: 1, description: '説明' }],
+        ['examples が配列でない', { name: '名前', description: '説明', examples: '例' }],
+        ['examples に文字列でない値がある', { name: '名前', description: '説明', examples: [1] }],
+        ['examples が 11 件', { name: '名前', description: '説明', examples: Array.from({ length: 11 }, () => '例') }],
+        ['examples に空の文がある', { name: '名前', description: '説明', examples: ['  '] }],
+        ['examples に 121 文字の文がある', { name: '名前', description: '説明', examples: ['あ'.repeat(121)] }],
+        ['excludes が配列でない', { name: '名前', description: '説明', excludes: '除く' }],
+        ['excludes が 11 件', {
+          name: '名前',
+          description: '説明',
+          excludes: Array.from({ length: 11 }, () => '除く'),
+        }],
+        ['excludes に空の文がある', { name: '名前', description: '説明', excludes: [''] }],
+        ['excludes に 121 文字の文がある', { name: '名前', description: '説明', excludes: ['あ'.repeat(121)] }],
       ])('%s と 400 にして、何も作らない', async (_label, body) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1349,9 +1459,59 @@ describe('iori のダイジェスト API', () => {
             enabled: true,
             sortOrder: 3,
             embedded: true,
+            examples: [],
+            excludes: [],
           },
         });
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ name: '新しい名前', bytes: EMBEDDING_DIMENSIONS * 4 });
+      });
+
+      it('examples と excludes だけを変えると 200 と更新後のトピックを返し、1 回の埋め込みで作り直す', async () => {
+        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
+        const t = setupReadApi({ textEmbedder: stub.embedder });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 3);
+
+        const response = await patch(t, 'genai', cookieOf(me), { examples: ['例 1'], excludes: ['除く 1', '除く 2'] });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({
+          topic: {
+            topicKey: 'genai',
+            name: 'genai の名前',
+            examples: ['例 1'],
+            excludes: ['除く 1', '除く 2'],
+            embedded: true,
+          },
+        });
+        expect(stub.calls).toHaveLength(1);
+        expect(stub.calls[0]?.texts).toEqual(['genai の名前: genai の説明', '例 1', '除く 1', '除く 2']);
+        expect(
+          t.sqlite.prepare(
+            'SELECT examples, excludes, length(excludeEmbedding) AS excludeBytes FROM digest_topics WHERE userId = ?',
+          ).get(me.userId),
+        ).toEqual({ examples: '["例 1"]', excludes: '["除く 1","除く 2"]', excludeBytes: EMBEDDING_DIMENSIONS * 4 });
+      });
+
+      it.each([
+        ['examples が配列でない', { examples: '例' }],
+        ['examples が 11 件', { examples: Array.from({ length: 11 }, () => '例') }],
+        ['examples に空の文がある', { examples: [''] }],
+        ['examples に 121 文字の文がある', { examples: ['あ'.repeat(121)] }],
+        ['excludes が配列でない', { excludes: 1 }],
+        ['excludes が 11 件', { excludes: Array.from({ length: 11 }, () => '除く') }],
+        ['excludes に 121 文字の文がある', { excludes: ['あ'.repeat(121)] }],
+      ])('%s と 400 にして、何も変えない', async (_label, body) => {
+        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
+        const t = setupReadApi({ textEmbedder: stub.embedder });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, body);
+
+        expect(response.status).toBe(400);
+        expect(stub.calls).toHaveLength(0);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ bytes: EMBEDDING_DIMENSIONS * 4 });
       });
 
       it('description を変えて埋め込みに失敗したら、200 にして embedded を false にする', async () => {

@@ -22,19 +22,42 @@ export const TopicAssignmentPolicy = {
 export const TOPIC_MIN_SIMILARITY = TopicAssignmentPolicy.default.minSimilarity;
 
 export type TopicAssignmentArticle = Readonly<{ embedding: Float32Array }>;
-export type TopicAssignmentTopic = Readonly<{ topicKey: string; embedding: Float32Array | null }>;
+export type TopicAssignmentTopic = Readonly<{
+  topicKey: string;
+  embedding: Float32Array | null;
+  excludeEmbedding?: Float32Array | null;
+}>;
+
+export const excludeSimilarityOf = (
+  embedding: Float32Array,
+  topic: Pick<TopicAssignmentTopic, 'excludeEmbedding'>,
+): number | null =>
+  topic.excludeEmbedding === undefined || topic.excludeEmbedding === null
+    || topic.excludeEmbedding.length !== embedding.length
+    ? null
+    : Recommendation.cosineSimilarity(embedding, topic.excludeEmbedding);
 
 export type TopicMatch = Readonly<{ similarity: number; margin: number }>;
 
-export type TopicAssignmentOutcome = 'assigned' | 'belowMinSimilarity' | 'belowMinMargin' | 'noComparableTopic';
+export type TopicAssignmentOutcome =
+  | 'assigned'
+  | 'belowMinSimilarity'
+  | 'belowMinMargin'
+  | 'excluded'
+  | 'noComparableTopic';
 
 export const judgeTopicAssignment = (
-  best: Readonly<{ similarity: number; margin: number | null }> | null,
+  best: Readonly<{ similarity: number; margin: number | null; excludeSimilarity?: number | null }> | null,
   policy: Pick<TopicAssignmentPolicy, 'minSimilarity' | 'minMargin'>,
 ): TopicAssignmentOutcome => {
   if (best === null) return 'noComparableTopic';
   if (best.similarity < policy.minSimilarity) return 'belowMinSimilarity';
   if (best.margin !== null && best.margin < policy.minMargin) return 'belowMinMargin';
+  if (
+    best.excludeSimilarity !== undefined && best.excludeSimilarity !== null && best.excludeSimilarity >= best.similarity
+  ) {
+    return 'excluded';
+  }
   return 'assigned';
 };
 
@@ -45,6 +68,7 @@ export type TopicAssignment<TArticle extends TopicAssignmentArticle> = Readonly<
   otherCounts: Readonly<{
     belowMinSimilarity: number;
     belowMinMargin: number;
+    excluded: number;
     noComparableTopic: number;
   }>;
 }>;
@@ -59,9 +83,10 @@ export const assignTopics = <TArticle extends TopicAssignmentArticle>(
   const byTopic = new Map<string, TArticle[]>(input.topics.map((topic) => [topic.topicKey, []]));
   const matches = new Map<TArticle, TopicMatch>();
   const others: TArticle[] = [];
-  const otherCounts = { belowMinSimilarity: 0, belowMinMargin: 0, noComparableTopic: 0 };
+  const otherCounts = { belowMinSimilarity: 0, belowMinMargin: 0, excluded: 0, noComparableTopic: 0 };
   for (const article of input.articles) {
     let bestTopicKey: string | undefined;
+    let bestTopic: TopicAssignmentTopic | undefined;
     let bestSimilarity = -Infinity;
     let secondSimilarity = -Infinity;
     for (const topic of input.topics) {
@@ -71,13 +96,16 @@ export const assignTopics = <TArticle extends TopicAssignmentArticle>(
         secondSimilarity = bestSimilarity;
         bestSimilarity = similarity;
         bestTopicKey = topic.topicKey;
+        bestTopic = topic;
       } else if (similarity > secondSimilarity) {
         secondSimilarity = similarity;
       }
     }
     const margin = secondSimilarity === -Infinity ? Infinity : bestSimilarity - secondSimilarity;
     const outcome = judgeTopicAssignment(
-      bestTopicKey === undefined ? null : { similarity: bestSimilarity, margin },
+      bestTopic === undefined
+        ? null
+        : { similarity: bestSimilarity, margin, excludeSimilarity: excludeSimilarityOf(article.embedding, bestTopic) },
       input.policy,
     );
     if (outcome === 'assigned') {
