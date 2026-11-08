@@ -13,18 +13,6 @@ body.chapter-page {
   min-height: 0;
 }
 
-body.chapter-page {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-}
-.chapter-main {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-}
-
 .content h1 {
   margin-block: 0 1rem;
   font-size: 1.75rem;
