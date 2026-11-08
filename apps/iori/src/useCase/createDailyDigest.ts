@@ -256,6 +256,16 @@ const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): Reado
     .slice(0, TOPIC_ITEMS_LIMIT)
     .map((article) => ({ article, score: null, reasonInterestSourceId: null }));
 
+const takeTopicsIncludingTies = <T extends { items: readonly unknown[] }>(
+  sorted: readonly T[],
+  slots: number,
+): readonly T[] => {
+  const last = sorted[slots - 1];
+  if (slots <= 0) return [];
+  if (last === undefined) return sorted;
+  return sorted.filter((selection) => selection.items.length >= last.items.length);
+};
+
 const create = ({
   digestSubscriptionResolverByUserId,
   digestHeadersResolverByUserIdAndDigestDate,
@@ -474,7 +484,7 @@ const create = ({
     }
     const scoringMs = Date.now() - scoringStartedAt;
     selections.sort((a, b) => b.items.length - a.items.length || a.topic.sortOrder - b.topic.sortOrder);
-    const chosen = selections.slice(0, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
+    const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
     let fetchedBodies = 0;

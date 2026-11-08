@@ -577,14 +577,13 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 1, items: 3 });
   });
 
-  it('トピックは項目数の多い順、同数なら sortOrder の順に最大 4 本までにする', async () => {
+  it('トピックは項目数の多い順、同数なら sortOrder の順に並べ、境界が同数でなければ 4 本までにする', async () => {
     const t = setup();
     const embeddings: Array<[string, number, number]> = [
       ['platform', 1, 5],
-      ['server', 2, 4],
-      ['design', 3, 3],
-      ['ciam', 4, 3],
-      ['security', 5, 3],
+      ['server', 2, 5],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
     ];
     t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
     for (const [topicKey, index, count] of embeddings) {
@@ -594,8 +593,63 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
 
     const result = await t.run();
 
-    expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 4, items: 3 + 3 + 5 + 4 });
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 4 + 4 });
+  });
+
+  it('4 本目と 5 本目のトピックの項目数が同じなら、5 本すべて作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 15 });
+  });
+
+  it('4 本目と 5 本目のトピックの項目数が違えば、4 本だけ作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 4],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 4 + 4 + 4 });
+  });
+
+  it('1 テーマあたり 5 件までに切った後の項目数で、同数かどうかを判定する', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 6],
+      ['server', 2, 6],
+      ['design', 3, 6],
+      ['ciam', 4, 6],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 5, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 25 });
   });
 
   it('止めたトピックには振り分けない', async () => {
@@ -1930,6 +1984,25 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(t.bodies().privateHtml).toContain(`/articles/${t.digestOf('platform')!.articleId}`);
   });
 
+  it('残る topic があって枠が減っても、減った枠の境界と項目数が同じ topic はすべて作る', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'platform', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 2 * HOUR }));
+    await t.run('requested');
+    for (const topicKey of ['genai', 'platform']) t.setArticleStatusOf(topicKey, 'published');
+    for (const [topicKey, index] of [['server', 2], ['design', 3], ['ciam', 4]] as const) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW }));
+    }
+    t.clock.value = (NOW + HOUR) as typeof NOW;
+
+    const result = await t.run('requested');
+
+    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 3 });
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+  });
+
   it('残る topic の記事の項目は、置き換えで作る topic に載せない', async () => {
     const t = setup();
     seedTwoTopics(t);
@@ -2088,11 +2161,15 @@ describe('CreateDailyDigestUseCase: requested', () => {
 
   it('残る topic が 4 本に達していれば、新しい topic は作らない', async () => {
     const t = setup();
-    const keys: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
-    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    for (const [topicKey, index] of keys) {
+    const keys: Array<[string, number, number]> = [['platform', 1, 4], ['server', 2, 4], ['design', 3, 4], [
+      'ciam',
+      4,
+      3,
+    ]];
+    t.addEntries(t.sources.rss, 'genai', 4, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    for (const [topicKey, index, count] of keys) {
       t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
     }
     await t.run('requested');
     expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
