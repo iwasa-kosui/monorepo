@@ -401,7 +401,7 @@ IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=
 
 `put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` と、任意の `BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
 
-必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿と、Bluesky の home タイムラインの取り込みの両方に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、取り込みは `IORI_BLUESKY_TIMELINE` が `enabled` のときだけ動きます。どちらも既定は `disabled` です。2つの機能は互いに独立していて、どちらの機能も、この2つの secret が空でないときだけ動きます。
+必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿と、Bluesky の home タイムラインの取り込みの両方に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、取り込みは `IORI_BLUESKY_TIMELINE` が `enabled` のときだけ動きます。どちらも本番の template の値は `enabled` です。2つの機能は互いに独立していて、どちらの機能も、この2つの secret が空でないときだけ動きます。
 
 job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
 
@@ -572,11 +572,11 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 
 #### IORI_BLUESKY_CROSSPOST と IORI_BLUESKY_TIMELINE を有効にする
 
-`IORI_BLUESKY_CROSSPOST` は iori の投稿を Bluesky に送る機能を、`IORI_BLUESKY_TIMELINE` は Bluesky の home タイムラインを取り込む機能を切り替えます。どちらも Worker の環境変数で、初期値は `disabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。2つの機能は独立しているので、作業者は片方だけを有効にできます。
+`IORI_BLUESKY_CROSSPOST` は iori の投稿を Bluesky に送る機能を、`IORI_BLUESKY_TIMELINE` は Bluesky の home タイムラインを取り込む機能を切り替えます。どちらも Worker の環境変数で、本番の template の値は `enabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。2つの機能は独立しているので、作業者は片方だけを有効にできます。
 
 作業者は、有効にする前に、`put-worker-secrets` で `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` を Worker に入れます。どちらかの secret が空だと、環境変数を `enabled` にしても機能は動きません。
 
-有効にするには、作業者が template の対象の値を `enabled` に変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
+値を変えるには、作業者が template の対象の値を変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
 
 `IORI_BLUESKY_TIMELINE` を有効にすると、Worker は3時間ごとの Cron で Bluesky の home タイムラインを取り込み、D1 の `bluesky_timeline_items` に保存します。同じタスクが、30日より古い行を消します。取り込んだ投稿は、Web UI の `/bluesky` ページに表示されます。
 
