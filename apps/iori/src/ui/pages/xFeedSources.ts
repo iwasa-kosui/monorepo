@@ -1,4 +1,9 @@
-import { type FeedSource, isMastodonApiError } from '../api/mastodonClient.ts';
+import {
+  failureMessage,
+  type FeedSource,
+  isMastodonApiError,
+  type XPostsRefreshResult,
+} from '../api/mastodonClient.ts';
 
 export const EMPTY_USERNAME_MESSAGE = 'ユーザー名を入力してください。';
 
@@ -26,6 +31,22 @@ export const toggleFailureMessage = (error: unknown): string =>
   statusOf(error) === 404
     ? 'このユーザーが見つかりません。ページを読み込み直してください。'
     : '切り替えられませんでした。時間をおいてもう一度お試しください。';
+
+export const refreshSuccessMessage = ({ sources, failed, collected }: XPostsRefreshResult): string => {
+  if (sources === 0) return '取得するユーザーがいません';
+  const base = `${collected} 件を取り込みました`;
+  return failed >= 1 ? `${base}（${failed} 人は取得に失敗しました）` : base;
+};
+
+export const refreshFailureMessage = (error: unknown): string => {
+  if (isMastodonApiError(error)) {
+    if (error.status === 409) return '取り込みは無効です';
+    if (error.status === 429 && error.retryAfterSeconds !== undefined) {
+      return `あと ${error.retryAfterSeconds} 秒待ってから取得してください`;
+    }
+  }
+  return failureMessage('refresh X posts', error);
+};
 
 export const withSourceEnabled = (
   sources: readonly FeedSource[],

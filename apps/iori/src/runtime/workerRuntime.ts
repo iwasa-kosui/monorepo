@@ -161,6 +161,7 @@ import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
+import { createRefreshXPostsUseCase } from '../scheduled/feedTasks.ts';
 import { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
@@ -466,6 +467,7 @@ export const createWorkerRuntimePorts = async (
         xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
         now: Instant.now,
       }),
+      refreshXPostsUseCase: createRefreshXPostsUseCase(env),
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({
         digestTopicsResolverByUserId,

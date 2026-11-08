@@ -6,6 +6,8 @@ import {
   addXUserSource,
   EMPTY_USERNAME_MESSAGE,
   normalizeXUsername,
+  refreshFailureMessage,
+  refreshSuccessMessage,
   runOptimisticToggle,
   toggleFailureMessage,
   withSource,
@@ -156,5 +158,43 @@ describe('runOptimisticToggle', () => {
     ).rejects.toBe(error);
 
     expect(store.get()[0]?.enabled).toBe(false);
+  });
+});
+
+describe('refreshSuccessMessage', () => {
+  it('取得するユーザーがいないとき（sources が 0）は、そのことを伝える', () => {
+    expect(refreshSuccessMessage({ sources: 0, failed: 0, collected: 0 })).toBe('取得するユーザーがいません');
+  });
+
+  it('取り込んだ件数を伝える', () => {
+    expect(refreshSuccessMessage({ sources: 2, failed: 0, collected: 7 })).toBe('7 件を取り込みました');
+    expect(refreshSuccessMessage({ sources: 1, failed: 0, collected: 0 })).toBe('0 件を取り込みました');
+  });
+
+  it('失敗したユーザーがいるときは、人数を後ろにつなげる', () => {
+    expect(refreshSuccessMessage({ sources: 3, failed: 2, collected: 4 })).toBe(
+      '4 件を取り込みました（2 人は取得に失敗しました）',
+    );
+  });
+});
+
+describe('refreshFailureMessage', () => {
+  it('409 は取り込みが無効だと伝える', () => {
+    expect(refreshFailureMessage(apiError(409))).toBe('取り込みは無効です');
+  });
+
+  it('429 で retryAfterSeconds があれば、待つ秒数を伝える', () => {
+    const error = Object.assign(new Error('boom'), { status: 429, retryAfterSeconds: 120 });
+
+    expect(refreshFailureMessage(error)).toBe('あと 120 秒待ってから取得してください');
+  });
+
+  it('429 でも retryAfterSeconds が無ければ、既存の failureMessage の書き方にする', () => {
+    expect(refreshFailureMessage(apiError(429))).toBe('Failed to refresh X posts: boom');
+  });
+
+  it('それ以外の API エラーとネットワークエラーは、既存の failureMessage の書き方にする', () => {
+    expect(refreshFailureMessage(apiError(500))).toBe('Failed to refresh X posts: boom');
+    expect(refreshFailureMessage(new TypeError('network'))).toBe('Failed to refresh X posts. Please try again.');
   });
 });

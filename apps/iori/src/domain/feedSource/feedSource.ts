@@ -1,4 +1,4 @@
-import type { Result } from '@iwasa-kosui/result';
+import type { RA, Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -221,6 +221,27 @@ const setEnabled = (feedSource: FeedSource, enabled: boolean, now: Instant): Fee
     now,
   );
 };
+
+export const X_MANUAL_FETCH_MAX_SOURCES = 5;
+export const X_MANUAL_FETCH_COOLDOWN_SECONDS = 300;
+
+export type FeedSourceFetchReserver = Readonly<{
+  reserve: (input: Readonly<{ feedSourceId: FeedSourceId; now: Instant }>) => RA<boolean, never>;
+}>;
+
+export type FeedSourceFetchCooldownError = Readonly<{
+  type: 'FeedSourceFetchCooldownError';
+  message: string;
+  detail: { retryAfterSeconds: number };
+}>;
+
+export const FeedSourceFetchCooldownError = {
+  create: (retryAfterSeconds: number): FeedSourceFetchCooldownError => ({
+    type: 'FeedSourceFetchCooldownError',
+    message: 'The feed sources were fetched too recently.',
+    detail: { retryAfterSeconds },
+  }),
+} as const;
 
 export type FeedSourceCreatedStore = Agg.Store<FeedSourceCreated>;
 export type FeedSourceFetchedStore = Agg.Store<FeedSourceFetched>;

@@ -95,45 +95,24 @@ export const runWithConcurrency = async <T>(
   await Promise.all(workers);
 };
 
-const create = ({
-  feedSourcesResolverByEnabled,
+type CollectorDeps = Pick<
+  Deps,
+  | 'feedEntriesResolverByFeedSourceIdAndGuids'
+  | 'feedSourceFetchedStore'
+  | 'feedSourceFetchFailedStore'
+  | 'feedEntryCollectedStore'
+  | 'feedEntryBookmarkCountUpdatedStore'
+  | 'now'
+>;
+
+export const createFeedSourceCollector = ({
   feedEntriesResolverByFeedSourceIdAndGuids,
-  feedEntriesResolverByFetchedBefore,
   feedSourceFetchedStore,
   feedSourceFetchFailedStore,
   feedEntryCollectedStore,
   feedEntryBookmarkCountUpdatedStore,
-  feedEntryExpiredStore,
-  feedEntryMaxGuidResolverByFeedSourceId,
-  safeFetcher,
-  twitterApiIoClient,
   now,
-}: Deps): CollectFeedEntriesUseCase => {
-  const fetchRss: FeedItemFetcher = async (source) => {
-    const headers: Record<string, string> = {};
-    if (source.etag !== null) headers['If-None-Match'] = source.etag;
-    if (source.lastModified !== null) headers['If-Modified-Since'] = source.lastModified;
-    const fetched = await safeFetcher.fetchText(source.url, { ...FETCH_OPTIONS, headers });
-    if (!fetched.ok) throw new Error(fetched.err.message);
-    const { status, body, etag, lastModified } = fetched.val;
-    const validators = { etag: etag ?? source.etag, lastModified: lastModified ?? source.lastModified };
-    if (status === 304 || body === undefined) {
-      return { source, items: [], retentionDays: FEED_RETENTION_DAYS, validators };
-    }
-    const parsed = parseFeed(body);
-    if (!parsed.ok) throw new Error(parsed.err.message);
-    return { source, items: parsed.val, retentionDays: FEED_RETENTION_DAYS, validators };
-  };
-
-  const fetchXUser: FeedItemFetcher | undefined = twitterApiIoClient === undefined
-    ? undefined
-    : createXUserItemsFetcher({ twitterApiIoClient, feedEntryMaxGuidResolverByFeedSourceId, now });
-
-  const fetcherOf = (kind: FeedSourceKind): FeedItemFetcher | undefined => {
-    if (kind === 'thoughtworks_radar') return undefined;
-    return kind === 'x_user' ? fetchXUser : fetchRss;
-  };
-
+}: CollectorDeps) => {
   const collectSource = async (original: FeedSource, fetchItems: FeedItemFetcher): Promise<number> => {
     const { source, items: fetchedItems, retentionDays, validators } = await fetchItems(original);
     const retentionStart = Instant.addDuration(now(), -retentionDays * DAY_MS);
@@ -180,6 +159,57 @@ const create = ({
         error: storeError,
       });
     }
+  };
+
+  return { collectSource, recordFailure };
+};
+
+const create = ({
+  feedSourcesResolverByEnabled,
+  feedEntriesResolverByFeedSourceIdAndGuids,
+  feedEntriesResolverByFetchedBefore,
+  feedSourceFetchedStore,
+  feedSourceFetchFailedStore,
+  feedEntryCollectedStore,
+  feedEntryBookmarkCountUpdatedStore,
+  feedEntryExpiredStore,
+  feedEntryMaxGuidResolverByFeedSourceId,
+  safeFetcher,
+  twitterApiIoClient,
+  now,
+}: Deps): CollectFeedEntriesUseCase => {
+  const { collectSource, recordFailure } = createFeedSourceCollector({
+    feedEntriesResolverByFeedSourceIdAndGuids,
+    feedSourceFetchedStore,
+    feedSourceFetchFailedStore,
+    feedEntryCollectedStore,
+    feedEntryBookmarkCountUpdatedStore,
+    now,
+  });
+
+  const fetchRss: FeedItemFetcher = async (source) => {
+    const headers: Record<string, string> = {};
+    if (source.etag !== null) headers['If-None-Match'] = source.etag;
+    if (source.lastModified !== null) headers['If-Modified-Since'] = source.lastModified;
+    const fetched = await safeFetcher.fetchText(source.url, { ...FETCH_OPTIONS, headers });
+    if (!fetched.ok) throw new Error(fetched.err.message);
+    const { status, body, etag, lastModified } = fetched.val;
+    const validators = { etag: etag ?? source.etag, lastModified: lastModified ?? source.lastModified };
+    if (status === 304 || body === undefined) {
+      return { source, items: [], retentionDays: FEED_RETENTION_DAYS, validators };
+    }
+    const parsed = parseFeed(body);
+    if (!parsed.ok) throw new Error(parsed.err.message);
+    return { source, items: parsed.val, retentionDays: FEED_RETENTION_DAYS, validators };
+  };
+
+  const fetchXUser: FeedItemFetcher | undefined = twitterApiIoClient === undefined
+    ? undefined
+    : createXUserItemsFetcher({ twitterApiIoClient, feedEntryMaxGuidResolverByFeedSourceId, now });
+
+  const fetcherOf = (kind: FeedSourceKind): FeedItemFetcher | undefined => {
+    if (kind === 'thoughtworks_radar') return undefined;
+    return kind === 'x_user' ? fetchXUser : fetchRss;
   };
 
   const expireOldEntries = async (): Promise<number> => {
