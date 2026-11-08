@@ -15,7 +15,7 @@
     "head_sampling_rate": 1,
   },
   "placement": {
-    "mode": "smart",
+    "region": "aws:us-east-1",
   },
   "assets": {
     "binding": "ASSETS",
