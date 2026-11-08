@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { XUsername } from '../../../domain/feedSource/xUsername.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { SafeFetcher, SafeFetchError, SafeFetchResult } from '../../http/safeFetch.ts';
-import { createTwitterApiIoClient, MAX_PAGES } from '../twitterApiIoClient.ts';
+import { createTwitterApiIoClient, MAX_PAGES, REQUEST_INTERVAL_MS } from '../twitterApiIoClient.ts';
 
 type Response = Result<SafeFetchResult, SafeFetchError>;
 
@@ -42,9 +42,23 @@ const page = (tweets: ReadonlyArray<unknown>, nextCursor = '') => ({
 const setup = (...responses: Response[]) => {
   const queue = [...responses];
   const fetchText = vi.fn<SafeFetcher['fetchText']>(async () => queue.shift() ?? httpError(500));
-  const client = createTwitterApiIoClient({ safeFetcher: { fetchText }, apiKey: 'secret-api-key' });
+  let clock = 1_000_000;
+  const sleeps: number[] = [];
+  const sleep = vi.fn(async (ms: number) => {
+    sleeps.push(ms);
+    clock += ms;
+  });
+  const client = createTwitterApiIoClient({
+    safeFetcher: { fetchText },
+    apiKey: 'secret-api-key',
+    sleep,
+    now: () => clock as Instant,
+  });
+  const advance = (ms: number) => {
+    clock += ms;
+  };
   const calledUrl = (index = 0) => new URL(fetchText.mock.calls[index]![0]);
-  return { client, fetchText, calledUrl };
+  return { client, fetchText, calledUrl, sleeps, advance };
 };
 
 const jack = XUsername.orThrow('jack');
@@ -199,5 +213,49 @@ describe('TwitterApiIoClient.searchUserTweets', () => {
     await client.searchUserTweets({ username: jack, sinceId: '1' });
 
     expect(fetchText).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ maxRedirects: 0 }));
+  });
+
+  it('古い投稿が混ざったページでは、古い投稿を捨てて次のページを取らない', async () => {
+    const { client, fetchText } = setup(
+      ok(page([tweet('30'), tweet('10'), tweet('5')], 'cursor-1')),
+      ok(page([tweet('4')])),
+    );
+
+    const result = await client.searchUserTweets({ username: jack, sinceId: '10' });
+
+    expect(fetchText).toHaveBeenCalledTimes(1);
+    expect(result.ok && result.val.map((item) => item.id)).toEqual(['30']);
+  });
+
+  it('sinceTime のときは id で投稿を捨てない', async () => {
+    const { client } = setup(ok(page([tweet('30'), tweet('5')])));
+
+    const result = await client.searchUserTweets({ username: jack, sinceTime: Instant.orThrow(1_700_000_000_000) });
+
+    expect(result.ok && result.val.map((item) => item.id)).toEqual(['30', '5']);
+  });
+
+  it('1回目のリクエストの前には待たず、ページ送りでは前回から間隔をあける', async () => {
+    const { client, sleeps } = setup(
+      ok(page([tweet('30')], 'cursor-1')),
+      ok(page([tweet('20')], 'cursor-2')),
+      ok(page([tweet('10')])),
+    );
+
+    await client.searchUserTweets({ username: jack, sinceId: '1' });
+
+    expect(sleeps).toEqual([REQUEST_INTERVAL_MS, REQUEST_INTERVAL_MS]);
+  });
+
+  it('呼び出しをまたいでも前回のリクエストから間隔をあけ、経過した分は待たない', async () => {
+    const { client, sleeps, advance } = setup(ok(page([])), ok(page([])), ok(page([])));
+
+    await client.searchUserTweets({ username: jack, sinceId: '1' });
+    advance(2_000);
+    await client.searchUserTweets({ username: jack, sinceId: '1' });
+    advance(REQUEST_INTERVAL_MS);
+    await client.searchUserTweets({ username: jack, sinceId: '1' });
+
+    expect(sleeps).toEqual([REQUEST_INTERVAL_MS - 2_000]);
   });
 });

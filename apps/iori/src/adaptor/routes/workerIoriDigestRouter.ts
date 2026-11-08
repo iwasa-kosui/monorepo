@@ -52,6 +52,7 @@ import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem
 import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
 import type { PreviewDigestTopicsUseCase } from '../../useCase/previewDigestTopics.ts';
+import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';
@@ -84,6 +85,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   allFeedSourcesResolver: AllFeedSourcesResolver;
   addFeedSourceUseCase: AddFeedSourceUseCase;
   changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
+  isDigestOwner: IsDigestOwner;
 }>;
 
 type DigestTrendBody = Readonly<{ rank: number; url: string; title: string; count: number }>;
@@ -200,6 +202,7 @@ export type IoriFeedSourceBody = Readonly<{
   lastError: string | null;
 }>;
 
+const forbidden = { error: 'Forbidden' } as const;
 const invalidToken = { error: 'The access token is invalid' } as const;
 const digestNotFound = { error: 'Digest not found' } as const;
 const digestItemNotFound = { error: 'Digest item not found' } as const;
@@ -360,6 +363,7 @@ export const createWorkerIoriDigestRouter = ({
   allFeedSourcesResolver,
   addFeedSourceUseCase,
   changeFeedSourceEnabledUseCase,
+  isDigestOwner,
 }: WorkerIoriDigestRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -541,11 +545,16 @@ export const createWorkerIoriDigestRouter = ({
     })
     .get('/iori/v1/feed-sources', authn.requireUser(readStatuses), async (c) => {
       const sources = await allFeedSourcesResolver.resolve();
-      return sources.ok ? c.json({ sources: sources.val.map(toFeedSourceBody) }) : c.json(internalServerError, 500);
+      if (!sources.ok) return c.json(internalServerError, 500);
+      const visible = (await isDigestOwner(userIdOf(c)))
+        ? sources.val
+        : sources.val.filter((source) => source.kind !== 'x_user');
+      return c.json({ sources: visible.map(toFeedSourceBody) });
     })
     .post('/iori/v1/feed-sources', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
       const body = await readRequestBody(c);
       if (bodyString(body, 'kind')?.trim() === 'x_user') {
+        if (!(await isDigestOwner(userIdOf(c)))) return c.json(forbidden, 403);
         const username = bodyString(body, 'username')?.trim();
         if (username === undefined) return c.json({ error: 'Validation failed: username' }, 400);
         const added = await addFeedSourceUseCase.run({ kind: 'x_user', username });
@@ -567,6 +576,11 @@ export const createWorkerIoriDigestRouter = ({
       async (c) => {
         const feedSourceId = FeedSourceId.parse(c.req.param('feedSourceId'));
         if (!feedSourceId.ok) return c.json(feedSourceNotFound, 404);
+        const sources = await allFeedSourcesResolver.resolve();
+        if (!sources.ok) return c.json(internalServerError, 500);
+        const target = sources.val.find((source) => source.feedSourceId === feedSourceId.val);
+        // GET が所有者以外から x_user を隠すので、存在しない情報源と同じ 404 にして区別させない。
+        if (target?.kind === 'x_user' && !(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const enabled = readEnabled(await readRequestBody(c));
         if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
         const changed = await changeFeedSourceEnabledUseCase.run({ feedSourceId: feedSourceId.val, enabled });
