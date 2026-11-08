@@ -11,7 +11,7 @@ import type {
   IoriBlueskyTimelineRefreshResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import type { IoriDigestRequestResponse } from '../../adaptor/routes/workerIoriDigestRouter.ts';
+import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 import type { IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
@@ -322,6 +322,32 @@ export const searchStatuses = async (q: string, limit?: number): Promise<SearchS
 
 export const fetchXPosts = async (): Promise<IoriXPostsResponse> =>
   (await request<IoriXPostsResponse>('/api/iori/v1/x-posts')).body;
+
+export type FeedSource = IoriFeedSourceBody;
+
+export const fetchFeedSources = async (): Promise<readonly FeedSource[]> =>
+  (await request<Readonly<{ sources: readonly FeedSource[] }>>('/api/iori/v1/feed-sources')).body.sources;
+
+const sendFeedSourceJson = async (
+  method: 'POST' | 'PATCH',
+  path: string,
+  body: Readonly<Record<string, unknown>>,
+): Promise<FeedSource> => {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json() as Readonly<{ source: FeedSource }>).source;
+};
+
+export const addXUserFeedSource = (username: string): Promise<FeedSource> =>
+  sendFeedSourceJson('POST', '/api/iori/v1/feed-sources', { kind: 'x_user', username });
+
+export const setFeedSourceEnabled = (feedSourceId: string, enabled: boolean): Promise<FeedSource> =>
+  sendFeedSourceJson('PATCH', `/api/iori/v1/feed-sources/${encodeURIComponent(feedSourceId)}`, { enabled });
 
 export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
 

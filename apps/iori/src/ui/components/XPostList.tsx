@@ -5,7 +5,7 @@ type Props = Readonly<{
   posts: readonly IoriXPostBody[];
 }>;
 
-const formatPostedAt = (postedAt: string): string =>
+export const formatPostedAt = (postedAt: string): string =>
   new Date(postedAt).toLocaleString('ja-JP', {
     year: 'numeric',
     month: 'short',
