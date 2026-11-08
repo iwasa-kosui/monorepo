@@ -9,7 +9,7 @@ const moveOperations = [
   'delete-unfollowed-posts-dry-run',
   'delete-unfollowed-posts',
 ];
-const statsOperations = ['domain-events-stats'];
+const statsOperations = ['domain-events-stats', 'digest-quality-sample'];
 const deleteBlockedDomainOperations = ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'];
 const pruneOperations = ['prune-federated-posts-dry-run'];
 const bucketOperations = ['ensure-event-archive-bucket'];

@@ -39,6 +39,7 @@ import { ArticleBody, type ArticleBodyResolver } from '../../domain/articleBody/
 import { Digest, type DigestCreatedStore, type DigestTrigger } from '../../domain/digest/digest.ts';
 import { DigestId } from '../../domain/digest/digestId.ts';
 import { defaultDigestTopics } from '../../domain/digestTopic/defaultDigestTopics.ts';
+import { TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../../domain/interestSource/embeddingBytes.ts';
@@ -89,6 +90,7 @@ const setup = (
     draftArticleWithDependentsDeletedStore?: (db: IoriD1Db) => DraftArticleWithDependentsDeletedStore;
     articleResolver?: (db: IoriD1Db) => ArticleResolver;
     articleBodyResolver?: (db: IoriD1Db) => ArticleBodyResolver;
+    topicAssignmentPolicy?: TopicAssignmentPolicy;
   } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
@@ -145,6 +147,7 @@ const setup = (
     digestPushSentStore: createD1DigestPushSentStore(db),
     pushSubscriptionsResolverByUserId: createD1PushSubscriptionsResolverByUserId(db),
     webPushSender: { send },
+    topicAssignmentPolicy: options.topicAssignmentPolicy,
     now: currentNow,
     sleep: options.sleep ?? (() => new Promise(() => undefined)),
   });
@@ -1179,6 +1182,101 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
   });
 });
 
+describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', () => {
+  const KOSUI_REF = 'https://kosui.me/posts/a';
+  const interest = vec({ 0: 1, 1: 1 });
+  const strictPolicy = TopicAssignmentPolicy.orThrow({ minSimilarity: 0.8, minMargin: 0 });
+
+  it('関心の点数が高くてもトピックとの類似度が低い記事より、点数がやや低くてもトピックとの類似度が高い記事を上に置く', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', KOSUI_REF, interest);
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
+    t.addEntry(t.sources.rss, 'Close to topic', { count: 1, embedding: vec({ 0: 1, 1: 0.3 }) });
+    t.addEntry(t.sources.rss, 'Filler', { count: 1, embedding: vec({ 0: 1, 1: 0.1 }) });
+
+    await t.run();
+
+    const items = t.itemsOf('genai');
+    expect(items.map((item) => item.title)).toEqual(['Close to topic', 'Filler', 'Far from topic']);
+    const scoreOf = (title: string) => items.find((item) => item.title === title)!.score!;
+    expect(scoreOf('Far from topic')).toBeGreaterThan(scoreOf('Close to topic'));
+  });
+
+  it('minSimilarity 未満の記事は、関心の点数が最も高くても選ばない', async () => {
+    const t = setup({ topicAssignmentPolicy: strictPolicy });
+    t.addInterest('kosui_post', KOSUI_REF, interest);
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
+    t.addEntry(t.sources.rss, 'Close to topic', { count: 1, embedding: vec({ 0: 1, 1: 0.3 }) });
+    t.addEntry(t.sources.rss, 'Filler 1', { count: 1, embedding: vec({ 0: 1, 1: 0.1 }) });
+    t.addEntry(t.sources.rss, 'Filler 2', { count: 1, embedding: vec({ 0: 1, 1: 0.2 }) });
+
+    const result = await t.run();
+
+    expect(t.titlesOf('genai')).toHaveLength(3);
+    expect(t.titlesOf('genai')).not.toContain('Far from topic');
+    expect(result.items).toBe(3);
+  });
+
+  it('関心の材料が無いとき、既定の方針ではトピックとの類似度が低くても、はてなの件数が多い記事を先に置く', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'Near', 3);
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.5 }) });
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Far from topic', 'Near 1', 'Near 2', 'Near 3']);
+  });
+
+  it('関心の材料が無いとき、minSimilarity 未満の記事を選ばず、残りははてなの件数の順にする', async () => {
+    const t = setup({ topicAssignmentPolicy: strictPolicy });
+    t.addEntries(t.sources.rss, 'Near', 3);
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.5 }) });
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Near 1', 'Near 2', 'Near 3']);
+  });
+
+  it('トピックに入った件数と、類似度不足と差の不足で落ちた件数を返す', async () => {
+    const t = setup({
+      topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({
+        minSimilarity: 0.4,
+        minMargin: 0.1,
+      }),
+    });
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
+    t.addEntry(t.sources.rss, 'Far', { count: 1, embedding: basis(7) });
+    t.addEntry(t.sources.rss, 'Between', { count: 1, embedding: vec({ 0: 1, 1: 1.05 }) });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({
+      candidates: 5,
+      assignedToTopics: 3,
+      belowMinSimilarity: 1,
+      belowMinMargin: 1,
+    });
+  });
+
+  it('既定の方針では、差を見ないので差の不足で落ちた件数は 0 になる', async () => {
+    const t = setup();
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
+    t.addEntry(t.sources.rss, 'Far', { count: 1, embedding: basis(7) });
+    t.addEntry(t.sources.rss, 'Between', { count: 1, embedding: vec({ 0: 1, 1: 1.05 }) });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({
+      candidates: 5,
+      assignedToTopics: 4,
+      belowMinSimilarity: 1,
+      belowMinMargin: 0,
+    });
+  });
+});
+
 describe('stripThinkBlocks', () => {
   it('対になった <think> を除き、前後の空白を削る', () => {
     expect(stripThinkBlocks('<think>a\nb</think>\n要約\n')).toBe('要約');
@@ -1596,6 +1694,9 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
         scoringMs: 0,
         fetchedBodies: 0,
         fallbackToDescription: 0,
+        assignedToTopics: 0,
+        belowMinSimilarity: 0,
+        belowMinMargin: 0,
       },
     });
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 2 }]);

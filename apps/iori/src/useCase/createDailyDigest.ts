@@ -43,7 +43,7 @@ import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
 import { selectXPosts } from '../domain/digest/xPostSelection.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
-import { assignTopics, TOPIC_MIN_SIMILARITY } from '../domain/digestTopic/topicAssignment.ts';
+import { assignTopics, TopicAssignmentPolicy } from '../domain/digestTopic/topicAssignment.ts';
 import type { FeedEntry } from '../domain/feedEntry/feedEntry.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { InterestSourceId } from '../domain/interestSource/interestSourceId.ts';
@@ -114,6 +114,9 @@ type Ok = Readonly<{
     scoringMs: number;
     fetchedBodies: number;
     fallbackToDescription: number;
+    assignedToTopics: number;
+    belowMinSimilarity: number;
+    belowMinMargin: number;
   }>;
 }>;
 
@@ -167,6 +170,7 @@ type Deps = Readonly<{
   digestPushSentStore: DigestPushSentStore;
   pushSubscriptionsResolverByUserId: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  topicAssignmentPolicy?: TopicAssignmentPolicy;
   now: () => Instant;
   sleep: (ms: number) => Promise<void>;
 }>;
@@ -271,6 +275,7 @@ const create = ({
   digestPushSentStore,
   pushSubscriptionsResolverByUserId,
   webPushSender,
+  topicAssignmentPolicy = TopicAssignmentPolicy.default,
   now,
   sleep,
 }: Deps): CreateDailyDigestUseCase => {
@@ -349,6 +354,9 @@ const create = ({
         scoringMs: 0,
         fetchedBodies: 0,
         fallbackToDescription: 0,
+        assignedToTopics: 0,
+        belowMinSimilarity: 0,
+        belowMinMargin: 0,
       },
     });
 
@@ -434,18 +442,24 @@ const create = ({
     const hasPositiveMaterial = materials.some((material) => !Recommendation.isNegative(material));
 
     const scoringStartedAt = Date.now();
-    const assignment = assignTopics({ articles: candidates, topics, minSimilarity: TOPIC_MIN_SIMILARITY });
+    const assignment = assignTopics({ articles: candidates, topics, policy: topicAssignmentPolicy });
+    const topicSimilarityOf = (article: RecommendableArticle): number => assignment.matches.get(article)!.similarity;
     const selections: TopicSelection[] = [];
     for (const topic of topics) {
       if (keptTopicKeys.has(topic.topicKey)) continue;
       const assigned = assignment.byTopic.get(topic.topicKey) ?? [];
       const items = hasPositiveMaterial
-        ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: TOPIC_ITEMS_LIMIT })
-          .map(({ feedEntryId, score, reasonInterestSourceId }): SelectedItem => ({
-            article: candidateById.get(feedEntryId)!,
-            score,
-            reasonInterestSourceId,
-          }))
+        ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
+          .map(({ feedEntryId, score, reasonInterestSourceId }) => {
+            const article = candidateById.get(feedEntryId)!;
+            return {
+              item: { article, score, reasonInterestSourceId } satisfies SelectedItem,
+              rank: score * topicSimilarityOf(article),
+            };
+          })
+          .sort((a, b) => b.rank - a.rank)
+          .slice(0, TOPIC_ITEMS_LIMIT)
+          .map(({ item }) => item)
         : selectByBookmarks(assigned);
       if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items });
     }
@@ -663,6 +677,9 @@ const create = ({
           scoringMs,
           fetchedBodies,
           fallbackToDescription,
+          assignedToTopics: candidates.length - assignment.others.length,
+          belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
+          belowMinMargin: assignment.otherCounts.belowMinMargin,
         },
       });
     if (trigger === 'requested') return createdOk(0);
