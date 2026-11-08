@@ -112,6 +112,34 @@ describe('put-worker-secrets', () => {
     }
     expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
   });
+  it('adds the optional TWITTERAPI_IO_API_KEY to the bulk call only when it has a value', async () => {
+    const token = 'twitterapi-io-key-value-for-fixture';
+    const env = environment({ TWITTERAPI_IO_API_KEY: token });
+    const { calls, error } = await run(env, { stdout: '\u2728 4 secrets successfully uploaded\n' });
+    expect(error).toBeUndefined();
+    const [call] = calls;
+    expect(Object.keys(JSON.parse(call.options.input!))).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+      'TWITTERAPI_IO_API_KEY',
+    ]);
+    expect(call.args.join(' ')).not.toContain(token);
+    expect(Object.values(call.options.env)).not.toContain(token);
+  });
+  it.each([['empty', ''], ['unset', undefined]])(
+    'does not fail and does not put TWITTERAPI_IO_API_KEY when it is %s',
+    async (_label, value) => {
+      const env = environment(value === undefined ? {} : { TWITTERAPI_IO_API_KEY: value });
+      const { calls, error } = await run(env);
+      expect(error).toBeUndefined();
+      expect(Object.keys(JSON.parse(calls[0]!.options.input!))).toEqual([
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'SMOKE_QUEUE_TOKEN',
+      ]);
+    },
+  );
   it('puts the Bluesky credentials as well when both are set', async () => {
     const env = environment({ BLUESKY_IDENTIFIER: 'iori.example.com', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' });
     const { calls, error } = await run(env, { stdout: '\u2728 5 secrets successfully uploaded\n' });

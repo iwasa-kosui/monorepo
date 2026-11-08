@@ -2083,14 +2083,20 @@ describe('iori のダイジェスト API', () => {
     const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
     const seedSource = (
       t: ReturnType<typeof setupReadApi>,
-      options: { feedSourceId?: string; url?: string; enabled?: boolean; lastFetchedAt?: number; lastError?: string } =
-        {},
+      options: {
+        feedSourceId?: string;
+        kind?: string;
+        url?: string;
+        enabled?: boolean;
+        lastFetchedAt?: number;
+        lastError?: string;
+      } = {},
     ) =>
       t.sqlite.prepare(
         'INSERT INTO feed_sources(feedSourceId,kind,url,title,enabled,etag,lastModified,lastFetchedAt,lastError,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
       ).run(
         options.feedSourceId ?? SOURCE_ID,
-        'rss',
+        options.kind ?? 'rss',
         options.url ?? 'https://example.com/feed.xml',
         'ブログ',
         options.enabled === false ? 0 : 1,
@@ -2104,6 +2110,14 @@ describe('iori のダイジェスト API', () => {
       t.sqlite.prepare('SELECT url, title, enabled FROM feed_sources WHERE feedSourceId = ?').get(feedSourceId);
     const countOf = (t: ReturnType<typeof setupReadApi>) =>
       t.sqlite.prepare('SELECT count(*) AS n FROM feed_sources').get();
+    const X_SOURCE_ID = '33333333-3333-4333-8333-333333333333';
+    const seedXSource = (t: ReturnType<typeof setupReadApi>, enabled = true) =>
+      seedSource(t, { feedSourceId: X_SOURCE_ID, kind: 'x_user', url: 'https://x.com/jack', enabled });
+    const signInAsOther = async (t: ReturnType<typeof setupReadApi>, scope: string) => {
+      const other = await t.issueUserToken(scope);
+      t.seed.addLocalActor('other', other.userId);
+      return { sessionId: other.sessionId, bearer: { Authorization: `Bearer ${other.token}` } };
+    };
     const send = (method: string, headers: Record<string, string>, body?: unknown) => ({
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
@@ -2176,6 +2190,47 @@ describe('iori のダイジェスト API', () => {
             lastError: null,
           },
         ]);
+      });
+
+      it('所有者でないユーザーには x_user の情報源を一覧から除く（Cookie）', async () => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'read:statuses');
+        seedSource(t);
+        seedXSource(t);
+
+        const response = await t.request('/api/iori/v1/feed-sources', {
+          headers: { Cookie: `sessionId=${other.sessionId}` },
+        });
+
+        expect(response.status).toBe(200);
+        const { sources } = await response.json() as { sources: Array<{ feedSourceId: string; kind: string }> };
+        expect(sources.map(({ feedSourceId, kind }) => ({ feedSourceId, kind }))).toEqual([
+          { feedSourceId: SOURCE_ID, kind: 'rss' },
+        ]);
+      });
+
+      it('所有者でないユーザーには x_user の情報源を一覧から除く（トークン）', async () => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'read:statuses');
+        seedSource(t);
+        seedXSource(t);
+
+        const response = await t.request('/api/iori/v1/feed-sources', { headers: other.bearer });
+
+        const { sources } = await response.json() as { sources: Array<{ kind: string }> };
+        expect(sources.map(({ kind }) => kind)).toEqual(['rss']);
+      });
+
+      it('所有者には x_user の情報源も返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        seedSource(t);
+        seedXSource(t);
+
+        const response = await t.request('/api/iori/v1/feed-sources', { headers: me.bearer });
+
+        const { sources } = await response.json() as { sources: Array<{ kind: string }> };
+        expect(sources.map(({ kind }) => kind).toSorted()).toEqual(['rss', 'x_user']);
       });
 
       it('情報源が無ければ空の配列を返す', async () => {
@@ -2317,6 +2372,23 @@ describe('iori のダイジェスト API', () => {
         expect(countOf(t)).toEqual({ n: 0 });
       });
 
+      it.each(['https://x.com/jack', 'https://www.twitter.com/jack', 'https://X.COM/jack'])(
+        '所有者でないユーザーの rss の %s は、x_user の登録の有無によらず同じ 400 にする',
+        async (url) => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+          const absent = await post(t, other.bearer, { url, title: 'ブログ' });
+          seedXSource(t);
+
+          const present = await post(t, other.bearer, { url, title: 'ブログ' });
+
+          expect(absent.status).toBe(400);
+          expect(present.status).toBe(400);
+          expect(await present.json()).toEqual(await absent.json());
+          expect(countOf(t)).toEqual({ n: 1 });
+        },
+      );
+
       it('kind を渡しても無視して rss で保存する', async () => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
@@ -2325,6 +2397,128 @@ describe('iori のダイジェスト API', () => {
 
         expect(response.status).toBe(201);
         expect(t.sqlite.prepare('SELECT kind FROM feed_sources').all()).toEqual([{ kind: 'rss' }]);
+      });
+
+      describe('kind が x_user', () => {
+        it('201 と追加した情報源を返し、https://x.com/<ユーザー名> と @<ユーザー名> で保存する', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, cookieOf(me), { kind: 'x_user', username: ' Kosui_Iwasa ' });
+
+          expect(response.status).toBe(201);
+          expect(await response.json()).toEqual({
+            source: {
+              feedSourceId: expect.any(String),
+              kind: 'x_user',
+              url: 'https://x.com/kosui_iwasa',
+              title: '@Kosui_Iwasa',
+              enabled: true,
+              lastFetchedAt: null,
+              lastError: null,
+            },
+          });
+          expect(
+            t.sqlite.prepare('SELECT kind, url, title, enabled FROM feed_sources').all(),
+          ).toEqual([
+            {
+              kind: 'x_user',
+              url: 'https://x.com/kosui_iwasa',
+              title: '@Kosui_Iwasa',
+              enabled: 1,
+            },
+          ]);
+        });
+
+        it('url と title を渡しても使わない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, me.bearer, { ...body, kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(201);
+          expect(t.sqlite.prepare('SELECT url, title FROM feed_sources').all()).toEqual([
+            { url: 'https://x.com/jack', title: '@jack' },
+          ]);
+        });
+
+        it('大文字小文字だけが違う同じユーザーが既にあれば 409 にして、何も増やさない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+          await post(t, me.bearer, { kind: 'x_user', username: 'Jack' });
+
+          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jACK' });
+
+          expect(response.status).toBe(409);
+          expect(countOf(t)).toEqual({ n: 1 });
+        });
+
+        it.each([
+          ['username がない', { kind: 'x_user' }],
+          ['username が文字列でない', { kind: 'x_user', username: 1 }],
+          ['username が空白だけ', { kind: 'x_user', username: '  ' }],
+          ['username が 16 文字', { kind: 'x_user', username: 'a'.repeat(16) }],
+          ['username に使えない文字がある', { kind: 'x_user', username: 'jack-x' }],
+          ['username が @ つき', { kind: 'x_user', username: '@jack' }],
+          ['username が URL', { kind: 'x_user', username: 'https://x.com/jack' }],
+        ])('%s と 400 にして、何も作らない', async (_label, invalid) => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, me.bearer, invalid);
+
+          expect(response.status).toBe(400);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+
+        it('write:accounts を満たさない scope のトークンを 403 にし、何も作らない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('read:statuses');
+
+          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+
+        it('所有者でないユーザーの Cookie は 403 にし、何も作らない', async () => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, cookieOf(other), { kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+
+        it('所有者でないユーザーのトークンは 403 にし、何も作らない', async () => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, other.bearer, { kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+
+        it('所有者でないユーザーには、username が無くても 400 ではなく 403 を返す', async () => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, other.bearer, { kind: 'x_user' });
+
+          expect(response.status).toBe(403);
+        });
+
+        it('rss は所有者でなくても追加できる', async () => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, other.bearer, body);
+
+          expect(response.status).toBe(201);
+          expect(t.sqlite.prepare('SELECT kind FROM feed_sources').all()).toEqual([{ kind: 'rss' }]);
+        });
       });
     });
 
@@ -2402,6 +2596,51 @@ describe('iori のダイジェスト API', () => {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...me.bearer },
           body: 'enabled=false',
         });
+
+        expect(response.status).toBe(200);
+        expect(rowOf(t)).toMatchObject({ enabled: 0 });
+      });
+
+      it('所有者でないユーザーの Cookie は x_user の情報源を変えられず、無い情報源と同じ 404 にする', async () => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'write:accounts');
+        seedXSource(t, false);
+
+        const response = await patch(t, X_SOURCE_ID, cookieOf(other), { enabled: true });
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: 'Feed source not found' });
+        expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 0 });
+      });
+
+      it('所有者でないユーザーのトークンは x_user の情報源を変えられない', async () => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'write:accounts');
+        seedXSource(t);
+
+        const response = await patch(t, X_SOURCE_ID, other.bearer, { enabled: false });
+
+        expect(response.status).toBe(404);
+        expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 1 });
+      });
+
+      it('所有者は x_user の情報源の有効・無効を変えられる', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('write:accounts');
+        seedXSource(t, false);
+
+        const response = await patch(t, X_SOURCE_ID, me.bearer, { enabled: true });
+
+        expect(response.status).toBe(200);
+        expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 1 });
+      });
+
+      it('rss の情報源は所有者でなくても変えられる', async () => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'write:accounts');
+        seedSource(t);
+
+        const response = await patch(t, SOURCE_ID, other.bearer, { enabled: false });
 
         expect(response.status).toBe(200);
         expect(rowOf(t)).toMatchObject({ enabled: 0 });

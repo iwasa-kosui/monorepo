@@ -258,6 +258,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
+      'TWITTERAPI_IO_API_KEY',
       ...(identity.environment === 'staging' ? ['STAGING_ACCESS_TOKEN'] : []),
     ]);
     if (bindings.some((binding) => binding.name === 'AI' && binding.type !== 'ai')) fail('worker-binding-mismatch');
@@ -277,6 +278,9 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       if (!bindings.some((binding) => binding.name === name && binding.type === 'secret_text')) {
         fail('worker-secret-missing');
       }
+    }
+    if (bindings.some((binding) => binding.name === 'TWITTERAPI_IO_API_KEY' && binding.type !== 'secret_text')) {
+      fail('worker-secret-missing');
     }
     // Return only reviewed metadata: never secret values or the raw version bindings.
     return {

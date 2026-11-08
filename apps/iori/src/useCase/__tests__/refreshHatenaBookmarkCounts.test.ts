@@ -82,19 +82,21 @@ const urlWithEncodedLength = (name: string, length: number): string => {
 const urlsOf = (requested: string): string[] => [...new URL(requested).searchParams.getAll('url')];
 
 describe('RefreshHatenaBookmarkCountsUseCase', () => {
-  it('targets only rss entries fetched within three days, excluding hatena and radar sources', async () => {
+  it('targets only rss entries fetched within three days, excluding hatena, radar and x_user sources', async () => {
     const fetchText = vi.fn(async () => ok({}));
     const { useCase, addSource, addEntry } = setup(fetchText);
     const rss = await addSource('rss');
     const hotentry = await addSource('hatena_hotentry');
     const entrylist = await addSource('hatena_entrylist');
     const radar = await addSource('thoughtworks_radar');
+    const xUser = await addSource('x_user');
     await addEntry(rss, 'recent');
     await addEntry(rss, 'edge', { ageDays: 3 });
     await addEntry(rss, 'stale', { ageDays: 3.5 });
     await addEntry(hotentry, 'hot');
     await addEntry(entrylist, 'list');
     await addEntry(radar, 'radar');
+    await addEntry(xUser, 'post');
     expect((await useCase.run()).val).toEqual({ requested: 2, updated: 0, failedRequests: 0, skipped: 0 });
     const requested = (fetchText.mock.calls[0] as unknown as [string])[0];
     expect(urlsOf(requested).sort()).toEqual(['https://e.test/edge', 'https://e.test/recent']);

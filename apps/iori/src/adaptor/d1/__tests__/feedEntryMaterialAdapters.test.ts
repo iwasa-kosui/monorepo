@@ -74,6 +74,20 @@ describe('HatenaTrendsResolverByFetchedSince', () => {
   });
 });
 
+describe('HatenaTrendsResolverByFetchedSince の x_user', () => {
+  it('x_user の情報源の記事は、ブックマーク数があっても返さない', async () => {
+    const { addFeedSource, addEntry, resolveTrends } = setup();
+    const hotentry = addFeedSource('hatena_hotentry');
+    const xUser = addFeedSource('x_user');
+    addEntry(hotentry, { url: 'https://example.com/kept', count: 10 });
+    addEntry(xUser, { url: 'https://x.com/jack/status/1', count: 500 });
+
+    const resolved = await resolveTrends();
+
+    expect(resolved.map((trend) => trend.url)).toEqual(['https://example.com/kept']);
+  });
+});
+
 describe('RadarFeedEntriesResolverByFetchedSince', () => {
   it('有効な thoughtworks_radar の記事を返す', async () => {
     const { addFeedSource, addEntry, resolveRadar } = setup();
@@ -93,5 +107,19 @@ describe('RadarFeedEntriesResolverByFetchedSince', () => {
     addEntry(disabled);
 
     expect(await resolveRadar()).toEqual([]);
+  });
+});
+
+describe('RadarFeedEntriesResolverByFetchedSince の x_user', () => {
+  it('x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRadar } = setup();
+    const radar = addFeedSource('thoughtworks_radar');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(radar);
+    addEntry(xUser);
+
+    const resolved = await resolveRadar();
+
+    expect(resolved.map((entry) => entry.feedEntryId)).toEqual([kept]);
   });
 });

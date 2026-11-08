@@ -143,6 +143,39 @@ describe('temporary Worker config command paths', () => {
     ]);
   });
 
+  it('installs TWITTERAPI_IO_API_KEY after the required secrets only when a value is supplied', async () => {
+    const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;
+    const secretPutsWith = async (extra: Record<string, string>) => {
+      const fakePnpmDirectory = await createFakePnpm();
+      await execFileAsync(process.execPath, [script], {
+        cwd: appRoot,
+        env: {
+          ...fixtureEnvironment(fakePnpmDirectory),
+          VAPID_PUBLIC_KEY: 'fixture-public',
+          VAPID_PRIVATE_KEY: 'fixture-private',
+          SMOKE_QUEUE_TOKEN: 'fixture-smoke-token',
+          ...extra,
+        },
+      });
+      const commands = await readFile(join(fakePnpmDirectory, 'pnpm-command.log'), 'utf8');
+      return commands.split('\n').filter((line) => line.startsWith('exec wrangler secret put')).map((line) =>
+        line.split(' ')[4]
+      );
+    };
+
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: 'fixture-twitterapi-io-key' })).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+      'TWITTERAPI_IO_API_KEY',
+    ]);
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: '' })).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+    ]);
+  });
+
   it('installs STAGING_ACCESS_TOKEN as the fourth secret in staging when a value is supplied', async () => {
     const fakePnpmDirectory = await createFakePnpm();
     const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;

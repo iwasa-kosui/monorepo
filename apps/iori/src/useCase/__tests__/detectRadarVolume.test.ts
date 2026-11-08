@@ -9,6 +9,7 @@ import { createD1FeedEntriesResolverByFetchedBefore } from '../../adaptor/d1/fee
 import { createD1FeedEntryBookmarkCountUpdatedStore } from '../../adaptor/d1/feedEntry/feedEntryBookmarkCountUpdatedStore.ts';
 import { createD1FeedEntryCollectedStore } from '../../adaptor/d1/feedEntry/feedEntryCollectedStore.ts';
 import { createD1FeedEntryExpiredStore } from '../../adaptor/d1/feedEntry/feedEntryExpiredStore.ts';
+import { createD1FeedEntryMaxGuidResolverByFeedSourceId } from '../../adaptor/d1/feedEntry/feedEntryMaxGuidResolverByFeedSourceId.ts';
 import { createD1AllFeedSourcesResolver } from '../../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceFetchedStore } from '../../adaptor/d1/feedSource/feedSourceFetchedStore.ts';
@@ -65,6 +66,7 @@ const setup = (fetchText: SafeFetcher['fetchText'], now: () => Instant = () => N
     feedEntryCollectedStore: createD1FeedEntryCollectedStore(db),
     feedEntryBookmarkCountUpdatedStore: createD1FeedEntryBookmarkCountUpdatedStore(db),
     feedEntryExpiredStore: createD1FeedEntryExpiredStore(db),
+    feedEntryMaxGuidResolverByFeedSourceId: createD1FeedEntryMaxGuidResolverByFeedSourceId(db),
     safeFetcher: { fetchText: async () => ok({ body: '<rss version="2.0"><channel></channel></rss>' }) },
     now,
   });

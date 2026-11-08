@@ -32,7 +32,7 @@ describe('AddFeedSource', () => {
   it('rss の情報源を有効な状態で保存し、保存した情報源を返す', async () => {
     const { add, sqlite, eventNames } = setup();
 
-    const result = await add.run({ url: 'https://example.com/feed.xml', title: 'ブログ' });
+    const result = await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ' });
 
     expect(result).toMatchObject({
       ok: true,
@@ -55,7 +55,7 @@ describe('AddFeedSource', () => {
   it('保存した情報源は enabled: true の resolver に出る', async () => {
     const { add, enabledResolver } = setup();
 
-    await add.run({ url: 'https://example.com/feed.xml', title: 'ブログ' });
+    await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ' });
 
     expect((await enabledResolver.resolve({ enabled: true })).val.map((source) => source.url)).toEqual([
       'https://example.com/feed.xml',
@@ -64,9 +64,9 @@ describe('AddFeedSource', () => {
 
   it('同じ URL が既にあれば FeedSourceAlreadyExistsError にして、何も書かない', async () => {
     const { add, count, eventNames } = setup();
-    await add.run({ url: 'https://example.com/feed.xml', title: 'ブログ' });
+    await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ' });
 
-    const result = await add.run({ url: 'https://example.com/feed.xml', title: '別の名前' });
+    const result = await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: '別の名前' });
 
     expect(result).toMatchObject({
       ok: false,
@@ -82,7 +82,7 @@ describe('AddFeedSource', () => {
     const zenn = defaultFeedSources.find((source) => source.kind === 'rss');
     if (zenn === undefined) throw new Error('unexpected');
 
-    const result = await add.run({ url: zenn.url, title: zenn.title });
+    const result = await add.run({ kind: 'rss', url: zenn.url, title: zenn.title });
 
     expect(result).toMatchObject({ ok: false, err: { type: 'FeedSourceAlreadyExistsError' } });
     expect(count()).toBe(defaultFeedSources.length);
@@ -96,7 +96,7 @@ describe('AddFeedSource', () => {
   ])('%s なら ParseError にして、何も書かない', async (_label, input) => {
     const { add, count } = setup();
 
-    const result = await add.run(input);
+    const result = await add.run({ kind: 'rss', ...input });
 
     expect(result).toMatchObject({ ok: false, err: { kind: 'ParseError' } });
     expect(count()).toBe(0);

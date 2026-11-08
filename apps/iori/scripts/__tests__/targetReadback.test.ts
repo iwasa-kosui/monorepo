@@ -666,6 +666,19 @@ describe('a state close to a production wrangler deployment', () => {
     ]);
     await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
+  it('accepts an optional TWITTERAPI_IO_API_KEY secret_text binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [{
+      name: 'TWITTERAPI_IO_API_KEY',
+      type: 'secret_text',
+    }]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
+  });
+  it('rejects a TWITTERAPI_IO_API_KEY binding that is not a secret_text', async () => {
+    const { api, input } = await wranglerFixture('production', [
+      { name: 'TWITTERAPI_IO_API_KEY', type: 'plain_text', text: 'x' },
+    ]);
+    await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-secret-missing'));
+  });
   it('accepts the Bluesky crosspost bindings without worker-binding-extra', async () => {
     const { api, input } = await wranglerFixture('production', [
       { name: 'IORI_BLUESKY_CROSSPOST', type: 'plain_text', text: 'disabled' },

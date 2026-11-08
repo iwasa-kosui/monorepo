@@ -7,8 +7,9 @@ import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { FeedSourceId } from './feedSourceId.ts';
 import { blockedReason } from './feedSourceUrl.ts';
+import { XUsername } from './xUsername.ts';
 
-export const feedSourceKinds = ['rss', 'hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar'] as const;
+export const feedSourceKinds = ['rss', 'hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar', 'x_user'] as const;
 const kindZodType = z.enum(feedSourceKinds);
 export type FeedSourceKind = z.output<typeof kindZodType>;
 
@@ -55,16 +56,35 @@ const feedUrlZodType = z
     return url.href;
   });
 
+const X_HOSTS = new Set(['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com']);
+
+// x_user の登録の有無を、所有者以外が rss の POST の結果で探れないようにする
+const rssUrlZodType = feedUrlZodType.refine(
+  (href) => !X_HOSTS.has(new URL(href).hostname.replace(/\.$/, '')),
+  { message: 'x.com URLs are not allowed for rss' },
+);
+
+const newRssFeedSourceZodType = z.object({
+  kind: z.literal('rss'),
+  url: rssUrlZodType,
+  title: z.string().min(1).max(100),
+});
+const newXUserFeedSourceZodType = z.object({
+  kind: z.literal('x_user'),
+  username: XUsername.zodType,
+});
 const newFeedSourceZodType = z
-  .object({
-    kind: z.literal('rss'),
-    url: feedUrlZodType,
-    title: z.string().min(1).max(100),
-  })
+  .discriminatedUnion('kind', [newRssFeedSourceZodType, newXUserFeedSourceZodType])
+  .transform((value) =>
+    value.kind === 'rss'
+      ? value
+      : { kind: value.kind, url: XUsername.toProfileUrl(value.username), title: `@${value.username}` }
+  )
   .describe('NewFeedSource');
 const newFeedSourceSchema = Schema.create<z.output<typeof newFeedSourceZodType>, z.input<typeof newFeedSourceZodType>>(
   newFeedSourceZodType,
 );
+export type NewFeedSourceInput = z.input<typeof newFeedSourceZodType>;
 export type NewFeedSource = z.output<typeof newFeedSourceZodType>;
 export type FeedSourceAggregateId = Readonly<{
   feedSourceId: FeedSourceId;
