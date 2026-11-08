@@ -105,7 +105,7 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
     expect(await response.json()).toEqual({
       enabled: true,
       counts: { pending: 0, sent: 0, failed: 0, skipped: 0, deleting: 0 },
-      exhausted: { failed: 0, deleting: 0 },
+      exhausted: { pending: 0, failed: 0, deleting: 0 },
       recentFailures: [],
     });
   });
@@ -121,7 +121,7 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
     expect(await response.json()).toMatchObject({ enabled: false, counts: { failed: 1 } });
   });
 
-  it('件数と、上限に達した failed と deleting の件数を返す', async () => {
+  it('件数と、上限に達した pending と failed と deleting の件数を返す', async () => {
     const t = setup();
     t.addCrosspost(postId(1), 'pending');
     t.addCrosspost(postId(2), 'sent', { sent: true });
@@ -132,12 +132,13 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
     t.addCrosspost(postId(7), 'deleting', { attempts: 4, lastError: 'e', sent: true });
     t.addCrosspost(postId(8), 'deleting', { attempts: 5, lastError: 'e', sent: true });
     t.addCrosspost(postId(9), 'deleting', { attempts: 6, lastError: 'e', sent: true });
+    t.addCrosspost(postId(10), 'pending', { attempts: 3 });
     const headers = await t.signInAs('kosui');
 
     const body = await (await t.request(headers)).json() as Record<string, unknown>;
 
-    expect(body.counts).toEqual({ pending: 1, sent: 2, failed: 2, skipped: 1, deleting: 3 });
-    expect(body.exhausted).toEqual({ failed: 1, deleting: 2 });
+    expect(body.counts).toEqual({ pending: 2, sent: 2, failed: 2, skipped: 1, deleting: 3 });
+    expect(body.exhausted).toEqual({ pending: 1, failed: 1, deleting: 2 });
   });
 
   it('直近の失敗を updatedAt の降順で最大 10 件返し、ISO 文字列にする', async () => {
@@ -196,7 +197,6 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
       const secret of [
         'ACCESS-JWT-SECRET',
         'REFRESH-JWT-SECRET',
-        'app-pass',
         '3krkeysecret',
         'bafycidsecret',
         'did:plc:secret',

@@ -17,6 +17,7 @@ export const createD1BlueskyCrosspostStatusReportResolver = (db: IoriD1Db): Blue
         status: blueskyCrosspostsTable.status,
         total: sql<number>`count(*)`.mapWith(Number),
         exhausted: sql<number>`coalesce(sum(case
+          when ${blueskyCrosspostsTable.status} = 'pending' and ${blueskyCrosspostsTable.attempts} >= ${maxAttempts} then 1
           when ${blueskyCrosspostsTable.status} = 'failed' and ${blueskyCrosspostsTable.attempts} >= ${maxAttempts} then 1
           when ${blueskyCrosspostsTable.status} = 'deleting' and ${blueskyCrosspostsTable.attempts} >= ${maxDeleteAttempts} then 1
           else 0 end), 0)`.mapWith(Number),
@@ -36,12 +37,14 @@ export const createD1BlueskyCrosspostStatusReportResolver = (db: IoriD1Db): Blue
         .limit(failuresLimit),
     ]);
     const counts = { pending: 0, sent: 0, failed: 0, skipped: 0, deleting: 0 };
-    const exhausted = { failed: 0, deleting: 0 };
+    const exhausted = { pending: 0, failed: 0, deleting: 0 };
     for (const group of groups) {
       const status = BlueskyCrosspostStatus.safeParse(group.status);
       if (!status.success) continue;
       counts[status.data] = group.total;
-      if (status.data === 'failed' || status.data === 'deleting') exhausted[status.data] = group.exhausted;
+      if (status.data === 'pending' || status.data === 'failed' || status.data === 'deleting') {
+        exhausted[status.data] = group.exhausted;
+      }
     }
     return RA.ok({
       counts,

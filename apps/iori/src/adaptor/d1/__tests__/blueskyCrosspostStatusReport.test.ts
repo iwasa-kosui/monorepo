@@ -59,12 +59,12 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
 
     expect(Result.unsafeUnwrap(await resolver.resolve(input))).toEqual({
       counts: { pending: 0, sent: 0, failed: 0, skipped: 0, deleting: 0 },
-      exhausted: { failed: 0, deleting: 0 },
+      exhausted: { pending: 0, failed: 0, deleting: 0 },
       recentFailures: [],
     });
   });
 
-  it('status ごとの件数と、上限に達した failed と deleting の件数を返す', async () => {
+  it('status ごとの件数と、上限に達した pending と failed と deleting の件数を返す', async () => {
     const { resolver, savedStore } = setup();
     const save = async (row: BlueskyCrosspost) => {
       await savedStore.save(row);
@@ -83,7 +83,7 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
     const report = Result.unsafeUnwrap(await resolver.resolve(input));
 
     expect(report.counts).toEqual({ pending: 3, sent: 1, failed: 3, skipped: 1, deleting: 2 });
-    expect(report.exhausted).toEqual({ failed: 2, deleting: 1 });
+    expect(report.exhausted).toEqual({ pending: 1, failed: 2, deleting: 1 });
   });
 
   it('直近の失敗は failed、deleting、attempts が 1 以上の pending だけを updatedAt の降順で返す', async () => {
