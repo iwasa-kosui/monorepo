@@ -1183,7 +1183,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
 describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', () => {
   const KOSUI_REF = 'https://kosui.me/posts/a';
   const interest = vec({ 0: 1, 1: 1 });
-  const strictPolicy = TopicAssignmentPolicy.orThrow({ minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: 0.8 });
+  const strictPolicy = TopicAssignmentPolicy.orThrow({ minSimilarity: 0.8, minMargin: 0 });
 
   it('関心の点数が高くてもトピックとの類似度が低い記事より、点数がやや低くてもトピックとの類似度が高い記事を上に置く', async () => {
     const t = setup();
@@ -1200,7 +1200,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
     expect(scoreOf('Far from topic')).toBeGreaterThan(scoreOf('Close to topic'));
   });
 
-  it('itemMinSimilarity 未満の記事は、関心の点数が最も高くても選ばない', async () => {
+  it('minSimilarity 未満の記事は、関心の点数が最も高くても選ばない', async () => {
     const t = setup({ topicAssignmentPolicy: strictPolicy });
     t.addInterest('kosui_post', KOSUI_REF, interest);
     t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
@@ -1215,18 +1215,6 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
     expect(result.items).toBe(3);
   });
 
-  it('itemMinSimilarity 未満の記事を除いた結果が 3 件に満たなければ、トピックを作らない', async () => {
-    const t = setup({ topicAssignmentPolicy: strictPolicy });
-    t.addInterest('kosui_post', KOSUI_REF, interest);
-    t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
-    t.addEntry(t.sources.rss, 'Close to topic', { count: 1, embedding: vec({ 0: 1, 1: 0.3 }) });
-    t.addEntry(t.sources.rss, 'Filler', { count: 1, embedding: vec({ 0: 1, 1: 0.1 }) });
-
-    await t.run();
-
-    expect(t.topicKeys()).toEqual(['summary']);
-  });
-
   it('関心の材料が無いとき、既定の方針ではトピックとの類似度が低くても、はてなの件数が多い記事を先に置く', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Near', 3);
@@ -1237,7 +1225,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
     expect(t.titlesOf('genai')).toEqual(['Far from topic', 'Near 1', 'Near 2', 'Near 3']);
   });
 
-  it('関心の材料が無いとき、itemMinSimilarity 未満の記事を選ばず、残りははてなの件数の順にする', async () => {
+  it('関心の材料が無いとき、minSimilarity 未満の記事を選ばず、残りははてなの件数の順にする', async () => {
     const t = setup({ topicAssignmentPolicy: strictPolicy });
     t.addEntries(t.sources.rss, 'Near', 3);
     t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.5 }) });
@@ -1252,7 +1240,6 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
       topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({
         minSimilarity: 0.4,
         minMargin: 0.1,
-        itemMinSimilarity: 0.4,
       }),
     });
     t.addTopic('platform', basis(1));

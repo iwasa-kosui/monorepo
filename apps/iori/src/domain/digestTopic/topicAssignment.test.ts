@@ -213,27 +213,25 @@ describe('assignTopics', () => {
 
 describe('TopicAssignmentPolicy', () => {
   it('既定値は今の挙動を保つ値である', () => {
-    expect(TopicAssignmentPolicy.default).toEqual({ minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: 0.4 });
+    expect(TopicAssignmentPolicy.default).toEqual({ minSimilarity: 0.4, minMargin: 0 });
     expect(TOPIC_MIN_SIMILARITY).toBe(0.4);
   });
 
   it('0 から 1 までの値を受け付ける', () => {
-    const parsed = TopicAssignmentPolicy.parse({ minSimilarity: 0, minMargin: 0.5, itemMinSimilarity: 1 });
-
-    expect(parsed.ok).toBe(true);
-    expect(parsed.ok && parsed.val).toEqual({ minSimilarity: 0, minMargin: 0.5, itemMinSimilarity: 1 });
+    expect(TopicAssignmentPolicy.orThrow({ minSimilarity: 0, minMargin: 1 })).toEqual({
+      minSimilarity: 0,
+      minMargin: 1,
+    });
   });
 
   it.each([
-    ['minSimilarity が 0 未満', { minSimilarity: -0.01, minMargin: 0, itemMinSimilarity: 0.4 }],
-    ['minSimilarity が 1 超', { minSimilarity: 1.01, minMargin: 0, itemMinSimilarity: 0.4 }],
-    ['minMargin が 0 未満', { minSimilarity: 0.4, minMargin: -0.01, itemMinSimilarity: 0.4 }],
-    ['minMargin が 1 超', { minSimilarity: 0.4, minMargin: 1.01, itemMinSimilarity: 0.4 }],
-    ['itemMinSimilarity が 0 未満', { minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: -0.01 }],
-    ['itemMinSimilarity が 1 超', { minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: 1.01 }],
-    ['値が NaN', { minSimilarity: Number.NaN, minMargin: 0, itemMinSimilarity: 0.4 }],
-    ['値が欠けている', { minSimilarity: 0.4, minMargin: 0 }],
+    ['minSimilarity が 0 未満', { minSimilarity: -0.01, minMargin: 0 }],
+    ['minSimilarity が 1 超', { minSimilarity: 1.01, minMargin: 0 }],
+    ['minMargin が 0 未満', { minSimilarity: 0.4, minMargin: -0.01 }],
+    ['minMargin が 1 超', { minSimilarity: 0.4, minMargin: 1.01 }],
+    ['値が NaN', { minSimilarity: Number.NaN, minMargin: 0 }],
+    ['値が欠けている', { minSimilarity: 0.4 }],
   ])('範囲外の値を拒否する: %s', (_, input) => {
-    expect(TopicAssignmentPolicy.parse(input).ok).toBe(false);
+    expect(() => TopicAssignmentPolicy.orThrow(input as TopicAssignmentPolicy)).toThrow();
   });
 });

@@ -9,16 +9,14 @@ const policyZodType = z
   .object({
     minSimilarity: similarityRatio,
     minMargin: similarityRatio,
-    itemMinSimilarity: similarityRatio,
   })
   .describe('TopicAssignmentPolicy');
 const policySchema = Schema.create<z.output<typeof policyZodType>, z.input<typeof policyZodType>>(policyZodType);
 export type TopicAssignmentPolicy = Readonly<z.output<typeof policyZodType>>;
 export const TopicAssignmentPolicy = {
   zodType: policyZodType,
-  parse: policySchema.parse,
   orThrow: policySchema.orThrow,
-  default: { minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: 0.4 } satisfies TopicAssignmentPolicy,
+  default: { minSimilarity: 0.4, minMargin: 0 } satisfies TopicAssignmentPolicy,
 } as const;
 
 export const TOPIC_MIN_SIMILARITY = TopicAssignmentPolicy.default.minSimilarity;

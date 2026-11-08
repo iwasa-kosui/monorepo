@@ -436,8 +436,7 @@ const create = ({
     const selections: TopicSelection[] = [];
     for (const topic of topics) {
       if (keptTopicKeys.has(topic.topicKey)) continue;
-      const assigned = (assignment.byTopic.get(topic.topicKey) ?? [])
-        .filter((article) => topicSimilarityOf(article) >= topicAssignmentPolicy.itemMinSimilarity);
+      const assigned = assignment.byTopic.get(topic.topicKey) ?? [];
       const items = hasPositiveMaterial
         ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
           .map(({ feedEntryId, score, reasonInterestSourceId }) => {
