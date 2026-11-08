@@ -245,7 +245,11 @@ type SelectedItem = Readonly<{
   reasonInterestSourceId: InterestSourceId | null;
 }>;
 
-type TopicSelection = Readonly<{ topic: StoredDigestTopic; items: ReadonlyArray<SelectedItem> }>;
+type TopicSelection = Readonly<{
+  topic: StoredDigestTopic;
+  items: ReadonlyArray<SelectedItem>;
+  assignedCount: number;
+}>;
 
 const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): ReadonlyArray<SelectedItem> =>
   [...articles]
@@ -253,17 +257,16 @@ const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): Reado
       (b.hatenaBookmarkCount ?? 0) - (a.hatenaBookmarkCount ?? 0)
       || (a.feedEntryId < b.feedEntryId ? -1 : a.feedEntryId > b.feedEntryId ? 1 : 0)
     )
-    .slice(0, TOPIC_ITEMS_LIMIT)
     .map((article) => ({ article, score: null, reasonInterestSourceId: null }));
 
-const takeTopicsIncludingTies = <T extends { items: readonly unknown[] }>(
+const takeTopicsIncludingTies = <T extends { assignedCount: number }>(
   sorted: readonly T[],
   slots: number,
 ): readonly T[] => {
   const last = sorted[slots - 1];
   if (slots <= 0) return [];
   if (last === undefined) return sorted;
-  return sorted.filter((selection) => selection.items.length >= last.items.length);
+  return sorted.filter((selection) => selection.assignedCount >= last.assignedCount);
 };
 
 const create = ({
@@ -467,7 +470,7 @@ const create = ({
     for (const topic of topics) {
       if (keptTopicKeys.has(topic.topicKey)) continue;
       const assigned = assignment.byTopic.get(topic.topicKey) ?? [];
-      const items = hasPositiveMaterial
+      const ranked = hasPositiveMaterial
         ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
           .map(({ feedEntryId, score, reasonInterestSourceId }) => {
             const article = candidateById.get(feedEntryId)!;
@@ -477,13 +480,13 @@ const create = ({
             };
           })
           .sort((a, b) => b.rank - a.rank)
-          .slice(0, TOPIC_ITEMS_LIMIT)
           .map(({ item }) => item)
         : selectByBookmarks(assigned);
-      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items });
+      const items = ranked.slice(0, TOPIC_ITEMS_LIMIT);
+      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items, assignedCount: ranked.length });
     }
     const scoringMs = Date.now() - scoringStartedAt;
-    selections.sort((a, b) => b.items.length - a.items.length || a.topic.sortOrder - b.topic.sortOrder);
+    selections.sort((a, b) => b.assignedCount - a.assignedCount || a.topic.sortOrder - b.topic.sortOrder);
     const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
