@@ -18,4 +18,7 @@ export type IoriWorkerEnv = Readonly<{
   IORI_ADMISSION_MODE?: string;
   IORI_ADMISSION_IDENTITY?: string;
   IORI_PRUNE_FEDERATED_POSTS?: string;
+  IORI_BLUESKY_CROSSPOST?: string;
+  BLUESKY_IDENTIFIER?: string;
+  BLUESKY_APP_PASSWORD?: string;
 }>;

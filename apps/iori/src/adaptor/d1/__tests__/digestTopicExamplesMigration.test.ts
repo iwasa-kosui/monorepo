@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 const migrationsDir = new URL('../../../../drizzle-d1/', import.meta.url);
-const target = '0024_';
+const target = '0025_';
 
 const setup = () => {
   const sqlite = new DatabaseSync(':memory:');

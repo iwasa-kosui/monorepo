@@ -31,6 +31,7 @@ import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -84,6 +85,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
 
@@ -99,6 +101,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  scheduleBlueskyCrosspost,
   origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
@@ -283,6 +286,10 @@ const create = ({
           }),
         );
 
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ replyPost }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
         return RA.ok(undefined);
       }),
       // Create reply notification if replying to a local post (and not self-reply)
