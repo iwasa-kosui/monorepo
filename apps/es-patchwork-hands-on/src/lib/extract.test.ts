@@ -1,7 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { extractExport, extractFrom, extractHtmlSection, extractLines, toInsertTemplate } from './extract';
+import {
+  extractExport,
+  extractFrom,
+  extractHtmlSection,
+  extractLines,
+  sliceLines,
+  sliceTableRows,
+  tableBodyRows,
+  toInsertTemplate,
+} from './extract';
 import { cancelVisitOf, readFunctionsOf } from './snapshots';
 
 const read = (path: string): string => readFileSync(new URL(`../../exercises/${path}`, import.meta.url), 'utf8');
@@ -96,5 +105,43 @@ describe('toInsertTemplate', () => {
     const template = toInsertTemplate(read('chapter-2-step-1/visits.ts'));
     expect(template).not.toContain('VisitCancelled');
     expect(template).toContain('JSON.stringify({})');
+  });
+});
+
+describe('sliceLines', () => {
+  it('1 始まりで両端を含む行の範囲を返す', () => {
+    expect(sliceLines('a\nb\nc\nd', 2, 3)).toBe('b\nc');
+  });
+
+  it('範囲が不正ならビルドを止める', () => {
+    expect(() => sliceLines('a\nb', 0, 1)).toThrow('範囲');
+    expect(() => sliceLines('a\nb', 2, 1)).toThrow('範囲');
+    expect(() => sliceLines('a\nb', 1, 3)).toThrow('範囲');
+  });
+});
+
+describe('sliceTableRows', () => {
+  const table =
+    '<h2 id="x">X</h2>\n<table><thead><tr><th>軸</th></tr></thead><tbody><tr><td>1</td></tr><tr><td>2</td></tr><tr><td>3</td></tr></tbody></table>';
+
+  it('見出しの行を残して、指定した本体の行だけにする', () => {
+    expect(sliceTableRows(table, 1, 2)).toBe(
+      '<h2 id="x">X</h2>\n<table><thead><tr><th>軸</th></tr></thead><tbody><tr><td>1</td></tr><tr><td>2</td></tr></tbody></table>',
+    );
+  });
+
+  it('2 行目以降から始めるときは章の見出しを外す', () => {
+    expect(sliceTableRows(table, 3, 3)).toBe(
+      '<table><thead><tr><th>軸</th></tr></thead><tbody><tr><td>3</td></tr></tbody></table>',
+    );
+  });
+
+  it('ページに分けた行をつなぐと元の行と一致する', () => {
+    const joined = [sliceTableRows(table, 1, 1), sliceTableRows(table, 2, 3)].flatMap(tableBodyRows);
+    expect(joined).toEqual(tableBodyRows(table));
+  });
+
+  it('範囲が不正ならビルドを止める', () => {
+    expect(() => sliceTableRows(table, 1, 4)).toThrow('範囲');
   });
 });

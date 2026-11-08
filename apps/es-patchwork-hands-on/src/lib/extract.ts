@@ -23,6 +23,33 @@ export const extractFrom = (source: string, startPrefix: string): string => {
   return lines.slice(start).join('\n').trimEnd();
 };
 
+const assertRange = (from: number, to: number, total: number, what: string): void => {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to > total) {
+    throw new Error(`${what}の範囲が不正です: ${from}-${to}（全${total}）`);
+  }
+};
+
+export const sliceLines = (code: string, from: number, to: number): string => {
+  const lines = code.split('\n');
+  assertRange(from, to, lines.length, '行');
+  return lines.slice(from - 1, to).join('\n');
+};
+
+export const tableBodyRows = (html: string): string[] => {
+  const body = /<tbody>([\s\S]*?)<\/tbody>/.exec(html);
+  if (body === null) {
+    throw new Error('表の本体が見つかりません');
+  }
+  return body[1]?.match(/<tr>[\s\S]*?<\/tr>/g) ?? [];
+};
+
+export const sliceTableRows = (html: string, from: number, to: number): string => {
+  const rows = tableBodyRows(html);
+  assertRange(from, to, rows.length, '表の行');
+  const sliced = html.replace(/<tbody>[\s\S]*?<\/tbody>/, () => `<tbody>${rows.slice(from - 1, to).join('')}</tbody>`);
+  return from === 1 ? sliced : sliced.replace(/^<h2[^>]*>[\s\S]*?<\/h2>\s*/, '');
+};
+
 export const extractHtmlSection = (html: string, heading: string): string => {
   const section = html.split(/(?=<h2[\s>])/).find((part) => {
     const title = /^<h2[^>]*>(.*?)<\/h2>/s.exec(part)?.[1];

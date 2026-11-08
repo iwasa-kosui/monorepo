@@ -266,3 +266,9 @@ jobs:
 
       - name: Test
         run: pnpm --filter es-patchwork-hands-on run test:ci
+
+      - name: Install Playwright browser
+        run: pnpm --filter es-patchwork-hands-on exec playwright install --with-deps chromium
+
+      - name: E2E test
+        run: pnpm --filter es-patchwork-hands-on run test:e2e
