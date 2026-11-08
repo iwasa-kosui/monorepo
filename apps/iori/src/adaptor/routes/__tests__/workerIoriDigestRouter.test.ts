@@ -2520,6 +2520,22 @@ describe('iori のダイジェスト API', () => {
           expect(countOf(t)).toEqual({ n: 0 });
         });
       });
+
+      it.each([
+        ['url が無い', { title: 'ブログ' }],
+        ['title が無い', { url: 'https://example.com/feed.xml' }],
+      ])(
+        '所有者でないユーザーが rss を送るとき、%s でも 400 ではなく 403 にし、何も作らない',
+        async (_label, invalid) => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, other.bearer, invalid);
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        },
+      );
     });
 
     describe('PATCH', () => {
@@ -2655,6 +2671,22 @@ describe('iori のダイジェスト API', () => {
         await patch(t, SOURCE_ID, me.bearer, { enabled: false });
 
         expect(rowOf(t, '22222222-2222-4222-8222-222222222222')).toMatchObject({ enabled: 1 });
+      });
+
+      it.each([
+        ['形式の不正な ID', 'missing', { enabled: false }],
+        ['形式は正しいが存在しない ID', '22222222-2222-4222-8222-222222222222', { enabled: false }],
+        ['存在する情報源への不正な body', SOURCE_ID, { enabled: 'maybe' }],
+      ])('所有者でないユーザーが %s で呼んでも 404 にし、何も変えない', async (_label, feedSourceId, invalid) => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'write:accounts');
+        seedSource(t);
+
+        const response = await patch(t, feedSourceId, other.bearer, invalid);
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: 'Feed source not found' });
+        expect(rowOf(t)).toMatchObject({ enabled: 1 });
       });
 
       it('無い情報源は 404 にする', async () => {

@@ -585,6 +585,7 @@ export const createWorkerIoriDigestRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
+        // GET が所有者以外から x_user を隠すので、存在しない情報源と同じ 404 にして区別させない。
         if (!(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const feedSourceId = FeedSourceId.parse(c.req.param('feedSourceId'));
         if (!feedSourceId.ok) return c.json(feedSourceNotFound, 404);
