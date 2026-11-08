@@ -1,5 +1,6 @@
-import { createCollectBlueskyTimelineUseCase } from '../runtime/blueskyTimeline.ts';
+import { createCollectBlueskyTimelineUseCase, createExpireBlueskyTimelineUseCase } from '../runtime/blueskyTimeline.ts';
 import type { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
+import type { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask } from './scheduledTasks.ts';
 
@@ -24,4 +25,22 @@ export const createCollectBlueskyTimelineTask = (
 
 export const collectBlueskyTimelineTask = createCollectBlueskyTimelineTask((env) =>
   createCollectBlueskyTimelineUseCase(env)
+);
+
+export const createExpireBlueskyTimelineTask = (
+  createUseCase: (env: IoriWorkerEnv) => ExpireBlueskyTimelineUseCase | undefined,
+): ScheduledTask => ({
+  name: 'expireBlueskyTimeline',
+  run: async ({ env }) => {
+    const useCase = createUseCase(env);
+    if (useCase === undefined) {
+      console.info('iori bluesky timeline is disabled.');
+      return;
+    }
+    await useCase.run();
+  },
+});
+
+export const expireBlueskyTimelineTask = createExpireBlueskyTimelineTask((env) =>
+  createExpireBlueskyTimelineUseCase(env)
 );
