@@ -91,6 +91,54 @@ describe('GET /api/iori/v1/x-posts', () => {
     });
   });
 
+  it('所有者でないユーザーの Cookie は 403 にし、本文を一切返さない', async () => {
+    const t = setupReadApi();
+    const other = await t.issueUserToken('read:statuses');
+    t.seed.addLocalActor('other', other.userId);
+    seed(t);
+
+    const response = await t.request(PATH, { headers: { Cookie: `sessionId=${other.sessionId}` } });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain('投稿');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
+  });
+
+  it('所有者でないユーザーのトークンは 403 にし、本文を一切返さない', async () => {
+    const t = setupReadApi();
+    const other = await t.issueUserToken('read:statuses');
+    t.seed.addLocalActor('other', other.userId);
+    seed(t);
+
+    const response = await t.request(PATH, { headers: { Authorization: `Bearer ${other.token}` } });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain('投稿');
+  });
+
+  it('所有者のユーザーが見つからないときは、ログインしていても 403 にする', async () => {
+    const t = setupReadApi();
+    const other = await t.issueUserToken('read:statuses');
+    t.seed.addLocalActor('other', other.userId);
+    seed(t);
+
+    const response = await t.request(PATH, { headers: { Authorization: `Bearer ${other.token}` } });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain('投稿');
+  });
+
+  it('所有者のトークンで 200 を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('read:statuses');
+    seed(t);
+
+    const response = await t.request(PATH, { headers: me.bearer });
+
+    expect(response.status).toBe(200);
+  });
+
   it('成功も失敗もキャッシュを許さず、検索エンジンに載せない', async () => {
     const t = setupReadApi();
     const me = await t.signIn('read:statuses');

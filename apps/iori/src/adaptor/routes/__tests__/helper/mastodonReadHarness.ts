@@ -25,6 +25,7 @@ import { DismissNotificationUseCase } from '../../../../useCase/dismissNotificat
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
+import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
@@ -145,6 +146,7 @@ import { createD1TimelineItemResolverByRepostId } from '../../../d1/timeline/tim
 import { createD1TimelineItemsResolverByActorIds } from '../../../d1/timeline/timelineItemsResolverByActorIds.ts';
 import { createD1TimelineSearchCandidatesResolver } from '../../../d1/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createD1UserResolver } from '../../../d1/user/userResolver.ts';
+import { createD1UserResolverByUsername } from '../../../d1/user/userResolverByUsername.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
@@ -561,6 +563,7 @@ export const setupReadApi = (
           getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
             xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
           }),
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );
       root.route(

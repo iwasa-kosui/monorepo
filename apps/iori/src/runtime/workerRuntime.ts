@@ -179,6 +179,7 @@ import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -450,6 +451,7 @@ export const createWorkerRuntimePorts = async (
         now: Instant.now,
       }),
       getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({ xFeedEntriesResolver: createD1XFeedEntriesResolver(db) }),
+      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({
         digestTopicsResolverByUserId,

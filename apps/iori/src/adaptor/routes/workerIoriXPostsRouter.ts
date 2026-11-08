@@ -3,14 +3,16 @@ import { Hono } from 'hono';
 import type { XFeedEntry } from '../../domain/feedEntry/xFeedEntry.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { GetXFeedEntriesUseCase } from '../../useCase/getXFeedEntries.ts';
+import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { parseLimit, xPostsLimits } from './helper/mastodonPage.ts';
-import type { MastodonAuthEnv, MastodonAuthn } from './mastodonAuthn.ts';
+import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerIoriXPostsRouterDeps = Readonly<{
   authn: MastodonAuthn;
   getXFeedEntriesUseCase: GetXFeedEntriesUseCase;
+  isDigestOwner: IsDigestOwner;
 }>;
 
 export type IoriXPostBody = Readonly<{
@@ -23,6 +25,7 @@ export type IoriXPostBody = Readonly<{
 
 export type IoriXPostsResponse = Readonly<{ posts: ReadonlyArray<IoriXPostBody> }>;
 
+const forbidden = { error: 'Forbidden' } as const;
 const readStatuses = Scope.orThrow('read:statuses');
 
 const toPostBody = ({ feedEntryId, sourceTitle, text, url, postedAt }: XFeedEntry): IoriXPostBody => ({
@@ -36,6 +39,7 @@ const toPostBody = ({ feedEntryId, sourceTitle, text, url, postedAt }: XFeedEntr
 export const createWorkerIoriXPostsRouter = ({
   authn,
   getXFeedEntriesUseCase,
+  isDigestOwner,
 }: WorkerIoriXPostsRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -45,6 +49,7 @@ export const createWorkerIoriXPostsRouter = ({
       c.res.headers.set('X-Robots-Tag', 'noindex');
     })
     .get('/iori/v1/x-posts', authn.requireUser(readStatuses), async (c) => {
+      if (!(await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined))) return c.json(forbidden, 403);
       const entries = await getXFeedEntriesUseCase.run({ limit: parseLimit(c.req.query('limit'), xPostsLimits) });
       return c.json({ posts: entries.val.map(toPostBody) } satisfies IoriXPostsResponse);
     });

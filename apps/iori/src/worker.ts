@@ -279,7 +279,15 @@ export default {
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
-      servePage: async (pageRequest) => createWorkerPageFallback(pageRequest, await pageIdentity(pageRequest, runtime)),
+      servePage: async (pageRequest) => {
+        const identity = await pageIdentity(pageRequest, runtime);
+        // 所有者以外には /x の存在を見せないため、404 と同じく undefined を返す。
+        if (
+          new URL(pageRequest.url).pathname === '/x' && identity.isLoggedIn
+          && !(await runtime.digest.isDigestOwner(identity.userId))
+        ) return undefined;
+        return createWorkerPageFallback(pageRequest, identity);
+      },
       serveUpload: async (filename) => {
         const imageIdResult = parseUploadFilenameImageId(filename);
         if (!imageIdResult.ok) {
