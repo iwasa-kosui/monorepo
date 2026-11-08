@@ -1,26 +1,29 @@
 ---
 import '../playground/playground.css';
 
-import { snapshotFiles } from '../lib/snapshots';
+import { lessonFile, snapshotFiles } from '../lib/snapshots';
 
 interface Props {
   exercise: string;
   editable: string[];
   readonly?: string[];
   testFile?: string;
+  lesson?: string;
+  reveal?: string;
   scripts?: { file: string; label: string }[];
   complete?: { exercise: string; label?: string };
 }
 
-const { exercise, editable, testFile, scripts = [], complete } = Astro.props;
+const { exercise, editable, testFile, lesson, reveal, scripts = [], complete } = Astro.props;
 const readonlyFiles = Astro.props.readonly ?? [];
 const shown = [...editable, ...readonlyFiles];
 const config = JSON.stringify({
   exerciseId: exercise,
-  files: snapshotFiles(exercise),
+  files: { ...snapshotFiles(exercise), ...(lesson === undefined ? {} : lessonFile(lesson)) },
   editable,
   readonly: readonlyFiles,
   testFile: testFile ?? null,
+  reveal: reveal ?? null,
   complete: complete === undefined
     ? null
     : { files: snapshotFiles(complete.exercise) },
@@ -66,25 +69,34 @@ const config = JSON.stringify({
         </button>
       )
     }
-    <button type="button" data-role="reset">最初のコードに戻す</button>
-  </div>
-  <div class="playground-tabs" role="tablist" aria-label="ファイル">
     {
-      shown.map((file, index) => (
-        <button
-          type="button"
-          role="tab"
-          data-file={file}
-          aria-selected={index === 0 ? 'true' : 'false'}
-          tabindex={index === 0 ? 0 : -1}
-        >
-          {file} {readonlyFiles.includes(file) ? '（読み取りだけ）' : ''}
-        </button>
-      ))
+      editable.length > 0 && (
+        <button type="button" data-role="reset">最初のコードに戻す</button>
+      )
     }
   </div>
-  <div class="playground-editor" data-role="editor" role="tabpanel"></div>
-  <div class="playground-results" data-role="output" aria-live="polite"></div>
+  <div class="playground-panes">
+    <div class="playground-pane-editor">
+      <div class="playground-tabs" role="tablist" aria-label="ファイル">
+        {
+          shown.map((file, index) => (
+            <button
+              type="button"
+              role="tab"
+              data-file={file}
+              aria-selected={index === 0 ? 'true' : 'false'}
+              tabindex={index === 0 ? 0 : -1}
+            >
+              {file} {readonlyFiles.includes(file) ? '（読み取りだけ）' : ''}
+            </button>
+          ))
+        }
+      </div>
+      <div class="playground-editor" data-role="editor" role="tabpanel"></div>
+    </div>
+    <div class="playground-results" data-role="output" aria-live="polite">
+    </div>
+  </div>
 </section>
 
 <script>

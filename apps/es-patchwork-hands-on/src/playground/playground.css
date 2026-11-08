@@ -49,9 +49,22 @@
   color: #6b7280;
 }
 .playground-hint {
-  margin: 0.25rem 0 0;
+  align-self: center;
+  margin-left: auto;
   font-size: 0.8rem;
   color: #4b5563;
+}
+.content .playground .playground-origin {
+  margin-block: 0 0.5rem;
+  font-size: 0.85rem;
+}
+.playground-panes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.playground-pane-editor {
+  min-width: 0;
 }
 .playground-tabs {
   display: flex;
@@ -153,4 +166,49 @@
   padding: 0.5rem;
   color: #f9fafb;
   white-space: pre;
+}
+
+@media (min-width: 768px) {
+  .content .chapter-body > .playground {
+    display: flex;
+    flex: 1 1 auto;
+    flex-shrink: 1;
+    flex-direction: column;
+    min-height: 15rem;
+    max-height: 28rem;
+    margin-block: 0;
+  }
+  .chapter-body .playground-panes {
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.75rem;
+    min-height: 0;
+  }
+  .chapter-body .playground-pane-editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .chapter-body .playground-editor {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .chapter-body .playground-editor .cm-editor {
+    position: absolute;
+    inset: 0;
+    max-height: none;
+  }
+  .chapter-body .playground-results,
+  .chapter-body .playground-results:empty {
+    display: block;
+    max-height: none;
+    min-height: 0;
+    margin-top: 0;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    padding: 0.5rem;
+  }
 }

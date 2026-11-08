@@ -1,4 +1,10 @@
-## 自分のシステムの問いを1つ挙げる
+import SqlPlayground from '../../../components/SqlPlayground.astro';
 
-自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。次に、その問いの答えが入る列が今のテーブルにあるかを思い出します。問いが思いつかないときは、題材の問いで進めます。
+## visits テーブルを SQL で調べる
 
+SQL を書き換えて「実行する」を押します。`visits` テーブルに、キャンセルの理由や操作した人を答えられる列があるかを確かめます。
+
+<SqlPlayground
+  script={{ exercise: 'chapter-1-start', entry: 'show-visits.ts' }}
+  initial="SELECT * FROM visits;"
+/>

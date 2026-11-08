@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js/dist/sql-wasm-browser.js';
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 
-import { runCode } from './engine/run-code.ts';
+import { runCode, runForDatabase } from './engine/run-code.ts';
 import { createSqlSession } from './engine/sql-session.ts';
 import type { WorkerRequest, WorkerResponse } from './engine/types.ts';
 
@@ -25,6 +25,13 @@ const handle = async (request: WorkerRequest): Promise<WorkerResponse> => {
   switch (request.type) {
     case 'sql-setup':
       return { id: request.id, type: 'sql-setup', error: session(SQL).reset(request.setupSql) };
+    case 'sql-setup-script': {
+      const created = await runForDatabase({ SQL, files: request.files, entry: request.entry });
+      if (created.database !== null) {
+        session(SQL).adopt(created.database);
+      }
+      return { id: request.id, type: 'sql-setup-script', error: created.error };
+    }
     case 'sql-run':
       return { id: request.id, type: 'sql-run', outcome: session(SQL).run(request.sql) };
     case 'code-run':

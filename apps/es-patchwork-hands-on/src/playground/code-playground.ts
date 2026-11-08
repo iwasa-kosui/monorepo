@@ -2,7 +2,7 @@ import type { EditorState } from '@codemirror/state';
 
 import { createRuntime, executionLimitMs, RuntimeTimeoutError } from './client.ts';
 import { applyRuntimeState, element, query } from './dom.ts';
-import { createEditorState, createEditorView } from './editor.ts';
+import { createEditorState, createEditorView, revealText } from './editor.ts';
 import type { RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
 
@@ -12,6 +12,7 @@ type CodeConfig = {
   editable: string[];
   readonly: string[];
   testFile: string | null;
+  reveal: string | null;
   complete: { files: Record<string, string> } | null;
 };
 
@@ -81,7 +82,7 @@ const mount = (root: HTMLElement): void => {
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
   const output = query<HTMLElement>(root, '[data-role="output"]');
   const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
-  const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
+  const resetButton = root.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
   const completeButton = root.querySelector<HTMLButtonElement>('[data-role="complete"]');
   const runButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-run-file]')];
@@ -127,10 +128,17 @@ const mount = (root: HTMLElement): void => {
     }
   }
 
+  const reveal = (): void => {
+    if (config.reveal !== null && config.editable.includes(active)) {
+      revealText(view, config.reveal);
+    }
+  };
+
   const select = (file: string): void => {
     states.set(active, view.state);
     active = file;
     view.setState(states.get(file) ?? stateFor(file, ''));
+    reveal();
     for (const tab of tabs) {
       const selected = tab.dataset.file === file;
       tab.setAttribute('aria-selected', String(selected));
@@ -144,6 +152,7 @@ const mount = (root: HTMLElement): void => {
       states.set(file, stateFor(file, docs[file] ?? config.files[file] ?? ''));
     }
     view.setState(states.get(active) ?? stateFor(active, ''));
+    reveal();
   };
 
   const updateControls = (): void => {
@@ -208,7 +217,7 @@ const mount = (root: HTMLElement): void => {
       }
     });
   }
-  resetButton.addEventListener('click', () => {
+  resetButton?.addEventListener('click', () => {
     clearEdits(config.exerciseId);
     replaceDocs(config.files);
   });

@@ -3,8 +3,21 @@ import { applyRuntimeState, element, query } from './dom.ts';
 import { createEditorState, createEditorView } from './editor.ts';
 import { maxDisplayedRows } from './engine/sql-session.ts';
 import type { SqlCell, SqlRunOutcome, SqlStatementResult } from './engine/types.ts';
+import { loadEdits } from './storage.ts';
 
-type SqlConfig = { setupSql: string; initialSql: string };
+type SetupScript = {
+  files: Record<string, string>;
+  entry: string;
+  own: { storageKey: string; file: string; testFile: string } | null;
+};
+
+type SqlConfig = { setupSql: string | null; setupScript: SetupScript | null; initialSql: string };
+
+const originMessages = {
+  own: '第2章で書いた visits.ts で、このデータベースを作りました。',
+  failing: '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
+  missing: '第2章で書いた visits.ts が保存されていないので、ステップ2の完成コードでこのデータベースを作りました。',
+};
 
 const oneLine = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
 
@@ -61,6 +74,7 @@ const mount = (root: HTMLElement): void => {
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
   const results = query<HTMLElement>(root, '[data-role="results"]');
+  const origin = query<HTMLElement>(root, '[data-role="origin"]');
   let busy = false;
   let preparedGeneration = -1;
 
@@ -94,10 +108,51 @@ const mount = (root: HTMLElement): void => {
   const runtime = createRuntime((state) => {
     applyRuntimeState(root, state);
     updateControls();
+    if (state === 'ready' && config.setupScript !== null) {
+      void prepareOnReady();
+    }
   });
 
+  const passesAllTests = async (files: Readonly<Record<string, string>>, testFile: string): Promise<boolean> => {
+    try {
+      const outcome = await runtime.runCode(files, testFile);
+      return outcome.error === null && outcome.tests !== null && outcome.tests.length > 0
+        && outcome.tests.every((test) => test.status === 'pass');
+    } catch (error) {
+      if (error instanceof RuntimeTimeoutError) {
+        await runtime.whenReady();
+        return false;
+      }
+      throw error;
+    }
+  };
+
+  const prepareFromScript = async (script: SetupScript): Promise<string | null> => {
+    let files = script.files;
+    let message: string | null = null;
+    if (script.own !== null) {
+      const saved = loadEdits(script.own.storageKey)[script.own.file];
+      if (saved === undefined) {
+        message = originMessages.missing;
+      } else {
+        const candidate = { ...script.files, [script.own.file]: saved };
+        const passed = await passesAllTests(candidate, script.own.testFile);
+        files = passed ? candidate : script.files;
+        message = passed ? originMessages.own : originMessages.failing;
+      }
+    }
+    const error = await runtime.setupScript(files, script.entry);
+    if (error === null && message !== null) {
+      origin.textContent = message;
+      origin.hidden = false;
+    }
+    return error;
+  };
+
   const prepare = async (): Promise<string | null> => {
-    const error = await runtime.setupSql(config.setupSql);
+    const error = config.setupScript === null
+      ? await runtime.setupSql(config.setupSql ?? '')
+      : await prepareFromScript(config.setupScript);
     preparedGeneration = runtime.generation;
     return error;
   };
@@ -126,6 +181,14 @@ const mount = (root: HTMLElement): void => {
       updateControls();
     }
   };
+
+  const prepareOnReady = (): Promise<void> =>
+    guarded(async () => {
+      const setupError = await prepare();
+      if (setupError !== null) {
+        showSetupError(setupError);
+      }
+    });
 
   const run = (): Promise<void> =>
     guarded(async () => {

@@ -49,6 +49,7 @@ const innerScrollers = (page: Page): Promise<Scroller[]> =>
     const found: Scroller[] = [];
     for (const element of document.querySelectorAll('.chapter-body *')) {
       if (element.closest('details:not([open])') !== null) continue;
+      if (element.matches('.cm-scroller') || element.closest('.playground-results') !== null) continue;
       const style = getComputedStyle(element);
       const scrolls = (value: string): boolean => value === 'auto' || value === 'scroll';
       if (!scrolls(style.overflowX) && !scrolls(style.overflowY)) continue;

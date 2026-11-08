@@ -1,13 +1,35 @@
 ---
 import '../playground/playground.css';
 
+import { snapshotFiles } from '../lib/snapshots';
+
 interface Props {
-  setup: string;
+  setup?: string;
+  script?: {
+    exercise: string;
+    entry: string;
+    own?: { exercise: string; file: string; testFile: string };
+  };
   initial: string;
 }
 
-const { setup, initial } = Astro.props;
-const config = JSON.stringify({ setupSql: setup, initialSql: initial });
+const { setup, script, initial } = Astro.props;
+if ((setup === undefined) === (script === undefined)) {
+  throw new Error('SqlPlayground には setup と script のどちらか一方を指定します');
+}
+const config = JSON.stringify({
+  setupSql: setup ?? null,
+  setupScript: script === undefined ? null : {
+    files: snapshotFiles(script.exercise),
+    entry: script.entry,
+    own: script.own === undefined ? null : {
+      storageKey: script.own.exercise,
+      file: script.own.file,
+      testFile: script.own.testFile,
+    },
+  },
+  initialSql: initial,
+});
 ---
 
 <section
@@ -22,17 +44,23 @@ const config = JSON.stringify({ setupSql: setup, initialSql: initial });
     >実行環境を読み込んでいます</span>
     <button type="button" data-role="retry" hidden>もう一度読み込む</button>
   </div>
-  <div class="playground-editor" data-role="editor"></div>
-  <div class="playground-toolbar" style="margin-top: 0.5rem">
+  <p class="playground-origin" data-role="origin" role="status" hidden></p>
+  <div class="playground-toolbar">
     <button type="button" data-role="run" disabled>実行する</button>
     <button type="button" data-role="reset" disabled>
       データベースを最初の状態に戻す
     </button>
+    <span class="playground-hint">
+      Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
+    </span>
   </div>
-  <p class="playground-hint">
-    Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
-  </p>
-  <div class="playground-results" data-role="results" aria-live="polite"></div>
+  <div class="playground-panes">
+    <div class="playground-pane-editor">
+      <div class="playground-editor" data-role="editor"></div>
+    </div>
+    <div class="playground-results" data-role="results" aria-live="polite">
+    </div>
+  </div>
 </section>
 
 <script>

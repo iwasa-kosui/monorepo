@@ -1,15 +1,35 @@
-## 記録を足すと visits.ts は何行変わるか
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import { cancelVisitOf } from '../../../lib/snapshots';
 
-`chapter-1-start` から `chapter-2-step-2` への `visits.ts` の変更量は、+13/-1 行です。変更した関数は `cancelVisit` だけです。`business_events` テーブルの作成は `CREATE TABLE` 1つで、9行です。`visits` テーブルは変えていません。
+## ステップ2: 理由と操作した人を記録する
 
-記録を足した後も、開発者には次の作業が残ります。
+同じ `cancelVisit` を、次の2か所で変更します。
 
-- `business_events` の行は増え続けます。読み取りに必要な索引は、開発者が検討します。
-- 記録を足す作業は、更新処理ごとに必要です。
+1. `input` の型に `reason: string` と `operatedBy: string` を足します。
+2. `payload` の `JSON.stringify({})` を、`reason` と `operatedBy` を持つオブジェクトに変えます。キーの名前はこのとおりにします。テストと第3章の SELECT は `$.reason` と `$.operatedBy` を読みます。
 
-記録を足しても、次の2つは分かりません。
+「テストを実行する」を押します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
 
-- 記録を足す前に起きたキャンセルは、理由も操作した人も分かりません。第3章で該当の行を見ます。
-- 記録のコードを書いていない更新は、`business_events` に行を増やしません。この演習の `completeVisit` には記録のコードがありません。SQL で直接 `UPDATE` した変更も `business_events` に残りません。
+<CodePlayground
+  exercise="chapter-1-start"
+  editable={['visits.ts']}
+  readonly={['visits.test.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  complete={{ exercise: 'chapter-2-step-2', label: 'ステップ2の完成コードを読み込む' }}
+/>
 
-この行数は演習の題材の数字です。自分のシステムで増える行数は、記録を足す更新処理の数で変わります。
+<details>
+<summary>ステップ2の解答を見る</summary>
+
+<CodeBlock code={cancelVisitOf('chapter-2-step-2')} />
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`node --test visits.test.ts` を実行します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
+
+</details>
