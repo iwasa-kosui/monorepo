@@ -1,5 +1,28 @@
 import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
-<CodeBlock code={cancelVisitOf('chapter-4-external-sync-done')} />
+`chapter-4-summary-table-done` で `node why-this-count.ts` を実行すると、次の表が出ます。時刻の値は実行のたびに変わります。
+
+```text
+┌─────────┬─────────┬────────────────────────────┬───────────┬────────────────────────┬────────────────┐
+│ (index) │ eventId │ eventAt                    │ visitId   │ reason                 │ operatedBy     │
+├─────────┼─────────┼────────────────────────────┼───────────┼────────────────────────┼────────────────┤
+│ 0       │ 1       │ '2026-11-06T10:14:12.540Z' │ 'visit-1' │ '飼い主の都合'         │ '受付スタッフ' │
+│ 1       │ 2       │ '2026-11-06T10:14:12.541Z' │ 'visit-2' │ '来院前に回復したため' │ '院長'         │
+└─────────┴─────────┴────────────────────────────┴───────────┴────────────────────────┴────────────────┘
+┌─────────┬───────────────┬───────────────────┬────────────┐
+│ (index) │ recordedCount │ recalculatedCount │ difference │
+├─────────┼───────────────┼───────────────────┼────────────┤
+│ 0       │ 3             │ 2                 │ 1          │
+└─────────┴───────────────┴───────────────────┴────────────┘
+```
+
+上の表は、キャンセル数の内訳を理由と操作者つきで示します。下の表は検算の結果です。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。検算は差があることを示しますが、差の理由は示しません。
+
+<details>
+<summary>読み取り関数を見る</summary>
+
+<CodeBlock code={readFunctionsOf('chapter-4-summary-table-done', 'explainCancellationCount')} />
+
+</details>
 

@@ -115,4 +115,37 @@ test.describe('矢印キー', () => {
       expect(pathOf(page)).toBe('/chapters/chapter-2/2/');
     });
   }
+
+  test('横にスクロールできるコード欄にフォーカスがあるときは移動しない', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/chapters/chapter-1/6/');
+    const code = page.locator('pre').first();
+    expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    await logHandledKeys(page);
+    await code.focus();
+    await page.keyboard.press('ArrowRight');
+    expect(await handledKeys(page)).toEqual([false]);
+    expect(pathOf(page)).toBe('/chapters/chapter-1/6/');
+  });
+
+  test('横にスクロールしないコード欄にフォーカスがあるときは移動する', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await page.goto('/chapters/chapter-1/6/');
+    const code = page.locator('pre').first();
+    expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
+    await code.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page).toHaveURL(/\/chapters\/chapter-1\/5\/$/);
+  });
+
+  test('キーを押し続けて繰り返されたイベントでは移動しない', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/2/');
+    const notCancelled = await page.evaluate(() =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', repeat: true, bubbles: true, cancelable: true }),
+      )
+    );
+    expect(notCancelled).toBe(true);
+    expect(pathOf(page)).toBe('/chapters/chapter-2/2/');
+  });
 });

@@ -89,6 +89,7 @@ body.chapter-page {
 }
 
 .content .code-block pre {
+  margin: 0;
   padding-top: 2.75rem;
 }
 
@@ -133,6 +134,7 @@ body.chapter-page {
   overflow-wrap: anywhere;
 }
 .content .chapter-body > * {
+  flex-shrink: 0;
   margin-block: 0;
 }
 .content .chapter-body > * + h2 {
@@ -180,22 +182,8 @@ body.chapter-page {
   .content .chapter-body {
     overflow-y: auto;
   }
-  .content .code-block {
-    display: flex;
-    flex: 0 1 auto;
-    flex-direction: column;
-    min-height: 10rem;
-  }
-  .content .code-block pre {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: 60dvh;
-    margin: 0;
-    overflow: auto;
-  }
-  .content .decision-table {
-    flex: 0 1 auto;
-    min-height: 10rem;
+  .content pre[data-language="text"] {
+    font-size: 0.75rem;
   }
 }
 

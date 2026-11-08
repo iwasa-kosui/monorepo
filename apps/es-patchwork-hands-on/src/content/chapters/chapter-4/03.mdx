@@ -1,6 +1,3 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
-
 ## 集計テーブル
 
 この問いに答えます。
@@ -8,6 +5,4 @@ import { cancelVisitOf } from '../../../lib/snapshots';
 > この集計値はなぜこの値なのか。
 
 `daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。
-
-<CodeBlock code={cancelVisitOf('chapter-4-summary-table-done')} />
 
