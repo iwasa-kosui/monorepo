@@ -15,7 +15,13 @@ import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import { embedDigestTopicIfAvailable } from './helper/embedDigestTopics.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ userId: UserId; name: string; description: string }>;
+type Input = Readonly<{
+  userId: UserId;
+  name: string;
+  description: string;
+  examples?: ReadonlyArray<string>;
+  excludes?: ReadonlyArray<string>;
+}>;
 
 type Err = DigestTopicNotFoundError | DigestTopicParseError;
 
@@ -43,12 +49,15 @@ const create = ({
   textEmbedder,
   now,
 }: Deps): AddDigestTopicUseCase => {
-  const run = async ({ userId, name, description }: Input): RA<StoredDigestTopic, Err> => {
+  const run = async ({ userId, name, description, examples, excludes }: Input): RA<StoredDigestTopic, Err> => {
     const registered = (await digestTopicsResolverByUserId.resolve(userId)).val;
     const topicKey = generateTopicKey(new Set(registered.map((topic) => topic.topicKey)));
     const sortOrder = registered.reduce((max, topic) => Math.max(max, topic.sortOrder), -1) + 1;
 
-    const created = DigestTopic.create({ userId, topicKey, name, description, sortOrder }, now());
+    const created = DigestTopic.create(
+      { userId, topicKey, name, description, sortOrder, examples: [...examples ?? []], excludes: [...excludes ?? []] },
+      now(),
+    );
     if (!created.ok) return RA.err(created.err);
     await digestTopicCreatedStore.store(created.val);
     await embedDigestTopicIfAvailable(

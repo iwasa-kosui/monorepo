@@ -242,6 +242,80 @@ describe('previewCandidates の assignment', () => {
   });
 });
 
+describe('previewCandidates の除く例', () => {
+  const topics = [
+    { topicKey: 'a', embedding: vector(1, 0), excludeEmbedding: vector(0, 1) },
+    { topicKey: 'b', embedding: vector(-1, 0), excludeEmbedding: null },
+  ];
+  const articles = [
+    article('near', vector(1, 0.1)),
+    article('aboutExclude', vector(1, 1)),
+    article('other', vector(-1, 0.1)),
+  ];
+
+  it('除く例との類似度を候補ごとに返し、除く例に近い記事を excluded にする', () => {
+    const preview = previewCandidates({ articles, topics, limit: 10, policy });
+
+    const a = preview.byTopic.find((entry) => entry.topicKey === 'a')!;
+    const byId = new Map(a.top.map((candidate) => [candidate.feedEntryId, candidate]));
+    expect(byId.get('near')).toMatchObject({ assignment: 'assigned' });
+    expect(byId.get('near')!.excludeSimilarity).toBeCloseTo(0.0995, 3);
+    expect(byId.get('aboutExclude')).toMatchObject({ assignment: 'excluded' });
+    expect(byId.get('aboutExclude')!.excludeSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(a.assignedCount).toBe(1);
+    const b = preview.byTopic.find((entry) => entry.topicKey === 'b')!;
+    expect(b.top[0]).toMatchObject({ feedEntryId: 'other', excludeSimilarity: null, assignment: 'assigned' });
+  });
+
+  it('assignment が excludes のあるケースでも assignTopics の結果と一致する', () => {
+    const assigned = assignTopics({ articles, topics, policy });
+    const assignedIds = new Set([...assigned.byTopic.values()].flat().map((entry) => entry.feedEntryId));
+    const preview = previewCandidates({ articles, topics, limit: 10, policy });
+
+    const candidates = preview.byTopic.flatMap((entry) => entry.top);
+    expect(candidates).toHaveLength(articles.length);
+    for (const candidate of candidates) {
+      expect(candidate.assignment === 'assigned').toBe(assignedIds.has(candidate.feedEntryId));
+    }
+    expect(assigned.otherCounts.excluded).toBe(1);
+    expect(candidates.filter((candidate) => candidate.assignment === 'excluded')).toHaveLength(1);
+    for (const entry of preview.byTopic) {
+      expect(entry.assignedCount).toBe(assigned.byTopic.get(entry.topicKey)!.length);
+    }
+  });
+});
+
+describe('previewDigestItems の除く例', () => {
+  const item = (topicKey: string, embedding: Float32Array) => ({
+    digestDate: '2026-11-05',
+    topicKey,
+    rank: 1,
+    title: 'T',
+    url: 'https://example.com/t',
+    feedback: null,
+    embedding,
+  });
+  const topics = [
+    { topicKey: 'a', embedding: vector(1, 0), excludeEmbedding: vector(0, 1) },
+    topic('b', vector(-1, 0)),
+  ];
+
+  it('1 位のテーマの除く例との類似度を返し、除く例に近い項目を excluded にする', () => {
+    const [clean, excluded, noExclude] = previewDigestItems({
+      items: [item('a', vector(1, 0.1)), item('a', vector(1, 1)), item('b', vector(-1, 0))],
+      comparableTopics: topics,
+      embeddedTopics: topics,
+      policy,
+    });
+
+    expect(clean).toMatchObject({ assignment: 'assigned' });
+    expect(clean!.excludeSimilarity).toBeCloseTo(0.0995, 3);
+    expect(excluded).toMatchObject({ assignment: 'excluded' });
+    expect(excluded!.excludeSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(noExclude).toMatchObject({ assignment: 'assigned', excludeSimilarity: null });
+  });
+});
+
 describe('previewDigestItems', () => {
   const item = (topicKey: string, embedding: Float32Array | null) => ({
     digestDate: '2026-11-05',
@@ -300,6 +374,7 @@ describe('previewDigestItems', () => {
       margin: null,
       adoptedSimilarity: null,
       matchesFirst: null,
+      excludeSimilarity: null,
       assignment: 'noComparableTopic',
     });
   });

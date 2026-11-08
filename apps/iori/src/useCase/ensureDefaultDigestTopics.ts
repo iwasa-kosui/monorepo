@@ -51,7 +51,9 @@ const create = ({
     if (createdEvents.length > 0) await digestTopicCreatedStore.store(...createdEvents);
 
     const pending: DigestTopic[] = [
-      ...registered.filter((topic) => topic.embedding === null).map(({ embedding: _embedding, ...topic }) => topic),
+      ...registered.filter((topic) => topic.embedding === null).map((
+        { embedding: _embedding, excludeEmbedding: _excludeEmbedding, ...topic },
+      ) => topic),
       ...createdEvents.map((event) => event.aggregateState),
     ];
     if (textEmbedder === undefined || pending.length === 0) {
