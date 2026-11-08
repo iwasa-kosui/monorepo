@@ -16,10 +16,11 @@ import {
   unfollow,
   unmute,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId, withUpdatedStatus } from '../api/status.ts';
+import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { runExclusive, runOptimisticFavourite } from '../hooks/optimisticFavourite.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 type Props = Readonly<{
@@ -346,6 +347,7 @@ const getActorIdFromUrl = () => {
 
 const App = () => {
   const isFetchingMoreRef = useRef(false);
+  const favouriteInFlightRef = useRef<Set<string>>(null);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
@@ -402,24 +404,30 @@ const App = () => {
 
   useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
 
-  const handleLike = async (postId: string) => {
-    setLikingPostId(postId);
-    try {
-      const updated = await favourite(postId);
-      setData((prev) =>
-        prev === null || 'error' in prev
-          ? prev
-          : {
-            ...prev,
-            statuses: updateStatusesByPostId(prev.statuses, postId, (status) => withUpdatedStatus(status, updated)),
-          }
-      );
-    } catch (error) {
-      console.error('Failed to like:', error);
-    } finally {
-      setLikingPostId(null);
-    }
+  const updateStatus = (postId: string, updater: (status: Status) => Status) => {
+    setData((prev) =>
+      prev === null || 'error' in prev
+        ? prev
+        : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
+    );
   };
+
+  const handleLike = (postId: string) =>
+    runExclusive(favouriteInFlightRef.current ??= new Set<string>(), postId, async () => {
+      setLikingPostId(postId);
+      try {
+        await runOptimisticFavourite({
+          postId,
+          favourited: true,
+          request: favourite,
+          updateTimelineItem: updateStatus,
+        });
+      } catch (error) {
+        console.error('Failed to like:', error);
+      } finally {
+        setLikingPostId(null);
+      }
+    });
 
   const handleFollow = async () => {
     if (!data || 'error' in data) return;
