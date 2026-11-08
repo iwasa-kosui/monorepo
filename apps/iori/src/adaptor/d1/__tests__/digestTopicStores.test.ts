@@ -8,6 +8,7 @@ import { createD1DigestTopicCreatedStore } from '../digestTopic/digestTopicCreat
 import { createD1DigestTopicEditedStore } from '../digestTopic/digestTopicEditedStore.ts';
 import { createD1DigestTopicEmbeddedStore } from '../digestTopic/digestTopicEmbeddedStore.ts';
 import { createD1DigestTopicEnabledChangedStore } from '../digestTopic/digestTopicEnabledChangedStore.ts';
+import { createD1DigestTopicMaterialWindowChangedStore } from '../digestTopic/digestTopicMaterialWindowChangedStore.ts';
 import { createD1DigestTopicsResolverByUserId } from '../digestTopic/digestTopicsResolverByUserId.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -52,6 +53,11 @@ const setup = () => {
     if (!changed.ok) throw new Error('unexpected');
     return changed.val;
   };
+  const setTopicMaterialWindowHours = (topic: DigestTopic, materialWindowHours: number | null) => {
+    const changed = DigestTopic.setMaterialWindowHours(topic, materialWindowHours, EDITED_AT);
+    if (!changed.ok) throw new Error('unexpected');
+    return changed.val;
+  };
   const topicRows = () =>
     sqlite.prepare(
       'SELECT topicKey, description, embeddedAt, updatedAt, length(embedding) AS bytes FROM digest_topics ORDER BY topicKey',
@@ -66,12 +72,14 @@ const setup = () => {
     embedTopic,
     editTopic,
     setTopicEnabled,
+    setTopicMaterialWindowHours,
     topicRows,
     eventNames,
     createdStore: createD1DigestTopicCreatedStore(db),
     embeddedStore: createD1DigestTopicEmbeddedStore(db),
     editedStore: createD1DigestTopicEditedStore(db),
     enabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
+    materialWindowChangedStore: createD1DigestTopicMaterialWindowChangedStore(db),
     resolver: createD1DigestTopicsResolverByUserId(db),
   };
 };
@@ -440,6 +448,86 @@ describe('createD1DigestTopicEnabledChangedStore', () => {
   });
 });
 
+describe('createD1DigestTopicMaterialWindowChangedStore', () => {
+  it('materialWindowHours と updatedAt だけを更新し、embedding は残す', async () => {
+    const {
+      sqlite,
+      createdStore,
+      embeddedStore,
+      materialWindowChangedStore,
+      createTopic,
+      embedTopic,
+      setTopicMaterialWindowHours,
+    } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created);
+    await embeddedStore.store(embedTopic(created.aggregateState, vector()));
+
+    await materialWindowChangedStore.store(setTopicMaterialWindowHours(created.aggregateState, 72));
+
+    expect(
+      sqlite.prepare(
+        'SELECT name, enabled, materialWindowHours, embeddedAt, updatedAt, length(embedding) AS bytes FROM digest_topics',
+      ).all(),
+    ).toEqual([
+      {
+        name: 'genai の名前',
+        enabled: 1,
+        materialWindowHours: 72,
+        embeddedAt: EMBEDDED_AT,
+        updatedAt: EDITED_AT,
+        bytes: EMBEDDING_DIMENSIONS * 4,
+      },
+    ]);
+  });
+
+  it('null で materialWindowHours を NULL に戻す', async () => {
+    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created);
+    const withWindow = setTopicMaterialWindowHours(created.aggregateState, 72);
+    await materialWindowChangedStore.store(withWindow);
+
+    await materialWindowChangedStore.store(setTopicMaterialWindowHours(withWindow.aggregateState, null));
+
+    expect(sqlite.prepare('SELECT materialWindowHours FROM digest_topics').all()).toEqual([
+      { materialWindowHours: null },
+    ]);
+  });
+
+  it('他のユーザーの同じ topicKey の行は変えない', async () => {
+    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
+    const target = createTopic('genai');
+    await createdStore.store(target, createTopic('genai', { userId: OTHER_USER_ID }));
+
+    await materialWindowChangedStore.store(setTopicMaterialWindowHours(target.aggregateState, 72));
+
+    expect(sqlite.prepare('SELECT userId, materialWindowHours FROM digest_topics ORDER BY userId').all()).toEqual([
+      { userId: USER_ID, materialWindowHours: 72 },
+      { userId: OTHER_USER_ID, materialWindowHours: null },
+    ]);
+  });
+
+  it('digestTopic.materialWindowChanged を domain_events に残す', async () => {
+    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created);
+
+    await materialWindowChangedStore.store(setTopicMaterialWindowHours(created.aggregateState, 72));
+
+    const events = sqlite.prepare(
+      'SELECT eventPayload FROM domain_events WHERE eventName = \'digestTopic.materialWindowChanged\'',
+    ).all() as Array<{ eventPayload: string }>;
+    expect(events).toHaveLength(1);
+    expect(JSON.parse(events[0]!.eventPayload)).toEqual({
+      userId: USER_ID,
+      topicKey: 'genai',
+      materialWindowHours: 72,
+      updatedAt: EDITED_AT,
+    });
+  });
+});
+
 describe('createD1DigestTopicsResolverByUserId', () => {
   it('指定したユーザーの topic だけを sortOrder、topicKey の順に返す', async () => {
     const { createdStore, resolver, createTopic } = setup();
@@ -476,6 +564,17 @@ describe('createD1DigestTopicsResolverByUserId', () => {
     });
     expect(genai?.embedding).toBeInstanceOf(Float32Array);
     expect(platform).toMatchObject({ topicKey: 'platform', embedding: null, embeddedAt: null });
+  });
+
+  it('materialWindowHours は新規作成では null で、store で書いた値を読み戻す', async () => {
+    const { createdStore, materialWindowChangedStore, resolver, createTopic, setTopicMaterialWindowHours } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created, createTopic('platform', { sortOrder: 1 }));
+    expect((await resolver.resolve(USER_ID)).val.map((topic) => topic.materialWindowHours)).toEqual([null, null]);
+
+    await materialWindowChangedStore.store(setTopicMaterialWindowHours(created.aggregateState, 336));
+
+    expect((await resolver.resolve(USER_ID)).val.map((topic) => topic.materialWindowHours)).toEqual([336, null]);
   });
 
   it('topic が無ければ空の配列を返す', async () => {

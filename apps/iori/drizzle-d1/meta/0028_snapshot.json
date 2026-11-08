@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a20243db-22a0-4b55-8b98-2a9d70eecae6",
+  "id": "85dcacff-0c7d-42eb-859d-bc06457ce3c3",
   "prevId": "4b787756-1376-4d46-ad51-ae05829474f8",
   "tables": {
     "actors": {
@@ -459,13 +459,6 @@
           "columns": [
             "status",
             "createdAt"
-          ],
-          "isUnique": false
-        },
-        "bluesky_crossposts_uri_idx": {
-          "name": "bluesky_crossposts_uri_idx",
-          "columns": [
-            "uri"
           ],
           "isUnique": false
         }
@@ -1175,6 +1168,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "materialWindowHours": {
+          "name": "materialWindowHours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "createdAt": {

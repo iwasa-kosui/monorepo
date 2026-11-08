@@ -218,10 +218,14 @@ const toSummaryInput = (target: SummaryTarget, bodyText: string | undefined, max
 
 const uniqueByNormalizedUrl = (
   articles: ReadonlyArray<RecommendableArticle>,
+  since: Instant,
 ): ReadonlyArray<RecommendableArticle> => {
   const seen = new Set<string>();
   return [...articles]
-    .sort((a, b) => Number(a.sourceKind !== 'rss') - Number(b.sourceKind !== 'rss'))
+    .sort((a, b) =>
+      Number(a.fetchedAt < since) - Number(b.fetchedAt < since)
+      || Number(a.sourceKind !== 'rss') - Number(b.sourceKind !== 'rss')
+    )
     .filter((article) => {
       const key = normalizeDigestUrl(article.url);
       return !seen.has(key) && seen.add(key);
@@ -245,7 +249,11 @@ type SelectedItem = Readonly<{
   reasonInterestSourceId: InterestSourceId | null;
 }>;
 
-type TopicSelection = Readonly<{ topic: StoredDigestTopic; items: ReadonlyArray<SelectedItem> }>;
+type TopicSelection = Readonly<{
+  topic: StoredDigestTopic;
+  items: ReadonlyArray<SelectedItem>;
+  eligibleCount: number;
+}>;
 
 const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): ReadonlyArray<SelectedItem> =>
   [...articles]
@@ -253,8 +261,17 @@ const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): Reado
       (b.hatenaBookmarkCount ?? 0) - (a.hatenaBookmarkCount ?? 0)
       || (a.feedEntryId < b.feedEntryId ? -1 : a.feedEntryId > b.feedEntryId ? 1 : 0)
     )
-    .slice(0, TOPIC_ITEMS_LIMIT)
     .map((article) => ({ article, score: null, reasonInterestSourceId: null }));
+
+const takeTopicsIncludingTies = <T extends { eligibleCount: number }>(
+  sorted: readonly T[],
+  slots: number,
+): readonly T[] => {
+  const last = sorted[slots - 1];
+  if (slots <= 0) return [];
+  if (last === undefined) return sorted;
+  return sorted.filter((selection) => selection.eligibleCount >= last.eligibleCount);
+};
 
 const create = ({
   digestSubscriptionResolverByUserId,
@@ -423,6 +440,15 @@ const create = ({
       ? windowStart
       : previous.val.createdAt;
 
+    const topicSinceOf = (topic: StoredDigestTopic): Instant =>
+      topic.materialWindowHours === null
+        ? since
+        : Instant.addDuration(startedAt, -topic.materialWindowHours * HOUR_MS);
+    const fetchedSince = topics.reduce(
+      (oldest, topic) => topic.materialWindowHours === null ? oldest : Math.min(oldest, topicSinceOf(topic)) as Instant,
+      since,
+    );
+
     const ownsDigest = await isDigestOwner(userId);
     const [radarEntries, hatenaTrends, timelineTrends, xPostCandidates, interestVectors, pastUrls, recommendable] =
       await Promise.all([
@@ -437,27 +463,38 @@ const create = ({
           userId,
           excludingDigestIds: existing.replaceable.map((header) => header.digestId),
         }),
-        recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
+        recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince }),
       ]);
     const radar = radarEntries.val[0];
 
     const materials = interestVectors.val;
     const xPosts = selectXPosts({ posts: xPostCandidates.val, materials, now: startedAt, limit: X_POSTS_LIMIT });
     const pastUrlSet = new Set(pastUrls.val.map(normalizeDigestUrl));
-    const candidates = uniqueByNormalizedUrl(recommendable.val)
+    const candidates = uniqueByNormalizedUrl(recommendable.val, since)
       .filter((candidate) => !pastUrlSet.has(normalizeDigestUrl(candidate.url)));
     const candidateById = new Map(candidates.map((candidate) => [candidate.feedEntryId, candidate]));
     const materialById = new Map(materials.map((material) => [material.interestSourceId, material]));
     const hasPositiveMaterial = materials.some((material) => !Recommendation.isNegative(material));
 
     const scoringStartedAt = Date.now();
-    const assignment = assignTopics({ articles: candidates, topics, policy: topicAssignmentPolicy });
-    const topicSimilarityOf = (article: RecommendableArticle): number => assignment.matches.get(article)!.similarity;
+    const windowCandidates = candidates.filter((candidate) => candidate.fetchedAt >= since);
+    const olderCandidates = candidates.filter((candidate) => candidate.fetchedAt < since);
+    const assignment = assignTopics({ articles: windowCandidates, topics, policy: topicAssignmentPolicy });
+    const olderAssignment = assignTopics({ articles: olderCandidates, topics, policy: topicAssignmentPolicy });
+    const assignedByTopic = new Map(topics.map((topic) => [
+      topic.topicKey,
+      [...(assignment.byTopic.get(topic.topicKey) ?? []), ...(olderAssignment.byTopic.get(topic.topicKey) ?? [])]
+        .filter((article) => article.fetchedAt >= topicSinceOf(topic)),
+    ]));
+    const countedOlderAssigned = [...assignedByTopic.values()].flat().filter((article) => article.fetchedAt < since);
+    const countedCandidates = windowCandidates.length + countedOlderAssigned.length;
+    const topicSimilarityOf = (article: RecommendableArticle): number =>
+      (assignment.matches.get(article) ?? olderAssignment.matches.get(article))!.similarity;
     const selections: TopicSelection[] = [];
     for (const topic of topics) {
       if (keptTopicKeys.has(topic.topicKey)) continue;
-      const assigned = assignment.byTopic.get(topic.topicKey) ?? [];
-      const items = hasPositiveMaterial
+      const assigned = assignedByTopic.get(topic.topicKey) ?? [];
+      const ranked = hasPositiveMaterial
         ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
           .map(({ feedEntryId, score, reasonInterestSourceId }) => {
             const article = candidateById.get(feedEntryId)!;
@@ -467,14 +504,14 @@ const create = ({
             };
           })
           .sort((a, b) => b.rank - a.rank)
-          .slice(0, TOPIC_ITEMS_LIMIT)
           .map(({ item }) => item)
         : selectByBookmarks(assigned);
-      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items });
+      const items = ranked.slice(0, TOPIC_ITEMS_LIMIT);
+      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items, eligibleCount: ranked.length });
     }
     const scoringMs = Date.now() - scoringStartedAt;
-    selections.sort((a, b) => b.items.length - a.items.length || a.topic.sortOrder - b.topic.sortOrder);
-    const chosen = selections.slice(0, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
+    selections.sort((a, b) => b.eligibleCount - a.eligibleCount || a.topic.sortOrder - b.topic.sortOrder);
+    const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
     let fetchedBodies = 0;
@@ -682,12 +719,12 @@ const create = ({
         pushed,
         recommendation: {
           materials: materials.length,
-          candidates: candidates.length,
+          candidates: countedCandidates,
           selected: selectedItems.length,
           scoringMs,
           fetchedBodies,
           fallbackToDescription,
-          assignedToTopics: candidates.length - assignment.others.length,
+          assignedToTopics: countedCandidates - assignment.others.length,
           belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
           belowMinMargin: assignment.otherCounts.belowMinMargin,
           excluded: assignment.otherCounts.excluded,

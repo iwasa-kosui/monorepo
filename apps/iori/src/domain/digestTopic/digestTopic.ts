@@ -19,6 +19,7 @@ const zodType = z
     embeddedAt: z.nullable(Instant.zodType),
     sortOrder: z.number().int().nonnegative(),
     enabled: z.boolean(),
+    materialWindowHours: z.nullable(z.number().int().min(24).max(336)),
     createdAt: Instant.zodType,
     updatedAt: Instant.zodType,
   })
@@ -79,6 +80,11 @@ export type DigestTopicEnabledChanged = DigestTopicEvent<
   'digestTopic.enabledChanged',
   { userId: UserId; topicKey: string; enabled: boolean; updatedAt: Instant }
 >;
+export type DigestTopicMaterialWindowChanged = DigestTopicEvent<
+  DigestTopic,
+  'digestTopic.materialWindowChanged',
+  { userId: UserId; topicKey: string; materialWindowHours: number | null; updatedAt: Instant }
+>;
 
 export type DigestTopicNotFoundError = Readonly<{
   type: 'DigestTopicNotFoundError';
@@ -105,6 +111,7 @@ const create = (payload: CreateDigestTopicPayload, now: Instant): Result<DigestT
     ...payload,
     embeddedAt: null,
     enabled: true,
+    materialWindowHours: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -165,6 +172,30 @@ const setEnabled = (
       changed,
       'digestTopic.enabledChanged',
       { userId: changed.userId, topicKey: changed.topicKey, enabled: changed.enabled, updatedAt: now },
+      now,
+    ),
+  );
+};
+
+const setMaterialWindowHours = (
+  topic: DigestTopic,
+  materialWindowHours: number | null,
+  now: Instant,
+): Result<DigestTopicMaterialWindowChanged, ParseError> => {
+  const parsed = schema.parse({ ...topic, materialWindowHours, updatedAt: now });
+  if (!parsed.ok) return parsed;
+  const changed = parsed.val;
+  return ok(
+    DigestTopicEvent.create(
+      toAggregateId(changed),
+      changed,
+      'digestTopic.materialWindowChanged',
+      {
+        userId: changed.userId,
+        topicKey: changed.topicKey,
+        materialWindowHours: changed.materialWindowHours,
+        updatedAt: now,
+      },
       now,
     ),
   );
@@ -239,6 +270,7 @@ export type DigestTopicCreatedStore = Agg.Store<DigestTopicCreated>;
 export type DigestTopicEmbeddedStore = Agg.Store<DigestTopicEmbedded>;
 export type DigestTopicEditedStore = Agg.Store<DigestTopicEdited>;
 export type DigestTopicEnabledChangedStore = Agg.Store<DigestTopicEnabledChanged>;
+export type DigestTopicMaterialWindowChangedStore = Agg.Store<DigestTopicMaterialWindowChanged>;
 export type DigestTopicsResolverByUserId = Agg.Resolver<UserId, ReadonlyArray<StoredDigestTopic>>;
 
 export const DigestTopic = {
@@ -246,6 +278,7 @@ export const DigestTopic = {
   create,
   edit,
   setEnabled,
+  setMaterialWindowHours,
   embed,
   toEmbeddingText,
   toEmbeddingTexts,

@@ -207,11 +207,15 @@ const setup = (
         embedding: basis(0),
         ...entry(index + 1),
       }));
-  const addTopic = (topicKey: string, embedding: Float32Array | null, topicOptions: { enabled?: boolean } = {}) => {
+  const addTopic = (
+    topicKey: string,
+    embedding: Float32Array | null,
+    topicOptions: { enabled?: boolean; materialWindowHours?: number } = {},
+  ) => {
     const sortOrder = defaultDigestTopics.findIndex((topic) => topic.topicKey === topicKey);
     const definition = defaultDigestTopics[sortOrder]!;
     sqlite.prepare(
-      'INSERT OR REPLACE INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT OR REPLACE INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,materialWindowHours,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       me.userId,
       topicKey,
@@ -221,6 +225,7 @@ const setup = (
       embedding === null ? null : NOW,
       sortOrder,
       topicOptions.enabled === false ? 0 : 1,
+      topicOptions.materialWindowHours ?? null,
       1,
       1,
     );
@@ -577,14 +582,13 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 1, items: 3 });
   });
 
-  it('トピックは項目数の多い順、同数なら sortOrder の順に最大 4 本までにする', async () => {
+  it('トピックは記事数の多い順、同数なら sortOrder の順に並べ、境界が同数でなければ 4 本までにする', async () => {
     const t = setup();
     const embeddings: Array<[string, number, number]> = [
       ['platform', 1, 5],
-      ['server', 2, 4],
-      ['design', 3, 3],
-      ['ciam', 4, 3],
-      ['security', 5, 3],
+      ['server', 2, 5],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
     ];
     t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
     for (const [topicKey, index, count] of embeddings) {
@@ -594,8 +598,151 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
 
     const result = await t.run();
 
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 4 + 4 });
+  });
+
+  it('4 本目と 5 本目のトピックの記事数が同じなら、5 本すべて作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 15 });
+  });
+
+  it('4 本目と 5 本目のトピックの記事数が違えば、4 本だけ作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 4],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 4 + 4 + 4 });
+  });
+
+  it('5 件で切る前の記事数で同数かどうかを判定する', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 8],
+      ['server', 2, 7],
+      ['design', 3, 6],
+      ['ciam', 4, 5],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 9, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
     expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 4, items: 3 + 3 + 5 + 4 });
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+  });
+
+  it('5 件で切る前の記事数が同じトピックは、すべて作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 7],
+      ['design', 3, 7],
+      ['ciam', 4, 7],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 7, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 25 });
+  });
+
+  it('5 件を超える記事があるとき、切る前の記事数の多いトピックを先に選ぶ', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 8],
+      ['design', 3, 9],
+      ['ciam', 4, 10],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+  });
+
+  it('材料があるときも、5 件で切る前の記事数の多いトピックを先に選ぶ', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 8],
+      ['design', 3, 9],
+      ['ciam', 4, 10],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+    for (const topicKey of ['ciam', 'design', 'platform', 'server']) {
+      expect(t.itemsOf(topicKey).every((item) => item.score !== null)).toBe(true);
+    }
+  });
+
+  it('材料があるときは、スコアが正の記事だけを数えて同数を判定する', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    t.addInterest('feedback_negative', 'https://example.com/disliked', basis(7));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 6],
+      ['design', 3, 7],
+      ['ciam', 4, 8],
+    ];
+    t.addEntries(t.sources.rss, 'Match', 4, () => ({ embedding: basis(0) }));
+    t.addEntries(t.sources.rss, 'Disliked', 8, () => ({ embedding: vec({ 0: 1, 7: 2 }) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 5 + 5 });
+    expect(t.itemsOf('platform').every((item) => item.score !== null)).toBe(true);
   });
 
   it('止めたトピックには振り分けない', async () => {
@@ -1930,6 +2077,25 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(t.bodies().privateHtml).toContain(`/articles/${t.digestOf('platform')!.articleId}`);
   });
 
+  it('残る topic があって枠が減っても、減った枠の境界と記事数が同じ topic はすべて作る', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'platform', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 2 * HOUR }));
+    await t.run('requested');
+    for (const topicKey of ['genai', 'platform']) t.setArticleStatusOf(topicKey, 'published');
+    for (const [topicKey, index] of [['server', 2], ['design', 3], ['ciam', 4]] as const) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW }));
+    }
+    t.clock.value = (NOW + HOUR) as typeof NOW;
+
+    const result = await t.run('requested');
+
+    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 3 });
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+  });
+
   it('残る topic の記事の項目は、置き換えで作る topic に載せない', async () => {
     const t = setup();
     seedTwoTopics(t);
@@ -2088,11 +2254,15 @@ describe('CreateDailyDigestUseCase: requested', () => {
 
   it('残る topic が 4 本に達していれば、新しい topic は作らない', async () => {
     const t = setup();
-    const keys: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
-    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    for (const [topicKey, index] of keys) {
+    const keys: Array<[string, number, number]> = [['platform', 1, 4], ['server', 2, 4], ['design', 3, 4], [
+      'ciam',
+      4,
+      3,
+    ]];
+    t.addEntries(t.sources.rss, 'genai', 4, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    for (const [topicKey, index, count] of keys) {
       t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
     }
     await t.run('requested');
     expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
@@ -2555,6 +2725,94 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
 
     expect(result.replaced).toBe(true);
     expect(t.titlesOf('genai')).toEqual(['Early 1', 'Early 2', 'Early 3']);
+  });
+});
+
+describe('CreateDailyDigestUseCase: テーマごとの材料の期間', () => {
+  it('期間を持つテーマは、窓より古くても期間内の記事を集め、期間より古い記事は集めない', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntry(t.sources.rss, 'Too old gen', { embedding: basis(0), count: 1000, fetchedAt: NOW - 100 * HOUR });
+    t.addEntries(t.sources.rss, 'Fresh plat', 3, () => ({ embedding: basis(1) }));
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Old gen 1', 'Old gen 2', 'Old gen 3']);
+    expect(t.titlesOf('platform')).toEqual(['Fresh plat 1', 'Fresh plat 2', 'Fresh plat 3']);
+  });
+
+  it('期間を持たないテーマは、別のテーマが期間を持っていても、窓より古い記事を集めない', async () => {
+    const t = setup();
+    t.addTopic('platform', basis(1), { materialWindowHours: 72 });
+    t.addEntries(t.sources.rss, 'Fresh gen', 2, () => ({ embedding: basis(0) }));
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntries(t.sources.rss, 'Old plat', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 48 * HOUR }));
+
+    await t.run();
+
+    expect(t.topicKeys()).toEqual(['platform', 'summary']);
+    expect(t.titlesOf('platform')).toEqual(['Old plat 1', 'Old plat 2', 'Old plat 3']);
+  });
+
+  it('結果の件数は、窓の記事と、期間を持つテーマに振り分けられて期間内にある記事から数える', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Fresh plat', 3, () => ({ embedding: basis(1) }));
+    t.addEntry(t.sources.rss, 'Fresh far', { embedding: basis(7) });
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntry(t.sources.rss, 'Too old gen', { embedding: basis(0), fetchedAt: NOW - 100 * HOUR });
+    t.addEntry(t.sources.rss, 'Old plat', { embedding: basis(1), fetchedAt: NOW - 48 * HOUR });
+    t.addEntry(t.sources.rss, 'Old far', { embedding: basis(7), fetchedAt: NOW - 48 * HOUR });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({
+      candidates: 7,
+      assignedToTopics: 6,
+      belowMinSimilarity: 1,
+      belowMinMargin: 0,
+      excluded: 0,
+    });
+  });
+
+  it('期間を持つテーマがあっても、窓内の同じ URL の重複では窓内の記事が勝つ', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addEntry(t.sources.rss, 'Old rss', {
+      url: 'https://example.com/a',
+      count: 1,
+      embedding: basis(0),
+      fetchedAt: NOW - 48 * HOUR,
+    });
+    t.addEntry(t.sources.hotentry, 'Hot copy', {
+      url: 'https://example.com/a/?utm_source=x#top',
+      count: 900,
+      embedding: basis(0),
+    });
+    t.addEntry(t.sources.rss, 'B', { url: 'https://example.com/b', count: 2, embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'C', { url: 'https://example.com/c', count: 3, embedding: basis(0) });
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Hot copy', 'C', 'B']);
+  });
+
+  it('過去に載せた記事は、期間を延ばしても再び載らない', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'Past', 3, () => ({ fetchedAt: NOW - DAY - HOUR }));
+    t.clock.value = (NOW - DAY) as typeof NOW;
+    await t.run();
+    t.clock.value = NOW;
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addEntries(t.sources.rss, 'Old', 3, () => ({ fetchedAt: NOW - 48 * HOUR }));
+
+    await t.run();
+
+    expect((t.all('SELECT title FROM digest_items ORDER BY title') as Array<{ title: string }>).map((row) => row.title))
+      .toEqual(['Old 1', 'Old 2', 'Old 3', 'Past 1', 'Past 2', 'Past 3']);
   });
 });
 

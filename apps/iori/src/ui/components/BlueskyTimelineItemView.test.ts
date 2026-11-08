@@ -32,7 +32,7 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('Alice');
     expect(html).toContain('@alice.bsky.social');
     expect(html).toContain('本文です');
-    expect(html).toContain('href="https://bsky.app/profile/did%3Aplc%3Aauthor/post/3kabc"');
+    expect(html).toContain('href="https://bsky.app/profile/did:plc:author/post/3kabc"');
     expect(html).toContain('src="https://cdn.example/avatar.jpg"');
   });
 
@@ -113,6 +113,6 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('記事');
     expect(html).toContain('@q.bsky.social');
     expect(html).toContain('引用本文');
-    expect(html).toContain('href="https://bsky.app/profile/did%3Aplc%3Aq/post/3kq"');
+    expect(html).toContain('href="https://bsky.app/profile/did:plc:q/post/3kq"');
   });
 });

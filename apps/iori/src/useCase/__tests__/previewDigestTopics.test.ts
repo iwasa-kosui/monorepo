@@ -32,6 +32,7 @@ const topic = (topicKey: string, embedding: Float32Array | null, enabled = true)
   embeddedAt: embedding === null ? null : Instant.orThrow(1),
   sortOrder: 0,
   enabled,
+  materialWindowHours: null,
   createdAt: Instant.orThrow(1),
   updatedAt: Instant.orThrow(1),
   embedding,

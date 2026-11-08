@@ -172,7 +172,7 @@ describe('第4章 集計テーブル', () => {
     });
   });
 
-  it('業務イベントを通らずに書き換えたキャンセル数は、検算で差として分かる', () => {
+  it('業務イベントを通らずに書き換えたキャンセル数は、業務イベントから数え直した数との差として分かる', () => {
     cancelVisit(db, cancelInput);
     db.prepare(`UPDATE daily_cancellation_counts SET cancelled_count = 5 WHERE visit_date = ?`).run(visitDate);
     assert.deepEqual(verifyCancellationCount(db, visitDate), {
@@ -182,7 +182,7 @@ describe('第4章 集計テーブル', () => {
     });
   });
 
-  it('イベントの導入前から残っているキャンセル数は、検算で差として分かる', () => {
+  it('業務イベントの導入前から残っているキャンセル数は、業務イベントから数え直した数との差として分かる', () => {
     db.prepare(`INSERT INTO daily_cancellation_counts (visit_date, cancelled_count) VALUES (?, 1)`).run(visitDate);
     cancelVisit(db, cancelInput);
     assert.deepEqual(verifyCancellationCount(db, visitDate), {
