@@ -6,7 +6,7 @@ import { assertReviewedMain } from './reviewed-main.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
 
 // The live Worker predates bindings this release introduces; the post-deploy readback still requires them.
-const BINDINGS_ADDED_BY_THIS_RELEASE = Object.freeze(['EVENT_ARCHIVE']);
+const BINDINGS_ADDED_BY_THIS_RELEASE = Object.freeze([]);
 
 /** A normal code update preserves the immutable migration identity and all active routing/Queue configuration. */
 export const updateActiveWorker = async (
