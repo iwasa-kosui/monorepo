@@ -7,7 +7,7 @@ import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.t
 import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import { sha256Hex } from '../../../helper/sha256.ts';
 import type { TextEmbedder } from '../../../ports/textEmbedder.ts';
-import { createStubEmbedder } from '../../../testing/aiStubs.ts';
+import { createStubEmbedder, createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -126,6 +126,7 @@ describe('iori のダイジェスト API', () => {
     '/api/iori/v1/trends/hatena',
     '/api/iori/v1/digest/subscription',
     '/api/iori/v1/digest-topics',
+    '/api/iori/v1/digest-topics/preview',
   ];
 
   it.each(readPaths)('GET %s は認証なしだと 401 にする', async (path) => {
@@ -764,6 +765,353 @@ describe('iori のダイジェスト API', () => {
       const response = await t.request('/api/iori/v1/digests', post(me.bearer));
 
       expect(response.status).toBe(201);
+    });
+  });
+
+  describe('/api/iori/v1/digest-topics/preview', () => {
+    const PREVIEW = '/api/iori/v1/digest-topics/preview';
+    const HOUR_MS = 60 * 60 * 1000;
+    const vec = (...head: number[]) =>
+      float32ToBytes(Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => head[i] ?? 0));
+    const today = () => Instant.toJstDate(Instant.now());
+    const addTopic = (
+      t: ReturnType<typeof setupReadApi>,
+      userId: string,
+      topicKey: string,
+      sortOrder: number,
+      options: { embedding?: Uint8Array | null; enabled?: boolean } = {},
+    ) =>
+      t.sqlite.prepare(
+        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        userId,
+        topicKey,
+        `${topicKey} の名前`,
+        `${topicKey} の説明`,
+        options.embedding === undefined ? null : options.embedding,
+        options.embedding === undefined || options.embedding === null ? null : 1,
+        sortOrder,
+        options.enabled === false ? 0 : 1,
+        1,
+        1,
+      );
+    const uuidOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const addEntry = (
+      t: ReturnType<typeof setupReadApi>,
+      n: number,
+      embedding: Uint8Array | null,
+      fetchedAt: number,
+    ) => {
+      t.sqlite.prepare(
+        'INSERT OR IGNORE INTO feed_sources(feedSourceId,kind,url,title,enabled,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(uuidOf(0), 'rss', 'https://feeds.example/rss', 'rss', 1, 1_000);
+      t.sqlite.prepare(
+        'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,hatenaBookmarkCount,fetchedAt,embedding,embeddedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        uuidOf(n),
+        uuidOf(0),
+        uuidOf(n),
+        `https://example.com/${uuidOf(n)}`,
+        `記事 ${n}`,
+        '',
+        null,
+        fetchedAt,
+        embedding,
+        embedding === null ? null : 2_000,
+      );
+    };
+    const linkItem = (t: ReturnType<typeof setupReadApi>, digestId: string, rank: number, n: number) =>
+      t.sqlite.prepare('UPDATE digest_items SET feedEntryId = ? WHERE digestId = ? AND rank = ?')
+        .run(uuidOf(n), digestId, rank);
+    const preview = async (t: ReturnType<typeof setupReadApi>, me: { bearer: Record<string, string> }, query = '') =>
+      t.request(`${PREVIEW}${query}`, { headers: me.bearer });
+    const write = /^\s*(insert|update|delete|replace|create|drop|alter)\b/i;
+
+    it('トークンも Cookie も無いときは 401 にする', async () => {
+      const t = setupReadApi();
+
+      const response = await t.request(PREVIEW);
+
+      expect(response.status).toBe(401);
+    });
+
+    it.each(['digestDays=0', 'digestDays=31', 'limit=101', 'candidateHours=73'])(
+      '?%s は 400 にする',
+      async (query) => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await preview(t, me, `?${query}`);
+
+        expect(response.status).toBe(400);
+      },
+    );
+
+    it('ログイン中のユーザーのテーマ、候補記事の振り分け、ダイジェスト項目の類似度を返す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      const other = t.seed.addLocalActor('other');
+      addTopic(t, me.userId, 'genai', 0, { embedding: vec(1, 0, 0) });
+      addTopic(t, me.userId, 'platform', 1, { embedding: vec(0, 1, 0) });
+      addTopic(t, me.userId, 'draft', 2, { embedding: vec(0, 0, 1), enabled: false });
+      addTopic(t, me.userId, 'raw', 3);
+      addTopic(t, other.userId, 'security', 0, { embedding: vec(1, 0, 0) });
+      const fetchedAt = Date.now() - 2 * HOUR_MS;
+      addEntry(t, 1, vec(4, 3, 0), fetchedAt);
+      addEntry(t, 3, vec(3, 4, 0), fetchedAt);
+      addEntry(t, 4, vec(1, 0, 0), fetchedAt);
+      addEntry(t, 5, vec(1, 0, 0), Date.now() - 100 * HOUR_MS);
+      addEntry(t, 6, null, fetchedAt);
+      linkItem(t, seedDigest(t, me, today(), { topicKey: 'genai', itemCount: 2 }).digestId, 1, 1);
+      linkItem(t, seedDigest(t, me, today(), { topicKey: 'platform', itemCount: 1 }).digestId, 1, 1);
+      seedDigest(t, me, today());
+      seedDigest(t, me, '2020-01-01', { topicKey: 'genai' });
+      seedDigest(t, other, today(), { topicKey: 'security' });
+
+      const response = await preview(t, me, '?limit=2');
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as {
+        topics: unknown;
+        thresholds: unknown;
+        candidates: { total: number; top1Histogram: Array<{ from: number; count: number }>; byTopic: unknown };
+        digestItems: unknown;
+      };
+      const iso = new Date(fetchedAt).toISOString();
+      const candidate = (n: number, similarity: number, second: unknown, margin: number) => ({
+        feedEntryId: uuidOf(n),
+        title: `記事 ${n}`,
+        url: `https://example.com/${uuidOf(n)}`,
+        fetchedAt: iso,
+        similarity,
+        second,
+        margin,
+        assignment: 'assigned',
+      });
+      expect(body.topics).toEqual([
+        { topicKey: 'genai', name: 'genai の名前', description: 'genai の説明', enabled: true, embedded: true },
+        {
+          topicKey: 'platform',
+          name: 'platform の名前',
+          description: 'platform の説明',
+          enabled: true,
+          embedded: true,
+        },
+        { topicKey: 'draft', name: 'draft の名前', description: 'draft の説明', enabled: false, embedded: true },
+        { topicKey: 'raw', name: 'raw の名前', description: 'raw の説明', enabled: true, embedded: false },
+      ]);
+      expect(body.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0 });
+      expect(body.candidates.total).toBe(3);
+      expect(body.candidates.top1Histogram).toHaveLength(40);
+      expect(body.candidates.top1Histogram.filter((bin) => bin.count > 0)).toEqual([
+        { from: 0.8, to: 0.85, count: 2 },
+        { from: 0.95, to: 1, count: 1 },
+      ]);
+      expect(body.candidates.byTopic).toEqual([
+        {
+          topicKey: 'genai',
+          count: 2,
+          assignedCount: 2,
+          top: [
+            candidate(4, 1, { topicKey: 'platform', similarity: 0 }, 1),
+            candidate(1, 0.8, { topicKey: 'platform', similarity: 0.6 }, 0.2),
+          ],
+          bottom: [
+            candidate(1, 0.8, { topicKey: 'platform', similarity: 0.6 }, 0.2),
+            candidate(4, 1, { topicKey: 'platform', similarity: 0 }, 1),
+          ],
+        },
+        {
+          topicKey: 'platform',
+          count: 1,
+          assignedCount: 1,
+          top: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
+          bottom: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
+        },
+      ]);
+      const adopted = (topicKey: string, rank: number, title: string, url: string, scores: object) => ({
+        digestDate: today(),
+        topicKey,
+        rank,
+        title,
+        url,
+        feedback: null,
+        ...scores,
+      });
+      expect(body.digestItems).toEqual([
+        adopted('genai', 1, 'A', 'https://example.com/a', {
+          first: { topicKey: 'genai', similarity: 0.8 },
+          second: { topicKey: 'platform', similarity: 0.6 },
+          margin: 0.2,
+          adoptedSimilarity: 0.8,
+          matchesFirst: true,
+          assignment: 'assigned',
+        }),
+        adopted('genai', 2, 'B', 'https://example.com/b', {
+          first: null,
+          second: null,
+          margin: null,
+          adoptedSimilarity: null,
+          matchesFirst: null,
+          assignment: 'noComparableTopic',
+        }),
+        adopted('platform', 1, 'A', 'https://example.com/a', {
+          first: { topicKey: 'genai', similarity: 0.8 },
+          second: { topicKey: 'platform', similarity: 0.6 },
+          margin: 0.2,
+          adoptedSimilarity: 0.6,
+          matchesFirst: false,
+          assignment: 'assigned',
+        }),
+      ]);
+    });
+
+    it('ほかのユーザーのテーマとダイジェスト項目を返さない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      const other = t.seed.addLocalActor('other');
+      addTopic(t, other.userId, 'security', 0, { embedding: vec(1, 0, 0) });
+      addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
+      seedDigest(t, other, today(), { topicKey: 'security' });
+
+      const body = await (await preview(t, me)).json() as {
+        topics: unknown[];
+        candidates: { total: number; byTopic: unknown[] };
+        digestItems: unknown[];
+      };
+
+      expect(body.topics).toEqual([]);
+      expect(body.candidates.byTopic).toEqual([]);
+      expect(body.candidates.total).toBe(1);
+      expect(body.digestItems).toEqual([]);
+    });
+
+    it('クエリで候補記事の期間、ダイジェスト項目の期間、上位と下位の件数を絞る', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      addTopic(t, me.userId, 'genai', 0, { embedding: vec(1, 0, 0) });
+      addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS / 2);
+      addEntry(t, 2, vec(2, 1, 0), Date.now() - HOUR_MS / 2);
+      addEntry(t, 3, vec(1, 0, 0), Date.now() - 10 * HOUR_MS);
+      seedDigest(t, me, today(), { topicKey: 'genai' });
+      seedDigest(t, me, Instant.toJstDate(Instant.addDuration(Instant.now(), -3 * 24 * HOUR_MS)), {
+        topicKey: 'genai',
+      });
+      type Body = {
+        candidates: { total: number; byTopic: Array<{ count: number; top: unknown[]; bottom: unknown[] }> };
+        digestItems: unknown[];
+      };
+
+      const defaults = await (await preview(t, me)).json() as Body;
+      const narrowed = await (await preview(t, me, '?candidateHours=1&digestDays=2&limit=1')).json() as Body;
+
+      expect(defaults.candidates.total).toBe(3);
+      expect(defaults.candidates.byTopic[0]).toMatchObject({ count: 3 });
+      expect(defaults.candidates.byTopic[0]!.top).toHaveLength(3);
+      expect(defaults.digestItems).toHaveLength(4);
+      expect(narrowed.candidates.total).toBe(2);
+      expect(narrowed.candidates.byTopic[0]).toMatchObject({ count: 2 });
+      expect(narrowed.candidates.byTopic[0]!.top).toHaveLength(1);
+      expect(narrowed.candidates.byTopic[0]!.bottom).toHaveLength(1);
+      expect(narrowed.digestItems).toHaveLength(2);
+    });
+
+    it.each([
+      ['candidateHours=0', 'candidateHours'],
+      ['candidateHours=73', 'candidateHours'],
+      ['candidateHours=abc', 'candidateHours'],
+      ['candidateHours=1.5', 'candidateHours'],
+      ['candidateHours=', 'candidateHours'],
+      ['digestDays=0', 'digestDays'],
+      ['digestDays=31', 'digestDays'],
+      ['limit=0', 'limit'],
+      ['limit=101', 'limit'],
+      ['limit=-1', 'limit'],
+    ])('?%s は 400 にして、範囲外のパラメーター名を返す', async (query, name) => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+
+      const response = await preview(t, me, `?${query}`);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: `Validation failed: ${name}` });
+    });
+
+    it.each(['candidateHours=1', 'candidateHours=72', 'digestDays=1', 'digestDays=30', 'limit=1', 'limit=100'])(
+      '?%s は範囲の端として受け付ける',
+      async (query) => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await preview(t, me, `?${query}`);
+
+        expect(response.status).toBe(200);
+      },
+    );
+
+    it('テーマも候補記事もダイジェストも無いときは、空の結果を返す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+
+      const response = await preview(t, me);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        topics: [],
+        thresholds: { minSimilarity: 0.4, minMargin: 0 },
+        candidates: { total: 0, byTopic: [], truncated: false },
+        digestItemsTruncated: false,
+        digestItems: [],
+      });
+    });
+
+    it('埋め込み済みで有効なテーマが無いときも、落ちずに候補の件数とダイジェスト項目を返す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      addTopic(t, me.userId, 'raw', 0);
+      addTopic(t, me.userId, 'draft', 1, { embedding: vec(1, 0, 0), enabled: false });
+      addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
+      linkItem(t, seedDigest(t, me, today(), { topicKey: 'draft', itemCount: 1 }).digestId, 1, 1);
+
+      const response = await preview(t, me);
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as {
+        candidates: { total: number; byTopic: unknown[] };
+        digestItems: Array<Record<string, unknown>>;
+      };
+      expect(body.candidates.total).toBe(1);
+      expect(body.candidates.byTopic).toEqual([]);
+      expect(body.digestItems).toHaveLength(1);
+      expect(body.digestItems[0]).toMatchObject({
+        topicKey: 'draft',
+        first: null,
+        adoptedSimilarity: 1,
+        matchesFirst: null,
+      });
+    });
+
+    it('D1 に書き込まず、埋め込みも要約も呼ばない', async () => {
+      const embedder = createStubEmbedder(EMBEDDING_DIMENSIONS);
+      const generator = createStubTextGenerator(() => '要約');
+      const t = setupReadApi({ textEmbedder: embedder.embedder, textGenerator: generator.generator });
+      const me = await t.signIn('read:statuses');
+      addTopic(t, me.userId, 'genai', 0, { embedding: vec(1, 0, 0) });
+      addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
+      seedDigest(t, me, today(), { topicKey: 'genai' });
+      const changesBefore = t.sqlite.prepare('SELECT total_changes() AS n').get();
+      const tablesBefore = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get();
+      t.queries.length = 0;
+
+      const response = await preview(t, me);
+
+      expect(response.status).toBe(200);
+      expect(t.queries.length).toBeGreaterThan(0);
+      expect(t.queries.filter((query) => write.test(query.sql))).toEqual([]);
+      expect(t.sqlite.prepare('SELECT total_changes() AS n').get()).toEqual(changesBefore);
+      expect(t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get()).toEqual(tablesBefore);
+      expect(embedder.calls).toEqual([]);
+      expect(generator.calls).toEqual([]);
     });
   });
 

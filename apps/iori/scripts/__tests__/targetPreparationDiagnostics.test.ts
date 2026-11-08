@@ -30,6 +30,8 @@ const representativeReasons = [
   'command-failed',
   'd1-baseline-mismatch',
   'aborted',
+  'result-invalid',
+  'cursor-invalid',
   'identity-mismatch',
   'mismatch',
   'config-invalid',

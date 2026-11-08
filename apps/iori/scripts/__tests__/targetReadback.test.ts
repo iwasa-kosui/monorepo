@@ -305,7 +305,11 @@ type WorkerFixture = Awaited<ReturnType<typeof workerFixture>>;
 const withoutBinding = (name: string) => ({ bindings }: WorkerFixture) => {
   bindings.splice(bindings.findIndex((binding) => binding.name === name), 1);
 };
-const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<WorkerFixture['input']> | void][] = [
+const workerReadbackCases: [
+  string,
+  string,
+  (fixture: WorkerFixture) => Partial<WorkerFixture['input'] & { missingAllowed: readonly string[] }> | void,
+][] = [
   ['state-mismatch', 'a routePresent that is not true', () => ({ routePresent: false as never })],
   [
     'worker-input',
@@ -429,6 +433,37 @@ const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<
   ['worker-binding-missing', 'a missing DB binding', withoutBinding('DB')],
   ['worker-binding-missing', 'a missing ORIGIN binding', withoutBinding('ORIGIN')],
   [
+    'worker-binding-missing',
+    'a missing EVENT_ARCHIVE binding that is not allowed to be missing',
+    withoutBinding('EVENT_ARCHIVE'),
+  ],
+  [
+    'worker-binding-missing',
+    'a missing DB binding when only EVENT_ARCHIVE may be missing',
+    (fixture) => {
+      withoutBinding('DB')(fixture);
+      return { missingAllowed: ['EVENT_ARCHIVE'] };
+    },
+  ],
+  [
+    'worker-input',
+    'a missingAllowed that is not an array',
+    () => ({ missingAllowed: 'EVENT_ARCHIVE' as never }),
+  ],
+  [
+    'worker-input',
+    'a missingAllowed naming a binding that is not expected',
+    () => ({ missingAllowed: ['UNKNOWN_BINDING'] }),
+  ],
+  [
+    'worker-binding-mismatch',
+    'an EVENT_ARCHIVE binding of another bucket that may otherwise be missing',
+    ({ bindings }) => {
+      bindings[2] = { name: 'EVENT_ARCHIVE', type: 'r2_bucket', bucket_name: 'other-bucket' };
+      return { missingAllowed: ['EVENT_ARCHIVE'] };
+    },
+  ],
+  [
     'worker-binding-mismatch',
     'a DB binding of another database',
     ({ bindings }) => {
@@ -465,6 +500,12 @@ const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<
 it('reads a complete worker fixture before the broken cases', async () => {
   const { api, input } = await workerFixture();
   await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+});
+it('accepts a worker without a binding listed in missingAllowed', async () => {
+  const fixture = await workerFixture();
+  withoutBinding('EVENT_ARCHIVE')(fixture);
+  await expect(fixture.api.readActiveWorker({ ...fixture.input, missingAllowed: ['EVENT_ARCHIVE'] }))
+    .resolves.toMatchObject({ mode: 'active', bindingCount: 12 });
 });
 it.each(workerReadbackCases)('classifies %s for %s', async (reason, _label, break_) => {
   const fixture = await workerFixture();
@@ -637,6 +678,14 @@ describe('a state close to a production wrangler deployment', () => {
       { name: 'TWITTERAPI_IO_API_KEY', type: 'plain_text', text: 'x' },
     ]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-secret-missing'));
+  });
+  it('accepts the Bluesky crosspost bindings without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [
+      { name: 'IORI_BLUESKY_CROSSPOST', type: 'plain_text', text: 'disabled' },
+      { name: 'BLUESKY_IDENTIFIER', type: 'secret_text' },
+      { name: 'BLUESKY_APP_PASSWORD', type: 'secret_text' },
+    ]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 17 });
   });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
