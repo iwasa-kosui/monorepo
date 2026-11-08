@@ -10,6 +10,7 @@ import type {
 import type { IoriDigestRequestResponse } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
+import type { IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -314,6 +315,9 @@ export type SearchStatusesResult = IoriSearchStatusesResponse;
 
 export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
   (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
+
+export const fetchXPosts = async (): Promise<IoriXPostsResponse> =>
+  (await request<IoriXPostsResponse>('/api/iori/v1/x-posts')).body;
 
 export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
 

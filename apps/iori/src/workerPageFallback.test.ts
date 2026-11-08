@@ -109,6 +109,55 @@ describe('createWorkerPageFallback', () => {
     expect(html).toMatch(/<meta name="viewport"[^>]*viewport-fit=cover/);
   });
 
+  it('redirects the private X page to /sign-in when logged out, without caching', async () => {
+    const anonymous = await createWorkerPageFallback(new Request('https://worker.test/x'));
+    const expired = await createWorkerPageFallback(
+      new Request('https://worker.test/x', {
+        headers: { Cookie: 'sessionId=expired' },
+      }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the private X page for a logged-in user with no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/x'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/xPosts.js');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('does not add noindex to public pages', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
+
+    expect(response?.headers.get('X-Robots-Tag')).toBeNull();
+    expect(await response?.text()).not.toContain('name="robots"');
+  });
+
+  it('shows the X link in the Sidebar only when logged in and keeps it out of the BottomNav', async () => {
+    const loggedIn = await renderSidebar(true);
+    const loggedOut = await renderSidebar(false);
+
+    expect(loggedIn).toContain('href="/x"');
+    expect(loggedIn.indexOf('href="/x"')).toBeGreaterThan(loggedIn.indexOf('href="/digest"'));
+    expect(loggedIn.indexOf('href="/x"')).toBeLessThan(loggedIn.indexOf('href="/articles"'));
+    expect(loggedOut).not.toContain('href="/x"');
+    expect(await renderBottomNav(true)).not.toContain('href="/x"');
+  });
+
   it('does not claim unknown GET routes', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/not-a-page'));
     expect(response).toBeUndefined();

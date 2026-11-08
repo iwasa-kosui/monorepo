@@ -8,6 +8,7 @@ export const timelineLimits: PageLimits = { defaultLimit: 20, maxLimit: 40 };
 export const accountListLimits: PageLimits = { defaultLimit: 40, maxLimit: 80 };
 export const notificationLimits: PageLimits = { defaultLimit: 40, maxLimit: 80 };
 export const unreadCountLimits: PageLimits = { defaultLimit: 100, maxLimit: 1000 };
+export const xPostsLimits: PageLimits = { defaultLimit: 100, maxLimit: 200 };
 
 export const isTrue = (value: string | undefined): boolean => value === 'true' || value === '1';
 

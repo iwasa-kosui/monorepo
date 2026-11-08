@@ -23,6 +23,7 @@ import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
+import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
@@ -75,6 +76,7 @@ import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/em
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1XFeedEntriesResolver } from '../../../d1/feedEntry/xFeedEntriesResolver.ts';
 import { createD1AllFeedSourcesResolver } from '../../../d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../../../d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceEnabledChangedStore } from '../../../d1/feedSource/feedSourceEnabledChangedStore.ts';
@@ -150,6 +152,7 @@ import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts'
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
+import { createWorkerIoriXPostsRouter } from '../../workerIoriXPostsRouter.ts';
 import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
@@ -548,6 +551,15 @@ export const setupReadApi = (
             digestTopicsResolverByUserId,
             digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
             now: Instant.now,
+          }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriXPostsRouter({
+          authn,
+          getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
+            xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
           }),
         }),
       );
