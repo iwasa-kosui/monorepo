@@ -108,7 +108,7 @@ const setup = (
     safeFetcher: { fetchText },
     twitterApiIoClient: apiKey === null
       ? undefined
-      : createTwitterApiIoClient({ safeFetcher: { fetchText }, apiKey }),
+      : createTwitterApiIoClient({ safeFetcher: { fetchText }, apiKey, sleep: async () => {}, now }),
     now,
   });
   const addX = async (username = 'jack') => {

@@ -8,6 +8,7 @@ import { parseTweetCreatedAt } from './parseTweetCreatedAt.ts';
 
 const SEARCH_URL = 'https://api.twitterapi.io/twitter/tweet/advanced_search';
 export const MAX_PAGES = 5;
+export const REQUEST_INTERVAL_MS = 5_000;
 // リダイレクトを辿ると API キーが転送先にも送られるため、辿らない
 const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 2 * 1024 * 1024, maxRedirects: 0 } as const;
 
@@ -53,10 +54,27 @@ const toQuery = (input: UserTweetsQuery): string => {
 const isOriginalPost = (tweet: SearchResponse['tweets'][number]): boolean =>
   tweet.isReply !== true && (tweet.retweeted_tweet === null || tweet.retweeted_tweet === undefined);
 
-type Deps = Readonly<{ safeFetcher: SafeFetcher; apiKey: string }>;
+const isNumericId = (value: string): boolean => /^\d+$/.test(value);
 
-export const createTwitterApiIoClient = ({ safeFetcher, apiKey }: Deps): TwitterApiIoClient => {
+type Deps = Readonly<{
+  safeFetcher: SafeFetcher;
+  apiKey: string;
+  sleep: (ms: number) => Promise<void>;
+  now: () => Instant;
+}>;
+
+export const createTwitterApiIoClient = ({ safeFetcher, apiKey, sleep, now }: Deps): TwitterApiIoClient => {
+  let nextRequestAt: number | undefined;
+
+  const waitForTurn = async (): Promise<void> => {
+    const current = now();
+    const startAt = nextRequestAt === undefined ? current : Math.max(current, nextRequestAt);
+    nextRequestAt = startAt + REQUEST_INTERVAL_MS;
+    if (startAt > current) await sleep(startAt - current);
+  };
+
   const getPage = async (query: string, cursor: string): RA<SearchResponse, TwitterApiIoError> => {
+    await waitForTurn();
     const url = new URL(SEARCH_URL);
     url.searchParams.set('query', query);
     url.searchParams.set('queryType', 'Latest');
@@ -82,14 +100,20 @@ export const createTwitterApiIoClient = ({ safeFetcher, apiKey }: Deps): Twitter
 
   const searchUserTweets: TwitterApiIoClient['searchUserTweets'] = async (input) => {
     const query = toQuery(input);
+    const sinceId = 'sinceId' in input && isNumericId(input.sinceId) ? BigInt(input.sinceId) : undefined;
     const tweets: Tweet[] = [];
     let cursor = '';
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const response = await getPage(query, cursor);
       if (!response.ok) return response;
-      for (const tweet of response.val.tweets) {
+      // since_id が効かない場合に備え、sinceId 以前の投稿が出たらそれ以降のページを取らない
+      const fresh = sinceId === undefined
+        ? response.val.tweets
+        : response.val.tweets.filter((tweet) => BigInt(tweet.id) > sinceId);
+      for (const tweet of fresh) {
         if (isOriginalPost(tweet)) tweets.push({ id: tweet.id, text: tweet.text, createdAt: tweet.createdAt });
       }
+      if (fresh.length < response.val.tweets.length) break;
       const nextCursor = response.val.next_cursor ?? '';
       if (response.val.has_next_page !== true || nextCursor === '') break;
       cursor = nextCursor;

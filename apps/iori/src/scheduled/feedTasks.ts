@@ -51,7 +51,12 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
       safeFetcher: createSafeFetcher(),
       twitterApiIoClient: twitterApiIoApiKey === undefined || twitterApiIoApiKey === ''
         ? undefined
-        : createTwitterApiIoClient({ safeFetcher: createSafeFetcher(), apiKey: twitterApiIoApiKey }),
+        : createTwitterApiIoClient({
+          safeFetcher: createSafeFetcher(),
+          apiKey: twitterApiIoApiKey,
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          now,
+        }),
       now,
     }),
     detectRadarVolume: DetectRadarVolumeUseCase.create({
