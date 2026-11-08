@@ -84,6 +84,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
     || !['production', 'staging'].includes(env.IORI_ENVIRONMENT)
     || ([
       'delete-rehearsal-d1',
+      'put-bluesky-secrets',
       ...moveOperations,
       ...statsOperations,
       ...deleteBlockedDomainOperations,

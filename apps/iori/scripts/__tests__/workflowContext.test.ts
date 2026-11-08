@@ -21,13 +21,33 @@ const env = {
   IORI_GENERATION: 'fixture01',
   IORI_OPERATION: 'deploy-worker',
 };
+const operationEnv = (operation: string) =>
+  operation === 'put-bluesky-secrets' ? { ...env, IORI_ENVIRONMENT: 'production' } : env;
 it.each(['put-worker-secrets', 'put-bluesky-secrets'])(
   'accepts a migration SHA that differs from the code SHA for %s',
   operation => {
-    expect(parseWorkflowInvocation({ ...env, IORI_OPERATION: operation, IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40) }))
+    expect(
+      parseWorkflowInvocation({
+        ...operationEnv(operation),
+        IORI_OPERATION: operation,
+        IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
+      }),
+    )
       .toMatchObject({ operation, codeSha: env.MAIN_SHA, migrationSha: 'b'.repeat(40) });
   },
 );
+it('accepts put-bluesky-secrets only for production', () => {
+  const invocation = { ...env, IORI_OPERATION: 'put-bluesky-secrets' };
+  expect(parseWorkflowInvocation({ ...invocation, IORI_ENVIRONMENT: 'production' })).toMatchObject({
+    operation: 'put-bluesky-secrets',
+    environment: 'production',
+  });
+  for (const environment of ['staging', 'development']) {
+    expect(() => parseWorkflowInvocation({ ...invocation, IORI_ENVIRONMENT: environment })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
 it('binds protected invocation to reviewed main and separates maintenance code from immutable migration SHA', () => {
   expect(parseWorkflowInvocation(env)).toMatchObject({ codeSha: env.MAIN_SHA, migrationSha: env.MAIN_SHA });
   expect(() => parseWorkflowInvocation({ ...env, GITHUB_REF: 'refs/heads/feature' })).toThrow();
@@ -129,7 +149,7 @@ it('accepts restart-failed-source only without recovery and with a different mig
 it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
-    const valid = { ...env, IORI_OPERATION: operation };
+    const valid = { ...operationEnv(operation), IORI_OPERATION: operation };
     expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
     expect(parseWorkflowInvocation({ ...valid, IORI_RECOVERY: '' })).toMatchObject({ operation });
     for (const recovery of ['destination_writes_not_enabled', 'destination_writes_reconciled', 'x']) {
@@ -190,7 +210,7 @@ it('rejects diagnose-source with a recovery value, a stale main SHA or an unknow
 it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'])(
   'rejects an empty or missing generation and run ID for %s',
   operation => {
-    const invocation = { ...env, IORI_OPERATION: operation };
+    const invocation = { ...operationEnv(operation), IORI_OPERATION: operation };
     expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
     for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
       for (const empty of ['', undefined]) {
@@ -399,7 +419,7 @@ it.each([
       ? { ...env, IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
       : operation === 'resume-source'
       ? { ...env, IORI_RECOVERY: 'destination_writes_reconciled' }
-      : env;
+      : operationEnv(operation);
     expect(parseWorkflowInvocation({ ...base, IORI_OPERATION: operation })).toMatchObject({ operation });
     expect(() =>
       parseWorkflowInvocation({ ...base, IORI_OPERATION: operation, IORI_REPOST_CREATED_BEFORE_MS: '1700000000000' })
