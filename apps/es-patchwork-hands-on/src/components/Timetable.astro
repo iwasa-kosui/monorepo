@@ -1,10 +1,11 @@
 ---
 import { getCollection } from 'astro:content';
 
+import { chapterOfEntryId } from '../lib/chapter-routes';
 import { schedule, withTimeRanges } from '../schedule';
 
 const pageIds = new Set(
-  (await getCollection('chapters')).map((entry) => entry.id),
+  (await getCollection('chapters')).map((entry) => chapterOfEntryId(entry.id)),
 );
 ---
 

@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef } from 'hono/jsx';
 
-import { isNearDocumentEnd, shouldAutoLoadCursor, shouldLoadNow } from './infiniteScrollPosition.ts';
+import { decideLoadMore, isNearDocumentEnd } from './infiniteScrollPosition.ts';
 
 type UseInfiniteScrollProps = Readonly<{
   nextCursor: string | undefined;
   onLoadMore: (cursor: string) => void;
   debounceMs?: number;
+  isFirstPageSettled?: boolean;
 }>;
 
 export const useInfiniteScroll = ({
   nextCursor,
   onLoadMore,
   debounceMs = 300,
+  isFirstPageSettled = true,
 }: UseInfiniteScrollProps): void => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutRef = useRef<any>(undefined);
@@ -31,14 +33,20 @@ export const useInfiniteScroll = ({
 
   useEffect(() => {
     const check = (isAutomatic: boolean) => {
-      if (!shouldLoadNow(nextCursor, isNearDocumentEnd())) return;
-      if (!isAutomatic) {
-        debouncedLoadMore(nextCursor);
+      const decision = decideLoadMore({
+        isFirstPageSettled,
+        cursor: nextCursor,
+        isNearEnd: isFirstPageSettled && isNearDocumentEnd(),
+        isAutomatic,
+        lastAutoLoadedCursor: lastAutoLoadedCursorRef.current ?? undefined,
+      });
+      if (decision.kind === 'skip') return;
+      if (decision.kind === 'debounced') {
+        debouncedLoadMore(decision.cursor);
         return;
       }
-      if (!shouldAutoLoadCursor(nextCursor, lastAutoLoadedCursorRef.current ?? undefined)) return;
-      lastAutoLoadedCursorRef.current = nextCursor;
-      onLoadMore(nextCursor);
+      lastAutoLoadedCursorRef.current = decision.cursor;
+      onLoadMore(decision.cursor);
     };
 
     const handleScrollOrResize = () => check(false);
@@ -54,5 +62,5 @@ export const useInfiniteScroll = ({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [nextCursor, onLoadMore, debouncedLoadMore]);
+  }, [nextCursor, onLoadMore, debouncedLoadMore, isFirstPageSettled]);
 };

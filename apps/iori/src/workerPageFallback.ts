@@ -1,4 +1,5 @@
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
+import { speculationRulesScript } from './ui/api/speculationRules.ts';
 import { renderBottomNav, renderSidebar } from './workerPageNav.tsx';
 
 export const SITE_DESCRIPTION = 'A microblog by kosui';
@@ -84,7 +85,9 @@ export const createWorkerPageFallback = async (
     <script src="https://cdn.tailwindcss.com"></script>
     <style>${layoutStyle}</style>
     <script>${tailwindConfigScript}</script>
+    ${speculationRulesScript()}
     <script type="module" src="/static/${page.entry}.js"></script>
+    <script type="module" src="/static/navPrefetch.js"></script>
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
     isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16' : ''

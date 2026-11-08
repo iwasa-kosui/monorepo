@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  addXUserFeedSource,
   createStatus,
   deleteStatus,
   failureMessage,
@@ -9,6 +10,7 @@ import {
   fetchAccountStatuses,
   fetchBlueskyTimeline,
   fetchFavourites,
+  fetchFeedSources,
   fetchFollowers,
   fetchHomeTimeline,
   fetchNotifications,
@@ -33,6 +35,7 @@ import {
   saveNotificationsMarker,
   searchAccount,
   searchStatuses,
+  setFeedSourceEnabled,
   summarizeTimeline,
   translate,
   unfavourite,
@@ -568,6 +571,56 @@ describe('mastodon client requests', () => {
     expect(isMastodonApiError(error) && error.status).toBe(409);
     expect(isMastodonApiError(error) && error.message).toBe('Digest request too soon');
     expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(45);
+  });
+
+  it('fetches the feed sources through a same-origin GET', async () => {
+    const sources = [{ feedSourceId: 'f1', kind: 'x_user', title: '@jack' }];
+    const fetchMock = stubFetch(jsonResponse({ sources }));
+
+    const result = await fetchFeedSources();
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(sources);
+  });
+
+  it('posts the X user as JSON and returns the created source', async () => {
+    const source = { feedSourceId: 'f1', kind: 'x_user', title: '@jack' };
+    const fetchMock = stubFetch(jsonResponse({ source }, { status: 201 }));
+
+    const result = await addXUserFeedSource('jack');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({ kind: 'x_user', username: 'jack' });
+    expect(result).toEqual(source);
+  });
+
+  it('carries the status and the error on a rejected X user', async () => {
+    stubFetch(jsonResponse({ error: 'Feed source already exists' }, { status: 409 }));
+
+    const error = await addXUserFeedSource('jack').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
+    expect(isMastodonApiError(error) && error.message).toBe('Feed source already exists');
+  });
+
+  it('patches the enabled flag of the feed source with an encoded id', async () => {
+    const source = { feedSourceId: 'f/1', enabled: false };
+    const fetchMock = stubFetch(jsonResponse({ source }));
+
+    const result = await setFeedSourceEnabled('f/1', false);
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources/f%2F1');
+    expect(init.method).toBe('PATCH');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({ enabled: false });
+    expect(result).toEqual(source);
   });
 
   it('fetches the Bluesky timeline with the paging query', async () => {

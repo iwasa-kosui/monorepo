@@ -1,22 +1,3 @@
----
-goal: 「誰が、いつ、何を、なぜ」を業務イベントから答えられます。
----
-
-import CodeBlock from '../../components/CodeBlock.astro';
-import { whoCancelledQuery } from '../../lib/snapshots';
-
-## 業務イベントから答える
-
-第2章で編集した `chapter-1-start` か、`chapter-2-step-2` で、次のコマンドを実行します。
-
-```bash
-node who-cancelled.ts
-```
-
-`who-cancelled.ts` は、来院を2件用意して次の SELECT を実行します。`visits` と `business_events` を来院の ID で結びつけます。
-
-<CodeBlock code={whoCancelledQuery()} />
-
 実行すると、次の表が出ます。`event_at` の値は実行のたびに変わります。
 
 ```text
@@ -37,8 +18,3 @@ node who-cancelled.ts
 | 何を | `event_name` | 来院のキャンセル |
 | なぜ | `reason` | 飼い主の都合 |
 
-## 足す前の過去は残らない
-
-`visit-tama` は、記録を足す前にキャンセルされた来院を表します。第1章で見た行の1つです。この行の記録の列は `null` なので、この来院の問い合わせには今も答えられません。記録を足しても、足す前の出来事は分かりません。
-
-記録を足した時点から先の変更には答えられるようになります。足す前の過去をどう扱うかは、各自のシステムの事情で判断します。

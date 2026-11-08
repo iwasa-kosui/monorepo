@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
             search: './src/ui/pages/search.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
             bluesky: './src/ui/pages/bluesky.tsx',
+            navPrefetch: './src/ui/pages/navPrefetch.ts',
           },
           output: {
             entryFileNames: 'static/[name].js',

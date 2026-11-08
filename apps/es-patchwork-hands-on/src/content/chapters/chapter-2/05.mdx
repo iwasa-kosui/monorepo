@@ -1,0 +1,23 @@
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { cancelVisitOf } from '../../../lib/snapshots';
+
+## ステップ2: 理由と操作した人を記録する
+
+同じ `cancelVisit` を、次の2か所で変更します。
+
+1. `input` の型に `reason: string` と `operatedBy: string` を足します。
+2. `payload` の `JSON.stringify({})` を、`reason` と `operatedBy` を持つオブジェクトに変えます。キーの名前はこのとおりにします。テストと第3章の SELECT は `$.reason` と `$.operatedBy` を読みます。
+
+`node --test visits.test.ts` を実行します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
+
+<details>
+<summary>ステップ2の解答を見る</summary>
+
+<CodeBlock code={cancelVisitOf('chapter-2-step-2')} />
+
+</details>
+
+## 遅れたとき
+
+ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-1` に移動して続けます。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
+

@@ -46,6 +46,7 @@ export type PreviewCandidate = Readonly<{
   margin: number | null;
   excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
+  jevNoul?: number | null;
 }>;
 
 export type PreviewTopicCandidates = Readonly<{

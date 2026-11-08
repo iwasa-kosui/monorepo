@@ -7,6 +7,7 @@ import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.t
 import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import { sha256Hex } from '../../../helper/sha256.ts';
 import type { TextEmbedder } from '../../../ports/textEmbedder.ts';
+import type { TopicRelevanceJudge } from '../../../ports/topicRelevanceJudge.ts';
 import { createStubEmbedder, createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -927,7 +928,7 @@ describe('iori のダイジェスト API', () => {
           excludes: [],
         },
       ]);
-      expect(body.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0 });
+      expect(body.thresholds).toEqual({ minSimilarity: 0.55, minMargin: 0 });
       expect(body.candidates.total).toBe(3);
       expect(body.candidates.top1Histogram).toHaveLength(40);
       expect(body.candidates.top1Histogram.filter((bin) => bin.count > 0)).toEqual([
@@ -1016,6 +1017,94 @@ describe('iori のダイジェスト API', () => {
       expect(body.digestItems).toEqual([]);
     });
 
+    describe('?withJev', () => {
+      type JevBody = {
+        jev?: unknown;
+        candidates: { byTopic: Array<{ top: Array<{ feedEntryId: string; jevNoul?: number | null }> }> };
+      };
+      const seedForJev = (t: ReturnType<typeof setupReadApi>, userId: string) => {
+        addTopic(t, userId, 'genai', 0, { embedding: vec(1, 0, 0) });
+        addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
+        addEntry(t, 2, vec(2, 1, 0), Date.now() - HOUR_MS);
+      };
+
+      it('指定がなければ、判定を呼ばず、応答に jev も jevNoul も入れない', async () => {
+        const judge = vi.fn(() => RA.ok({ noul: 0.7 }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const body = await (await preview(t, me)).json() as JevBody;
+
+        expect(judge).not.toHaveBeenCalled();
+        expect('jev' in body).toBe(false);
+        expect(body.candidates.byTopic[0]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
+      });
+
+      it('?withJev=true なら、上位の候補に jevNoul を足し、jev に使ったモデルを返す', async () => {
+        const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.ok({ noul: 0.7 }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.jev).toEqual({
+          model: 'typesafe/jev',
+          configured: true,
+          perTopicLimit: 5,
+          totalLimit: 60,
+          overTotalLimit: false,
+        });
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([0.7, 0.7]);
+        expect(judge).toHaveBeenCalledWith({
+          model: 'typesafe/jev',
+          topic: { name: 'genai の名前', description: 'genai の説明' },
+          article: { title: expect.stringMatching(/^記事 [12]$/), excerpt: '' },
+        });
+      });
+
+      it('判定が失敗しても 200 で返し、その候補の jevNoul を null にする', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.err({ type: 'AiError', message: 'boom' }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
+        error.mockRestore();
+      });
+
+      it('判定が未設定でも 200 で返し、jev.configured を false、jevNoul を null にする', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.jev).toMatchObject({ configured: false });
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
+      });
+
+      it('?withJev=yes は 400 にして、withJev を返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await preview(t, me, '?withJev=yes');
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Validation failed: withJev' });
+      });
+    });
+
     it('クエリで候補記事の期間、ダイジェスト項目の期間、上位と下位の件数を絞る', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -1096,7 +1185,7 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         topics: [],
-        thresholds: { minSimilarity: 0.4, minMargin: 0 },
+        thresholds: { minSimilarity: 0.55, minMargin: 0 },
         candidates: { total: 0, byTopic: [], truncated: false },
         digestItemsTruncated: false,
         digestItems: [],
@@ -2473,14 +2562,14 @@ describe('iori のダイジェスト API', () => {
       });
 
       it.each(['https://x.com/jack', 'https://www.twitter.com/jack', 'https://X.COM/jack'])(
-        '所有者でないユーザーの rss の %s は、x_user の登録の有無によらず同じ 400 にする',
+        '所有者の rss の %s は、x_user の登録の有無によらず同じ 400 にする',
         async (url) => {
           const t = setupReadApi();
-          const other = await signInAsOther(t, 'write:accounts');
-          const absent = await post(t, other.bearer, { url, title: 'ブログ' });
+          const me = await t.signIn('write:accounts');
+          const absent = await post(t, me.bearer, { url, title: 'ブログ' });
           seedXSource(t);
 
-          const present = await post(t, other.bearer, { url, title: 'ブログ' });
+          const present = await post(t, me.bearer, { url, title: 'ブログ' });
 
           expect(absent.status).toBe(400);
           expect(present.status).toBe(400);
@@ -2610,16 +2699,32 @@ describe('iori のダイジェスト API', () => {
           expect(response.status).toBe(403);
         });
 
-        it('rss は所有者でなくても追加できる', async () => {
+        it('所有者でないユーザーの rss は 403 にし、何も作らない', async () => {
           const t = setupReadApi();
           const other = await signInAsOther(t, 'write:accounts');
 
           const response = await post(t, other.bearer, body);
 
-          expect(response.status).toBe(201);
-          expect(t.sqlite.prepare('SELECT kind FROM feed_sources').all()).toEqual([{ kind: 'rss' }]);
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
         });
       });
+
+      it.each([
+        ['url が無い', { title: 'ブログ' }],
+        ['title が無い', { url: 'https://example.com/feed.xml' }],
+      ])(
+        '所有者でないユーザーが rss を送るとき、%s でも 400 ではなく 403 にし、何も作らない',
+        async (_label, invalid) => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+
+          const response = await post(t, other.bearer, invalid);
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        },
+      );
     });
 
     describe('PATCH', () => {
@@ -2735,15 +2840,15 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 1 });
       });
 
-      it('rss の情報源は所有者でなくても変えられる', async () => {
+      it('所有者でないユーザーは rss の情報源を変えられず、404 にする', async () => {
         const t = setupReadApi();
         const other = await signInAsOther(t, 'write:accounts');
         seedSource(t);
 
         const response = await patch(t, SOURCE_ID, other.bearer, { enabled: false });
 
-        expect(response.status).toBe(200);
-        expect(rowOf(t)).toMatchObject({ enabled: 0 });
+        expect(response.status).toBe(404);
+        expect(rowOf(t)).toMatchObject({ enabled: 1 });
       });
 
       it('他の情報源は変えない', async () => {
@@ -2755,6 +2860,22 @@ describe('iori のダイジェスト API', () => {
         await patch(t, SOURCE_ID, me.bearer, { enabled: false });
 
         expect(rowOf(t, '22222222-2222-4222-8222-222222222222')).toMatchObject({ enabled: 1 });
+      });
+
+      it.each([
+        ['形式の不正な ID', 'missing', { enabled: false }],
+        ['形式は正しいが存在しない ID', '22222222-2222-4222-8222-222222222222', { enabled: false }],
+        ['存在する情報源への不正な body', SOURCE_ID, { enabled: 'maybe' }],
+      ])('所有者でないユーザーが %s で呼んでも 404 にし、何も変えない', async (_label, feedSourceId, invalid) => {
+        const t = setupReadApi();
+        const other = await signInAsOther(t, 'write:accounts');
+        seedSource(t);
+
+        const response = await patch(t, feedSourceId, other.bearer, invalid);
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: 'Feed source not found' });
+        expect(rowOf(t)).toMatchObject({ enabled: 1 });
       });
 
       it('無い情報源は 404 にする', async () => {

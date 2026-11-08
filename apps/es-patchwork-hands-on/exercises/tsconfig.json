@@ -11,5 +11,6 @@
     "verbatimModuleSyntax": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../scripts/*.ts"]
+  "include": ["**/*.ts", "../scripts/*.ts"],
+  "exclude": ["../scripts/check-browser-runtime.ts"]
 }

@@ -156,6 +156,7 @@ import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebP
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
+import { createWorkersAiTopicRelevanceJudge } from '../adaptor/workersAi/workersAiTopicRelevanceJudge.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
@@ -498,6 +499,7 @@ export const createWorkerRuntimePorts = async (
         digestTopicItemsResolverByUserIdAndDigestDateFrom: createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(
           db,
         ),
+        topicRelevanceJudge: workersAi === undefined ? undefined : createWorkersAiTopicRelevanceJudge(workersAi),
         now: Instant.now,
       }),
     },

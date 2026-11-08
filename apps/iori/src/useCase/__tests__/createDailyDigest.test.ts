@@ -582,14 +582,13 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 1, items: 3 });
   });
 
-  it('トピックは項目数の多い順、同数なら sortOrder の順に最大 4 本までにする', async () => {
+  it('トピックは記事数の多い順、同数なら sortOrder の順に並べ、境界が同数でなければ 4 本までにする', async () => {
     const t = setup();
     const embeddings: Array<[string, number, number]> = [
       ['platform', 1, 5],
-      ['server', 2, 4],
-      ['design', 3, 3],
-      ['ciam', 4, 3],
-      ['security', 5, 3],
+      ['server', 2, 5],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
     ];
     t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
     for (const [topicKey, index, count] of embeddings) {
@@ -599,8 +598,151 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
 
     const result = await t.run();
 
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 4 + 4 });
+  });
+
+  it('4 本目と 5 本目のトピックの記事数が同じなら、5 本すべて作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 15 });
+  });
+
+  it('4 本目と 5 本目のトピックの記事数が違えば、4 本だけ作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 4],
+      ['design', 3, 4],
+      ['ciam', 4, 4],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 4 + 4 + 4 });
+  });
+
+  it('5 件で切る前の記事数で同数かどうかを判定する', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 8],
+      ['server', 2, 7],
+      ['design', 3, 6],
+      ['ciam', 4, 5],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 9, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
     expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 4, items: 3 + 3 + 5 + 4 });
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+  });
+
+  it('5 件で切る前の記事数が同じトピックは、すべて作る', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 7],
+      ['design', 3, 7],
+      ['ciam', 4, 7],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 7, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 5, items: 25 });
+  });
+
+  it('5 件を超える記事があるとき、切る前の記事数の多いトピックを先に選ぶ', async () => {
+    const t = setup();
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 8],
+      ['design', 3, 9],
+      ['ciam', 4, 10],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+  });
+
+  it('材料があるときも、5 件で切る前の記事数の多いトピックを先に選ぶ', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 8],
+      ['design', 3, 9],
+      ['ciam', 4, 10],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+    for (const topicKey of ['ciam', 'design', 'platform', 'server']) {
+      expect(t.itemsOf(topicKey).every((item) => item.score !== null)).toBe(true);
+    }
+  });
+
+  it('材料があるときは、スコアが正の記事だけを数えて同数を判定する', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    t.addInterest('feedback_negative', 'https://example.com/disliked', basis(7));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 6],
+      ['design', 3, 7],
+      ['ciam', 4, 8],
+    ];
+    t.addEntries(t.sources.rss, 'Match', 4, () => ({ embedding: basis(0) }));
+    t.addEntries(t.sources.rss, 'Disliked', 8, () => ({ embedding: vec({ 0: 1, 7: 2 }) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 5 + 5 });
+    expect(t.itemsOf('platform').every((item) => item.score !== null)).toBe(true);
   });
 
   it('止めたトピックには振り分けない', async () => {
@@ -921,7 +1063,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     });
 
   it('関心のベクトルがあれば、トピックごとにおすすめの点数が正の記事を選び、score と根拠と rank を保存する', async () => {
-    const t = setup();
+    const t = setup({ topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({ minSimilarity: 0.4, minMargin: 0 }) });
     const interestSourceId = t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addEntry(t.sources.rss, 'Low', { count: 99, embedding: vec({ 0: 1, 1: 2 }) });
     t.addEntry(t.sources.rss, 'Mid', { count: 1, embedding: vec({ 0: 1, 1: 1 }) });
@@ -964,7 +1106,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     const t = setup();
     t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addInterest('feedback_negative', 'https://example.com/disliked', basis(1));
-    t.addEntry(t.sources.rss, 'Disliked', { count: 1, embedding: vec({ 0: 1, 1: 1.5 }) });
+    t.addEntry(t.sources.rss, 'Disliked', { count: 1, embedding: vec({ 0: 1, 1: 1.2 }) });
     t.addEntry(t.sources.rss, 'Fine one', { count: 1, embedding: vec({ 0: 1, 2: 0.3 }) });
     t.addEntry(t.sources.rss, 'Fine two', { count: 1, embedding: vec({ 0: 1, 3: 0.3 }) });
     t.addEntry(t.sources.rss, 'Match', { count: 1, embedding: basis(0) });
@@ -996,7 +1138,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addInterest('feedback_negative', 'https://example.com/disliked', basis(1));
     t.addEntries(t.sources.rss, 'Match', 3, () => ({ count: 1 }));
-    t.addEntries(t.sources.rss, 'Disliked', 3, () => ({ count: 1000, embedding: vec({ 0: 1, 1: 2 }) }));
+    t.addEntries(t.sources.rss, 'Disliked', 3, () => ({ count: 1000, embedding: vec({ 0: 1, 1: 1.2 }) }));
 
     const result = await t.run();
 
@@ -1010,7 +1152,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addInterest('feedback_negative', 'https://example.com/disliked', basis(1));
     t.addEntries(t.sources.rss, 'Match', 2, () => ({ count: 1 }));
-    t.addEntries(t.sources.rss, 'Disliked', 3, () => ({ count: 1000, embedding: vec({ 0: 1, 1: 2 }) }));
+    t.addEntries(t.sources.rss, 'Disliked', 3, () => ({ count: 1000, embedding: vec({ 0: 1, 1: 1.2 }) }));
 
     await t.run();
 
@@ -1205,7 +1347,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
   const strictPolicy = TopicAssignmentPolicy.orThrow({ minSimilarity: 0.8, minMargin: 0 });
 
   it('関心の点数が高くてもトピックとの類似度が低い記事より、点数がやや低くてもトピックとの類似度が高い記事を上に置く', async () => {
-    const t = setup();
+    const t = setup({ topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({ minSimilarity: 0.4, minMargin: 0 }) });
     t.addInterest('kosui_post', KOSUI_REF, interest);
     t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
     t.addEntry(t.sources.rss, 'Close to topic', { count: 1, embedding: vec({ 0: 1, 1: 0.3 }) });
@@ -1237,7 +1379,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
   it('関心の材料が無いとき、既定の方針ではトピックとの類似度が低くても、はてなの件数が多い記事を先に置く', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Near', 3);
-    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.5 }) });
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.2 }) });
 
     await t.run();
 
@@ -1247,7 +1389,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
   it('関心の材料が無いとき、minSimilarity 未満の記事を選ばず、残りははてなの件数の順にする', async () => {
     const t = setup({ topicAssignmentPolicy: strictPolicy });
     t.addEntries(t.sources.rss, 'Near', 3);
-    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.5 }) });
+    t.addEntry(t.sources.rss, 'Far from topic', { count: 1000, embedding: vec({ 0: 1, 1: 1.2 }) });
 
     await t.run();
 
@@ -1935,6 +2077,25 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(t.bodies().privateHtml).toContain(`/articles/${t.digestOf('platform')!.articleId}`);
   });
 
+  it('残る topic があって枠が減っても、減った枠の境界と記事数が同じ topic はすべて作る', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'platform', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 2 * HOUR }));
+    await t.run('requested');
+    for (const topicKey of ['genai', 'platform']) t.setArticleStatusOf(topicKey, 'published');
+    for (const [topicKey, index] of [['server', 2], ['design', 3], ['ciam', 4]] as const) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW }));
+    }
+    t.clock.value = (NOW + HOUR) as typeof NOW;
+
+    const result = await t.run('requested');
+
+    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 3 });
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
+  });
+
   it('残る topic の記事の項目は、置き換えで作る topic に載せない', async () => {
     const t = setup();
     seedTwoTopics(t);
@@ -2093,11 +2254,15 @@ describe('CreateDailyDigestUseCase: requested', () => {
 
   it('残る topic が 4 本に達していれば、新しい topic は作らない', async () => {
     const t = setup();
-    const keys: Array<[string, number]> = [['platform', 1], ['server', 2], ['design', 3], ['ciam', 4]];
-    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    for (const [topicKey, index] of keys) {
+    const keys: Array<[string, number, number]> = [['platform', 1, 4], ['server', 2, 4], ['design', 3, 4], [
+      'ciam',
+      4,
+      3,
+    ]];
+    t.addEntries(t.sources.rss, 'genai', 4, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    for (const [topicKey, index, count] of keys) {
       t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
     }
     await t.run('requested');
     expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);

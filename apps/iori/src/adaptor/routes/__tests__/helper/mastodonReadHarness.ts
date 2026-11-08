@@ -10,6 +10,7 @@ import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
+import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
 import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
@@ -182,6 +183,7 @@ export const setupReadApi = (
   options: Readonly<{
     textGenerator?: TextGenerator;
     textEmbedder?: TextEmbedder;
+    topicRelevanceJudge?: TopicRelevanceJudge;
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
     collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
@@ -582,6 +584,7 @@ export const setupReadApi = (
             recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
             digestTopicItemsResolverByUserIdAndDigestDateFrom:
               createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db),
+            topicRelevanceJudge: options.topicRelevanceJudge,
             now: Instant.now,
           }),
         }),

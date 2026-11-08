@@ -174,6 +174,21 @@ describe('createWorkerPageFallback', () => {
     expect(await renderBottomNav(true)).not.toContain('href="/x"');
   });
 
+  it('embeds prefetch-only speculation rules that never target /auth or prerender', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
+    const html = (await response?.text()) ?? '';
+    const match = /<script type="speculationrules">([^<]*)<\/script>/.exec(html);
+
+    expect(match).not.toBeNull();
+    const rules = JSON.parse(match?.[1] ?? '{}') as { prefetch?: { eagerness?: string }[]; prerender?: unknown };
+    expect(rules.prerender).toBeUndefined();
+    expect(rules.prefetch?.[0]?.eagerness).toBe('moderate');
+    expect(match?.[1]).not.toContain('prerender');
+    expect(match?.[1]).not.toContain('/auth');
+    expect(match?.[1]).toContain('"selector_matches":"aside nav a, body > nav a"');
+    expect(html).toContain('<script type="module" src="/static/navPrefetch.js"></script>');
+  });
+
   it('does not claim unknown GET routes', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/not-a-page'));
     expect(response).toBeUndefined();
