@@ -118,7 +118,7 @@ export const createWorkerIoriArticlesRouter = ({
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,
         hatenaCounts: digest.val.topicKey === SUMMARY_DIGEST_TOPIC_KEY && digest.val.items.length > 0,
-        xPosts: digest.val.topicKey === SUMMARY_DIGEST_TOPIC_KEY && digest.val.items.length === 0,
+        xPosts: digest.val.xPostFeedEntryIds.length > 0,
         recommendations: digest.val.items.some((item) => item.reasonInterestSourceId !== null),
       },
     };

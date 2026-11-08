@@ -575,6 +575,14 @@ export const digestTrendsTable = sqliteTable('digest_trends', {
   primaryKey({ columns: [table.digestId, table.kind, table.rank] }),
 ]);
 
+export const digestXPostsTable = sqliteTable('digest_x_posts', {
+  digestId: text('digestId').notNull().references(() => digestsTable.digestId),
+  rank: integer('rank').notNull(),
+  feedEntryId: text('feedEntryId').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.digestId, table.rank] }),
+]);
+
 export const interestSourcesTable = sqliteTable('interest_sources', {
   interestSourceId: text('interestSourceId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -647,5 +655,6 @@ export const schema = {
   digestDeepDiveTurnsTable,
   digestDeepDiveUsagesTable,
   digestTrendsTable,
+  digestXPostsTable,
   interestSourcesTable,
 } as const;

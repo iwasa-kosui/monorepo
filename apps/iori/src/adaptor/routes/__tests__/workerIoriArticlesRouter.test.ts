@@ -732,6 +732,7 @@ describe('createWorkerIoriArticlesRouter', () => {
       itemCount: number,
       reasonInterestSourceId: string | null = null,
       topicKey = 'genai',
+      xPostFeedEntryIds: ReadonlyArray<string> = [],
     ) => {
       const created = Digest.create({
         userId: authorUserId,
@@ -755,6 +756,7 @@ describe('createWorkerIoriArticlesRouter', () => {
           { kind: 'timeline_link', rank: 2, url: 'https://example.com/t2', title: 'T2', count: 2 },
           { kind: 'hatena', rank: 1, url: 'https://example.com/h1', title: 'H1', count: 100 },
         ],
+        xPostFeedEntryIds,
       }, createdAt);
       if (!created.ok) throw new Error('unexpected');
       return created.val.aggregateState;
@@ -941,19 +943,19 @@ describe('createWorkerIoriArticlesRouter', () => {
       expect(body.digest).toMatchObject({ topicKey: 'summary', excluded: { hatenaCounts: false } });
     });
 
-    it('新形式のまとめ（項目を持たない）だけ xPosts を true にする', async () => {
-      const summary = createArticle('draft');
-      const legacy = createArticle('draft');
+    it('X の投稿の feedEntryId を保存したまとめだけ xPosts を true にする', async () => {
+      const withPosts = createArticle('draft');
+      const withoutPosts = createArticle('draft');
       const topic = createArticle('draft');
       const detailOf = async (article: Article, digest: Digest) => {
         const t = createDigestApp(article, digest);
         return (await getDetail(t, article, t.auth.cookieFor(authorUserId))).digest;
       };
 
-      expect(await detailOf(summary, createDigest(summary, 0, null, 'summary'))).toMatchObject({
+      expect(await detailOf(withPosts, createDigest(withPosts, 0, null, 'summary', ['x-1']))).toMatchObject({
         excluded: { xPosts: true },
       });
-      expect(await detailOf(legacy, createDigest(legacy, 2, null, 'summary'))).toMatchObject({
+      expect(await detailOf(withoutPosts, createDigest(withoutPosts, 0, null, 'summary'))).toMatchObject({
         excluded: { xPosts: false },
       });
       expect(await detailOf(topic, createDigest(topic, 2))).toMatchObject({ excluded: { xPosts: false } });

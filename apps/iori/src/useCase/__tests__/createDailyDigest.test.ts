@@ -2817,78 +2817,66 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
       ...options,
     });
   };
-  const xHtmlOf = (t: ReturnType<typeof setup>) => t.bodies().privateHtml;
-  const storedOutsideSummaryPrivateBody = (t: ReturnType<typeof setup>): string =>
-    JSON.stringify([
-      t.all('SELECT * FROM digests'),
-      t.all('SELECT * FROM digest_items'),
-      t.all('SELECT * FROM digest_trends'),
-      t.all(
-        'SELECT eventName, eventPayload, aggregateState FROM domain_events WHERE NOT (aggregateName = \'articleBody\' AND aggregateId = \'"\' || (SELECT articleId FROM digests WHERE topicKey = \'summary\') || \'"\')',
-      ),
-      t.all(
-        'SELECT eventName, eventPayload FROM domain_events WHERE aggregateName = \'articleBody\' AND aggregateId = \'"\' || (SELECT articleId FROM digests WHERE topicKey = \'summary\') || \'"\'',
-      ),
-      t.all('SELECT * FROM articles'),
-      t.all(
-        'SELECT articleId, publicHtml, markdown FROM article_bodies',
-      ),
-      t.all(
-        'SELECT privateHtml FROM article_bodies WHERE articleId = (SELECT articleId FROM digests WHERE topicKey = \'genai\')',
-      ),
-    ]);
+  const storedFeedEntryIds = (t: ReturnType<typeof setup>, articleId?: string): string[] =>
+    (t.all(
+      `SELECT x.feedEntryId FROM digest_x_posts x JOIN digests d ON d.digestId = x.digestId ${
+        articleId === undefined ? '' : `WHERE d.articleId = '${articleId}'`
+      } ORDER BY x.rank`,
+    ) as Array<{ feedEntryId: string }>).map((row) => row.feedEntryId);
+  const dump = (t: ReturnType<typeof setup>, query: string): string => JSON.stringify(t.all(query));
 
-  it('有効な x_user の投稿を、まとめの非公開版に「X の投稿」の節として、ユーザー名と URL つきで載せる', async () => {
+  it('有効な x_user の投稿の feedEntryId だけを、まとめの digest に保存する', async () => {
     const t = setup();
     const source = addXSource(t, USERNAME);
     const post = addXPost(t, source, POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
 
     const result = await t.run();
 
-    const html = xHtmlOf(t);
     expect(result.xPosts).toBe(1);
-    expect(html).toContain('<h2>X の投稿</h2>');
-    expect(html).toContain(`@${USERNAME} <a href="${post.url}" rel="noopener noreferrer nofollow">${POST_TEXT}</a>`);
+    expect(storedFeedEntryIds(t, result.articleId)).toEqual([post.feedEntryId]);
+    expect(t.all('SELECT * FROM digest_x_posts')).toEqual([
+      { digestId: result.digestId, rank: 1, feedEntryId: post.feedEntryId },
+    ]);
   });
 
-  it('無効な情報源の投稿と、24 時間より前に取得した投稿は載せない', async () => {
+  it('まとめの記事の本文には、「X の投稿」の節を入れない', async () => {
+    const t = setup();
+    addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+
+    await t.run();
+
+    expect(t.bodies().privateHtml).not.toContain('X の投稿');
+  });
+
+  it('無効な情報源の投稿と、24 時間より前に取得した投稿は保存しない', async () => {
     const t = setup();
     const enabled = addXSource(t, 'enabled_user');
     const disabled = addXSource(t, 'disabled_user', false);
-    addXPost(t, enabled, 'fresh post', { fetchedAt: NOW - 2 * HOUR });
+    const fresh = addXPost(t, enabled, 'fresh post', { fetchedAt: NOW - 2 * HOUR });
     addXPost(t, enabled, 'stale post', { fetchedAt: NOW - 25 * HOUR });
     addXPost(t, disabled, 'disabled post', { fetchedAt: NOW - 2 * HOUR });
 
     const result = await t.run();
 
-    const html = xHtmlOf(t);
     expect(result.xPosts).toBe(1);
-    expect(html).toContain('fresh post');
-    expect(html).not.toContain('stale post');
-    expect(html).not.toContain('disabled post');
-    expect(html).not.toContain('disabled_user');
+    expect(storedFeedEntryIds(t)).toEqual([fresh.feedEntryId]);
   });
 
-  it('直前の日の digest の createdAt より後に取得した投稿だけを載せる', async () => {
+  it('直前の日の digest の createdAt より後に取得した投稿だけを保存する', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
     t.clock.value = (NOW - 12 * HOUR) as typeof NOW;
     await t.run('scheduled');
     t.clock.value = NOW;
     addXPost(t, source, 'older post', { fetchedAt: NOW - 13 * HOUR });
-    addXPost(t, source, 'newer post', { fetchedAt: NOW - 11 * HOUR });
+    const newer = addXPost(t, source, 'newer post', { fetchedAt: NOW - 11 * HOUR });
 
     const result = await t.run('scheduled');
 
-    const privateHtml =
-      (t.all(`SELECT privateHtml FROM article_bodies WHERE articleId = '${result.articleId}'`) as Array<
-        { privateHtml: string }
-      >)[0]!.privateHtml;
-    expect(privateHtml).toContain('newer post');
-    expect(privateHtml).not.toContain('older post');
+    expect(storedFeedEntryIds(t, result.articleId)).toEqual([newer.feedEntryId]);
   });
 
-  it('X の投稿が無い日は、節を出さず、件数を 0 にする', async () => {
+  it('X の投稿が無い日は、何も保存せず、件数を 0 にする', async () => {
     const t = setup();
     addXSource(t, USERNAME);
     t.addEntries(t.sources.rss, 'News', 3);
@@ -2896,15 +2884,15 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     const result = await t.run();
 
     expect(result.xPosts).toBe(0);
-    expect(xHtmlOf(t)).not.toContain('X の投稿');
+    expect(storedFeedEntryIds(t)).toEqual([]);
   });
 
   it('投稿が 10 件を超え、関心の材料があれば、関心に近い投稿だけを選ぶ', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
     t.addInterest('own_post', 'post-1', basis(0));
-    addXPost(t, source, 'near one', { embedding: basis(0), publishedAt: NOW - 5 * HOUR });
-    addXPost(t, source, 'near two', { embedding: basis(0), publishedAt: NOW - 6 * HOUR });
+    const one = addXPost(t, source, 'near one', { embedding: basis(0), publishedAt: NOW - 5 * HOUR });
+    const two = addXPost(t, source, 'near two', { embedding: basis(0), publishedAt: NOW - 6 * HOUR });
     for (let i = 1; i <= 10; i += 1) {
       addXPost(t, source, `far ${i}`, { embedding: basis(1), publishedAt: NOW - i * 1000 });
     }
@@ -2912,26 +2900,22 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     const result = await t.run();
 
     expect(result.xPosts).toBe(2);
-    expect(xHtmlOf(t)).toContain('near one');
-    expect(xHtmlOf(t)).toContain('near two');
-    expect(xHtmlOf(t)).not.toContain('far 1<');
+    expect(storedFeedEntryIds(t)).toEqual([one.feedEntryId, two.feedEntryId]);
   });
 
-  it('投稿が 10 件を超え、関心の材料が無ければ、新しい順に 10 件を載せる', async () => {
+  it('投稿が 10 件を超え、関心の材料が無ければ、新しい順に 10 件を保存する', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
-    for (let i = 1; i <= 12; i += 1) addXPost(t, source, `post ${i}`, { publishedAt: NOW - i * 1000 });
+    const posts = [];
+    for (let i = 1; i <= 12; i += 1) posts.push(addXPost(t, source, `post ${i}`, { publishedAt: NOW - i * 1000 }));
 
     const result = await t.run();
 
-    const html = xHtmlOf(t);
     expect(result.xPosts).toBe(10);
-    expect(html).toContain('>post 10<');
-    expect(html).not.toContain('>post 11<');
-    expect(html).not.toContain('>post 12<');
+    expect(storedFeedEntryIds(t)).toEqual(posts.slice(0, 10).map((post) => post.feedEntryId));
   });
 
-  it('トピックの記事の非公開版と公開版、まとめの公開版、digest の項目と trends、domain event には、投稿の本文もユーザー名も URL も入れない', async () => {
+  it('記事、記事本文、digest の項目と trends、domain event には、投稿の本文もユーザー名も URL も feedEntryId も入れない', async () => {
     const t = setup();
     const source = addXSource(t, USERNAME);
     const post = addXPost(t, source, POST_TEXT, { embedding: basis(0), fetchedAt: NOW - 2 * HOUR });
@@ -2943,10 +2927,28 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     expect(result).toMatchObject({ topics: 1, xPosts: 1 });
     expect(t.bodiesOf('genai').privateHtml).toContain('News 1');
     expect(t.bodies().publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
-    const stored = storedOutsideSummaryPrivateBody(t);
+    const stored = [
+      dump(t, 'SELECT * FROM articles'),
+      dump(t, 'SELECT * FROM article_bodies'),
+      dump(t, 'SELECT * FROM digests'),
+      dump(t, 'SELECT * FROM digest_items'),
+      dump(t, 'SELECT * FROM digest_trends'),
+      dump(t, 'SELECT eventName, eventPayload, aggregateState FROM domain_events WHERE aggregateName <> \'digest\''),
+    ].join('\n');
     for (const secret of [POST_TEXT, USERNAME, post.url, 'x.com', post.feedEntryId]) {
       expect(stored.includes(secret), secret).toBe(false);
     }
+  });
+
+  it('digest の domain event には、投稿の feedEntryId だけを入れ、本文もユーザー名も URL も入れない', async () => {
+    const t = setup();
+    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+
+    await t.run();
+
+    const event = dump(t, 'SELECT eventPayload, aggregateState FROM domain_events WHERE aggregateName = \'digest\'');
+    expect(event).toContain(post.feedEntryId);
+    for (const secret of [POST_TEXT, USERNAME, post.url, 'x.com']) expect(event.includes(secret), secret).toBe(false);
   });
 
   it('投稿の本文を、要約の AI に渡さず、ログにも出さない', async () => {
@@ -2976,6 +2978,19 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
 
     expect(JSON.stringify(t.send.mock.calls)).not.toContain(POST_TEXT);
     expect(JSON.stringify(t.send.mock.calls)).not.toContain(USERNAME);
+  });
+
+  it('日を置き換えて作り直すと、前の digest の X の投稿の行を消し、新しい digest の行だけが残る', async () => {
+    const t = setup();
+    const source = addXSource(t, 'user_a');
+    const first = addXPost(t, source, 'first', { fetchedAt: NOW - 2 * HOUR });
+    await t.run('requested');
+    const second = addXPost(t, source, 'second', { fetchedAt: NOW - 1 * HOUR, publishedAt: NOW });
+
+    await t.run('requested');
+
+    expect(storedFeedEntryIds(t)).toEqual([second.feedEntryId, first.feedEntryId]);
+    expect(t.all('SELECT count(DISTINCT digestId) AS n FROM digest_x_posts')).toEqual([{ n: 1 }]);
   });
 });
 

@@ -36,6 +36,7 @@ import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResol
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
+import { createD1DigestXPostsResolverByArticleId } from '../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -569,6 +570,7 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
+        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,

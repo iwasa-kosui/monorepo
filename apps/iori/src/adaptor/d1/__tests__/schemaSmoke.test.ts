@@ -18,6 +18,7 @@ describe('D1 schema', () => {
       'digestSubscriptionsTable',
       'digestTopicsTable',
       'digestTrendsTable',
+      'digestXPostsTable',
       'digestsTable',
       'domainEventsTable',
       'emojiReactsTable',

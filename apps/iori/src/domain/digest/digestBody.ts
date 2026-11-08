@@ -1,3 +1,4 @@
+import type { DigestXPost } from './digest.ts';
 import type { TrendCandidate } from './digestMaterial.ts';
 
 export type DigestBodyRadar = Readonly<{ title: string; url: string }>;
@@ -104,12 +105,9 @@ export const buildDigestBodies = ({
 
 export type DigestSummaryBodyTopic = Readonly<{ name: string; articleId: string }>;
 
-export type DigestSummaryBodyXPost = Readonly<{ username: string; title: string; url: string }>;
-
 export type DigestSummaryBodyInput = Readonly<{
   radar: DigestBodyRadar | undefined;
   topics: ReadonlyArray<DigestSummaryBodyTopic>;
-  xPosts?: ReadonlyArray<DigestSummaryBodyXPost>;
   timelineTrends: ReadonlyArray<TrendCandidate>;
   hatenaTrends: ReadonlyArray<TrendCandidate>;
 }>;
@@ -122,21 +120,19 @@ const topicsSection = (topics: ReadonlyArray<DigestSummaryBodyTopic>): string =>
     topics.map((topic) => `<a href="/articles/${encodeURIComponent(topic.articleId)}">${escapeHtml(topic.name)}</a>`),
   );
 
-// X と提携していない手段で取った投稿なので、非公開版のまとめにだけ載せ、公開版と digest の保存データには入れない
-const xPostsSection = (xPosts: ReadonlyArray<DigestSummaryBodyXPost>): string =>
+// X と提携していない手段で取った投稿なので、記事には保存せず、所有者が非公開版を開くときだけ足す
+export const buildXPostsSection = (xPosts: ReadonlyArray<DigestXPost>): string =>
   section('X の投稿', xPosts.map(({ username, title, url }) => `${escapeHtml(`@${username}`)} ${link(title, url)}`));
 
 export const buildSummaryBodies = ({
   radar,
   topics,
-  xPosts = [],
   timelineTrends,
   hatenaTrends,
 }: DigestSummaryBodyInput): DigestBodies => ({
   privateHtml: join([
     radarSection(radar),
     topicsSection(topics),
-    xPostsSection(xPosts),
     trendsSection('みんなの関心（iori のタイムライン）', timelineTrends, '人が共有'),
     trendsSection('みんなの関心（はてなブックマーク）', hatenaTrends, 'ブックマーク'),
   ]),

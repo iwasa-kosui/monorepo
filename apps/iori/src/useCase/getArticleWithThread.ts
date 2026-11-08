@@ -5,6 +5,8 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { DigestXPostsResolverByArticleId } from '../domain/digest/digest.ts';
+import { buildXPostsSection } from '../domain/digest/digestBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostWithAuthor, type ThreadResolver } from '../domain/post/post.ts';
 import type { UserId } from '../domain/user/userId.ts';
@@ -34,12 +36,14 @@ type Deps = Readonly<{
   articleResolver: ArticleResolver;
   threadResolver: ThreadResolver;
   articleBodyResolver: ArticleBodyResolver;
+  digestXPostsResolverByArticleId?: DigestXPostsResolverByArticleId;
 }>;
 
 const create = ({
   articleResolver,
   threadResolver,
   articleBodyResolver,
+  digestXPostsResolverByArticleId,
 }: Deps): GetArticleWithThreadUseCase => {
   const run = async (input: Input) =>
     RA.flow(
@@ -66,7 +70,14 @@ const create = ({
           if (body.val === undefined) {
             return RA.err(ArticleNotFoundError.create(article.articleId));
           }
-          const html = article.status === 'published' ? body.val.publicHtml : body.val.privateHtml;
+          if (article.status === 'published') {
+            return RA.ok({ article, thread: [], body: { html: body.val.publicHtml, updatedAt: body.val.updatedAt } });
+          }
+          const xPosts = await digestXPostsResolverByArticleId?.resolve(article.articleId);
+          if (xPosts !== undefined && !xPosts.ok) {
+            return xPosts;
+          }
+          const html = body.val.privateHtml + (xPosts === undefined ? '' : buildXPostsSection(xPosts.val));
           return RA.ok({ article, thread: [], body: { html, updatedAt: body.val.updatedAt } });
         }
         const threadData = await threadResolver.resolve({

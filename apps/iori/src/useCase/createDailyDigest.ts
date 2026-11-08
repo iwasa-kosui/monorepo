@@ -562,7 +562,6 @@ const create = ({
           })),
           ...topicDigests.map(({ selection, articleId }) => ({ name: selection.topic.name, articleId })),
         ],
-        xPosts,
         timelineTrends: timelineTrends.val,
         hatenaTrends: hatenaTrends.val,
       }),
@@ -593,6 +592,7 @@ const create = ({
           feedbackAt: null,
         })),
         trends: [],
+        xPostFeedEntryIds: [],
       }, now());
       if (!created.ok) {
         await discardCreatedArticles();
@@ -611,6 +611,7 @@ const create = ({
         ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
         ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
       ],
+      xPostFeedEntryIds: xPosts.map((post) => post.feedEntryId),
     }, now());
     if (!summaryCreated.ok) {
       await discardCreatedArticles();
