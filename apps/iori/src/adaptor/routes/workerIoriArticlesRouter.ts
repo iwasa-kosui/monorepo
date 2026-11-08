@@ -118,6 +118,7 @@ export const createWorkerIoriArticlesRouter = ({
         timelineLinks: digest.val.trends.filter((trend) => trend.kind === 'timeline_link').length,
         hatena: digest.val.trends.filter((trend) => trend.kind === 'hatena').length,
         hatenaCounts: digest.val.topicKey === SUMMARY_DIGEST_TOPIC_KEY && digest.val.items.length > 0,
+        xPosts: digest.val.xPostFeedEntryIds.length > 0,
         recommendations: digest.val.items.some((item) => item.reasonInterestSourceId !== null),
       },
     };
@@ -151,6 +152,10 @@ export const createWorkerIoriArticlesRouter = ({
           : c.json({ error: `Failed to get article: ${JSON.stringify(result.err)}` }, 400);
       }
       const digest = await resolveDigestExclusions(result.val.article, viewerUserId);
+      if (result.val.hasXPosts === true) {
+        c.header('Cache-Control', 'private, no-store');
+        c.header('X-Robots-Tag', 'noindex');
+      }
       return c.json({
         article: result.val.article,
         thread: result.val.thread.map((post) => ({ ...post, content: sanitizePostContent(post.content) })),

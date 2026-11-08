@@ -13,6 +13,7 @@ import {
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
+  digestXPostsTable,
   domainEventsTable,
 } from '../schema.ts';
 
@@ -26,6 +27,7 @@ export const createD1ArticleWithDependentsDeletedStore = (db: IoriD1Db): Article
       db.delete(digestDeepDivesTable).where(eq(digestDeepDivesTable.articleId, articleId)),
       ...(digestExpired === undefined ? [] : [
         db.delete(digestTrendsTable).where(eq(digestTrendsTable.digestId, digestExpired.eventPayload.digestId)),
+        db.delete(digestXPostsTable).where(eq(digestXPostsTable.digestId, digestExpired.eventPayload.digestId)),
         db.delete(digestItemsTable).where(eq(digestItemsTable.digestId, digestExpired.eventPayload.digestId)),
         db.delete(digestsTable).where(eq(digestsTable.digestId, digestExpired.eventPayload.digestId)),
         db.insert(domainEventsTable).values(toD1DomainEventRow(digestExpired)),

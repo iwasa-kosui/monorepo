@@ -5,10 +5,13 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import { Article, ArticleNotFoundError, type ArticleResolver } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { DigestXPostsResolverByArticleId } from '../domain/digest/digest.ts';
+import { buildXPostsSection } from '../domain/digest/digestBody.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostWithAuthor, type ThreadResolver } from '../domain/post/post.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { Schema } from '../helper/schema.ts';
+import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -22,6 +25,7 @@ const Ok = Schema.create(
     article: Article.zodType,
     thread: z.array(z.custom<PostWithAuthor>()),
     body: z.object({ html: z.string(), updatedAt: Instant.zodType }).optional(),
+    hasXPosts: z.literal(true).optional(),
   }),
 );
 type Ok = z.infer<typeof Ok.zodType>;
@@ -34,12 +38,18 @@ type Deps = Readonly<{
   articleResolver: ArticleResolver;
   threadResolver: ThreadResolver;
   articleBodyResolver: ArticleBodyResolver;
+  digestXPostsResolverByArticleId?: DigestXPostsResolverByArticleId;
+  isDigestOwner?: IsDigestOwner;
+  now?: () => Instant;
 }>;
 
 const create = ({
   articleResolver,
   threadResolver,
   articleBodyResolver,
+  digestXPostsResolverByArticleId,
+  isDigestOwner,
+  now = Instant.now,
 }: Deps): GetArticleWithThreadUseCase => {
   const run = async (input: Input) =>
     RA.flow(
@@ -57,7 +67,7 @@ const create = ({
         }
         return RA.ok(article.val);
       }),
-      RA.andThen(async ({ article, currentActorId }): Promise<Result<Ok, Err>> => {
+      RA.andThen(async ({ article, currentActorId, viewerUserId }): Promise<Result<Ok, Err>> => {
         if (article.rootPostId === null) {
           const body = await articleBodyResolver.resolve(article.articleId);
           if (!body.ok) {
@@ -66,8 +76,23 @@ const create = ({
           if (body.val === undefined) {
             return RA.err(ArticleNotFoundError.create(article.articleId));
           }
-          const html = article.status === 'published' ? body.val.publicHtml : body.val.privateHtml;
-          return RA.ok({ article, thread: [], body: { html, updatedAt: body.val.updatedAt } });
+          if (article.status === 'published') {
+            return RA.ok({ article, thread: [], body: { html: body.val.publicHtml, updatedAt: body.val.updatedAt } });
+          }
+          const xPosts = digestXPostsResolverByArticleId !== undefined && isDigestOwner !== undefined
+              && await isDigestOwner(viewerUserId)
+            ? await digestXPostsResolverByArticleId.resolve({ articleId: article.articleId, now: now() })
+            : undefined;
+          if (xPosts !== undefined && !xPosts.ok) {
+            return xPosts;
+          }
+          const section = xPosts === undefined ? '' : buildXPostsSection(xPosts.val);
+          return RA.ok({
+            article,
+            thread: [],
+            body: { html: body.val.privateHtml + section, updatedAt: body.val.updatedAt },
+            ...(section === '' ? {} : { hasXPosts: true as const }),
+          });
         }
         const threadData = await threadResolver.resolve({
           postId: article.rootPostId,

@@ -25,6 +25,7 @@ import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/f
 import { createD1FeedEntryResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
+import { createD1XPostsResolverByFetchedSince } from '../adaptor/d1/feedEntry/xPostsResolverByFetchedSince.ts';
 import { createD1InterestSourceResolverByUserIdAndInterestSourceId } from '../adaptor/d1/interestSource/interestSourceResolverByUserIdAndInterestSourceId.ts';
 import { createD1LikedPostContentsResolverByLikeIds } from '../adaptor/d1/interestSource/likedPostContentsResolverByLikeIds.ts';
 import { createD1PostContentsResolverByPostIds } from '../adaptor/d1/interestSource/postContentsResolverByPostIds.ts';
@@ -48,6 +49,7 @@ import { CreateDailyDigestUseCase } from '../useCase/createDailyDigest.ts';
 import { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts';
 import { EnsureDefaultDigestTopicsUseCase } from '../useCase/ensureDefaultDigestTopics.ts';
 import { ExpireDigestsUseCase } from '../useCase/expireDigests.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask } from './scheduledTasks.ts';
@@ -62,6 +64,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
   const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const userResolverByUsername = createD1UserResolverByUsername(db);
   const createDailyDigest = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeadersResolverByUserIdAndDigestDate,
@@ -81,6 +84,8 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+    xPostsResolverByFetchedSince: createD1XPostsResolverByFetchedSince(db),
+    isDigestOwner: IsDigestOwner.create({ userResolverByUsername }),
     interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
     recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
     safeFetcher: createSafeFetcher(),
@@ -101,7 +106,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   });
   return {
-    userResolverByUsername: createD1UserResolverByUsername(db),
+    userResolverByUsername,
     createDailyDigest,
     deepDiveDigestItem: DeepDiveDigestItemUseCase.create({
       digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
