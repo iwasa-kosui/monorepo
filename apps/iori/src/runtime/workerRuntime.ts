@@ -26,6 +26,7 @@ import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
+import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
@@ -206,7 +207,7 @@ import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { createBlueskyCrosspostUseCases } from './blueskyCrosspost.ts';
+import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
 
@@ -469,6 +470,11 @@ export const createWorkerRuntimePorts = async (
         digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
         now: Instant.now,
       }),
+    },
+    blueskyCrosspostStatus: {
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(db),
+      blueskyCrosspostEnabled: resolveBlueskyCrosspostConfig(env) !== undefined,
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({
