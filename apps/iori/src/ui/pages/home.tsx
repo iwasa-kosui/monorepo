@@ -18,6 +18,7 @@ const usePostedHandler = () => {
   return (status: Status) => {
     timeline.prependPost(status);
     ui.setSelectedIndex(-1);
+    ui.setEmojiPickerOpenForIndex(null);
   };
 };
 

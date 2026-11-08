@@ -3,7 +3,7 @@ import { useState } from 'hono/jsx';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
-import { canSubmitPost, formValueAfterSubmit, submitPost } from './postSubmission.ts';
+import { canSubmitPost, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
   id?: string;
@@ -21,12 +21,13 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     if (!canSubmitPost(content, isUploading, isPosting)) return;
     setIsPosting(true);
     try {
-      const current = { content, uploaded };
-      const result = await submitPost(current, { create: createStatus, onPosted });
-      const next = formValueAfterSubmit(result, current);
-      setContent(next.content);
-      setUploaded([...next.uploaded]);
-      if (result.kind === 'failed') alert(result.message);
+      const result = await submitPost({ content, uploaded }, { create: createStatus, onPosted });
+      if (result.kind === 'posted') {
+        setContent('');
+        setUploaded([]);
+      } else {
+        alert(result.message);
+      }
     } finally {
       setIsPosting(false);
     }

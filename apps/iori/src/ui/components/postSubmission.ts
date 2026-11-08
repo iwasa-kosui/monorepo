@@ -17,8 +17,6 @@ type SubmitPostDeps = Readonly<{
   onPosted: (status: Status) => void;
 }>;
 
-export const emptyPostFormValue: PostFormValue = { content: '', uploaded: [] };
-
 export const canSubmitPost = (content: string, isUploading: boolean, isPosting: boolean): boolean =>
   content.trim() !== '' && !isUploading && !isPosting;
 
@@ -39,6 +37,3 @@ export const submitPost = async (
   deps.onPosted(status);
   return { kind: 'posted', status };
 };
-
-export const formValueAfterSubmit = (result: PostSubmitResult, current: PostFormValue): PostFormValue =>
-  result.kind === 'posted' ? emptyPostFormValue : current;

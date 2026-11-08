@@ -1,13 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import {
-  canSubmitPost,
-  emptyPostFormValue,
-  formValueAfterSubmit,
-  type PostFormValue,
-  submitPost,
-} from './postSubmission.ts';
+import { canSubmitPost, type PostFormValue, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -85,15 +79,5 @@ describe('submitPost', () => {
     });
 
     await expect(submitPost(filled, { create, onPosted })).rejects.toThrow('render');
-  });
-});
-
-describe('formValueAfterSubmit', () => {
-  it('clears the content and the attachments after posting', () => {
-    expect(formValueAfterSubmit({ kind: 'posted', status: created }, filled)).toEqual(emptyPostFormValue);
-  });
-
-  it('keeps the content and the attachments after a failure', () => {
-    expect(formValueAfterSubmit({ kind: 'failed', message: 'x' }, filled)).toBe(filled);
   });
 });
