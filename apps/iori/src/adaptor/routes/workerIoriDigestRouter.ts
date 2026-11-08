@@ -153,6 +153,13 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
     >;
   }>;
   digestItemsTruncated: boolean;
+  jev?: Readonly<{
+    model: string;
+    configured: boolean;
+    perTopicLimit: number;
+    totalLimit: number;
+    overTotalLimit: boolean;
+  }>;
   digestItems: ReadonlyArray<
     Readonly<{
       digestDate: string;
@@ -182,6 +189,7 @@ type IoriDigestPreviewCandidateBody = Readonly<{
   margin: number | null;
   excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
+  jevNoul?: number | null;
 }>;
 
 export type IoriDigestDeepDiveResponse = Readonly<{
@@ -196,6 +204,7 @@ const previewQuery = z.object({
   candidateHours: z.coerce.number().int().min(1).max(72).default(48),
   digestDays: z.coerce.number().int().min(1).max(30).default(14),
   limit: z.coerce.number().int().min(1).max(100).default(30),
+  withJev: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 });
 
 const deepDiveRequestBody = z.object({
@@ -289,6 +298,7 @@ const toPreviewCandidateBody = (candidate: PreviewCandidate): IoriDigestPreviewC
   margin: roundNullable(candidate.margin),
   excludeSimilarity: roundNullable(candidate.excludeSimilarity),
   assignment: candidate.assignment,
+  ...(candidate.jevNoul === undefined ? {} : { jevNoul: candidate.jevNoul }),
 });
 
 const toPreviewTopicCandidatesBody = (entry: PreviewTopicCandidates) => ({
@@ -612,7 +622,7 @@ export const createWorkerIoriDigestRouter = ({
       }
       const preview = await previewDigestTopicsUseCase.run({ userId, ...query.data });
       if (!preview.ok) return c.json(internalServerError, 500);
-      const { topics, thresholds, candidates, digestItems, digestItemsTruncated } = preview.val;
+      const { topics, thresholds, candidates, digestItems, digestItemsTruncated, jev } = preview.val;
       return c.json(
         {
           topics: topics.map(({ topicKey, name, description, enabled, embedding, examples, excludes }) => ({
@@ -632,6 +642,7 @@ export const createWorkerIoriDigestRouter = ({
             byTopic: candidates.byTopic.map(toPreviewTopicCandidatesBody),
           },
           digestItemsTruncated,
+          ...(jev === null ? {} : { jev }),
           digestItems: digestItems.map(toPreviewDigestItemBody),
         } satisfies IoriDigestTopicPreviewResponse,
       );
