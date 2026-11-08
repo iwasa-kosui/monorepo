@@ -506,6 +506,7 @@ export const digestTopicsTable = sqliteTable('digest_topics', {
   embeddedAt: timestamp(),
   sortOrder: integer('sortOrder').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  materialWindowHours: integer('materialWindowHours'),
   createdAt: timestamp().notNull(),
   updatedAt: timestamp().notNull(),
 }, (table) => [

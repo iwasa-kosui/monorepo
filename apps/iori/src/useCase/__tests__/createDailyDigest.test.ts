@@ -207,11 +207,15 @@ const setup = (
         embedding: basis(0),
         ...entry(index + 1),
       }));
-  const addTopic = (topicKey: string, embedding: Float32Array | null, topicOptions: { enabled?: boolean } = {}) => {
+  const addTopic = (
+    topicKey: string,
+    embedding: Float32Array | null,
+    topicOptions: { enabled?: boolean; materialWindowHours?: number } = {},
+  ) => {
     const sortOrder = defaultDigestTopics.findIndex((topic) => topic.topicKey === topicKey);
     const definition = defaultDigestTopics[sortOrder]!;
     sqlite.prepare(
-      'INSERT OR REPLACE INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT OR REPLACE INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,materialWindowHours,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       me.userId,
       topicKey,
@@ -221,6 +225,7 @@ const setup = (
       embedding === null ? null : NOW,
       sortOrder,
       topicOptions.enabled === false ? 0 : 1,
+      topicOptions.materialWindowHours ?? null,
       1,
       1,
     );
@@ -2555,6 +2560,94 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
 
     expect(result.replaced).toBe(true);
     expect(t.titlesOf('genai')).toEqual(['Early 1', 'Early 2', 'Early 3']);
+  });
+});
+
+describe('CreateDailyDigestUseCase: テーマごとの材料の期間', () => {
+  it('期間を持つテーマは、窓より古くても期間内の記事を集め、期間より古い記事は集めない', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntry(t.sources.rss, 'Too old gen', { embedding: basis(0), count: 1000, fetchedAt: NOW - 100 * HOUR });
+    t.addEntries(t.sources.rss, 'Fresh plat', 3, () => ({ embedding: basis(1) }));
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Old gen 1', 'Old gen 2', 'Old gen 3']);
+    expect(t.titlesOf('platform')).toEqual(['Fresh plat 1', 'Fresh plat 2', 'Fresh plat 3']);
+  });
+
+  it('期間を持たないテーマは、別のテーマが期間を持っていても、窓より古い記事を集めない', async () => {
+    const t = setup();
+    t.addTopic('platform', basis(1), { materialWindowHours: 72 });
+    t.addEntries(t.sources.rss, 'Fresh gen', 2, () => ({ embedding: basis(0) }));
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntries(t.sources.rss, 'Old plat', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 48 * HOUR }));
+
+    await t.run();
+
+    expect(t.topicKeys()).toEqual(['platform', 'summary']);
+    expect(t.titlesOf('platform')).toEqual(['Old plat 1', 'Old plat 2', 'Old plat 3']);
+  });
+
+  it('結果の件数は、窓の記事と、期間を持つテーマに振り分けられて期間内にある記事から数える', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Fresh plat', 3, () => ({ embedding: basis(1) }));
+    t.addEntry(t.sources.rss, 'Fresh far', { embedding: basis(7) });
+    t.addEntries(t.sources.rss, 'Old gen', 3, () => ({ embedding: basis(0), fetchedAt: NOW - 48 * HOUR }));
+    t.addEntry(t.sources.rss, 'Too old gen', { embedding: basis(0), fetchedAt: NOW - 100 * HOUR });
+    t.addEntry(t.sources.rss, 'Old plat', { embedding: basis(1), fetchedAt: NOW - 48 * HOUR });
+    t.addEntry(t.sources.rss, 'Old far', { embedding: basis(7), fetchedAt: NOW - 48 * HOUR });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({
+      candidates: 7,
+      assignedToTopics: 6,
+      belowMinSimilarity: 1,
+      belowMinMargin: 0,
+      excluded: 0,
+    });
+  });
+
+  it('期間を持つテーマがあっても、窓内の同じ URL の重複では窓内の記事が勝つ', async () => {
+    const t = setup();
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addEntry(t.sources.rss, 'Old rss', {
+      url: 'https://example.com/a',
+      count: 1,
+      embedding: basis(0),
+      fetchedAt: NOW - 48 * HOUR,
+    });
+    t.addEntry(t.sources.hotentry, 'Hot copy', {
+      url: 'https://example.com/a/?utm_source=x#top',
+      count: 900,
+      embedding: basis(0),
+    });
+    t.addEntry(t.sources.rss, 'B', { url: 'https://example.com/b', count: 2, embedding: basis(0) });
+    t.addEntry(t.sources.rss, 'C', { url: 'https://example.com/c', count: 3, embedding: basis(0) });
+
+    await t.run();
+
+    expect(t.titlesOf('genai')).toEqual(['Hot copy', 'C', 'B']);
+  });
+
+  it('過去に載せた記事は、期間を延ばしても再び載らない', async () => {
+    const t = setup();
+    t.addEntries(t.sources.rss, 'Past', 3, () => ({ fetchedAt: NOW - DAY - HOUR }));
+    t.clock.value = (NOW - DAY) as typeof NOW;
+    await t.run();
+    t.clock.value = NOW;
+    t.addTopic('genai', basis(0), { materialWindowHours: 72 });
+    t.addEntries(t.sources.rss, 'Old', 3, () => ({ fetchedAt: NOW - 48 * HOUR }));
+
+    await t.run();
+
+    expect((t.all('SELECT title FROM digest_items ORDER BY title') as Array<{ title: string }>).map((row) => row.title))
+      .toEqual(['Old 1', 'Old 2', 'Old 3', 'Past 1', 'Past 2', 'Past 3']);
   });
 });
 

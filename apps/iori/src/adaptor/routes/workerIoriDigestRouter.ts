@@ -47,6 +47,7 @@ import type { UserId } from '../../domain/user/userId.ts';
 import type { AddDigestTopicUseCase } from '../../useCase/addDigestTopic.ts';
 import type { AddFeedSourceUseCase } from '../../useCase/addFeedSource.ts';
 import type { ChangeDigestTopicEnabledUseCase } from '../../useCase/changeDigestTopicEnabled.ts';
+import type { ChangeDigestTopicMaterialWindowUseCase } from '../../useCase/changeDigestTopicMaterialWindow.ts';
 import type { ChangeFeedSourceEnabledUseCase } from '../../useCase/changeFeedSourceEnabled.ts';
 import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDigest.ts';
 import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem.ts';
@@ -82,6 +83,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   addDigestTopicUseCase: AddDigestTopicUseCase;
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  changeDigestTopicMaterialWindowUseCase: ChangeDigestTopicMaterialWindowUseCase;
   previewDigestTopicsUseCase: PreviewDigestTopicsUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
   allFeedSourcesResolver: AllFeedSourcesResolver;
@@ -125,6 +127,7 @@ export type IoriDigestTopicBody = Readonly<{
   name: string;
   description: string;
   enabled: boolean;
+  materialWindowHours: number | null;
   sortOrder: number;
   embedded: boolean;
   examples: ReadonlyArray<string>;
@@ -193,7 +196,7 @@ export type IoriDigestDeepDiveResponse = Readonly<{
 }>;
 
 const previewQuery = z.object({
-  candidateHours: z.coerce.number().int().min(1).max(72).default(48),
+  candidateHours: z.coerce.number().int().min(1).max(336).default(48),
   digestDays: z.coerce.number().int().min(1).max(30).default(14),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
@@ -264,6 +267,7 @@ const toTopicBody = (topic: StoredDigestTopic): IoriDigestTopicBody => ({
   name: topic.name,
   description: topic.description,
   enabled: topic.enabled,
+  materialWindowHours: topic.materialWindowHours,
   sortOrder: topic.sortOrder,
   embedded: topic.embedding !== null,
   examples: topic.examples,
@@ -338,6 +342,13 @@ const readEnabled = (body: RequestBody): boolean | undefined => {
   return undefined;
 };
 
+const readMaterialWindowHours = (body: RequestBody): number | null | undefined => {
+  const hours = body.materialWindowHours;
+  if (hours === null) return null;
+  if (typeof hours === 'number' && Number.isInteger(hours) && hours >= 24 && hours <= 336) return hours;
+  return undefined;
+};
+
 const feedSourceErrorResponse = (
   c: Context<MastodonAuthEnv>,
   err: FeedSourceAlreadyExistsError | FeedSourceNotFoundError | FeedSourceParseError,
@@ -369,6 +380,7 @@ export const createWorkerIoriDigestRouter = ({
   addDigestTopicUseCase,
   editDigestTopicUseCase,
   changeDigestTopicEnabledUseCase,
+  changeDigestTopicMaterialWindowUseCase,
   previewDigestTopicsUseCase,
   deepDiveDigestItemUseCase,
   allFeedSourcesResolver,
@@ -672,6 +684,7 @@ export const createWorkerIoriDigestRouter = ({
         const examples = bodyTrimmedStringArray(body, 'examples');
         const excludes = bodyTrimmedStringArray(body, 'excludes');
         const enabled = readEnabled(body);
+        const materialWindowHours = readMaterialWindowHours(body);
         if (body.name !== undefined && name === undefined) return c.json({ error: 'Validation failed: name' }, 400);
         if (body.description !== undefined && description === undefined) {
           return c.json({ error: 'Validation failed: description' }, 400);
@@ -685,12 +698,16 @@ export const createWorkerIoriDigestRouter = ({
         if (body.enabled !== undefined && enabled === undefined) {
           return c.json({ error: 'Validation failed: enabled' }, 400);
         }
+        if (body.materialWindowHours !== undefined && materialWindowHours === undefined) {
+          return c.json({ error: 'Validation failed: materialWindowHours' }, 400);
+        }
         if (
           name === undefined && description === undefined && examples === undefined && excludes === undefined
-          && enabled === undefined
+          && enabled === undefined && materialWindowHours === undefined
         ) {
           return c.json({
-            error: 'Validation failed: name, description, examples, excludes or enabled is required',
+            error:
+              'Validation failed: name, description, examples, excludes, enabled or materialWindowHours is required',
           }, 400);
         }
         let updated: StoredDigestTopic | undefined;
@@ -701,6 +718,11 @@ export const createWorkerIoriDigestRouter = ({
         }
         if (enabled !== undefined) {
           const changed = await changeDigestTopicEnabledUseCase.run({ userId, topicKey, enabled });
+          if (!changed.ok) return topicErrorResponse(c, changed.err);
+          updated = changed.val;
+        }
+        if (materialWindowHours !== undefined) {
+          const changed = await changeDigestTopicMaterialWindowUseCase.run({ userId, topicKey, materialWindowHours });
           if (!changed.ok) return topicErrorResponse(c, changed.err);
           updated = changed.val;
         }

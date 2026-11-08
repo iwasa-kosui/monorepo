@@ -15,6 +15,7 @@ import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
+import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/changeDigestTopicMaterialWindow.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import type { CollectBlueskyTimelineUseCase } from '../../../../useCase/collectBlueskyTimeline.ts';
@@ -74,6 +75,7 @@ import { createD1DigestTopicCreatedStore } from '../../../d1/digestTopic/digestT
 import { createD1DigestTopicEditedStore } from '../../../d1/digestTopic/digestTopicEditedStore.ts';
 import { createD1DigestTopicEmbeddedStore } from '../../../d1/digestTopic/digestTopicEmbeddedStore.ts';
 import { createD1DigestTopicEnabledChangedStore } from '../../../d1/digestTopic/digestTopicEnabledChangedStore.ts';
+import { createD1DigestTopicMaterialWindowChangedStore } from '../../../d1/digestTopic/digestTopicMaterialWindowChangedStore.ts';
 import { createD1DigestTopicsResolverByUserId } from '../../../d1/digestTopic/digestTopicsResolverByUserId.ts';
 import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../../../d1/emojiReact/emojiReactDeletedStore.ts';
@@ -568,6 +570,11 @@ export const setupReadApi = (
           changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
             digestTopicsResolverByUserId,
             digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
+            now: Instant.now,
+          }),
+          changeDigestTopicMaterialWindowUseCase: ChangeDigestTopicMaterialWindowUseCase.create({
+            digestTopicsResolverByUserId,
+            digestTopicMaterialWindowChangedStore: createD1DigestTopicMaterialWindowChangedStore(db),
             now: Instant.now,
           }),
           previewDigestTopicsUseCase: PreviewDigestTopicsUseCase.create({

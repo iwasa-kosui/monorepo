@@ -58,6 +58,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'digestTopic.edited',
   'digestTopic.embedded',
   'digestTopic.enabledChanged',
+  'digestTopic.materialWindowChanged',
   'emojiReact.emojiReactCreated',
   'emojiReact.emojiReactDeleted',
   'federatedTimelineItem.created',
