@@ -722,4 +722,5 @@ it('cancels superseded deploy runs from a workflow outside the production lock',
   const job = cancel.jobs['cancel-superseded-deploys'];
   expect(job.environment).toBeUndefined();
   expect(job.steps.at(-1)?.run).toBe('node apps/iori/scripts/cancel-superseded-deploys.mjs');
+  expect(main.jobs['deploy-worker']).not.toHaveProperty('name');
 });
