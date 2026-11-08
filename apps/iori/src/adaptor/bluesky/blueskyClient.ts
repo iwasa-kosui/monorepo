@@ -2,6 +2,9 @@ import { RA, Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type {
+  BlueskyLoginFailureDeletedStore,
+  BlueskyLoginFailureResolver,
+  BlueskyLoginFailureSavedStore,
   BlueskySession,
   BlueskySessionResolver,
   BlueskySessionSavedStore,
@@ -19,12 +22,18 @@ export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
+export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 
 type BlueskyClientDeps = Readonly<{
   identifier: string;
   appPassword: string;
   sessionResolver: BlueskySessionResolver;
   sessionStore: BlueskySessionSavedStore;
+  loginFailure?: Readonly<{
+    resolver: BlueskyLoginFailureResolver;
+    savedStore: BlueskyLoginFailureSavedStore;
+    deletedStore: BlueskyLoginFailureDeletedStore;
+  }>;
   fetch?: typeof fetch;
   now?: () => Instant;
 }>;
@@ -138,6 +147,13 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
   };
 
   const createSession = async (): RA<BlueskySession, BlueskyClientError> => {
+    const loginFailure = deps.loginFailure;
+    const failedAt = loginFailure === undefined
+      ? undefined
+      : Result.unsafeUnwrap(await loginFailure.resolver.resolve());
+    if (failedAt !== undefined && now() - failedAt < BLUESKY_LOGIN_RETRY_COOLDOWN_MS) {
+      return RA.err(clientError('auth', 'createSession skipped: waiting after a recent login failure'));
+    }
     const created = await call(
       'createSession',
       `${BLUESKY_DEFAULT_PDS_URL}/xrpc/com.atproto.server.createSession`,
@@ -148,7 +164,15 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
       },
       sessionResponseSchema,
     );
-    return created.ok ? RA.ok(await saveSession(created.val, undefined)) : created;
+    if (!created.ok) {
+      if (loginFailure !== undefined) Result.unsafeUnwrap(await loginFailure.savedStore.save(now()));
+      return created;
+    }
+    const session = await saveSession(created.val, undefined);
+    if (loginFailure !== undefined && failedAt !== undefined) {
+      Result.unsafeUnwrap(await loginFailure.deletedStore.delete());
+    }
+    return RA.ok(session);
   };
 
   const refreshSession = async (session: BlueskySession): RA<BlueskySession, BlueskyClientError> => {

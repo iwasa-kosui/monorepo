@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BlueskySession } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyPostRecord } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { createBlueskyClient, resolveBlueskyPdsUrl } from './blueskyClient.ts';
+import { BLUESKY_LOGIN_RETRY_COOLDOWN_MS, createBlueskyClient, resolveBlueskyPdsUrl } from './blueskyClient.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8));
 const PDS = 'https://pds.example.net';
@@ -458,6 +458,165 @@ describe('createBlueskyClient のタイムアウト', () => {
     ]);
 
     expect(await client.createRecord(record, RKEY)).toMatchObject({ ok: false, err: { kind: 'network' } });
+  });
+});
+
+describe('createBlueskyClient のログイン失敗後の待ち時間', () => {
+  const setupGuarded = (
+    session: BlueskySession | undefined,
+    failedAt: Instant | undefined,
+    responders: Responder[],
+    guarded = true,
+  ) => {
+    let clock = NOW;
+    let failure = failedAt;
+    const events: string[] = [];
+    const queue = [...responders];
+    const calls: Call[] = [];
+    const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
+      const call = { url: String(url), init: init ?? {} };
+      calls.push(call);
+      const responder = queue.shift();
+      if (responder === undefined) throw new Error(`unexpected request: ${call.url}`);
+      return responder(call);
+    }) as typeof fetch;
+    const client = createBlueskyClient({
+      identifier: 'iori.example.com',
+      appPassword: 'app-pass-secret',
+      sessionResolver: { resolve: () => RA.ok(session) },
+      sessionStore: { save: () => RA.ok(undefined) },
+      ...(guarded
+        ? {
+          loginFailure: {
+            resolver: {
+              resolve: () => {
+                events.push('read');
+                return RA.ok(failure);
+              },
+            },
+            savedStore: {
+              save: (at: Instant) => {
+                events.push(`write:${at}`);
+                failure = at;
+                return RA.ok(undefined);
+              },
+            },
+            deletedStore: {
+              delete: () => {
+                events.push('delete');
+                failure = undefined;
+                return RA.ok(undefined);
+              },
+            },
+          },
+        }
+        : {}),
+      fetch: fetchStub,
+      now: () => clock,
+    });
+    return {
+      client,
+      calls,
+      events,
+      advance: (ms: number) => {
+        clock = Instant.orThrow(clock + ms);
+      },
+    };
+  };
+  const authError = () => json({ error: 'AuthenticationRequired' }, 401);
+
+  it('createSession が失敗したら現在の時刻を書き、待ち時間のあいだは createSession を呼ばずに auth の失敗を返す', async () => {
+    const { client, calls, events, advance } = setupGuarded(undefined, undefined, [authError]);
+
+    const first = await client.query('app.bsky.feed.getTimeline', {});
+    advance(BLUESKY_LOGIN_RETRY_COOLDOWN_MS - 1);
+    const second = await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(first).toMatchObject({ ok: false, err: { kind: 'auth', status: 401 } });
+    expect(second).toMatchObject({ ok: false, err: { kind: 'auth' } });
+    expect(calls).toHaveLength(1);
+    expect(events).toEqual(['read', `write:${NOW}`, 'read']);
+  });
+
+  it('30 分が過ぎたら再び createSession を呼び、成功したら記録を消す', async () => {
+    const { client, calls, events, advance } = setupGuarded(undefined, undefined, [
+      authError,
+      () => json(sessionBody('new', { didDoc: didDoc() })),
+      () => json({ feed: [] }),
+    ]);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+    advance(BLUESKY_LOGIN_RETRY_COOLDOWN_MS);
+    const result = await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(result).toEqual({ ok: true, val: { feed: [] } });
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://bsky.social/xrpc/com.atproto.server.createSession',
+      'https://bsky.social/xrpc/com.atproto.server.createSession',
+      `${PDS}/xrpc/app.bsky.feed.getTimeline`,
+    ]);
+    expect(events).toEqual([
+      'read',
+      `write:${NOW}`,
+      'read',
+      'delete',
+    ]);
+  });
+
+  it('30 分が過ぎたあとの createSession が失敗したら、時刻を書き直す', async () => {
+    const { client, events, advance } = setupGuarded(undefined, NOW, [authError]);
+    advance(BLUESKY_LOGIN_RETRY_COOLDOWN_MS);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(events).toEqual(['read', `write:${NOW + BLUESKY_LOGIN_RETRY_COOLDOWN_MS}`]);
+  });
+
+  it('createSession が成功し、記録が無かったときは、読むだけで書き込まない', async () => {
+    const { client, events } = setupGuarded(undefined, undefined, [
+      () => json(sessionBody('new', { didDoc: didDoc() })),
+      () => json({ feed: [] }),
+    ]);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(events).toEqual(['read']);
+  });
+
+  it('保存済みのセッションが有効なときは、失敗の記録を読まない', async () => {
+    const { client, calls, events } = setupGuarded(stored(), undefined, [() => json({ feed: [] })]);
+
+    const result = await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(events).toEqual([]);
+  });
+
+  it('保存済みのセッションが失効して createSession に進むときは、記録を読む', async () => {
+    const { client, calls, events } = setupGuarded(stored(), NOW, [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json({ error: 'ExpiredToken' }, 400),
+    ]);
+
+    const result = await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'auth' } });
+    expect(calls).toHaveLength(2);
+    expect(events).toEqual(['read']);
+  });
+
+  it('依存を渡さない client は、待ち時間なしで毎回 createSession を呼ぶ', async () => {
+    const { client, calls, events } = setupGuarded(undefined, NOW, [authError, authError], false);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+    await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://bsky.social/xrpc/com.atproto.server.createSession',
+      'https://bsky.social/xrpc/com.atproto.server.createSession',
+    ]);
+    expect(events).toEqual([]);
   });
 });
 

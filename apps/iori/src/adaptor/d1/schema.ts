@@ -615,6 +615,11 @@ export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
   updatedAt: timestamp().notNull(),
 });
 
+export const blueskyLoginFailuresTable = sqliteTable('bluesky_login_failures', {
+  scope: text('scope').primaryKey(),
+  failedAt: timestamp().notNull(),
+});
+
 export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
   postId: text('postId').primaryKey(),
   status: text('status').notNull(),
@@ -712,6 +717,7 @@ export const schema = {
   digestXPostsTable,
   interestSourcesTable,
   blueskySessionsTable,
+  blueskyLoginFailuresTable,
   blueskyCrosspostsTable,
   blueskyTimelineItemsTable,
 } as const;
