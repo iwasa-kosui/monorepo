@@ -248,7 +248,7 @@ type SelectedItem = Readonly<{
 type TopicSelection = Readonly<{
   topic: StoredDigestTopic;
   items: ReadonlyArray<SelectedItem>;
-  assignedCount: number;
+  eligibleCount: number;
 }>;
 
 const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): ReadonlyArray<SelectedItem> =>
@@ -259,14 +259,14 @@ const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): Reado
     )
     .map((article) => ({ article, score: null, reasonInterestSourceId: null }));
 
-const takeTopicsIncludingTies = <T extends { assignedCount: number }>(
+const takeTopicsIncludingTies = <T extends { eligibleCount: number }>(
   sorted: readonly T[],
   slots: number,
 ): readonly T[] => {
   const last = sorted[slots - 1];
   if (slots <= 0) return [];
   if (last === undefined) return sorted;
-  return sorted.filter((selection) => selection.assignedCount >= last.assignedCount);
+  return sorted.filter((selection) => selection.eligibleCount >= last.eligibleCount);
 };
 
 const create = ({
@@ -483,10 +483,10 @@ const create = ({
           .map(({ item }) => item)
         : selectByBookmarks(assigned);
       const items = ranked.slice(0, TOPIC_ITEMS_LIMIT);
-      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items, assignedCount: ranked.length });
+      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items, eligibleCount: ranked.length });
     }
     const scoringMs = Date.now() - scoringStartedAt;
-    selections.sort((a, b) => b.assignedCount - a.assignedCount || a.topic.sortOrder - b.topic.sortOrder);
+    selections.sort((a, b) => b.eligibleCount - a.eligibleCount || a.topic.sortOrder - b.topic.sortOrder);
     const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
 
     const selectedItems = chosen.flatMap((selection) => selection.items);

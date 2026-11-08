@@ -692,6 +692,54 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 4, items: 20 });
   });
 
+  it('材料があるときも、5 件で切る前の記事数の多いトピックを先に選ぶ', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 7],
+      ['server', 2, 8],
+      ['design', 3, 9],
+      ['ciam', 4, 10],
+    ];
+    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 20 });
+    for (const topicKey of ['ciam', 'design', 'platform', 'server']) {
+      expect(t.itemsOf(topicKey).every((item) => item.score !== null)).toBe(true);
+    }
+  });
+
+  it('材料があるときは、スコアが正の記事だけを数えて同数を判定する', async () => {
+    const t = setup();
+    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
+    t.addInterest('feedback_negative', 'https://example.com/disliked', basis(7));
+    const embeddings: Array<[string, number, number]> = [
+      ['platform', 1, 5],
+      ['server', 2, 6],
+      ['design', 3, 7],
+      ['ciam', 4, 8],
+    ];
+    t.addEntries(t.sources.rss, 'Match', 4, () => ({ embedding: basis(0) }));
+    t.addEntries(t.sources.rss, 'Disliked', 8, () => ({ embedding: vec({ 0: 1, 7: 2 }) }));
+    for (const [topicKey, index, count] of embeddings) {
+      t.addTopic(topicKey, basis(index));
+      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
+    }
+
+    const result = await t.run();
+
+    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
+    expect(result).toMatchObject({ topics: 4, items: 5 + 5 + 5 + 5 });
+    expect(t.itemsOf('platform').every((item) => item.score !== null)).toBe(true);
+  });
+
   it('止めたトピックには振り分けない', async () => {
     const t = setup();
     t.addTopic('genai', basis(0), { enabled: false });
