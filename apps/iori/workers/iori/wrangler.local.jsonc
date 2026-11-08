@@ -21,6 +21,7 @@
     "IORI_ADMISSION_IDENTITY": "{\"environment\": \"local\", \"generation\": \"fixture1\", \"mainSha\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"runId\": \"local-fixture\", \"hostname\": \"localhost\", \"workerHostname\": \"iori-local-fixture1.fixture.workers.dev\", \"smoke\": {\"username\": \"iori-smoke\", \"uploadFilename\": \"00000000-0000-4000-8000-000000000000.png\", \"articleId\": \"00000000-0000-4000-8000-000000000000\"}}",
     "VAPID_SUBJECT": "mailto:admin@example.invalid",
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
+    "IORI_BLUESKY_CROSSPOST": "disabled",
   },
   "d1_databases": [
     {

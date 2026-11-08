@@ -11,7 +11,14 @@ import { vapidKeyPairMatches } from './vapid-origin-check.mjs';
 import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.mjs';
 
 const appRoot = new URL('..', import.meta.url).pathname;
-const SECRET_NAMES = Object.freeze(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']);
+const OPTIONAL_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+const SECRET_NAMES = Object.freeze([
+  'VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'SMOKE_QUEUE_TOKEN',
+  ...OPTIONAL_SECRET_NAMES,
+]);
+const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
   let identity;
@@ -26,7 +33,12 @@ const assertIdentity = (env, invocation) => {
 };
 const assertInputs = (env) => {
   if (
-    ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', ...SECRET_NAMES].some((name) => !env[name])
+    [
+      'CLOUDFLARE_ACCOUNT_ID',
+      'CLOUDFLARE_API_TOKEN',
+      ...SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name)),
+    ]
+      .some((name) => !env[name])
   ) throw withReason(new Error('Worker credentials are required.'), 'credentials-missing');
   if (!/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID)) {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
@@ -100,6 +112,7 @@ export const putWorkerSecrets = async ({
     WRANGLER_SEND_METRICS: 'false',
   };
   onStage('put-worker-secrets-put');
+  const putNames = secretNamesToPut(env);
   let result;
   try {
     result = await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'bulk', '--name', workerName], {
@@ -109,12 +122,12 @@ export const putWorkerSecrets = async ({
       timeout,
       maxBuffer: 1_000_000,
       killGraceMs: 15000,
-      input: JSON.stringify(Object.fromEntries(SECRET_NAMES.map((name) => [name, env[name]]))),
+      input: JSON.stringify(Object.fromEntries(putNames.map((name) => [name, env[name]]))),
     });
   } catch {
     throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
   }
-  if (!String(result?.stdout ?? '').includes(`${SECRET_NAMES.length} secrets successfully uploaded`)) {
+  if (!String(result?.stdout ?? '').includes(`${putNames.length} secrets successfully uploaded`)) {
     throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
   }
 };

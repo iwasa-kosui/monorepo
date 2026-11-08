@@ -1,0 +1,32 @@
+import type { BlueskyStrongRef } from './blueskyCrosspost.ts';
+
+export type BlueskyBlob = Readonly<{
+  $type: 'blob';
+  ref: Readonly<{ $link: string }>;
+  mimeType: string;
+  size: number;
+}>;
+
+export type BlueskyFacet = Readonly<{
+  index: Readonly<{ byteStart: number; byteEnd: number }>;
+  features: readonly [Readonly<{ $type: 'app.bsky.richtext.facet#link'; uri: string }>];
+}>;
+
+export type BlueskyEmbed =
+  | Readonly<{
+    $type: 'app.bsky.embed.images';
+    images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>;
+  }>
+  | Readonly<{
+    $type: 'app.bsky.embed.external';
+    external: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyBlob }>;
+  }>;
+
+export type BlueskyPostRecord = Readonly<{
+  $type: 'app.bsky.feed.post';
+  text: string;
+  createdAt: string;
+  facets?: readonly BlueskyFacet[];
+  reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
+  embed?: BlueskyEmbed;
+}>;
