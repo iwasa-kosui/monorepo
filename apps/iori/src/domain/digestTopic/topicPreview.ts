@@ -1,13 +1,22 @@
 import type { DigestFeedback, DigestTopicItem } from '../digest/digest.ts';
 import type { Instant } from '../instant/instant.ts';
 import { Recommendation } from '../recommendation/recommendation.ts';
-import { judgeTopicAssignment, type TopicAssignmentOutcome, type TopicAssignmentPolicy } from './topicAssignment.ts';
+import {
+  excludeSimilarityOf,
+  judgeTopicAssignment,
+  type TopicAssignmentOutcome,
+  type TopicAssignmentPolicy,
+} from './topicAssignment.ts';
 
 export const HISTOGRAM_BIN_COUNT = 40;
 const HISTOGRAM_BINS_PER_UNIT = HISTOGRAM_BIN_COUNT / 2;
 const HISTOGRAM_BOUNDARY_TOLERANCE = 1e-9;
 
-export type PreviewTopic = Readonly<{ topicKey: string; embedding: Float32Array | null }>;
+export type PreviewTopic = Readonly<{
+  topicKey: string;
+  embedding: Float32Array | null;
+  excludeEmbedding?: Float32Array | null;
+}>;
 
 export type TopicSimilarity = Readonly<{ topicKey: string; similarity: number }>;
 
@@ -35,6 +44,7 @@ export type PreviewCandidate = Readonly<{
   similarity: number;
   second: TopicSimilarity | null;
   margin: number | null;
+  excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
 }>;
 
@@ -64,6 +74,7 @@ export type DigestItemPreview = Readonly<{
   margin: number | null;
   adoptedSimilarity: number | null;
   matchesFirst: boolean | null;
+  excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
 }>;
 
@@ -91,6 +102,9 @@ export const rankTopics = (
   if (first === null) return null;
   return { first, second, margin: second === null ? null : first.similarity - second.similarity };
 };
+
+const firstTopicOf = (topics: ReadonlyArray<PreviewTopic>, ranking: TopicRanking): PreviewTopic =>
+  topics.find((topic) => topic.topicKey === ranking.first.topicKey)!;
 
 export const similarityHistogram = (similarities: ReadonlyArray<number>): ReadonlyArray<HistogramBin> => {
   const counts = new Array<number>(HISTOGRAM_BIN_COUNT).fill(0);
@@ -134,6 +148,7 @@ export const previewCandidates = (
     const ranking = rankTopics(article.embedding, comparable);
     if (ranking === null) continue;
     similarities.push(ranking.first.similarity);
+    const excludeSimilarity = excludeSimilarityOf(article.embedding, firstTopicOf(comparable, ranking));
     grouped.get(ranking.first.topicKey)!.push({
       feedEntryId: article.feedEntryId,
       title: article.title,
@@ -142,7 +157,11 @@ export const previewCandidates = (
       similarity: ranking.first.similarity,
       second: ranking.second,
       margin: ranking.margin,
-      assignment: judgeTopicAssignment({ similarity: ranking.first.similarity, margin: ranking.margin }, input.policy),
+      excludeSimilarity,
+      assignment: judgeTopicAssignment(
+        { similarity: ranking.first.similarity, margin: ranking.margin, excludeSimilarity },
+        input.policy,
+      ),
     });
   }
   return {
@@ -177,11 +196,15 @@ export const previewDigestItems = (
         margin: null,
         adoptedSimilarity: null,
         matchesFirst: null,
+        excludeSimilarity: null,
         assignment: judgeTopicAssignment(null, input.policy),
       };
     }
     const ranking = rankTopics(embedding, input.comparableTopics);
     const adopted = input.embeddedTopics.find((topic) => topic.topicKey === item.topicKey);
+    const excludeSimilarity = ranking === null
+      ? null
+      : excludeSimilarityOf(embedding, firstTopicOf(input.comparableTopics, ranking));
     return {
       ...item,
       first: ranking?.first ?? null,
@@ -189,8 +212,9 @@ export const previewDigestItems = (
       margin: ranking?.margin ?? null,
       adoptedSimilarity: adopted === undefined ? null : similarityTo(embedding, adopted),
       matchesFirst: ranking === null ? null : ranking.first.topicKey === item.topicKey,
+      excludeSimilarity,
       assignment: judgeTopicAssignment(
-        ranking === null ? null : { similarity: ranking.first.similarity, margin: ranking.margin },
+        ranking === null ? null : { similarity: ranking.first.similarity, margin: ranking.margin, excludeSimilarity },
         input.policy,
       ),
     };

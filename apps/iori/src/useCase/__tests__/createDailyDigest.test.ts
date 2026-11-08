@@ -1257,6 +1257,25 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
     });
   });
 
+  it('テーマの除く例に近い記事は excluded としてトピックに入れず、落ちた件数に数える', async () => {
+    const t = setup();
+    t.fixture.sqlite.prepare('UPDATE digest_topics SET excludeEmbedding = ? WHERE topicKey = ?')
+      .run(float32ToBytes(basis(1)), 'genai');
+    t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
+    t.addEntry(t.sources.rss, 'About exclude', { count: 1, embedding: vec({ 0: 1, 1: 1.2 }) });
+
+    const result = await t.run();
+
+    expect(result.recommendation).toMatchObject({
+      candidates: 4,
+      assignedToTopics: 3,
+      belowMinSimilarity: 0,
+      belowMinMargin: 0,
+      excluded: 1,
+    });
+    expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
+  });
+
   it('既定の方針では、差を見ないので差の不足で落ちた件数は 0 になる', async () => {
     const t = setup();
     t.addTopic('platform', basis(1));
@@ -1694,6 +1713,7 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
         assignedToTopics: 0,
         belowMinSimilarity: 0,
         belowMinMargin: 0,
+        excluded: 0,
       },
     });
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 2 }]);

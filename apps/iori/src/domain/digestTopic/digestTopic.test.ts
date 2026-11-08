@@ -43,6 +43,51 @@ describe('DigestTopic', () => {
     );
   });
 
+  it('create は examples と excludes の既定値を空配列にする', () => {
+    const created = DigestTopic.create(payload(), now);
+
+    expect(created.ok && created.val.aggregateState).toMatchObject({ examples: [], excludes: [] });
+  });
+
+  it('create は examples と excludes を 10 件までの 1 から 120 文字で受け取る', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `文 ${i}`);
+
+    expect(DigestTopic.create({ ...payload(), examples: ten, excludes: ten }, now).ok).toBe(true);
+    expect(DigestTopic.create({ ...payload(), examples: [...ten, '十一'] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), excludes: [...ten, '十一'] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), examples: [''] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), excludes: [''] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), examples: ['あ'.repeat(121)] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), excludes: ['あ'.repeat(121)] }, now).ok).toBe(false);
+    expect(DigestTopic.create({ ...payload(), examples: ['あ'.repeat(120)], excludes: ['あ'.repeat(120)] }, now).ok)
+      .toBe(true);
+  });
+
+  it('toEmbeddingTexts は「name: description」、examples、excludes の順に並べる', () => {
+    expect(DigestTopic.toEmbeddingTexts({ name: 'N', description: 'D', examples: ['e1', 'e2'], excludes: ['x1'] }))
+      .toEqual(['N: D', 'e1', 'e2', 'x1']);
+  });
+
+  it('combineEmbeddings は examples が空なら「name: description」の埋め込みをそのまま返し、excludes が空なら excludeEmbedding を null にする', () => {
+    const result = DigestTopic.combineEmbeddings({ examples: [], excludes: [] }, [[3, 4]]);
+
+    expect(Array.from(result.embedding)).toEqual([3, 4]);
+    expect(result.excludeEmbedding).toBeNull();
+  });
+
+  it('combineEmbeddings は examples があれば「name: description」との平均を正規化し、excludes の平均を正規化して excludeEmbedding にする', () => {
+    const result = DigestTopic.combineEmbeddings({ examples: ['e'], excludes: ['x1', 'x2'] }, [
+      [2, 0],
+      [0, 2],
+      [0, 3],
+      [0, 5],
+    ]);
+
+    expect(result.embedding[0]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(result.embedding[1]).toBeCloseTo(Math.SQRT1_2, 5);
+    expect(Array.from(result.excludeEmbedding!)).toEqual([0, 1]);
+  });
+
   it('toEmbeddingText は「name: description」を返す', () => {
     expect(DigestTopic.toEmbeddingText({ name: 'セキュリティ', description: '脆弱性' })).toBe('セキュリティ: 脆弱性');
   });
@@ -52,7 +97,10 @@ describe('DigestTopic', () => {
     if (!created.ok) throw new Error('create failed');
     const later = Instant.orThrow(now + 1_000);
 
-    const embedded = DigestTopic.embed(created.val.aggregateState, new Float32Array(1024), later);
+    const embedded = DigestTopic.embed(created.val.aggregateState, {
+      embedding: new Float32Array(1024),
+      excludeEmbedding: null,
+    }, later);
 
     expect(embedded.ok).toBe(true);
     if (!embedded.ok) return;
@@ -65,7 +113,9 @@ describe('DigestTopic', () => {
     const created = DigestTopic.create(payload(), now);
     if (!created.ok) throw new Error('create failed');
 
-    expect(DigestTopic.embed(created.val.aggregateState, new Float32Array(3), now).ok).toBe(false);
+    expect(
+      DigestTopic.embed(created.val.aggregateState, { embedding: new Float32Array(3), excludeEmbedding: null }, now).ok,
+    ).toBe(false);
   });
 });
 
@@ -105,6 +155,51 @@ describe('DigestTopic.edit', () => {
         updatedAt: later,
       },
     });
+  });
+
+  it('examples と excludes が変わると embeddedAt を null に戻し、イベントに含める', () => {
+    const topic = created();
+
+    const edited = DigestTopic.edit(topic, {
+      name: topic.name,
+      description: topic.description,
+      examples: ['例'],
+      excludes: ['除く'],
+    }, later);
+
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    expect(edited.val.aggregateState).toMatchObject({ embeddedAt: null, examples: ['例'], excludes: ['除く'] });
+    expect(edited.val.eventPayload).toMatchObject({ examples: ['例'], excludes: ['除く'] });
+  });
+
+  it('examples と excludes を省くと、今の値を保つ', () => {
+    const topic = created();
+    const withLists = DigestTopic.edit(topic, {
+      name: topic.name,
+      description: topic.description,
+      examples: ['例'],
+      excludes: ['除く'],
+    }, later);
+    if (!withLists.ok) throw new Error('edit failed');
+
+    const edited = DigestTopic.edit(withLists.val.aggregateState, {
+      name: '新しい名前',
+      description: topic.description,
+    }, later);
+
+    expect(edited.ok && edited.val.aggregateState).toMatchObject({ examples: ['例'], excludes: ['除く'] });
+  });
+
+  it('edit は 11 件の examples、11 件の excludes、121 文字の文を拒否する', () => {
+    const topic = created();
+    const valid = { name: '名前', description: '説明' };
+    const eleven = Array.from({ length: 11 }, (_, i) => `文 ${i}`);
+
+    expect(DigestTopic.edit(topic, { ...valid, examples: eleven }, later).ok).toBe(false);
+    expect(DigestTopic.edit(topic, { ...valid, excludes: eleven }, later).ok).toBe(false);
+    expect(DigestTopic.edit(topic, { ...valid, examples: ['あ'.repeat(121)] }, later).ok).toBe(false);
+    expect(DigestTopic.edit(topic, { ...valid, excludes: [''] }, later).ok).toBe(false);
   });
 
   it('空の name、41 文字の name、空の description、301 文字の description を拒否する', () => {

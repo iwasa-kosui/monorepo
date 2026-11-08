@@ -57,7 +57,7 @@ import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { bodyString, readRequestBody, type RequestBody } from './helper/requestBody.ts';
+import { bodyString, bodyTrimmedStringArray, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import {
   getMastodonPrincipal,
   isSameOriginRequest,
@@ -124,12 +124,16 @@ export type IoriDigestTopicBody = Readonly<{
   enabled: boolean;
   sortOrder: number;
   embedded: boolean;
+  examples: ReadonlyArray<string>;
+  excludes: ReadonlyArray<string>;
 }>;
 
 type TopicSimilarityBody = Readonly<{ topicKey: string; similarity: number }>;
 
 export type IoriDigestTopicPreviewResponse = Readonly<{
-  topics: ReadonlyArray<Pick<IoriDigestTopicBody, 'topicKey' | 'name' | 'description' | 'enabled' | 'embedded'>>;
+  topics: ReadonlyArray<
+    Pick<IoriDigestTopicBody, 'topicKey' | 'name' | 'description' | 'enabled' | 'embedded' | 'examples' | 'excludes'>
+  >;
   thresholds: Readonly<{ minSimilarity: number; minMargin: number }>;
   candidates: Readonly<{
     truncated: boolean;
@@ -159,6 +163,7 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
       margin: number | null;
       adoptedSimilarity: number | null;
       matchesFirst: boolean | null;
+      excludeSimilarity: number | null;
       assignment: TopicAssignmentOutcome;
     }>
   >;
@@ -172,6 +177,7 @@ type IoriDigestPreviewCandidateBody = Readonly<{
   similarity: number;
   second: TopicSimilarityBody | null;
   margin: number | null;
+  excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
 }>;
 
@@ -256,6 +262,8 @@ const toTopicBody = (topic: StoredDigestTopic): IoriDigestTopicBody => ({
   enabled: topic.enabled,
   sortOrder: topic.sortOrder,
   embedded: topic.embedding !== null,
+  examples: topic.examples,
+  excludes: topic.excludes,
 });
 
 const SIMILARITY_DECIMAL_FACTOR = 10_000;
@@ -275,6 +283,7 @@ const toPreviewCandidateBody = (candidate: PreviewCandidate): IoriDigestPreviewC
   similarity: roundSimilarity(candidate.similarity),
   second: toSimilarityBody(candidate.second),
   margin: roundNullable(candidate.margin),
+  excludeSimilarity: roundNullable(candidate.excludeSimilarity),
   assignment: candidate.assignment,
 });
 
@@ -298,6 +307,7 @@ const toPreviewDigestItemBody = (item: DigestItemPreview) => ({
   margin: roundNullable(item.margin),
   adoptedSimilarity: roundNullable(item.adoptedSimilarity),
   matchesFirst: item.matchesFirst,
+  excludeSimilarity: roundNullable(item.excludeSimilarity),
   assignment: item.assignment,
 });
 
@@ -592,12 +602,14 @@ export const createWorkerIoriDigestRouter = ({
       const { topics, thresholds, candidates, digestItems, digestItemsTruncated } = preview.val;
       return c.json(
         {
-          topics: topics.map(({ topicKey, name, description, enabled, embedding }) => ({
+          topics: topics.map(({ topicKey, name, description, enabled, embedding, examples, excludes }) => ({
             topicKey,
             name,
             description,
             enabled,
             embedded: embedding !== null,
+            examples,
+            excludes,
           })),
           thresholds,
           candidates: {
@@ -619,7 +631,15 @@ export const createWorkerIoriDigestRouter = ({
       if (name === undefined) return c.json({ error: 'Validation failed: name' }, 400);
       const description = bodyString(body, 'description')?.trim();
       if (description === undefined) return c.json({ error: 'Validation failed: description' }, 400);
-      const added = await addDigestTopicUseCase.run({ userId, name, description });
+      const examples = bodyTrimmedStringArray(body, 'examples');
+      if (body.examples !== undefined && examples === undefined) {
+        return c.json({ error: 'Validation failed: examples' }, 400);
+      }
+      const excludes = bodyTrimmedStringArray(body, 'excludes');
+      if (body.excludes !== undefined && excludes === undefined) {
+        return c.json({ error: 'Validation failed: excludes' }, 400);
+      }
+      const added = await addDigestTopicUseCase.run({ userId, name, description, examples, excludes });
       return added.ok ? c.json({ topic: toTopicBody(added.val) }, 201) : topicErrorResponse(c, added.err);
     })
     .patch(
@@ -633,20 +653,33 @@ export const createWorkerIoriDigestRouter = ({
         const body = await readRequestBody(c);
         const name = bodyString(body, 'name')?.trim();
         const description = bodyString(body, 'description')?.trim();
+        const examples = bodyTrimmedStringArray(body, 'examples');
+        const excludes = bodyTrimmedStringArray(body, 'excludes');
         const enabled = readEnabled(body);
         if (body.name !== undefined && name === undefined) return c.json({ error: 'Validation failed: name' }, 400);
         if (body.description !== undefined && description === undefined) {
           return c.json({ error: 'Validation failed: description' }, 400);
         }
+        if (body.examples !== undefined && examples === undefined) {
+          return c.json({ error: 'Validation failed: examples' }, 400);
+        }
+        if (body.excludes !== undefined && excludes === undefined) {
+          return c.json({ error: 'Validation failed: excludes' }, 400);
+        }
         if (body.enabled !== undefined && enabled === undefined) {
           return c.json({ error: 'Validation failed: enabled' }, 400);
         }
-        if (name === undefined && description === undefined && enabled === undefined) {
-          return c.json({ error: 'Validation failed: name, description or enabled is required' }, 400);
+        if (
+          name === undefined && description === undefined && examples === undefined && excludes === undefined
+          && enabled === undefined
+        ) {
+          return c.json({
+            error: 'Validation failed: name, description, examples, excludes or enabled is required',
+          }, 400);
         }
         let updated: StoredDigestTopic | undefined;
-        if (name !== undefined || description !== undefined) {
-          const edited = await editDigestTopicUseCase.run({ userId, topicKey, name, description });
+        if (name !== undefined || description !== undefined || examples !== undefined || excludes !== undefined) {
+          const edited = await editDigestTopicUseCase.run({ userId, topicKey, name, description, examples, excludes });
           if (!edited.ok) return topicErrorResponse(c, edited.err);
           updated = edited.val;
         }
