@@ -15,6 +15,7 @@ import { createD1PostResolver } from '../../adaptor/d1/post/postResolver.ts';
 import { createD1UserResolver } from '../../adaptor/d1/user/userResolver.ts';
 import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
@@ -46,15 +47,19 @@ const setup = () => {
   const uploaded: Array<{ bytes: Uint8Array; mimeType: string }> = [];
   const created: BlueskyPostRecord[] = [];
   const deleted: string[] = [];
+  const rkeys: string[] = [];
   const behavior = {
     createRecord: (
       _record: BlueskyPostRecord,
+      _rkey: string,
     ): Result<{ uri: string; cid: string; rkey: string }, BlueskyClientError> =>
       Result.ok({
         uri: `at://did:plc:abc/app.bsky.feed.post/3k${created.length}`,
         cid: `bafycid${created.length}`,
         rkey: `3k${created.length}`,
       }),
+    getRecord: (_rkey: string): Result<{ uri: string; cid: string; rkey: string }, BlueskyClientError> =>
+      Result.err(failure('getRecord failed: status 400 RecordNotFound')),
     deleteRecord: (): Result<void, BlueskyClientError> => Result.ok(undefined),
     uploadBlob: (): Result<void, BlueskyClientError> => Result.ok(undefined),
   };
@@ -71,11 +76,13 @@ const setup = () => {
       };
       return RA.ok(blob);
     },
-    createRecord: async (record) => {
-      const result = behavior.createRecord(record);
+    createRecord: async (record, rkey) => {
+      rkeys.push(rkey);
+      const result = behavior.createRecord(record, rkey);
       if (result.ok) created.push(record);
       return result;
     },
+    getRecord: async (rkey) => behavior.getRecord(rkey),
     deleteRecord: async (rkey) => {
       deleted.push(rkey);
       return behavior.deleteRecord();
@@ -127,9 +134,19 @@ const setup = () => {
     waitUntil,
     now: () => NOW,
   });
-  const remove = RemoveBlueskyCrosspostUseCase.create({ crosspostResolver, crosspostDeletedStore, client, waitUntil });
+  const remove = RemoveBlueskyCrosspostUseCase.create({
+    crosspostResolver,
+    crosspostSavedStore,
+    crosspostDeletedStore,
+    client,
+    waitUntil,
+    now: () => NOW,
+  });
   const retry = RetryBlueskyCrosspostsUseCase.create({
     crosspostsResolverByRetryable: createD1BlueskyCrosspostsResolverByRetryable(db),
+    crosspostSavedStore,
+    crosspostDeletedStore,
+    client,
     send,
     now: () => NOW,
   });
@@ -165,6 +182,7 @@ const setup = () => {
     uploaded,
     created,
     deleted,
+    rkeys,
     behavior,
     stored,
     thumbnails,
@@ -479,7 +497,31 @@ describe('RemoveBlueskyCrosspostUseCase', () => {
     await run(t.remove.run({ postId: post.postId }));
     await t.flush();
 
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+    expect(await t.row(post.postId)).toMatchObject({
+      status: 'deleting',
+      attempts: 1,
+      lastError: 'deleteRecord failed: status 500',
+      uri: 'at://did:plc:abc/app.bsky.feed.post/3k0',
+      rkey: '3k0',
+    });
+  });
+
+  it('deleteRecord を呼ぶ前に行を deleting で保存する', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+    const statusesSeen: unknown[] = [];
+    t.behavior.deleteRecord = () => {
+      statusesSeen.push(t.sqlite.prepare('SELECT status FROM bluesky_crossposts WHERE postId = ?').get(post.postId));
+      return Result.ok(undefined);
+    };
+
+    await run(t.remove.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(statusesSeen).toEqual([{ status: 'deleting' }]);
+    expect(await t.row(post.postId)).toBeUndefined();
   });
 
   it.each(['pending', 'failed', 'skipped'] as const)('%s の行は deleteRecord を呼ばずにすぐ消す', async (status) => {
@@ -535,7 +577,7 @@ describe('RetryBlueskyCrosspostsUseCase', () => {
 
     const summary = await run(t.retry.run());
 
-    expect(summary).toEqual({ sent: 2, failed: 0, skipped: 0, gone: 0, noop: 0 });
+    expect(summary).toEqual({ sent: 2, failed: 0, skipped: 0, gone: 0, noop: 0, deleted: 0, deleteFailed: 0 });
     expect(await t.row(oldPending.postId)).toMatchObject({ status: 'sent' });
     expect(await t.row(failedTwice.postId)).toMatchObject({ status: 'sent' });
     expect(await t.row(freshPending.postId)).toMatchObject({ status: 'pending' });
@@ -580,8 +622,341 @@ describe('RetryBlueskyCrosspostsUseCase', () => {
 
     const summary = await run(t.retry.run());
 
-    expect(summary).toEqual({ sent: 0, failed: 0, skipped: 0, gone: 0, noop: 0 });
+    expect(summary).toEqual({ sent: 0, failed: 0, skipped: 0, gone: 0, noop: 0, deleted: 0, deleteFailed: 0 });
     expect(t.created).toEqual([]);
+  });
+});
+
+describe('送信の回数制限と重複投稿の防止', () => {
+  const insertRow = (
+    t: ReturnType<typeof setup>,
+    postId: string,
+    status: 'pending' | 'failed' | 'deleting',
+    attempts: number,
+    createdAt: number,
+    refs: { uri: string; cid: string; rkey: string } | undefined = undefined,
+  ) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,status,attempts,uri,cid,rkey,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(postId, status, attempts, refs?.uri ?? null, refs?.cid ?? null, refs?.rkey ?? null, createdAt, createdAt);
+
+  it('送信を始める前に attempts を 1 増やして保存する', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    const seen: unknown[] = [];
+    t.behavior.createRecord = () => {
+      seen.push(
+        t.sqlite.prepare('SELECT status, attempts FROM bluesky_crossposts WHERE postId = ?').get(post.postId),
+      );
+      return Result.ok({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k0', cid: 'c', rkey: '3k0' });
+    };
+
+    await t.flush();
+
+    expect(seen).toEqual([{ status: 'pending', attempts: 1 }]);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', attempts: 1 });
+  });
+
+  it('途中で止まった pending は attempts が上限に達するまでしか再送しない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertRow(t, post.postId, 'pending', 0, NOW - 60 * 60_000);
+    t.behavior.createRecord = () => {
+      throw new Error('stalled');
+    };
+
+    for (let i = 0; i < 5; i += 1) await run(t.retry.run());
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'failed', attempts: 3 });
+    expect(t.rkeys).toHaveLength(3);
+  });
+
+  it('postId と createdAt から決まる rkey を createRecord に渡す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.rkeys).toEqual([blueskyRkeyOf({ postId: post.postId, createdAt: Instant.orThrow(CREATED_AT) })]);
+  });
+
+  it('rkey が衝突して createRecord が失敗しても、getRecord で見つかれば sent にする', async () => {
+    const t = setup();
+    const post = t.addPost();
+    t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 400 InvalidRequest'));
+    t.behavior.getRecord = (rkey) =>
+      Result.ok({ uri: `at://did:plc:abc/app.bsky.feed.post/${rkey}`, cid: 'bafyexisting', rkey });
+    await run(t.schedule.run({ postId: post.postId }));
+
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({
+      status: 'sent',
+      uri: `at://did:plc:abc/app.bsky.feed.post/${t.rkeys[0]}`,
+      cid: 'bafyexisting',
+      rkey: t.rkeys[0],
+      lastError: null,
+    });
+  });
+
+  it('createRecord が失敗して getRecord でも見つからなければ、createRecord の失敗を failed に残す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 500'));
+    await run(t.schedule.run({ postId: post.postId }));
+
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({
+      status: 'failed',
+      attempts: 1,
+      lastError: 'createRecord failed: status 500',
+    });
+  });
+});
+
+describe('送信中の削除と、削除の再試行', () => {
+  const sentRefs = { uri: 'at://did:plc:abc/app.bsky.feed.post/3kdel', cid: 'bafydel', rkey: '3kdel' };
+  const insertDeleting = (t: ReturnType<typeof setup>, postId: string, attempts: number) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,status,attempts,uri,cid,rkey,lastError,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+    ).run(
+      postId,
+      'deleting',
+      attempts,
+      sentRefs.uri,
+      sentRefs.cid,
+      sentRefs.rkey,
+      'deleteRecord failed: status 500',
+      NOW - 60 * 60_000,
+      NOW - 60 * 60_000,
+    );
+
+  it('送信中に行が消されたら、作った record をその場で deleteRecord し、行を作り直さない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    t.behavior.createRecord = () => {
+      t.sqlite.prepare('DELETE FROM bluesky_crossposts WHERE postId = ?').run(post.postId);
+      return Result.ok({ uri: 'at://did:plc:abc/app.bsky.feed.post/3kmid', cid: 'bafymid', rkey: '3kmid' });
+    };
+
+    await t.flush();
+
+    expect(t.deleted).toEqual(['3kmid']);
+    expect(await t.row(post.postId)).toBeUndefined();
+  });
+
+  it('送信中に投稿が消されたら、作った record を deleteRecord し、行も消す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    t.behavior.createRecord = () => {
+      t.sqlite.exec('PRAGMA foreign_keys=OFF');
+      t.sqlite.prepare('DELETE FROM local_posts WHERE postId = ?').run(post.postId);
+      t.sqlite.prepare('DELETE FROM timeline_items WHERE postId = ?').run(post.postId);
+      t.sqlite.prepare('DELETE FROM posts WHERE postId = ?').run(post.postId);
+      return Result.ok({ uri: 'at://did:plc:abc/app.bsky.feed.post/3kmid', cid: 'bafymid', rkey: '3kmid' });
+    };
+
+    await t.flush();
+
+    expect(t.deleted).toEqual(['3kmid']);
+    expect(await t.row(post.postId)).toBeUndefined();
+  });
+
+  it('その場の deleteRecord が失敗したら、uri と rkey を持つ deleting の行に残し、再試行で消す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    t.behavior.createRecord = () => {
+      t.sqlite.exec('PRAGMA foreign_keys=OFF');
+      t.sqlite.prepare('DELETE FROM local_posts WHERE postId = ?').run(post.postId);
+      t.sqlite.prepare('DELETE FROM timeline_items WHERE postId = ?').run(post.postId);
+      t.sqlite.prepare('DELETE FROM posts WHERE postId = ?').run(post.postId);
+      return Result.ok({ uri: 'at://did:plc:abc/app.bsky.feed.post/3kmid', cid: 'bafymid', rkey: '3kmid' });
+    };
+    t.behavior.deleteRecord = () => Result.err(failure('deleteRecord failed: status 503'));
+
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({
+      status: 'deleting',
+      uri: 'at://did:plc:abc/app.bsky.feed.post/3kmid',
+      cid: 'bafymid',
+      rkey: '3kmid',
+      attempts: 1,
+      lastError: 'deleteRecord failed: status 503',
+    });
+
+    t.behavior.deleteRecord = () => Result.ok(undefined);
+    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = 0 WHERE postId = ?').run(post.postId);
+    const summary = await run(t.retry.run());
+
+    expect(summary).toMatchObject({ deleted: 1, deleteFailed: 0 });
+    expect(t.deleted).toEqual(['3kmid', '3kmid']);
+    expect(await t.row(post.postId)).toBeUndefined();
+  });
+
+  it('retry は attempts が 5 未満の deleting の行に deleteRecord を再試行し、成功したら行を消す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertDeleting(t, post.postId, 2);
+
+    const summary = await run(t.retry.run());
+
+    expect(summary).toMatchObject({ deleted: 1, deleteFailed: 0, sent: 0 });
+    expect(t.deleted).toEqual(['3kdel']);
+    expect(await t.row(post.postId)).toBeUndefined();
+  });
+
+  it('再試行の deleteRecord が失敗したら deleting のまま attempts を増やし、5 回で止める', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertDeleting(t, post.postId, 3);
+    t.behavior.deleteRecord = () => Result.err(failure('deleteRecord failed: status 500'));
+
+    expect(await run(t.retry.run())).toMatchObject({ deleted: 0, deleteFailed: 1 });
+    expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 4 });
+    expect(await run(t.retry.run())).toMatchObject({ deleteFailed: 1 });
+    expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 5 });
+    expect(await run(t.retry.run())).toMatchObject({ deleted: 0, deleteFailed: 0 });
+    expect(t.deleted).toEqual(['3kdel', '3kdel']);
+  });
+
+  it('send は deleting の行には触れない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertDeleting(t, post.postId, 1);
+
+    expect(await run(t.send.run({ postId: post.postId }))).toBe('noop');
+    expect(t.rkeys).toEqual([]);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 1 });
+  });
+
+  it('削除は sent から deleting を経て、削除済みなら行が消える', async () => {
+    const t = setup();
+    const post = t.addPost();
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+    t.behavior.deleteRecord = () => Result.err(failure('deleteRecord failed: status 500'));
+    await run(t.remove.run({ postId: post.postId }));
+    await t.flush();
+    expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 1 });
+
+    t.behavior.deleteRecord = () => Result.ok(undefined);
+    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = 0').run();
+    await run(t.retry.run());
+
+    expect(await t.row(post.postId)).toBeUndefined();
+  });
+});
+
+describe('スレッドの 2 件目以降', () => {
+  const insertRow = (
+    t: ReturnType<typeof setup>,
+    postId: string,
+    status: 'pending' | 'failed',
+    attempts: number,
+    createdAt: number,
+  ) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
+    ).run(postId, status, attempts, createdAt, createdAt);
+
+  it.each(
+    [
+      ['pending', 0],
+      ['failed', 2],
+    ] as const,
+  )('親が %s (attempts %i) なら、子は skipped にせず pending に置く', async (status, attempts) => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    insertRow(t, parent.postId, status, attempts, NOW);
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+
+    expect(await run(t.schedule.run({ postId: child.postId }))).toBe('pending');
+
+    expect(await t.row(child.postId)).toMatchObject({ status: 'pending', skipReason: null, attempts: 0 });
+  });
+
+  it('親が上限に達した failed なら、子は reply_to_unsent で skipped にする', async () => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    insertRow(t, parent.postId, 'failed', 3, NOW);
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+
+    expect(await run(t.schedule.run({ postId: child.postId }))).toBe('skipped');
+
+    expect(await t.row(child.postId)).toMatchObject({ status: 'skipped', skipReason: 'reply_to_unsent' });
+  });
+
+  it('親がまだ送られていない間、send は子を pending のまま、attempts を増やさず何もしない', async () => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    insertRow(t, parent.postId, 'pending', 0, NOW);
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+    await run(t.schedule.run({ postId: child.postId }));
+
+    await t.flush();
+
+    expect(await t.row(child.postId)).toMatchObject({ status: 'pending', attempts: 0 });
+    expect(t.rkeys).toEqual([]);
+  });
+
+  it('send の時点で親が skipped なら、子は reply_to_unsent で skipped にする', async () => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    insertRow(t, parent.postId, 'pending', 0, NOW);
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+    await run(t.schedule.run({ postId: child.postId }));
+    t.sqlite.prepare('UPDATE bluesky_crossposts SET status = \'skipped\' WHERE postId = ?').run(parent.postId);
+
+    await t.flush();
+
+    expect(await t.row(child.postId)).toMatchObject({ status: 'skipped', skipReason: 'reply_to_unsent' });
+  });
+
+  it('retry は古い順に処理するので、親が送られた同じ回で子も親への返信として送られる', async () => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+    const grandchild = t.addPost({ content: '<p>孫</p>', inReplyToUri: child.uri });
+    insertRow(t, parent.postId, 'pending', 0, NOW - 90 * 60_000);
+    insertRow(t, child.postId, 'pending', 0, NOW - 80 * 60_000);
+    insertRow(t, grandchild.postId, 'pending', 0, NOW - 70 * 60_000);
+
+    const summary = await run(t.retry.run());
+
+    expect(summary).toMatchObject({ sent: 3, noop: 0 });
+    const parentRef = { uri: 'at://did:plc:abc/app.bsky.feed.post/3k0', cid: 'bafycid0' };
+    expect(t.created[1]?.reply).toEqual({ root: parentRef, parent: parentRef });
+    expect(t.created[2]?.reply).toEqual({
+      root: parentRef,
+      parent: { uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'bafycid1' },
+    });
+    expect(await t.row(child.postId)).toMatchObject({ status: 'sent', attempts: 1, rootUri: parentRef.uri });
+  });
+
+  it('親の送信が終わる前に子を予約しても、親の送信後に retry で子が送られる', async () => {
+    const t = setup();
+    const parent = t.addPost({ content: '<p>親</p>' });
+    insertRow(t, parent.postId, 'pending', 0, NOW);
+    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
+    await run(t.schedule.run({ postId: child.postId }));
+    await t.flush();
+    expect(await t.row(child.postId)).toMatchObject({ status: 'pending', attempts: 0 });
+
+    await run(t.send.run({ postId: parent.postId }));
+    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = ? WHERE postId = ?').run(
+      NOW - 60 * 60_000,
+      child.postId,
+    );
+    await run(t.retry.run());
+
+    expect(await t.row(child.postId)).toMatchObject({ status: 'sent', attempts: 1 });
+    expect(t.created[1]?.reply).toBeDefined();
   });
 });
 
@@ -610,6 +985,19 @@ describe('createBlueskyThumbnailFetcher', () => {
     ['接続できない', new Error('network')],
   ])('%s ときは undefined を返す', async (_name, response) => {
     expect(await fetcherFor(response).fetch('https://example.com/a.png')).toBeUndefined();
+  });
+
+  it('リダイレクトを追わず、3xx は thumb なしとして扱う', async () => {
+    const fetchStub = vi.fn(async () =>
+      new Response(null, { status: 302, headers: { location: 'https://127.0.0.1/a.png', 'content-type': 'image/png' } })
+    );
+    const fetcher = createBlueskyThumbnailFetcher({ fetch: fetchStub as unknown as typeof fetch });
+
+    expect(await fetcher.fetch('https://example.com/a.png')).toBeUndefined();
+    expect(fetchStub).toHaveBeenCalledWith(
+      'https://example.com/a.png',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
   });
 
   it.each(['http://example.com/a.png', 'https://localhost/a.png', 'https://127.0.0.1/a.png', 'not a url'])(

@@ -35,4 +35,12 @@ describe('htmlToTextWithLinks', () => {
   it('script と style の中身を捨てる', () => {
     expect(htmlToTextWithLinks('<style>p{}</style>hi<script>x()</script>').text).toBe('hi');
   });
+
+  it('本文に含まれるリンクの印と同じ文字を取り除き、リンクの位置をずらさない', () => {
+    const { text, links } = htmlToTextWithLinks(
+      '<p>\uE000前\uE001 <a href="https://example.com/a">リンク&#xE000;</a>\uE001 後</p>',
+    );
+    expect(text).toBe('前 リンク 後');
+    expect(links).toEqual([{ start: 2, end: 5, uri: 'https://example.com/a' }]);
+  });
 });

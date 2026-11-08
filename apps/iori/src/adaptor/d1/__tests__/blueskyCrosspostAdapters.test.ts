@@ -109,7 +109,11 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
     const failedId = PostId.generate();
     const skippedId = PostId.generate();
     await savedStore.save(
-      BlueskyCrosspost.markFailed(BlueskyCrosspost.pending(failedId, at(1)), 'createRecord failed: status 500', at(2)),
+      BlueskyCrosspost.markFailed(
+        BlueskyCrosspost.markSending(BlueskyCrosspost.pending(failedId, at(1)), at(1)),
+        'createRecord failed: status 500',
+        at(2),
+      ),
     );
     await savedStore.save(BlueskyCrosspost.skipped(skippedId, 'content_warning', at(1)));
 
@@ -122,6 +126,26 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
       status: 'skipped',
       skipReason: 'content_warning',
     });
+  });
+
+  it('update は既にある行だけを更新して true を返し、無い行は作らず false を返す', async () => {
+    const { resolver, savedStore, deletedStore } = setup();
+    const postId = PostId.generate();
+    const pending = BlueskyCrosspost.pending(postId, at(1));
+    await savedStore.save(pending);
+
+    expect(Result.unsafeUnwrap(await savedStore.update(BlueskyCrosspost.markSending(pending, at(2))))).toBe(true);
+    expect(Result.unsafeUnwrap(await resolver.resolve(postId))).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      createdAt: at(1),
+      updatedAt: at(2),
+    });
+
+    await deletedStore.delete(postId);
+
+    expect(Result.unsafeUnwrap(await savedStore.update(BlueskyCrosspost.markSending(pending, at(3))))).toBe(false);
+    expect(Result.unsafeUnwrap(await resolver.resolve(postId))).toBeUndefined();
   });
 
   it('削除ストアは指定した行だけを消す', async () => {
@@ -137,49 +161,85 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
     expect(Result.unsafeUnwrap(await resolver.resolve(other))).toBeDefined();
   });
 
-  it('再送の候補は、10 分以上前の pending と試行回数が上限未満の failed を古い順に limit 件返す', async () => {
+  it('再送の候補は、10 分以上前の pending、上限未満の failed、上限未満の deleting を古い順に limit 件返す', async () => {
     const { savedStore, retryable } = setup();
-    const ids = Array.from({ length: 8 }, () => PostId.generate());
-    const [oldPending, freshPending, failedOne, failedThree, sent, skipped, failedOld, failedTwo] = ids as [
-      PostId,
-      PostId,
-      PostId,
-      PostId,
-      PostId,
-      PostId,
-      PostId,
-      PostId,
-    ];
-    const pending = (postId: PostId, minute: number) => BlueskyCrosspost.pending(postId, at(minute));
-    const failed = (postId: PostId, minute: number, times: number) => {
-      let row = pending(postId, minute);
-      for (let i = 0; i < times; i += 1) row = BlueskyCrosspost.markFailed(row, 'error', at(minute + 1));
+    const ids = Array.from({ length: 11 }, () => PostId.generate());
+    const [
+      oldPending,
+      freshPending,
+      failedOne,
+      failedThree,
+      sent,
+      skipped,
+      failedOld,
+      failedTwo,
+      exhaustedPending,
+      deletingFour,
+      deletingFive,
+    ] = ids as [PostId, PostId, PostId, PostId, PostId, PostId, PostId, PostId, PostId, PostId, PostId];
+    const pending = (postId: PostId, minute: number, times = 0) => {
+      let row = BlueskyCrosspost.pending(postId, at(minute));
+      for (let i = 0; i < times; i += 1) row = BlueskyCrosspost.markSending(row, at(minute + 1));
+      return row;
+    };
+    const failed = (postId: PostId, minute: number, times: number) =>
+      BlueskyCrosspost.markFailed(pending(postId, minute, times), 'error', at(minute + 1));
+    const sentRefs = { uri: 'u', cid: 'c', rkey: 'r', rootUri: null, rootCid: null };
+    const deleting = (postId: PostId, minute: number, times: number) => {
+      let row = BlueskyCrosspost.markDeleting(
+        BlueskyCrosspost.markSent(pending(postId, minute), sentRefs, at(minute)),
+        at(minute),
+      );
+      for (let i = 0; i < times; i += 1) row = BlueskyCrosspost.markDeleteFailed(row, 'error', at(minute + 1));
       return row;
     };
     await savedStore.save(pending(oldPending, 2));
     await savedStore.save(pending(freshPending, 55));
     await savedStore.save(failed(failedOne, 3, 1));
     await savedStore.save(failed(failedThree, 4, 3));
-    await savedStore.save(BlueskyCrosspost.markSent(pending(sent, 5), {
-      uri: 'u',
-      cid: 'c',
-      rkey: 'r',
-      rootUri: null,
-      rootCid: null,
-    }, at(6)));
+    await savedStore.save(BlueskyCrosspost.markSent(pending(sent, 5), sentRefs, at(6)));
     await savedStore.save(BlueskyCrosspost.skipped(skipped, 'sensitive', at(7)));
     await savedStore.save(failed(failedOld, 1, 2));
     await savedStore.save(failed(failedTwo, 8, 2));
+    await savedStore.save(pending(exhaustedPending, 9, 3));
+    await savedStore.save(deleting(deletingFour, 10, 4));
+    await savedStore.save(deleting(deletingFive, 11, 5));
 
     const all = Result.unsafeUnwrap(
-      await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, limit: 20 }),
+      await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, maxDeleteAttempts: 5, limit: 20 }),
     );
-    expect(all.map((row) => row.postId)).toEqual([failedOld, oldPending, failedOne, failedTwo]);
+    expect(all.map((row) => row.postId)).toEqual([failedOld, oldPending, failedOne, failedTwo, deletingFour]);
 
     const limited = Result.unsafeUnwrap(
-      await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, limit: 2 }),
+      await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, maxDeleteAttempts: 5, limit: 2 }),
     );
     expect(limited.map((row) => row.postId)).toEqual([failedOld, oldPending]);
+  });
+
+  it('deleting の行は uri、cid、rkey と試行回数、lastError を保存し直せる', async () => {
+    const { resolver, savedStore } = setup();
+    const postId = PostId.generate();
+    const sentRow = BlueskyCrosspost.markSent(BlueskyCrosspost.pending(postId, at(1)), {
+      uri: 'at://did:plc:abc/app.bsky.feed.post/3k1',
+      cid: 'bafy',
+      rkey: '3k1',
+      rootUri: null,
+      rootCid: null,
+    }, at(2));
+
+    await savedStore.save(sentRow);
+    await savedStore.save(
+      BlueskyCrosspost.markDeleteFailed(BlueskyCrosspost.markDeleting(sentRow, at(3)), 'deleteRecord failed', at(4)),
+    );
+
+    expect(Result.unsafeUnwrap(await resolver.resolve(postId))).toMatchObject({
+      status: 'deleting',
+      uri: 'at://did:plc:abc/app.bsky.feed.post/3k1',
+      cid: 'bafy',
+      rkey: '3k1',
+      attempts: 1,
+      lastError: 'deleteRecord failed',
+    });
   });
 });
 

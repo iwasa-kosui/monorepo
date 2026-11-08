@@ -126,6 +126,7 @@ export const buildBlueskyPostDraft = (
 ): Result<BlueskyPostDraft, BlueskySkipReason> => {
   const skipReason = BlueskyCrosspost.decideSkip(input);
   if (skipReason !== undefined) return Result.err(skipReason);
+  if (input.replyTo.kind === 'waiting') return Result.err('reply_to_unsent');
 
   const { kept, droppedCount } = selectBlueskyImages(input.images);
   const { text, links } = composeText(

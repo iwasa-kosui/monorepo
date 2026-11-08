@@ -6,6 +6,8 @@ export type TextWithLinks = Readonly<{ text: string; links: readonly TextLink[] 
 const LINK_OPEN = '';
 const LINK_CLOSE = '';
 
+const withoutMarkers = (text: string): string => text.replaceAll(LINK_OPEN, '').replaceAll(LINK_CLOSE, '');
+
 const hrefOf = (attributes: string): string | undefined => {
   const match = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attributes);
   const raw = match?.[1] ?? match?.[2] ?? match?.[3];
@@ -46,7 +48,7 @@ export const htmlToTextWithLinks = (html: string): TextWithLinks => {
   let linkOpen = false;
   let cursor = 0;
   for (const tag of cleaned.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g)) {
-    marked += decodeEntities(cleaned.slice(cursor, tag.index));
+    marked += withoutMarkers(decodeEntities(cleaned.slice(cursor, tag.index)));
     cursor = tag.index + tag[0].length;
     const closing = tag[1] === '/';
     const name = tag[2].toLowerCase();
@@ -65,7 +67,7 @@ export const htmlToTextWithLinks = (html: string): TextWithLinks => {
       marked += BLOCK_BREAKS[name] ?? '';
     }
   }
-  marked += decodeEntities(cleaned.slice(cursor));
+  marked += withoutMarkers(decodeEntities(cleaned.slice(cursor)));
   if (linkOpen) marked += LINK_CLOSE;
 
   const normalized = marked

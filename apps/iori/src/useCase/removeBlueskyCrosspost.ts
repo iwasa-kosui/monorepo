@@ -1,12 +1,16 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import type {
-  BlueskyCrosspostDeletedStore,
-  BlueskyCrosspostResolver,
+import {
+  BlueskyCrosspost,
+  type BlueskyCrosspostDeletedStore,
+  type BlueskyCrosspostResolver,
+  type BlueskyCrosspostSavedStore,
 } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { Instant } from '../domain/instant/instant.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { BlueskyClient } from '../ports/blueskyClient.ts';
+import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ postId: PostId }>;
@@ -17,22 +21,21 @@ export type RemoveBlueskyCrosspostUseCase = UseCase<Input, RemoveBlueskyCrosspos
 
 type Deps = Readonly<{
   crosspostResolver: BlueskyCrosspostResolver;
+  crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
   client: BlueskyClient;
   waitUntil: (promise: Promise<unknown>) => void;
+  now: () => Instant;
 }>;
 
 const create = (deps: Deps): RemoveBlueskyCrosspostUseCase => {
-  const deleteRemote = async (postId: PostId, rkey: string): Promise<void> => {
+  const deleteRemote = deleteBlueskyRecordWith(deps);
+
+  const deleteRemoteSafely = async (crosspost: BlueskyCrosspost): Promise<void> => {
     try {
-      const deleted = await deps.client.deleteRecord(rkey);
-      if (!deleted.ok) {
-        getLogger().warn(`Bluesky record could not be deleted: ${postId}`, { reason: deleted.err.message });
-        return;
-      }
-      await deps.crosspostDeletedStore.delete(postId);
+      await deleteRemote(crosspost);
     } catch (error) {
-      getLogger().error(`Bluesky record deletion failed unexpectedly: ${postId}`, {
+      getLogger().error(`Bluesky record deletion failed unexpectedly: ${crosspost.postId}`, {
         errorName: error instanceof Error ? error.name : typeof error,
       });
     }
@@ -41,8 +44,10 @@ const create = (deps: Deps): RemoveBlueskyCrosspostUseCase => {
   const execute = async ({ postId }: Input): Promise<RemoveBlueskyCrosspostOutcome> => {
     const crosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
     if (crosspost === undefined) return 'noop';
-    if (crosspost.status === 'sent' && crosspost.rkey !== null) {
-      deps.waitUntil(deleteRemote(postId, crosspost.rkey));
+    if ((crosspost.status === 'sent' || crosspost.status === 'deleting') && crosspost.rkey !== null) {
+      const deleting = BlueskyCrosspost.markDeleting(crosspost, deps.now());
+      Result.unsafeUnwrap(await deps.crosspostSavedStore.save(deleting));
+      deps.waitUntil(deleteRemoteSafely(deleting));
       return 'deleting';
     }
     await deps.crosspostDeletedStore.delete(postId);

@@ -9,13 +9,15 @@ export type BlueskyClientError = Readonly<{
   kind: BlueskyClientErrorKind;
   message: string;
   status?: number;
+  code?: string;
 }>;
 
 export type BlueskyCreatedRecord = Readonly<{ uri: string; cid: string; rkey: string }>;
 
 export type BlueskyClient = Readonly<{
   uploadBlob: (input: Readonly<{ bytes: Uint8Array; mimeType: string }>) => RA<BlueskyBlob, BlueskyClientError>;
-  createRecord: (record: BlueskyPostRecord) => RA<BlueskyCreatedRecord, BlueskyClientError>;
+  createRecord: (record: BlueskyPostRecord, rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
+  getRecord: (rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
   deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
 }>;
 

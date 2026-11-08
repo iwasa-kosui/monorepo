@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { BlueskySession } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyPostRecord } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
@@ -31,6 +31,7 @@ const stored = (overrides: Partial<BlueskySession> = {}): BlueskySession => ({
   updatedAt: Instant.orThrow(1),
   ...overrides,
 });
+const RKEY = '3kabcdefghij2';
 const record: BlueskyPostRecord = { $type: 'app.bsky.feed.post', text: 'hi', createdAt: '2026-11-08T00:00:00.000Z' };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -78,7 +79,7 @@ describe('createBlueskyClient のセッション', () => {
       () => created(),
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({
       ok: true,
@@ -104,6 +105,7 @@ describe('createBlueskyClient のセッション', () => {
     expect(JSON.parse(calls[1]!.init.body as string)).toEqual({
       repo: 'did:plc:abc',
       collection: 'app.bsky.feed.post',
+      rkey: RKEY,
       record,
     });
   });
@@ -111,7 +113,7 @@ describe('createBlueskyClient のセッション', () => {
   it('didDoc が無ければ https://bsky.social に書く', async () => {
     const { client, calls, saved } = setup(undefined, [() => json(sessionBody('new')), () => created()]);
 
-    await client.createRecord(record);
+    await client.createRecord(record, RKEY);
 
     expect(saved[0]?.pdsUrl).toBe('https://bsky.social');
     expect(calls[1]?.url).toBe('https://bsky.social/xrpc/com.atproto.repo.createRecord');
@@ -120,7 +122,7 @@ describe('createBlueskyClient のセッション', () => {
   it('保存済みのセッションがあれば createSession せずにそれを使う', async () => {
     const { client, calls, saved } = setup(stored(), [() => created()]);
 
-    await client.createRecord(record);
+    await client.createRecord(record, RKEY);
 
     expect(calls).toHaveLength(1);
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
@@ -134,7 +136,7 @@ describe('createBlueskyClient のセッション', () => {
       () => created('2'),
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({ ok: true, val: { rkey: '3k2' } });
     expect(calls.map((call) => call.url)).toEqual([
@@ -159,7 +161,7 @@ describe('createBlueskyClient のセッション', () => {
       () => created(),
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result.ok).toBe(true);
     expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
@@ -172,7 +174,7 @@ describe('createBlueskyClient のセッション', () => {
       () => created(),
     ]);
 
-    await client.createRecord(record);
+    await client.createRecord(record, RKEY);
 
     expect(saved[0]?.pdsUrl).toBe(PDS);
   });
@@ -185,7 +187,7 @@ describe('createBlueskyClient のセッション', () => {
       () => created('3'),
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({ ok: true, val: { rkey: '3k3' } });
     expect(calls.map((call) => call.url.split('/').pop())).toEqual([
@@ -204,7 +206,7 @@ describe('createBlueskyClient のセッション', () => {
       () => json({ error: 'ExpiredToken' }, 400),
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({ ok: false, err: { kind: 'auth', status: 400 } });
     expect(calls).toHaveLength(3);
@@ -213,7 +215,7 @@ describe('createBlueskyClient のセッション', () => {
   it('createSession が失敗したらその場でエラーを返し、パスワードを含めない', async () => {
     const { client, calls } = setup(undefined, [() => json({ error: 'AuthenticationRequired' }, 401)]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({ ok: false, err: { kind: 'auth', status: 401 } });
     expect(calls).toHaveLength(1);
@@ -248,6 +250,45 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
+  it('getRecord は repo、collection、rkey を query に付けて uri、cid、rkey を返す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k9', cid: 'bafy9', value: { text: 'x' } }),
+    ]);
+
+    const result = await client.getRecord('3k9');
+
+    expect(result).toMatchObject({
+      ok: true,
+      val: { uri: 'at://did:plc:abc/app.bsky.feed.post/3k9', cid: 'bafy9', rkey: '3k9' },
+    });
+    const url = new URL(calls[0]!.url);
+    expect(url.origin + url.pathname).toBe(`${PDS}/xrpc/com.atproto.repo.getRecord`);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.feed.post',
+      rkey: '3k9',
+    });
+    expect(calls[0]?.init.method).toBe('GET');
+  });
+
+  it('getRecord は無い record を http エラーで返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
+    expect(await client.getRecord('3k9')).toMatchObject({ ok: false, err: { kind: 'http', code: 'RecordNotFound' } });
+  });
+
+  it.each([
+    ['RecordNotFound の 400', json({ error: 'RecordNotFound' }, 400)],
+    ['404', json({ error: 'NotFound' }, 404)],
+  ])('deleteRecord は既に無い record を成功として扱う (%s)', async (_name, response) => {
+    const { client } = setup(stored(), [() => response]);
+    expect((await client.deleteRecord('3kabc')).ok).toBe(true);
+  });
+
+  it('deleteRecord は 500 を失敗として返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+    expect(await client.deleteRecord('3kabc')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
+  });
+
   it('deleteRecord は空の本文の成功応答も受け付ける', async () => {
     const { client } = setup(stored(), [() => new Response(null, { status: 200 })]);
     expect((await client.deleteRecord('3kabc')).ok).toBe(true);
@@ -256,7 +297,7 @@ describe('createBlueskyClient の各操作', () => {
   it('認証以外の HTTP エラーは http として返し、refresh を試さない', async () => {
     const { client, calls } = setup(stored(), [() => json({ error: 'InvalidRequest', message: 'bad record' }, 400)]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({
       ok: false,
@@ -267,17 +308,17 @@ describe('createBlueskyClient の各操作', () => {
 
   it('スキーマに合わない応答を invalid_response として返す', async () => {
     const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1' })]);
-    expect(await client.createRecord(record)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    expect(await client.createRecord(record, RKEY)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 
   it('投稿の uri から rkey を取れない応答を invalid_response として返す', async () => {
     const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/other.collection/3k1', cid: 'c' })]);
-    expect(await client.createRecord(record)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    expect(await client.createRecord(record, RKEY)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 
   it('JSON でない成功応答を invalid_response として返す', async () => {
     const { client } = setup(stored(), [() => new Response('<html>', { status: 200 })]);
-    expect(await client.createRecord(record)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    expect(await client.createRecord(record, RKEY)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 
   it('fetch が例外を投げても例外にせず network として返す', async () => {
@@ -287,10 +328,47 @@ describe('createBlueskyClient の各操作', () => {
       },
     ]);
 
-    const result = await client.createRecord(record);
+    const result = await client.createRecord(record, RKEY);
 
     expect(result).toMatchObject({ ok: false, err: { kind: 'network' } });
     expect(JSON.stringify(result)).not.toContain('access-old');
+  });
+});
+
+describe('createBlueskyClient のタイムアウト', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('uploadBlob は 30 秒、createSession、createRecord、getRecord、deleteRecord は 10 秒の signal を付ける', async () => {
+    const spy = vi.spyOn(AbortSignal, 'timeout');
+    const blob = { $type: 'blob', ref: { $link: 'bafkrei' }, mimeType: 'image/png', size: 1 };
+    const { client, calls } = setup(undefined, [
+      () => json(sessionBody('new')),
+      () => json({ blob }),
+      () => created(),
+      () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' }),
+      () => json({}),
+    ]);
+
+    await client.uploadBlob({ bytes: new Uint8Array([1]), mimeType: 'image/png' });
+    await client.createRecord(record, RKEY);
+    await client.getRecord('3k1');
+    await client.deleteRecord('3k1');
+
+    expect(spy.mock.calls.map(([ms]) => ms)).toEqual([10_000, 30_000, 10_000, 10_000, 10_000]);
+    expect(calls.every((call) => call.init.signal instanceof AbortSignal)).toBe(true);
+  });
+
+  it('タイムアウトした fetch は例外にせず network の失敗として返す', async () => {
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() =>
+      AbortSignal.abort(new DOMException('timed out', 'TimeoutError'))
+    );
+    const { client } = setup(stored(), [
+      (call) => {
+        throw (call.init.signal as AbortSignal).reason;
+      },
+    ]);
+
+    expect(await client.createRecord(record, RKEY)).toMatchObject({ ok: false, err: { kind: 'network' } });
   });
 });
 

@@ -15,6 +15,7 @@ import {
   type BlueskyCrosspostResolver,
   type BlueskyCrosspostSavedStore,
 } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { blueskyRkeyOf } from '../domain/blueskyCrosspost/blueskyRkey.ts';
 import type { PostImagesResolverByPostId } from '../domain/image/image.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPreview.ts';
@@ -24,6 +25,7 @@ import type { UserResolver } from '../domain/user/user.ts';
 import type { BlueskyClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
 import { resolveBlueskyReplyContextWith } from './helper/blueskyReplyContext.ts';
+import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ postId: PostId }>;
@@ -52,9 +54,10 @@ const errorNameOf = (error: unknown): string => error instanceof Error ? error.n
 
 const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
   const resolveReplyContext = resolveBlueskyReplyContextWith(deps);
+  const deleteRemote = deleteBlueskyRecordWith(deps);
 
   const failWith = async (crosspost: BlueskyCrosspost, message: string): Promise<SendBlueskyCrosspostOutcome> => {
-    await deps.crosspostSavedStore.save(BlueskyCrosspost.markFailed(crosspost, message, deps.now()));
+    await deps.crosspostSavedStore.update(BlueskyCrosspost.markFailed(crosspost, message, deps.now()));
     return 'failed';
   };
 
@@ -88,12 +91,16 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     const replyTo = await resolveReplyContext(post);
     const skipReason = BlueskyCrosspost.decideSkip({ summary: post.summary, sensitive: post.sensitive, replyTo });
     if (skipReason !== undefined) {
-      await deps.crosspostSavedStore.save(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
+      await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
     }
+    if (replyTo.kind === 'waiting') return 'noop';
+
+    const attempting = BlueskyCrosspost.markSending(crosspost, deps.now());
+    if (!Result.unsafeUnwrap(await deps.crosspostSavedStore.update(attempting))) return 'noop';
 
     const user = Result.unsafeUnwrap(await deps.userResolver.resolve(post.userId));
-    if (user === undefined) return failWith(crosspost, 'user not found');
+    if (user === undefined) return failWith(attempting, 'user not found');
     const postUrl = new URL(`/users/${user.username}/posts/${post.postId}`, deps.origin).href;
 
     const storedImages = [...Result.unsafeUnwrap(await deps.postImagesResolver.resolve(postId))]
@@ -128,34 +135,49 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       createdAt: post.createdAt,
     });
     if (!draft.ok) {
-      await deps.crosspostSavedStore.save(BlueskyCrosspost.markSkipped(crosspost, draft.err, deps.now()));
+      await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(attempting, draft.err, deps.now()));
       return 'skipped';
     }
 
     const imageBlobs = [];
     for (const image of draft.val.images) {
       const uploaded = await deps.client.uploadBlob(image);
-      if (!uploaded.ok) return failWith(crosspost, uploaded.err.message);
+      if (!uploaded.ok) return failWith(attempting, uploaded.err.message);
       imageBlobs.push(uploaded.val);
     }
     const thumbInput = draft.val.external?.thumb;
     const thumbUploaded = thumbInput === undefined ? undefined : await deps.client.uploadBlob(thumbInput);
 
-    const created = await deps.client.createRecord(
+    const rkey = blueskyRkeyOf({ postId, createdAt: post.createdAt });
+    let created = await deps.client.createRecord(
       toBlueskyPostRecord(draft.val, {
         images: imageBlobs,
         ...(thumbUploaded?.ok ? { thumb: thumbUploaded.val } : {}),
       }),
+      rkey,
     );
-    if (!created.ok) return failWith(crosspost, created.err.message);
+    if (!created.ok && created.err.kind !== 'auth') {
+      const existing = await deps.client.getRecord(rkey);
+      if (existing.ok) created = existing;
+    }
+    if (!created.ok) return failWith(attempting, created.err.message);
 
+    const latestPost = Result.unsafeUnwrap(await deps.postResolver.resolve(postId));
+    const latestCrosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
     const root = replyTo.kind === 'sent' ? replyTo.root : undefined;
-    await deps.crosspostSavedStore.save(BlueskyCrosspost.markSent(crosspost, {
-      ...created.val,
-      rootUri: root?.uri ?? null,
-      rootCid: root?.cid ?? null,
-    }, deps.now()));
-    return 'sent';
+    const refs = { ...created.val, rootUri: root?.uri ?? null, rootCid: root?.cid ?? null };
+    const markedSent = latestPost !== undefined && latestPost.type === 'local' && latestCrosspost !== undefined
+      && Result.unsafeUnwrap(
+        await deps.crosspostSavedStore.update(BlueskyCrosspost.markSent(latestCrosspost, refs, deps.now())),
+      );
+    if (markedSent) return 'sent';
+
+    const orphan = BlueskyCrosspost.markDeleting(
+      BlueskyCrosspost.markSent(latestCrosspost ?? attempting, refs, deps.now()),
+      deps.now(),
+    );
+    await deleteRemote(orphan);
+    return 'gone';
   };
 
   const run = async (input: Input) => {
@@ -171,7 +193,9 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
   const recordUnexpectedFailure = async (postId: PostId): Promise<void> => {
     try {
       const crosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
-      if (crosspost !== undefined) await failWith(crosspost, 'unexpected error');
+      if (crosspost !== undefined && (crosspost.status === 'pending' || crosspost.status === 'failed')) {
+        await failWith(crosspost, 'unexpected error');
+      }
     } catch (error) {
       getLogger().error('Bluesky crosspost failure could not be recorded.', { errorName: errorNameOf(error) });
     }

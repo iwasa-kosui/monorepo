@@ -13,7 +13,10 @@ export const createBlueskyThumbnailFetcher = (deps: ThumbnailFetcherDeps = {}): 
       try {
         const target = new URL(url);
         if (blockedReason(target) !== undefined) return undefined;
-        const response = await fetchRequest(target.href, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        const response = await fetchRequest(target.href, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          redirect: 'manual',
+        });
         const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
         if (!response.ok || mimeType === undefined || !mimeType.startsWith('image/')) return undefined;
         const declared = Number(response.headers.get('content-length'));

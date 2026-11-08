@@ -672,7 +672,7 @@ describe('a state close to a production wrangler deployment', () => {
       { name: 'BLUESKY_IDENTIFIER', type: 'secret_text' },
       { name: 'BLUESKY_APP_PASSWORD', type: 'secret_text' },
     ]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 17 });
   });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
