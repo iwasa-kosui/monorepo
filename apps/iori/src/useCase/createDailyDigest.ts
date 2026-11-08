@@ -37,8 +37,10 @@ import type {
   HatenaTrendsResolverByFetchedSince,
   RadarFeedEntriesResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
+  XPostsResolverByFetchedSince,
 } from '../domain/digest/digestMaterial.ts';
 import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
+import { selectXPosts } from '../domain/digest/xPostSelection.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
 import { assignTopics, TOPIC_MIN_SIMILARITY } from '../domain/digestTopic/topicAssignment.ts';
@@ -83,6 +85,8 @@ const TOPIC_MIN_ITEMS = 3;
 const TOPICS_PER_DAY_LIMIT = 4;
 export const TRENDS_LIMIT = 10;
 const RADAR_LIMIT = 1;
+export const X_POSTS_LIMIT = 10;
+const X_POSTS_CANDIDATE_LIMIT = 300;
 const HOUR_MS = 60 * 60 * 1000;
 export const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
@@ -99,6 +103,7 @@ type Ok = Readonly<{
   topics: number;
   items: number;
   trends: number;
+  xPosts: number;
   summarized: number;
   pushed: number;
   skippedReason?: string;
@@ -152,6 +157,7 @@ type Deps = Readonly<{
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
+  xPostsResolverByFetchedSince: XPostsResolverByFetchedSince;
   interestVectorsResolverByUserId: InterestVectorsResolverByUserId;
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
   safeFetcher: SafeFetcher;
@@ -255,6 +261,7 @@ const create = ({
   radarFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
   timelineLinkTrendsResolverByUserId,
+  xPostsResolverByFetchedSince,
   interestVectorsResolverByUserId,
   recommendableArticlesResolverByFetchedSince,
   safeFetcher,
@@ -332,6 +339,7 @@ const create = ({
       topics: 0,
       items: 0,
       trends: 0,
+      xPosts: 0,
       summarized: 0,
       pushed: 0,
       recommendation: {
@@ -401,20 +409,23 @@ const create = ({
       ? windowStart
       : previous.val.createdAt;
 
-    const [radarEntries, hatenaTrends, timelineTrends, interestVectors, pastUrls, recommendable] = await Promise.all([
-      radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
-      hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
-      timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
-      interestVectorsResolverByUserId.resolve(userId),
-      digestItemUrlsResolverByUserId.resolve({
-        userId,
-        excludingDigestIds: existing.replaceable.map((header) => header.digestId),
-      }),
-      recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
-    ]);
+    const [radarEntries, hatenaTrends, timelineTrends, xPostCandidates, interestVectors, pastUrls, recommendable] =
+      await Promise.all([
+        radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
+        hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
+        timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
+        xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT }),
+        interestVectorsResolverByUserId.resolve(userId),
+        digestItemUrlsResolverByUserId.resolve({
+          userId,
+          excludingDigestIds: existing.replaceable.map((header) => header.digestId),
+        }),
+        recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
+      ]);
     const radar = radarEntries.val[0];
 
     const materials = interestVectors.val;
+    const xPosts = selectXPosts({ posts: xPostCandidates.val, materials, now: startedAt, limit: X_POSTS_LIMIT });
     const pastUrlSet = new Set(pastUrls.val.map(normalizeDigestUrl));
     const candidates = uniqueByNormalizedUrl(recommendable.val)
       .filter((candidate) => !pastUrlSet.has(normalizeDigestUrl(candidate.url)));
@@ -537,6 +548,7 @@ const create = ({
           })),
           ...topicDigests.map(({ selection, articleId }) => ({ name: selection.topic.name, articleId })),
         ],
+        xPosts,
         timelineTrends: timelineTrends.val,
         hatenaTrends: hatenaTrends.val,
       }),
@@ -641,6 +653,7 @@ const create = ({
         topics: topicDigests.length,
         items: selectedItems.length,
         trends: summaryDigest.trends.length,
+        xPosts: xPosts.length,
         summarized,
         pushed,
         recommendation: {

@@ -268,4 +268,50 @@ describe('buildSummaryBodies', () => {
 
     expect(privateHtml).toBe('<p>今日のダイジェストに載せる記事はありません。</p>');
   });
+
+  describe('X の投稿', () => {
+    const xPosts = [
+      { username: 'jack', title: 'secret <b>post</b>', url: 'https://x.com/jack/status/111' },
+      { username: 'sundar', title: 'another post', url: 'https://x.com/sundar/status/222' },
+    ];
+
+    it('private はトピックの次、iori のタイムラインの前に「X の投稿」の節を置き、ユーザー名とリンクを出す', () => {
+      const { privateHtml } = buildSummaryBodies({ ...summaryInput, xPosts });
+
+      const positions = [
+        '<h2>トピック別のダイジェスト</h2>',
+        '<h2>X の投稿</h2>',
+        'みんなの関心（iori のタイムライン）',
+      ]
+        .map((heading) => privateHtml.indexOf(heading));
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
+      expect(privateHtml).toContain('@jack <a href="https://x.com/jack/status/111">secret &lt;b&gt;post&lt;/b&gt;</a>');
+      expect(privateHtml).toContain('@sundar <a href="https://x.com/sundar/status/222">another post</a>');
+    });
+
+    it('public には本文もユーザー名も URL も出さない', () => {
+      const { publicHtml } = buildSummaryBodies({ ...summaryInput, xPosts });
+
+      expect(publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
+    });
+
+    it('投稿が無ければ、節を見出しごと出さない', () => {
+      expect(buildSummaryBodies({ ...summaryInput, xPosts: [] }).privateHtml).not.toContain('X の投稿');
+      expect(buildSummaryBodies(summaryInput).privateHtml).not.toContain('X の投稿');
+    });
+
+    it('投稿だけがあれば、載せる記事がない旨の段落にしない', () => {
+      const { privateHtml } = buildSummaryBodies({
+        radar: undefined,
+        topics: [],
+        timelineTrends: [],
+        hatenaTrends: [],
+        xPosts,
+      });
+
+      expect(privateHtml).toContain('<h2>X の投稿</h2>');
+      expect(privateHtml).not.toContain('載せる記事はありません');
+    });
+  });
 });

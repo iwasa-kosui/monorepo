@@ -820,7 +820,7 @@ describe('createWorkerIoriArticlesRouter', () => {
           title: `entry ${rank}`,
           feedback: null,
         })),
-        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: false, recommendations: false },
+        excluded: { timelineLinks: 2, hatena: 1, hatenaCounts: false, xPosts: false, recommendations: false },
       });
     });
 
@@ -939,6 +939,24 @@ describe('createWorkerIoriArticlesRouter', () => {
       const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
 
       expect(body.digest).toMatchObject({ topicKey: 'summary', excluded: { hatenaCounts: false } });
+    });
+
+    it('新形式のまとめ（項目を持たない）だけ xPosts を true にする', async () => {
+      const summary = createArticle('draft');
+      const legacy = createArticle('draft');
+      const topic = createArticle('draft');
+      const detailOf = async (article: Article, digest: Digest) => {
+        const t = createDigestApp(article, digest);
+        return (await getDetail(t, article, t.auth.cookieFor(authorUserId))).digest;
+      };
+
+      expect(await detailOf(summary, createDigest(summary, 0, null, 'summary'))).toMatchObject({
+        excluded: { xPosts: true },
+      });
+      expect(await detailOf(legacy, createDigest(legacy, 2, null, 'summary'))).toMatchObject({
+        excluded: { xPosts: false },
+      });
+      expect(await detailOf(topic, createDigest(topic, 2))).toMatchObject({ excluded: { xPosts: false } });
     });
 
     it('新形式のまとめの公開が拒まれたら、409 とそのメッセージを返し、OGP 画像を作らない', async () => {

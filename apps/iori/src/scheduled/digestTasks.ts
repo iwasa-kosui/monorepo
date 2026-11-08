@@ -25,6 +25,7 @@ import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/f
 import { createD1FeedEntryResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
+import { createD1XPostsResolverByFetchedSince } from '../adaptor/d1/feedEntry/xPostsResolverByFetchedSince.ts';
 import { createD1InterestSourceResolverByUserIdAndInterestSourceId } from '../adaptor/d1/interestSource/interestSourceResolverByUserIdAndInterestSourceId.ts';
 import { createD1LikedPostContentsResolverByLikeIds } from '../adaptor/d1/interestSource/likedPostContentsResolverByLikeIds.ts';
 import { createD1PostContentsResolverByPostIds } from '../adaptor/d1/interestSource/postContentsResolverByPostIds.ts';
@@ -81,6 +82,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
+    xPostsResolverByFetchedSince: createD1XPostsResolverByFetchedSince(db),
     interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
     recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
     safeFetcher: createSafeFetcher(),
