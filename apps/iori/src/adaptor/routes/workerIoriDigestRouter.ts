@@ -563,9 +563,9 @@ export const createWorkerIoriDigestRouter = ({
       return c.json({ sources: visible.map(toFeedSourceBody) });
     })
     .post('/iori/v1/feed-sources', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
+      if (!(await isDigestOwner(userIdOf(c)))) return c.json(forbidden, 403);
       const body = await readRequestBody(c);
       if (bodyString(body, 'kind')?.trim() === 'x_user') {
-        if (!(await isDigestOwner(userIdOf(c)))) return c.json(forbidden, 403);
         const username = bodyString(body, 'username')?.trim();
         if (username === undefined) return c.json({ error: 'Validation failed: username' }, 400);
         const added = await addFeedSourceUseCase.run({ kind: 'x_user', username });
@@ -585,13 +585,9 @@ export const createWorkerIoriDigestRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
+        if (!(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const feedSourceId = FeedSourceId.parse(c.req.param('feedSourceId'));
         if (!feedSourceId.ok) return c.json(feedSourceNotFound, 404);
-        const sources = await allFeedSourcesResolver.resolve();
-        if (!sources.ok) return c.json(internalServerError, 500);
-        const target = sources.val.find((source) => source.feedSourceId === feedSourceId.val);
-        // GET が所有者以外から x_user を隠すので、存在しない情報源と同じ 404 にして区別させない。
-        if (target?.kind === 'x_user' && !(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const enabled = readEnabled(await readRequestBody(c));
         if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
         const changed = await changeFeedSourceEnabledUseCase.run({ feedSourceId: feedSourceId.val, enabled });
