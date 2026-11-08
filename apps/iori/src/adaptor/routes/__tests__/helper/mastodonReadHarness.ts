@@ -25,6 +25,7 @@ import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
+import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
@@ -64,6 +65,7 @@ import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestR
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../../../d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../../../d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../../../d1/digestTopic/digestTopicCreatedStore.ts';
@@ -130,6 +132,7 @@ import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../../../d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelaysResolver.ts';
 import { createD1AllRelaysResolver } from '../../../d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../../../d1/relay/relayResolverByActorUri.ts';
@@ -559,6 +562,13 @@ export const setupReadApi = (
           changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
             digestTopicsResolverByUserId,
             digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
+            now: Instant.now,
+          }),
+          previewDigestTopicsUseCase: PreviewDigestTopicsUseCase.create({
+            digestTopicsResolverByUserId,
+            recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+            digestTopicItemsResolverByUserIdAndDigestDateFrom:
+              createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db),
             now: Instant.now,
           }),
         }),

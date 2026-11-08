@@ -69,6 +69,9 @@ const setup = (
         scoringMs: 0,
         fetchedBodies: 0,
         fallbackToDescription: 0,
+        assignedToTopics: 0,
+        belowMinSimilarity: 0,
+        belowMinMargin: 0,
       },
     })
   );

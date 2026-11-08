@@ -184,6 +184,7 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
       title: expect.stringMatching(/^title /),
       description: expect.stringMatching(/^description /),
       hatenaBookmarkCount: 120,
+      fetchedAt: 10_001,
     });
     expect(resolved[2]?.hatenaBookmarkCount).toBeNull();
     expect(Array.from(resolved[0]!.embedding)).toEqual(Array.from(a.embedding as Float32Array));
