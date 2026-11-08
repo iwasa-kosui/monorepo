@@ -63,12 +63,6 @@ jobs:
           node-version: "24.12.0"
           cache: "pnpm"
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-          terraform_version: "1.17.1"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -112,9 +106,6 @@ jobs:
           export IORI_ADMISSION_IDENTITY="$(printf '{"environment":"staging","generation":"fixture1","mainSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","runId":"fixture1","hostname":"iori.example.invalid","workerHostname":"iori-staging-fixture1.fixture.workers.dev","smoke":{"username":"iori-smoke","uploadFilename":"%s.png","articleId":"%s"}}' "$iori_fixture_marker" "$iori_fixture_marker")"
           run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
           run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
-          run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
-          node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
-          run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
 
       - name: Write redacted Cloudflare validation summary
         shell: bash
@@ -124,7 +115,6 @@ jobs:
             printf '%s\n' '## Iori Cloudflare validation'
             printf '%s\n' '- Public artifact policy: passed'
             printf '%s\n' '- Workflow-output redaction: passed'
-            printf '%s\n' '- Terraform validation: passed'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
@@ -135,6 +125,53 @@ jobs:
 
       - name: Test on workerd
         run: pnpm --filter iori run test:workerd
+
+  iori-terraform:
+    name: "apps/iori terraform"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          terraform_version: "1.17.1"
+
+      - name: Run guarded Terraform checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_guarded() {
+            local output status=0 guard_status=0
+            output="$(mktemp)"
+            "$@" >"$output" 2>&1 || status=$?
+            node apps/iori/scripts/assert-workflow-output.mjs <"$output" || guard_status=$?
+            rm -f "$output"
+            if [ "$status" -ne 0 ] || [ "$guard_status" -ne 0 ]; then
+              printf 'Guarded command failed: exit=%s guard=%s command=%s\n' "$status" "$guard_status" "$*" >&2
+            fi
+            if [ "$guard_status" -ne 0 ]; then return "$guard_status"; fi
+            return "$status"
+          }
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
+          node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
+          run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
+
+      - name: Write redacted Terraform validation summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' '## Iori Terraform validation'
+            printf '%s\n' '- Terraform validation: passed'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   nen-diagnosis:
     name: "apps/nen-diagnosis"

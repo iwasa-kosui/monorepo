@@ -600,7 +600,10 @@ it('wires the test step, Terraform setup and sealed CI identity', async () => {
   expect(steps.find(step => step.name === 'Test')?.run).toBe(
     'pnpm --filter iori run test:ci --maxWorkers=1 --no-file-parallelism',
   );
-  expect(steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with?.terraform_wrapper).toBe(false);
+  expect(
+    ci.jobs['iori-terraform'].steps.find(step => step.uses?.startsWith('hashicorp/setup-terraform'))?.with
+      ?.terraform_wrapper,
+  ).toBe(false);
   const guard = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
   expect(guard).toContain('IORI_ADMISSION_MODE=sealed');
   expect(guard).toContain('iori-staging-fixture1');
@@ -609,8 +612,8 @@ it('wires the test step, Terraform setup and sealed CI identity', async () => {
 });
 it('runs readonly Terraform init and validate in CI', async () => {
   const ci = await readWorkflow('ci.yml');
-  const steps = ci.jobs.iori.steps;
-  const lines = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
+  const steps = ci.jobs['iori-terraform'].steps;
+  const lines = steps.find(step => step.name === 'Run guarded Terraform checks')!.run!
     .split('\n').map(line => line.trim());
   const init = lines.indexOf(
     'node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
@@ -620,6 +623,26 @@ it('runs readonly Terraform init and validate in CI', async () => {
   expect(lines.filter(line => line.includes('run-guarded-retry.mjs'))).toHaveLength(1);
   expect(lines.filter(line => /^run_guarded\b.*\binit\b/.test(line))).toEqual([]);
   expect(lines.some(line => line.includes('git diff --exit-code'))).toBe(false);
+});
+it('runs Terraform checks in a job independent of the apps/iori build and test', async () => {
+  const ci = await readWorkflow('ci.yml');
+  const terraform = ci.jobs['iori-terraform'];
+  expect(JSON.stringify(ci.jobs.iori)).not.toMatch(/terraform/i);
+  expect(ci.jobs.iori.needs).toBeUndefined();
+  expect(terraform.needs).toBeUndefined();
+  expect(terraform).not.toHaveProperty('continue-on-error');
+});
+it('uses the same run_guarded definition in both guarded check steps', async () => {
+  const ci = await readWorkflow('ci.yml');
+  const definition = (job: Job, stepName: string) => {
+    const lines = job.steps.find(step => step.name === stepName)!.run!.split('\n');
+    const start = lines.findIndex(line => line.trim() === 'run_guarded() {');
+    const end = lines.findIndex((line, index) => index > start && line.trim() === '}');
+    return lines.slice(start, end + 1).join('\n');
+  };
+  const cloudflare = definition(ci.jobs.iori, 'Run guarded Cloudflare checks');
+  expect(cloudflare).toContain('run_guarded() {');
+  expect(definition(ci.jobs['iori-terraform'], 'Run guarded Terraform checks')).toBe(cloudflare);
 });
 it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
   const { spawnSync } = await import('node:child_process');
