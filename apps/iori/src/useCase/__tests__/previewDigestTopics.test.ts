@@ -7,7 +7,11 @@ import { assignTopics, TopicAssignmentPolicy } from '../../domain/digestTopic/to
 import { Instant } from '../../domain/instant/instant.ts';
 import type { RecommendableArticle } from '../../domain/recommendation/recommendation.ts';
 import { UserId } from '../../domain/user/userId.ts';
+import type { TopicRelevanceJudge } from '../../ports/topicRelevanceJudge.ts';
 import {
+  JEV_CANDIDATES_PER_TOPIC,
+  JEV_MODEL,
+  JEV_TIMEOUT_MS,
   MAX_PREVIEW_CANDIDATES,
   MAX_PREVIEW_DIGEST_ITEMS,
   PreviewDigestTopicsUseCase,
@@ -64,6 +68,8 @@ const setup = (
     maxCandidates?: number;
     maxDigestItems?: number;
     topicAssignmentPolicy?: TopicAssignmentPolicy;
+    topicRelevanceJudge?: TopicRelevanceJudge;
+    sleep?: (ms: number) => Promise<void>;
   } = {},
 ) => {
   const resolveTopics = vi.fn(() => RA.ok(topics));
@@ -76,6 +82,8 @@ const setup = (
     maxCandidates: options.maxCandidates,
     maxDigestItems: options.maxDigestItems,
     topicAssignmentPolicy: options.topicAssignmentPolicy,
+    topicRelevanceJudge: options.topicRelevanceJudge,
+    sleep: options.sleep,
     now: () => NOW,
   });
   return { useCase, resolveTopics, resolveArticles, resolveItems };
@@ -257,6 +265,135 @@ describe('PreviewDigestTopicsUseCase', () => {
       expect(flagged.map((candidate) => candidate.feedEntryId)).toEqual(
         assigned.others.map((entry) => entry.feedEntryId),
       );
+    });
+  });
+
+  describe('Jev の判定', () => {
+    const topics = [topic('on', new Float32Array([1, 0]))];
+    const withDescription = (n: number, description: string): RecommendableArticle =>
+      ({ ...article(n), description }) as unknown as RecommendableArticle;
+    const articles = [1, 2, 3, 4, 5, 6, 7].map((n) => withDescription(n, `本文 ${n}`));
+    const input = { userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 } as const;
+    const judgeBy = (noulOf: (title: string) => number): TopicRelevanceJudge => ({
+      judge: vi.fn(({ article: target }) => RA.ok({ noul: noulOf(target.title) })),
+    });
+
+    it('withJev を付けないときは、判定を呼ばず、jevNoul も jev も応答に入れない', async () => {
+      const topicRelevanceJudge = judgeBy(() => 0.5);
+      const { useCase } = setup(topics, { articles, topicRelevanceJudge });
+
+      const result = await useCase.run(input);
+
+      expect(topicRelevanceJudge.judge).not.toHaveBeenCalled();
+      expect(result.ok && result.val.jev).toBeNull();
+      const candidates = result.ok ? result.val.candidates.byTopic[0]!.top : [];
+      expect(candidates).toHaveLength(7);
+      expect(candidates.every((candidate) => !('jevNoul' in candidate))).toBe(true);
+    });
+
+    it('withJev を付けると、テーマごとの上位の上限までを、テーマの名前と説明、記事のタイトルと本文の冒頭で判定する', async () => {
+      const topicRelevanceJudge = judgeBy((title) => Number(title.replace('記事 ', '')) / 10);
+      const { useCase } = setup(topics, { articles, topicRelevanceJudge });
+
+      const result = await useCase.run({ ...input, withJev: true });
+
+      const candidates = result.ok ? result.val.candidates.byTopic[0]!.top : [];
+      expect(candidates.map((candidate) => candidate.jevNoul)).toEqual([
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        undefined,
+        undefined,
+      ]);
+      expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_PER_TOPIC);
+      expect(topicRelevanceJudge.judge).toHaveBeenCalledWith({
+        model: JEV_MODEL,
+        topic: { name: 'on', description: 'on' },
+        article: { title: '記事 1', excerpt: '本文 1' },
+      });
+      expect(result.ok && result.val.jev).toEqual({
+        model: 'typesafe/jev',
+        configured: true,
+        perTopicLimit: JEV_CANDIDATES_PER_TOPIC,
+      });
+    });
+
+    it('本文は冒頭の 500 文字だけを渡す', async () => {
+      const topicRelevanceJudge = judgeBy(() => 0.5);
+      const { useCase } = setup(topics, {
+        articles: [withDescription(1, 'あ'.repeat(800))],
+        topicRelevanceJudge,
+      });
+
+      await useCase.run({ ...input, withJev: true });
+
+      expect(topicRelevanceJudge.judge).toHaveBeenCalledWith(
+        expect.objectContaining({ article: { title: '記事 1', excerpt: 'あ'.repeat(500) } }),
+      );
+    });
+
+    it('判定の呼び出しは、候補の数だけ待たずに並列で始める', async () => {
+      const started: string[] = [];
+      const topicRelevanceJudge: TopicRelevanceJudge = {
+        judge: ({ article: target }) => {
+          started.push(target.title);
+          return new Promise(() => undefined) as never;
+        },
+      };
+      const { useCase } = setup(topics, { articles, topicRelevanceJudge, sleep: () => new Promise(() => undefined) });
+
+      void useCase.run({ ...input, withJev: true });
+      await vi.waitFor(() => expect(started).toHaveLength(JEV_CANDIDATES_PER_TOPIC));
+    });
+
+    it('判定が失敗した候補は jevNoul を null にし、ほかの候補とプレビュー全体は成功させる', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const topicRelevanceJudge: TopicRelevanceJudge = {
+        judge: ({ article: target }) =>
+          target.title === '記事 2'
+            ? RA.err({ type: 'AiError', message: 'boom' })
+            : RA.ok({ noul: 0.9 }),
+      };
+      const { useCase } = setup(topics, { articles: articles.slice(0, 3), topicRelevanceJudge });
+
+      const result = await useCase.run({ ...input, withJev: true });
+
+      expect(result.ok && result.val.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([
+        0.9,
+        null,
+        0.9,
+      ]);
+      error.mockRestore();
+    });
+
+    it('判定が期限を過ぎた候補は jevNoul を null にして返す', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const topicRelevanceJudge: TopicRelevanceJudge = { judge: () => new Promise(() => undefined) as never };
+      const sleep = vi.fn((_: number) => Promise.resolve());
+      const { useCase } = setup(topics, { articles: articles.slice(0, 2), topicRelevanceJudge, sleep });
+
+      const result = await useCase.run({ ...input, withJev: true });
+
+      expect(sleep).toHaveBeenCalledWith(JEV_TIMEOUT_MS);
+      expect(result.ok && result.val.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([
+        null,
+        null,
+      ]);
+      error.mockRestore();
+    });
+
+    it('判定が未設定のときは、上位の候補の jevNoul を null にして、configured を false で返す', async () => {
+      const { useCase } = setup(topics, { articles: articles.slice(0, 2) });
+
+      const result = await useCase.run({ ...input, withJev: true });
+
+      expect(result.ok && result.val.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([
+        null,
+        null,
+      ]);
+      expect(result.ok && result.val.jev).toMatchObject({ configured: false });
     });
   });
 });

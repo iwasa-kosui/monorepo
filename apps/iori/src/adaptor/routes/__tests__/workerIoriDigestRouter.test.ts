@@ -7,6 +7,7 @@ import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.t
 import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import { sha256Hex } from '../../../helper/sha256.ts';
 import type { TextEmbedder } from '../../../ports/textEmbedder.ts';
+import type { TopicRelevanceJudge } from '../../../ports/topicRelevanceJudge.ts';
 import { createStubEmbedder, createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -1014,6 +1015,88 @@ describe('iori のダイジェスト API', () => {
       expect(body.candidates.byTopic).toEqual([]);
       expect(body.candidates.total).toBe(1);
       expect(body.digestItems).toEqual([]);
+    });
+
+    describe('?withJev', () => {
+      type JevBody = {
+        jev?: unknown;
+        candidates: { byTopic: Array<{ top: Array<{ feedEntryId: string; jevNoul?: number | null }> }> };
+      };
+      const seedForJev = (t: ReturnType<typeof setupReadApi>, userId: string) => {
+        addTopic(t, userId, 'genai', 0, { embedding: vec(1, 0, 0) });
+        addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
+        addEntry(t, 2, vec(2, 1, 0), Date.now() - HOUR_MS);
+      };
+
+      it('指定がなければ、判定を呼ばず、応答に jev も jevNoul も入れない', async () => {
+        const judge = vi.fn(() => RA.ok({ noul: 0.7 }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const body = await (await preview(t, me)).json() as JevBody;
+
+        expect(judge).not.toHaveBeenCalled();
+        expect('jev' in body).toBe(false);
+        expect(body.candidates.byTopic[0]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
+      });
+
+      it('?withJev=true なら、上位の候補に jevNoul を足し、jev に使ったモデルを返す', async () => {
+        const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.ok({ noul: 0.7 }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.jev).toEqual({ model: 'typesafe/jev', configured: true, perTopicLimit: 5 });
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([0.7, 0.7]);
+        expect(judge).toHaveBeenCalledWith({
+          model: 'typesafe/jev',
+          topic: { name: 'genai の名前', description: 'genai の説明' },
+          article: { title: expect.stringMatching(/^記事 [12]$/), excerpt: '' },
+        });
+      });
+
+      it('判定が失敗しても 200 で返し、その候補の jevNoul を null にする', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.err({ type: 'AiError', message: 'boom' }));
+        const t = setupReadApi({ topicRelevanceJudge: { judge } });
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
+        error.mockRestore();
+      });
+
+      it('判定が未設定でも 200 で返し、jev.configured を false、jevNoul を null にする', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        seedForJev(t, me.userId);
+
+        const response = await preview(t, me, '?withJev=true');
+        const body = await response.json() as JevBody;
+
+        expect(response.status).toBe(200);
+        expect(body.jev).toMatchObject({ configured: false });
+        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
+      });
+
+      it('?withJev=yes は 400 にして、withJev を返す', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await preview(t, me, '?withJev=yes');
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Validation failed: withJev' });
+      });
     });
 
     it('クエリで候補記事の期間、ダイジェスト項目の期間、上位と下位の件数を絞る', async () => {
