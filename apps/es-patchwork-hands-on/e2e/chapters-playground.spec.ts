@@ -215,6 +215,21 @@ test.describe('第3章', () => {
     await expectAnswer(playground);
   });
 
+  test('第2章で書いた visits.ts のテストは成功しても、データベースを作れないときは、ステップ2の完成コードで作る', async ({ page }) => {
+    const code = cancelVisitFrom('chapter-2-step-2').replace(
+      'withTransaction(db, () => {',
+      'withTransaction(db, () => {\n    if (input.visitId === \'visit-pochi\') {\n      throw new Error(\'作れません\');\n    }',
+    );
+    await page.addInitScript(([key, value]) => {
+      window.localStorage.setItem(key ?? '', JSON.stringify({ 'visits.ts': value }));
+    }, [storageKey, code]);
+    const playground = await open(page, '/chapters/chapter-3/');
+    await expect(playground.locator('[data-role="origin"]')).toHaveText(
+      '第2章で書いた visits.ts ではデータベースを作れなかったので、ステップ2の完成コードでこのデータベースを作りました。',
+    );
+    await expectAnswer(playground);
+  });
+
   test('SQL を書き換えて実行でき、データベースを最初の状態に戻せる', async ({ page }) => {
     const playground = await open(page, '/chapters/chapter-3/');
     await replaceEditorText(playground, 'DELETE FROM business_events');

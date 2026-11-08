@@ -118,4 +118,3 @@ describe('toInsertTemplate', () => {
     expect(template).toContain('JSON.stringify({})');
   });
 });
-

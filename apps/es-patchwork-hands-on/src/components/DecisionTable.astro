@@ -12,7 +12,9 @@ const section = extractHtmlSection(await compiledContent(), heading);
 const title = byAxis ? /^<h2[^>]*>[\s\S]*?<\/h2>/.exec(section)?.[0] ?? '' : '';
 const table = section.slice(title.length);
 const axes = byAxis
-  ? tableBodyRows(table).map((row) => /<td[^>]*>([\s\S]*?)<\/td>/.exec(row)?.[1] ?? '')
+  ? tableBodyRows(table).map((row) =>
+    /<td[^>]*>([\s\S]*?)<\/td>/.exec(row)?.[1] ?? ''
+  )
   : [];
 ---
 
@@ -20,23 +22,23 @@ const axes = byAxis
   {
     byAxis
       ? (
-        <>
-          <Fragment set:html={title} />
-          <div class="axis-buttons" role="group" aria-label="比較する軸" hidden>
-            {
-              axes.map((label, index) => (
-                <button
-                  type="button"
-                  data-axis={index}
-                  aria-pressed={index === 0 ? 'true' : 'false'}
-                  set:html={label}
-                />
-              ))
-            }
-          </div>
-          <Fragment set:html={table} />
-        </>
-      )
+      <>
+        <Fragment set:html={title} />
+        <div class="axis-buttons" role="group" aria-label="比較する軸" hidden>
+          {
+            axes.map((label, index) => (
+              <button
+                type="button"
+                data-axis={index}
+                aria-pressed={index === 0 ? 'true' : 'false'}
+                set:html={label}
+              />
+            ))
+          }
+        </div>
+        <Fragment set:html={table} />
+      </>
+    )
       : <Fragment set:html={section} />
   }
 </div>
