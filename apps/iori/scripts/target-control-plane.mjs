@@ -235,6 +235,11 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         text: admissionEnvironment[name],
       })),
     ];
+    if (
+      !Array.isArray(missingAllowed) || missingAllowed.some((name) => !expected.some((entry) => entry.name === name))
+    ) {
+      fail('worker-input');
+    }
     for (const entry of expected) {
       const present = bindings.some((binding) => binding.name === entry.name);
       if (!present && missingAllowed.includes(entry.name)) continue;

@@ -446,6 +446,16 @@ const workerReadbackCases: [
     },
   ],
   [
+    'worker-input',
+    'a missingAllowed that is not an array',
+    () => ({ missingAllowed: 'EVENT_ARCHIVE' as never }),
+  ],
+  [
+    'worker-input',
+    'a missingAllowed naming a binding that is not expected',
+    () => ({ missingAllowed: ['UNKNOWN_BINDING'] }),
+  ],
+  [
     'worker-binding-mismatch',
     'an EVENT_ARCHIVE binding of another bucket that may otherwise be missing',
     ({ bindings }) => {
