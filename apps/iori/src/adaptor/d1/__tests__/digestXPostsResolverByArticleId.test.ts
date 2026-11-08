@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
+import { X_USER_RETENTION_DAYS } from '../../../useCase/fetchXUserItems.ts';
 import { createD1DigestXPostsResolverByArticleId } from '../digest/digestXPostsResolverByArticleId.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
+
+const NOW = Instant.orThrow(Date.UTC(2026, 10, 8));
+const DAY = 24 * 60 * 60 * 1000;
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -25,7 +30,14 @@ const setup = () => {
       .run(feedSourceId, kind, url, kind, enabled ? 1 : 0, 1_000);
     return feedSourceId;
   };
-  const addEntry = (feedSourceId: string, title: string) => {
+  const addEntry = (
+    feedSourceId: string,
+    title: string,
+    times: Readonly<{ publishedAt: number | null; fetchedAt: number }> = {
+      publishedAt: NOW - DAY,
+      fetchedAt: NOW - DAY,
+    },
+  ) => {
     const feedEntryId = uuid(++counter);
     sqlite.prepare(
       'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,publishedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?)',
@@ -36,8 +48,8 @@ const setup = () => {
       `https://x.com/someone/status/${counter}`,
       title,
       title,
-      1,
-      1,
+      times.publishedAt,
+      times.fetchedAt,
     );
     return feedEntryId;
   };
@@ -48,7 +60,8 @@ const setup = () => {
       feedEntryId,
     );
   const resolve = async (articleId: string) =>
-    (await createD1DigestXPostsResolverByArticleId(fixture.db).resolve(articleId as never)).val;
+    (await createD1DigestXPostsResolverByArticleId(fixture.db).resolve({ articleId: articleId as never, now: NOW }))
+      .val;
   return { sqlite, addDigest, addSource, addEntry, link, resolve };
 };
 
@@ -80,6 +93,19 @@ describe('DigestXPostsResolverByArticleId', () => {
     sqlite.prepare('DELETE FROM feed_entries WHERE feedEntryId = ?').run(expired);
 
     expect((await resolve('article-1')).map((post) => post.title)).toEqual(['kept']);
+  });
+
+  it('feed_entries に行が残っていても、削除と同じ基準で 7 日を過ぎていれば返さない', async () => {
+    const { addDigest, addSource, addEntry, link, resolve } = setup();
+    addDigest('article-1', 'digest-1');
+    const source = addSource('x_user', 'https://x.com/jack');
+    const retention = X_USER_RETENTION_DAYS * DAY;
+    link('digest-1', 1, addEntry(source, 'old published', { publishedAt: NOW - retention - 1, fetchedAt: NOW }));
+    link('digest-1', 2, addEntry(source, 'old fetched', { publishedAt: null, fetchedAt: NOW - retention - 1 }));
+    link('digest-1', 3, addEntry(source, 'edge published', { publishedAt: NOW - retention, fetchedAt: NOW - 8 * DAY }));
+    link('digest-1', 4, addEntry(source, 'edge fetched', { publishedAt: null, fetchedAt: NOW - retention }));
+
+    expect((await resolve('article-1')).map((post) => post.title)).toEqual(['edge published', 'edge fetched']);
   });
 
   it('全部消えていれば空にする', async () => {

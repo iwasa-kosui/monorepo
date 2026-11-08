@@ -257,7 +257,10 @@ export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
   ReadonlyArray<DigestTopicItem>
 >;
 export type DigestXPost = Readonly<{ username: XUsername; title: string; url: string }>;
-export type DigestXPostsResolverByArticleId = Agg.Resolver<ArticleId, ReadonlyArray<DigestXPost>>;
+export type DigestXPostsResolverByArticleId = Agg.Resolver<
+  { articleId: ArticleId; now: Instant },
+  ReadonlyArray<DigestXPost>
+>;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
 export type DigestResolverByArticleId = Agg.Resolver<ArticleId, Digest | undefined>;
 export type DigestItemUrlsResolverByUserId = Agg.Resolver<

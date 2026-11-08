@@ -5,7 +5,8 @@ import { createIoriApp } from '../../../appFactory.tsx';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { Article, ArticleStatus } from '../../../domain/article/article.ts';
 import { ArticleId } from '../../../domain/article/articleId.ts';
-import { Digest, DigestSummaryNotPublishableError } from '../../../domain/digest/digest.ts';
+import { Digest, DigestSummaryNotPublishableError, type DigestXPost } from '../../../domain/digest/digest.ts';
+import { XUsername } from '../../../domain/feedSource/xUsername.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
@@ -959,6 +960,46 @@ describe('createWorkerIoriArticlesRouter', () => {
         excluded: { xPosts: false },
       });
       expect(await detailOf(topic, createDigest(topic, 2))).toMatchObject({ excluded: { xPosts: false } });
+    });
+
+    it('X の投稿の節を付けた応答だけに、共有キャッシュと検索エンジンに載せない見出しを付ける', async () => {
+      const article = createArticle('draft');
+      const detailOf = async (posts: ReadonlyArray<DigestXPost>) => {
+        const auth = createAuth();
+        const articleBodyResolver = {
+          resolve: async () =>
+            RA.ok({
+              articleId: article.articleId,
+              privateHtml: '<p>private</p>',
+              publicHtml: '<p>public</p>',
+              markdown: null,
+              updatedAt: createdAt,
+            }),
+        };
+        const app = createApp(auth.authn, {
+          articleBodyResolver,
+          getArticleWithThreadUseCase: GetArticleWithThreadUseCase.create({
+            articleResolver: { resolve: async () => RA.ok(article) },
+            threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
+            articleBodyResolver,
+            digestXPostsResolverByArticleId: { resolve: async () => RA.ok(posts) },
+            isDigestOwner: async () => true,
+          }),
+        });
+        return app.request(`${articlesPath}/${article.articleId}`, {
+          headers: { Cookie: auth.cookieFor(authorUserId) },
+        });
+      };
+
+      const withPosts = await detailOf([
+        { username: XUsername.orThrow('jack'), title: 'first', url: 'https://x.com/jack/status/1' },
+      ]);
+      const withoutPosts = await detailOf([]);
+
+      expect(withPosts.headers.get('Cache-Control')).toBe('private, no-store');
+      expect(withPosts.headers.get('X-Robots-Tag')).toBe('noindex');
+      expect(withoutPosts.headers.get('Cache-Control')).toBeNull();
+      expect(withoutPosts.headers.get('X-Robots-Tag')).toBeNull();
     });
 
     it('新形式のまとめの公開が拒まれたら、409 とそのメッセージを返し、OGP 画像を作らない', async () => {

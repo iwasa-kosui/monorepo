@@ -21,5 +21,6 @@ export const selectXPosts = ({ posts, materials, now, limit }: Readonly<{
   const postById = new Map(newest.map((post) => [post.feedEntryId, post]));
   const scored = Recommendation.scoreArticles({ materials, articles: embedded, now, limit })
     .map(({ feedEntryId }) => postById.get(feedEntryId)!);
-  return scored.length === 0 ? newest.slice(0, limit) : scored;
+  const pickedIds = new Set(scored.map((post) => post.feedEntryId));
+  return [...scored, ...newest.filter((post) => !pickedIds.has(post.feedEntryId))].slice(0, limit);
 };

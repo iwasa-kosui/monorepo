@@ -14,6 +14,7 @@ import { createD1DigestCreatedStore } from '../../adaptor/d1/digest/digestCreate
 import { createD1DigestHeadersResolverByUserIdAndDigestDate } from '../../adaptor/d1/digest/digestHeadersResolverByUserIdAndDigestDate.ts';
 import { createD1DigestItemUrlsResolverByUserId } from '../../adaptor/d1/digest/digestItemUrlsResolverByUserId.ts';
 import { createD1DigestPushSentStore } from '../../adaptor/d1/digest/digestPushSentStore.ts';
+import { createD1DigestXPostsResolverByArticleId } from '../../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1LatestDigestHeaderResolverByUserId } from '../../adaptor/d1/digest/latestDigestHeaderResolverByUserId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestTopicCreatedStore } from '../../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -26,6 +27,7 @@ import { createD1TimelineLinkTrendsResolverByUserId } from '../../adaptor/d1/lin
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1InterestVectorsResolverByUserId } from '../../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
 import { createD1RecommendableArticlesResolverByFetchedSince } from '../../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
+import { createD1UserResolverByUsername } from '../../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher, type SafeFetcher } from '../../adaptor/http/safeFetch.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import {
@@ -38,6 +40,7 @@ import { ArticleId } from '../../domain/article/articleId.ts';
 import { ArticleBody, type ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import { Digest, type DigestCreatedStore, type DigestTrigger } from '../../domain/digest/digest.ts';
 import { DigestId } from '../../domain/digest/digestId.ts';
+import type { XPostsResolverByFetchedSince } from '../../domain/digest/digestMaterial.ts';
 import { defaultDigestTopics } from '../../domain/digestTopic/defaultDigestTopics.ts';
 import { TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -54,6 +57,8 @@ import {
   stripThinkBlocks,
 } from '../createDailyDigest.ts';
 import { EnsureDefaultDigestTopicsUseCase } from '../ensureDefaultDigestTopics.ts';
+import { GetArticleWithThreadUseCase } from '../getArticleWithThread.ts';
+import { IsDigestOwner } from '../isDigestOwner.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 4, 21, 30));
 const HOUR = 60 * 60 * 1000;
@@ -91,6 +96,7 @@ const setup = (
     articleResolver?: (db: IoriD1Db) => ArticleResolver;
     articleBodyResolver?: (db: IoriD1Db) => ArticleBodyResolver;
     topicAssignmentPolicy?: TopicAssignmentPolicy;
+    isDigestOwner?: IsDigestOwner;
   } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
@@ -108,6 +114,9 @@ const setup = (
   const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const digestCreatedStore = (options.digestCreatedStore ?? createD1DigestCreatedStore)(db);
   const storeCalls: Array<ReadonlyArray<unknown>> = [];
+  const resolveXPosts = vi.fn<XPostsResolverByFetchedSince['resolve']>(
+    createD1XPostsResolverByFetchedSince(db).resolve,
+  );
   const useCase = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeadersResolverByUserIdAndDigestDate: createD1DigestHeadersResolverByUserIdAndDigestDate(db),
@@ -129,7 +138,9 @@ const setup = (
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
-    xPostsResolverByFetchedSince: createD1XPostsResolverByFetchedSince(db),
+    xPostsResolverByFetchedSince: { resolve: resolveXPosts },
+    isDigestOwner: options.isDigestOwner
+      ?? IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
     interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
     recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
     safeFetcher: { fetchText },
@@ -301,6 +312,7 @@ const setup = (
     send,
     fetchText,
     storeCalls,
+    resolveXPosts,
     useCase,
     sources,
     addSource,
@@ -2876,6 +2888,51 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     expect(storedFeedEntryIds(t, result.articleId)).toEqual([newer.feedEntryId]);
   });
 
+  it('所有者でないユーザーのまとめには、X の投稿を引かず、feedEntryId も保存しない', async () => {
+    const t = setup({ isDigestOwner: async () => false });
+    addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+
+    const result = await t.run('requested');
+
+    expect(result.xPosts).toBe(0);
+    expect(t.resolveXPosts).not.toHaveBeenCalled();
+    expect(storedFeedEntryIds(t)).toEqual([]);
+  });
+
+  it('所有者でないユーザーが開いた下書きには、保存済みの行があっても X の投稿の節を出さない', async () => {
+    const t = setup({ isDigestOwner: async () => false });
+    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+    const { articleId } = await t.run('requested');
+    const { digestId } = t.all('SELECT digestId FROM digests')[0] as { digestId: string };
+    t.fixture.sqlite.prepare('INSERT INTO digest_x_posts(digestId,rank,feedEntryId) VALUES (?,?,?)')
+      .run(digestId, 1, post.feedEntryId);
+    const open = (isDigestOwner: IsDigestOwner) =>
+      GetArticleWithThreadUseCase.create({
+        articleResolver: createD1ArticleResolver(t.fixture.db),
+        threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
+        articleBodyResolver: createD1ArticleBodyResolver(t.fixture.db),
+        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(t.fixture.db),
+        isDigestOwner,
+        now: () => NOW,
+      }).run({ articleId: ArticleId.orThrow(articleId!), viewerUserId: UserId.orThrow(t.me.userId) });
+
+    const byNonOwner = await open(async () => false);
+    const byOwner = await open(async () => true);
+
+    expect(byNonOwner.ok && byNonOwner.val.body?.html).not.toContain(POST_TEXT);
+    expect(byOwner.ok && byOwner.val.body?.html).toContain(POST_TEXT);
+  });
+
+  it('所有者のまとめでは、X の投稿を引いて保存する', async () => {
+    const t = setup();
+    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+
+    await t.run('requested');
+
+    expect(t.resolveXPosts).toHaveBeenCalledTimes(1);
+    expect(storedFeedEntryIds(t)).toEqual([post.feedEntryId]);
+  });
+
   it('X の投稿が無い日は、何も保存せず、件数を 0 にする', async () => {
     const t = setup();
     addXSource(t, USERNAME);
@@ -2887,20 +2944,25 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     expect(storedFeedEntryIds(t)).toEqual([]);
   });
 
-  it('投稿が 10 件を超え、関心の材料があれば、関心に近い投稿だけを選ぶ', async () => {
+  it('投稿が 10 件を超え、関心の材料があれば、関心に近い投稿を先に選び、足りない分を新しい順に足す', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
     t.addInterest('own_post', 'post-1', basis(0));
     const one = addXPost(t, source, 'near one', { embedding: basis(0), publishedAt: NOW - 5 * HOUR });
     const two = addXPost(t, source, 'near two', { embedding: basis(0), publishedAt: NOW - 6 * HOUR });
+    const far = [];
     for (let i = 1; i <= 10; i += 1) {
-      addXPost(t, source, `far ${i}`, { embedding: basis(1), publishedAt: NOW - i * 1000 });
+      far.push(addXPost(t, source, `far ${i}`, { embedding: basis(1), publishedAt: NOW - i * 1000 }));
     }
 
     const result = await t.run();
 
-    expect(result.xPosts).toBe(2);
-    expect(storedFeedEntryIds(t)).toEqual([one.feedEntryId, two.feedEntryId]);
+    expect(result.xPosts).toBe(10);
+    expect(storedFeedEntryIds(t)).toEqual([
+      one.feedEntryId,
+      two.feedEntryId,
+      ...far.slice(0, 8).map((post) => post.feedEntryId),
+    ]);
   });
 
   it('投稿が 10 件を超え、関心の材料が無ければ、新しい順に 10 件を保存する', async () => {

@@ -51,8 +51,8 @@ import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDiges
 import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem.ts';
 import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
-import type { PreviewDigestTopicsUseCase } from '../../useCase/previewDigestTopics.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
+import type { PreviewDigestTopicsUseCase } from '../../useCase/previewDigestTopics.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';

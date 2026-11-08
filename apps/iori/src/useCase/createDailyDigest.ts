@@ -37,6 +37,7 @@ import type {
   HatenaTrendsResolverByFetchedSince,
   RadarFeedEntriesResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
+  XPost,
   XPostsResolverByFetchedSince,
 } from '../domain/digest/digestMaterial.ts';
 import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
@@ -63,6 +64,7 @@ import type { CreateArticleWithBodyUseCase } from './createArticleWithBody.ts';
 import type { EnsureDefaultDigestTopicsUseCase } from './ensureDefaultDigestTopics.ts';
 import { fetchArticleBodyText } from './helper/fetchArticleBodyText.ts';
 import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
+import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
 export const DIGEST_SUMMARY_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
@@ -161,6 +163,7 @@ type Deps = Readonly<{
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
   xPostsResolverByFetchedSince: XPostsResolverByFetchedSince;
+  isDigestOwner: IsDigestOwner;
   interestVectorsResolverByUserId: InterestVectorsResolverByUserId;
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
   safeFetcher: SafeFetcher;
@@ -266,6 +269,7 @@ const create = ({
   hatenaTrendsResolverByFetchedSince,
   timelineLinkTrendsResolverByUserId,
   xPostsResolverByFetchedSince,
+  isDigestOwner,
   interestVectorsResolverByUserId,
   recommendableArticlesResolverByFetchedSince,
   safeFetcher,
@@ -417,12 +421,15 @@ const create = ({
       ? windowStart
       : previous.val.createdAt;
 
+    const ownsDigest = await isDigestOwner(userId);
     const [radarEntries, hatenaTrends, timelineTrends, xPostCandidates, interestVectors, pastUrls, recommendable] =
       await Promise.all([
         radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
         hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
         timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
-        xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT }),
+        ownsDigest
+          ? xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT })
+          : RA.ok<ReadonlyArray<XPost>>([]),
         interestVectorsResolverByUserId.resolve(userId),
         digestItemUrlsResolverByUserId.resolve({
           userId,

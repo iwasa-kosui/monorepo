@@ -58,7 +58,7 @@ describe('selectXPosts', () => {
       .toEqual(['post 1', 'post 2']);
   });
 
-  it('上限を超えるなら、関心の材料との類似度が高い順に上限件数を選ぶ', () => {
+  it('上限を超えるなら、関心の材料との類似度が高い投稿を先に選ぶ', () => {
     const posts = [
       post(1, { embedding: basis(1) }),
       post(2, { embedding: basis(0) }),
@@ -67,6 +67,7 @@ describe('selectXPosts', () => {
 
     expect(titles(selectXPosts({ posts, materials: [material('own_post', basis(0))], now: NOW, limit: 2 }))).toEqual([
       'post 2',
+      'post 1',
     ]);
   });
 
@@ -90,6 +91,19 @@ describe('selectXPosts', () => {
       'post 1',
       'post 2',
     ]);
+  });
+
+  it('上限を超えて埋め込み済みの投稿が上限より少なければ、残りを新しい順に足して上限件数にする', () => {
+    const posts = [
+      post(1, { embedding: null }),
+      post(2, { embedding: basis(0) }),
+      post(3, { embedding: null }),
+      post(4, { embedding: null }),
+    ];
+
+    const selected = selectXPosts({ posts, materials: [material('own_post', basis(0))], now: NOW, limit: 3 });
+
+    expect(titles(selected)).toEqual(['post 2', 'post 1', 'post 3']);
   });
 
   it('投稿が無ければ空を返す', () => {

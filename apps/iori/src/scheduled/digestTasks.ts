@@ -49,6 +49,7 @@ import { CreateDailyDigestUseCase } from '../useCase/createDailyDigest.ts';
 import { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts';
 import { EnsureDefaultDigestTopicsUseCase } from '../useCase/ensureDefaultDigestTopics.ts';
 import { ExpireDigestsUseCase } from '../useCase/expireDigests.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask } from './scheduledTasks.ts';
@@ -63,6 +64,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
   const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const userResolverByUsername = createD1UserResolverByUsername(db);
   const createDailyDigest = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeadersResolverByUserIdAndDigestDate,
@@ -83,6 +85,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
     xPostsResolverByFetchedSince: createD1XPostsResolverByFetchedSince(db),
+    isDigestOwner: IsDigestOwner.create({ userResolverByUsername }),
     interestVectorsResolverByUserId: createD1InterestVectorsResolverByUserId(db),
     recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
     safeFetcher: createSafeFetcher(),
@@ -103,7 +106,7 @@ export const createDigestUseCases = (env: IoriWorkerEnv) => {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   });
   return {
-    userResolverByUsername: createD1UserResolverByUsername(db),
+    userResolverByUsername,
     createDailyDigest,
     deepDiveDigestItem: DeepDiveDigestItemUseCase.create({
       digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),

@@ -152,6 +152,10 @@ export const createWorkerIoriArticlesRouter = ({
           : c.json({ error: `Failed to get article: ${JSON.stringify(result.err)}` }, 400);
       }
       const digest = await resolveDigestExclusions(result.val.article, viewerUserId);
+      if (result.val.hasXPosts === true) {
+        c.header('Cache-Control', 'private, no-store');
+        c.header('X-Robots-Tag', 'noindex');
+      }
       return c.json({
         article: result.val.article,
         thread: result.val.thread.map((post) => ({ ...post, content: sanitizePostContent(post.content) })),

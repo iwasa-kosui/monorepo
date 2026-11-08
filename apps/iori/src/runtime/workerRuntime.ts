@@ -251,6 +251,7 @@ export const createWorkerRuntimePorts = async (
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
@@ -452,7 +453,7 @@ export const createWorkerRuntimePorts = async (
         feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
         now: Instant.now,
       }),
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+      isDigestOwner,
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({
         digestTopicsResolverByUserId,
@@ -573,6 +574,7 @@ export const createWorkerRuntimePorts = async (
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
         digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
+        isDigestOwner,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,

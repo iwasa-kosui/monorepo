@@ -199,12 +199,20 @@ describe('GetArticleWithThreadUseCase', () => {
           title,
           url: `https://x.com/jack/status/${index + 1}`,
         }));
-      const createXDeps = (article: Article, posts: ReadonlyArray<DigestXPost>) => {
+      const xNow = Instant.orThrow(Date.parse('2026-11-08T00:00:00.000Z'));
+      const createXDeps = (article: Article, posts: ReadonlyArray<DigestXPost>, owner = true) => {
+        const isDigestOwner = vi.fn(async () => owner);
         const resolveXPosts = vi.fn(async () => RA.ok(posts));
         const digestXPostsResolverByArticleId: DigestXPostsResolverByArticleId = {
           resolve: resolveXPosts as unknown as DigestXPostsResolverByArticleId['resolve'],
         };
-        return { ...createBodyDeps(article, createBody(article)), digestXPostsResolverByArticleId, resolveXPosts };
+        return {
+          ...createBodyDeps(article, createBody(article)),
+          digestXPostsResolverByArticleId,
+          isDigestOwner,
+          now: () => xNow,
+          resolveXPosts,
+        };
       };
 
       it.each(['draft', 'unpublished'] as const)(
@@ -228,7 +236,9 @@ describe('GetArticleWithThreadUseCase', () => {
               },
             },
           });
-          expect(deps.resolveXPosts).toHaveBeenCalledWith(article.articleId);
+          expect(result).toMatchObject({ ok: true, val: { hasXPosts: true } });
+          expect(deps.isDigestOwner).toHaveBeenCalledWith(authorUserId);
+          expect(deps.resolveXPosts).toHaveBeenCalledWith({ articleId: article.articleId, now: xNow });
         },
       );
 
@@ -242,6 +252,34 @@ describe('GetArticleWithThreadUseCase', () => {
         });
 
         expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
+        expect(result.ok && result.val.hasXPosts).toBeFalsy();
+      });
+
+      it('所有者でない作者には、保存された行があっても節を足さず、投稿を引かない', async () => {
+        const article = createBodyArticle('draft');
+        const deps = createXDeps(article, xPostsOf('first'), false);
+
+        const result = await GetArticleWithThreadUseCase.create(deps).run({
+          articleId: article.articleId,
+          viewerUserId: authorUserId,
+        });
+
+        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
+        expect(result.ok && result.val.hasXPosts).toBeFalsy();
+        expect(deps.resolveXPosts).not.toHaveBeenCalled();
+      });
+
+      it('所有者かどうかを判定する依存を渡さなければ、投稿を引かない', async () => {
+        const article = createBodyArticle('draft');
+        const { isDigestOwner: _isDigestOwner, ...deps } = createXDeps(article, xPostsOf('first'));
+
+        const result = await GetArticleWithThreadUseCase.create(deps).run({
+          articleId: article.articleId,
+          viewerUserId: authorUserId,
+        });
+
+        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
+        expect(deps.resolveXPosts).not.toHaveBeenCalled();
       });
 
       it('published の記事には、作者が開いても節を足さず、投稿を引かない', async () => {
