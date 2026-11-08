@@ -58,6 +58,30 @@ const collector = (result: ReturnType<CollectBlueskyTimelineUseCase['run']>) => 
   return { run, useCase: { run } as CollectBlueskyTimelineUseCase };
 };
 
+const setupNonOwner = async () => {
+  const harness = createOAuthHarness();
+  const fixture = createSqliteD1Fixture();
+  fixtures.push(fixture);
+  const resolve = vi.fn(() => RA.ok([]));
+  const app = new Hono().route(
+    '/api',
+    createWorkerIoriBlueskyRouter({
+      authn: createMastodonAuthn({
+        verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
+        sessionResolver: harness.memory.sessionResolver as never,
+      }),
+      blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
+      collectBlueskyTimelineUseCase: undefined,
+      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
+    }),
+  );
+  const issued = await harness.issueUserToken('read:statuses');
+  createMastodonSeed(fixture).addLocalActor('alice', issued.userId);
+  const get = (path: string) =>
+    app.request(`${ORIGIN}${path}`, { headers: { Authorization: `Bearer ${issued.token}` } });
+  return { get, resolve };
+};
+
 describe('/api/iori/v1/bluesky/timeline', () => {
   describe('GET', () => {
     it('認証なしだと 401 にする', async () => {
@@ -113,6 +137,16 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         postedAt: BASE - 10_000,
         indexedAt: BASE + 5000,
       });
+    });
+
+    it('scope なしでは所有者でない利用者を 403 にし、一覧のクエリを実行しない', async () => {
+      const { get, resolve } = await setupNonOwner();
+
+      const response = await get('/api/iori/v1/bluesky/timeline');
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Forbidden' });
+      expect(resolve).not.toHaveBeenCalled();
     });
 
     it('取り込みが有効なら enabled を true にする', async () => {
@@ -260,26 +294,9 @@ describe('/api/iori/v1/bluesky/timeline', () => {
     });
 
     it('所有者でない利用者には空の結果を返し、一覧のクエリを実行しない', async () => {
-      const harness = createOAuthHarness();
-      const fixture = createSqliteD1Fixture();
-      fixtures.push(fixture);
-      const resolve = vi.fn(() => RA.ok([]));
-      const app = new Hono().route(
-        '/api',
-        createWorkerIoriBlueskyRouter({
-          authn: createMastodonAuthn({
-            verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
-            sessionResolver: harness.memory.sessionResolver as never,
-          }),
-          blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
-          collectBlueskyTimelineUseCase: undefined,
-          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
-        }),
-      );
-      const issued = await harness.issueUserToken('read:statuses');
-      createMastodonSeed(fixture).addLocalActor('alice', issued.userId);
+      const { get, resolve } = await setupNonOwner();
 
-      const response = await app.request(`${ORIGIN}${HOME}`, { headers: { Authorization: `Bearer ${issued.token}` } });
+      const response = await get(HOME);
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ enabled: false, items: [], nextBefore: null, nextBeforeId: null });
