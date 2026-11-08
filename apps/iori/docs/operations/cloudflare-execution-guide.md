@@ -345,7 +345,7 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 
 分類の行の `reason` には固定の語が出ます。固定の語に当たらない失敗では `unclassified` が出ます。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
 
-`deploy-worker` は、D1 のマイグレーションと `wrangler deploy` の前に、本番で動いている現行の Worker の binding を検査します。現行の Worker に期待する binding がないと、`worker-binding-missing` で止まり、本番は変わりません。binding を初めて足す PR は、同じ PR で、その名前を `apps/iori/scripts/update-active-worker.mjs` の `BINDINGS_ADDED_BY_THIS_RELEASE` に足します。この一覧に名前がある binding に限り、配備前の検査は binding が無いことを許します。名前があって内容が違う binding は、`worker-binding-mismatch` で止まります。配備後の検査は、全 binding を必須にします。本番への配備が成功したら、作業者は別の PR で、この一覧を `[]` に戻します。
+`deploy-worker` は、D1 のマイグレーションと `wrangler deploy` の前に、対象の環境で動いている現行の Worker の binding を検査します。現行の Worker に期待する binding がないと、`deploy-worker` は `stage=deploy-worker-before reason=worker-binding-missing` を出して止まり、環境は変わりません。binding を初めて足す PR は、同じ PR で、その名前を `apps/iori/scripts/update-active-worker.mjs` の `BINDINGS_ADDED_BY_THIS_RELEASE` に足します。既存の binding を、まだ持たない環境や世代に初めて入れる配備でも、作業者は配備の前に、この一覧に名前を足す PR を merge します。この一覧に名前がある binding に限り、配備前の検査は binding がないことを許します。一覧に名前があっても、現行の Worker にある binding の内容が期待と違うときは、`deploy-worker` は `worker-binding-mismatch` で止まります。配備後の検査は、全 binding を必須にします。binding を入れるすべての環境と世代で配備が成功したら、作業者は別の PR で、この一覧を `[]` に戻します。名前が一覧に残ると、binding が欠けた Worker も配備前の検査を通り、欠落は配備で環境が変わった後の検査で初めて見つかります。
 
 `deploy-worker-before` と `deploy-worker-after` の読み取りが `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
 
