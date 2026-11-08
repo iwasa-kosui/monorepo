@@ -179,7 +179,7 @@ export type BlueskyCrosspostFailure = Readonly<
 >;
 export type BlueskyCrosspostStatusReport = Readonly<{
   counts: Readonly<Record<BlueskyCrosspostStatus, number>>;
-  exhausted: Readonly<{ failed: number; deleting: number }>;
+  exhausted: Readonly<{ pending: number; failed: number; deleting: number }>;
   recentFailures: readonly BlueskyCrosspostFailure[];
 }>;
 export type BlueskyCrosspostStatusReportResolver = Agg.Resolver<

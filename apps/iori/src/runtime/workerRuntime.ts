@@ -36,6 +36,7 @@ import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/diges
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -118,6 +119,7 @@ import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1AcceptedRelaysResolver } from '../adaptor/d1/relay/acceptedRelaysResolver.ts';
 import { createD1AllRelaysResolver } from '../adaptor/d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../adaptor/d1/relay/relayResolverByActorUri.ts';
@@ -179,6 +181,7 @@ import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
@@ -468,6 +471,14 @@ export const createWorkerRuntimePorts = async (
       changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
         digestTopicsResolverByUserId,
         digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
+        now: Instant.now,
+      }),
+      previewDigestTopicsUseCase: PreviewDigestTopicsUseCase.create({
+        digestTopicsResolverByUserId,
+        recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+        digestTopicItemsResolverByUserIdAndDigestDateFrom: createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(
+          db,
+        ),
         now: Instant.now,
       }),
     },

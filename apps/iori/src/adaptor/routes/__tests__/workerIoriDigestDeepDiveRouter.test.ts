@@ -55,6 +55,7 @@ const setup = (run: DeepDiveDigestItemUseCase['run'] = async () => RA.ok(okValue
           addDigestTopicUseCase: unused,
           editDigestTopicUseCase: unused,
           changeDigestTopicEnabledUseCase: unused,
+          previewDigestTopicsUseCase: unused,
           deepDiveDigestItemUseCase: { run: deepDive },
           allFeedSourcesResolver: unused,
           addFeedSourceUseCase: unused,
