@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2cf0df99-c9ff-44e3-aaf1-9b9f607b5bca",
+  "id": "d8c1f480-d008-46e1-9f5b-324c0a36013f",
   "prevId": "a2518d4d-bc0a-44a2-acc1-88527e271671",
   "tables": {
     "actors": {
@@ -475,25 +475,18 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "bluesky_likes": {
-      "name": "bluesky_likes",
+    "bluesky_login_failures": {
+      "name": "bluesky_login_failures",
       "columns": {
-        "subjectUri": {
-          "name": "subjectUri",
+        "scope": {
+          "name": "scope",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "likeUri": {
-          "name": "likeUri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
+        "failedAt": {
+          "name": "failedAt",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

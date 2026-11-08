@@ -6,7 +6,7 @@ import {
   BLUESKY_TIMELINE_PAGE_LIMIT,
   BLUESKY_TIMELINE_RETENTION_DAYS,
   type BlueskyFetchedTimelineItem,
-  type BlueskyTimelineItemsExpiredStore,
+  type BlueskyTimelineExistingFeedItemIdsResolver,
   type BlueskyTimelineItemsSavedStore,
 } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -26,8 +26,8 @@ export type CollectBlueskyTimelineUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   fetcher: BlueskyTimelineFetcher;
+  existingResolver: BlueskyTimelineExistingFeedItemIdsResolver;
   savedStore: BlueskyTimelineItemsSavedStore;
-  expiredStore: BlueskyTimelineItemsExpiredStore;
   viewerLikesStore: BlueskyViewerLikesSyncedStore;
   now: () => Instant;
 }>;
@@ -50,7 +50,9 @@ const syncViewerLikes = async (
   Result.unsafeUnwrap(await store.sync([...likes.values()]));
 };
 
-const create = ({ fetcher, savedStore, expiredStore, viewerLikesStore, now }: Deps): CollectBlueskyTimelineUseCase => {
+const create = (
+  { fetcher, existingResolver, savedStore, viewerLikesStore, now }: Deps,
+): CollectBlueskyTimelineUseCase => {
   const run = async (): RA<Ok, Err> => {
     const retentionStart = Instant.addDuration(now(), -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
     let cursor: string | undefined;
@@ -70,13 +72,16 @@ const create = ({ fetcher, savedStore, expiredStore, viewerLikesStore, now }: De
       const unique = uniqueByFeedItemId(page.val.items);
       const recent = unique.filter((item) => item.indexedAt >= retentionStart);
       fetched += recent.length;
-      const inserted = Result.unsafeUnwrap(await savedStore.save(recent));
+      const existing = new Set(
+        Result.unsafeUnwrap(await existingResolver.resolve(recent.map((item) => item.feedItemId))),
+      );
+      const added = recent.filter((item) => !existing.has(item.feedItemId));
+      const inserted = added.length === 0 ? [] : Result.unsafeUnwrap(await savedStore.save(added));
       saved += inserted.length;
       await syncViewerLikes(viewerLikesStore, recent);
       cursor = page.val.cursor;
       if (inserted.length < recent.length || recent.length < unique.length || cursor === undefined) break;
     }
-    Result.unsafeUnwrap(await expiredStore.expire(retentionStart));
     return failure === undefined ? RA.ok({ pages, fetched, saved, dropped }) : RA.err(failure);
   };
 

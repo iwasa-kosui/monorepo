@@ -56,7 +56,8 @@ const createDeps = (relayStatus: string | null = 'accepted') => {
       )
     ),
   };
-  const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1' })) };
+  const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1', actorId: 'actor-1' })) };
+  const actorResolverByUri = { resolve: vi.fn(async () => RA.ok({ id: 'actor-1' })) };
   const federatedTimelineItemResolverByPostId = { resolve: vi.fn(async () => RA.ok(undefined)) };
   const federatedTimelineItemCreatedStore = { store: vi.fn(async () => undefined) };
   return {
@@ -64,6 +65,7 @@ const createDeps = (relayStatus: string | null = 'accepted') => {
       origin: 'https://iori.test',
       relayResolver,
       remotePostUpserter,
+      actorResolverByUri,
       federatedTimelineItemResolverByPostId,
       federatedTimelineItemCreatedStore,
     } as never,

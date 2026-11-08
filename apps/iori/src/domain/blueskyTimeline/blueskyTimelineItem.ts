@@ -112,6 +112,9 @@ export type BlueskyTimelineItemsResolver = Readonly<{
     }>,
   ) => RA<readonly BlueskyTimelineItem[], never>;
 }>;
+export type BlueskyTimelineExistingFeedItemIdsResolver = Readonly<{
+  resolve: (feedItemIds: readonly string[]) => RA<readonly string[], never>;
+}>;
 export type BlueskyTimelineItemsSavedStore = Readonly<{
   save: (items: readonly BlueskyFetchedTimelineItem[]) => RA<readonly string[], never>;
 }>;

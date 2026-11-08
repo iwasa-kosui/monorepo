@@ -19,17 +19,20 @@ const createNote = (attributionId = 'https://remote.example/users/alice') =>
   });
 
 const createDeps = (existing: unknown = undefined) => {
-  const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1' })) };
+  const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1', actorId: 'actor-1' })) };
+  const actorResolverByUri = { resolve: vi.fn(async (_uri: string) => RA.ok({ id: 'actor-1' } as unknown)) };
   const federatedTimelineItemResolverByPostId = { resolve: vi.fn(async () => RA.ok(existing)) };
   const federatedTimelineItemCreatedStore = { store: vi.fn(async () => undefined) };
   return {
     deps: {
       origin: 'https://iori.test',
       remotePostUpserter,
+      actorResolverByUri,
       federatedTimelineItemResolverByPostId,
       federatedTimelineItemCreatedStore,
     } as never,
     remotePostUpserter,
+    actorResolverByUri,
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
   };
@@ -80,6 +83,51 @@ describe('saveFederatedNote', () => {
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
       expect.objectContaining({ summary: null, sensitive: false }),
     );
+  });
+
+  it('stores a federated timeline item for an existing post owned by the Note author', async () => {
+    const { deps, remotePostUpserter, actorResolverByUri, federatedTimelineItemCreatedStore } = createDeps();
+    remotePostUpserter.resolve.mockReturnValue(RA.ok({ postId: 'post-existing', actorId: 'actor-1' }));
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(actorResolverByUri.resolve).toHaveBeenCalledWith('https://remote.example/users/alice');
+    expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+  });
+
+  it.each<[string, URL | undefined]>([
+    ['without the actor id', undefined],
+    ['with the actor id', new URL('https://remote.example/users/bob')],
+  ])(
+    'does not store a federated timeline item for an existing post owned by another actor %s',
+    async (_name, actorId) => {
+      const { deps, remotePostUpserter, federatedTimelineItemResolverByPostId, federatedTimelineItemCreatedStore } =
+        createDeps();
+      remotePostUpserter.resolve.mockReturnValue(RA.ok({ postId: 'post-existing', actorId: 'actor-other' }));
+
+      await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader, actorId });
+
+      expect(federatedTimelineItemResolverByPostId.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not store a federated timeline item when the author actor is not found', async () => {
+    const { deps, actorResolverByUri, federatedTimelineItemCreatedStore } = createDeps();
+    actorResolverByUri.resolve.mockReturnValue(RA.ok(undefined));
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('rejects without storing a federated timeline item when resolving the author actor fails', async () => {
+    const { deps, actorResolverByUri, federatedTimelineItemCreatedStore } = createDeps();
+    actorResolverByUri.resolve.mockRejectedValue(new Error('db down'));
+
+    await expect(saveFederatedNote(deps, { note: createNote(), relayId, documentLoader })).rejects.toThrow();
+
+    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
   it('does not store a federated timeline item when the post is already in the federated timeline', async () => {
