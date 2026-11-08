@@ -201,6 +201,7 @@ const create = () => {
       followedByLocalActorResolverByActorUri: PgFollowedByLocalActorResolverByActorUri.getInstance(),
       acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
       remotePostUpserter,
+      actorResolverByUri,
       federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
       federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
       addRemotePostUseCase: AddRemotePostUseCase.create({
@@ -263,6 +264,7 @@ const create = () => {
       addReceivedRepostUseCase,
       articleResolver: PgArticleResolver.getInstance(),
       remotePostUpserter,
+      actorResolverByUri,
       federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
       federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
     },

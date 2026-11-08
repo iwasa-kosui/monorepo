@@ -4,6 +4,7 @@ import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type { ArticleResolver } from '../../../domain/article/article.ts';
 import { ArticleId } from '../../../domain/article/articleId.ts';
 import type {
@@ -36,6 +37,7 @@ export type OnAnnounceDeps = Readonly<{
   addReceivedRepostUseCase: AddReceivedRepostUseCase;
   articleResolver: ArticleResolver;
   remotePostUpserter: RemotePostUpserter;
+  actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
 }>;

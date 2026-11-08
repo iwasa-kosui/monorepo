@@ -64,8 +64,9 @@ const createDeps = (
     run: vi.fn(async () => RA.ok({ actor: { uri: 'https://announcer.example/users/bob' } })),
   };
   const remotePostUpserter = {
-    resolve: vi.fn(async () => RA.ok({ postId: 'post-1' })),
+    resolve: vi.fn(async () => RA.ok({ postId: 'post-1', actorId: 'actor-1' })),
   };
+  const actorResolverByUri = { resolve: vi.fn(async () => RA.ok({ id: 'actor-1' })) };
   const articleResolver = { resolve: vi.fn(async () => RA.ok(article)) };
   const federatedTimelineItemResolverByPostId = { resolve: vi.fn(async () => RA.ok(undefined)) };
   const federatedTimelineItemCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) };
@@ -87,6 +88,7 @@ const createDeps = (
     addReceivedRepostUseCase,
     articleResolver,
     remotePostUpserter,
+    actorResolverByUri,
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
   };

@@ -21,8 +21,9 @@ const forwardingDeps = (followed = true, acceptedRelays: unknown[] = []) => ({
     resolve: vi.fn<AcceptedRelaysResolver['resolve']>(async () => RA.ok(acceptedRelays as never)),
   },
   remotePostUpserter: {
-    resolve: vi.fn<RemotePostUpserter['resolve']>(async () => RA.ok({ postId: 'post-1' } as never)),
+    resolve: vi.fn<RemotePostUpserter['resolve']>(async () => RA.ok({ postId: 'post-1', actorId: 'actor-1' } as never)),
   },
+  actorResolverByUri: { resolve: vi.fn(async () => RA.ok({ id: 'actor-1' } as never)) },
   federatedTimelineItemResolverByPostId: {
     resolve: vi.fn<FederatedTimelineItemResolverByPostId['resolve']>(async () => RA.ok(undefined)),
   },
@@ -329,6 +330,24 @@ describe('createOnCreate', () => {
       );
 
       await listener(createCtx(), create(createNote()));
+
+      expect(addRemotePostUseCase.run).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('rejects without saving anything when resolving the accepted relays fails', async () => {
+      const {
+        listener,
+        create,
+        addRemotePostUseCase,
+        acceptedRelaysResolver,
+        remotePostUpserter,
+        federatedTimelineItemCreatedStore,
+      } = setup(false, [{ relayId: 'relay-1' }]);
+      acceptedRelaysResolver.resolve.mockResolvedValue(RA.err(new Error('db down')) as never);
+
+      await expect(listener(createCtx(), create(createNote()))).rejects.toThrow();
 
       expect(addRemotePostUseCase.run).not.toHaveBeenCalled();
       expect(remotePostUpserter.resolve).not.toHaveBeenCalled();

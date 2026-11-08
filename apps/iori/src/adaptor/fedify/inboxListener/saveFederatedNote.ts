@@ -2,6 +2,7 @@ import { isActor, type Note } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { getLogger } from '@logtape/logtape';
 
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type {
   FederatedTimelineItemCreatedStore,
   FederatedTimelineItemResolverByPostId,
@@ -20,6 +21,7 @@ import { extractAttachments } from './extractAttachments.ts';
 export type SaveFederatedNoteDeps = Readonly<{
   origin: string;
   remotePostUpserter: RemotePostUpserter;
+  actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
 }>;
@@ -99,6 +101,22 @@ export const saveFederatedNote = async (
   }
 
   const post = postResult.val;
+
+  const authorActorResult = await deps.actorResolverByUri.resolve(authorIdentity.val.uri);
+  if (!authorActorResult.ok) {
+    getLogger().warn(`Failed to resolve the author actor for federated timeline: ${note.id.href}`);
+    return;
+  }
+  if (!authorActorResult.val) {
+    getLogger().warn(`Note author actor not found for federated timeline: ${note.id.href} - ${authorIdentity.val.uri}`);
+    return;
+  }
+  if (post.actorId !== authorActorResult.val.id) {
+    getLogger().warn(
+      `Ignored a federated Note for a post owned by another actor: ${note.id.href} existing=${post.actorId} actor=${authorActorResult.val.id}`,
+    );
+    return;
+  }
 
   const existingItemResult = await deps.federatedTimelineItemResolverByPostId.resolve({ postId: post.postId });
 

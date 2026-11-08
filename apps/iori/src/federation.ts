@@ -16,6 +16,7 @@ import { defineRefetchRelayForwardedNoteTask } from './adaptor/fedify/relayForwa
 import { SharedKeyDispatcher } from './adaptor/fedify/sharedKeyDispatcher.ts';
 import { ControlledQueue } from './adaptor/node/source/controlledQueue.ts';
 import { postgresQueueStorage } from './adaptor/node/source/postgresQueueStorage.ts';
+import { PgActorResolverByUri } from './adaptor/pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from './adaptor/pg/actor/actorResolverByUserId.ts';
 import { PgFederatedTimelineItemCreatedStore } from './adaptor/pg/federatedTimeline/federatedTimelineItemCreatedStore.ts';
 import { PgFederatedTimelineItemResolverByPostId } from './adaptor/pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
@@ -54,6 +55,7 @@ const create = () => {
     origin: env.ORIGIN,
     relayResolver: PgRelayResolver.getInstance(),
     remotePostUpserter: PgRemotePostUpserter.getInstance(),
+    actorResolverByUri: PgActorResolverByUri.getInstance(),
     federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
     federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
   });
