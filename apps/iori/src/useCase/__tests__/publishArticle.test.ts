@@ -43,6 +43,7 @@ const createDigest = (kind: DigestKind, article: Article): Digest | undefined =>
         feedbackAt: null,
       }],
     trends: [],
+    xPostFeedEntryIds: [],
   }, Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')));
   if (!created.ok) throw new Error('unexpected');
   return created.val.aggregateState;

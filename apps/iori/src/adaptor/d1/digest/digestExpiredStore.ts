@@ -11,6 +11,7 @@ import {
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
+  digestXPostsTable,
   domainEventsTable,
 } from '../schema.ts';
 
@@ -27,6 +28,7 @@ export const createD1DigestExpiredStore = (db: IoriD1Db): DigestExpiredStore => 
           ),
           db.delete(digestDeepDivesTable).where(sql`digestItemId IN ${itemIds}`),
           db.delete(digestTrendsTable).where(eq(digestTrendsTable.digestId, digestId)),
+          db.delete(digestXPostsTable).where(eq(digestXPostsTable.digestId, digestId)),
           db.delete(digestItemsTable).where(eq(digestItemsTable.digestId, digestId)),
           db.delete(digestsTable).where(eq(digestsTable.digestId, digestId)),
           db.insert(domainEventsTable).values(toD1DomainEventRow(event)),

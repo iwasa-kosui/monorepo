@@ -14,6 +14,7 @@ import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts
 import { appendUniqueById } from './appendUnique.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
 import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
+import { prependUniqueById } from './prependUnique.ts';
 import {
   initialTimelineState,
   readTimelineCache,
@@ -52,6 +53,7 @@ export type UseTimelineReturn = Readonly<{
   isFirstPageSettled: boolean;
   updateTimelineItem: StatusUpdater;
   removePost: (postId: string) => void;
+  prependPost: (status: Status) => void;
   updateMe: (me: CredentialAccount) => void;
 }>;
 
@@ -191,6 +193,16 @@ export const useTimeline = (): UseTimelineReturn => {
     });
   }, []);
 
+  const prependPost = useCallback((status: Status) => {
+    setState((prev) => {
+      if (prev.status !== 'success') return prev;
+      return {
+        status: 'success',
+        data: { ...prev.data, statuses: prependUniqueById(prev.data.statuses, status) },
+      };
+    });
+  }, []);
+
   const updateMe = useCallback((me: CredentialAccount) => {
     setState((prev) => prev.status === 'success' ? { status: 'success', data: { ...prev.data, me } } : prev);
   }, []);
@@ -208,6 +220,7 @@ export const useTimeline = (): UseTimelineReturn => {
     isFirstPageSettled,
     updateTimelineItem,
     removePost,
+    prependPost,
     updateMe,
   } as const;
 };

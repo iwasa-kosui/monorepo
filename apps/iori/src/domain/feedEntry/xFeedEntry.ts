@@ -15,6 +15,6 @@ const zodType = z
   .describe('XFeedEntry');
 export type XFeedEntry = z.output<typeof zodType>;
 
-export type XFeedEntriesResolver = Agg.Resolver<{ limit: number }, ReadonlyArray<XFeedEntry>>;
+export type XFeedEntriesResolver = Agg.Resolver<{ limit: number; now: Instant }, ReadonlyArray<XFeedEntry>>;
 
 export const XFeedEntry = { zodType } as const;

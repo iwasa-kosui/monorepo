@@ -37,8 +37,11 @@ import type {
   HatenaTrendsResolverByFetchedSince,
   RadarFeedEntriesResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
+  XPost,
+  XPostsResolverByFetchedSince,
 } from '../domain/digest/digestMaterial.ts';
 import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
+import { selectXPosts } from '../domain/digest/xPostSelection.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
 import { assignTopics, TopicAssignmentPolicy } from '../domain/digestTopic/topicAssignment.ts';
@@ -61,6 +64,7 @@ import type { CreateArticleWithBodyUseCase } from './createArticleWithBody.ts';
 import type { EnsureDefaultDigestTopicsUseCase } from './ensureDefaultDigestTopics.ts';
 import { fetchArticleBodyText } from './helper/fetchArticleBodyText.ts';
 import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
+import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
 export const DIGEST_SUMMARY_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
@@ -83,6 +87,8 @@ const TOPIC_MIN_ITEMS = 3;
 const TOPICS_PER_DAY_LIMIT = 4;
 export const TRENDS_LIMIT = 10;
 const RADAR_LIMIT = 1;
+export const X_POSTS_LIMIT = 10;
+const X_POSTS_CANDIDATE_LIMIT = 300;
 const HOUR_MS = 60 * 60 * 1000;
 export const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
@@ -99,6 +105,7 @@ type Ok = Readonly<{
   topics: number;
   items: number;
   trends: number;
+  xPosts: number;
   summarized: number;
   pushed: number;
   skippedReason?: string;
@@ -156,6 +163,8 @@ type Deps = Readonly<{
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
+  xPostsResolverByFetchedSince: XPostsResolverByFetchedSince;
+  isDigestOwner: IsDigestOwner;
   interestVectorsResolverByUserId: InterestVectorsResolverByUserId;
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
   safeFetcher: SafeFetcher;
@@ -260,6 +269,8 @@ const create = ({
   radarFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
   timelineLinkTrendsResolverByUserId,
+  xPostsResolverByFetchedSince,
+  isDigestOwner,
   interestVectorsResolverByUserId,
   recommendableArticlesResolverByFetchedSince,
   safeFetcher,
@@ -338,6 +349,7 @@ const create = ({
       topics: 0,
       items: 0,
       trends: 0,
+      xPosts: 0,
       summarized: 0,
       pushed: 0,
       recommendation: {
@@ -411,20 +423,26 @@ const create = ({
       ? windowStart
       : previous.val.createdAt;
 
-    const [radarEntries, hatenaTrends, timelineTrends, interestVectors, pastUrls, recommendable] = await Promise.all([
-      radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
-      hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
-      timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
-      interestVectorsResolverByUserId.resolve(userId),
-      digestItemUrlsResolverByUserId.resolve({
-        userId,
-        excludingDigestIds: existing.replaceable.map((header) => header.digestId),
-      }),
-      recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
-    ]);
+    const ownsDigest = await isDigestOwner(userId);
+    const [radarEntries, hatenaTrends, timelineTrends, xPostCandidates, interestVectors, pastUrls, recommendable] =
+      await Promise.all([
+        radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
+        hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
+        timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
+        ownsDigest
+          ? xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT })
+          : RA.ok<ReadonlyArray<XPost>>([]),
+        interestVectorsResolverByUserId.resolve(userId),
+        digestItemUrlsResolverByUserId.resolve({
+          userId,
+          excludingDigestIds: existing.replaceable.map((header) => header.digestId),
+        }),
+        recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
+      ]);
     const radar = radarEntries.val[0];
 
     const materials = interestVectors.val;
+    const xPosts = selectXPosts({ posts: xPostCandidates.val, materials, now: startedAt, limit: X_POSTS_LIMIT });
     const pastUrlSet = new Set(pastUrls.val.map(normalizeDigestUrl));
     const candidates = uniqueByNormalizedUrl(recommendable.val)
       .filter((candidate) => !pastUrlSet.has(normalizeDigestUrl(candidate.url)));
@@ -583,6 +601,7 @@ const create = ({
           feedbackAt: null,
         })),
         trends: [],
+        xPostFeedEntryIds: [],
       }, now());
       if (!created.ok) {
         await discardCreatedArticles();
@@ -601,6 +620,7 @@ const create = ({
         ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
         ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
       ],
+      xPostFeedEntryIds: xPosts.map((post) => post.feedEntryId),
     }, now());
     if (!summaryCreated.ok) {
       await discardCreatedArticles();
@@ -657,6 +677,7 @@ const create = ({
         topics: topicDigests.length,
         items: selectedItems.length,
         trends: summaryDigest.trends.length,
+        xPosts: xPosts.length,
         summarized,
         pushed,
         recommendation: {

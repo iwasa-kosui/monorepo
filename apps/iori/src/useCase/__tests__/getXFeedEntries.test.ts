@@ -15,13 +15,14 @@ const entry: XFeedEntry = {
 };
 
 describe('GetXFeedEntriesUseCase', () => {
-  it('リゾルバーに上限を渡し、返った投稿をそのまま返す', async () => {
+  it('リゾルバーに上限と現在時刻を渡し、返った投稿をそのまま返す', async () => {
     const resolve = vi.fn<XFeedEntriesResolver['resolve']>(async () => RA.ok([entry]));
-    const useCase = GetXFeedEntriesUseCase.create({ xFeedEntriesResolver: { resolve } });
+    const now = Instant.orThrow(5_000);
+    const useCase = GetXFeedEntriesUseCase.create({ xFeedEntriesResolver: { resolve }, now: () => now });
 
     const result = await useCase.run({ limit: 30 });
 
-    expect(resolve).toHaveBeenCalledWith({ limit: 30 });
+    expect(resolve).toHaveBeenCalledWith({ limit: 30, now });
     expect(result).toEqual({ ok: true, val: [entry] });
   });
 });

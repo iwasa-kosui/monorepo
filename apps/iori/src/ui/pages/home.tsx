@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
@@ -11,6 +12,15 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
+
+const usePostedHandler = () => {
+  const { timeline, ui } = useTimelineContext();
+  return (status: Status) => {
+    timeline.prependPost(status);
+    ui.setSelectedIndex(-1);
+    ui.setEmojiPickerOpenForIndex(null);
+  };
+};
 
 const PullToRefreshIndicator = () => {
   const { pullToRefresh, pullThreshold, timeline } = useTimelineContext();
@@ -428,6 +438,7 @@ const ThreadModal = () => {
 
 const UserProfile = () => {
   const { data } = useTimelineContext();
+  const handlePosted = usePostedHandler();
 
   if (!data) return null;
 
@@ -554,7 +565,7 @@ const UserProfile = () => {
         </div>
       </section>
 
-      <PostForm id='post' />
+      <PostForm id='post' onPosted={handlePosted} />
     </section>
   );
 };
@@ -738,6 +749,7 @@ const ServerTimeline = () => {
 
 const HomePage = () => {
   const { timeline } = useTimelineContext();
+  const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
   useEffect(() => {
@@ -759,7 +771,13 @@ const HomePage = () => {
     <>
       <UserProfile />
       <Modal id='post-modal' showCloseButton={false} fullScreen>
-        <PostForm formId='post-modal-form' />
+        <PostForm
+          formId='post-modal-form'
+          onPosted={(status) => {
+            handlePosted(status);
+            if (window.location.hash === '#post-modal') window.location.replace('#');
+          }}
+        />
       </Modal>
       <UpdateBioModal />
       <PullToRefreshIndicator />

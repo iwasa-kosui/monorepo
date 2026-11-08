@@ -1,3 +1,4 @@
+import type { DigestXPost } from './digest.ts';
 import type { TrendCandidate } from './digestMaterial.ts';
 
 export type DigestBodyRadar = Readonly<{ title: string; url: string }>;
@@ -118,6 +119,10 @@ const topicsSection = (topics: ReadonlyArray<DigestSummaryBodyTopic>): string =>
     'トピック別のダイジェスト',
     topics.map((topic) => `<a href="/articles/${encodeURIComponent(topic.articleId)}">${escapeHtml(topic.name)}</a>`),
   );
+
+// X と提携していない手段で取った投稿なので、記事には保存せず、所有者が非公開版を開くときだけ足す
+export const buildXPostsSection = (xPosts: ReadonlyArray<DigestXPost>): string =>
+  section('X の投稿', xPosts.map(({ username, title, url }) => `${escapeHtml(`@${username}`)} ${link(title, url)}`));
 
 export const buildSummaryBodies = ({
   radar,

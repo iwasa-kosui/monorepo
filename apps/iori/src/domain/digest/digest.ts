@@ -5,6 +5,7 @@ import { Schema } from '../../helper/schema.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { ArticleId } from '../article/articleId.ts';
+import type { XUsername } from '../feedSource/xUsername.ts';
 import { Instant } from '../instant/instant.ts';
 import { UserId } from '../user/userId.ts';
 import { DigestId } from './digestId.ts';
@@ -71,6 +72,7 @@ const zodType = digestHeaderZodType
   .extend({
     items: z.array(digestItemZodType),
     trends: z.array(digestTrendZodType),
+    xPostFeedEntryIds: z.array(z.string().min(1)),
   })
   .describe('Digest');
 const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(zodType);
@@ -117,6 +119,7 @@ export type CreateDigestPayload = Readonly<{
   topicKey: string;
   items: ReadonlyArray<Omit<DigestItem, 'digestItemId'>>;
   trends: ReadonlyArray<DigestTrend>;
+  xPostFeedEntryIds: ReadonlyArray<string>;
 }>;
 
 const create = (payload: CreateDigestPayload, now: Instant): Result<DigestCreated, DigestParseError> => {
@@ -252,6 +255,11 @@ export type DigestTopicItem = Readonly<{
 export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
   { userId: UserId; digestDateFrom: string; limit: number },
   ReadonlyArray<DigestTopicItem>
+>;
+export type DigestXPost = Readonly<{ username: XUsername; title: string; url: string }>;
+export type DigestXPostsResolverByArticleId = Agg.Resolver<
+  { articleId: ArticleId; now: Instant },
+  ReadonlyArray<DigestXPost>
 >;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
 export type DigestResolverByArticleId = Agg.Resolver<ArticleId, Digest | undefined>;

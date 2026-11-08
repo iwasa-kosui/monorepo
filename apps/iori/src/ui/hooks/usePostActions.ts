@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'hono/jsx';
+import { useCallback, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
@@ -12,6 +12,7 @@ import {
   unreblog,
 } from '../api/mastodonClient.ts';
 import { withReblogged, withUpdatedStatus } from '../api/status.ts';
+import { runExclusive, runOptimisticFavourite } from './optimisticFavourite.ts';
 
 type StatusUpdater = (
   postId: string,
@@ -61,37 +62,50 @@ export const usePostActions = ({
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [emojiReactingPostId, setEmojiReactingPostId] = useState<string | null>(null);
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
+  const favouriteInFlightRef = useRef<Set<string>>(null);
+  const favouriteInFlight = () => (favouriteInFlightRef.current ??= new Set<string>());
 
   const like = useCallback(
-    async (postId: string) => {
-      setLikingPostId(postId);
-      try {
-        const updated = await favourite(postId);
-        updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
-        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
-      } catch (error) {
-        console.error('Failed to like:', error);
-      } finally {
-        setLikingPostId(null);
-      }
-    },
+    (postId: string) =>
+      runExclusive(favouriteInFlight(), postId, async () => {
+        setLikingPostId(postId);
+        try {
+          await runOptimisticFavourite({
+            postId,
+            favourited: true,
+            request: favourite,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to like:', error);
+          alert(failureMessage('like', error));
+        } finally {
+          setLikingPostId(null);
+        }
+      }),
     [updateTimelineItem, updateThreadPost],
   );
 
   const undoLike = useCallback(
-    async (postId: string) => {
-      setUndoingLikePostId(postId);
-      try {
-        const updated = await unfavourite(postId);
-        updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
-        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
-      } catch (error) {
-        console.error('Failed to undo like:', error);
-        alert(failureMessage('undo like', error));
-      } finally {
-        setUndoingLikePostId(null);
-      }
-    },
+    (postId: string) =>
+      runExclusive(favouriteInFlight(), postId, async () => {
+        setUndoingLikePostId(postId);
+        try {
+          await runOptimisticFavourite({
+            postId,
+            favourited: false,
+            request: unfavourite,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to undo like:', error);
+          alert(failureMessage('undo like', error));
+        } finally {
+          setUndoingLikePostId(null);
+        }
+      }),
     [updateTimelineItem, updateThreadPost],
   );
 
