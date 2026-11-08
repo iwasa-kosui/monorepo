@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DigestTopicItem } from '../../domain/digest/digest.ts';
 import type { StoredDigestTopic } from '../../domain/digestTopic/digestTopic.ts';
-import { TOPIC_MIN_SIMILARITY } from '../../domain/digestTopic/topicAssignment.ts';
+import { assignTopics, TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { RecommendableArticle } from '../../domain/recommendation/recommendation.ts';
 import { UserId } from '../../domain/user/userId.ts';
@@ -60,6 +60,7 @@ const setup = (
     items?: ReadonlyArray<DigestTopicItem>;
     maxCandidates?: number;
     maxDigestItems?: number;
+    topicAssignmentPolicy?: TopicAssignmentPolicy;
   } = {},
 ) => {
   const resolveTopics = vi.fn(() => RA.ok(topics));
@@ -71,6 +72,7 @@ const setup = (
     digestTopicItemsResolverByUserIdAndDigestDateFrom: { resolve: resolveItems },
     maxCandidates: options.maxCandidates,
     maxDigestItems: options.maxDigestItems,
+    topicAssignmentPolicy: options.topicAssignmentPolicy,
     now: () => NOW,
   });
   return { useCase, resolveTopics, resolveArticles, resolveItems };
@@ -115,7 +117,7 @@ describe('PreviewDigestTopicsUseCase', () => {
       ok: true,
       val: {
         topics: [],
-        thresholds: { topicMinSimilarity: TOPIC_MIN_SIMILARITY },
+        thresholds: TopicAssignmentPolicy.default,
         candidates: { total: 0, byTopic: [], truncated: false },
         digestItems: [],
         digestItemsTruncated: false,
@@ -184,5 +186,61 @@ describe('PreviewDigestTopicsUseCase', () => {
 
     expect(result.ok && result.val.digestItemsTruncated).toBe(false);
     expect(result.ok && result.val.digestItems).toHaveLength(2);
+  });
+
+  it('thresholds は TopicAssignmentPolicy.default と一致する', async () => {
+    const { useCase } = setup();
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(result.ok && result.val.thresholds).toEqual(TopicAssignmentPolicy.default);
+  });
+
+  describe('方針', () => {
+    const tied = (n: number): RecommendableArticle =>
+      ({ ...article(n), embedding: new Float32Array([1, 1]) }) as unknown as RecommendableArticle;
+    const tiedItem = (n: number): DigestTopicItem => ({ ...digestItem(n), embedding: new Float32Array([1, 1]) });
+    const topics = [topic('on', new Float32Array([1, 0])), topic('next', new Float32Array([0, 1]))];
+    const options = { articles: [article(1), tied(2)], items: [digestItem(1), tiedItem(2)] };
+    const run = async (policy?: TopicAssignmentPolicy) => {
+      const { useCase } = setup(topics, { ...options, topicAssignmentPolicy: policy });
+      const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+      if (!result.ok) throw new Error('unreachable');
+      return result.val;
+    };
+
+    it('渡した方針を thresholds に返し、方針を差し替えると assignment と assignedCount が変わる', async () => {
+      const byDefault = await run();
+      const strict = await run({ minSimilarity: 0.4, minMargin: 0.5 });
+
+      expect(byDefault.candidates.byTopic[0]).toMatchObject({ count: 2, assignedCount: 2 });
+      expect(byDefault.digestItems.map((item) => item.assignment)).toEqual(['assigned', 'assigned']);
+      expect(strict.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0.5 });
+      expect(strict.candidates.byTopic[0]).toMatchObject({ count: 2, assignedCount: 1 });
+      expect(strict.candidates.byTopic[0]!.top.map((candidate) => candidate.assignment)).toEqual([
+        'assigned',
+        'belowMinMargin',
+      ]);
+      expect(strict.digestItems.map((item) => item.assignment)).toEqual(['assigned', 'belowMinMargin']);
+    });
+
+    it('assignment が同じ入力に対する assignTopics の結果と一致する', async () => {
+      const policy = { minSimilarity: 0.4, minMargin: 0.5 };
+      const result = await run(policy);
+      const assigned = assignTopics({
+        articles: options.articles,
+        topics,
+        policy,
+      });
+
+      const preview = result.candidates.byTopic;
+      expect(preview.map((entry) => entry.assignedCount)).toEqual(
+        topics.map((entry) => assigned.byTopic.get(entry.topicKey)!.length),
+      );
+      const flagged = preview.flatMap((entry) => entry.top).filter((candidate) => candidate.assignment !== 'assigned');
+      expect(flagged.map((candidate) => candidate.feedEntryId)).toEqual(
+        assigned.others.map((entry) => entry.feedEntryId),
+      );
+    });
   });
 });

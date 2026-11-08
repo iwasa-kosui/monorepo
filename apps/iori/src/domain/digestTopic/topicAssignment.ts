@@ -26,6 +26,18 @@ export type TopicAssignmentTopic = Readonly<{ topicKey: string; embedding: Float
 
 export type TopicMatch = Readonly<{ similarity: number; margin: number }>;
 
+export type TopicAssignmentOutcome = 'assigned' | 'belowMinSimilarity' | 'belowMinMargin' | 'noComparableTopic';
+
+export const judgeTopicAssignment = (
+  best: Readonly<{ similarity: number; margin: number | null }> | null,
+  policy: Pick<TopicAssignmentPolicy, 'minSimilarity' | 'minMargin'>,
+): TopicAssignmentOutcome => {
+  if (best === null) return 'noComparableTopic';
+  if (best.similarity < policy.minSimilarity) return 'belowMinSimilarity';
+  if (best.margin !== null && best.margin < policy.minMargin) return 'belowMinMargin';
+  return 'assigned';
+};
+
 export type TopicAssignment<TArticle extends TopicAssignmentArticle> = Readonly<{
   byTopic: ReadonlyMap<string, ReadonlyArray<TArticle>>;
   matches: ReadonlyMap<TArticle, TopicMatch>;
@@ -63,21 +75,17 @@ export const assignTopics = <TArticle extends TopicAssignmentArticle>(
         secondSimilarity = similarity;
       }
     }
-    if (bestTopicKey === undefined) {
-      otherCounts.noComparableTopic += 1;
-      others.push(article);
-      continue;
-    }
     const margin = secondSimilarity === -Infinity ? Infinity : bestSimilarity - secondSimilarity;
-    if (bestSimilarity < input.policy.minSimilarity) {
-      otherCounts.belowMinSimilarity += 1;
-      others.push(article);
-    } else if (margin < input.policy.minMargin) {
-      otherCounts.belowMinMargin += 1;
-      others.push(article);
-    } else {
-      byTopic.get(bestTopicKey)!.push(article);
+    const outcome = judgeTopicAssignment(
+      bestTopicKey === undefined ? null : { similarity: bestSimilarity, margin },
+      input.policy,
+    );
+    if (outcome === 'assigned') {
+      byTopic.get(bestTopicKey!)!.push(article);
       matches.set(article, { similarity: bestSimilarity, margin });
+    } else {
+      otherCounts[outcome] += 1;
+      others.push(article);
     }
   }
   return { byTopic, matches, others, otherCounts };

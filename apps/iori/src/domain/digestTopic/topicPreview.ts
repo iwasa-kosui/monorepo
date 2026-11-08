@@ -1,6 +1,7 @@
 import type { DigestFeedback, DigestTopicItem } from '../digest/digest.ts';
 import type { Instant } from '../instant/instant.ts';
 import { Recommendation } from '../recommendation/recommendation.ts';
+import { judgeTopicAssignment, type TopicAssignmentOutcome, type TopicAssignmentPolicy } from './topicAssignment.ts';
 
 export const HISTOGRAM_BIN_COUNT = 40;
 const HISTOGRAM_BINS_PER_UNIT = HISTOGRAM_BIN_COUNT / 2;
@@ -34,11 +35,13 @@ export type PreviewCandidate = Readonly<{
   similarity: number;
   second: TopicSimilarity | null;
   margin: number | null;
+  assignment: TopicAssignmentOutcome;
 }>;
 
 export type PreviewTopicCandidates = Readonly<{
   topicKey: string;
   count: number;
+  assignedCount: number;
   top: ReadonlyArray<PreviewCandidate>;
   bottom: ReadonlyArray<PreviewCandidate>;
 }>;
@@ -61,6 +64,7 @@ export type DigestItemPreview = Readonly<{
   margin: number | null;
   adoptedSimilarity: number | null;
   matchesFirst: boolean | null;
+  assignment: TopicAssignmentOutcome;
 }>;
 
 const similarityTo = (embedding: Float32Array, topic: PreviewTopic): number | null =>
@@ -120,6 +124,7 @@ export const previewCandidates = (
     articles: ReadonlyArray<PreviewArticle>;
     topics: ReadonlyArray<PreviewTopic>;
     limit: number;
+    policy: TopicAssignmentPolicy;
   }>,
 ): CandidatePreview => {
   const comparable = input.topics.filter((topic) => topic.embedding !== null);
@@ -137,6 +142,7 @@ export const previewCandidates = (
       similarity: ranking.first.similarity,
       second: ranking.second,
       margin: ranking.margin,
+      assignment: judgeTopicAssignment({ similarity: ranking.first.similarity, margin: ranking.margin }, input.policy),
     });
   }
   return {
@@ -147,6 +153,7 @@ export const previewCandidates = (
       return {
         topicKey: topic.topicKey,
         count: candidates.length,
+        assignedCount: candidates.filter((candidate) => candidate.assignment === 'assigned').length,
         ...pickTopAndBottom(candidates, input.limit, (c) => c.similarity, (c) => c.feedEntryId),
       };
     }),
@@ -158,11 +165,20 @@ export const previewDigestItems = (
     items: ReadonlyArray<DigestTopicItem>;
     comparableTopics: ReadonlyArray<PreviewTopic>;
     embeddedTopics: ReadonlyArray<PreviewTopic>;
+    policy: TopicAssignmentPolicy;
   }>,
 ): ReadonlyArray<DigestItemPreview> =>
   input.items.map(({ embedding, ...item }) => {
     if (embedding === null) {
-      return { ...item, first: null, second: null, margin: null, adoptedSimilarity: null, matchesFirst: null };
+      return {
+        ...item,
+        first: null,
+        second: null,
+        margin: null,
+        adoptedSimilarity: null,
+        matchesFirst: null,
+        assignment: judgeTopicAssignment(null, input.policy),
+      };
     }
     const ranking = rankTopics(embedding, input.comparableTopics);
     const adopted = input.embeddedTopics.find((topic) => topic.topicKey === item.topicKey);
@@ -173,5 +189,9 @@ export const previewDigestItems = (
       margin: ranking?.margin ?? null,
       adoptedSimilarity: adopted === undefined ? null : similarityTo(embedding, adopted),
       matchesFirst: ranking === null ? null : ranking.first.topicKey === item.topicKey,
+      assignment: judgeTopicAssignment(
+        ranking === null ? null : { similarity: ranking.first.similarity, margin: ranking.margin },
+        input.policy,
+      ),
     };
   });
