@@ -22,8 +22,10 @@ const env = {
   IORI_OPERATION: 'deploy-worker',
 };
 const operationEnv = (operation: string) =>
-  operation === 'put-bluesky-secrets' ? { ...env, IORI_ENVIRONMENT: 'production' } : env;
-it.each(['put-worker-secrets', 'put-bluesky-secrets'])(
+  operation === 'put-bluesky-secrets' || operation === 'put-twitterapi-secret'
+    ? { ...env, IORI_ENVIRONMENT: 'production' }
+    : env;
+it.each(['put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
   'accepts a migration SHA that differs from the code SHA for %s',
   operation => {
     expect(
@@ -36,10 +38,10 @@ it.each(['put-worker-secrets', 'put-bluesky-secrets'])(
       .toMatchObject({ operation, codeSha: env.MAIN_SHA, migrationSha: 'b'.repeat(40) });
   },
 );
-it('accepts put-bluesky-secrets only for production', () => {
-  const invocation = { ...env, IORI_OPERATION: 'put-bluesky-secrets' };
+it.each(['put-bluesky-secrets', 'put-twitterapi-secret'])('accepts %s only for production', operation => {
+  const invocation = { ...env, IORI_OPERATION: operation };
   expect(parseWorkflowInvocation({ ...invocation, IORI_ENVIRONMENT: 'production' })).toMatchObject({
-    operation: 'put-bluesky-secrets',
+    operation,
     environment: 'production',
   });
   for (const environment of ['staging', 'development']) {
@@ -146,7 +148,7 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'])(
+it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
     const valid = { ...operationEnv(operation), IORI_OPERATION: operation };
@@ -207,7 +209,7 @@ it('rejects diagnose-source with a recovery value, a stale main SHA or an unknow
     'Protected workflow invocation is invalid.',
   );
 });
-it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'])(
+it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
   'rejects an empty or missing generation and run ID for %s',
   operation => {
     const invocation = { ...operationEnv(operation), IORI_OPERATION: operation };
@@ -407,6 +409,7 @@ it.each([
   'deploy-worker',
   'put-worker-secrets',
   'put-bluesky-secrets',
+  'put-twitterapi-secret',
   'diagnose-source',
   'delete-rehearsal-d1',
   'resume-source',
@@ -539,7 +542,15 @@ it('checks only the event, ref, SHA and operation of a push while the identity i
   )
     .toThrow('Protected workflow invocation is invalid.');
 });
-it.each(['put-worker-secrets', 'put-bluesky-secrets', 'delete-rehearsal-d1', 'resume-source', 'source', ''])(
+it.each([
+  'put-worker-secrets',
+  'put-bluesky-secrets',
+  'put-twitterapi-secret',
+  'delete-rehearsal-d1',
+  'resume-source',
+  'source',
+  '',
+])(
   'rejects a main push for the operation %j',
   operation => {
     expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: operation })).toThrow(

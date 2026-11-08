@@ -927,7 +927,7 @@ describe('iori のダイジェスト API', () => {
           excludes: [],
         },
       ]);
-      expect(body.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0 });
+      expect(body.thresholds).toEqual({ minSimilarity: 0.55, minMargin: 0 });
       expect(body.candidates.total).toBe(3);
       expect(body.candidates.top1Histogram).toHaveLength(40);
       expect(body.candidates.top1Histogram.filter((bin) => bin.count > 0)).toEqual([
@@ -1088,7 +1088,7 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         topics: [],
-        thresholds: { minSimilarity: 0.4, minMargin: 0 },
+        thresholds: { minSimilarity: 0.55, minMargin: 0 },
         candidates: { total: 0, byTopic: [], truncated: false },
         digestItemsTruncated: false,
         digestItems: [],

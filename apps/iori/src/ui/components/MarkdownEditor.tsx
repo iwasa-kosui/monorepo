@@ -1,4 +1,6 @@
-import { useState } from 'hono/jsx';
+import { useEffect, useState } from 'hono/jsx';
+
+import { shouldResetPreview } from './markdownEditorPreview.ts';
 
 type TabMode = 'markdown' | 'preview';
 
@@ -25,6 +27,13 @@ export const MarkdownEditor = ({
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  useEffect(() => {
+    if (!shouldResetPreview(value)) return;
+    setActiveTab('markdown');
+    setPreviewHtml('');
+    setPreviewError('');
+  }, [value]);
 
   const fetchPreview = async (markdown: string) => {
     if (!markdown.trim()) {

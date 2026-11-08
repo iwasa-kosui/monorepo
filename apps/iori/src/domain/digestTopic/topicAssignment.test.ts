@@ -96,7 +96,7 @@ describe('assignTopics', () => {
     expect(result.others).toEqual([]);
   });
 
-  it('既定の方針では、差を見ず、類似度が 0.4 以上の記事を最大のトピックに入れる', () => {
+  it('既定の方針では、差を見ず、類似度が 0.55 以上の記事を最大のトピックに入れる', () => {
     const near = article('near', 0.9, 0.1);
     const tie = article('tie', 1, 1);
     const opposite = article('opposite', -1, -1);
@@ -109,6 +109,23 @@ describe('assignTopics', () => {
     expect(result.byTopic.get('a')).toEqual([near, tie]);
     expect(result.byTopic.get('b')).toEqual([]);
     expect(result.others).toEqual([opposite]);
+  });
+
+  it('既定の方針では、類似度が 0.55 を下回る記事を belowMinSimilarity で「その他」にし、上回る記事をテーマに入れる', () => {
+    const withSimilarity = (name: string, similarity: number) =>
+      article(name, similarity, Math.sqrt(1 - similarity * similarity));
+    const half = withSimilarity('half', 0.5);
+    const justBelow = withSimilarity('justBelow', 0.549);
+    const justAbove = withSimilarity('justAbove', 0.551);
+    const result = assignTopics({
+      articles: [half, justBelow, justAbove],
+      topics: [topic('a', 1, 0)],
+      policy: TopicAssignmentPolicy.default,
+    });
+
+    expect(result.byTopic.get('a')).toEqual([justAbove]);
+    expect(result.others).toEqual([half, justBelow]);
+    expect(result.otherCounts).toEqual({ belowMinSimilarity: 2, belowMinMargin: 0, excluded: 0, noComparableTopic: 0 });
   });
 
   it('minMargin を上げると、1 位と 2 位の差が小さい記事を「その他」にする', () => {
@@ -293,9 +310,9 @@ describe('judgeTopicAssignment の excluded', () => {
 });
 
 describe('TopicAssignmentPolicy', () => {
-  it('既定値は今の挙動を保つ値である', () => {
-    expect(TopicAssignmentPolicy.default).toEqual({ minSimilarity: 0.4, minMargin: 0 });
-    expect(TOPIC_MIN_SIMILARITY).toBe(0.4);
+  it('既定値は類似度 0.55、差の下限 0 である', () => {
+    expect(TopicAssignmentPolicy.default).toEqual({ minSimilarity: 0.55, minMargin: 0 });
+    expect(TOPIC_MIN_SIMILARITY).toBe(0.55);
   });
 
   it('0 から 1 までの値を受け付ける', () => {

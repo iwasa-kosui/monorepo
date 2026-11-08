@@ -113,7 +113,7 @@ jobs:
           run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
           run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
-          run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
+          node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
 
       - name: Write redacted Cloudflare validation summary

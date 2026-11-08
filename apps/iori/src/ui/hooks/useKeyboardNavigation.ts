@@ -13,8 +13,6 @@ type UseKeyboardNavigationProps = Readonly<{
   setEmojiPickerOpenForIndex: (index: number | null) => void;
   replyingToPostId: string | null;
   threadModalPostId: string | null;
-  likingPostId: string | null;
-  undoingLikePostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
   onReply: (postId: string) => void;
@@ -31,8 +29,6 @@ export const useKeyboardNavigation = ({
   setEmojiPickerOpenForIndex,
   replyingToPostId,
   threadModalPostId,
-  likingPostId,
-  undoingLikePostId,
   onLike,
   onUndoLike,
   onReply,
@@ -123,9 +119,9 @@ export const useKeyboardNavigation = ({
           break;
         case 'l':
           e.preventDefault();
-          if (post.favourited && !undoingLikePostId) {
+          if (post.favourited) {
             onUndoLike(post.id);
-          } else if (!post.favourited && !likingPostId) {
+          } else {
             onLike(post.id);
           }
           break;
@@ -177,8 +173,6 @@ export const useKeyboardNavigation = ({
     setEmojiPickerOpenForIndex,
     replyingToPostId,
     threadModalPostId,
-    likingPostId,
-    undoingLikePostId,
     onLike,
     onUndoLike,
     onReply,

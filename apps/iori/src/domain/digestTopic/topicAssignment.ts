@@ -16,7 +16,7 @@ export type TopicAssignmentPolicy = Readonly<z.output<typeof policyZodType>>;
 export const TopicAssignmentPolicy = {
   zodType: policyZodType,
   orThrow: policySchema.orThrow,
-  default: { minSimilarity: 0.4, minMargin: 0 } satisfies TopicAssignmentPolicy,
+  default: { minSimilarity: 0.55, minMargin: 0 } satisfies TopicAssignmentPolicy,
 } as const;
 
 export const TOPIC_MIN_SIMILARITY = TopicAssignmentPolicy.default.minSimilarity;
