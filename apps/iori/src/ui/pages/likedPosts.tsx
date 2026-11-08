@@ -7,6 +7,7 @@ import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 type LikedPostsData = Readonly<{
@@ -24,6 +25,7 @@ const LikedPostsPage = () => {
   const [data, setData] = useState<LikedPostsData | null>(cached);
   const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState('');
+  const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
@@ -42,13 +44,14 @@ const LikedPostsPage = () => {
         setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load liked posts');
       } finally {
         setIsLoading(false);
+        setIsFirstPageSettled(true);
       }
     };
     fetchLikedPosts();
   }, []);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (isLoadingMoreRef.current) return;
+    if (!canStartPageLoadMore(isLoadingMoreRef.current === true, isFirstPageSettled)) return;
     isLoadingMoreRef.current = true;
     try {
       const page = await fetchFavourites({ maxId });
@@ -59,9 +62,9 @@ const LikedPostsPage = () => {
     } finally {
       isLoadingMoreRef.current = false;
     }
-  }, []);
+  }, [isFirstPageSettled]);
 
-  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
   if (isLoading) {
     return (

@@ -57,6 +57,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   useInfiniteScroll({
     nextCursor: data?.nextMaxId,
     onLoadMore: timeline.loadMore,
+    isFirstPageSettled: timeline.isFirstPageSettled,
   });
 
   useKeyboardNavigation({

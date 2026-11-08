@@ -16,13 +16,22 @@ export type Prefetcher = Readonly<{
   prefetch: (pathname: string) => Promise<void>;
 }>;
 
+const isRecent = (attemptAt: number, now: number): boolean => {
+  const age = now - attemptAt;
+  return age >= 0 && age < PREFETCH_FRESH_MS;
+};
+
 export const createPrefetcher = (deps: PrefetchDeps): Prefetcher => {
   const inFlight = new Set<string>();
+  const lastAttemptAt = new Map<string, number>();
 
   const prefetchOne = async (url: string): Promise<void> => {
     if (inFlight.has(url)) return;
     const cached = readCache(url, deps.now());
     if (cached !== undefined && isFresh(cached, deps.now(), PREFETCH_FRESH_MS)) return;
+    const lastAttempt = lastAttemptAt.get(url);
+    if (lastAttempt !== undefined && isRecent(lastAttempt, deps.now())) return;
+    lastAttemptAt.set(url, deps.now());
     inFlight.add(url);
     try {
       const res = await deps.fetch(url, {

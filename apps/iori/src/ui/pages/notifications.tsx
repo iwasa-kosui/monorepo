@@ -14,6 +14,7 @@ import { readMeCache, readPageCache, writeMeCache, writePageCache } from '../api
 import { clearAllCache } from '../api/responseCache.ts';
 import { NotificationItem } from '../components/NotificationItem.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 type NotificationsData = Readonly<{
@@ -237,6 +238,7 @@ const NotificationsPage = () => {
   const [data, setData] = useState<NotificationsData | null>(cached);
   const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState('');
+  const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
@@ -265,13 +267,14 @@ const NotificationsPage = () => {
         setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load notifications');
       } finally {
         setIsLoading(false);
+        setIsFirstPageSettled(true);
       }
     };
     fetchFirstPage();
   }, []);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (isLoadingMoreRef.current) return;
+    if (!canStartPageLoadMore(isLoadingMoreRef.current === true, isFirstPageSettled)) return;
     isLoadingMoreRef.current = true;
     try {
       const page = await fetchNotifications(NOTIFICATION_TYPES, { maxId });
@@ -286,9 +289,9 @@ const NotificationsPage = () => {
     } finally {
       isLoadingMoreRef.current = false;
     }
-  }, []);
+  }, [isFirstPageSettled]);
 
-  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
   if (isLoading) {
     return (

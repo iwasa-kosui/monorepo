@@ -13,7 +13,19 @@ export type CacheEntry = Readonly<{
   cursors?: CacheCursors;
 }>;
 
-const keyOf = (url: string): string => `${KEY_PREFIX}${url}`;
+const currentUserId = (): string | undefined => {
+  try {
+    const userId = document.getElementById('root')?.dataset.userId;
+    return userId === undefined || userId === '' ? undefined : userId;
+  } catch {
+    return undefined;
+  }
+};
+
+const keyOf = (url: string): string | undefined => {
+  const userId = currentUserId();
+  return userId === undefined ? undefined : `${KEY_PREFIX}${userId}:${url}`;
+};
 
 const isCacheEntry = (value: unknown): value is CacheEntry =>
   typeof value === 'object'
@@ -30,11 +42,13 @@ export const isFresh = (entry: CacheEntry, now: number, maxAgeMs: number): boole
 
 export const readCache = (url: string, now: number = Date.now()): CacheEntry | undefined => {
   try {
-    const raw = sessionStorage.getItem(keyOf(url));
+    const key = keyOf(url);
+    if (key === undefined) return undefined;
+    const raw = sessionStorage.getItem(key);
     if (raw === null) return undefined;
     const parsed: unknown = JSON.parse(raw);
     if (isCacheEntry(parsed) && isFresh(parsed, now, CACHE_TTL_MS)) return parsed;
-    sessionStorage.removeItem(keyOf(url));
+    sessionStorage.removeItem(key);
     return undefined;
   } catch {
     return undefined;
@@ -48,8 +62,10 @@ export const writeCache = (
   now: number = Date.now(),
 ): void => {
   try {
+    const key = keyOf(url);
+    if (key === undefined) return;
     const entry: CacheEntry = cursors === undefined ? { body, savedAt: now } : { body, savedAt: now, cursors };
-    sessionStorage.setItem(keyOf(url), JSON.stringify(entry));
+    sessionStorage.setItem(key, JSON.stringify(entry));
   } catch {
     return;
   }

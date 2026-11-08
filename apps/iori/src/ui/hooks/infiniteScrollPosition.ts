@@ -16,6 +16,26 @@ export const shouldAutoLoadCursor = (
   lastAutoLoadedCursor: string | undefined,
 ): boolean => cursor !== undefined && cursor !== lastAutoLoadedCursor;
 
+export type LoadMoreDecision =
+  | Readonly<{ kind: 'skip' }>
+  | Readonly<{ kind: 'debounced'; cursor: string }>
+  | Readonly<{ kind: 'immediate'; cursor: string }>;
+
+export const decideLoadMore = (
+  input: Readonly<{
+    isFirstPageSettled: boolean;
+    cursor: string | undefined;
+    isNearEnd: boolean;
+    isAutomatic: boolean;
+    lastAutoLoadedCursor: string | undefined;
+  }>,
+): LoadMoreDecision => {
+  const { isFirstPageSettled, cursor, isNearEnd, isAutomatic, lastAutoLoadedCursor } = input;
+  if (!isFirstPageSettled || !shouldLoadNow(cursor, isNearEnd)) return { kind: 'skip' };
+  if (!isAutomatic) return { kind: 'debounced', cursor };
+  return shouldAutoLoadCursor(cursor, lastAutoLoadedCursor) ? { kind: 'immediate', cursor } : { kind: 'skip' };
+};
+
 export const isNearDocumentEnd = (): boolean =>
   isNearScrollEnd(
     window.scrollY,

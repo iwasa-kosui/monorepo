@@ -65,6 +65,7 @@ describe('createPrefetcher', () => {
       jsonResponse([{ id: '1' }], { headers: { Link: '<http://x/?max_id=7>; rel="next"' } })
     );
     vi.stubGlobal('sessionStorage', createFakeStorage());
+    vi.stubGlobal('document', { getElementById: () => ({ dataset: { userId: 'user-a' } }) });
   });
 
   afterEach(() => {
@@ -158,6 +159,47 @@ describe('createPrefetcher', () => {
       throw new TypeError('offline');
     });
     await expect(make().prefetch('/likes')).resolves.toBeUndefined();
+  });
+
+  it('does not retry within 30 seconds after a 500, and retries after that', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ error: 'boom' }, { status: 500 }));
+    const prefetcher = make();
+
+    await prefetcher.prefetch('/likes');
+    now += PREFETCH_FRESH_MS - 1;
+    await prefetcher.prefetch('/likes');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now += 1;
+    await prefetcher.prefetch('/likes');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry within 30 seconds after a network error', async () => {
+    fetchMock.mockImplementation(async () => {
+      throw new TypeError('offline');
+    });
+    const prefetcher = make();
+
+    await prefetcher.prefetch('/likes');
+    await prefetcher.prefetch('/likes');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry within 30 seconds after the cache write fails', async () => {
+    vi.stubGlobal('sessionStorage', {
+      ...createFakeStorage(),
+      setItem: () => {
+        throw new DOMException('full', 'QuotaExceededError');
+      },
+    });
+    const prefetcher = make();
+
+    await prefetcher.prefetch('/likes');
+    await prefetcher.prefetch('/likes');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

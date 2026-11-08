@@ -16,12 +16,19 @@ const createFakeStorage = () => {
   };
 };
 
+const stubUser = (userId: string | undefined) => {
+  vi.stubGlobal('document', {
+    getElementById: () => userId === undefined ? null : { dataset: { userId } },
+  });
+};
+
 describe('responseCache', () => {
   let storage: ReturnType<typeof createFakeStorage>;
 
   beforeEach(() => {
     storage = createFakeStorage();
     vi.stubGlobal('sessionStorage', storage);
+    stubUser('user-a');
   });
 
   afterEach(() => {
@@ -48,11 +55,45 @@ describe('responseCache', () => {
   });
 
   it('treats corrupt JSON and malformed entries as a miss', () => {
-    storage.setItem('iori:response-cache:/broken', '{not json');
-    storage.setItem('iori:response-cache:/shape', JSON.stringify({ body: 1 }));
+    storage.setItem('iori:response-cache:user-a:/broken', '{not json');
+    storage.setItem('iori:response-cache:user-a:/shape', JSON.stringify({ body: 1 }));
 
     expect(readCache('/broken', 0)).toBeUndefined();
     expect(readCache('/shape', 0)).toBeUndefined();
+  });
+
+  it('does not let another account read what one account wrote', () => {
+    writeCache('/api/v1/favourites', [{ id: 'a' }], undefined, 0);
+
+    stubUser('user-b');
+    expect(readCache('/api/v1/favourites', 1)).toBeUndefined();
+    writeCache('/api/v1/favourites', [{ id: 'b' }], undefined, 0);
+    expect(readCache('/api/v1/favourites', 1)?.body).toEqual([{ id: 'b' }]);
+
+    stubUser('user-a');
+    expect(readCache('/api/v1/favourites', 1)?.body).toEqual([{ id: 'a' }]);
+  });
+
+  it.each([['an empty user id', ''], ['no user id', undefined]])(
+    'neither reads nor writes with %s',
+    (_label, userId) => {
+      writeCache('/a', 'secret', undefined, 0);
+      expect(storage.map.size).toBe(1);
+
+      stubUser(userId);
+      expect(readCache('/a', 1)).toBeUndefined();
+      writeCache('/b', 'x', undefined, 0);
+      expect(storage.map.size).toBe(1);
+    },
+  );
+
+  it('neither reads nor writes when there is no document', () => {
+    writeCache('/a', 'secret', undefined, 0);
+
+    vi.stubGlobal('document', undefined);
+    expect(readCache('/a', 1)).toBeUndefined();
+    writeCache('/b', 'x', undefined, 0);
+    expect(storage.map.size).toBe(1);
   });
 
   it('does not throw when sessionStorage throws', () => {
@@ -91,10 +132,14 @@ describe('responseCache', () => {
   it('removes every cache key and leaves unrelated keys alone', () => {
     writeCache('/a', 1, undefined, 0);
     writeCache('/b', 2, undefined, 0);
+    stubUser('user-b');
+    writeCache('/c', 3, undefined, 0);
     storage.setItem('unrelated', 'keep');
 
     clearAllCache();
 
+    expect(storage.map.size).toBe(1);
+    stubUser('user-a');
     expect(readCache('/a', 0)).toBeUndefined();
     expect(readCache('/b', 0)).toBeUndefined();
     expect(storage.getItem('unrelated')).toBe('keep');
