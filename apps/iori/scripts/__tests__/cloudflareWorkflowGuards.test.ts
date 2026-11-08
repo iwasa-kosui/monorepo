@@ -565,10 +565,12 @@ it('runs readonly Terraform init and validate in CI', async () => {
   const lines = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
     .split('\n').map(line => line.trim());
   const init = lines.indexOf(
-    'run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
+    'node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
   );
   expect(init).toBeGreaterThan(-1);
   expect(lines[init + 1]).toBe('run_guarded terraform -chdir=apps/iori/infra/cloudflare validate');
+  expect(lines.filter(line => line.includes('run-guarded-retry.mjs'))).toHaveLength(1);
+  expect(lines.filter(line => /^run_guarded\b.*\binit\b/.test(line))).toEqual([]);
   expect(lines.some(line => line.includes('git diff --exit-code'))).toBe(false);
 });
 it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
@@ -592,6 +594,31 @@ it('prints one fixed failure line to stderr without the command output when a gu
   const passed = run('run_guarded true');
   expect(passed.status).toBe(0);
   expect(passed.stderr).not.toContain('Guarded command failed');
+});
+it('runs a failing guarded command exactly once', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const ci = await readWorkflow('ci.yml');
+  const script = ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
+  const lines = script.split('\n');
+  const start = lines.findIndex(line => line.trim() === 'run_guarded() {');
+  const end = lines.findIndex((line, index) => index > start && line.trim() === '}');
+  const definition = lines.slice(start, end + 1).join('\n');
+  const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const directory = mkdtempSync(resolve(tmpdir(), 'run-guarded-once-'));
+  const countFile = resolve(directory, 'count');
+  try {
+    const result = spawnSync('bash', [
+      '-c',
+      `${definition}\nrun_guarded bash -c 'echo run >> "$0"; exit 1' "$1" || true`,
+      'bash',
+      countFile,
+    ], { cwd: repositoryRoot, encoding: 'utf8' });
+    expect(result.stderr).toContain('Guarded command failed: exit=1 guard=0');
+    expect(readFileSync(countFile, 'utf8')).toBe('run\n');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 it('constructs the CI admission as a validated synthetic sealed identity', async () => {
   const { execFileSync } = await import('node:child_process');
