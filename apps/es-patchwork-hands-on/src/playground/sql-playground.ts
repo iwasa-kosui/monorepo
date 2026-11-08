@@ -1,9 +1,10 @@
-import { createRuntime, executionLimitMs, RuntimeTimeoutError } from './client.ts';
-import { applyRuntimeState, element, query } from './dom.ts';
+import { createRuntime, RuntimeScriptError, RuntimeTimeoutError } from './client.ts';
+import { applyRuntimeState, element, failureElement, query } from './dom.ts';
 import { createEditorState, createEditorView } from './editor.ts';
+import { maxSqlCellChars } from './engine/limits.ts';
 import { maxDisplayedRows } from './engine/sql-session.ts';
 import type { SqlCell, SqlRunOutcome, SqlStatementResult } from './engine/types.ts';
-import { loadEdits } from './storage.ts';
+import { clearSql, loadEdits, loadSql, saveSql } from './storage.ts';
 
 type SetupScript = {
   files: Record<string, string>;
@@ -11,11 +12,17 @@ type SetupScript = {
   own: { storageKey: string; file: string; testFile: string } | null;
 };
 
-type SqlConfig = { setupSql: string | null; setupScript: SetupScript | null; initialSql: string };
+type SqlConfig = {
+  storageId: string;
+  setupSql: string | null;
+  setupScript: SetupScript | null;
+  initialSql: string;
+};
 
 const originMessages = {
   own: '第2章で書いた visits.ts で、このデータベースを作りました。',
-  failing: '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
+  failing:
+    '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
   missing: '第2章で書いた visits.ts が保存されていないので、ステップ2の完成コードでこのデータベースを作りました。',
 };
 
@@ -43,6 +50,12 @@ const renderResult = (result: SqlStatementResult): HTMLElement => {
         ? `全 ${result.totalRows} 行のうち、先頭の ${maxDisplayedRows} 行を表示しています`
         : `${result.totalRows} 行`,
     }));
+    if (result.cutCells > 0) {
+      parts.push(element('p', {
+        className: 'playground-note',
+        text: `長い値が ${result.cutCells} 個あるため、先頭の ${maxSqlCellChars} 文字までを表示しています`,
+      }));
+    }
   } else if (result.kind === 'changes') {
     parts.push(element('p', { className: 'playground-note', text: `${result.changes} 行を変更しました` }));
   } else {
@@ -73,9 +86,13 @@ const mount = (root: HTMLElement): void => {
   const runButton = query<HTMLButtonElement>(root, '[data-role="run"]');
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
+  const resetSqlButton = query<HTMLButtonElement>(root, '[data-role="reset-sql"]');
+  const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const results = query<HTMLElement>(root, '[data-role="results"]');
   const origin = query<HTMLElement>(root, '[data-role="origin"]');
+  root.setAttribute('data-mounted', '');
   let busy = false;
+  let backup: string | null = null;
   let preparedGeneration = -1;
 
   const updateControls = (): void => {
@@ -89,20 +106,7 @@ const mount = (root: HTMLElement): void => {
   };
 
   const showFailure = (error: unknown): void => {
-    show(
-      element('div', { className: 'playground-error', attributes: { role: 'alert' } }, [
-        element('p', {
-          text: error instanceof RuntimeTimeoutError
-            ? `実行に ${
-              executionLimitMs / 1000
-            } 秒以上かかったため、途中で止めました。データベースは最初の状態に戻しました`
-            : '実行できませんでした',
-        }),
-        ...(error instanceof RuntimeTimeoutError || !(error instanceof Error)
-          ? []
-          : [element('pre', { text: error.message })]),
-      ]),
-    );
+    show(failureElement(error, 'データベースは最初の状態に戻しました'));
   };
 
   const runtime = createRuntime((state) => {
@@ -111,6 +115,8 @@ const mount = (root: HTMLElement): void => {
     if (state === 'ready' && config.setupScript !== null) {
       void prepareOnReady();
     }
+  }, (message) => {
+    show(failureElement(new RuntimeScriptError(message), ''));
   });
 
   const passesAllTests = async (files: Readonly<Record<string, string>>, testFile: string): Promise<boolean> => {
@@ -119,7 +125,7 @@ const mount = (root: HTMLElement): void => {
       return outcome.error === null && outcome.tests !== null && outcome.tests.length > 0
         && outcome.tests.every((test) => test.status === 'pass');
     } catch (error) {
-      if (error instanceof RuntimeTimeoutError) {
+      if (error instanceof RuntimeTimeoutError || error instanceof RuntimeScriptError) {
         await runtime.whenReady();
         return false;
       }
@@ -212,11 +218,42 @@ const mount = (root: HTMLElement): void => {
       }
     });
 
+  const stateFor = (doc: string) =>
+    createEditorState(doc, {
+      language: 'sql',
+      label: 'SQL を入力する欄',
+      onRun: () => void run(),
+      onChange: (text) => {
+        backup = null;
+        restoreButton.hidden = true;
+        if (text === config.initialSql) {
+          clearSql(config.storageId);
+        } else {
+          saveSql(config.storageId, text);
+        }
+      },
+    });
+
   const view = createEditorView(
     query<HTMLElement>(root, '[data-role="editor"]'),
-    createEditorState(config.initialSql, { language: 'sql', label: 'SQL を入力する欄', onRun: () => void run() }),
+    stateFor(loadSql(config.storageId) ?? config.initialSql),
   );
 
+  resetSqlButton.addEventListener('click', () => {
+    const before = view.state.doc.toString();
+    backup = before === config.initialSql ? null : before;
+    restoreButton.hidden = backup === null;
+    view.setState(stateFor(config.initialSql));
+    clearSql(config.storageId);
+  });
+  restoreButton.addEventListener('click', () => {
+    if (backup !== null) {
+      view.setState(stateFor(backup));
+      saveSql(config.storageId, backup);
+    }
+    backup = null;
+    restoreButton.hidden = true;
+  });
   runButton.addEventListener('click', () => void run());
   resetButton.addEventListener('click', () => void reset());
   retryButton.addEventListener('click', () => runtime.reload());

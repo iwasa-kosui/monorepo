@@ -68,10 +68,10 @@ test('第1章から第3章では、実行欄を置いたページだけが実行
       || html.includes('name="robots"');
   });
   expect(mismatches).toEqual([]);
-  expect(pages.filter((file) => readDistFile(file).includes('data-playground='))).toEqual([
-    'chapters/chapter-1/index.html',
+  expect(pages.filter((file) => readDistFile(file).includes('data-playground=')).sort()).toEqual([
     'chapters/chapter-1/3/index.html',
     'chapters/chapter-1/5/index.html',
+    'chapters/chapter-1/index.html',
     'chapters/chapter-2/2/index.html',
     'chapters/chapter-2/5/index.html',
     'chapters/chapter-2/6/index.html',

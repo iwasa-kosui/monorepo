@@ -5,6 +5,7 @@ import SqlPlayground from '../../../components/SqlPlayground.astro';
 SQL を書き換えて「実行する」を押します。`visits` テーブルに、キャンセルの理由や操作した人を答えられる列があるかを確かめます。
 
 <SqlPlayground
+  id="chapter-1-visits"
   script={{ exercise: 'chapter-1-start', entry: 'show-visits.ts' }}
-  initial="SELECT * FROM visits;"
+  initial="SELECT * FROM visits ORDER BY id;"
 />

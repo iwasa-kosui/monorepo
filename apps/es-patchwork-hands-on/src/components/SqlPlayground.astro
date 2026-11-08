@@ -4,6 +4,7 @@ import '../playground/playground.css';
 import { snapshotFiles } from '../lib/snapshots';
 
 interface Props {
+  id: string;
   setup?: string;
   script?: {
     exercise: string;
@@ -13,11 +14,14 @@ interface Props {
   initial: string;
 }
 
-const { setup, script, initial } = Astro.props;
+const { id, setup, script, initial } = Astro.props;
 if ((setup === undefined) === (script === undefined)) {
-  throw new Error('SqlPlayground には setup と script のどちらか一方を指定します');
+  throw new Error(
+    'SqlPlayground には setup と script のどちらか一方を指定します',
+  );
 }
 const config = JSON.stringify({
+  storageId: id,
   setupSql: setup ?? null,
   setupScript: script === undefined ? null : {
     files: snapshotFiles(script.exercise),
@@ -50,6 +54,10 @@ const config = JSON.stringify({
     <button type="button" data-role="reset" disabled>
       データベースを最初の状態に戻す
     </button>
+    <button type="button" data-role="reset-sql">最初の SQL に戻す</button>
+    <button type="button" data-role="restore" hidden>
+      読み込む前の SQL に戻す
+    </button>
     <span class="playground-hint">
       Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
     </span>
@@ -61,6 +69,17 @@ const config = JSON.stringify({
     <div class="playground-results" data-role="results" aria-live="polite">
     </div>
   </div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
 </section>
 
 <script>

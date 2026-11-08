@@ -307,7 +307,202 @@ test.describe('コードの実行欄', () => {
   });
 });
 
+const typeAtReserveVisit = async (box: Locator, code: string): Promise<void> => {
+  await box.locator('.cm-content').click();
+  const page = box.page();
+  await page.keyboard.press('ControlOrMeta+Home');
+  for (let line = 0; line < 4; line += 1) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(box.locator('.cm-activeLine')).toContainText('INSERT INTO visits');
+  await page.keyboard.press('Home');
+  await page.keyboard.type(code);
+};
+
+test.describe('出力の量の上限', () => {
+  test('console.log が大量でも、ページは止まらず、表示は上限で切って理由を表示する', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    await typeAtReserveVisit(box, 'for (let i = 0; i < 2000000; i += 1) console.log(\'line \' + i); ');
+    await page.evaluate(() => {
+      const gaps = { max: 0, last: performance.now() };
+      Object.assign(window, { gaps });
+      setInterval(() => {
+        const now = performance.now();
+        gaps.max = Math.max(gaps.max, now - gaps.last);
+        gaps.last = now;
+      }, 50);
+    });
+    await box.getByRole('button', { name: 'show-visits.ts を実行する' }).click();
+    await expect(box.getByText('出力が多いため、先頭の 1000 行までを表示しています')).toBeVisible({ timeout: 20_000 });
+    await expect(box.getByText('実際の出力は 2000001 行です')).toBeVisible();
+    const logLength = await box.locator('.playground-log').evaluate((element) => element.textContent?.length ?? 0);
+    expect(logLength).toBeLessThanOrEqual(100_000 + 1000);
+    const maxGap = await page.evaluate(() => (window as unknown as { gaps: { max: number } }).gaps.max);
+    expect(maxGap).toBeLessThan(2000);
+    expect(await hasHorizontalScroll(page)).toBe(false);
+  });
+
+  test('SQL は巨大な値を作る処理を止め、長い値は先頭だけを表示する', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openCheckPage(page);
+    await runSql(page, 'SELECT hex(zeroblob(50000000)) AS h');
+    await expect(results(page).getByRole('alert')).toContainText('string or blob too big');
+    await runSql(page, 'SELECT hex(zeroblob(500000)) AS h');
+    await expect(results(page)).toContainText('長い値が 1 個あるため、先頭の 1000 文字までを表示しています');
+    const cellLength = await results(page).locator('tbody td').evaluate((element) => element.textContent?.length ?? 0);
+    expect(cellLength).toBeLessThanOrEqual(1001);
+    expect(await hasHorizontalScroll(page)).toBe(false);
+    await runSql(page, 'SELECT 1 AS one');
+    await expect(results(page).locator('tbody td')).toHaveText(['1']);
+  });
+});
+
+test.describe('実行の後に起きるエラー', () => {
+  test('実行の後で投げられた例外を表示し、その後も実行できる', async ({ page }) => {
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    await typeAtReserveVisit(box, 'setTimeout(() => { throw new Error(\'late failure\'); }, 300); ');
+    await box.getByRole('button', { name: 'show-visits.ts を実行する' }).click();
+    await expect(box.getByRole('alert')).toContainText('コードの実行中にエラーが起きました');
+    await expect(box.getByRole('alert')).toContainText('late failure');
+    await waitUntilReady(box);
+    await box.getByRole('button', { name: '最初のコードに戻す' }).click();
+    await box.getByRole('button', { name: 'テストを実行する' }).click();
+    await expect(box.locator('[data-role="summary"]')).toHaveText('pass 4 / fail 4');
+  });
+
+  test('処理されなかった Promise の失敗も同じように表示する', async ({ page }) => {
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    await typeAtReserveVisit(box, 'Promise.reject(new Error(\'late rejection\')); ');
+    await box.getByRole('button', { name: 'show-visits.ts を実行する' }).click();
+    await expect(box.getByRole('alert')).toContainText('late rejection');
+    await waitUntilReady(box);
+  });
+});
+
+test.describe('編集内容を失わないための戻すボタン', () => {
+  const prependComment = async (box: Locator): Promise<void> => {
+    await box.locator('.cm-content').click();
+    await box.page().keyboard.press('ControlOrMeta+Home');
+    await box.page().keyboard.type('// my edit ');
+  };
+
+  test('最初のコードに戻した後、読み込む前のコードに戻せる', async ({ page }) => {
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    const restore = box.getByRole('button', { name: '読み込む前のコードに戻す' });
+    await expect(restore).toBeHidden();
+    await prependComment(box);
+    await box.getByRole('button', { name: '最初のコードに戻す' }).click();
+    await expect(box.locator('.cm-content')).not.toContainText('my edit');
+    await expect(restore).toBeVisible();
+    await restore.click();
+    await expect(box.locator('.cm-content')).toContainText('// my edit');
+    await expect(restore).toBeHidden();
+    await page.reload();
+    await waitUntilReady(codeBox(page, 0));
+    await expect(codeBox(page, 0).locator('.cm-content')).toContainText('// my edit');
+  });
+
+  test('完成コードを読み込んだ後、読み込む前のコードに戻せる', async ({ page }) => {
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    const restore = box.getByRole('button', { name: '読み込む前のコードに戻す' });
+    await prependComment(box);
+    await box.getByRole('button', { name: '完成コードを読み込む' }).click();
+    await expect(box.locator('.cm-content')).not.toContainText('my edit');
+    await expect(restore).toBeVisible();
+    await restore.click();
+    await expect(box.locator('.cm-content')).toContainText('// my edit');
+  });
+
+  test('編集していないときは戻すボタンを出さない', async ({ page }) => {
+    await openCheckPage(page);
+    const box = codeBox(page, 0);
+    await box.getByRole('button', { name: '完成コードを読み込む' }).click();
+    await expect(box.getByRole('button', { name: '読み込む前のコードに戻す' })).toBeHidden();
+    await box.getByRole('button', { name: '最初のコードに戻す' }).click();
+    await expect(box.getByRole('button', { name: '読み込む前のコードに戻す' })).toBeVisible();
+  });
+
+  test('SQL の入力は欄ごとのキーで保存し、データベースを戻しても消えない', async ({ page }) => {
+    await openCheckPage(page);
+    const box = sqlBox(page);
+    await replaceEditorText(box, 'SELECT 99 AS n');
+    expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([
+      'es-patchwork-hands-on:sql:check-sql',
+    ]);
+    await box.getByRole('button', { name: 'データベースを最初の状態に戻す' }).click();
+    await expect(box.locator('.cm-content')).toContainText('SELECT 99 AS n');
+    await page.reload();
+    await waitUntilReady(sqlBox(page));
+    await expect(sqlBox(page).locator('.cm-content')).toContainText('SELECT 99 AS n');
+
+    const restore = box.getByRole('button', { name: '読み込む前の SQL に戻す' });
+    await expect(restore).toBeHidden();
+    await box.getByRole('button', { name: '最初の SQL に戻す' }).click();
+    await expect(box.locator('.cm-content')).toContainText('SELECT * FROM visits;');
+    await expect(restore).toBeVisible();
+    await restore.click();
+    await expect(box.locator('.cm-content')).toContainText('SELECT 99 AS n');
+    await expect(restore).toBeHidden();
+  });
+
+  test('localStorage が使えなくても SQL の欄は例外を出さずに動く', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('denied', 'SecurityError');
+        },
+      });
+    });
+    await openCheckPage(page);
+    await runSql(page, 'SELECT 5 AS five');
+    await expect(results(page).locator('tbody td')).toHaveText(['5']);
+    await sqlBox(page).getByRole('button', { name: '最初の SQL に戻す' }).click();
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('読み込みの失敗', () => {
+  test('wasm の応答が返らないときは 20 秒で失敗の表示にし、もう一度読み込むと動く', async ({ page, context }) => {
+    test.setTimeout(90_000);
+    await context.route('**/*.wasm', () => undefined);
+    await page.goto(checkPath);
+    const box = sqlBox(page);
+    await expect(box.getByText('実行環境を読み込んでいます')).toBeVisible();
+    await expect(box).toHaveAttribute('data-state', 'failed', { timeout: 40_000 });
+    await expect(box.getByText('実行環境を読み込めませんでした。通信の状態を確かめて、もう一度読み込んでください。'))
+      .toBeVisible();
+    await context.unroute('**/*.wasm');
+    await box.getByRole('button', { name: 'もう一度読み込む' }).click();
+    await waitUntilReady(box);
+    await runSql(page, 'SELECT 1 AS one');
+    await expect(results(page).locator('tbody td')).toHaveText(['1']);
+  });
+
+  test('JS の読み込みに失敗したときは、ページの再読み込みを案内する', async ({ page, context }) => {
+    test.setTimeout(90_000);
+    await context.route('**/_astro/*Playground*.js', (route) => route.abort());
+    await page.goto(checkPath);
+    const box = sqlBox(page);
+    await expect(box.getByText('実行環境を読み込んでいます')).toBeVisible();
+    await expect(
+      box.getByText('実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。'),
+    )
+      .toBeVisible({ timeout: 40_000 });
+    await expect(box).toHaveAttribute('data-state', 'failed');
+    await context.unroute('**/_astro/*Playground*.js');
+    await page.reload();
+    await waitUntilReady(sqlBox(page));
+  });
+
   test('wasm の読み込みに失敗すると表示が出て、もう一度読み込むと動く', async ({ page, context }) => {
     await context.route('**/*.wasm', (route) => route.abort());
     await page.goto(checkPath);

@@ -14,12 +14,16 @@ interface Props {
   complete?: { exercise: string; label?: string };
 }
 
-const { exercise, editable, testFile, lesson, reveal, scripts = [], complete } = Astro.props;
+const { exercise, editable, testFile, lesson, reveal, scripts = [], complete } =
+  Astro.props;
 const readonlyFiles = Astro.props.readonly ?? [];
 const shown = [...editable, ...readonlyFiles];
 const config = JSON.stringify({
   exerciseId: exercise,
-  files: { ...snapshotFiles(exercise), ...(lesson === undefined ? {} : lessonFile(lesson)) },
+  files: {
+    ...snapshotFiles(exercise),
+    ...(lesson === undefined ? {} : lessonFile(lesson)),
+  },
   editable,
   readonly: readonlyFiles,
   testFile: testFile ?? null,
@@ -74,6 +78,13 @@ const config = JSON.stringify({
         <button type="button" data-role="reset">最初のコードに戻す</button>
       )
     }
+    {
+      editable.length > 0 && (
+        <button type="button" data-role="restore" hidden>
+          読み込む前のコードに戻す
+        </button>
+      )
+    }
   </div>
   <div class="playground-panes">
     <div class="playground-pane-editor">
@@ -94,9 +105,19 @@ const config = JSON.stringify({
       </div>
       <div class="playground-editor" data-role="editor" role="tabpanel"></div>
     </div>
-    <div class="playground-results" data-role="output" aria-live="polite">
-    </div>
+    <div class="playground-results" data-role="output" aria-live="polite"></div>
   </div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
 </section>
 
 <script>

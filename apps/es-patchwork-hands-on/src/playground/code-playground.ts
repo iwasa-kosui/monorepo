@@ -1,10 +1,13 @@
 import type { EditorState } from '@codemirror/state';
 
-import { createRuntime, executionLimitMs, RuntimeTimeoutError } from './client.ts';
-import { applyRuntimeState, element, query } from './dom.ts';
+import { createRuntime, RuntimeScriptError } from './client.ts';
+import { applyRuntimeState, element, failureElement, query } from './dom.ts';
 import { createEditorState, createEditorView, revealText } from './editor.ts';
+import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
 import type { RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
+
+const maxShownFailures = 50;
 
 type CodeConfig = {
   exerciseId: string;
@@ -18,13 +21,32 @@ type CodeConfig = {
 
 const logText = (outcome: RunOutcome): string => outcome.logs.map((line) => line.text).join('\n');
 
-const renderLogs = (outcome: RunOutcome): HTMLElement[] =>
-  outcome.logs.length === 0 ? [] : [
+const renderLogs = (outcome: RunOutcome): HTMLElement[] => {
+  const { totalLines, shownLines, cutLines } = outcome.logSummary;
+  if (totalLines === 0) {
+    return [];
+  }
+  const notes: HTMLElement[] = [];
+  if (totalLines > shownLines) {
+    notes.push(element('p', {
+      className: 'playground-note',
+      text: `出力が多いため、先頭の ${shownLines} 行までを表示しています。実際の出力は ${totalLines} 行です`,
+    }));
+  }
+  if (cutLines > 0) {
+    notes.push(element('p', {
+      className: 'playground-note',
+      text: `${cutLines} 行は長すぎるため、先頭の ${maxLogLineChars} 文字までを表示しています`,
+    }));
+  }
+  return [
     element('p', { className: 'playground-label', text: '出力' }),
     element('pre', { className: 'playground-log', text: logText(outcome) }),
+    ...notes,
   ];
+};
 
-const renderTests = (tests: NonNullable<RunOutcome['tests']>): HTMLElement[] => {
+const renderTests = (tests: NonNullable<RunOutcome['tests']>, cutMessages: number): HTMLElement[] => {
   const passed = tests.filter((test) => test.status === 'pass').length;
   const failed = tests.filter((test) => test.status === 'fail');
   const skipped = tests.filter((test) => test.status === 'skipped').length;
@@ -43,13 +65,25 @@ const renderTests = (tests: NonNullable<RunOutcome['tests']>): HTMLElement[] => 
     elements.push(element(
       'ul',
       { className: 'playground-failures' },
-      failed.map((test) =>
+      failed.slice(0, maxShownFailures).map((test) =>
         element('li', {}, [
           element('strong', { text: [...test.path, test.name].join(' > ') }),
           element('pre', { text: test.message ?? '' }),
         ])
       ),
     ));
+    if (failed.length > maxShownFailures) {
+      elements.push(element('p', {
+        className: 'playground-note',
+        text: `失敗したテストが多いため、先頭の ${maxShownFailures} 件までを表示しています`,
+      }));
+    }
+  }
+  if (cutMessages > 0) {
+    elements.push(element('p', {
+      className: 'playground-note',
+      text: `長いメッセージは、先頭の ${maxMessageChars} 文字までを表示しています`,
+    }));
   }
   return elements;
 };
@@ -60,6 +94,14 @@ const renderOutcome = (outcome: RunOutcome, kind: 'tests' | 'script'): HTMLEleme
       element('div', { className: 'playground-error', attributes: { role: 'alert' } }, [
         element('p', { text: 'コードを最後まで実行できませんでした' }),
         element('pre', { text: outcome.error }),
+        ...(outcome.cutMessages > 0
+          ? [
+            element('p', {
+              className: 'playground-note',
+              text: `長いメッセージは、先頭の ${maxMessageChars} 文字までを表示しています`,
+            }),
+          ]
+          : []),
       ]),
       ...renderLogs(outcome),
     ];
@@ -68,11 +110,11 @@ const renderOutcome = (outcome: RunOutcome, kind: 'tests' | 'script'): HTMLEleme
     return [
       ...(outcome.tests === null
         ? [element('p', { className: 'playground-note', text: 'このファイルにテストが見つかりませんでした' })]
-        : renderTests(outcome.tests)),
+        : renderTests(outcome.tests, outcome.cutMessages)),
       ...renderLogs(outcome),
     ];
   }
-  return outcome.logs.length === 0
+  return outcome.logSummary.totalLines === 0
     ? [element('p', { className: 'playground-note', text: '最後まで実行しました。出力はありません' })]
     : renderLogs(outcome);
 };
@@ -84,17 +126,30 @@ const mount = (root: HTMLElement): void => {
   const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
   const resetButton = root.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
+  const restoreButton = root.querySelector<HTMLButtonElement>('[data-role="restore"]');
   const completeButton = root.querySelector<HTMLButtonElement>('[data-role="complete"]');
   const runButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-run-file]')];
   const shown = [...config.editable, ...config.readonly];
+  root.setAttribute('data-mounted', '');
   let busy = false;
+  let backup: Record<string, string> | null = null;
+
+  const discardBackup = (): void => {
+    backup = null;
+    if (restoreButton !== null) {
+      restoreButton.hidden = true;
+    }
+  };
 
   const stateFor = (file: string, doc: string): EditorState =>
     createEditorState(doc, {
       language: 'typescript',
       label: `${file} のコード`,
       readOnly: !config.editable.includes(file),
-      onChange: () => persist(),
+      onChange: () => {
+        persist();
+        discardBackup();
+      },
     });
 
   const saved = loadEdits(config.exerciseId);
@@ -165,6 +220,8 @@ const mount = (root: HTMLElement): void => {
   const runtime = createRuntime((state) => {
     applyRuntimeState(root, state);
     updateControls();
+  }, (message) => {
+    output.replaceChildren(failureElement(new RuntimeScriptError(message), ''));
   });
 
   const execute = async (entry: string, kind: 'tests' | 'script'): Promise<void> => {
@@ -178,20 +235,7 @@ const mount = (root: HTMLElement): void => {
       const outcome = await runtime.runCode({ ...config.files, ...currentDocs() }, entry);
       output.replaceChildren(...renderOutcome(outcome, kind));
     } catch (error) {
-      output.replaceChildren(
-        element('div', { className: 'playground-error', attributes: { role: 'alert' } }, [
-          element('p', {
-            text: error instanceof RuntimeTimeoutError
-              ? `実行に ${
-                executionLimitMs / 1000
-              } 秒以上かかったため、途中で止めました。終わらない繰り返しがないか確かめてください`
-              : '実行できませんでした',
-          }),
-          ...(error instanceof RuntimeTimeoutError || !(error instanceof Error)
-            ? []
-            : [element('pre', { text: error.message })]),
-        ]),
-      );
+      output.replaceChildren(failureElement(error, '終わらない繰り返しがないか確かめてください'));
     } finally {
       busy = false;
       updateControls();
@@ -217,16 +261,40 @@ const mount = (root: HTMLElement): void => {
       }
     });
   }
-  resetButton?.addEventListener('click', () => {
-    clearEdits(config.exerciseId);
-    replaceDocs(config.files);
-  });
-  completeButton?.addEventListener('click', () => {
-    if (config.complete === null) {
-      return;
+
+  const editableDocs = (): Record<string, string> => {
+    const docs = currentDocs();
+    return Object.fromEntries(config.editable.map((file) => [file, docs[file] ?? '']));
+  };
+
+  const sameDocs = (left: Readonly<Record<string, string>>, right: Readonly<Record<string, string>>): boolean =>
+    config.editable.every((file) => left[file] === (right[file] ?? config.files[file]));
+
+  const replaceWithBackup = (target: Readonly<Record<string, string>>): void => {
+    const before = editableDocs();
+    backup = sameDocs(before, config.files) || sameDocs(before, target) ? null : before;
+    if (restoreButton !== null) {
+      restoreButton.hidden = backup === null;
     }
-    replaceDocs(config.complete.files);
+    replaceDocs(target);
     persist();
+  };
+
+  resetButton?.addEventListener('click', () => replaceWithBackup(config.files));
+  completeButton?.addEventListener('click', () => {
+    if (config.complete !== null) {
+      replaceWithBackup(config.complete.files);
+    }
+  });
+  restoreButton?.addEventListener('click', () => {
+    if (backup !== null) {
+      replaceDocs(backup);
+      persist();
+    }
+    backup = null;
+    if (restoreButton !== null) {
+      restoreButton.hidden = true;
+    }
   });
   retryButton.addEventListener('click', () => runtime.reload());
   select(active);

@@ -7,16 +7,20 @@ export type TestResult = {
   message: string | null;
 };
 
+export type LogSummary = { totalLines: number; shownLines: number; cutLines: number };
+
 export type RunOutcome = {
   logs: LogLine[];
+  logSummary: LogSummary;
   tests: TestResult[] | null;
+  cutMessages: number;
   error: string | null;
 };
 
 export type SqlCell = string | number | null;
 
 export type SqlStatementResult =
-  | { kind: 'rows'; sql: string; columns: string[]; rows: SqlCell[][]; totalRows: number }
+  | { kind: 'rows'; sql: string; columns: string[]; rows: SqlCell[][]; totalRows: number; cutCells: number }
   | { kind: 'changes'; sql: string; changes: number }
   | { kind: 'done'; sql: string };
 

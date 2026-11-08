@@ -1,5 +1,6 @@
 import type { Database, SqlJsStatic, SqlValue, Statement } from 'sql.js';
 
+import { limitBlobFunctions, maxSqlCellChars, truncate } from './limits.ts';
 import type { SqlCell, SqlRunOutcome, SqlStatementResult } from './types.ts';
 
 export const maxDisplayedRows = 1000;
@@ -10,8 +11,11 @@ const leadingKeyword = (sql: string): string => {
 };
 
 const toCell = (value: SqlValue): SqlCell => {
-  if (value === null || typeof value === 'string' || typeof value === 'number') {
+  if (value === null || typeof value === 'number') {
     return value;
+  }
+  if (typeof value === 'string') {
+    return truncate(value, maxSqlCellChars);
   }
   if (value instanceof Uint8Array) {
     return `(BLOB ${value.length} バイト)`;
@@ -27,13 +31,16 @@ const runStatement = (database: Database, statement: Statement): SqlStatementRes
   if (columns.length > 0) {
     const rows: SqlCell[][] = [];
     let totalRows = 0;
+    let cutCells = 0;
     while (statement.step()) {
       totalRows += 1;
       if (rows.length < maxDisplayedRows) {
-        rows.push(statement.get().map(toCell));
+        const values = statement.get();
+        cutCells += values.filter((value) => typeof value === 'string' && value.length > maxSqlCellChars).length;
+        rows.push(values.map(toCell));
       }
     }
-    return { kind: 'rows', sql, columns, rows, totalRows };
+    return { kind: 'rows', sql, columns, rows, totalRows, cutCells };
   }
   statement.step();
   const keyword = leadingKeyword(sql);
@@ -44,13 +51,18 @@ const runStatement = (database: Database, statement: Statement): SqlStatementRes
 };
 
 export const createSqlSession = (SQL: SqlJsStatic) => {
-  let database = new SQL.Database();
+  const create = (): Database => {
+    const created = new SQL.Database();
+    limitBlobFunctions(created);
+    created.run('PRAGMA foreign_keys = ON');
+    return created;
+  };
+  let database = create();
 
   const reset = (setupSql: string): string | null => {
     database.close();
-    database = new SQL.Database();
+    database = create();
     try {
-      database.run('PRAGMA foreign_keys = ON');
       database.run(setupSql);
       return null;
     } catch (error) {

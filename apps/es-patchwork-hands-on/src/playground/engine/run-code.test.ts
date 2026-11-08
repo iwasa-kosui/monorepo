@@ -1,7 +1,7 @@
 import initSqlJs, { type SqlJsStatic } from 'sql.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { runCode } from './run-code.ts';
+import { runCode, runForDatabase } from './run-code.ts';
 import { createSqlSession } from './sql-session.ts';
 
 let SQL: SqlJsStatic;
@@ -100,6 +100,118 @@ describe('runCode', () => {
   });
 });
 
+describe('Node に合わせた振る舞い', () => {
+  it('prepare の時点で SQL のエラーを投げ、エラーには code が付く', async () => {
+    const outcome = await run({
+      'main.ts': `
+        import { DatabaseSync } from 'node:sqlite';
+        const db = new DatabaseSync(':memory:');
+        try { db.prepare('SELECT * FROM missing'); } catch (error) { console.log((error as { code: string }).code, (error as Error).message); }
+      `,
+    }, 'main.ts');
+    expect(outcome.logs[0]?.text).toBe('ERR_SQLITE_ERROR no such table: missing');
+  });
+
+  it('存在しない名前付きパラメーターはエラーにする', async () => {
+    const outcome = await run({
+      'main.ts': `
+        import { DatabaseSync } from 'node:sqlite';
+        new DatabaseSync(':memory:').prepare('SELECT :a AS x').get({ a: 1, b: 2 });
+      `,
+    }, 'main.ts');
+    expect(outcome.error).toBe('Error: Unknown named parameter \'b\'');
+  });
+
+  it('拡張子なしの相対 import は解決しない', async () => {
+    const outcome = await run({
+      'main.ts': 'import { a } from \'./util\';\nconsole.log(a);',
+      'util.ts': 'export const a = 1;',
+    }, 'main.ts');
+    expect(outcome.error).toContain('Cannot find module');
+  });
+
+  it('enum とコンストラクタ引数のプロパティは型の除去だけでは動かないのでエラーにする', async () => {
+    const enumOutcome = await run({ 'main.ts': 'enum Color { Red }\nconsole.log(Color.Red);' }, 'main.ts');
+    expect(enumOutcome.error).toBe('SyntaxError: main.ts: TypeScript enum is not supported in strip-only mode');
+    const propertyOutcome = await run({
+      'main.ts': 'class A {\n  constructor(private readonly x: number) {}\n}\nconsole.log(new A(1));',
+    }, 'main.ts');
+    expect(propertyOutcome.error).toBe(
+      'SyntaxError: main.ts: TypeScript parameter property is not supported in strip-only mode',
+    );
+    const textOutcome = await run(
+      { 'main.ts': 'console.log(\'enum Color {\' + `constructor(private x)`);' },
+      'main.ts',
+    );
+    expect(textOutcome.error).toBeNull();
+  });
+
+  it('type なしで型だけを import するとエラーにする', async () => {
+    const files = { 'types.ts': 'export type A = number;\nexport const b = 1;' };
+    const bad = await run({ ...files, 'main.ts': 'import { A, b } from \'./types.ts\';\nconsole.log(b);' }, 'main.ts');
+    expect(bad.error).toBe(
+      'SyntaxError: The requested module \'./types.ts\' does not provide an export named \'A\'',
+    );
+    const good = await run(
+      { ...files, 'main.ts': 'import { type A, b } from \'./types.ts\';\nconsole.log(b);' },
+      'main.ts',
+    );
+    expect(good.error).toBeNull();
+  });
+
+  it('describe の本体が例外を投げたら 1 件の失敗にし、関数なしの it と only は成功にする', async () => {
+    const outcome = await run({
+      'main.test.ts': `
+        import { describe, it } from 'node:test';
+        it('関数なし');
+        it.only('only', () => {});
+        describe('壊れた', () => { throw new Error('本体の失敗'); });
+      `,
+    }, 'main.test.ts');
+    expect(outcome.tests?.map((test) => [test.name, test.status, test.message])).toEqual([
+      ['関数なし', 'pass', null],
+      ['only', 'pass', null],
+      ['壊れた', 'fail', '本体の失敗'],
+    ]);
+  });
+});
+
+describe('出力の上限', () => {
+  it('console の行数、合計文字数、1 行の文字数に上限がある', async () => {
+    const lines = await run({ 'main.ts': 'for (let i = 0; i < 20000; i += 1) console.log(\'line \' + i);' }, 'main.ts');
+    expect(lines.logs).toHaveLength(1000);
+    expect(lines.logSummary).toEqual({ totalLines: 20000, shownLines: 1000, cutLines: 0 });
+    const chars = await run(
+      { 'main.ts': 'for (let i = 0; i < 100; i += 1) console.log(\'x\'.repeat(5000));' },
+      'main.ts',
+    );
+    expect(chars.logs.length).toBeLessThan(30);
+    expect(chars.logs.reduce((sum, line) => sum + line.text.length, 0)).toBeLessThan(110_000);
+    const long = await run({ 'main.ts': 'console.log(\'y\'.repeat(1_000_000));' }, 'main.ts');
+    expect(long.logs[0]?.text).toHaveLength(10_001);
+    expect(long.logSummary.cutLines).toBe(1);
+  });
+
+  it('テストの失敗メッセージに上限がある', async () => {
+    const outcome = await run({
+      'main.test.ts':
+        'import { it } from \'node:test\';\nit(\'長い\', () => { throw new Error(\'z\'.repeat(100000)); });',
+    }, 'main.test.ts');
+    expect(outcome.tests?.[0]?.message).toHaveLength(2001);
+    expect(outcome.cutMessages).toBe(1);
+  });
+
+  it('SQL の 1 セルの文字数に上限があり、大きな zeroblob はエラーにする', () => {
+    const session = createSqlSession(SQL);
+    session.reset('');
+    const cell = session.run('SELECT hex(zeroblob(500000)) AS h').results[0];
+    expect(cell).toMatchObject({ kind: 'rows', cutCells: 1 });
+    expect(cell?.kind === 'rows' ? String(cell.rows[0]?.[0]).length : 0).toBe(1001);
+    expect(session.run('SELECT hex(zeroblob(50000000)) AS h').error?.message).toBe('string or blob too big');
+    expect(session.run('SELECT length(randomblob(10)) AS n').results[0]).toMatchObject({ rows: [[10]] });
+  });
+});
+
 describe('createSqlSession', () => {
   it('複数の文を順に実行し、行を返す文と変更件数を返す文を区別する', () => {
     const session = createSqlSession(SQL);
@@ -140,5 +252,34 @@ describe('createSqlSession', () => {
     session.run('INSERT INTO t VALUES (\'a\');');
     session.reset('CREATE TABLE t (v TEXT);');
     expect(session.run('SELECT count(*) FROM t').results[0]).toMatchObject({ rows: [[0]] });
+  });
+});
+
+describe('runForDatabase', () => {
+  const script = `
+    import { DatabaseSync } from 'node:sqlite';
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE t (v TEXT); INSERT INTO t VALUES (\\'a\\');');
+  `;
+
+  it('スクリプトが作ったデータベースを SQL の欄の初期状態として引き継ぐ', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': script }, entry: 'main.ts' });
+    expect(created.error).toBeNull();
+    expect(created.database).not.toBeNull();
+    const session = createSqlSession(SQL);
+    session.adopt(created.database as NonNullable<typeof created.database>);
+    expect(session.run('SELECT v FROM t').results[0]).toMatchObject({ rows: [['a']] });
+  });
+
+  it('スクリプトが失敗したときはエラーを返す', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': 'throw new Error(\'x\');' }, entry: 'main.ts' });
+    expect(created.database).toBeNull();
+    expect(created.error).toBe('Error: x');
+  });
+
+  it('データベースが 1 つも作られないときはエラーを返す', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': 'console.log(1);' }, entry: 'main.ts' });
+    expect(created.database).toBeNull();
+    expect(created.error).toBe('main.ts が作ったデータベースが 0 個あります');
   });
 });

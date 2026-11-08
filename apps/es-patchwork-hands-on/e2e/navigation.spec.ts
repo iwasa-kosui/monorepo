@@ -70,6 +70,7 @@ test.describe('矢印キー', () => {
     await page.goto('/chapters/chapter-2/2/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/3\/$/);
+    await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/2\/$/);
   });
@@ -78,6 +79,7 @@ test.describe('矢印キー', () => {
     await page.goto('/chapters/intro/9/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
+    await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
     await expect(page).toHaveURL(/\/chapters\/intro\/9\/$/);
   });

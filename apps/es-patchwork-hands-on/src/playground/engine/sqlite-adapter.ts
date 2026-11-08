@@ -1,5 +1,7 @@
 import type { BindParams, Database, SqlJsStatic, SqlValue, Statement } from 'sql.js';
 
+import { limitBlobFunctions } from './limits.ts';
+
 type Row = Record<string, SqlValue>;
 type RunResult = { changes: number; lastInsertRowid: number };
 
@@ -18,7 +20,20 @@ const toSqlValue = (value: unknown, position: number): SqlValue => {
   if (ArrayBuffer.isView(value)) {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   }
-  throw new TypeError(`Provided value cannot be bound to SQLite parameter ${position}.`);
+  throw Object.assign(new TypeError(`Provided value cannot be bound to SQLite parameter ${position}.`), {
+    code: 'ERR_INVALID_ARG_TYPE',
+  });
+};
+
+const asSqliteError = <T>(action: () => T): T => {
+  try {
+    return action();
+  } catch (error) {
+    if (error instanceof Error && !('code' in error)) {
+      Object.assign(error, { code: 'ERR_SQLITE_ERROR' });
+    }
+    throw error;
+  }
 };
 
 const isNamedParameters = (value: unknown): value is Record<string, unknown> =>
@@ -28,7 +43,13 @@ const bindParams = (sql: string, params: readonly unknown[]): BindParams => {
   const [first] = params;
   if (isNamedParameters(first)) {
     const bound: Record<string, SqlValue> = {};
-    for (const name of new Set(sql.match(namedPattern) ?? [])) {
+    const names = new Set(sql.match(namedPattern) ?? []);
+    for (const key of Object.keys(first)) {
+      if (![...names].some((name) => name === key || name.slice(1) === key)) {
+        throw Object.assign(new Error(`Unknown named parameter '${key}'`), { code: 'ERR_INVALID_STATE' });
+      }
+    }
+    for (const name of names) {
       const bare = name.slice(1);
       const key = name in first ? name : bare in first ? bare : undefined;
       if (key !== undefined) {
@@ -71,21 +92,26 @@ export const createDatabaseSync = (SQL: SqlJsStatic) => {
 
     constructor(_path?: unknown, _options?: unknown) {
       this.raw = new SQL.Database();
+      limitBlobFunctions(this.raw);
       this.raw.run('PRAGMA foreign_keys = ON');
       opened.add(this.raw);
     }
 
     exec(sql: string): void {
-      this.raw.run(sql);
+      asSqliteError(() => this.raw.run(sql));
     }
 
     prepare(sql: string): StatementSync {
       const raw = this.raw;
+      asSqliteError(() => raw.prepare(sql).free());
       const withStatement = <T>(params: readonly unknown[], use: (statement: Statement) => T): T => {
-        const statement = raw.prepare(sql);
+        const statement = asSqliteError(() => raw.prepare(sql));
         try {
-          statement.bind(bindParams(sql, params));
-          return use(statement);
+          const bindings = bindParams(sql, params);
+          return asSqliteError(() => {
+            statement.bind(bindings);
+            return use(statement);
+          });
         } finally {
           statement.free();
         }
