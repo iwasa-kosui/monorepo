@@ -240,6 +240,19 @@ export type DigestTopicEntriesResolverByUserIdAndDigestDate = Agg.Resolver<
   { userId: UserId; digestDate: string },
   ReadonlyArray<DigestTopicEntry>
 >;
+export type DigestTopicItem = Readonly<{
+  digestDate: string;
+  topicKey: string;
+  rank: number;
+  title: string;
+  url: string;
+  feedback: DigestFeedback | null;
+  embedding: Float32Array | null;
+}>;
+export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
+  { userId: UserId; digestDateFrom: string },
+  ReadonlyArray<DigestTopicItem>
+>;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
 export type DigestResolverByArticleId = Agg.Resolver<ArticleId, Digest | undefined>;
 export type DigestItemUrlsResolverByUserId = Agg.Resolver<

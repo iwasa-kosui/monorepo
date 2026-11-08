@@ -5,6 +5,8 @@ import { Digest } from '../../../domain/digest/digest.ts';
 import { DigestItemId } from '../../../domain/digest/digestItemId.ts';
 import { DigestSubscription } from '../../../domain/digestSubscription/digestSubscription.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.ts';
+import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../digest/digestHeadersResolverByArticleIds.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../digest/digestItemFeedbackGivenStore.ts';
@@ -13,6 +15,7 @@ import { createD1DigestResolverByDigestItemId } from '../digest/digestResolverBy
 import { createD1DigestResolverByUserId } from '../digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../digestSubscription/digestSubscriptionSavedStore.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -235,6 +238,76 @@ describe('digest の読み取り resolver', () => {
     const { db } = setup();
 
     expect(valueOf(await createD1DigestHeadersResolverByArticleIds(db).resolve([]))).toEqual([]);
+  });
+});
+
+describe('createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom', () => {
+  const embeddingOf = (...head: number[]) =>
+    Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => head[i] ?? 0);
+  const addEntry = (fixture: ReturnType<typeof setup>['fixture'], feedEntryId: string, embedding: Float32Array) => {
+    fixture.sqlite.prepare(
+      'INSERT INTO feed_sources(feedSourceId,kind,url,title,enabled,createdAt) VALUES (?,?,?,?,?,?)',
+    )
+      .run('source', 'rss', 'https://feeds.example/rss', 'rss', 1, 1_000);
+    fixture.sqlite.prepare(
+      'INSERT INTO feed_entries(feedEntryId,feedSourceId,guid,url,title,description,hatenaBookmarkCount,fetchedAt,embedding,embeddedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(
+      feedEntryId,
+      'source',
+      feedEntryId,
+      `https://example.com/${feedEntryId}`,
+      feedEntryId,
+      '',
+      null,
+      1_000,
+      float32ToBytes(embedding),
+      2_000,
+    );
+  };
+  const resolve = async (db: ReturnType<typeof setup>['db'], userId: string, digestDateFrom: string) =>
+    valueOf(
+      await createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db).resolve({
+        userId: userId as UserId,
+        digestDateFrom,
+      }),
+    );
+
+  it('指定日以降の summary 以外のダイジェスト項目を、新しい日付順とトピック順と rank 順で、記事の embedding つきで返す', async () => {
+    const { fixture, db, me, addDigest } = setup();
+    addEntry(fixture, 'entry-1', embeddingOf(1, 2));
+    addDigest(me, '2026-11-04', { topicKey: 'genai', itemCount: 1 });
+    addDigest(me, '2026-11-05', { topicKey: 'platform', itemCount: 2 });
+    addDigest(me, '2026-11-05', { topicKey: 'genai', itemCount: 1 });
+    addDigest(me, '2026-11-05', { itemCount: 2 });
+    addDigest(me, '2026-11-03', { topicKey: 'genai', itemCount: 1 });
+
+    const items = await resolve(db, me.userId, '2026-11-04');
+
+    expect(items.map((item) => `${item.digestDate}:${item.topicKey}:${item.rank}`)).toEqual([
+      '2026-11-05:genai:1',
+      '2026-11-05:platform:1',
+      '2026-11-05:platform:2',
+      '2026-11-04:genai:1',
+    ]);
+    expect(items[0]).toMatchObject({ title: 'T1', url: 'https://example.com/1', feedback: null });
+    expect(items[0]!.embedding).toEqual(embeddingOf(1, 2));
+  });
+
+  it('記事が消えているか embedding の次元が違う項目は、embedding を null にする', async () => {
+    const { fixture, db, me, addDigest } = setup();
+    addEntry(fixture, 'entry-2', embeddingOf(1).slice(0, 8));
+    addDigest(me, '2026-11-05', { topicKey: 'genai', itemCount: 2 });
+
+    const items = await resolve(db, me.userId, '2026-11-05');
+
+    expect(items.map((item) => [item.rank, item.embedding])).toEqual([[1, null], [2, null]]);
+  });
+
+  it('他人のダイジェスト項目は返さない', async () => {
+    const { db, me, other, addDigest } = setup();
+    addDigest(other, '2026-11-05', { topicKey: 'genai' });
+
+    expect(await resolve(db, me.userId, '2026-11-01')).toEqual([]);
   });
 });
 

@@ -27,6 +27,12 @@ import type {
   StoredDigestTopic,
 } from '../../domain/digestTopic/digestTopic.ts';
 import type {
+  DigestItemPreview,
+  PreviewCandidate,
+  PreviewTopicCandidates,
+  TopicSimilarity,
+} from '../../domain/digestTopic/topicPreview.ts';
+import type {
   AllFeedSourcesResolver,
   FeedSource,
   FeedSourceAlreadyExistsError,
@@ -45,6 +51,7 @@ import { MATERIAL_WINDOW_MS, TRENDS_LIMIT } from '../../useCase/createDailyDiges
 import type { DeepDiveDigestItemUseCase } from '../../useCase/deepDiveDigestItem.ts';
 import type { EditDigestTopicUseCase } from '../../useCase/editDigestTopic.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../../useCase/giveDigestItemFeedback.ts';
+import type { PreviewDigestTopicsUseCase } from '../../useCase/previewDigestTopics.ts';
 import type { RequestDigestUseCase } from '../../useCase/requestDigest.ts';
 import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubscription.ts';
 import { toIsoString } from '../mastodon/time.ts';
@@ -72,6 +79,7 @@ export type WorkerIoriDigestRouterDeps = Readonly<{
   addDigestTopicUseCase: AddDigestTopicUseCase;
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  previewDigestTopicsUseCase: PreviewDigestTopicsUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
   allFeedSourcesResolver: AllFeedSourcesResolver;
   addFeedSourceUseCase: AddFeedSourceUseCase;
@@ -117,6 +125,50 @@ export type IoriDigestTopicBody = Readonly<{
   embedded: boolean;
 }>;
 
+type TopicSimilarityBody = Readonly<{ topicKey: string; similarity: number }>;
+
+export type IoriDigestTopicPreviewResponse = Readonly<{
+  topics: ReadonlyArray<Pick<IoriDigestTopicBody, 'topicKey' | 'name' | 'description' | 'enabled' | 'embedded'>>;
+  thresholds: Readonly<{ topicMinSimilarity: number }>;
+  candidates: Readonly<{
+    total: number;
+    top1Histogram: ReadonlyArray<Readonly<{ from: number; to: number; count: number }>>;
+    byTopic: ReadonlyArray<
+      Readonly<{
+        topicKey: string;
+        count: number;
+        top: ReadonlyArray<IoriDigestPreviewCandidateBody>;
+        bottom: ReadonlyArray<IoriDigestPreviewCandidateBody>;
+      }>
+    >;
+  }>;
+  digestItems: ReadonlyArray<
+    Readonly<{
+      digestDate: string;
+      topicKey: string;
+      rank: number;
+      title: string;
+      url: string;
+      feedback: DigestFeedback | null;
+      first: TopicSimilarityBody | null;
+      second: TopicSimilarityBody | null;
+      margin: number | null;
+      adoptedSimilarity: number | null;
+      matchesFirst: boolean | null;
+    }>
+  >;
+}>;
+
+type IoriDigestPreviewCandidateBody = Readonly<{
+  feedEntryId: string;
+  title: string;
+  url: string;
+  fetchedAt: string;
+  similarity: number;
+  second: TopicSimilarityBody | null;
+  margin: number | null;
+}>;
+
 export type IoriDigestDeepDiveResponse = Readonly<{
   markdown: string;
   updatedAt: number;
@@ -124,6 +176,12 @@ export type IoriDigestDeepDiveResponse = Readonly<{
   turnsLeft: number;
   dailyRemaining: number;
 }>;
+
+const previewQuery = z.object({
+  candidateHours: z.coerce.number().int().min(1).max(168).default(72),
+  digestDays: z.coerce.number().int().min(1).max(60).default(14),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
 
 const deepDiveRequestBody = z.object({
   instruction: DigestDeepDive.instructionZodType.optional(),
@@ -194,6 +252,46 @@ const toTopicBody = (topic: StoredDigestTopic): IoriDigestTopicBody => ({
   embedded: topic.embedding !== null,
 });
 
+const SIMILARITY_DECIMAL_FACTOR = 10_000;
+const roundSimilarity = (value: number): number =>
+  Math.round(value * SIMILARITY_DECIMAL_FACTOR) / SIMILARITY_DECIMAL_FACTOR;
+const roundNullable = (value: number | null): number | null => value === null ? null : roundSimilarity(value);
+const toSimilarityBody = (similarity: TopicSimilarity | null): TopicSimilarityBody | null =>
+  similarity === null
+    ? null
+    : { topicKey: similarity.topicKey, similarity: roundSimilarity(similarity.similarity) };
+
+const toPreviewCandidateBody = (candidate: PreviewCandidate): IoriDigestPreviewCandidateBody => ({
+  feedEntryId: candidate.feedEntryId,
+  title: candidate.title,
+  url: candidate.url,
+  fetchedAt: toIsoString(candidate.fetchedAt),
+  similarity: roundSimilarity(candidate.similarity),
+  second: toSimilarityBody(candidate.second),
+  margin: roundNullable(candidate.margin),
+});
+
+const toPreviewTopicCandidatesBody = (entry: PreviewTopicCandidates) => ({
+  topicKey: entry.topicKey,
+  count: entry.count,
+  top: entry.top.map(toPreviewCandidateBody),
+  bottom: entry.bottom.map(toPreviewCandidateBody),
+});
+
+const toPreviewDigestItemBody = (item: DigestItemPreview) => ({
+  digestDate: item.digestDate,
+  topicKey: item.topicKey,
+  rank: item.rank,
+  title: item.title,
+  url: item.url,
+  feedback: item.feedback,
+  first: toSimilarityBody(item.first),
+  second: toSimilarityBody(item.second),
+  margin: roundNullable(item.margin),
+  adoptedSimilarity: roundNullable(item.adoptedSimilarity),
+  matchesFirst: item.matchesFirst,
+});
+
 const toSubscriptionBody = (subscription: Pick<DigestSubscription, 'enabled'> | undefined) =>
   ({
     subscription: { enabled: subscription?.enabled ?? true },
@@ -255,6 +353,7 @@ export const createWorkerIoriDigestRouter = ({
   addDigestTopicUseCase,
   editDigestTopicUseCase,
   changeDigestTopicEnabledUseCase,
+  previewDigestTopicsUseCase,
   deepDiveDigestItemUseCase,
   allFeedSourcesResolver,
   addFeedSourceUseCase,
@@ -469,6 +568,37 @@ export const createWorkerIoriDigestRouter = ({
       if (userId === undefined) return c.json(invalidToken, 401);
       const topics = await digestTopicsResolverByUserId.resolve(userId);
       return topics.ok ? c.json({ topics: topics.val.map(toTopicBody) }) : c.json(internalServerError, 500);
+    })
+    .get('/iori/v1/digest-topics/preview', authn.requireUser(readStatuses), async (c) => {
+      const userId = userIdOf(c);
+      if (userId === undefined) return c.json(invalidToken, 401);
+      const query = previewQuery.safeParse(c.req.query());
+      if (!query.success) {
+        return c.json({
+          error: `Validation failed: ${query.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
+        }, 400);
+      }
+      const preview = await previewDigestTopicsUseCase.run({ userId, ...query.data });
+      if (!preview.ok) return c.json(internalServerError, 500);
+      const { topics, thresholds, candidates, digestItems } = preview.val;
+      return c.json(
+        {
+          topics: topics.map(({ topicKey, name, description, enabled, embedding }) => ({
+            topicKey,
+            name,
+            description,
+            enabled,
+            embedded: embedding !== null,
+          })),
+          thresholds,
+          candidates: {
+            total: candidates.total,
+            top1Histogram: candidates.top1Histogram,
+            byTopic: candidates.byTopic.map(toPreviewTopicCandidatesBody),
+          },
+          digestItems: digestItems.map(toPreviewDigestItemBody),
+        } satisfies IoriDigestTopicPreviewResponse,
+      );
     })
     .post('/iori/v1/digest-topics', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
       const userId = userIdOf(c);
