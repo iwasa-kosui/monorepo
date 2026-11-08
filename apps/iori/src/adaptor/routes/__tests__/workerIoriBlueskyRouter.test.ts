@@ -560,7 +560,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ liked: true });
-      expect(client.createLike).toHaveBeenCalledExactlyOnceWith({ uri: ITEM, cid: 'cid1' });
+      expect(client.createLike).toHaveBeenCalledExactlyOnceWith({ uri: ITEM, cid: 'cid1' }, expect.any(String));
       expect(likeRows(t)).toEqual([{ subjectUri: ITEM, likeUri: 'at://did:plc:me/app.bsky.feed.like/3kcreated' }]);
       const timeline = await (await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer })).json() as {
         items: Array<{ liked: boolean; likeUri?: string }>;

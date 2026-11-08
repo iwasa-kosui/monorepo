@@ -1,9 +1,10 @@
 import { RA, Result } from '@iwasa-kosui/result';
 
-import type {
-  BlueskyLikeSavedStore,
-  BlueskyLikeTargetNotFound,
-  BlueskyLikeTargetResolver,
+import {
+  type BlueskyLikeSavedStore,
+  type BlueskyLikeTargetNotFound,
+  type BlueskyLikeTargetResolver,
+  deriveBlueskyLikeRkey,
 } from '../domain/blueskyTimeline/blueskyLike.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../ports/blueskyClient.ts';
@@ -29,7 +30,10 @@ const create = ({ client, targetResolver, savedStore, now }: Deps): LikeBlueskyP
     const target = Result.unsafeUnwrap(await targetResolver.resolve(feedItemId));
     if (target === undefined) return RA.err({ type: 'BlueskyLikeTargetNotFound' });
     if (target.likeUri !== null) return RA.ok({ liked: true });
-    const created = await client.createLike({ uri: target.uri, cid: target.cid });
+    const created = await client.createLike(
+      { uri: target.uri, cid: target.cid },
+      await deriveBlueskyLikeRkey(target.uri),
+    );
     if (!created.ok) return RA.err(created.err);
     Result.unsafeUnwrap(
       await savedStore.save({ subjectUri: target.uri, likeUri: created.val.uri, createdAt: now() }),

@@ -1,5 +1,6 @@
 import { RA, Result } from '@iwasa-kosui/result';
 
+import type { BlueskyLike, BlueskyViewerLikesSyncedStore } from '../domain/blueskyTimeline/blueskyLike.ts';
 import {
   BLUESKY_TIMELINE_MAX_PAGES,
   BLUESKY_TIMELINE_PAGE_LIMIT,
@@ -27,6 +28,7 @@ type Deps = Readonly<{
   fetcher: BlueskyTimelineFetcher;
   savedStore: BlueskyTimelineItemsSavedStore;
   expiredStore: BlueskyTimelineItemsExpiredStore;
+  viewerLikesStore: BlueskyViewerLikesSyncedStore;
   now: () => Instant;
 }>;
 
@@ -35,7 +37,20 @@ const uniqueByFeedItemId = (items: readonly BlueskyFetchedTimelineItem[]): Blues
   return items.filter((item) => !seen.has(item.feedItemId) && seen.add(item.feedItemId));
 };
 
-const create = ({ fetcher, savedStore, expiredStore, now }: Deps): CollectBlueskyTimelineUseCase => {
+const syncViewerLikes = async (
+  store: BlueskyViewerLikesSyncedStore,
+  items: readonly BlueskyFetchedTimelineItem[],
+): Promise<void> => {
+  const likes = new Map<string, BlueskyLike>();
+  for (const item of items) {
+    if (item.viewerLikeUri === null || likes.has(item.uri)) continue;
+    likes.set(item.uri, { subjectUri: item.uri, likeUri: item.viewerLikeUri, createdAt: item.fetchedAt });
+  }
+  if (likes.size === 0) return;
+  Result.unsafeUnwrap(await store.sync([...likes.values()]));
+};
+
+const create = ({ fetcher, savedStore, expiredStore, viewerLikesStore, now }: Deps): CollectBlueskyTimelineUseCase => {
   const run = async (): RA<Ok, Err> => {
     const retentionStart = Instant.addDuration(now(), -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
     let cursor: string | undefined;
@@ -57,6 +72,7 @@ const create = ({ fetcher, savedStore, expiredStore, now }: Deps): CollectBluesk
       fetched += recent.length;
       const inserted = Result.unsafeUnwrap(await savedStore.save(recent));
       saved += inserted.length;
+      await syncViewerLikes(viewerLikesStore, recent);
       cursor = page.val.cursor;
       if (inserted.length < recent.length || recent.length < unique.length || cursor === undefined) break;
     }

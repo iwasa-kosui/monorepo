@@ -5,6 +5,7 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1BlueskyLikeDeletedStore } from '../../adaptor/d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { deriveBlueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import { LikeBlueskyPostUseCase } from '../likeBlueskyPost.ts';
@@ -32,10 +33,11 @@ const setup = () => {
   const createLike = vi.fn<BlueskyClient['createLike']>(async () => RA.ok({ uri: CREATED }));
   const deleteLike = vi.fn<BlueskyClient['deleteLike']>(async () => RA.ok(undefined));
   const targetResolver = createD1BlueskyLikeTargetResolver(db);
+  const save = vi.fn(createD1BlueskyLikeSavedStore(db).save);
   const like = LikeBlueskyPostUseCase.create({
     client: { createLike },
     targetResolver,
-    savedStore: createD1BlueskyLikeSavedStore(db),
+    savedStore: { save },
     now: () => NOW,
   });
   const unlike = UnlikeBlueskyPostUseCase.create({
@@ -46,7 +48,7 @@ const setup = () => {
   const likes = () => sqlite.prepare('SELECT subjectUri, likeUri, createdAt FROM bluesky_likes').all();
   const seedLike = () =>
     sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)').run(POST, LIKE, 1);
-  return { like, unlike, createLike, deleteLike, likes, seedLike, queries };
+  return { like, unlike, createLike, deleteLike, save, likes, seedLike, queries };
 };
 
 describe('LikeBlueskyPostUseCase', () => {
@@ -65,7 +67,10 @@ describe('LikeBlueskyPostUseCase', () => {
     const result = await t.like.run({ feedItemId: POST });
 
     expect(result).toEqual({ ok: true, val: { liked: true } });
-    expect(t.createLike).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'bafypost' });
+    expect(t.createLike).toHaveBeenCalledExactlyOnceWith(
+      { uri: POST, cid: 'bafypost' },
+      await deriveBlueskyLikeRkey(POST),
+    );
     expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
   });
 
@@ -83,7 +88,10 @@ describe('LikeBlueskyPostUseCase', () => {
 
     await t.like.run({ feedItemId: REPOST });
 
-    expect(t.createLike).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'bafypost' });
+    expect(t.createLike).toHaveBeenCalledExactlyOnceWith(
+      { uri: POST, cid: 'bafypost' },
+      await deriveBlueskyLikeRkey(POST),
+    );
     expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
   });
 
@@ -96,6 +104,29 @@ describe('LikeBlueskyPostUseCase', () => {
     expect(result).toEqual({ ok: true, val: { liked: true } });
     expect(t.createLike).not.toHaveBeenCalled();
     expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: LIKE, createdAt: 1 }]);
+  });
+
+  it('保存が失敗したあとに押し直しても、同じ rkey で Bluesky に書き込む', async () => {
+    const t = setup();
+    t.save.mockRejectedValueOnce(new Error('D1 is unavailable'));
+
+    await expect(t.like.run({ feedItemId: POST })).rejects.toThrow('D1 is unavailable');
+    const retried = await t.like.run({ feedItemId: POST });
+
+    expect(retried).toEqual({ ok: true, val: { liked: true } });
+    expect(t.createLike).toHaveBeenCalledTimes(2);
+    expect(t.createLike.mock.calls[1]?.[1]).toBe(t.createLike.mock.calls[0]?.[1]);
+    expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
+  });
+
+  it('同時に 2 回実行しても、同じ rkey で Bluesky に書き込み、行は 1 つになる', async () => {
+    const t = setup();
+
+    await Promise.all([t.like.run({ feedItemId: POST }), t.like.run({ feedItemId: REPOST })]);
+
+    expect(t.createLike).toHaveBeenCalledTimes(2);
+    expect(t.createLike.mock.calls[1]?.[1]).toBe(t.createLike.mock.calls[0]?.[1]);
+    expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
   });
 
   it('Bluesky の作成が失敗したら、エラーを返し、保存しない', async () => {

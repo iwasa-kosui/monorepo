@@ -7,6 +7,7 @@ import type {
   BlueskySessionSavedStore,
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyClient,
@@ -52,7 +53,6 @@ const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
-const likeUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.like\/[^/]+$/;
 
 const clientError = (
   kind: BlueskyClientErrorKind,
@@ -245,17 +245,18 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           : RA.ok({ uri: found.val.uri, cid: found.val.cid, rkey: foundRkey });
       }),
     deleteRecord: (rkey) => removeRecord(POST_COLLECTION, rkey),
-    createLike: (subject) =>
+    createLike: (subject, rkey) =>
       withSession(async (session) => {
         const created = await call(
           'createLike',
-          `${session.pdsUrl}/xrpc/com.atproto.repo.createRecord`,
+          `${session.pdsUrl}/xrpc/com.atproto.repo.putRecord`,
           {
             method: 'POST',
             headers: authorized(session, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               repo: session.did,
               collection: LIKE_COLLECTION,
+              rkey,
               record: {
                 $type: LIKE_COLLECTION,
                 subject: { uri: subject.uri, cid: subject.cid },
@@ -266,7 +267,7 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           createRecordResponseSchema,
         );
         if (!created.ok) return created;
-        return likeUriPattern.test(created.val.uri)
+        return blueskyLikeRkey(created.val.uri) !== undefined
           ? RA.ok({ uri: created.val.uri })
           : RA.err(clientError('invalid_response', 'createLike returned an unexpected uri'));
       }),

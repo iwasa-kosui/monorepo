@@ -10,6 +10,7 @@ import { createD1BlueskyLikeTargetResolver } from '../adaptor/d1/blueskyTimeline
 import { createD1BlueskyTimelineItemsExpiredStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsExpiredStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
+import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
@@ -86,6 +87,7 @@ export const createCollectBlueskyTimelineUseCase = (
     fetcher: createBlueskyTimelineFetcher({ client: createTimelineClient(config, db, deps), now }),
     savedStore: createD1BlueskyTimelineItemsSavedStore(db),
     expiredStore: createD1BlueskyTimelineItemsExpiredStore(db),
+    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
     now,
   });
 };
