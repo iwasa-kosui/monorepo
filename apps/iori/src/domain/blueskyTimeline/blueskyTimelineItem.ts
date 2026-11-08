@@ -97,7 +97,12 @@ export const blueskyTimelineFeedItemId = (uri: string, repostedByDid: string | n
 
 export type BlueskyTimelineItemsResolver = Readonly<{
   resolve: (
-    input: Readonly<{ limit: number; before: Instant | undefined; beforeId?: string }>,
+    input: Readonly<{
+      limit: number;
+      before: Instant | undefined;
+      beforeId?: string;
+      excludeCrossposted?: boolean;
+    }>,
   ) => RA<readonly BlueskyTimelineItem[], never>;
 }>;
 export type BlueskyTimelineItemsSavedStore = Readonly<{
@@ -105,4 +110,7 @@ export type BlueskyTimelineItemsSavedStore = Readonly<{
 }>;
 export type BlueskyTimelineItemsExpiredStore = Readonly<{
   expire: (indexedBefore: Instant) => RA<void, never>;
+}>;
+export type BlueskyTimelineItemsDeletedStore = Readonly<{
+  deleteByUri: (uri: string) => RA<void, never>;
 }>;

@@ -11,14 +11,16 @@ import {
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { CollectBlueskyTimelineUseCase } from '../../useCase/collectBlueskyTimeline.ts';
+import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
-import type { MastodonAuthEnv, MastodonAuthn } from './mastodonAuthn.ts';
+import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerIoriBlueskyRouterDeps = Readonly<{
   authn: MastodonAuthn;
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
   collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
+  isDigestOwner: IsDigestOwner;
 }>;
 
 export type IoriBlueskyTimelineItemBody = Readonly<{
@@ -81,6 +83,7 @@ export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
   collectBlueskyTimelineUseCase,
+  isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -103,17 +106,28 @@ export const createWorkerIoriBlueskyRouter = ({
       if (beforeId !== undefined && (beforeId === '' || before === undefined)) {
         return c.json({ error: 'Validation failed: beforeId' }, 400);
       }
+      const scope = c.req.query('scope');
+      if (scope !== undefined && scope !== 'home') {
+        return c.json({ error: 'Validation failed: scope' }, 400);
+      }
+      const enabled = collectBlueskyTimelineUseCase !== undefined;
+      if (scope === 'home' && !(await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined))) {
+        return c.json(
+          { enabled, items: [], nextBefore: null, nextBeforeId: null } satisfies IoriBlueskyTimelineResponse,
+        );
+      }
       const resolved = await blueskyTimelineItemsResolver.resolve({
         limit: limit + 1,
         before: before?.ok ? before.val : undefined,
         beforeId,
+        excludeCrossposted: scope === 'home',
       });
       if (!resolved.ok) return c.json(internalServerError, 500);
       const page = resolved.val.slice(0, limit);
       const last = resolved.val.length > limit ? page.at(-1) : undefined;
       return c.json(
         {
-          enabled: collectBlueskyTimelineUseCase !== undefined,
+          enabled,
           items: page.map(toItemBody),
           nextBefore: last?.indexedAt ?? null,
           nextBeforeId: last?.feedItemId ?? null,

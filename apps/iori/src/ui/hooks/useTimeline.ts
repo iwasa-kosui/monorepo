@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 
 import type { Account, CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
 import {
+  fetchBlueskyHomeTimeline,
   fetchFollowers,
   fetchFollowing,
   fetchHomeTimeline,
@@ -11,8 +12,15 @@ import {
 } from '../api/mastodonClient.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
-import { appendUniqueById } from './appendUnique.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
+import {
+  type BlueskyCursor,
+  type BlueskySource,
+  blueskySourceOf,
+  homeFeedCursor,
+  pagingAfterLoadMore,
+  settleLoadMore,
+} from './homeFeed.ts';
 import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
 import { prependUniqueById } from './prependUnique.ts';
 import {
@@ -32,6 +40,7 @@ export type TimelineData = Readonly<{
   followers: readonly Account[];
   following: readonly Account[];
   nextMaxId: string | undefined;
+  bluesky: BlueskySource;
 }>;
 
 export type TimelineState =
@@ -67,6 +76,9 @@ export const useTimeline = (): UseTimelineReturn => {
   const isReloadingRef = useRef(state.status === 'success');
   const isShowingCacheRef = useRef(state.status === 'success');
   const nextMaxIdRef = useRef<string | undefined>(state.status === 'success' ? state.data.nextMaxId : undefined);
+  const blueskyCursorRef = useRef<BlueskyCursor | undefined>(
+    state.status === 'success' ? state.data.bluesky.cursor : undefined,
+  );
   const generationRef = useRef(0);
 
   const loadAccountLists = useCallback(async (accountId: string, generation: number) => {
@@ -95,13 +107,21 @@ export const useTimeline = (): UseTimelineReturn => {
       isReloadingRef.current = true;
       if (isManualRefresh) setIsRefreshing(true);
       try {
-        const [page, me] = await Promise.all([fetchHomeTimeline(), fetchVerifyCredentials()]);
+        const [[homeResult, blueskyResult], me] = await Promise.all([
+          Promise.allSettled([fetchHomeTimeline(), fetchBlueskyHomeTimeline()]),
+          fetchVerifyCredentials(),
+        ]);
         if (isStaleGeneration(generationRef, generation)) return;
+        if (homeResult.status === 'rejected') throw homeResult.reason;
+        const page = homeResult.value;
+        const blueskyPage = blueskyResult.status === 'fulfilled' ? blueskyResult.value : undefined;
+        const bluesky = blueskySourceOf(blueskyPage);
         isReloadingRef.current = false;
         isShowingCacheRef.current = false;
         nextMaxIdRef.current = page.nextMaxId;
-        writeTimelineCache(page, me);
-        setState((prev) => stateAfterFirstPage(prev, me, page.items, page.nextMaxId));
+        blueskyCursorRef.current = bluesky.cursor;
+        writeTimelineCache(page, me, blueskyPage);
+        setState((prev) => stateAfterFirstPage(prev, me, page.items, page.nextMaxId, bluesky));
         setIsRefreshing(false);
         setIsFirstPageSettled(true);
         await loadAccountLists(me.id, generation);
@@ -116,11 +136,13 @@ export const useTimeline = (): UseTimelineReturn => {
           const showingCache = isShowingCacheRef.current === true;
           if (!showingCache || isUnauthorized) {
             nextMaxIdRef.current = undefined;
+            blueskyCursorRef.current = undefined;
             isShowingCacheRef.current = false;
           }
           setState((prev) => stateAfterFirstPageFailure(prev, showingCache, isUnauthorized, errorMessage(error)));
         } else if (isMastodonApiError(error)) {
           nextMaxIdRef.current = undefined;
+          blueskyCursorRef.current = undefined;
           setState({ status: 'error', error: error.message });
         } else {
           console.error('Failed to refresh:', error);
@@ -134,31 +156,38 @@ export const useTimeline = (): UseTimelineReturn => {
 
   const refresh = useCallback(() => loadFirstPage(true), [loadFirstPage]);
 
-  const loadMore = useCallback(async (maxId: string) => {
+  const loadMore = useCallback(async (cursor: string) => {
     if (
       !canStartLoadMore(
         isLoadingMoreRef.current === true,
         isReloadingRef.current === true,
-        isCurrentCursor(maxId, nextMaxIdRef.current ?? undefined),
+        isCurrentCursor(
+          cursor,
+          homeFeedCursor(nextMaxIdRef.current ?? undefined, blueskyCursorRef.current ?? undefined),
+        ),
       )
     ) return;
     isLoadingMoreRef.current = true;
     const generation = currentGeneration(generationRef);
+    const maxId = nextMaxIdRef.current ?? undefined;
+    const blueskyCursor = blueskyCursorRef.current ?? undefined;
     try {
-      const page = await fetchHomeTimeline({ maxId });
+      const [homeResult, blueskyResult] = await Promise.allSettled([
+        maxId === undefined ? undefined : fetchHomeTimeline({ maxId }),
+        blueskyCursor === undefined ? undefined : fetchBlueskyHomeTimeline(blueskyCursor),
+      ]);
       if (isStaleGeneration(generationRef, generation)) return;
-      const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
-      nextMaxIdRef.current = nextMaxId;
+      const outcome = settleLoadMore({ maxId, blueskyCursor }, { home: homeResult, bluesky: blueskyResult });
+      if (outcome.kind === 'homeFailed') {
+        setState((prev) => stateAfterFetchFailure(prev, true, errorMessage(outcome.reason)));
+        return;
+      }
+      const { advance } = outcome;
+      nextMaxIdRef.current = advance.nextMaxId;
+      blueskyCursorRef.current = advance.blueskyCursor;
       setState((prev) => {
         if (prev.status !== 'success') return prev;
-        return {
-          status: 'success',
-          data: {
-            ...prev.data,
-            statuses: appendUniqueById(prev.data.statuses, page.items),
-            nextMaxId,
-          },
-        };
+        return { status: 'success', data: { ...prev.data, ...pagingAfterLoadMore(prev.data, advance) } };
       });
     } catch (error) {
       if (isStaleGeneration(generationRef, generation)) return;

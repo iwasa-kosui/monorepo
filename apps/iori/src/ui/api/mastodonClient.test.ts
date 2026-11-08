@@ -8,6 +8,7 @@ import {
   favourite,
   fetchAccount,
   fetchAccountStatuses,
+  fetchBlueskyHomeTimeline,
   fetchBlueskyTimeline,
   fetchFavourites,
   fetchFeedSources,
@@ -654,6 +655,21 @@ describe('mastodon client requests', () => {
     await fetchBlueskyTimeline();
 
     expect((fetchMock.mock.calls as unknown[][])[0]![0]).toBe('/api/iori/v1/bluesky/timeline');
+  });
+
+  it.each([
+    [undefined, '/api/iori/v1/bluesky/timeline?scope=home'],
+    [{ before: 1_700_000_000_000, beforeId: null }, '/api/iori/v1/bluesky/timeline?scope=home&before=1700000000000'],
+    [
+      { before: 1_700_000_000_000, beforeId: 'a' },
+      '/api/iori/v1/bluesky/timeline?scope=home&before=1700000000000&beforeId=a',
+    ],
+  ])('fetches the Bluesky home timeline with scope=home and the cursor %j', async (cursor, expectedUrl) => {
+    const fetchMock = stubFetch(jsonResponse({ enabled: true, items: [], nextBefore: null, nextBeforeId: null }));
+
+    await fetchBlueskyHomeTimeline(cursor);
+
+    expect(requestedUrl(fetchMock)).toBe(expectedUrl);
   });
 
   it('posts a Bluesky timeline refresh and returns the counts', async () => {

@@ -630,6 +630,7 @@ export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
   updatedAt: timestamp().notNull(),
 }, (table) => [
   index('bluesky_crossposts_status_created_at_idx').on(table.status, table.createdAt),
+  index('bluesky_crossposts_uri_idx').on(table.uri),
 ]);
 
 export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {

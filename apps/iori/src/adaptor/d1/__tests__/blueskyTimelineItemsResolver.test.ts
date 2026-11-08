@@ -7,33 +7,42 @@ import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const BASE = Date.UTC(2026, 10, 8, 12);
 
-const setup = (rows: ReadonlyArray<Readonly<{ feedItemId: string; indexedAt: number }>>) => {
+const setup = (
+  rows: ReadonlyArray<Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string }>>,
+  crosspostUris: readonly (string | null)[] = [],
+) => {
   const { sqlite, db } = createSqliteD1Fixture();
   const insert = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
   );
   for (const row of rows) {
     insert.run(
       row.feedItemId,
-      row.feedItemId,
+      row.uri ?? row.feedItemId,
       'cid',
       'did:plc:a',
       'alice.bsky.social',
       'text',
       '[]',
+      row.repostedByDid ?? null,
       1,
       row.indexedAt,
       1,
     );
   }
+  const insertCrosspost = sqlite.prepare(
+    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+  );
+  crosspostUris.forEach((uri, index) => insertCrosspost.run(`post-${index}`, 'sent', uri, 1, 1, 1));
   const resolver = createD1BlueskyTimelineItemsResolver(db);
   return {
-    resolve: async (input: { limit: number; before?: number; beforeId?: string }) =>
+    resolve: async (input: { limit: number; before?: number; beforeId?: string; excludeCrossposted?: boolean }) =>
       Result.unsafeUnwrap(
         await resolver.resolve({
           limit: input.limit,
           before: input.before === undefined ? undefined : Instant.orThrow(input.before),
           beforeId: input.beforeId,
+          excludeCrossposted: input.excludeCrossposted,
         }),
       ).map((item) => item.feedItemId),
   };
@@ -70,5 +79,45 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
     expect(first).toEqual(['d', 'c']);
     expect(second).toEqual(['b', 'a']);
     expect(third).toEqual(['e']);
+  });
+
+  describe('excludeCrossposted', () => {
+    const crosspostRows = [
+      { feedItemId: 'own', uri: 'at://own', indexedAt: BASE },
+      { feedItemId: 'at://own#repost:did:plc:b', uri: 'at://own', repostedByDid: 'did:plc:b', indexedAt: BASE - 1 },
+      { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 2 },
+    ];
+
+    it('crosspost と同じ uri の通常の行だけを除き、同じ uri の repost の行は残す', async () => {
+      const t = setup(crosspostRows, ['at://own']);
+
+      expect(await t.resolve({ limit: 10, excludeCrossposted: true })).toEqual([
+        'at://own#repost:did:plc:b',
+        'other',
+      ]);
+    });
+
+    it('指定が無いときは crosspost の行も返す', async () => {
+      const t = setup(crosspostRows, ['at://own']);
+
+      expect(await t.resolve({ limit: 10 })).toEqual(['own', 'at://own#repost:did:plc:b', 'other']);
+    });
+
+    it('uri が NULL の crosspost は行を除かない', async () => {
+      const t = setup(crosspostRows, [null]);
+
+      expect(await t.resolve({ limit: 10, excludeCrossposted: true })).toEqual([
+        'own',
+        'at://own#repost:did:plc:b',
+        'other',
+      ]);
+    });
+
+    it('除いた行を数えずに limit まで返し、カーソルとも併用できる', async () => {
+      const t = setup(crosspostRows, ['at://own']);
+
+      expect(await t.resolve({ limit: 1, excludeCrossposted: true })).toEqual(['at://own#repost:did:plc:b']);
+      expect(await t.resolve({ limit: 10, before: BASE - 1, excludeCrossposted: true })).toEqual(['other']);
+    });
   });
 });

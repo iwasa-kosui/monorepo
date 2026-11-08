@@ -16,6 +16,7 @@ import {
   type BlueskyCrosspostSavedStore,
 } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { blueskyRkeyOf } from '../domain/blueskyCrosspost/blueskyRkey.ts';
+import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { PostImagesResolverByPostId } from '../domain/image/image.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPreview.ts';
@@ -43,6 +44,7 @@ type Deps = Readonly<{
   crosspostResolver: BlueskyCrosspostResolver;
   crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
+  timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
   uploads: PostImageObjectStore;
   thumbnailFetcher: BlueskyThumbnailFetcher;
   client: BlueskyClient;
