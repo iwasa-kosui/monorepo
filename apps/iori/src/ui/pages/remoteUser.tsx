@@ -424,6 +424,7 @@ const App = () => {
         });
       } catch (error) {
         console.error('Failed to like:', error);
+        alert(failureMessage('like', error));
       } finally {
         setLikingPostId(null);
       }

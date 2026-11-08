@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { runExclusive, runOptimisticFavourite, withOptimisticFavourite } from './optimisticFavourite.ts';
 
 const status = (id: string, overrides: Partial<Status> = {}): Status =>
@@ -19,6 +20,16 @@ const createTimeline = (initial: Status) => {
     get: () => current,
     update: (_postId: string, updater: (status: Status) => Status) => {
       current = updater(current);
+    },
+  };
+};
+
+const createList = (initial: readonly Status[]) => {
+  let current = initial;
+  return {
+    get: () => current,
+    update: (postId: string, updater: (status: Status) => Status) => {
+      current = updateStatusesByPostId(current, postId, updater);
     },
   };
 };
@@ -293,6 +304,42 @@ describe('runOptimisticFavourite', () => {
     expect(timeline.get().reblog?.favourited).toBe(false);
     expect(timeline.get().reblog?.favourites_count).toBe(4);
     expect(timeline.get().reblog?.reblogs_count).toBe(6);
+  });
+
+  describe.each([
+    ['the original before the boost', 0],
+    ['the boost before the original', 1],
+  ])('when the original and its boost are in the same list, %s', (_name, boostIndex) => {
+    it('restores both items to their pre-press display when the request fails', async () => {
+      const original = status('p1', { favourites_count: 4 });
+      const boost = status('b1', { reblog: original, favourites_count: 9 });
+      const list = createList(boostIndex === 0 ? [boost, original] : [original, boost]);
+      const pending = deferred<Status>();
+
+      const running = runOptimisticFavourite({
+        postId: 'p1',
+        favourited: true,
+        request: () => pending.promise,
+        updateTimelineItem: list.update,
+      });
+
+      const items = list.get();
+      expect(items.map((item) => (item.reblog ?? item).favourited)).toEqual([true, true]);
+      expect(items.map((item) => (item.reblog ?? item).favourites_count)).toEqual([5, 5]);
+
+      pending.reject(new Error('network'));
+      await expect(running).rejects.toThrow('network');
+
+      const restored = list.get();
+      const restoredBoost = restored[boostIndex === 0 ? 0 : 1];
+      const restoredOriginal = restored[boostIndex === 0 ? 1 : 0];
+      expect(restoredOriginal.favourited).toBe(false);
+      expect(restoredOriginal.favourites_count).toBe(4);
+      expect(restoredBoost.favourited).toBe(false);
+      expect(restoredBoost.favourites_count).toBe(9);
+      expect(restoredBoost.reblog?.favourited).toBe(false);
+      expect(restoredBoost.reblog?.favourites_count).toBe(4);
+    });
   });
 });
 

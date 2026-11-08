@@ -1,5 +1,5 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { withFavourited, withUpdatedStatus } from '../api/status.ts';
+import { displayStatus, withFavourited, withUpdatedStatus } from '../api/status.ts';
 
 type StatusUpdater = (
   postId: string,
@@ -20,18 +20,11 @@ export const withOptimisticFavourite = (status: Status, favourited: boolean): St
 };
 
 export const withRestoredFavourite = (current: Status, before: Status): Status => {
-  if (current.reblog === null || before.reblog === null) {
-    return { ...current, favourited: before.favourited, favourites_count: before.favourites_count };
+  const { favourited, favourites_count } = displayStatus(before);
+  if (current.reblog === null) {
+    return { ...current, favourited, favourites_count };
   }
-  return {
-    ...current,
-    favourited: before.favourited,
-    reblog: {
-      ...current.reblog,
-      favourited: before.reblog.favourited,
-      favourites_count: before.reblog.favourites_count,
-    },
-  };
+  return { ...current, favourited, reblog: { ...current.reblog, favourited, favourites_count } };
 };
 
 export const runExclusive = async (
