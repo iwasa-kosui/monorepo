@@ -41,7 +41,8 @@ const run = async (
     failPut = false,
     stdout = '\u2728 3 secrets successfully uploaded\n',
     signal = new AbortController().signal,
-  }: { status?: number; failPut?: boolean; stdout?: string; signal?: AbortSignal } = {},
+    operation = invocation.operation,
+  }: { status?: number; failPut?: boolean; stdout?: string; signal?: AbortSignal; operation?: string } = {},
 ) => {
   const calls: Call[] = [];
   const stages: string[] = [];
@@ -58,7 +59,7 @@ const run = async (
   let error: unknown;
   try {
     await putWorkerSecrets({
-      invocation,
+      invocation: { ...invocation, operation },
       env,
       signal,
       timeout: 60_000,
@@ -245,4 +246,114 @@ describe('put-worker-secrets', () => {
     expect(stages.at(-1)).toBe('put-worker-secrets-put');
     expectDiagnostic(stages.at(-1)!, error, 'aborted', env);
   });
+});
+
+const blueskyEnvironment = (overrides: Record<string, string> = {}): Record<string, string> =>
+  environment({
+    BLUESKY_IDENTIFIER: 'iori.example.com',
+    BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop',
+    ...overrides,
+  });
+const runBluesky = (
+  env: Record<string, string>,
+  options: { status?: number; failPut?: boolean; stdout?: string; signal?: AbortSignal } = {},
+) => run(env, { stdout: '\u2728 2 secrets successfully uploaded\n', ...options, operation: 'put-bluesky-secrets' });
+
+describe('put-bluesky-secrets', () => {
+  it('puts only the two Bluesky values even when other secrets are in the environment', async () => {
+    const env = blueskyEnvironment({
+      TWITTERAPI_IO_API_KEY: 'twitterapi-io-key-value-for-fixture',
+      VAPID_SUBJECT: 'mailto:iori@example.com',
+    });
+    const { calls, stages, requests, error } = await runBluesky(env);
+    expect(error).toBeUndefined();
+    expect(stages).toEqual(['put-bluesky-secrets', 'put-bluesky-secrets-read', 'put-bluesky-secrets-put']);
+    expect(requests).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+    const [call] = calls;
+    expect([call.program, call.args]).toEqual([
+      'pnpm',
+      ['exec', 'wrangler', 'secret', 'bulk', '--name', 'iori-production-fixture1'],
+    ]);
+    const input = JSON.parse(call.options.input!) as Record<string, unknown>;
+    expect(Object.keys(input).sort()).toEqual(['BLUESKY_APP_PASSWORD', 'BLUESKY_IDENTIFIER']);
+    expect(input).toEqual({ BLUESKY_IDENTIFIER: 'iori.example.com', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' });
+    expect(Object.values(input)).not.toContain(null);
+    for (
+      const value of [
+        env.VAPID_PUBLIC_KEY,
+        env.VAPID_PRIVATE_KEY,
+        env.SMOKE_QUEUE_TOKEN,
+        env.TWITTERAPI_IO_API_KEY,
+        'iori.example.com',
+        'abcd-efgh-ijkl-mnop',
+      ]
+    ) {
+      expect(call.args.join(' ')).not.toContain(value);
+      expect(Object.values(call.options.env)).not.toContain(value);
+    }
+    expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
+  });
+  it('does not fail when the VAPID and smoke values are empty or malformed', async () => {
+    const env = blueskyEnvironment({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', SMOKE_QUEUE_TOKEN: 'short' });
+    const { calls, error } = await runBluesky(env);
+    expect(error).toBeUndefined();
+    expect(Object.keys(JSON.parse(calls[0].options.input!)).sort()).toEqual([
+      'BLUESKY_APP_PASSWORD',
+      'BLUESKY_IDENTIFIER',
+    ]);
+  });
+  it.each(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'])(
+    'rejects an empty %s without calling wrangler',
+    async (name) => {
+      const env = blueskyEnvironment({ [name]: '' });
+      const { calls, requests, stages, error } = await runBluesky(env);
+      expect([calls, requests]).toEqual([[], []]);
+      expect(stages.at(-1)).toBe('put-bluesky-secrets');
+      expectDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
+    },
+  );
+  it('rejects an unset Bluesky value without calling wrangler', async () => {
+    const { BLUESKY_APP_PASSWORD: _removed, ...env } = blueskyEnvironment();
+    const { calls, stages, error } = await runBluesky(env);
+    expect(calls).toEqual([]);
+    expectDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
+  });
+  it.each([
+    ['environment', { environment: 'staging' }],
+    ['generation', { generation: 'fixture2' }],
+    ['run ID', { runId: 'run-2' }],
+    ['main SHA', { mainSha: 'c'.repeat(40) }],
+  ])('rejects an admission identity with a different %s before any request', async (_name, change) => {
+    const env = blueskyEnvironment({ IORI_ADMISSION_IDENTITY: JSON.stringify({ ...identity, ...change }) });
+    const { calls, stages, requests, error } = await runBluesky(env);
+    expect([calls, requests]).toEqual([[], []]);
+    expect(stages).toEqual(['put-bluesky-secrets']);
+    expectDiagnostic(stages.at(-1)!, error, 'identity-mismatch', env);
+  });
+  it('stops before putting when the Worker does not exist', async () => {
+    const env = blueskyEnvironment();
+    const { calls, stages, error } = await runBluesky(env, { status: 404 });
+    expect(calls).toEqual([]);
+    expect(stages.at(-1)).toBe('put-bluesky-secrets-read');
+    expectDiagnostic(stages.at(-1)!, error, 'workers-http-404', env);
+  });
+  it('keeps the values out of the diagnostics when the put fails', async () => {
+    const env = blueskyEnvironment();
+    const { calls, stages, error } = await runBluesky(env, { failPut: true });
+    expect(calls).toHaveLength(1);
+    expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
+    expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
+    expect(String((error as Error).message)).not.toContain('abcd-efgh-ijkl-mnop');
+  });
+  it.each(['', 'No content found in file or piped input.\n', '\u2728 3 secrets successfully uploaded\n'])(
+    'fails with exit code 0 when the success line is missing from %j',
+    async (stdout) => {
+      const env = blueskyEnvironment();
+      const { calls, stages, error } = await runBluesky(env, { stdout });
+      expect(calls).toHaveLength(1);
+      expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
+      expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
+    },
+  );
 });

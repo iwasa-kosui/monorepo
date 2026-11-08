@@ -55,6 +55,7 @@ it('maps the operations to their fixed scripts', async () => {
     const [name, script] of [
       ['deploy-worker', 'deploy-active-worker.mjs'],
       ['put-worker-secrets', 'worker-bindings-put.mjs'],
+      ['put-bluesky-secrets', 'worker-bindings-put.mjs'],
       ['resume-source', 'resume-source.mjs'],
       [
         'release-pending-freeze',

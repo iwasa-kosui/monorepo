@@ -93,6 +93,7 @@ operation が使う参照名は、次のとおりです。
 
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`。任意の secret として `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` も受け取ります
+- `put-bluesky-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
@@ -403,7 +404,7 @@ IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=
 
 `put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` と、任意の `BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
 
-必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿と、Bluesky の home タイムラインの取り込みの両方に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、取り込みは `IORI_BLUESKY_TIMELINE` が `enabled` のときだけ動きます。どちらも既定は `disabled` です。2つの機能は互いに独立していて、どちらの機能も、この2つの secret が空でないときだけ動きます。
+必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿と、Bluesky の home タイムラインの取り込みの両方に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、取り込みは `IORI_BLUESKY_TIMELINE` が `enabled` のときだけ動きます。どちらも既定は `disabled` です。2つの機能は互いに独立していて、どちらの機能も、この2つの secret が空でないときだけ動きます。Bluesky の secret だけを入れるときは `put-bluesky-secrets` を使います。
 
 job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
 
@@ -451,6 +452,14 @@ job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と T
 | `workers-request`、`workers-shape`              | API への要求が失敗したか、応答の形が想定と違います                                                                                                                                                                                                  |
 | `command-failed`                                | `wrangler secret bulk` が失敗したか、成功を示す `3 secrets successfully uploaded` の行が出ませんでした                                                                                                                                              |
 | `aborted`                                       | 時間切れか中断で止まりました                                                                                                                                                                                                                        |
+
+#### put-bluesky-secrets で Bluesky の secret を入れる
+
+`put-bluesky-secrets` は、稼働中の Worker に `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つだけを入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` を読みません。作業者は、Bluesky の secret を入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
+
+この operation は production だけを受け付けます。`environment` が `production` 以外の場合、job は最初の step で失敗します。
+
+作業者は、`deploy-iori-worker.yml` を `operation=put-bluesky-secrets`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。どちらかの secret が空の場合、job は `reason=credentials-missing` で失敗します。
 
 #### delete-rehearsal-d1 で予行演習の空の D1 を削除する
 
@@ -576,7 +585,7 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 
 `IORI_BLUESKY_CROSSPOST` は iori の投稿を Bluesky に送る機能を、`IORI_BLUESKY_TIMELINE` は Bluesky の home タイムラインを取り込む機能を切り替えます。どちらも Worker の環境変数で、初期値は `disabled` です。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。2つの機能は独立しているので、作業者は片方だけを有効にできます。
 
-作業者は、有効にする前に、`put-worker-secrets` で `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` を Worker に入れます。どちらかの secret が空だと、環境変数を `enabled` にしても機能は動きません。
+作業者は、有効にする前に、`put-bluesky-secrets` で `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` を Worker に入れます。どちらかの secret が空だと、環境変数を `enabled` にしても機能は動きません。
 
 有効にするには、作業者が template の対象の値を `enabled` に変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
 

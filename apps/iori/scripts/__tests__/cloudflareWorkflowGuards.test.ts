@@ -35,6 +35,7 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'public-artifact-gate',
     'deploy-worker',
     'put-worker-secrets',
+    'put-bluesky-secrets',
     'delete-rehearsal-d1',
     'move-unfollowed-reposts-dry-run',
     'move-unfollowed-reposts',
@@ -148,6 +149,54 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
   const inputs =
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
   expect(inputs.operation.options).toContain('put-worker-secrets');
+});
+it('gives put-bluesky-secrets only the deploy token, the account and admission identity, and the two Bluesky secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['put-bluesky-secrets'];
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'put-bluesky-secrets\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    IORI_ADMISSION_IDENTITY: secret('IORI_ADMISSION_IDENTITY'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    BLUESKY_IDENTIFIER: secret('BLUESKY_IDENTIFIER'),
+    BLUESKY_APP_PASSWORD: secret('BLUESKY_APP_PASSWORD'),
+  });
+  expect(Object.keys(operation(job).env!).filter(key => key.startsWith('BLUESKY_'))).toHaveLength(2);
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/VAPID|SMOKE_QUEUE_TOKEN|TWITTERAPI_IO_API_KEY/);
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toContain('put-bluesky-secrets');
+});
+it('rejects any environment other than production in the first step of put-bluesky-secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const lines = workflow.jobs['put-bluesky-secrets'].steps[0].run!.split('\n').map(line => line.trim());
+  expect(lines).toContain('set -euo pipefail');
+  expect(lines).toContain('test "$IORI_ENVIRONMENT" = production');
+  expect(lines.indexOf('test "$IORI_ENVIRONMENT" = production')).toBeLessThan(
+    lines.indexOf('test "$MAIN_SHA" = "$GITHUB_SHA"'),
+  );
+  expect(workflow.jobs['put-bluesky-secrets'].steps[0].run).toContain('refs/heads/main');
+  const { spawnSync } = await import('node:child_process');
+  const script = workflow.jobs['put-bluesky-secrets'].steps[0].run!;
+  const sha = 'a'.repeat(40);
+  const base = {
+    GITHUB_ENV: '/dev/null',
+    GITHUB_EVENT_NAME: 'workflow_dispatch',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_SHA: sha,
+    MAIN_SHA: sha,
+    IORI_OPERATION: 'put-bluesky-secrets',
+  };
+  const run = (environment: string) =>
+    spawnSync('bash', ['-c', script], { env: { PATH: process.env.PATH, ...base, IORI_ENVIRONMENT: environment } });
+  expect(run('production').status).toBe(0);
+  expect(run('staging').status).not.toBe(0);
+  expect(run('').status).not.toBe(0);
 });
 it('gives delete-rehearsal-d1 only the account and the deploy token, and no input that names a database', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');

@@ -18,7 +18,10 @@ const SECRET_NAMES = Object.freeze([
   'SMOKE_QUEUE_TOKEN',
   ...OPTIONAL_SECRET_NAMES,
 ]);
-const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
+const BLUESKY_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+const isBlueskyOperation = (invocation) => invocation.operation === 'put-bluesky-secrets';
+const secretNamesToPut = (env, bluesky) =>
+  bluesky ? BLUESKY_SECRET_NAMES : SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
   let identity;
@@ -31,18 +34,19 @@ const assertIdentity = (env, invocation) => {
     || identity.mainSha !== invocation.migrationSha
   ) throw withReason(new Error('Migration target evidence is invalid.'), 'identity-mismatch');
 };
-const assertInputs = (env) => {
+const assertInputs = (env, bluesky) => {
   if (
     [
       'CLOUDFLARE_ACCOUNT_ID',
       'CLOUDFLARE_API_TOKEN',
-      ...SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name)),
+      ...(bluesky ? BLUESKY_SECRET_NAMES : SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name))),
     ]
       .some((name) => !env[name])
   ) throw withReason(new Error('Worker credentials are required.'), 'credentials-missing');
   if (!/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID)) {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
   }
+  if (bluesky) return;
   assertSmokeQueueToken(env.SMOKE_QUEUE_TOKEN);
   let matches = false;
   try {
@@ -86,9 +90,11 @@ export const putWorkerSecrets = async ({
   runCommand = runMigrationCommand,
   fetchRequest = fetch,
 }) => {
-  onStage('put-worker-secrets');
+  const bluesky = isBlueskyOperation(invocation);
+  const stagePrefix = bluesky ? 'put-bluesky-secrets' : 'put-worker-secrets';
+  onStage(stagePrefix);
   assertIdentity(env, invocation);
-  assertInputs(env);
+  assertInputs(env, bluesky);
   let workerName;
   try {
     workerName = createTargetIdentity({
@@ -99,7 +105,7 @@ export const putWorkerSecrets = async ({
   } catch {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
   }
-  onStage('put-worker-secrets-read');
+  onStage(`${stagePrefix}-read`);
   await assertWorkerExists({
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     workerName,
@@ -111,8 +117,8 @@ export const putWorkerSecrets = async ({
     ...Object.fromEntries(Object.entries(env).filter(([name]) => !SECRET_NAMES.includes(name))),
     WRANGLER_SEND_METRICS: 'false',
   };
-  onStage('put-worker-secrets-put');
-  const putNames = secretNamesToPut(env);
+  onStage(`${stagePrefix}-put`);
+  const putNames = secretNamesToPut(env, bluesky);
   let result;
   try {
     result = await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'bulk', '--name', workerName], {
@@ -133,13 +139,15 @@ export const putWorkerSecrets = async ({
 };
 const main = async (cliSignal, onStage) => {
   const invocation = parseWorkflowInvocation(process.env);
-  if (invocation.operation !== 'put-worker-secrets') throw new Error('Invalid Worker secret operation.');
+  if (!['put-worker-secrets', 'put-bluesky-secrets'].includes(invocation.operation)) {
+    throw new Error('Invalid Worker secret operation.');
+  }
   const { remainingMs } = workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT));
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(remainingMs)]);
   await putWorkerSecrets({ invocation, env: process.env, signal, timeout: remainingMs, onStage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  let putStage = 'put-worker-secrets';
+  let putStage = process.env.IORI_OPERATION === 'put-bluesky-secrets' ? 'put-bluesky-secrets' : 'put-worker-secrets';
   withCliSignal(signal =>
     main(signal, (stage) => {
       putStage = stage;

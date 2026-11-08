@@ -71,6 +71,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
     || ![
       'deploy-worker',
       'put-worker-secrets',
+      'put-bluesky-secrets',
       'diagnose-source',
       'delete-rehearsal-d1',
       ...moveOperations,
@@ -105,7 +106,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
     || (moveOperations.includes(operation)
       ? repostCreatedBefore(env.IORI_REPOST_CREATED_BEFORE_MS, now) === undefined
       : Boolean(env.IORI_REPOST_CREATED_BEFORE_MS))
-    || (!['deploy-worker', 'put-worker-secrets'].includes(operation)
+    || (!['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'].includes(operation)
       && !recoveryOperation
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))
