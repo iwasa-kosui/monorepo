@@ -585,6 +585,7 @@ export const setupReadApi = (
           authn,
           getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
             xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
+            now: Instant.now,
           }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),

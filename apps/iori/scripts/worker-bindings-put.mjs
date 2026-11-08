@@ -19,10 +19,21 @@ const SECRET_NAMES = Object.freeze([
   'SMOKE_QUEUE_TOKEN',
   ...OPTIONAL_SECRET_NAMES,
 ]);
-const BLUESKY_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+// The relay pattern limits a stage word to 24 characters.
+const SECRETS_BULK_OPERATIONS = Object.freeze({
+  'put-bluesky-secrets': Object.freeze({
+    stagePrefix: 'put-bluesky-secrets',
+    secretNames: Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']),
+  }),
+  'put-twitterapi-secret': Object.freeze({
+    stagePrefix: 'put-twitterapi',
+    secretNames: Object.freeze(['TWITTERAPI_IO_API_KEY']),
+  }),
+});
 const SECRETS_BULK_VERIFY_ATTEMPTS = 5;
 const SECRETS_BULK_VERIFY_INTERVAL_MS = 3000;
-const isBlueskyOperation = (invocation) => invocation.operation === 'put-bluesky-secrets';
+const bulkOperationOf = (operation) =>
+  Object.hasOwn(SECRETS_BULK_OPERATIONS, operation) ? SECRETS_BULK_OPERATIONS[operation] : undefined;
 const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
@@ -36,19 +47,19 @@ const assertIdentity = (env, invocation) => {
     || identity.mainSha !== invocation.migrationSha
   ) throw withReason(new Error('Migration target evidence is invalid.'), 'identity-mismatch');
 };
-const assertInputs = (env, bluesky) => {
+const assertInputs = (env, bulkSecretNames) => {
   if (
     [
       'CLOUDFLARE_ACCOUNT_ID',
       'CLOUDFLARE_API_TOKEN',
-      ...(bluesky ? BLUESKY_SECRET_NAMES : SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name))),
+      ...(bulkSecretNames ?? SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name))),
     ]
       .some((name) => !env[name])
   ) throw withReason(new Error('Worker credentials are required.'), 'credentials-missing');
   if (!/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID)) {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
   }
-  if (bluesky) return;
+  if (bulkSecretNames) return;
   assertSmokeQueueToken(env.SMOKE_QUEUE_TOKEN);
   let matches = false;
   try {
@@ -156,11 +167,11 @@ export const putWorkerSecrets = async ({
   fetchRequest = fetch,
   sleep = (ms, sleepSignal) => delay(ms, undefined, { signal: sleepSignal }),
 }) => {
-  const bluesky = isBlueskyOperation(invocation);
-  const stagePrefix = bluesky ? 'put-bluesky-secrets' : 'put-worker-secrets';
+  const bulkOperation = bulkOperationOf(invocation.operation);
+  const stagePrefix = bulkOperation?.stagePrefix ?? 'put-worker-secrets';
   onStage(stagePrefix);
   assertIdentity(env, invocation);
-  assertInputs(env, bluesky);
+  assertInputs(env, bulkOperation?.secretNames);
   let workerName;
   try {
     workerName = createTargetIdentity({
@@ -179,14 +190,14 @@ export const putWorkerSecrets = async ({
     signal,
     fetchRequest,
   });
-  if (bluesky) {
+  if (bulkOperation) {
     const previous = latestVersions(deployments, signal)[0].version_id;
     onStage(`${stagePrefix}-put`);
     await putSecretsBulk({
       accountId: env.CLOUDFLARE_ACCOUNT_ID,
       workerName,
       token: env.CLOUDFLARE_API_TOKEN,
-      secrets: Object.fromEntries(BLUESKY_SECRET_NAMES.map((name) => [name, env[name]])),
+      secrets: Object.fromEntries(bulkOperation.secretNames.map((name) => [name, env[name]])),
       signal,
       fetchRequest,
     });
@@ -227,7 +238,7 @@ export const putWorkerSecrets = async ({
 };
 const main = async (cliSignal, onStage) => {
   const invocation = parseWorkflowInvocation(process.env);
-  if (!['put-worker-secrets', 'put-bluesky-secrets'].includes(invocation.operation)) {
+  if (invocation.operation !== 'put-worker-secrets' && !bulkOperationOf(invocation.operation)) {
     throw new Error('Invalid Worker secret operation.');
   }
   const { remainingMs } = workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT));
@@ -235,7 +246,7 @@ const main = async (cliSignal, onStage) => {
   await putWorkerSecrets({ invocation, env: process.env, signal, timeout: remainingMs, onStage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  let putStage = process.env.IORI_OPERATION === 'put-bluesky-secrets' ? 'put-bluesky-secrets' : 'put-worker-secrets';
+  let putStage = bulkOperationOf(process.env.IORI_OPERATION)?.stagePrefix ?? 'put-worker-secrets';
   withCliSignal(signal =>
     main(signal, (stage) => {
       putStage = stage;

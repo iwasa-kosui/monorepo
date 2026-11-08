@@ -263,7 +263,7 @@ describe('defaultDigestTopics の文字数', () => {
 });
 
 describe('TOPIC_MIN_SIMILARITY', () => {
-  it('0.40 である', () => {
-    expect(TOPIC_MIN_SIMILARITY).toBe(0.4);
+  it('0.55 である', () => {
+    expect(TOPIC_MIN_SIMILARITY).toBe(0.55);
   });
 });

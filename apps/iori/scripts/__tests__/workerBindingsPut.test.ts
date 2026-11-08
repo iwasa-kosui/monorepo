@@ -270,7 +270,8 @@ const runBluesky = async (
     patch = {},
     signal = new AbortController().signal,
     sleepFails = false,
-  }: { reads?: Read[]; patch?: PatchReply; signal?: AbortSignal; sleepFails?: boolean } = {},
+    operation = 'put-bluesky-secrets',
+  }: { reads?: Read[]; patch?: PatchReply; signal?: AbortSignal; sleepFails?: boolean; operation?: string } = {},
 ) => {
   const calls: Call[] = [];
   const stages: string[] = [];
@@ -314,7 +315,7 @@ const runBluesky = async (
   let error: unknown;
   try {
     await putWorkerSecrets({
-      invocation: { ...invocation, operation: 'put-bluesky-secrets' },
+      invocation: { ...invocation, operation },
       env,
       signal,
       timeout: 60_000,
@@ -332,7 +333,12 @@ const runBluesky = async (
   const reads_ = requests.filter(request => request.method === 'GET');
   return { calls, stages, requests, patches, reads: reads_, sleep, written, error };
 };
-const expectNoLeak = (env: Record<string, string>, written: string[], error: unknown) => {
+const expectNoLeak = (
+  env: Record<string, string>,
+  written: string[],
+  error: unknown,
+  { stage = 'put-bluesky-secrets-put', secretValues = blueskyValues }: { stage?: string; secretValues?: string[] } = {},
+) => {
   const surface = [
     ...written,
     ...(error === undefined
@@ -341,10 +347,10 @@ const expectNoLeak = (env: Record<string, string>, written: string[], error: unk
         String((error as Error).message),
         JSON.stringify(error, Object.getOwnPropertyNames(error as object)),
         String((error as Error).cause ?? ''),
-        ...operationFailureLines('put-bluesky-secrets-put', error),
+        ...operationFailureLines(stage, error),
       ]),
   ].join('\n');
-  for (const value of [...values(env), ...blueskyValues]) expect(surface).not.toContain(value);
+  for (const value of [...values(env), ...secretValues]) expect(surface).not.toContain(value);
 };
 const patchUrl =
   `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/iori-production-fixture1/secrets-bulk`;
@@ -550,5 +556,171 @@ describe('put-bluesky-secrets', () => {
     const env = blueskyEnvironment();
     const { error, stages } = await runBluesky(env, { reads: [deployments(oldVersion)], sleepFails: true });
     expectDiagnostic(stages.at(-1)!, error, 'aborted', env);
+  });
+});
+
+const twitterapiKey = 'twitterapi-io-key-value-for-fixture';
+const twitterapiEnvironment = (overrides: Record<string, string> = {}): Record<string, string> =>
+  environment({ TWITTERAPI_IO_API_KEY: twitterapiKey, ...overrides });
+const runTwitterapi = (env: Record<string, string>, options: Parameters<typeof runBluesky>[1] = {}) =>
+  runBluesky(env, { ...options, operation: 'put-twitterapi-secret' });
+const twitterapiLeak = { stage: 'put-twitterapi-put', secretValues: [twitterapiKey] };
+const expectTwitterapiDiagnostic = (stage: string, error: unknown, reason: string, env: Record<string, string>) => {
+  expectDiagnostic(stage, error, reason, env);
+  expect(operationFailureLines(stage, error).join('\n')).not.toContain(twitterapiKey);
+};
+
+describe('put-twitterapi-secret', () => {
+  it('patches only TWITTERAPI_IO_API_KEY through secrets-bulk without calling wrangler', async () => {
+    const env = twitterapiEnvironment({
+      BLUESKY_IDENTIFIER: 'iori.example.com',
+      BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop',
+      VAPID_SUBJECT: 'mailto:iori@example.com',
+    });
+    const { calls, stages, requests, patches, sleep, written, error } = await runTwitterapi(env);
+    expect(error).toBeUndefined();
+    expect(calls).toEqual([]);
+    expect(stages).toEqual(['put-twitterapi', 'put-twitterapi-read', 'put-twitterapi-put']);
+    expect(requests.map(request => [request.method, request.url])).toEqual([
+      ['GET', deploymentsUrl],
+      ['PATCH', patchUrl],
+      ['GET', deploymentsUrl],
+    ]);
+    expect(patches).toHaveLength(1);
+    const [patch] = patches;
+    expect(patch.headers).toEqual({
+      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+      'Content-Type': 'application/merge-patch+json',
+    });
+    expect(JSON.parse(patch.body!)).toEqual({
+      secrets: { TWITTERAPI_IO_API_KEY: { type: 'secret_text', name: 'TWITTERAPI_IO_API_KEY', text: twitterapiKey } },
+    });
+    for (
+      const leaked of [
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'SMOKE_QUEUE_TOKEN',
+        'BLUESKY_IDENTIFIER',
+        'BLUESKY_APP_PASSWORD',
+        'VAPID_SUBJECT',
+        env.VAPID_PUBLIC_KEY,
+        env.VAPID_PRIVATE_KEY,
+        env.SMOKE_QUEUE_TOKEN,
+        env.BLUESKY_IDENTIFIER,
+        env.BLUESKY_APP_PASSWORD,
+      ]
+    ) expect(patch.body).not.toContain(leaked);
+    expect(sleep).not.toHaveBeenCalled();
+    expectNoLeak(env, written, error, { ...twitterapiLeak, secretValues: [twitterapiKey, ...blueskyValues] });
+  });
+  it('does not fail when the VAPID and smoke values are empty or malformed', async () => {
+    const env = twitterapiEnvironment({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', SMOKE_QUEUE_TOKEN: 'short' });
+    const { patches, error } = await runTwitterapi(env);
+    expect(error).toBeUndefined();
+    expect(Object.keys(JSON.parse(patches[0].body!).secrets)).toEqual(['TWITTERAPI_IO_API_KEY']);
+  });
+  it.each(['TWITTERAPI_IO_API_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'])(
+    'rejects an empty %s without any request',
+    async (name) => {
+      const env = twitterapiEnvironment({ [name]: '' });
+      const { calls, requests, stages, error } = await runTwitterapi(env);
+      expect([calls, requests]).toEqual([[], []]);
+      expect(stages).toEqual(['put-twitterapi']);
+      expectTwitterapiDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
+    },
+  );
+  it('rejects an unset TWITTERAPI_IO_API_KEY without any request', async () => {
+    const env = environment();
+    const { calls, requests, stages, error } = await runTwitterapi(env);
+    expect([calls, requests]).toEqual([[], []]);
+    expect(stages).toEqual(['put-twitterapi']);
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
+  });
+  it('does not need the Bluesky secrets', async () => {
+    const { patches, error } = await runTwitterapi(twitterapiEnvironment());
+    expect(error).toBeUndefined();
+    expect(Object.keys(JSON.parse(patches[0].body!).secrets)).toEqual(['TWITTERAPI_IO_API_KEY']);
+  });
+  it('rejects a malformed CLOUDFLARE_ACCOUNT_ID with config-invalid before any request', async () => {
+    const env = twitterapiEnvironment({ CLOUDFLARE_ACCOUNT_ID: 'not-an-account-id' });
+    const { requests, stages, error } = await runTwitterapi(env);
+    expect(requests).toEqual([]);
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'config-invalid', env);
+  });
+  it.each([
+    ['environment', { environment: 'staging' }],
+    ['generation', { generation: 'fixture2' }],
+    ['run ID', { runId: 'run-2' }],
+    ['main SHA', { mainSha: 'c'.repeat(40) }],
+  ])('rejects an admission identity with a different %s before any request', async (_name, change) => {
+    const env = twitterapiEnvironment({ IORI_ADMISSION_IDENTITY: JSON.stringify({ ...identity, ...change }) });
+    const { calls, stages, requests, error } = await runTwitterapi(env);
+    expect([calls, requests]).toEqual([[], []]);
+    expect(stages).toEqual(['put-twitterapi']);
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'identity-mismatch', env);
+  });
+  it('stops before patching when the Worker does not exist', async () => {
+    const env = twitterapiEnvironment();
+    const { calls, patches, stages, error } = await runTwitterapi(env, { reads: [404] });
+    expect([calls, patches]).toEqual([[], []]);
+    expect(stages.at(-1)).toBe('put-twitterapi-read');
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'workers-http-404', env);
+  });
+  it.each([[401, 'secrets-bulk-forbidden'], [403, 'secrets-bulk-forbidden'], [500, 'secrets-bulk-failed']])(
+    'maps a PATCH response of HTTP %i to %s and does not read the deployments again',
+    async (status, reason) => {
+      const env = twitterapiEnvironment();
+      const body = JSON.stringify({
+        success: false,
+        errors: [{ message: `rejected ${twitterapiKey}` }],
+        result: { secrets: { TWITTERAPI_IO_API_KEY: { text: twitterapiKey } } },
+      });
+      const { calls, patches, reads, stages, error, written, sleep } = await runTwitterapi(env, {
+        patch: { status, body },
+      });
+      expect(calls).toEqual([]);
+      expect(patches).toHaveLength(1);
+      expect(reads).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
+      expect(stages.at(-1)).toBe('put-twitterapi-put');
+      expectTwitterapiDiagnostic(stages.at(-1)!, error, reason, env);
+      expectNoLeak(env, written, error, twitterapiLeak);
+    },
+  );
+  it('maps a PATCH network error to secrets-bulk-failed without leaking the value', async () => {
+    const env = twitterapiEnvironment();
+    const { calls, patches, reads, stages, error, written } = await runTwitterapi(env, { patch: { throws: true } });
+    expect(calls).toEqual([]);
+    expect(patches).toHaveLength(1);
+    expect(reads).toHaveLength(1);
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'secrets-bulk-failed', env);
+    expectNoLeak(env, written, error, twitterapiLeak);
+  });
+  it('reports an abort when the signal is aborted and the PATCH fails', async () => {
+    const env = twitterapiEnvironment();
+    const controller = new AbortController();
+    controller.abort();
+    const { stages, error } = await runTwitterapi(env, { patch: { throws: true }, signal: controller.signal });
+    expect(stages.at(-1)).toBe('put-twitterapi-put');
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'aborted', env);
+  });
+  it('fails with secrets-bulk-not-deployed after 5 reads when the version does not change', async () => {
+    const env = twitterapiEnvironment();
+    const { calls, patches, reads, stages, sleep, error, written } = await runTwitterapi(env, {
+      reads: [deployments(oldVersion)],
+    });
+    expect(calls).toEqual([]);
+    expect(patches).toHaveLength(1);
+    expect(reads).toHaveLength(6);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([3000, 3000, 3000, 3000]);
+    expect(stages.at(-1)).toBe('put-twitterapi-put');
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'secrets-bulk-not-deployed', env);
+    expectNoLeak(env, written, error, twitterapiLeak);
+  });
+  it('fails with the read reason when a re-read fails after the write', async () => {
+    const env = twitterapiEnvironment();
+    const { error, stages, written } = await runTwitterapi(env, { reads: [deployments(oldVersion), 502] });
+    expectTwitterapiDiagnostic(stages.at(-1)!, error, 'workers-http-502', env);
+    expectNoLeak(env, written, error, twitterapiLeak);
   });
 });

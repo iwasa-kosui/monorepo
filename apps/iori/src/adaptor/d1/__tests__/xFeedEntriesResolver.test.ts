@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
 import { createD1XFeedEntriesResolver } from '../feedEntry/xFeedEntriesResolver.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
+const DAY = 24 * 60 * 60 * 1000;
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 const setup = () => {
@@ -40,7 +42,8 @@ const setup = () => {
     );
     return feedEntryId;
   };
-  const resolve = async (limit = 10) => (await createD1XFeedEntriesResolver(db).resolve({ limit })).val;
+  const resolve = async (limit = 10, now = 10_000) =>
+    (await createD1XFeedEntriesResolver(db).resolve({ limit, now: Instant.orThrow(now) })).val;
   return { addFeedSource, addEntry, resolve };
 };
 
@@ -101,6 +104,42 @@ describe('XFeedEntriesResolver', () => {
     const resolved = await resolve(2);
 
     expect(resolved.map((entry) => entry.feedEntryId)).toEqual([third, second]);
+  });
+
+  it('feed_entries に残っていても、投稿日時が 7 日を過ぎた投稿は返さない', async () => {
+    const { addFeedSource, addEntry, resolve } = setup();
+    const xUser = addFeedSource('x_user');
+    const now = 100 * DAY;
+    const kept = addEntry(xUser, { publishedAt: now - 7 * DAY + 1, fetchedAt: now });
+    addEntry(xUser, { publishedAt: now - 7 * DAY - 1, fetchedAt: now });
+
+    const resolved = await resolve(10, now);
+
+    expect(resolved.map((entry) => entry.feedEntryId)).toEqual([kept]);
+  });
+
+  it('投稿日時が無く、取得日時が 7 日を過ぎた投稿は返さない', async () => {
+    const { addFeedSource, addEntry, resolve } = setup();
+    const xUser = addFeedSource('x_user');
+    const now = 100 * DAY;
+    const kept = addEntry(xUser, { publishedAt: null, fetchedAt: now - 7 * DAY + 1 });
+    addEntry(xUser, { publishedAt: null, fetchedAt: now - 7 * DAY - 1 });
+
+    const resolved = await resolve(10, now);
+
+    expect(resolved.map((entry) => entry.feedEntryId)).toEqual([kept]);
+  });
+
+  it('ちょうど 7 日前の投稿は返す', async () => {
+    const { addFeedSource, addEntry, resolve } = setup();
+    const xUser = addFeedSource('x_user');
+    const now = 100 * DAY;
+    const published = addEntry(xUser, { publishedAt: now - 7 * DAY, fetchedAt: now });
+    const fetched = addEntry(xUser, { publishedAt: null, fetchedAt: now - 7 * DAY });
+
+    const resolved = await resolve(10, now);
+
+    expect(resolved.map((entry) => entry.feedEntryId).sort()).toEqual([published, fetched].sort());
   });
 
   it('投稿が無ければ空の配列を返す', async () => {
