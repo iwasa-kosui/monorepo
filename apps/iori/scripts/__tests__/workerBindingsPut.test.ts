@@ -254,54 +254,152 @@ const blueskyEnvironment = (overrides: Record<string, string> = {}): Record<stri
     BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop',
     ...overrides,
   });
-const runBluesky = (
+const blueskyValues = ['iori.example.com', 'abcd-efgh-ijkl-mnop'];
+const deployments = (...versions: { version_id: string; percentage: number }[]) => ({
+  success: true,
+  result: { deployments: [{ versions }, { versions: [{ version_id: 'v-older', percentage: 100 }] }] },
+});
+const oldVersion = { version_id: 'v-old', percentage: 100 };
+const newVersion = { version_id: 'v-new', percentage: 100 };
+type Read = unknown;
+type PatchReply = { status?: number; body?: string; throws?: boolean };
+const runBluesky = async (
   env: Record<string, string>,
-  options: { status?: number; failPut?: boolean; stdout?: string; signal?: AbortSignal } = {},
-) => run(env, { stdout: '\u2728 2 secrets successfully uploaded\n', ...options, operation: 'put-bluesky-secrets' });
+  {
+    reads = [deployments(oldVersion), deployments(newVersion)],
+    patch = {},
+    signal = new AbortController().signal,
+    sleepFails = false,
+  }: { reads?: Read[]; patch?: PatchReply; signal?: AbortSignal; sleepFails?: boolean } = {},
+) => {
+  const calls: Call[] = [];
+  const stages: string[] = [];
+  const requests: { url: string; method: string; headers: Record<string, string>; body?: string }[] = [];
+  const runCommand = vi.fn(async (program: string, args: string[], options: Call['options']) => {
+    calls.push({ program, args, options });
+    return { stdout: '✨ 2 secrets successfully uploaded\n', stderr: '' };
+  });
+  let readIndex = 0;
+  const fetchRequest = vi.fn(
+    async (url: URL, init: { method: string; headers: Record<string, string>; body?: string }) => {
+      requests.push({ url: url.toString(), method: init.method, headers: init.headers, body: init.body });
+      if (init.method === 'PATCH') {
+        if (patch.throws) throw new Error(`network down for ${init.body}`);
+        return new Response(
+          patch.body
+            ?? JSON.stringify({ success: true, result: { secrets: { BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' } } }),
+          { status: patch.status ?? 200 },
+        );
+      }
+      const read = reads[Math.min(readIndex, reads.length - 1)];
+      readIndex += 1;
+      if (typeof read === 'number') return new Response(JSON.stringify({ success: false }), { status: read });
+      return new Response(JSON.stringify(read), { status: 200 });
+    },
+  );
+  const sleep = vi.fn(async (_ms: number, _signal: AbortSignal) => {
+    if (sleepFails) throw new Error('sleep aborted');
+  });
+  const written: string[] = [];
+  const capture = (chunk: unknown) => {
+    written.push(String(chunk));
+    return true;
+  };
+  const spies = [
+    vi.spyOn(process.stdout, 'write').mockImplementation(capture as never),
+    vi.spyOn(process.stderr, 'write').mockImplementation(capture as never),
+    vi.spyOn(console, 'log').mockImplementation((...args) => void written.push(args.join(' '))),
+    vi.spyOn(console, 'error').mockImplementation((...args) => void written.push(args.join(' '))),
+  ];
+  let error: unknown;
+  try {
+    await putWorkerSecrets({
+      invocation: { ...invocation, operation: 'put-bluesky-secrets' },
+      env,
+      signal,
+      timeout: 60_000,
+      onStage: stage => stages.push(stage),
+      runCommand: runCommand as never,
+      fetchRequest: fetchRequest as never,
+      sleep: sleep as never,
+    });
+  } catch (caught) {
+    error = caught;
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+  const patches = requests.filter(request => request.method === 'PATCH');
+  const reads_ = requests.filter(request => request.method === 'GET');
+  return { calls, stages, requests, patches, reads: reads_, sleep, written, error };
+};
+const expectNoLeak = (env: Record<string, string>, written: string[], error: unknown) => {
+  const surface = [
+    ...written,
+    ...(error === undefined
+      ? []
+      : [
+        String((error as Error).message),
+        JSON.stringify(error, Object.getOwnPropertyNames(error as object)),
+        String((error as Error).cause ?? ''),
+        ...operationFailureLines('put-bluesky-secrets-put', error),
+      ]),
+  ].join('\n');
+  for (const value of [...values(env), ...blueskyValues]) expect(surface).not.toContain(value);
+};
+const patchUrl =
+  `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/iori-production-fixture1/secrets-bulk`;
+const deploymentsUrl =
+  `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/iori-production-fixture1/deployments`;
 
 describe('put-bluesky-secrets', () => {
-  it('puts only the two Bluesky values even when other secrets are in the environment', async () => {
+  it('patches only the two Bluesky secrets through secrets-bulk without calling wrangler', async () => {
     const env = blueskyEnvironment({
       TWITTERAPI_IO_API_KEY: 'twitterapi-io-key-value-for-fixture',
       VAPID_SUBJECT: 'mailto:iori@example.com',
     });
-    const { calls, stages, requests, error } = await runBluesky(env);
+    const { calls, stages, requests, patches, sleep, written, error } = await runBluesky(env);
     expect(error).toBeUndefined();
+    expect(calls).toEqual([]);
     expect(stages).toEqual(['put-bluesky-secrets', 'put-bluesky-secrets-read', 'put-bluesky-secrets-put']);
-    expect(requests).toHaveLength(1);
-    expect(calls).toHaveLength(1);
-    const [call] = calls;
-    expect([call.program, call.args]).toEqual([
-      'pnpm',
-      ['exec', 'wrangler', 'secret', 'bulk', '--name', 'iori-production-fixture1'],
+    expect(requests.map(request => [request.method, request.url])).toEqual([
+      ['GET', deploymentsUrl],
+      ['PATCH', patchUrl],
+      ['GET', deploymentsUrl],
     ]);
-    const input = JSON.parse(call.options.input!) as Record<string, unknown>;
-    expect(Object.keys(input).sort()).toEqual(['BLUESKY_APP_PASSWORD', 'BLUESKY_IDENTIFIER']);
-    expect(input).toEqual({ BLUESKY_IDENTIFIER: 'iori.example.com', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' });
-    expect(Object.values(input)).not.toContain(null);
+    expect(patches).toHaveLength(1);
+    const [patch] = patches;
+    expect(patch.headers).toEqual({
+      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+      'Content-Type': 'application/merge-patch+json',
+    });
+    expect(JSON.parse(patch.body!)).toEqual({
+      secrets: {
+        BLUESKY_IDENTIFIER: { type: 'secret_text', name: 'BLUESKY_IDENTIFIER', text: 'iori.example.com' },
+        BLUESKY_APP_PASSWORD: { type: 'secret_text', name: 'BLUESKY_APP_PASSWORD', text: 'abcd-efgh-ijkl-mnop' },
+      },
+    });
+    expect(Object.keys(JSON.parse(patch.body!).secrets)).toEqual(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
     for (
-      const value of [
+      const leaked of [
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'SMOKE_QUEUE_TOKEN',
+        'TWITTERAPI_IO_API_KEY',
+        'VAPID_SUBJECT',
         env.VAPID_PUBLIC_KEY,
         env.VAPID_PRIVATE_KEY,
         env.SMOKE_QUEUE_TOKEN,
         env.TWITTERAPI_IO_API_KEY,
-        'iori.example.com',
-        'abcd-efgh-ijkl-mnop',
       ]
-    ) {
-      expect(call.args.join(' ')).not.toContain(value);
-      expect(Object.values(call.options.env)).not.toContain(value);
-    }
-    expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
+    ) expect(patch.body).not.toContain(leaked);
+    expect(sleep).not.toHaveBeenCalled();
+    expectNoLeak(env, written, error);
   });
   it('does not fail when the VAPID and smoke values are empty or malformed', async () => {
     const env = blueskyEnvironment({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', SMOKE_QUEUE_TOKEN: 'short' });
-    const { calls, error } = await runBluesky(env);
+    const { patches, error } = await runBluesky(env);
     expect(error).toBeUndefined();
-    expect(Object.keys(JSON.parse(calls[0].options.input!)).sort()).toEqual([
-      'BLUESKY_APP_PASSWORD',
-      'BLUESKY_IDENTIFIER',
-    ]);
+    expect(Object.keys(JSON.parse(patches[0].body!).secrets)).toEqual(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
   });
   it.each(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'])(
     'rejects an empty %s without calling wrangler',
@@ -315,8 +413,8 @@ describe('put-bluesky-secrets', () => {
   );
   it('rejects an unset Bluesky value without calling wrangler', async () => {
     const { BLUESKY_APP_PASSWORD: _removed, ...env } = blueskyEnvironment();
-    const { calls, stages, error } = await runBluesky(env);
-    expect(calls).toEqual([]);
+    const { calls, requests, stages, error } = await runBluesky(env);
+    expect([calls, requests]).toEqual([[], []]);
     expectDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
   });
   it.each([
@@ -331,29 +429,126 @@ describe('put-bluesky-secrets', () => {
     expect(stages).toEqual(['put-bluesky-secrets']);
     expectDiagnostic(stages.at(-1)!, error, 'identity-mismatch', env);
   });
-  it('stops before putting when the Worker does not exist', async () => {
+  it('stops before patching when the Worker does not exist', async () => {
     const env = blueskyEnvironment();
-    const { calls, stages, error } = await runBluesky(env, { status: 404 });
-    expect(calls).toEqual([]);
+    const { calls, patches, stages, error } = await runBluesky(env, { reads: [404] });
+    expect([calls, patches]).toEqual([[], []]);
     expect(stages.at(-1)).toBe('put-bluesky-secrets-read');
     expectDiagnostic(stages.at(-1)!, error, 'workers-http-404', env);
   });
-  it('keeps the values out of the diagnostics when the put fails', async () => {
+  it.each([
+    ['an HTTP error', [500], 'workers-http-500'],
+    ['no deployment', [{ success: true, result: { deployments: [] } }], 'workers-shape'],
+    ['no versions', [{ success: true, result: { deployments: [{ versions: [] }] } }], 'workers-shape'],
+    [
+      'a version without an id',
+      [{ success: true, result: { deployments: [{ versions: [{ percentage: 100 }] }] } }],
+      'workers-shape',
+    ],
+  ])('does not patch when the deployments read before the write has %s', async (_label, reads, reason) => {
     const env = blueskyEnvironment();
-    const { calls, stages, error } = await runBluesky(env, { failPut: true });
-    expect(calls).toHaveLength(1);
-    expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
-    expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
-    expect(String((error as Error).message)).not.toContain('abcd-efgh-ijkl-mnop');
+    const { calls, patches, stages, error, written } = await runBluesky(env, { reads });
+    expect([calls, patches]).toEqual([[], []]);
+    expect(stages.at(-1)).toBe('put-bluesky-secrets-read');
+    expectDiagnostic(stages.at(-1)!, error, reason, env);
+    expectNoLeak(env, written, error);
   });
-  it.each(['', 'No content found in file or piped input.\n', '\u2728 3 secrets successfully uploaded\n'])(
-    'fails with exit code 0 when the success line is missing from %j',
-    async (stdout) => {
+  it.each([[401, 'secrets-bulk-forbidden'], [403, 'secrets-bulk-forbidden'], [500, 'secrets-bulk-failed']])(
+    'maps a PATCH response of HTTP %i to %s and does not read the deployments again',
+    async (status, reason) => {
       const env = blueskyEnvironment();
-      const { calls, stages, error } = await runBluesky(env, { stdout });
-      expect(calls).toHaveLength(1);
+      const body = JSON.stringify({
+        success: false,
+        errors: [{ message: 'rejected abcd-efgh-ijkl-mnop for iori.example.com' }],
+        result: { secrets: { BLUESKY_APP_PASSWORD: { text: 'abcd-efgh-ijkl-mnop' } } },
+      });
+      const { calls, patches, reads, stages, error, written, sleep } = await runBluesky(env, {
+        patch: { status, body },
+      });
+      expect(calls).toEqual([]);
+      expect(patches).toHaveLength(1);
+      expect(reads).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
       expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
-      expectDiagnostic(stages.at(-1)!, error, 'command-failed', env);
+      expectDiagnostic(stages.at(-1)!, error, reason, env);
+      expectNoLeak(env, written, error);
     },
   );
+  it.each([
+    [
+      'success:false',
+      { status: 200, body: JSON.stringify({ success: false, errors: [{ message: 'bad abcd-efgh-ijkl-mnop' }] }) },
+    ],
+    ['success missing', { status: 200, body: JSON.stringify({ result: { text: 'abcd-efgh-ijkl-mnop' } }) }],
+    ['invalid JSON', { status: 200, body: 'not json abcd-efgh-ijkl-mnop' }],
+    ['a network error', { throws: true }],
+  ])('maps a PATCH with %s to secrets-bulk-failed and does not read the deployments again', async (_label, patch) => {
+    const env = blueskyEnvironment();
+    const { calls, patches, reads, stages, error, written, sleep } = await runBluesky(env, { patch });
+    expect(calls).toEqual([]);
+    expect(patches).toHaveLength(1);
+    expect(reads).toHaveLength(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expectDiagnostic(stages.at(-1)!, error, 'secrets-bulk-failed', env);
+    expectNoLeak(env, written, error);
+  });
+  it('reports an abort when the signal is aborted and the PATCH fails', async () => {
+    const env = blueskyEnvironment();
+    const controller = new AbortController();
+    controller.abort();
+    const { stages, error } = await runBluesky(env, { patch: { throws: true }, signal: controller.signal });
+    expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
+    expectDiagnostic(stages.at(-1)!, error, 'aborted', env);
+  });
+  it('succeeds when a later read shows the new version at 100 percent, waiting 3 seconds between reads', async () => {
+    const env = blueskyEnvironment();
+    const { error, reads, patches, sleep, written } = await runBluesky(env, {
+      reads: [
+        deployments(oldVersion),
+        deployments(oldVersion),
+        deployments({ version_id: 'v-new', percentage: 50 }, { version_id: 'v-old', percentage: 50 }),
+        deployments(newVersion),
+      ],
+    });
+    expect(error).toBeUndefined();
+    expect(patches).toHaveLength(1);
+    expect(reads).toHaveLength(4);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([3000, 3000]);
+    expectNoLeak(env, written, error);
+  });
+  it.each([
+    ['the version does not change', [deployments(oldVersion)]],
+    ['the new version is at 50 percent alone', [
+      deployments(oldVersion),
+      deployments({ version_id: 'v-new', percentage: 50 }),
+    ]],
+    [
+      'the new version shares the traffic',
+      [
+        deployments(oldVersion),
+        deployments({ version_id: 'v-new', percentage: 50 }, { version_id: 'v-old', percentage: 50 }),
+      ],
+    ],
+  ])('fails with secrets-bulk-not-deployed after 5 reads when %s', async (_label, reads) => {
+    const env = blueskyEnvironment();
+    const { calls, patches, reads: gets, stages, sleep, error, written } = await runBluesky(env, { reads });
+    expect(calls).toEqual([]);
+    expect(patches).toHaveLength(1);
+    expect(gets).toHaveLength(6);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([3000, 3000, 3000, 3000]);
+    expect(stages.at(-1)).toBe('put-bluesky-secrets-put');
+    expectDiagnostic(stages.at(-1)!, error, 'secrets-bulk-not-deployed', env);
+    expectNoLeak(env, written, error);
+  });
+  it('fails with the read reason when a re-read fails after the write', async () => {
+    const env = blueskyEnvironment();
+    const { error, stages, written } = await runBluesky(env, { reads: [deployments(oldVersion), 502] });
+    expectDiagnostic(stages.at(-1)!, error, 'workers-http-502', env);
+    expectNoLeak(env, written, error);
+  });
+  it('reports an abort when the wait between reads is interrupted', async () => {
+    const env = blueskyEnvironment();
+    const { error, stages } = await runBluesky(env, { reads: [deployments(oldVersion)], sleepFails: true });
+    expectDiagnostic(stages.at(-1)!, error, 'aborted', env);
+  });
 });
