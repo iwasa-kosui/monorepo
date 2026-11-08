@@ -916,7 +916,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     });
 
   it('関心のベクトルがあれば、トピックごとにおすすめの点数が正の記事を選び、score と根拠と rank を保存する', async () => {
-    const t = setup();
+    const t = setup({ topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({ minSimilarity: 0.4, minMargin: 0 }) });
     const interestSourceId = t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addEntry(t.sources.rss, 'Low', { count: 99, embedding: vec({ 0: 1, 1: 2 }) });
     t.addEntry(t.sources.rss, 'Mid', { count: 1, embedding: vec({ 0: 1, 1: 1 }) });
@@ -1200,7 +1200,7 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
   const strictPolicy = TopicAssignmentPolicy.orThrow({ minSimilarity: 0.8, minMargin: 0 });
 
   it('関心の点数が高くてもトピックとの類似度が低い記事より、点数がやや低くてもトピックとの類似度が高い記事を上に置く', async () => {
-    const t = setup();
+    const t = setup({ topicAssignmentPolicy: TopicAssignmentPolicy.orThrow({ minSimilarity: 0.4, minMargin: 0 }) });
     t.addInterest('kosui_post', KOSUI_REF, interest);
     t.addEntry(t.sources.rss, 'Far from topic', { count: 1, embedding: vec({ 0: 0.5, 1: 1 }) });
     t.addEntry(t.sources.rss, 'Close to topic', { count: 1, embedding: vec({ 0: 1, 1: 0.3 }) });
