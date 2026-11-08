@@ -1,4 +1,5 @@
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
+import { speculationRulesScript } from './ui/api/speculationRules.ts';
 import { renderBottomNav, renderSidebar } from './workerPageNav.tsx';
 
 export const SITE_DESCRIPTION = 'A microblog by kosui';
@@ -6,6 +7,7 @@ export const SITE_DESCRIPTION = 'A microblog by kosui';
 type WorkerPage = Readonly<{
   entry: string;
   title: string;
+  private?: boolean;
 }>;
 
 export type WorkerPageIdentity = Readonly<{
@@ -17,6 +19,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/', { entry: 'home', title: 'blog.kosui.me' }],
   ['/about', { entry: 'about', title: 'About | blog.kosui.me' }],
   ['/articles', { entry: 'articles', title: 'Articles | blog.kosui.me' }],
+  ['/bluesky', { entry: 'bluesky', title: 'Bluesky | blog.kosui.me' }],
   ['/federated', { entry: 'federatedTimeline', title: 'Federated timeline | blog.kosui.me' }],
   ['/follow', { entry: 'follow', title: 'Follow | blog.kosui.me' }],
   ['/likes', { entry: 'likedPosts', title: 'Liked posts | blog.kosui.me' }],
@@ -24,6 +27,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/search', { entry: 'search', title: '検索 | blog.kosui.me' }],
   ['/sign-in', { entry: 'signIn', title: 'Sign in | blog.kosui.me' }],
   ['/sign-up', { entry: 'signUp', title: 'Sign up | blog.kosui.me' }],
+  ['/x', { entry: 'xPosts', title: 'X | blog.kosui.me', private: true }],
 ]);
 
 const pageForPath = (pathname: string): WorkerPage | undefined => {
@@ -55,6 +59,9 @@ export const createWorkerPageFallback = async (
   const page = pageForPath(new URL(request.url).pathname);
   if (page === undefined) return undefined;
   const isLoggedIn = identity?.isLoggedIn ?? /(?:^|;\s*)sessionId=/.test(request.headers.get('Cookie') ?? '');
+  if (page.private === true && !isLoggedIn) {
+    return new Response(null, { status: 302, headers: { Location: '/sign-in', 'Cache-Control': 'no-store' } });
+  }
   const [sidebar, bottomNav] = isLoggedIn
     ? await Promise.all([renderSidebar(isLoggedIn), renderBottomNav(isLoggedIn)])
     : ['', ''];
@@ -72,11 +79,15 @@ export const createWorkerPageFallback = async (
     <link rel="apple-touch-icon" href="/icon-192.png">
     <meta name="theme-color" content="#1a1918">
     <title>${escapeHtml(page.title)}</title>
-    <meta name="description" content="${SITE_DESCRIPTION}">
+    <meta name="description" content="${SITE_DESCRIPTION}">${
+    page.private === true ? '\n    <meta name="robots" content="noindex">' : ''
+  }
     <script src="https://cdn.tailwindcss.com"></script>
     <style>${layoutStyle}</style>
     <script>${tailwindConfigScript}</script>
+    ${speculationRulesScript()}
     <script type="module" src="/static/${page.entry}.js"></script>
+    <script type="module" src="/static/navPrefetch.js"></script>
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
     isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16' : ''
@@ -99,6 +110,7 @@ export const createWorkerPageFallback = async (
     headers: {
       'Content-Type': 'text/html; charset=UTF-8',
       'Cache-Control': 'no-store',
+      ...(page.private === true ? { 'X-Robots-Tag': 'noindex' } : {}),
     },
   });
 };

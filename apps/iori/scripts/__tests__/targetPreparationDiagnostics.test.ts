@@ -30,6 +30,8 @@ const representativeReasons = [
   'command-failed',
   'd1-baseline-mismatch',
   'aborted',
+  'result-invalid',
+  'cursor-invalid',
   'identity-mismatch',
   'mismatch',
   'config-invalid',
@@ -40,6 +42,9 @@ const representativeReasons = [
   'smoke-token-short',
   'smoke-token-long',
   'vapid-rejected',
+  'secrets-bulk-forbidden',
+  'secrets-bulk-failed',
+  'secrets-bulk-not-deployed',
   'unclassified',
 ];
 it.each(representativeReasons)('accepts the representative reason %s', (reason) => {

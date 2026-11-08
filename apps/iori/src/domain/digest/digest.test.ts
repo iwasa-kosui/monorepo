@@ -26,6 +26,7 @@ const payload = () => ({
     feedbackAt: null,
   }],
   trends: [{ kind: 'hatena' as const, rank: 1, url: 'https://example.com/h', title: 'H', count: 10 }],
+  xPostFeedEntryIds: ['x-1', 'x-2'],
 });
 
 describe('Digest', () => {
@@ -48,6 +49,7 @@ describe('Digest', () => {
     expect(created.val.aggregateState.items).toHaveLength(1);
     expect(created.val.aggregateState.items[0]!.digestItemId).toEqual(expect.any(String));
     expect(created.val.aggregateState.trends).toHaveLength(1);
+    expect(created.val.aggregateState.xPostFeedEntryIds).toEqual(['x-1', 'x-2']);
   });
 
   it('create は日付の形式が違う digest を作らない', () => {

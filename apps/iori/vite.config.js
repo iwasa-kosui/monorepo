@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
             likedPosts: './src/ui/pages/likedPosts.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
             search: './src/ui/pages/search.tsx',
+            xPosts: './src/ui/pages/xPosts.tsx',
+            bluesky: './src/ui/pages/bluesky.tsx',
+            navPrefetch: './src/ui/pages/navPrefetch.ts',
           },
           output: {
             entryFileNames: 'static/[name].js',

@@ -55,6 +55,8 @@ it('maps the operations to their fixed scripts', async () => {
     const [name, script] of [
       ['deploy-worker', 'deploy-active-worker.mjs'],
       ['put-worker-secrets', 'worker-bindings-put.mjs'],
+      ['put-bluesky-secrets', 'worker-bindings-put.mjs'],
+      ['put-twitterapi-secret', 'worker-bindings-put.mjs'],
       ['resume-source', 'resume-source.mjs'],
       [
         'release-pending-freeze',
@@ -65,6 +67,12 @@ it('maps the operations to their fixed scripts', async () => {
       ['delete-rehearsal-d1', 'delete-rehearsal-d1.mjs'],
       ['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts.mjs'],
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
+      ['delete-unfollowed-posts-dry-run', 'delete-unfollowed-posts.mjs'],
+      ['delete-unfollowed-posts', 'delete-unfollowed-posts.mjs'],
+      ['domain-events-stats', 'domain-events-stats.mjs'],
+      ['digest-quality-sample', 'digest-quality-sample.mjs'],
+      ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts.mjs'],
+      ['delete-blocked-domain-posts', 'delete-blocked-domain-posts.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
       ['ensure-event-archive-bucket', 'ensure-event-archive-bucket.mjs'],
     ]
@@ -221,6 +229,111 @@ it('relays only the fixed move-unfollowed-reposts notices to the public log', as
     'IORI_NOTICE move-unfollowed-reposts mode=delete created=1 deleted=1',
     'IORI_NOTICE move-unfollowed-reposts mode=apply created=1234567890 deleted=1',
     ' IORI_NOTICE move-unfollowed-reposts mode=apply created=1 deleted=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed delete-unfollowed-posts notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000 federated=300',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=0 federated=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=20000',
+  ];
+  const rejected = [
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=20000',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run federated=1 targets=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=-1 federated=0',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=-1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1234567890',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 federated=1 posts=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=1 posts=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 created=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply created=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply',
+    'IORI_NOTICE delete-unfollowed-posts mode=delete deleted=1',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1234567890',
+    'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 postId=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed domain-events-stats notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE domain-events-stats summary total=120000 oldest=2026-08-01T00:00:00.000Z newest=2026-11-05T01:02:03.456Z older_than_7d=100000 avg_bytes=850 max_bytes=64000 created_at_skew_actors=3',
+    'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1234',
+    'IORI_NOTICE domain-events-stats event=timelineItem.deleted count=42',
+  ];
+  const rejected = [
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=-1',
+    'IORI_NOTICE domain-events-stats summary total=-1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=yesterday newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1 extra=1',
+    'IORI_NOTICE domain-events-stats day=yesterday count=1',
+    'IORI_NOTICE domain-events-stats event=../secret count=1',
+    'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed digest-quality-sample notices to the public log', async () => {
+  const writes = captureStderr();
+  const prefix = 'IORI_NOTICE digest-quality-sample';
+  const accepted = [
+    `${prefix} overview users=1`,
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750`,
+    `${prefix} user=1 summary topics=0 enabled=0 embedded=0 items=0 scored=0 matched=0 match_rate=none`,
+    `${prefix} user=1 hist=item_top1 lt0.20=0 b0.20=1 b0.25=2 ge0.80=0`,
+    `${prefix} user=2 hist=item_gap lt0.00=0 b0.00=3 ge0.20=1`,
+    `${prefix} user=1 candidates total=900 ge0.40=500 ge0.45=300 ge0.50=200 ge0.55=100 ge0.60=50`,
+    `${prefix} user=1 material kind=bookmark total=30 ge0.40=20 ge0.50=10`,
+  ];
+  const rejected = [
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.75`,
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750 title=x`,
+    `${prefix} user=1 hist=item_top1 lt0.20=-1`,
+    `${prefix} user=1 hist=other b0.20=1`,
+    `${prefix} user=1 candidates total=900 ge0.40=500`,
+    `${prefix} user=1 material kind=Book.mark total=30 ge0.40=20 ge0.50=10`,
+    `${prefix} user=alice summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750`,
+    ` ${prefix} overview users=1`,
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed delete-blocked-domain-posts notices to the public log', async () => {
+  const writes = captureStderr();
+  const dry = (domain: string, counts: string) =>
+    `IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=${domain} ${counts}`;
+  const counts =
+    'posts=120 remote_posts=130 timeline_items=400 federated_items=10 reposts=5 likes=3 emoji_reacts=2 notifications=7 orphan_repost_notifications=4 images=9 articles_skipped=1 actors=20 follows_out=2 follows_in=3 mutes=0';
+  const accepted = [
+    dry('baraag.net', counts),
+    dry('baraag.net', counts.replace(/=\d+/g, '=0')),
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=120 deleted_timeline_items=400',
+  ];
+  const rejected = [
+    dry('example.com', counts),
+    dry('baraag.net', counts.replace(' mutes=0', '')),
+    dry('baraag.net', counts.replace('posts=120 ', '')),
+    dry('baraag.net', `${counts} extra=1`),
+    dry('baraag.net', counts.replace('posts=120', 'posts=-1')),
+    dry('baraag.net', counts.replace('posts=120', 'posts=1234567890')),
+    dry('baraag.net', counts.replace('mutes=0', 'mutes=x')),
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1',
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1 extra=1',
+    'IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1234567890',
+    'IORI_NOTICE delete-blocked-domain-posts mode=delete deleted_posts=1 deleted_timeline_items=1',
+    ' IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=1 deleted_timeline_items=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));

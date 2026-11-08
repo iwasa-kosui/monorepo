@@ -37,11 +37,14 @@ import type {
   HatenaTrendsResolverByFetchedSince,
   RadarFeedEntriesResolverByFetchedSince,
   TimelineLinkTrendsResolverByUserId,
+  XPost,
+  XPostsResolverByFetchedSince,
 } from '../domain/digest/digestMaterial.ts';
 import { normalizeDigestUrl } from '../domain/digest/digestUrl.ts';
+import { selectXPosts } from '../domain/digest/xPostSelection.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
-import { assignTopics, TOPIC_MIN_SIMILARITY } from '../domain/digestTopic/topicAssignment.ts';
+import { assignTopics, TopicAssignmentPolicy } from '../domain/digestTopic/topicAssignment.ts';
 import type { FeedEntry } from '../domain/feedEntry/feedEntry.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { InterestSourceId } from '../domain/interestSource/interestSourceId.ts';
@@ -61,6 +64,7 @@ import type { CreateArticleWithBodyUseCase } from './createArticleWithBody.ts';
 import type { EnsureDefaultDigestTopicsUseCase } from './ensureDefaultDigestTopics.ts';
 import { fetchArticleBodyText } from './helper/fetchArticleBodyText.ts';
 import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
+import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
 export const DIGEST_SUMMARY_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
@@ -83,6 +87,8 @@ const TOPIC_MIN_ITEMS = 3;
 const TOPICS_PER_DAY_LIMIT = 4;
 export const TRENDS_LIMIT = 10;
 const RADAR_LIMIT = 1;
+export const X_POSTS_LIMIT = 10;
+const X_POSTS_CANDIDATE_LIMIT = 300;
 const HOUR_MS = 60 * 60 * 1000;
 export const MATERIAL_WINDOW_MS = 24 * HOUR_MS;
 
@@ -99,6 +105,7 @@ type Ok = Readonly<{
   topics: number;
   items: number;
   trends: number;
+  xPosts: number;
   summarized: number;
   pushed: number;
   skippedReason?: string;
@@ -109,6 +116,10 @@ type Ok = Readonly<{
     scoringMs: number;
     fetchedBodies: number;
     fallbackToDescription: number;
+    assignedToTopics: number;
+    belowMinSimilarity: number;
+    belowMinMargin: number;
+    excluded: number;
   }>;
 }>;
 
@@ -152,6 +163,8 @@ type Deps = Readonly<{
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
+  xPostsResolverByFetchedSince: XPostsResolverByFetchedSince;
+  isDigestOwner: IsDigestOwner;
   interestVectorsResolverByUserId: InterestVectorsResolverByUserId;
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
   safeFetcher: SafeFetcher;
@@ -161,6 +174,7 @@ type Deps = Readonly<{
   digestPushSentStore: DigestPushSentStore;
   pushSubscriptionsResolverByUserId: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  topicAssignmentPolicy?: TopicAssignmentPolicy;
   now: () => Instant;
   sleep: (ms: number) => Promise<void>;
 }>;
@@ -231,7 +245,11 @@ type SelectedItem = Readonly<{
   reasonInterestSourceId: InterestSourceId | null;
 }>;
 
-type TopicSelection = Readonly<{ topic: StoredDigestTopic; items: ReadonlyArray<SelectedItem> }>;
+type TopicSelection = Readonly<{
+  topic: StoredDigestTopic;
+  items: ReadonlyArray<SelectedItem>;
+  eligibleCount: number;
+}>;
 
 const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): ReadonlyArray<SelectedItem> =>
   [...articles]
@@ -239,8 +257,17 @@ const selectByBookmarks = (articles: ReadonlyArray<RecommendableArticle>): Reado
       (b.hatenaBookmarkCount ?? 0) - (a.hatenaBookmarkCount ?? 0)
       || (a.feedEntryId < b.feedEntryId ? -1 : a.feedEntryId > b.feedEntryId ? 1 : 0)
     )
-    .slice(0, TOPIC_ITEMS_LIMIT)
     .map((article) => ({ article, score: null, reasonInterestSourceId: null }));
+
+const takeTopicsIncludingTies = <T extends { eligibleCount: number }>(
+  sorted: readonly T[],
+  slots: number,
+): readonly T[] => {
+  const last = sorted[slots - 1];
+  if (slots <= 0) return [];
+  if (last === undefined) return sorted;
+  return sorted.filter((selection) => selection.eligibleCount >= last.eligibleCount);
+};
 
 const create = ({
   digestSubscriptionResolverByUserId,
@@ -255,6 +282,8 @@ const create = ({
   radarFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
   timelineLinkTrendsResolverByUserId,
+  xPostsResolverByFetchedSince,
+  isDigestOwner,
   interestVectorsResolverByUserId,
   recommendableArticlesResolverByFetchedSince,
   safeFetcher,
@@ -264,6 +293,7 @@ const create = ({
   digestPushSentStore,
   pushSubscriptionsResolverByUserId,
   webPushSender,
+  topicAssignmentPolicy = TopicAssignmentPolicy.default,
   now,
   sleep,
 }: Deps): CreateDailyDigestUseCase => {
@@ -332,6 +362,7 @@ const create = ({
       topics: 0,
       items: 0,
       trends: 0,
+      xPosts: 0,
       summarized: 0,
       pushed: 0,
       recommendation: {
@@ -341,6 +372,10 @@ const create = ({
         scoringMs: 0,
         fetchedBodies: 0,
         fallbackToDescription: 0,
+        assignedToTopics: 0,
+        belowMinSimilarity: 0,
+        belowMinMargin: 0,
+        excluded: 0,
       },
     });
 
@@ -401,20 +436,26 @@ const create = ({
       ? windowStart
       : previous.val.createdAt;
 
-    const [radarEntries, hatenaTrends, timelineTrends, interestVectors, pastUrls, recommendable] = await Promise.all([
-      radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
-      hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
-      timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
-      interestVectorsResolverByUserId.resolve(userId),
-      digestItemUrlsResolverByUserId.resolve({
-        userId,
-        excludingDigestIds: existing.replaceable.map((header) => header.digestId),
-      }),
-      recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
-    ]);
+    const ownsDigest = await isDigestOwner(userId);
+    const [radarEntries, hatenaTrends, timelineTrends, xPostCandidates, interestVectors, pastUrls, recommendable] =
+      await Promise.all([
+        radarFeedEntriesResolverByFetchedSince.resolve({ fetchedSince: since, limit: RADAR_LIMIT }),
+        hatenaTrendsResolverByFetchedSince.resolve({ fetchedSince: since, limit: TRENDS_LIMIT }),
+        timelineLinkTrendsResolverByUserId.resolve({ userId, createdSince: since, limit: TRENDS_LIMIT }),
+        ownsDigest
+          ? xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT })
+          : RA.ok<ReadonlyArray<XPost>>([]),
+        interestVectorsResolverByUserId.resolve(userId),
+        digestItemUrlsResolverByUserId.resolve({
+          userId,
+          excludingDigestIds: existing.replaceable.map((header) => header.digestId),
+        }),
+        recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince: since }),
+      ]);
     const radar = radarEntries.val[0];
 
     const materials = interestVectors.val;
+    const xPosts = selectXPosts({ posts: xPostCandidates.val, materials, now: startedAt, limit: X_POSTS_LIMIT });
     const pastUrlSet = new Set(pastUrls.val.map(normalizeDigestUrl));
     const candidates = uniqueByNormalizedUrl(recommendable.val)
       .filter((candidate) => !pastUrlSet.has(normalizeDigestUrl(candidate.url)));
@@ -423,24 +464,30 @@ const create = ({
     const hasPositiveMaterial = materials.some((material) => !Recommendation.isNegative(material));
 
     const scoringStartedAt = Date.now();
-    const assignment = assignTopics({ articles: candidates, topics, minSimilarity: TOPIC_MIN_SIMILARITY });
+    const assignment = assignTopics({ articles: candidates, topics, policy: topicAssignmentPolicy });
+    const topicSimilarityOf = (article: RecommendableArticle): number => assignment.matches.get(article)!.similarity;
     const selections: TopicSelection[] = [];
     for (const topic of topics) {
       if (keptTopicKeys.has(topic.topicKey)) continue;
       const assigned = assignment.byTopic.get(topic.topicKey) ?? [];
-      const items = hasPositiveMaterial
-        ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: TOPIC_ITEMS_LIMIT })
-          .map(({ feedEntryId, score, reasonInterestSourceId }): SelectedItem => ({
-            article: candidateById.get(feedEntryId)!,
-            score,
-            reasonInterestSourceId,
-          }))
+      const ranked = hasPositiveMaterial
+        ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
+          .map(({ feedEntryId, score, reasonInterestSourceId }) => {
+            const article = candidateById.get(feedEntryId)!;
+            return {
+              item: { article, score, reasonInterestSourceId } satisfies SelectedItem,
+              rank: score * topicSimilarityOf(article),
+            };
+          })
+          .sort((a, b) => b.rank - a.rank)
+          .map(({ item }) => item)
         : selectByBookmarks(assigned);
-      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items });
+      const items = ranked.slice(0, TOPIC_ITEMS_LIMIT);
+      if (items.length >= TOPIC_MIN_ITEMS) selections.push({ topic, items, eligibleCount: ranked.length });
     }
     const scoringMs = Date.now() - scoringStartedAt;
-    selections.sort((a, b) => b.items.length - a.items.length || a.topic.sortOrder - b.topic.sortOrder);
-    const chosen = selections.slice(0, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
+    selections.sort((a, b) => b.eligibleCount - a.eligibleCount || a.topic.sortOrder - b.topic.sortOrder);
+    const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
     let fetchedBodies = 0;
@@ -567,6 +614,7 @@ const create = ({
           feedbackAt: null,
         })),
         trends: [],
+        xPostFeedEntryIds: [],
       }, now());
       if (!created.ok) {
         await discardCreatedArticles();
@@ -585,6 +633,7 @@ const create = ({
         ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
         ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
       ],
+      xPostFeedEntryIds: xPosts.map((post) => post.feedEntryId),
     }, now());
     if (!summaryCreated.ok) {
       await discardCreatedArticles();
@@ -641,6 +690,7 @@ const create = ({
         topics: topicDigests.length,
         items: selectedItems.length,
         trends: summaryDigest.trends.length,
+        xPosts: xPosts.length,
         summarized,
         pushed,
         recommendation: {
@@ -650,6 +700,10 @@ const create = ({
           scoringMs,
           fetchedBodies,
           fallbackToDescription,
+          assignedToTopics: candidates.length - assignment.others.length,
+          belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
+          belowMinMargin: assignment.otherCounts.belowMinMargin,
+          excluded: assignment.otherCounts.excluded,
         },
       });
     if (trigger === 'requested') return createdOk(0);

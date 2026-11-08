@@ -1,0 +1,106 @@
+---
+import '../playground/playground.css';
+
+import { snapshotFiles } from '../lib/snapshots';
+
+interface Props {
+  exercise: string;
+  editable: string[];
+  readonly?: string[];
+  testFile?: string;
+  scripts?: { file: string; label: string }[];
+  complete?: { exercise: string; label?: string };
+}
+
+const { exercise, editable, testFile, scripts = [], complete } = Astro.props;
+const readonlyFiles = Astro.props.readonly ?? [];
+const shown = [...editable, ...readonlyFiles];
+const config = JSON.stringify({
+  exerciseId: exercise,
+  files: snapshotFiles(exercise),
+  editable,
+  readonly: readonlyFiles,
+  testFile: testFile ?? null,
+  complete: complete === undefined
+    ? null
+    : { files: snapshotFiles(complete.exercise) },
+});
+---
+
+<section
+  class="playground"
+  data-playground="code"
+  data-state="loading"
+  data-config={config}
+  aria-label="コードを編集して実行する欄"
+>
+  <div class="playground-status" data-role="status">
+    <span data-role="status-text" role="status"
+    >実行環境を読み込んでいます</span>
+    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+  </div>
+  <div class="playground-toolbar">
+    {
+      testFile !== undefined && (
+        <button
+          type="button"
+          data-role="run-tests"
+          data-run-file={testFile}
+          disabled
+        >
+          テストを実行する
+        </button>
+      )
+    }
+    {
+      scripts.map((script) => (
+        <button type="button" data-run-file={script.file} disabled>
+          {script.label}
+        </button>
+      ))
+    }
+    {
+      complete !== undefined && (
+        <button type="button" data-role="complete">
+          {complete.label ?? '完成コードを読み込む'}
+        </button>
+      )
+    }
+    <button type="button" data-role="reset">最初のコードに戻す</button>
+    <button type="button" data-role="restore" hidden>
+      読み込む前のコードに戻す
+    </button>
+  </div>
+  <div class="playground-tabs" role="tablist" aria-label="ファイル">
+    {
+      shown.map((file, index) => (
+        <button
+          type="button"
+          role="tab"
+          data-file={file}
+          aria-selected={index === 0 ? 'true' : 'false'}
+          tabindex={index === 0 ? 0 : -1}
+        >
+          {file} {readonlyFiles.includes(file) ? '（読み取りだけ）' : ''}
+        </button>
+      ))
+    }
+  </div>
+  <div class="playground-editor" data-role="editor" role="tabpanel"></div>
+  <div class="playground-results" data-role="output" aria-live="polite"></div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
+</section>
+
+<script>
+import '../playground/code-playground.ts';
+</script>

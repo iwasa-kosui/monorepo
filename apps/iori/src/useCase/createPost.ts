@@ -21,6 +21,7 @@ import { Schema } from '../helper/schema.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -28,6 +29,8 @@ type Input =
   & PostImagesInput
   & Readonly<{
     content: string;
+    summary?: string | null;
+    sensitive?: boolean;
     ctx: RequestContext<unknown>;
   }>;
 
@@ -53,6 +56,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
 
@@ -66,6 +70,7 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  scheduleBlueskyCrosspost,
   origin,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
@@ -77,11 +82,13 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content }) => {
+      RA.andBind('postEvent', ({ actor, content, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
@@ -207,6 +214,10 @@ const create = ({
           }
         }
 
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ post }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: post.postId });
         return RA.ok(undefined);
       }),
       RA.map(({ post, user }) => ({ post, user })),

@@ -19,6 +19,7 @@ const fixtureEnvironment = (directory: string, options: { rejectQueueProducer?: 
   D1_DATABASE_ID: '00000000-0000-4000-8000-000000000002',
   KV_NAMESPACE_ID: '00000000000000000000000000000003',
   R2_BUCKET_NAME: 'iori-uploads-fixture',
+  R2_EVENT_ARCHIVE_BUCKET_NAME: 'iori-event-archive-fixture',
   QUEUE_NAME: 'iori-fedify-fixture',
   ORIGIN: 'https://iori.example.invalid',
   VAPID_SUBJECT: 'mailto:admin@example.invalid',
@@ -136,6 +137,39 @@ describe('temporary Worker config command paths', () => {
     const secretPuts = commands.split('\n').filter((line) => line.startsWith('exec wrangler secret put'));
 
     expect(secretPuts.map((line) => line.split(' ')[4])).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+    ]);
+  });
+
+  it('installs TWITTERAPI_IO_API_KEY after the required secrets only when a value is supplied', async () => {
+    const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;
+    const secretPutsWith = async (extra: Record<string, string>) => {
+      const fakePnpmDirectory = await createFakePnpm();
+      await execFileAsync(process.execPath, [script], {
+        cwd: appRoot,
+        env: {
+          ...fixtureEnvironment(fakePnpmDirectory),
+          VAPID_PUBLIC_KEY: 'fixture-public',
+          VAPID_PRIVATE_KEY: 'fixture-private',
+          SMOKE_QUEUE_TOKEN: 'fixture-smoke-token',
+          ...extra,
+        },
+      });
+      const commands = await readFile(join(fakePnpmDirectory, 'pnpm-command.log'), 'utf8');
+      return commands.split('\n').filter((line) => line.startsWith('exec wrangler secret put')).map((line) =>
+        line.split(' ')[4]
+      );
+    };
+
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: 'fixture-twitterapi-io-key' })).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+      'TWITTERAPI_IO_API_KEY',
+    ]);
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: '' })).toEqual([
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',

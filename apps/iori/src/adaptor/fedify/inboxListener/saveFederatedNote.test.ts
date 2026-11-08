@@ -2,6 +2,7 @@ import { Note, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ActorIdentity } from '../actorIdentity.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
 const relayId = 'relay-1' as never;
@@ -43,6 +44,21 @@ describe('saveFederatedNote', () => {
     await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
 
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
+  });
+
+  it('fetches the author and attachments of the Note with the given document loader', async () => {
+    const { deps } = createDeps();
+    const note = createNote();
+    const getAttribution = vi.spyOn(note, 'getAttribution');
+    const getAttachments = vi.spyOn(note, 'getAttachments');
+    const fromFedifyActor = vi.spyOn(ActorIdentity, 'fromFedifyActor');
+
+    await saveFederatedNote(deps, { note, relayId, documentLoader });
+
+    expect(getAttribution).toHaveBeenCalledWith({ documentLoader });
+    expect(getAttachments).toHaveBeenCalledWith({ documentLoader });
+    expect(fromFedifyActor).toHaveBeenCalledWith(expect.anything(), { documentLoader });
+    fromFedifyActor.mockRestore();
   });
 
   it('passes the summary and sensitive flag of the Note to the upserter', async () => {

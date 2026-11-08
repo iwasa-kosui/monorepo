@@ -57,10 +57,10 @@ const setup = () => {
     );
     return { interestSourceId, embedding };
   };
-  const addFeedSource = (kind: string) => {
+  const addFeedSource = (kind: string, enabled = true) => {
     const feedSourceId = uuid(++counter);
     sqlite.prepare('INSERT INTO feed_sources(feedSourceId,kind,url,title,enabled,createdAt) VALUES (?,?,?,?,?,?)')
-      .run(feedSourceId, kind, `https://feeds.example/${feedSourceId}`, kind, 1, 1_000);
+      .run(feedSourceId, kind, `https://feeds.example/${feedSourceId}`, kind, enabled ? 1 : 0, 1_000);
     return feedSourceId;
   };
   const addEntry = (
@@ -184,9 +184,34 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
       title: expect.stringMatching(/^title /),
       description: expect.stringMatching(/^description /),
       hatenaBookmarkCount: 120,
+      fetchedAt: 10_001,
     });
     expect(resolved[2]?.hatenaBookmarkCount).toBeNull();
     expect(Array.from(resolved[0]!.embedding)).toEqual(Array.from(a.embedding as Float32Array));
+  });
+
+  it('無効にした情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveArticles } = setup();
+    const enabled = addFeedSource('rss');
+    const disabled = addFeedSource('rss', false);
+    const kept = addEntry(enabled);
+    addEntry(disabled);
+
+    const resolved = await resolveArticles(0);
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveArticles } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss);
+    addEntry(xUser);
+
+    const resolved = await resolveArticles(0);
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
   });
 
   it('次元が 1024 でないベクトルの記事は返さず、1 ページを超える件数は全件読む', async () => {
@@ -257,6 +282,30 @@ describe('RelatedArticlesResolverByEmbedding', () => {
     const resolved = await resolveRelated(angled(0), { fetchedSince: 10_000 });
 
     expect(resolved.map((article) => article.feedEntryId)).toEqual([recent.feedEntryId]);
+  });
+
+  it('無効にした情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const enabled = addFeedSource('rss');
+    const disabled = addFeedSource('rss', false);
+    const kept = addEntry(enabled, { embedding: angled(0.2) });
+    addEntry(disabled, { embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss, { embedding: angled(0.2) });
+    addEntry(xUser, { embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
   });
 
   it('記事が無ければ空配列を返す', async () => {

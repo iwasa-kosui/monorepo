@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { XUsername } from '../feedSource/xUsername.ts';
 import {
   buildDigestBodies,
   buildSummaryBodies,
+  buildXPostsSection,
   type DigestBodyInput,
   type DigestBodyRecommendation,
 } from './digestBody.ts';
@@ -267,5 +269,37 @@ describe('buildSummaryBodies', () => {
     const { privateHtml } = buildSummaryBodies({ radar: undefined, topics: [], timelineTrends: [], hatenaTrends: [] });
 
     expect(privateHtml).toBe('<p>今日のダイジェストに載せる記事はありません。</p>');
+  });
+
+  it('X の投稿の節を、private にも public にも入れない', () => {
+    expect(buildSummaryBodies(summaryInput).privateHtml).not.toContain('X の投稿');
+    expect(buildSummaryBodies(summaryInput).publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
+  });
+});
+
+describe('buildXPostsSection', () => {
+  const xPosts = [
+    { username: XUsername.orThrow('jack'), title: 'secret <b>post</b>', url: 'https://x.com/jack/status/111' },
+    { username: XUsername.orThrow('sundar'), title: 'another post', url: 'https://x.com/sundar/status/222' },
+  ];
+
+  it('見出しの下に、ユーザー名とリンクを並べ、本文を HTML エスケープする', () => {
+    expect(buildXPostsSection(xPosts)).toBe(
+      '<h2>X の投稿</h2><ul>'
+        + '<li>@jack <a href="https://x.com/jack/status/111">secret &lt;b&gt;post&lt;/b&gt;</a></li>'
+        + '<li>@sundar <a href="https://x.com/sundar/status/222">another post</a></li>'
+        + '</ul>',
+    );
+  });
+
+  it('http と https 以外の URL はリンクにしない', () => {
+    const [post] = xPosts;
+
+    expect(buildXPostsSection([{ ...post!, url: 'javascript:alert(1)' }])).toContain('@jack secret &lt;b&gt;');
+    expect(buildXPostsSection([{ ...post!, url: 'javascript:alert(1)' }])).not.toContain('href');
+  });
+
+  it('投稿が無ければ、見出しごと空にする', () => {
+    expect(buildXPostsSection([])).toBe('');
   });
 });

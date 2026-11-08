@@ -19,6 +19,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
   DigestResolverByArticleId,
@@ -31,7 +32,9 @@ import type {
   TimelineLinkTrendsResolverByUserId,
 } from '../domain/digest/digestMaterial.ts';
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
+import type { DigestTopicsResolverByUserId } from '../domain/digestTopic/digestTopic.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
+import type { AllFeedSourcesResolver } from '../domain/feedSource/feedSource.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
 import type { MediaUploadResolver } from '../domain/mediaUpload/mediaUpload.ts';
@@ -57,6 +60,10 @@ import type { UserResolver, UserResolverByUsername } from '../domain/user/user.t
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
+import type { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
+import type { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
+import type { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
+import type { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -68,14 +75,18 @@ import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
+import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import type { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
+import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import type { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
@@ -104,6 +115,7 @@ import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescri
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -178,7 +190,23 @@ export type IoriDigestRuntimePorts = Readonly<{
   saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase;
   requestDigestUseCase: RequestDigestUseCase;
   giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase;
+  digestTopicsResolverByUserId: DigestTopicsResolverByUserId;
+  addDigestTopicUseCase: AddDigestTopicUseCase;
+  editDigestTopicUseCase: EditDigestTopicUseCase;
+  changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  previewDigestTopicsUseCase: PreviewDigestTopicsUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
+  allFeedSourcesResolver: AllFeedSourcesResolver;
+  addFeedSourceUseCase: AddFeedSourceUseCase;
+  changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
+  getXFeedEntriesUseCase: GetXFeedEntriesUseCase;
+  isDigestOwner: IsDigestOwner;
+}>;
+export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
+export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
+  userResolverByUsername: UserResolverByUsername;
+  blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
+  blueskyCrosspostEnabled: boolean;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -235,6 +263,8 @@ export type IoriRuntimePorts = Readonly<{
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
+  blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
+  blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;

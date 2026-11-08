@@ -44,6 +44,8 @@ export const createOutboxDispatcher = (
               mediaType: 'text/html',
               published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
               url: ctx.getObjectUri(Note, { identifier, id: post.postId }),
+              summary: post.summary,
+              sensitive: post.sensitive,
             });
             return new Create({
               id: new URL('#activity', note.id ?? undefined),

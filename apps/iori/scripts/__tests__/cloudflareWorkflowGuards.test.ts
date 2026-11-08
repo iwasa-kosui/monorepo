@@ -35,11 +35,19 @@ it('runs every protected role on hosted isolated jobs after the public gate', as
     'public-artifact-gate',
     'deploy-worker',
     'put-worker-secrets',
+    'put-bluesky-secrets',
+    'put-twitterapi-secret',
     'delete-rehearsal-d1',
     'move-unfollowed-reposts-dry-run',
     'move-unfollowed-reposts',
+    'delete-unfollowed-posts-dry-run',
+    'delete-unfollowed-posts',
+    'domain-events-stats',
+    'digest-quality-sample',
     'prune-federated-posts-dry-run',
     'ensure-event-archive-bucket',
+    'delete-blocked-domain-posts-dry-run',
+    'delete-blocked-domain-posts',
     'recover-source',
   ]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -119,7 +127,7 @@ it('exposes the recovery operations and inputs without a default recovery value'
   expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
   expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
 });
-it('gives put-worker-secrets only the deploy token, the account and admission identity, and the three values to put', async () => {
+it('gives put-worker-secrets only the deploy token, the account and admission identity, and the values to put', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const job = workflow.jobs['put-worker-secrets'];
   const secret = (name: string) => `\${{ secrets.${name} }}`;
@@ -133,12 +141,110 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
     VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
     VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
     SMOKE_QUEUE_TOKEN: secret('SMOKE_QUEUE_TOKEN'),
+    TWITTERAPI_IO_API_KEY: secret('TWITTERAPI_IO_API_KEY'),
+    BLUESKY_IDENTIFIER: secret('BLUESKY_IDENTIFIER'),
+    BLUESKY_APP_PASSWORD: secret('BLUESKY_APP_PASSWORD'),
   });
   expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
   expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
   const inputs =
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
   expect(inputs.operation.options).toContain('put-worker-secrets');
+});
+it('gives put-bluesky-secrets only the deploy token, the account and admission identity, and the two Bluesky secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['put-bluesky-secrets'];
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'put-bluesky-secrets\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    IORI_ADMISSION_IDENTITY: secret('IORI_ADMISSION_IDENTITY'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    BLUESKY_IDENTIFIER: secret('BLUESKY_IDENTIFIER'),
+    BLUESKY_APP_PASSWORD: secret('BLUESKY_APP_PASSWORD'),
+  });
+  expect(Object.keys(operation(job).env!).filter(key => key.startsWith('BLUESKY_'))).toHaveLength(2);
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/VAPID|SMOKE_QUEUE_TOKEN|TWITTERAPI_IO_API_KEY/);
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toContain('put-bluesky-secrets');
+});
+it('rejects any environment other than production in the first step of put-bluesky-secrets', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const lines = workflow.jobs['put-bluesky-secrets'].steps[0].run!.split('\n').map(line => line.trim());
+  expect(lines).toContain('set -euo pipefail');
+  expect(lines).toContain('test "$IORI_ENVIRONMENT" = production');
+  expect(lines.indexOf('test "$IORI_ENVIRONMENT" = production')).toBeLessThan(
+    lines.indexOf('test "$MAIN_SHA" = "$GITHUB_SHA"'),
+  );
+  expect(workflow.jobs['put-bluesky-secrets'].steps[0].run).toContain('refs/heads/main');
+  const { spawnSync } = await import('node:child_process');
+  const script = workflow.jobs['put-bluesky-secrets'].steps[0].run!;
+  const sha = 'a'.repeat(40);
+  const base = {
+    GITHUB_ENV: '/dev/null',
+    GITHUB_EVENT_NAME: 'workflow_dispatch',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_SHA: sha,
+    MAIN_SHA: sha,
+    IORI_OPERATION: 'put-bluesky-secrets',
+  };
+  const run = (environment: string) =>
+    spawnSync('bash', ['-c', script], { env: { PATH: process.env.PATH, ...base, IORI_ENVIRONMENT: environment } });
+  expect(run('production').status).toBe(0);
+  expect(run('staging').status).not.toBe(0);
+  expect(run('').status).not.toBe(0);
+});
+it('gives put-twitterapi-secret only the deploy token, the account and admission identity, and the twitterapi.io key', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['put-twitterapi-secret'];
+  const secret = (name: string) => `\${{ secrets.${name} }}`;
+  expect(job.if).toBe('inputs.operation == \'put-twitterapi-secret\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    IORI_ADMISSION_IDENTITY: secret('IORI_ADMISSION_IDENTITY'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    TWITTERAPI_IO_API_KEY: secret('TWITTERAPI_IO_API_KEY'),
+  });
+  expect(Object.keys(operation(job).env!).filter(key => key.includes('TWITTERAPI'))).toHaveLength(1);
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/VAPID|SMOKE_QUEUE_TOKEN|BLUESKY_/);
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);
+  const inputs =
+    (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
+  expect(inputs.operation.options).toContain('put-twitterapi-secret');
+});
+it('rejects any environment other than production in the first step of put-twitterapi-secret', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const lines = workflow.jobs['put-twitterapi-secret'].steps[0].run!.split('\n').map(line => line.trim());
+  expect(lines).toContain('set -euo pipefail');
+  expect(lines).toContain('test "$IORI_ENVIRONMENT" = production');
+  expect(lines.indexOf('test "$IORI_ENVIRONMENT" = production')).toBeLessThan(
+    lines.indexOf('test "$MAIN_SHA" = "$GITHUB_SHA"'),
+  );
+  expect(workflow.jobs['put-twitterapi-secret'].steps[0].run).toContain('refs/heads/main');
+  const { spawnSync } = await import('node:child_process');
+  const script = workflow.jobs['put-twitterapi-secret'].steps[0].run!;
+  const sha = 'a'.repeat(40);
+  const base = {
+    GITHUB_ENV: '/dev/null',
+    GITHUB_EVENT_NAME: 'workflow_dispatch',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_SHA: sha,
+    MAIN_SHA: sha,
+    IORI_OPERATION: 'put-twitterapi-secret',
+  };
+  const run = (environment: string) =>
+    spawnSync('bash', ['-c', script], { env: { PATH: process.env.PATH, ...base, IORI_ENVIRONMENT: environment } });
+  expect(run('production').status).toBe(0);
+  expect(run('staging').status).not.toBe(0);
+  expect(run('').status).not.toBe(0);
 });
 it('gives delete-rehearsal-d1 only the account and the deploy token, and no input that names a database', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
@@ -167,7 +273,12 @@ it('gives delete-rehearsal-d1 only the account and the deploy token, and no inpu
     'repost_created_before_ms',
   ]);
 });
-it.each(['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'])(
+it.each([
+  'move-unfollowed-reposts-dry-run',
+  'move-unfollowed-reposts',
+  'delete-unfollowed-posts-dry-run',
+  'delete-unfollowed-posts',
+])(
   'gives %s only the account and the deploy token, and one optional input for the repost time limit',
   async (name) => {
     const workflow = await readWorkflow('deploy-iori-worker.yml');
@@ -195,6 +306,64 @@ it.each(['move-unfollowed-reposts-dry-run', 'move-unfollowed-reposts'])(
       type: 'string',
     });
     expect(parsed.env.IORI_REPOST_CREATED_BEFORE_MS).toBe('${{ inputs.repost_created_before_ms }}');
+  },
+);
+it('gives domain-events-stats only the account and the deploy token, and no input beyond the generation', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['domain-events-stats'];
+  const secret = (key: string) => `\${{ secrets.${key} }}`;
+  expect(job.if).toBe('inputs.operation == \'domain-events-stats\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const parsed = parse(text) as { on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } } };
+  expect(parsed.on.workflow_dispatch.inputs.operation.options).toContain('domain-events-stats');
+});
+it('gives digest-quality-sample only the account and the deploy token, and no input beyond the generation', async () => {
+  const workflow = await readWorkflow('deploy-iori-worker.yml');
+  const job = workflow.jobs['digest-quality-sample'];
+  const secret = (key: string) => `\${{ secrets.${key} }}`;
+  expect(job.if).toBe('inputs.operation == \'digest-quality-sample\'');
+  expect(job.needs).toBe('public-artifact-gate');
+  expect(job.environment).toBe('${{ inputs.environment }}');
+  expect(operation(job).env).toEqual({
+    CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+    CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+  });
+  expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+  expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+  const text = await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8');
+  const parsed = parse(text) as { on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } } };
+  expect(parsed.on.workflow_dispatch.inputs.operation.options).toContain('digest-quality-sample');
+});
+it.each(['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts'])(
+  'gives %s only the account and the deploy token, and no input for the target domain',
+  async (name) => {
+    const workflow = await readWorkflow('deploy-iori-worker.yml');
+    const job = workflow.jobs[name];
+    const secret = (key: string) => `\${{ secrets.${key} }}`;
+    expect(job.if).toBe(`inputs.operation == '${name}'`);
+    expect(job.needs).toBe('public-artifact-gate');
+    expect(job.environment).toBe('${{ inputs.environment }}');
+    expect(operation(job).env).toEqual({
+      CLOUDFLARE_ACCOUNT_ID: secret('CLOUDFLARE_ACCOUNT_ID'),
+      CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
+    });
+    expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
+    expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform|VAPID/);
+    const parsed = parse(
+      await readFile(resolve(repositoryRoot, '.github/workflows/deploy-iori-worker.yml'), 'utf8'),
+    ) as {
+      on: { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } };
+    };
+    expect(parsed.on.workflow_dispatch.inputs.operation.options).toContain(name);
+    expect(Object.keys(parsed.on.workflow_dispatch.inputs)).not.toContain('domain');
   },
 );
 it('gives prune-federated-posts-dry-run only the account and the deploy token, and no extra input', async () => {
@@ -444,10 +613,12 @@ it('runs readonly Terraform init and validate in CI', async () => {
   const lines = steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!
     .split('\n').map(line => line.trim());
   const init = lines.indexOf(
-    'run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
+    'node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly',
   );
   expect(init).toBeGreaterThan(-1);
   expect(lines[init + 1]).toBe('run_guarded terraform -chdir=apps/iori/infra/cloudflare validate');
+  expect(lines.filter(line => line.includes('run-guarded-retry.mjs'))).toHaveLength(1);
+  expect(lines.filter(line => /^run_guarded\b.*\binit\b/.test(line))).toEqual([]);
   expect(lines.some(line => line.includes('git diff --exit-code'))).toBe(false);
 });
 it('prints one fixed failure line to stderr without the command output when a guarded command fails', async () => {
@@ -471,6 +642,31 @@ it('prints one fixed failure line to stderr without the command output when a gu
   const passed = run('run_guarded true');
   expect(passed.status).toBe(0);
   expect(passed.stderr).not.toContain('Guarded command failed');
+});
+it('runs a failing guarded command exactly once', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const ci = await readWorkflow('ci.yml');
+  const script = ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
+  const lines = script.split('\n');
+  const start = lines.findIndex(line => line.trim() === 'run_guarded() {');
+  const end = lines.findIndex((line, index) => index > start && line.trim() === '}');
+  const definition = lines.slice(start, end + 1).join('\n');
+  const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const directory = mkdtempSync(resolve(tmpdir(), 'run-guarded-once-'));
+  const countFile = resolve(directory, 'count');
+  try {
+    const result = spawnSync('bash', [
+      '-c',
+      `${definition}\nrun_guarded bash -c 'echo run >> "$0"; exit 1' "$1" || true`,
+      'bash',
+      countFile,
+    ], { cwd: repositoryRoot, encoding: 'utf8' });
+    expect(result.stderr).toContain('Guarded command failed: exit=1 guard=0');
+    expect(readFileSync(countFile, 'utf8')).toBe('run\n');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 it('constructs the CI admission as a validated synthetic sealed identity', async () => {
   const { execFileSync } = await import('node:child_process');

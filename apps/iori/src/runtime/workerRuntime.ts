@@ -26,6 +26,7 @@ import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
+import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
@@ -35,14 +36,25 @@ import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/diges
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
+import { createD1DigestXPostsResolverByArticleId } from '../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
+import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
+import { createD1DigestTopicEditedStore } from '../adaptor/d1/digestTopic/digestTopicEditedStore.ts';
+import { createD1DigestTopicEmbeddedStore } from '../adaptor/d1/digestTopic/digestTopicEmbeddedStore.ts';
+import { createD1DigestTopicEnabledChangedStore } from '../adaptor/d1/digestTopic/digestTopicEnabledChangedStore.ts';
+import { createD1DigestTopicsResolverByUserId } from '../adaptor/d1/digestTopic/digestTopicsResolverByUserId.ts';
 import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1XFeedEntriesResolver } from '../adaptor/d1/feedEntry/xFeedEntriesResolver.ts';
+import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
+import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
+import { createD1FeedSourceEnabledChangedStore } from '../adaptor/d1/feedSource/feedSourceEnabledChangedStore.ts';
 import { createD1AccountRelationshipsResolverByActorIds } from '../adaptor/d1/follow/accountRelationshipsResolverByActorIds.ts';
 import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
@@ -109,6 +121,7 @@ import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1AcceptedRelaysResolver } from '../adaptor/d1/relay/acceptedRelaysResolver.ts';
 import { createD1AllRelaysResolver } from '../adaptor/d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../adaptor/d1/relay/relayResolverByActorUri.ts';
@@ -142,11 +155,16 @@ import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebP
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { createWorkersAiTextGenerator } from '../adaptor/workersAi/workersAiTextGenerator.ts';
+import { createWorkersAiTopicRelevanceJudge } from '../adaptor/workersAi/workersAiTopicRelevanceJudge.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
+import { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
+import { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
+import { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
+import { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
@@ -157,14 +175,18 @@ import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { EditArticleUseCase } from '../useCase/editArticle.ts';
+import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
@@ -193,6 +215,8 @@ import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
+import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
 
@@ -206,6 +230,7 @@ export const createWorkerRuntimePorts = async (
   waitUntil: WaitUntil,
 ): Promise<WorkerRuntimePorts> => {
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
+  const blueskyCrosspost = createBlueskyCrosspostUseCases(env, waitUntil);
   const db = createD1Db(env.DB);
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const textGenerator = workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi);
@@ -224,11 +249,16 @@ export const createWorkerRuntimePorts = async (
   });
   const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
+  const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
+  const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
+  const digestTopicEmbeddedStore = createD1DigestTopicEmbeddedStore(db);
+  const topicTextEmbedder = workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi);
   const postResolver = createD1PostResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
@@ -396,6 +426,7 @@ export const createWorkerRuntimePorts = async (
         origin: env.ORIGIN,
       }),
     },
+    blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),
@@ -419,6 +450,56 @@ export const createWorkerRuntimePorts = async (
         digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
         now: Instant.now,
       }),
+      allFeedSourcesResolver,
+      addFeedSourceUseCase: AddFeedSourceUseCase.create({
+        allFeedSourcesResolver,
+        feedSourceCreatedStore: createD1FeedSourceCreatedStore(db),
+        now: Instant.now,
+      }),
+      changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase.create({
+        allFeedSourcesResolver,
+        feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
+        now: Instant.now,
+      }),
+      isDigestOwner,
+      getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
+        xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
+        now: Instant.now,
+      }),
+      digestTopicsResolverByUserId,
+      addDigestTopicUseCase: AddDigestTopicUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicCreatedStore: createD1DigestTopicCreatedStore(db),
+        digestTopicEmbeddedStore,
+        textEmbedder: topicTextEmbedder,
+        now: Instant.now,
+      }),
+      editDigestTopicUseCase: EditDigestTopicUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicEditedStore: createD1DigestTopicEditedStore(db),
+        digestTopicEmbeddedStore,
+        textEmbedder: topicTextEmbedder,
+        now: Instant.now,
+      }),
+      changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase.create({
+        digestTopicsResolverByUserId,
+        digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
+        now: Instant.now,
+      }),
+      previewDigestTopicsUseCase: PreviewDigestTopicsUseCase.create({
+        digestTopicsResolverByUserId,
+        recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+        digestTopicItemsResolverByUserIdAndDigestDateFrom: createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(
+          db,
+        ),
+        topicRelevanceJudge: workersAi === undefined ? undefined : createWorkersAiTopicRelevanceJudge(workersAi),
+        now: Instant.now,
+      }),
+    },
+    blueskyCrosspostStatus: {
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(db),
+      blueskyCrosspostEnabled: resolveBlueskyCrosspostConfig(env) !== undefined,
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({
@@ -443,6 +524,7 @@ export const createWorkerRuntimePorts = async (
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
         ogpFetcher: createOgpFetcher(),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
     },
@@ -510,6 +592,8 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
+        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
+        isDigestOwner,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,
@@ -617,6 +701,7 @@ export const createWorkerRuntimePorts = async (
         pushSubscriptionsResolver,
         webPushSender,
         postResolver,
+        scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
       deletePostUseCase: DeletePostUseCase.create({
@@ -627,6 +712,7 @@ export const createWorkerRuntimePorts = async (
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
+        removeBlueskyCrosspost: blueskyCrosspost?.remove,
       }),
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,

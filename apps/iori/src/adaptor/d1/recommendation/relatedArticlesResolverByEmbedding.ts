@@ -4,6 +4,7 @@ import { and, asc, eq, gt, gte, inArray, isNotNull } from 'drizzle-orm';
 import { normalizeDigestUrl } from '../../../domain/digest/digestUrl.ts';
 import { FeedEntryId } from '../../../domain/feedEntry/feedEntryId.ts';
 import { FeedSourceId } from '../../../domain/feedSource/feedSourceId.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import { Embedding } from '../../../domain/interestSource/embedding.ts';
 import {
   type RecommendableArticle,
@@ -36,11 +37,13 @@ export const createD1RelatedArticlesResolverByEmbedding = (db: IoriD1Db): Relate
         title: feedEntriesTable.title,
         description: feedEntriesTable.description,
         hatenaBookmarkCount: feedEntriesTable.hatenaBookmarkCount,
+        fetchedAt: feedEntriesTable.fetchedAt,
         embedding: feedEntriesTable.embedding,
       }).from(feedEntriesTable)
         .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
         .where(and(
           inArray(feedSourcesTable.kind, [...RECOMMENDABLE_KINDS]),
+          eq(feedSourcesTable.enabled, true),
           isNotNull(feedEntriesTable.embeddedAt),
           isNotNull(feedEntriesTable.embedding),
           gte(feedEntriesTable.fetchedAt, new Date(fetchedSince)),
@@ -61,6 +64,7 @@ export const createD1RelatedArticlesResolverByEmbedding = (db: IoriD1Db): Relate
             title: row.title,
             description: row.description,
             hatenaBookmarkCount: row.hatenaBookmarkCount,
+            fetchedAt: Instant.orThrow(row.fetchedAt.getTime()),
             embedding: row.embedding,
           },
           score: Recommendation.cosineSimilarity(embedding, row.embedding),

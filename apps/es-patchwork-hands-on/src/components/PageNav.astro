@@ -1,0 +1,70 @@
+---
+interface Link {
+  href: string;
+  hint?: string;
+}
+
+interface Props {
+  previous?: Link;
+  next?: Link;
+}
+
+const { previous, next } = Astro.props;
+---
+
+<nav class="chapter-nav" aria-label="ページの移動">
+  {
+    previous === undefined ? <span /> : (
+      <a rel="prev" href={previous.href}>
+        ← 前へ{
+          previous.hint === undefined ? '' : <small>{previous.hint}</small>
+        }
+      </a>
+    )
+  }
+  {
+    next === undefined ? <span /> : (
+      <a rel="next" href={next.href}>
+        {next.hint === undefined ? '' : <small>{next.hint}</small>}次へ →
+      </a>
+    )
+  }
+</nav>
+
+<script>
+const isEditing = (element: Element | null): boolean =>
+  element instanceof HTMLElement
+  && (element.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName));
+
+const scrollsSideways = (element: Element): boolean =>
+  element.scrollWidth > element.clientWidth
+  && ['auto', 'scroll'].includes(getComputedStyle(element).overflowX);
+
+const isInSidewaysScroller = (element: Element | null): boolean => {
+  for (
+    let current = element;
+    current !== null;
+    current = current.parentElement
+  ) {
+    if (scrollsSideways(current)) return true;
+  }
+  return false;
+};
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  if (
+    event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey
+    || event.metaKey || event.shiftKey
+  ) return;
+  if (isEditing(document.activeElement)) return;
+  if (isInSidewaysScroller(document.activeElement)) return;
+  const link = document.querySelector<HTMLAnchorElement>(
+    event.key === 'ArrowLeft' ? 'a[rel="prev"]' : 'a[rel="next"]',
+  );
+  if (link === null) return;
+  event.preventDefault();
+  location.assign(link.href);
+});
+</script>

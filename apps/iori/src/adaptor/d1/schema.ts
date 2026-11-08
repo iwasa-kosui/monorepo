@@ -33,6 +33,7 @@ export const domainEventsTable = sqliteTable('domain_events', {
   occurredAt: timestamp().notNull(),
 }, (table) => [
   index('domain_events_aggregate_id_idx').on(table.aggregateId),
+  index('domain_events_occurred_at_idx').on(table.occurredAt, table.eventId),
 ]);
 
 export const actorsTable = sqliteTable('actors', {
@@ -498,7 +499,10 @@ export const digestTopicsTable = sqliteTable('digest_topics', {
   topicKey: text('topicKey').notNull(),
   name: text('name').notNull(),
   description: text('description').notNull(),
+  examples: text('examples').notNull().default('[]'),
+  excludes: text('excludes').notNull().default('[]'),
   embedding: embeddingBlob('embedding'),
+  excludeEmbedding: embeddingBlob('excludeEmbedding'),
   embeddedAt: timestamp(),
   sortOrder: integer('sortOrder').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull(),
@@ -574,6 +578,14 @@ export const digestTrendsTable = sqliteTable('digest_trends', {
   primaryKey({ columns: [table.digestId, table.kind, table.rank] }),
 ]);
 
+export const digestXPostsTable = sqliteTable('digest_x_posts', {
+  digestId: text('digestId').notNull().references(() => digestsTable.digestId),
+  rank: integer('rank').notNull(),
+  feedEntryId: text('feedEntryId').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.digestId, table.rank] }),
+]);
+
 export const interestSourcesTable = sqliteTable('interest_sources', {
   interestSourceId: text('interestSourceId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -590,6 +602,55 @@ export const interestSourcesTable = sqliteTable('interest_sources', {
 }, (table) => [
   uniqueIndex('interest_sources_user_id_kind_ref_unique').on(table.userId, table.kind, table.ref),
   index('interest_sources_user_id_embedded_at_deleted_at_idx').on(table.userId, table.embeddedAt, table.deletedAt),
+]);
+
+export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
+  id: text('id').primaryKey(),
+  did: text('did').notNull(),
+  handle: text('handle').notNull(),
+  pdsUrl: text('pdsUrl').notNull(),
+  accessJwt: text('accessJwt').notNull(),
+  refreshJwt: text('refreshJwt').notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
+export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
+  postId: text('postId').primaryKey(),
+  status: text('status').notNull(),
+  skipReason: text('skipReason'),
+  uri: text('uri'),
+  cid: text('cid'),
+  rkey: text('rkey'),
+  rootUri: text('rootUri'),
+  rootCid: text('rootCid'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('lastError'),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  index('bluesky_crossposts_status_created_at_idx').on(table.status, table.createdAt),
+]);
+
+export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
+  feedItemId: text('feedItemId').primaryKey(),
+  uri: text('uri').notNull(),
+  cid: text('cid').notNull(),
+  authorDid: text('authorDid').notNull(),
+  authorHandle: text('authorHandle').notNull(),
+  authorDisplayName: text('authorDisplayName'),
+  authorAvatar: text('authorAvatar'),
+  text: text('text').notNull(),
+  facets: text('facets').notNull(),
+  embed: text('embed'),
+  replyParentUri: text('replyParentUri'),
+  replyParentAuthorHandle: text('replyParentAuthorHandle'),
+  repostedByDid: text('repostedByDid'),
+  repostedByHandle: text('repostedByHandle'),
+  postedAt: timestamp().notNull(),
+  indexedAt: timestamp().notNull(),
+  fetchedAt: timestamp().notNull(),
+}, (table) => [
+  index('bluesky_timeline_items_indexed_at_idx').on(table.indexedAt),
 ]);
 
 export const schema = {
@@ -646,5 +707,9 @@ export const schema = {
   digestDeepDiveTurnsTable,
   digestDeepDiveUsagesTable,
   digestTrendsTable,
+  digestXPostsTable,
   interestSourcesTable,
+  blueskySessionsTable,
+  blueskyCrosspostsTable,
+  blueskyTimelineItemsTable,
 } as const;

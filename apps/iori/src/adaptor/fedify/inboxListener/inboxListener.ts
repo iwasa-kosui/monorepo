@@ -151,6 +151,12 @@ const create = () => {
       followResolver: PgFollowResolver.getInstance(),
       followAcceptedStore: PgFollowedStore.getInstance(),
     },
+    onReject: {
+      inboxActorResolver,
+      actorResolverByUri,
+      followResolver: PgFollowResolver.getInstance(),
+      undoFollowingProcessedStore: PgUnfollowedStore.getInstance(),
+    },
     onFollow: {
       inboxActorResolver,
       acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({

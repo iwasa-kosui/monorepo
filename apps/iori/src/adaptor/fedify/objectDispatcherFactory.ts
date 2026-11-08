@@ -67,6 +67,8 @@ export const createObjectDispatcher = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
             url: ctx.getObjectUri(Note, values),
+            summary: post.summary,
+            sensitive: post.sensitive,
             replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
             attachments: postImages.map((image) => toImageDocument(image, origin)),
           }),

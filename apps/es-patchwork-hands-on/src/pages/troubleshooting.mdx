@@ -1,0 +1,223 @@
+---
+layout: ../layouts/BaseLayout.astro
+title: うまく動かないとき
+---
+
+<a href="/">トップページへ</a>
+
+# うまく動かないとき
+
+実行結果には、複数の失敗が並ぶ場合もあります。`✖ failing tests:` の下にある最初のエラー文から項目を探して、直す操作を実行します。
+
+`✖ failing tests:` の下に `'test failed'` しかないときは、画面を上に戻して `SyntaxError` を探します。
+
+## 環境と移動で止まったとき
+
+### Could not find 'visits.test.ts'
+
+```text
+Could not find 'visits.test.ts'
+```
+
+`node --test visits.test.ts` を実行したディレクトリに、`visits.test.ts` がありません。演習のディレクトリに移動できていません。事前準備で展開したディレクトリの中にある `chapter-1-start` のように、いま取り組む章のディレクトリに `cd` で移動してから、もう一度実行します。
+
+### Cannot find module
+
+```text
+Error: Cannot find module '…/who-cancelled.ts'
+```
+
+`node who-cancelled.ts` を実行したディレクトリに、`who-cancelled.ts` がありません。演習のディレクトリに移動できていません。`chapter-1-start` か `chapter-2-step-2` に `cd` で移動してから、もう一度実行します。
+
+### Unknown file extension ".ts"
+
+```text
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for …/who-cancelled.ts
+```
+
+Node.js のバージョンが古く、`.ts` ファイルを直接実行できません。`node --version` でバージョンを確かめ、24.12.0 以上を入れます。この文は Node.js 20.19.6 で実際に出ました。
+
+### ExperimentalWarning
+
+```text
+(node:74361) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+```
+
+問題ありません。Node.js の SQLite 機能が実験的だと知らせる警告です。演習の結果には影響しません。括弧内の数字は実行のたびに変わります。
+
+### エディタに赤線が出る
+
+エディタが `.ts` ファイルに赤線を引くことがあります。`node --test visits.test.ts` が動くなら、問題ありません。赤線は直さずに進めます。
+
+### 演習の直下で node --test を実行したら失敗が混ざる
+
+```text
+ℹ pass 96
+ℹ fail 18
+```
+
+演習の直下で `node --test` を実行すると、すべての章のディレクトリにあるテストが実行されます。各章の開始のコードには、まだ書いていない部分があります。このため失敗が混ざります。章のディレクトリに `cd` で移動し、ファイルを指定して `node --test visits.test.ts` を実行します。
+
+### ℹ pass と ℹ fail の行が見つからない
+
+```text
+ℹ pass 4
+ℹ fail 4
+```
+
+`node --test` は、この2行を失敗の詳細より上に出します。画面を上に戻して探します。
+
+## 第2章のエラー
+
+ステップ1とステップ2の `cancelVisit` で出るエラーです。
+
+### Expression expected
+
+```text
+SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
+ℹ pass 0
+ℹ fail 1
+```
+
+`✖ failing tests:` の下には、次の文しか出ません。`SyntaxError` の文は、画面の上のほうに出ます。
+
+```text
+✖ visits.test.ts
+  'test failed'
+```
+
+雛形の空欄が `/* event_name */` のように残っています。第2章の表のとおりに、4つの空欄を値で埋めます。
+
+### table business_events has no column named
+
+```text
+Error: table business_events has no column named event_nam
+```
+
+INSERT の列名に、`business_events` テーブルにない名前があります。`named` の後ろに出ている名前が、誤っている列名です。`event_name` のように、列名を表の定義どおりに書き直します。
+
+### 5 values for 6 columns
+
+```text
+Error: 5 values for 6 columns
+```
+
+`VALUES (…)` の `?` が5個で、列は6個です。`?` を6個にそろえます。
+
+### 7 values for 6 columns
+
+```text
+Error: 7 values for 6 columns
+```
+
+`VALUES (…)` の `?` が7個で、列は6個です。`?` を6個にそろえます。
+
+### NOT NULL constraint failed
+
+```text
+Error: NOT NULL constraint failed: business_events.target_state
+```
+
+`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `business_events.target_type` と出ます。`.run()` の引数を6個にそろえます。
+
+### Provided value cannot be bound to SQLite parameter
+
+```text
+TypeError: Provided value cannot be bound to SQLite parameter 3.
+code: 'ERR_INVALID_ARG_TYPE'
+```
+
+SQLite に渡せない値が、`.run()` の引数にあります。オブジェクトのまま渡したことが原因です。末尾の番号は、`?` の何番目かを表します。3番目は `payload`、6番目は `target_state` です。その引数を `JSON.stringify(…)` で文字列にして渡します。
+
+### malformed JSON
+
+```text
+Error: malformed JSON
+```
+
+`payload` に、JSON ではない文字列が入っています。`String({})` のように、オブジェクトを `JSON.stringify` 以外の方法で文字列にすると、この文になります。`payload` を `JSON.stringify({ reason: …, operatedBy: … })` の形に直します。
+
+### 記録の失敗が更新処理に伝わっていません
+
+```text
+AssertionError [ERR_ASSERTION]: 記録の失敗が更新処理に伝わっていません
+```
+
+列名の誤りや値の数の誤りなどがあると、ほかのテストの失敗と一緒にこの文も出ます。先に出ている別のエラー文の項目を見て、そのエラーを直します。
+
+```text
+AssertionError [ERR_ASSERTION]: Missing expected exception: 記録の失敗が更新処理に伝わっていません
+```
+
+ステップ1の雛形をまだ貼っていないときに、この文が出ます。ステップ1の雛形を貼ります。
+
+### キャンセルした人を答えられません
+
+```text
+AssertionError [ERR_ASSERTION]: キャンセルした人を答えられません（payload の operatedBy を読みました）
+
+null !== '受付スタッフ'
+```
+
+テストが `payload` の `operatedBy` を読んで、期待した値を得られていません。次のどれかが原因です。
+
+- ステップ2が終わっておらず、`payload` が `JSON.stringify({})` のままです。
+- `payload` のキーの名前が `operatedBy` ではありません。キーの名前は `reason` と `operatedBy` にします。
+- `operatedBy` のキーを書き忘れています。
+
+`reason` と `operatedBy` の値を取り違えたときも、同じ文が出ます。このときは `null` の代わりに、取り違えた値が出ます。
+
+```text
+'飼い主の都合' !== '受付スタッフ'
+```
+
+`reason` に理由を、`operatedBy` に操作した人を渡します。
+
+### 来院キャンセルの記録がありません
+
+```text
+AssertionError [ERR_ASSERTION]: 来院キャンセルの記録がありません（business_events を target_type = 'Visit'、target_id = 'visit-1' で探しました）
+
+0 !== 1
+```
+
+`business_events` に、該当する行が入っていません。ステップ1の雛形をまだ貼っていないときも、この文が出ます。雛形を貼ったあとにも出るなら、`.run()` の引数の順番を確かめます。引数は、`event_at`、`event_name`、`payload`、`target_id`、`target_type`、`target_state` の順に渡します。`payload` と `target_id` を入れ替えると、`target_id` が `visit-1` でない行が入るため、この文が出ます。
+
+### Expected values to be strictly equal
+
+```text
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'reserved'
+- 'cancelled'
+```
+
+テスト「キャンセルの記録に、キャンセル後の来院の状態が残る」の失敗です。INSERT が `UPDATE visits SET status = 'cancelled'` より前にあり、更新前の状態 `reserved` が `target_state` に入っています。雛形を、`UPDATE visits SET status = 'cancelled'` の次の行へ移します。
+
+## 第3章の表がおかしいとき
+
+`node who-cancelled.ts` の結果で確かめます。
+
+### visit-pochi の行で event_at 以下がすべて null
+
+記録を足していないコードで実行しています。`chapter-1-start` のコードにステップ1とステップ2を反映してから、もう一度実行します。終わっていないときは `chapter-2-step-2` に移動して実行します。
+
+### visit-pochi の行で operated_by と reason だけが null
+
+ステップ2が終わっていません。`payload` に `reason` と `operatedBy` を入れてから、もう一度実行します。
+
+### visit-tama の行が null
+
+```text
+│ 1       │ 'visit-tama'  │ 'cancelled' │ null                       │ null             │ null           │ null           │
+```
+
+この行の null は、正しい結果です。`visit-tama` は、記録を足す前にキャンセルされた来院です。記録を足す前に起きたことは `business_events` に残っていません。
+
+## 追いつけないとき
+
+ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-1` に移動して続けます。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
+
+この一覧にないエラーで止まったときは、講師の画面を見て進みます。その演習は、持ち帰りの教材で試してください。

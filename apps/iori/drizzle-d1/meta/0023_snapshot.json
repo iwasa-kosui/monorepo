@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "38015ce2-183c-4cc4-b768-79e234f4bcd6",
-  "prevId": "5d694e3f-3fc0-4b3e-825c-d15bac4d8234",
+  "prevId": "970aee95-2103-429c-a1ff-0726760f5725",
   "tables": {
     "actors": {
       "name": "actors",
@@ -933,6 +933,14 @@
           "name": "domain_events_aggregate_id_idx",
           "columns": [
             "aggregateId"
+          ],
+          "isUnique": false
+        },
+        "domain_events_occurred_at_idx": {
+          "name": "domain_events_occurred_at_idx",
+          "columns": [
+            "occurredAt",
+            "eventId"
           ],
           "isUnique": false
         }

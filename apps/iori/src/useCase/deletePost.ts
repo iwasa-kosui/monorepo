@@ -12,6 +12,7 @@ import { SessionExpiredError, type SessionResolver } from '../domain/session/ses
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { RemoveBlueskyCrosspostUseCase } from './removeBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -53,6 +54,7 @@ type Deps = Readonly<{
   // Article is a child aggregate of Post, so we keep it
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
+  removeBlueskyCrosspost?: RemoveBlueskyCrosspostUseCase;
 }>;
 
 const create = ({
@@ -63,6 +65,7 @@ const create = ({
   postResolver,
   articleResolverByRootPostId,
   articleDeletedStore,
+  removeBlueskyCrosspost,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
@@ -102,6 +105,7 @@ const create = ({
         // Delete the post via event store
         const deleteEvent = Post.deletePost(now)(postId);
         await postDeletedStore.store(deleteEvent);
+        await removeBlueskyCrosspost?.run({ postId });
 
         // Build Note URI for the Delete activity using Fedify context
         const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: postId });

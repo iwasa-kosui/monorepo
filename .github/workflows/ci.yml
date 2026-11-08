@@ -104,6 +104,7 @@ jobs:
           export D1_DATABASE_ID="$(printf '%032d' 1)"
           export KV_NAMESPACE_ID="$(printf '%032d' 2)"
           export R2_BUCKET_NAME="iori-staging-fixture1-uploads"
+          export R2_EVENT_ARCHIVE_BUCKET_NAME="iori-staging-fixture1-event-archive"
           export QUEUE_NAME="iori-staging-fixture1-fedify"
           export ORIGIN="https://iori.example.invalid"
           export IORI_ADMISSION_MODE=sealed
@@ -112,7 +113,7 @@ jobs:
           run_guarded pnpm --silent --filter iori run deploy:worker:dry-run
           run_guarded pnpm --silent --filter iori run cloudflare:public-artifacts:check
           run_guarded terraform -chdir=apps/iori/infra/cloudflare fmt -check -recursive
-          run_guarded terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
+          node apps/iori/scripts/run-guarded-retry.mjs terraform -chdir=apps/iori/infra/cloudflare init -backend=false -input=false -lockfile=readonly
           run_guarded terraform -chdir=apps/iori/infra/cloudflare validate
 
       - name: Write redacted Cloudflare validation summary
@@ -169,6 +170,32 @@ jobs:
       - name: Test
         run: pnpm --filter nen-diagnosis run test:ci
 
+  es-patchwork-exercises:
+    name: "apps/es-patchwork-hands-on/exercises (node ${{ matrix.node-version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["24.12.0", "24"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          check-latest: true
+
+      - name: Check RED and GREEN of each snapshot
+        run: node apps/es-patchwork-hands-on/scripts/check-exercises.ts
+
+      - name: Type check
+        working-directory: apps/es-patchwork-hands-on/exercises
+        run: |
+          npm install --no-save --no-package-lock typescript@5.9.3 @types/node@24.10.4
+          npx tsc -p tsconfig.json
+
   kosui-me:
     name: "apps/kosui-me"
     runs-on: ubuntu-latest
@@ -202,3 +229,49 @@ jobs:
 
       - name: Test
         run: pnpm --filter kosui-me run test:ci
+
+  es-patchwork-hands-on:
+    name: "apps/es-patchwork-hands-on"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter es-patchwork-hands-on run lint
+
+      - name: Format check
+        run: pnpm --filter es-patchwork-hands-on run format:check
+
+      - name: Type check
+        run: pnpm --filter es-patchwork-hands-on run typecheck
+
+      - name: Build
+        run: pnpm --filter es-patchwork-hands-on run build
+
+      - name: Check exercises tarball
+        run: node apps/es-patchwork-hands-on/scripts/check-exercises-tarball.ts
+
+      - name: Check browser runtime matches node
+        run: node apps/es-patchwork-hands-on/scripts/check-browser-runtime.ts
+
+      - name: Test
+        run: pnpm --filter es-patchwork-hands-on run test:ci
+
+      - name: Install Playwright browsers
+        run: pnpm --filter es-patchwork-hands-on exec playwright install --with-deps chromium firefox webkit
+
+      - name: E2E test
+        run: pnpm --filter es-patchwork-hands-on run test:e2e

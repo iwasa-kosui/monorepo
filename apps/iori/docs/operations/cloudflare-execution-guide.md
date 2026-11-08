@@ -92,9 +92,12 @@ Cloudflare REST API token の実際の permission と readback API の適合も�
 operation が使う参照名は、次のとおりです。
 
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
+- `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`。任意の secret として `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` も受け取ります
+- `put-bluesky-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD`
+- `put-twitterapi-secret`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`TWITTERAPI_IO_API_KEY`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
+- `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `resume-source`、`release-pending-freeze`、`restart-failed-source`、`diagnose-source`: Source SSH の4件だけ
 
 既存の `MICROBLOG_*`、`IORI_VAPID_*`、汎用 `CLOUDFLARE_API_TOKEN` は、新しい名前への自動マッピングではありません。VAPID については、下の「[VAPID 値の確認](#vapid-値の確認)」にユーザーの回答と自動の検査を書いています。GitHub API から secret 値を取り出すこともできません。既存の安全な保管元から適合する値を用意します。staging を使う場合は、staging の source SSH を本番へ向けないでください。
@@ -344,6 +347,8 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 
 分類の行の `reason` には固定の語が出ます。固定の語に当たらない失敗では `unclassified` が出ます。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
 
+`deploy-worker` は、D1 のマイグレーションと `wrangler deploy` の前に、対象の環境で動いている現行の Worker の binding を検査します。現行の Worker に期待する binding がないと、`deploy-worker` は `stage=deploy-worker-before reason=worker-binding-missing` を出して止まり、環境は変わりません。binding を初めて足す PR は、同じ PR で、その名前を `apps/iori/scripts/update-active-worker.mjs` の `BINDINGS_ADDED_BY_THIS_RELEASE` に足します。既存の binding を、まだ持たない環境や世代に初めて入れる配備でも、作業者は配備の前に、この一覧に名前を足す PR を merge します。この一覧に名前がある binding に限り、配備前の検査は binding がないことを許します。一覧に名前があっても、現行の Worker にある binding の内容が期待と違うときは、`deploy-worker` は `worker-binding-mismatch` で止まります。配備後の検査は、全 binding を必須にします。binding を入れるすべての環境と世代で配備が成功したら、作業者は別の PR で、この一覧を `[]` に戻します。名前が一覧に残ると、binding が欠けた Worker も配備前の検査を通り、欠落は配備で環境が変わった後の検査で初めて見つかります。
+
 `deploy-worker-before` と `deploy-worker-after` の読み取りが `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
 
 | `reason`                     | 意味                                                                                   |
@@ -351,7 +356,7 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 | `resource-input`             | 読み取りに渡したリソースの ID の形が不正か、Queue と DLQ の ID が同じです。            |
 | `resource-d1`                | D1 の uuid か名前が一致しません。                                                      |
 | `resource-kv`                | KV の ID か title が一致しません。                                                     |
-| `resource-r2`                | uploads か transfer の bucket の名前が一致しません。                                   |
+| `resource-r2`                | uploads、event-archive、transfer のどれかの bucket の名前が一致しません。              |
 | `resource-queue-identity`    | Queue か DLQ の ID か名前が一致しません。                                              |
 | `resource-queue-paused`      | Queue か DLQ の配送の一時停止の状態が期待と違います。                                  |
 | `resource-queue-shape`       | Queue の応答の consumers、producers、件数の形が不正です。                              |
@@ -398,9 +403,11 @@ IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=
 
 #### put-worker-secrets で Worker の secret を更新する
 
-`put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
+`put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` と、任意の `BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の secret で入れ替えた後に、この operation で Worker に反映します。
 
-job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
+必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿と、Bluesky の home タイムラインの取り込みの両方に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、取り込みは `IORI_BLUESKY_TIMELINE` が `enabled` のときだけ動きます。どちらも template の値は `enabled` です。production と staging は同じ template を使います。2つの機能は互いに独立していて、どちらの機能も、この2つの secret が空でないときだけ動きます。Bluesky の secret だけを入れるときは `put-bluesky-secrets` を使います。この operation は production だけを受け付けます。staging に入れると、staging の Worker が同じ Bluesky アカウントに送信するからです。`put-worker-secrets` は staging でも実行でき、リポジトリ単位の Bluesky の secret も staging の Worker に入れます。staging の Worker が同じ Bluesky アカウントに送信するので、作業者は staging で `put-worker-secrets` を実行しないでください。
+
+job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
 
 | job の環境変数            | 元の GitHub secret                 |
 | ------------------------- | ---------------------------------- |
@@ -410,18 +417,20 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | `VAPID_PUBLIC_KEY`        | `VAPID_PUBLIC_KEY`                 |
 | `VAPID_PRIVATE_KEY`       | `VAPID_PRIVATE_KEY`                |
 | `SMOKE_QUEUE_TOKEN`       | `SMOKE_QUEUE_TOKEN`                |
+| `BLUESKY_IDENTIFIER`      | `BLUESKY_IDENTIFIER`               |
+| `BLUESKY_APP_PASSWORD`    | `BLUESKY_APP_PASSWORD`             |
 
 手順は次のとおりです。
 
-1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は3つすべてを put するからです。VAPID の鍵を入れ替えると、ブラウザが登録済みの push の購読は使えなくなります。利用者は、購読し直す必要があります。
+1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。必須の3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は必須の3つを必ず put するからです。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は、値が空でないものだけを put します。VAPID の鍵を入れ替えると、ブラウザが登録済みの push の購読は使えなくなります。利用者は、購読し直す必要があります。
 2. 作業者は、`deploy-iori-worker.yml` を `operation=put-worker-secrets`、`environment`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。
 3. production の場合、承認者は job の承認待ちを承認します。
 4. job は、`IORI_ADMISSION_IDENTITY` の `environment`、`generation`、`runId`、`mainSha` が dispatch の入力と一致することを確かめます。
 5. job は、`SMOKE_QUEUE_TOKEN` の形式と、`VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対の鍵であることを確かめます。
 6. job は、Cloudflare API で Worker `iori-<environment>-<generation>` の deployments を読み、Worker が存在することを確かめます。
-7. job は、`wrangler secret bulk` を1回だけ実行します。job は、3つの値を JSON にして標準入力だけで渡し、ファイルの引数は付けません。job は、wrangler が `3 secrets successfully uploaded` の行を出したことも、成功の条件にします。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
+7. job は、`wrangler secret bulk` を1回だけ実行します。job は、put する値を JSON にして標準入力だけで渡し、ファイルの引数は付けません。job は、wrangler が `<put した secret の数> secrets successfully uploaded` の行を出したことも、成功の条件にします。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
 
-`wrangler secret bulk` は、3つの secret を1回の設定の更新で Worker に送ります。このため、3つとも新しい値が反映されるか、どれも反映されないかのどちらかです。1回の `put-worker-secrets` で Worker の version は1つだけ増えます。作業者は、実行後に Worker の現在の version を記録します。失敗した場合は、どの secret も新しい値になっていません。作業者は、原因を直してから `put-worker-secrets` を dispatch し直します。
+`wrangler secret bulk` は、put する secret を1回の設定の更新で Worker に送ります。このため、put する secret のすべてに新しい値が反映されるか、どれも反映されないかのどちらかです。1回の `put-worker-secrets` で Worker の version は1つだけ増えます。作業者は、実行後に Worker の現在の version を記録します。失敗した場合は、どの secret も新しい値になっていません。作業者は、原因を直してから `put-worker-secrets` を dispatch し直します。
 
 失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を1行出します。`stage` は次のとおりです。
 
@@ -444,6 +453,39 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | `workers-request`、`workers-shape`              | API への要求が失敗したか、応答の形が想定と違います                                                                                                                                                                                                  |
 | `command-failed`                                | `wrangler secret bulk` が失敗したか、成功を示す `3 secrets successfully uploaded` の行が出ませんでした                                                                                                                                              |
 | `aborted`                                       | 時間切れか中断で止まりました                                                                                                                                                                                                                        |
+
+#### put-bluesky-secrets で Bluesky の secret を入れる
+
+`put-bluesky-secrets` は、稼働中の Worker に `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つだけを入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` を読みません。作業者は、Bluesky の secret を入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
+
+この operation は production だけを受け付けます。`environment` が `production` 以外の場合、job は最初の step で失敗します。
+
+作業者は、`deploy-iori-worker.yml` を `operation=put-bluesky-secrets`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。どちらかの secret が空の場合、job は `reason=credentials-missing` で失敗します。
+
+`put-bluesky-secrets` は、`wrangler secret bulk` を使いません。job は、Cloudflare の `PATCH .../workers/scripts/{worker}/secrets-bulk` API を直接呼びます。job は、`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つだけを1回のリクエストで送ります。Cloudflare の API リファレンスは、リクエストに含めない secret は変わらないと明記しています。このため、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` は、この operation で変わりません。Cloudflare の文書で確かめられた内容は、1回のリクエストで1つの version を作ることです。
+
+書き込みの後、job は deployment の一覧を読み直します。job は、最新の deployment が100%で新しい version を指していることを確かめます。確かめられない場合、job は失敗します。job は、secret の値と API の応答本文をログに出しません。
+
+失敗した場合、job は次の `reason` を出します。
+
+- `secrets-bulk-forbidden`: API が 401 か 403 を返しました。Worker の secret は変わっていない見込みです。作業者は、配備用の token `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` に Workers Scripts の書き込み権限があるかを確かめます。作業者は、権限を直してから `put-bluesky-secrets` を dispatch し直します。
+- `secrets-bulk-failed`: API の呼び出しが失敗したか、成功の応答を確かめられませんでした。secret が反映されたかどうかは分かりません。作業者は、同じ値で `put-bluesky-secrets` を dispatch し直せます。
+- `secrets-bulk-not-deployed`: 書き込みの後の読み直しで、新しい version が100%の deployment になっていませんでした。secret は新しい version にあり、まだ配信されていない可能性があります。作業者は、Cloudflare のダッシュボードか deployment の一覧で状態を確かめます。その結果をもとに、作業者は、新しい version を deploy するか、`put-bluesky-secrets` を dispatch し直すかを決めます。`IORI_BLUESKY_CROSSPOST` と `IORI_BLUESKY_TIMELINE` が `disabled` の場合、配信中の Worker の動作に影響しません。
+- `workers-http-NNN`、`workers-request`、`workers-shape`、`aborted`（`stage` が `put-bluesky-secrets-put` のとき）: job は書き込みの後の確認で止まった場合があります。secret は新しい version にある可能性があります。作業者は、`secrets-bulk-not-deployed` と同じ手順で deployment の一覧を確かめます。
+
+#### put-twitterapi-secret で twitterapi.io の API キーを入れる
+
+`put-twitterapi-secret` は、稼働中の Worker に `TWITTERAPI_IO_API_KEY` の1つだけを入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` を読みません。作業者は、API キーだけを入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
+
+この operation は production だけを受け付けます。`environment` が `production` 以外の場合、job は最初の step で失敗します。
+
+作業者は、`deploy-iori-worker.yml` を `operation=put-twitterapi-secret`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。GitHub の secret `TWITTERAPI_IO_API_KEY` が未登録か空の場合、job は何も書き込まず、`reason=credentials-missing` で失敗します。この場合、Worker の secret は変わりません。
+
+job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`（job 内では `CLOUDFLARE_API_TOKEN`）、`TWITTERAPI_IO_API_KEY` の4つです。
+
+`put-twitterapi-secret` は、`put-bluesky-secrets` と同じ仕組みで書き込みます。job は、Cloudflare の `PATCH .../workers/scripts/{worker}/secrets-bulk` API を直接呼び、`TWITTERAPI_IO_API_KEY` だけを1回のリクエストで送ります。リクエストに含めない secret は変わらないので、VAPID の鍵、`SMOKE_QUEUE_TOKEN`、Bluesky の secret はこの operation で変わりません。書き込みの後、job は deployment の一覧を読み直し、最新の deployment が100%で新しい version を指していることを確かめます。確かめられない場合、job は失敗します。job は、secret の値と API の応答本文をログに出しません。
+
+失敗した場合、job は `IORI_DIAG` の行に `stage=put-twitterapi`（入力の検査）、`put-twitterapi-read`（Worker の存在の確認）、`put-twitterapi-put`（書き込みと書き込み後の確認）のどれかを出します。`reason` の意味と対処は、`put-bluesky-secrets` の `secrets-bulk-forbidden`、`secrets-bulk-failed`、`secrets-bulk-not-deployed`、`workers-http-NNN`、`workers-request`、`workers-shape`、`aborted` と同じです。ただし、再実行する operation は `put-twitterapi-secret` です。
 
 #### delete-rehearsal-d1 で予行演習の空の D1 を削除する
 
@@ -512,6 +554,24 @@ job が受け取る secret は、次の2つです。
 
 dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。`deletedAt` の条件があるので、段階的に実行しても、同じ repost を二重に処理しません。
 
+#### delete-unfollowed-posts でフォローしていない actor の投稿を home から消す
+
+`delete-unfollowed-posts-dry-run` は、本番の D1 の `timeline_items` から、フォローしていない remote actor の投稿（`type` が `post` で、`createdAt` が `repost_created_before_ms` 以下で、まだ論理削除されていないもの）を数えます。「フォローしていない」とは、ローカルの actor が1人もフォローしていないことです。投稿の actor がローカルの actor である行は、対象にしません。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=<N> federated=<N>` の行を出します。`targets` は、対象の行の数です。`federated` は、対象の行が指す投稿のうち、`federated_timeline_items` に項目がある投稿の件数です。複数の行が同じ投稿を指す場合、この operation はその投稿を1件と数えます。`delete-unfollowed-posts` は、同じ条件の行について、`timelineItem.deleted` のイベントを足してから、`deletedAt` を立てます。この operation は `IORI_NOTICE delete-unfollowed-posts mode=apply deleted=<N>` の行を出します。
+
+`delete-unfollowed-posts` は、論理削除だけをします。`move-unfollowed-reposts` と違い、federated の項目は足さず、`federatedTimelineItem.created` のイベントも足しません。repost の行（`type` が `repost`）は、対象にしません。
+
+home の行と federated の項目の両方を持つ投稿は、いま `IORI_PRUNE_FEDERATED_POSTS` の Cron の削除から守られています。`delete-unfollowed-posts` が home の行に `deletedAt` を立てると、この保護が外れます。ほかの除外理由に当たらなければ、Cron は保持期間の後にその投稿を物理削除します。dry-run の `federated` は、この投稿の件数です。
+
+作業者は、フォローしていない actor の Create から home の行を作らない修正の配備の後に、この operation を実行します。配備の前に同じ Create が再配送されると、新しい home の行が作られます。この行は home に出ず、再実行で消せます。
+
+この operation は、フォローを外した actor の過去の行も対象にします。作業者が後でその actor をフォローし直しても、この operation が消した過去の投稿は home に戻りません。
+
+作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation`、`repost_created_before_ms=<ミリ秒の epoch。未来の時刻は不可>` で dispatch します。`migration_run_id` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-unfollowed-posts` を dispatch します。
+
+同じ入力で `delete-unfollowed-posts` を再実行しても安全です。`deletedAt` の条件があるので、削除済みの行は対象になりません。`timelineItem.deleted` のイベントは、同じ行にすでにあれば足しません。途中で失敗し、イベントだけが入って `deletedAt` が未設定の行が残った場合も、再実行がその行に `deletedAt` を立て、イベントは重複しません。apply が出す `deleted` は、その回の実行で `deletedAt` を立てた件数です。
+
+`delete-unfollowed-posts` は、2つの文を1回の `/query` で送ります。REST API がこの2つの文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。dry-run が遅いとき、または apply が時間切れで失敗したときは、作業者が `repost_created_before_ms` を古い時刻から段階的に大きくして、複数回に分けて dispatch します。
+
 #### prune-federated-posts-dry-run で federated の古い remote 投稿の削除対象を数える
 
 `prune-federated-posts-dry-run` は、本番の D1 に SELECT だけを送り、Worker の Cron が消す投稿の件数を事前に数える operation です。apply の operation はありません。削除は Worker の Cron が担当します。
@@ -546,6 +606,16 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 | `cutoff_ms`    | 実行時刻の7日前を示すミリ秒の epoch                                                                 |
 
 `local_likes` から `article` までは、除外理由ごとの件数です。1件の投稿が複数の除外理由に当たる場合、operation はその投稿を当たる理由すべてで数えます。このため、除外理由の件数の合計は、`candidates` から `to_delete` を引いた値より大きくなることがあります。
+
+#### IORI_BLUESKY_CROSSPOST と IORI_BLUESKY_TIMELINE を切り替える
+
+`IORI_BLUESKY_CROSSPOST` は iori の投稿を Bluesky に送る機能を、`IORI_BLUESKY_TIMELINE` は Bluesky の home タイムラインを取り込む機能を切り替えます。どちらも Worker の環境変数で、template の値は `enabled` です。production と staging は同じ template を使います。値は `workers/iori/wrangler.template.jsonc` の `vars` にあります。2つの機能は独立しているので、作業者は片方だけを有効にできます。
+
+作業者は、機能を動かす前に、`put-bluesky-secrets` で `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` を Worker に入れます。どちらかの secret が空だと、環境変数を `enabled` にしても機能は動きません。
+
+値を変えるには、作業者が template の対象の値を変える PR を作り、merge して配備します。ダッシュボードで変えた値は、次の配備が template の値で上書きします。
+
+`IORI_BLUESKY_TIMELINE` を有効にすると、Worker は3時間ごとの Cron で Bluesky の home タイムラインを取り込み、D1 の `bluesky_timeline_items` に保存します。同じタスクが、30日より古い行を消します。取り込んだ投稿は、Web UI の `/bluesky` ページに表示されます。
 
 #### ensure-event-archive-bucket でドメインイベント退避用の R2 バケットを作る
 
@@ -600,6 +670,29 @@ job が受け取る secret は、次の2つです。
 | `aborted`                                    | 時間切れか中断で止まりました                                                                  |
 
 この operation は、バケットを足す Terraform の変更を merge する前に実行します。作業者は、対象にするすべての generation で `state=verified` を確かめてから、その変更を merge します。順序は、この operation の PR を merge し、operation を dispatch し、その後で Terraform の変更を merge する流れです。
+
+#### delete-blocked-domain-posts でブロックしたドメインの保存済みの投稿を消す
+
+`delete-blocked-domain-posts-dry-run` は、本番の D1 から、ブロックしたドメイン `baraag.net`（とそのサブドメイン）の actor が書いた投稿を数えます。この operation は、SELECT だけを実行し、`IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=<N> remote_posts=<N> timeline_items=<N> federated_items=<N> reposts=<N> likes=<N> emoji_reacts=<N> notifications=<N> orphan_repost_notifications=<N> images=<N> articles_skipped=<N> actors=<N> follows_out=<N> follows_in=<N> mutes=<N>` の行を出します。`delete-blocked-domain-posts` は、同じ条件の投稿と、投稿に付く行を消します。この operation は `IORI_NOTICE delete-blocked-domain-posts mode=apply deleted_posts=<N> deleted_timeline_items=<N>` の行を出します。対象のドメインは、スクリプトの定数で固定しています。workflow の入力では指定しません。
+
+対象の範囲は、次のとおりです。
+
+- 対象の投稿は、`actors.uri` のホストが `baraag.net` か `*.baraag.net` の actor が書いた `posts` の行です。`notbaraag.net` と `baraag.net.example` は対象になりません。`local_actors` に行がある actor は対象にしません。
+- `articles.rootPostId` から参照される投稿は、対象にしません。dry-run の `articles_skipped` は、この投稿の件数です。
+- dry-run の `remote_posts` は、対象の投稿のうち `remote_posts` に行がある投稿の件数です。`posts` との差を見るために出します。
+- actor（`actors`、`remote_actors`）と `follows` の行は、消しません。dry-run の `actors`、`follows_out`（ローカルの actor がフォローしている行）、`follows_in`（ローカルの actor がフォローされている行）、`mutes` は、残る行の件数を確かめるために出します。
+- apply が出す `deleted_posts` と `deleted_timeline_items` は、その回の実行で足した `post.deleted` のイベントと論理削除の件数です。前の実行で消した分は、含みません。
+
+apply は、受信した Delete の処理（`onDelete`）と各 D1 ストアにそろえて、次の順で文を実行します。
+
+1. 対象の投稿を指す `timeline_items` に `timelineItem.deleted` のイベントを足し、`deletedAt` を立てます。
+2. 対象の投稿に付く通知（like、emojiReact、reply、repost）を消します。通知の種類ごとの表を先に、`notifications` を後に消します。like、emojiReact、reply の通知には、削除のイベントを足します。repost の通知には、ドメインに削除のイベントが無いため、イベントを足しません。
+3. `reposts`、`likes`（`local_likes` と `remote_likes` が先）、`emoji_reacts`、`federated_timeline_items` のうち、対象の投稿を指す行を、各削除のイベントを足してから消します。
+4. `post_images`、`local_posts`、`remote_post_recipients`、`remote_posts`、`posts` の順に消します。`posts` を消す前に `post.deleted` のイベントを足します。`post_translations` と `link_previews` は、外部キーの cascade で消えます。
+
+作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-blocked-domain-posts` を dispatch します。
+
+`delete-blocked-domain-posts` は、複数の文を1回の `/query` で送ります。REST API がこの複数の文を1つのトランザクションとして扱うかどうかは、公式ドキュメントに記載がありません。どの文も、対象を毎回 actor から引き直し、足したイベントの有無を確かめます。このため、途中で失敗しても、同じ入力で `delete-blocked-domain-posts` を再実行すれば、最終状態はそろいます。ただし、`/query` が全文を1つのトランザクションで実行する場合は、時間切れのたびに全体が巻き戻ります。apply が同じ失敗を繰り返すとき、作業者は再実行を続けず、文を分けて送る変更を検討します。
 
 ## 6. 中断と引き継ぎ
 

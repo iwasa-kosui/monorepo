@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  addXUserFeedSource,
   createStatus,
   deleteStatus,
   failureMessage,
   favourite,
   fetchAccount,
   fetchAccountStatuses,
+  fetchBlueskyTimeline,
   fetchFavourites,
+  fetchFeedSources,
   fetchFollowers,
   fetchHomeTimeline,
   fetchNotifications,
@@ -27,10 +30,12 @@ import {
   parseRetryAfter,
   react,
   reblog,
+  refreshBlueskyTimeline,
   requestDigest,
   saveNotificationsMarker,
   searchAccount,
   searchStatuses,
+  setFeedSourceEnabled,
   summarizeTimeline,
   translate,
   unfavourite,
@@ -566,6 +571,110 @@ describe('mastodon client requests', () => {
     expect(isMastodonApiError(error) && error.status).toBe(409);
     expect(isMastodonApiError(error) && error.message).toBe('Digest request too soon');
     expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(45);
+  });
+
+  it('fetches the feed sources through a same-origin GET', async () => {
+    const sources = [{ feedSourceId: 'f1', kind: 'x_user', title: '@jack' }];
+    const fetchMock = stubFetch(jsonResponse({ sources }));
+
+    const result = await fetchFeedSources();
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(sources);
+  });
+
+  it('posts the X user as JSON and returns the created source', async () => {
+    const source = { feedSourceId: 'f1', kind: 'x_user', title: '@jack' };
+    const fetchMock = stubFetch(jsonResponse({ source }, { status: 201 }));
+
+    const result = await addXUserFeedSource('jack');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({ kind: 'x_user', username: 'jack' });
+    expect(result).toEqual(source);
+  });
+
+  it('carries the status and the error on a rejected X user', async () => {
+    stubFetch(jsonResponse({ error: 'Feed source already exists' }, { status: 409 }));
+
+    const error = await addXUserFeedSource('jack').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
+    expect(isMastodonApiError(error) && error.message).toBe('Feed source already exists');
+  });
+
+  it('patches the enabled flag of the feed source with an encoded id', async () => {
+    const source = { feedSourceId: 'f/1', enabled: false };
+    const fetchMock = stubFetch(jsonResponse({ source }));
+
+    const result = await setFeedSourceEnabled('f/1', false);
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/feed-sources/f%2F1');
+    expect(init.method).toBe('PATCH');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({ enabled: false });
+    expect(result).toEqual(source);
+  });
+
+  it('fetches the Bluesky timeline with the paging query', async () => {
+    const payload = { enabled: true, items: [], nextBefore: null };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await fetchBlueskyTimeline({ before: 1_700_000_000_000, limit: 20 });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/timeline?before=1700000000000&limit=20');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('sends beforeId with before when paging the Bluesky timeline', async () => {
+    const fetchMock = stubFetch(jsonResponse({ enabled: true, items: [], nextBefore: null, nextBeforeId: null }));
+
+    await fetchBlueskyTimeline({
+      before: 1_700_000_000_000,
+      beforeId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+    });
+
+    expect((fetchMock.mock.calls as unknown[][])[0]![0]).toBe(
+      '/api/iori/v1/bluesky/timeline?before=1700000000000&beforeId=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1%23repost%3Adid%3Aplc%3Ab',
+    );
+  });
+
+  it('fetches the first page of the Bluesky timeline without a query', async () => {
+    const fetchMock = stubFetch(jsonResponse({ enabled: false, items: [], nextBefore: null }));
+
+    await fetchBlueskyTimeline();
+
+    expect((fetchMock.mock.calls as unknown[][])[0]![0]).toBe('/api/iori/v1/bluesky/timeline');
+  });
+
+  it('posts a Bluesky timeline refresh and returns the counts', async () => {
+    const payload = { pages: 1, fetched: 3, saved: 2, dropped: 0 };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await refreshBlueskyTimeline();
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/timeline/refresh');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('carries the status of a refresh rejected because the import is disabled', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky timeline is disabled' }, { status: 409 }));
+
+    const error = await refreshBlueskyTimeline().catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
   });
 
   it('posts a translate request for the status and returns the Translation', async () => {

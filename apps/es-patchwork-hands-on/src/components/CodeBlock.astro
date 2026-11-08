@@ -1,0 +1,50 @@
+---
+import { Code } from 'astro:components';
+
+import { sliceLines } from '../lib/extract';
+
+interface Props {
+  code: string;
+  from?: number;
+  to?: number;
+}
+
+const { code, from, to } = Astro.props;
+if ((from === undefined) !== (to === undefined)) {
+  throw new Error('CodeBlock の from と to は両方を指定します');
+}
+const shown = from === undefined || to === undefined
+  ? code
+  : sliceLines(code, from, to);
+---
+
+<div class="code-block relative">
+  <button
+    type="button"
+    hidden
+    class="absolute top-2 right-2 rounded bg-gray-200 px-2 py-1 text-xs text-gray-900"
+  >
+    コピー
+  </button>
+  <Code code={shown} lang="ts" />
+</div>
+
+<script>
+for (const block of document.querySelectorAll('.code-block')) {
+  const button = block.querySelector('button');
+  const pre = block.querySelector('pre');
+  if (button === null || pre === null) continue;
+  button.hidden = false;
+  button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(pre.textContent ?? '');
+      button.textContent = 'コピーしました';
+    } catch {
+      button.textContent = 'コピーできませんでした';
+    }
+    setTimeout(() => {
+      button.textContent = 'コピー';
+    }, 2000);
+  });
+}
+</script>

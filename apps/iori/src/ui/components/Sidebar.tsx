@@ -73,6 +73,22 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
       )}
       {isLoggedIn && (
         <a
+          href='/x'
+          aria-label='X'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z'
+            />
+          </svg>
+        </a>
+      )}
+      {isLoggedIn && (
+        <a
           href='/articles'
           class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
         >
@@ -82,6 +98,22 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
               stroke-linejoin='round'
               stroke-width='2'
               d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            />
+          </svg>
+        </a>
+      )}
+      {isLoggedIn && (
+        <a
+          href='/bluesky'
+          aria-label='Bluesky'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z'
             />
           </svg>
         </a>

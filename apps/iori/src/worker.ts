@@ -14,9 +14,12 @@ import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRoute
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
+import { createWorkerIoriBlueskyCrosspostStatusRouter } from './adaptor/routes/workerIoriBlueskyCrosspostStatusRouter.ts';
+import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
+import { createWorkerIoriXPostsRouter } from './adaptor/routes/workerIoriXPostsRouter.ts';
 import { createWorkerMastodonAccountsRouter } from './adaptor/routes/workerMastodonAccountsRouter.ts';
 import { createWorkerMastodonAppsRouter } from './adaptor/routes/workerMastodonAppsRouter.ts';
 import { createWorkerMastodonCoreRouter } from './adaptor/routes/workerMastodonCoreRouter.ts';
@@ -38,6 +41,7 @@ import { Session } from './domain/session/session.ts';
 import { SessionId } from './domain/session/sessionId.ts';
 import { Username } from './domain/user/username.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
+import { createD1TimingCollector, instrumentEnvD1, logD1Timing } from './runtime/d1Timing.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
 import { dispatchScheduled, scheduledTasks } from './scheduled/scheduledTasks.ts';
 import { readOnlySmokeEnvironment } from './smokeCapabilities.ts';
@@ -122,10 +126,12 @@ export default {
       await env.FEDIFY_QUEUE.send(smokeMarker(admission.identity));
       return Response.json({ accepted: true, queue: { enqueued: 1 } }, { headers: { 'Cache-Control': 'no-store' } });
     }
+    const d1Timing = createD1TimingCollector();
+    env = instrumentEnvD1(env, d1Timing);
     if (admission.capability === 'smoke') env = readOnlySmokeEnvironment(env);
     const runtime = await createWorkerRuntimePorts(env, (promise) => executionCtx.waitUntil(promise));
 
-    return createIoriApp({
+    const response = await createIoriApp({
       federationMiddleware: async (c, next) => {
         if (c.req.path === '/inbox' && c.req.method === 'GET') return c.json({ error: 'Method Not Allowed' }, 405);
         return federationWithObjectNotFound(runtime.federation, () => undefined)(c, next);
@@ -251,6 +257,9 @@ export default {
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
+        app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
+        app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));
         app.route(
           '/api',
           createWorkerIoriActionsRouter({
@@ -277,7 +286,15 @@ export default {
         app.route('/api', createWorkerMastodonFallbackRouter());
       },
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
-      servePage: async (pageRequest) => createWorkerPageFallback(pageRequest, await pageIdentity(pageRequest, runtime)),
+      servePage: async (pageRequest) => {
+        const identity = await pageIdentity(pageRequest, runtime);
+        // 所有者以外には /x の存在を見せないため、404 と同じく undefined を返す。
+        if (
+          new URL(pageRequest.url).pathname === '/x' && identity.isLoggedIn
+          && !(await runtime.digest.isDigestOwner(identity.userId))
+        ) return undefined;
+        return createWorkerPageFallback(pageRequest, identity);
+      },
       serveUpload: async (filename) => {
         const imageIdResult = parseUploadFilenameImageId(filename);
         if (!imageIdResult.ok) {
@@ -335,6 +352,8 @@ export default {
         });
       },
     }).fetch(request as unknown as Request, env, executionCtx);
+    logD1Timing(d1Timing, request, response);
+    return response;
   },
   queue: async (
     batch: MessageBatch<unknown>,

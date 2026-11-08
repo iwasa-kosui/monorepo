@@ -1,0 +1,74 @@
+---
+import { getCollection, render } from 'astro:content';
+
+import PageNav from '../../components/PageNav.astro';
+import { buildChapterPages, pagePath } from '../../lib/chapter-routes';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { schedule, withTimeRanges } from '../../schedule';
+
+export const getStaticPaths = async () => {
+  const pages = buildChapterPages(
+    await getCollection('chapters'),
+    schedule.map((row) => row.id),
+  );
+  for (const page of pages) {
+    const hasGoal = page.entry.data.goal !== undefined;
+    if (page.number === 1 && !hasGoal) {
+      throw new Error(`章の最初のページに goal がありません: ${page.entry.id}`);
+    }
+    if (page.number > 1 && hasGoal) {
+      throw new Error(
+        `goal は章の最初のページだけに置きます: ${page.entry.id}`,
+      );
+    }
+  }
+  return pages.map((page, index) => ({
+    params: { slug: page.slug },
+    props: { page, previous: pages[index - 1], next: pages[index + 1] },
+  }));
+};
+
+const { page, previous, next } = Astro.props;
+const rows = withTimeRanges(schedule);
+const rowOf = (chapter: string) => {
+  const row = rows.find((candidate) => candidate.id === chapter);
+  if (row === undefined) {
+    throw new Error(`schedule.ts に章がありません: ${chapter}`);
+  }
+  return row;
+};
+const row = rowOf(page.chapter);
+const linkTo = (target: typeof page | undefined) =>
+  target === undefined ? undefined : {
+    href: pagePath(target.chapter, target.number),
+    hint: target.chapter === page.chapter
+      ? undefined
+      : `（${rowOf(target.chapter).title}）`,
+  };
+const progress = `${page.number}/${page.total}`;
+const { Content } = await render(page.entry);
+---
+
+<BaseLayout title={`${row.title} ${progress}`} chapterPage>
+  <header class="chapter-header">
+    <h1>{row.title} <span class="chapter-progress">{progress}</span></h1>
+    <p class="chapter-links">
+      <a href="/">トップページへ</a>｜<a href="/troubleshooting/"
+      >うまく動かないとき</a>
+    </p>
+    <p class="chapter-range">
+      {row.range}{row.parts === undefined ? '' : `：${row.parts}`}
+    </p>
+  </header>
+  {
+    page.entry.data.goal !== undefined && (
+      <p class="chapter-goal">
+        <strong>できるようになること：</strong>{page.entry.data.goal}
+      </p>
+    )
+  }
+  <article class="chapter-body">
+    <Content />
+  </article>
+  <PageNav previous={linkTo(previous)} next={linkTo(next)} />
+</BaseLayout>

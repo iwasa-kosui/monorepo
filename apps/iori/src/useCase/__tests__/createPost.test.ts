@@ -1,5 +1,6 @@
 import { test as fcTest } from '@fast-check/vitest';
-import { describe, expect, it } from 'vitest';
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -103,6 +104,51 @@ describe('CreatePostUseCase', () => {
         expect(deps.postCreatedStore.store).toHaveBeenCalledTimes(1);
       }
     });
+
+    it.each([
+      { summary: 'cw', sensitive: true, expectedSummary: 'cw', expectedSensitive: true },
+      { summary: null, sensitive: false, expectedSummary: null, expectedSensitive: false },
+      { summary: undefined, sensitive: undefined, expectedSummary: null, expectedSensitive: false },
+    ])(
+      'summary $summary、sensitive $sensitive を保存した投稿に載せる',
+      async ({ summary, sensitive, expectedSummary, expectedSensitive }) => {
+        const deps = createDeps();
+        const user: User = {
+          id: crypto.randomUUID() as User['id'],
+          username: 'kosui' as Username,
+        };
+        const session: Session = {
+          sessionId: crypto.randomUUID() as Session['sessionId'],
+          userId: user.id,
+          expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+        };
+        const actor: LocalActor = {
+          id: crypto.randomUUID() as LocalActor['id'],
+          userId: user.id,
+          uri: 'https://example.com/users/kosui',
+          inboxUrl: 'https://example.com/inbox',
+          type: 'local',
+          logoUri: undefined,
+        };
+        setupValidUserSession(deps, user, session, actor);
+
+        const result = await CreatePostUseCase.create(deps).run({
+          sessionId: session.sessionId,
+          content: 'Hello, world!',
+          imageUrls: [],
+          summary,
+          sensitive,
+          ctx: createMockRequestContext(),
+        });
+
+        expect(result.ok).toBe(true);
+        expect(deps.postCreatedStore.items).toHaveLength(1);
+        expect(deps.postCreatedStore.items[0]?.aggregateState).toMatchObject({
+          summary: expectedSummary,
+          sensitive: expectedSensitive,
+        });
+      },
+    );
 
     it.each([
       { imageCount: 0, description: '画像なし' },
@@ -384,6 +430,62 @@ describe('CreatePostUseCase', () => {
       });
 
       expect(ctx.sendActivity).toHaveBeenCalled();
+    });
+  });
+
+  describe('Bluesky への投稿の予約', () => {
+    const setupUser = (deps: ReturnType<typeof createDeps>) => {
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      return session;
+    };
+
+    it('投稿の保存と配送のあとに、作った投稿の ID で予約する', async () => {
+      const deps = createDeps();
+      const session = setupUser(deps);
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+      const ctx = createMockRequestContext();
+
+      const result = await CreatePostUseCase.create({ ...deps, scheduleBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        content: 'Hello Bluesky!',
+        imageUrls: [],
+        ctx,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledExactlyOnceWith({ postId: result.val.post.postId });
+      expect(vi.mocked(ctx.sendActivity).mock.invocationCallOrder[0]).toBeLessThan(
+        scheduleBlueskyCrosspost.run.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('予約の use case が無くても投稿できる', async () => {
+      const deps = createDeps();
+      const session = setupUser(deps);
+
+      const result = await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'Hello',
+        imageUrls: [],
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
     });
   });
 });

@@ -57,6 +57,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   useInfiniteScroll({
     nextCursor: data?.nextMaxId,
     onLoadMore: timeline.loadMore,
+    isFirstPageSettled: timeline.isFirstPageSettled,
   });
 
   useKeyboardNavigation({
@@ -68,8 +69,6 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
     replyingToPostId: reply.replyingToPostId,
     threadModalPostId: thread.threadModalPostId,
-    likingPostId: actions.actionState.likingPostId,
-    undoingLikePostId: actions.actionState.undoingLikePostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
     onReply: reply.openReplyDialog,

@@ -38,6 +38,22 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<title>検索 | blog.kosui.me</title>');
   });
 
+  it('renders the Bluesky entry and links it from the Sidebar and BottomNav only when logged in', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/bluesky'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+    const html = await response?.text();
+
+    expect(response?.status).toBe(200);
+    expect(html).toContain('/static/bluesky.js');
+    expect(html).toContain('<title>Bluesky | blog.kosui.me</title>');
+    expect(await renderSidebar(true)).toContain('href="/bluesky"');
+    expect(await renderBottomNav(true)).toContain('href="/bluesky"');
+    expect(await renderSidebar(false)).not.toContain('/bluesky');
+    expect(await renderBottomNav(false)).not.toContain('/bluesky');
+  });
+
   it('embeds the tailwind config and the style block shared with LayoutClient', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
     const html = await response?.text();
@@ -107,6 +123,70 @@ describe('createWorkerPageFallback', () => {
     const html = await response?.text();
 
     expect(html).toMatch(/<meta name="viewport"[^>]*viewport-fit=cover/);
+  });
+
+  it('redirects the private X page to /sign-in when logged out, without caching', async () => {
+    const anonymous = await createWorkerPageFallback(new Request('https://worker.test/x'));
+    const expired = await createWorkerPageFallback(
+      new Request('https://worker.test/x', {
+        headers: { Cookie: 'sessionId=expired' },
+      }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the private X page for a logged-in user with no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/x'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/xPosts.js');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('does not add noindex to public pages', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
+
+    expect(response?.headers.get('X-Robots-Tag')).toBeNull();
+    expect(await response?.text()).not.toContain('name="robots"');
+  });
+
+  it('shows the X link in the Sidebar only when logged in and keeps it out of the BottomNav', async () => {
+    const loggedIn = await renderSidebar(true);
+    const loggedOut = await renderSidebar(false);
+
+    expect(loggedIn).toContain('href="/x"');
+    expect(loggedIn.indexOf('href="/x"')).toBeGreaterThan(loggedIn.indexOf('href="/digest"'));
+    expect(loggedIn.indexOf('href="/x"')).toBeLessThan(loggedIn.indexOf('href="/articles"'));
+    expect(loggedOut).not.toContain('href="/x"');
+    expect(await renderBottomNav(true)).not.toContain('href="/x"');
+  });
+
+  it('embeds prefetch-only speculation rules that never target /auth or prerender', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
+    const html = (await response?.text()) ?? '';
+    const match = /<script type="speculationrules">([^<]*)<\/script>/.exec(html);
+
+    expect(match).not.toBeNull();
+    const rules = JSON.parse(match?.[1] ?? '{}') as { prefetch?: { eagerness?: string }[]; prerender?: unknown };
+    expect(rules.prerender).toBeUndefined();
+    expect(rules.prefetch?.[0]?.eagerness).toBe('moderate');
+    expect(match?.[1]).not.toContain('prerender');
+    expect(match?.[1]).not.toContain('/auth');
+    expect(match?.[1]).toContain('"selector_matches":"aside nav a, body > nav a"');
+    expect(html).toContain('<script type="module" src="/static/navPrefetch.js"></script>');
   });
 
   it('does not claim unknown GET routes', async () => {

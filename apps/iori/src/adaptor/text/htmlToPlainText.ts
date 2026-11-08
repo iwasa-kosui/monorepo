@@ -26,7 +26,7 @@ const decodeCodePoint = (match: string, codePoint: number): string => {
   return String.fromCodePoint(codePoint);
 };
 
-const decodeEntities = (text: string): string =>
+export const decodeEntities = (text: string): string =>
   text.replace(
     /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(amp|lt|gt|quot|apos|nbsp|hellip|mdash|ndash|rsquo|lsquo|rdquo|ldquo|middot|copy|reg|trade|yen|times));/g,
     (match, dec, hex, named) => {

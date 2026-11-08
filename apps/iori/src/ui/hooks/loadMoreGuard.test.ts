@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
+import { canStartLoadMore, canStartPageLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
 
 describe('canStartLoadMore', () => {
   it('starts when idle and the cursor is the current one', () => {
@@ -39,5 +39,19 @@ describe('isCurrentCursor', () => {
 
   it('is false for an empty max id', () => {
     expect(isCurrentCursor('', 'cursor-1')).toBe(false);
+  });
+});
+
+describe('canStartPageLoadMore', () => {
+  it('does not start while the first page is still being fetched', () => {
+    expect(canStartPageLoadMore(false, false)).toBe(false);
+  });
+
+  it('starts once the first page has settled and nothing else is loading', () => {
+    expect(canStartPageLoadMore(false, true)).toBe(true);
+  });
+
+  it('does not start while another load more is in flight', () => {
+    expect(canStartPageLoadMore(true, true)).toBe(false);
   });
 });

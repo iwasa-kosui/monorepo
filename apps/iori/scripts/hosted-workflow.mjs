@@ -18,6 +18,8 @@ const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = Object.freeze({
   'deploy-worker': 'deploy-active-worker.mjs',
   'put-worker-secrets': 'worker-bindings-put.mjs',
+  'put-bluesky-secrets': 'worker-bindings-put.mjs',
+  'put-twitterapi-secret': 'worker-bindings-put.mjs',
   source: 'deploy-source.mjs',
   'resume-source': 'resume-source.mjs',
   'release-pending-freeze': 'release-pending-freeze.mjs',
@@ -26,6 +28,12 @@ const operations = Object.freeze({
   'delete-rehearsal-d1': 'delete-rehearsal-d1.mjs',
   'move-unfollowed-reposts-dry-run': 'move-unfollowed-reposts.mjs',
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
+  'delete-unfollowed-posts-dry-run': 'delete-unfollowed-posts.mjs',
+  'delete-unfollowed-posts': 'delete-unfollowed-posts.mjs',
+  'domain-events-stats': 'domain-events-stats.mjs',
+  'digest-quality-sample': 'digest-quality-sample.mjs',
+  'delete-blocked-domain-posts-dry-run': 'delete-blocked-domain-posts.mjs',
+  'delete-blocked-domain-posts': 'delete-blocked-domain-posts.mjs',
   'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
   'ensure-event-archive-bucket': 'ensure-event-archive-bucket.mjs',
 });
@@ -122,6 +130,14 @@ const rehearsalNoticeLine =
   /^IORI_NOTICE rehearsal-d1 name=iori-production-prdrehearse[1-5] state=(?:present|absent|empty|not-empty|ambiguous|check-failed|deleted|delete-failed|remaining)$/;
 const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
+const deleteNoticeLine =
+  /^IORI_NOTICE delete-unfollowed-posts (?:mode=dry-run targets=\d{1,9} federated=\d{1,9}|mode=apply deleted=\d{1,9})$/;
+const statsNoticeLine =
+  /^IORI_NOTICE domain-events-stats (?:summary total=\d{1,12} oldest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) newest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) older_than_7d=\d{1,12} avg_bytes=\d{1,12} max_bytes=\d{1,12} created_at_skew_actors=\d{1,12}|day=\d{4}-\d{2}-\d{2} count=\d{1,12}|event=[A-Za-z][A-Za-z0-9.]{0,63} count=\d{1,12})$/;
+const digestQualityNoticeLine =
+  /^IORI_NOTICE digest-quality-sample (?:overview users=\d{1,3}|user=\d{1,3} (?:summary topics=\d{1,9} enabled=\d{1,9} embedded=\d{1,9} items=\d{1,9} scored=\d{1,9} matched=\d{1,9} match_rate=(?:none|[01]\.\d{3})|hist=(?:item_top1|item_gap)(?: (?:lt|ge|b)\d\.\d{2}=\d{1,9}){1,20}|candidates total=\d{1,9}(?: ge\d\.\d{2}=\d{1,9}){5}|material kind=[a-z][a-z0-9_]{0,31} total=\d{1,9} ge0\.40=\d{1,9} ge0\.50=\d{1,9}))$/;
+const deleteBlockedDomainNoticeLine =
+  /^IORI_NOTICE delete-blocked-domain-posts (?:mode=dry-run domain=baraag\.net posts=\d{1,9} remote_posts=\d{1,9} timeline_items=\d{1,9} federated_items=\d{1,9} reposts=\d{1,9} likes=\d{1,9} emoji_reacts=\d{1,9} notifications=\d{1,9} orphan_repost_notifications=\d{1,9} images=\d{1,9} articles_skipped=\d{1,9} actors=\d{1,9} follows_out=\d{1,9} follows_in=\d{1,9} mutes=\d{1,9}|mode=apply deleted_posts=\d{1,9} deleted_timeline_items=\d{1,9})$/;
 const pruneNoticeLine =
   /^IORI_NOTICE prune-federated-posts mode=dry-run candidates=\d{1,9} local_likes=\d{1,9} local_emoji=\d{1,9} home=\d{1,9} local_repost=\d{1,9} reply=\d{1,9} notification=\d{1,9} article=\d{1,9} to_delete=\d{1,9} cutoff_ms=[1-9]\d{0,15}$/;
 const bucketNoticeLine =
@@ -157,8 +173,9 @@ const writeDiagnosticLine = async line => {
       && !releaseNoticeLine.test(line) && !alreadyRenamedNoticeLine.test(line) && !stoppedNoticeLine.test(line)
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
-      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !pruneNoticeLine.test(line)
-      && !bucketNoticeLine.test(line)
+      && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !deleteNoticeLine.test(line)
+      && !statsNoticeLine.test(line) && !digestQualityNoticeLine.test(line)
+      && !pruneNoticeLine.test(line) && !bucketNoticeLine.test(line) && !deleteBlockedDomainNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');
     if (assertWorkflowOutput(line).length === 0) process.stderr.write(`${line}\n`);

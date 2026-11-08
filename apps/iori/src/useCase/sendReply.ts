@@ -31,6 +31,7 @@ import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -39,6 +40,8 @@ type Input =
   & Readonly<{
     postId: PostId;
     content: string;
+    summary?: string | null;
+    sensitive?: boolean;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -82,6 +85,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
 
@@ -97,6 +101,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  scheduleBlueskyCrosspost,
   origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
@@ -139,12 +144,14 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri }) => {
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
           inReplyToUri,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
@@ -184,6 +191,8 @@ const create = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+            summary: replyPost.summary,
+            sensitive: replyPost.sensitive,
             replyTarget: new URL(inReplyToUri),
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
@@ -245,6 +254,8 @@ const create = ({
           mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
           url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+          summary: replyPost.summary,
+          sensitive: replyPost.sensitive,
           replyTarget: new URL(objectUri),
           attachments: images.map((image) => toImageDocument(image, origin)),
         });
@@ -275,6 +286,10 @@ const create = ({
           }),
         );
 
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ replyPost }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
         return RA.ok(undefined);
       }),
       // Create reply notification if replying to a local post (and not self-reply)
