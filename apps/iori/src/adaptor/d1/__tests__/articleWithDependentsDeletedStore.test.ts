@@ -17,6 +17,7 @@ import {
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
+  digestXPostsTable,
   domainEventsTable,
 } from '../schema.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -44,6 +45,11 @@ const setup = () => {
     ).run('item-1', digestId, 'entry-1', 'https://example.com/a', 'A', 1, null, null, null, null);
     fixture.sqlite.prepare('INSERT INTO digest_trends(digestId,kind,rank,url,title,count) VALUES (?,?,?,?,?,?)')
       .run(digestId, 'hatena', 1, 'https://example.com/t', 'T', 3);
+    fixture.sqlite.prepare('INSERT INTO digest_x_posts(digestId,rank,feedEntryId) VALUES (?,?,?)').run(
+      digestId,
+      1,
+      'x-1',
+    );
     fixture.sqlite.prepare(
       'INSERT INTO digest_deep_dives(deepDiveId,userId,digestItemId,articleId,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
     ).run('dive-1', author.userId, 'item-1', articleId, 3_000, 3_000);
@@ -74,6 +80,7 @@ describe('createD1ArticleWithDependentsDeletedStore', () => {
     );
 
     expect(count('digest_trends')).toBe(0);
+    expect(count('digest_x_posts')).toBe(0);
     expect(count('digest_items')).toBe(0);
     expect(count('digest_deep_dives')).toBe(0);
     expect(count('digest_deep_dive_turns')).toBe(0);
@@ -128,6 +135,7 @@ describe('createD1ArticleWithDependentsDeletedStore', () => {
     expect(count('digests')).toBe(1);
     expect(count('digest_items')).toBe(1);
     expect(count('digest_trends')).toBe(1);
+    expect(count('digest_x_posts')).toBe(1);
     expect(count('article_bodies')).toBe(1);
     expect(count('articles')).toBe(1);
   });
@@ -152,6 +160,7 @@ describe('createD1ArticleWithDependentsDeletedStore', () => {
       { kind: 'delete', table: digestDeepDiveTurnsTable },
       { kind: 'delete', table: digestDeepDivesTable },
       { kind: 'delete', table: digestTrendsTable },
+      { kind: 'delete', table: digestXPostsTable },
       { kind: 'delete', table: digestItemsTable },
       { kind: 'delete', table: digestsTable },
       { kind: 'insert', table: domainEventsTable, values: { eventName: 'digest.expired' } },

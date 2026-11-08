@@ -9,6 +9,7 @@ export type DigestPublishNotice = Readonly<{
     timelineLinks: number;
     hatena: number;
     hatenaCounts: boolean;
+    xPosts: boolean;
     recommendations: boolean;
   }>;
 }>;
@@ -27,6 +28,7 @@ const buildExclusionMessage = ({ edited, excluded }: DigestPublishNotice): strin
     ...(excluded.timelineLinks > 0 ? [`・みんなの関心（iori のタイムライン）${excluded.timelineLinks} 件`] : []),
     ...(excluded.hatena > 0 ? [`・みんなの関心（はてなブックマーク）${excluded.hatena} 件`] : []),
     ...(excluded.hatenaCounts ? ['・新着のはてなブックマーク数の表示'] : []),
+    ...(excluded.xPosts ? ['・X の投稿'] : []),
     ...(excluded.recommendations
       ? ['・はてなから見つけたおすすめの記事', '・iori の投稿といいねを根拠にした表示']
       : []),

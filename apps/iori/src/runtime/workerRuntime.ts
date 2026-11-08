@@ -37,6 +37,7 @@ import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResol
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
+import { createD1DigestXPostsResolverByArticleId } from '../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -256,6 +257,7 @@ export const createWorkerRuntimePorts = async (
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
@@ -458,11 +460,11 @@ export const createWorkerRuntimePorts = async (
         feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
         now: Instant.now,
       }),
+      isDigestOwner,
       getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
         xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
         now: Instant.now,
       }),
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({
         digestTopicsResolverByUserId,
@@ -588,6 +590,8 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
+        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
+        isDigestOwner,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,

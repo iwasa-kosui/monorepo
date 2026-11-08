@@ -14,6 +14,7 @@ import {
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
+  digestXPostsTable,
   domainEventsTable,
 } from '../schema.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -66,6 +67,7 @@ const createDigest = (topicKey = 'summary') => {
       },
     ],
     trends: [{ kind: 'hatena', rank: 1, url: 'https://example.com/h', title: 'H', count: 1 }],
+    xPostFeedEntryIds: ['x-1', 'x-2'],
   }, now);
   if (!created.ok) throw new Error('unexpected');
   return created.val;
@@ -83,10 +85,13 @@ describe('digest stores', () => {
       digestItemsTable,
       digestItemsTable,
       digestTrendsTable,
+      digestXPostsTable,
+      digestXPostsTable,
       domainEventsTable,
     ]);
     expect(batches[0]![0]).toMatchObject({ values: { digestDate: '2026-11-05', pushSentAt: null } });
-    expect(batches[0]![4]).toMatchObject({ values: { eventName: 'digest.created' } });
+    expect(batches[0]![6]).toMatchObject({ values: { eventName: 'digest.created' } });
+    expect(batches[0]![4]).toMatchObject({ values: { digestId: expect.any(String), rank: 1, feedEntryId: 'x-1' } });
   });
 
   it('作成ストアは複数の digest の書き込みを、topicKey を付けて1回の batch にまとめる', async () => {
@@ -96,7 +101,7 @@ describe('digest stores', () => {
 
     expect(batches).toHaveLength(1);
     const statements = batches[0] as Array<{ table: unknown; values: Record<string, unknown> }>;
-    expect(statements).toHaveLength(10);
+    expect(statements).toHaveLength(14);
     expect(
       statements.filter((statement) => statement.table === digestsTable).map((statement) => statement.values.topicKey),
     )
@@ -117,7 +122,7 @@ describe('digest stores', () => {
     ]);
   });
 
-  it('削除ストアは深掘りの往復、深掘り、trends、items、digest の順に消して domain event を1回の batch で書く', async () => {
+  it('削除ストアは深掘りの往復、深掘り、trends、X の投稿、items、digest の順に消して domain event を1回の batch で書く', async () => {
     const { db, batches } = recordingDb();
 
     await createD1DigestExpiredStore(db).store(Digest.expire(createDigest().aggregateState, now));
@@ -127,6 +132,7 @@ describe('digest stores', () => {
       { kind: 'delete', table: digestDeepDiveTurnsTable },
       { kind: 'delete', table: digestDeepDivesTable },
       { kind: 'delete', table: digestTrendsTable },
+      { kind: 'delete', table: digestXPostsTable },
       { kind: 'delete', table: digestItemsTable },
       { kind: 'delete', table: digestsTable },
       { kind: 'insert', table: domainEventsTable, values: { eventName: 'digest.expired' } },

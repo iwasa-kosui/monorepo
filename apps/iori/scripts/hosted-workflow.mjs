@@ -18,6 +18,7 @@ const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = Object.freeze({
   'deploy-worker': 'deploy-active-worker.mjs',
   'put-worker-secrets': 'worker-bindings-put.mjs',
+  'put-bluesky-secrets': 'worker-bindings-put.mjs',
   source: 'deploy-source.mjs',
   'resume-source': 'resume-source.mjs',
   'release-pending-freeze': 'release-pending-freeze.mjs',

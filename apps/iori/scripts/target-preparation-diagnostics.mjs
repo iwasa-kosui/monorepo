@@ -55,6 +55,9 @@ const FIXED_REASONS = new Set([
   'smoke-token-short',
   'smoke-token-long',
   'vapid-rejected',
+  'secrets-bulk-forbidden',
+  'secrets-bulk-failed',
+  'secrets-bulk-not-deployed',
   'unclassified',
 ]);
 const controlPlaneReason = new RegExp(
