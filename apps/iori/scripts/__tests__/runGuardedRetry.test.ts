@@ -159,6 +159,24 @@ describe('runGuardedWithRetry', () => {
     expect(stderr).not.toContain('url-secret-pw');
   });
 
+  it('removes everything after the last @ of the credentials in a URL', async () => {
+    expect(await run(99, 'GET https://user:p@ss@registry.example.invalid/v1 failed\n')).toBe(1);
+    expect(stderr).toContain('| GET https://***@registry.example.invalid/v1 failed');
+    expect(stderr).not.toContain('p@ss');
+    expect(stderr).not.toContain('ss@');
+  });
+
+  it('rejects a tail that only matches the guard after sanitizing, without printing it', async () => {
+    expect(await run(99, 'CLOUDFLARE_API_\u0001TOKEN=leak-marker-value\n')).toBe(1);
+    expect(attempts()).toBe(3);
+    expect(stderr).toContain('Unsafe workflow output: Cloudflare API token');
+    expect(stderr).toContain('Guarded command failed: exit=1 guard=1 command=');
+    expect(stderr).not.toContain('guard=0');
+    expect(stdout + stderr).not.toContain('leak-marker-value');
+    expect(stdout + stderr).not.toContain('Last ');
+    expect(stdout + stderr).not.toContain('::stop-commands::');
+  });
+
   it('removes its temporary files after success, retry and failure', async () => {
     await run(1, 'ok\n');
     await rm(counter);

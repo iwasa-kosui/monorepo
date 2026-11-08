@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const guardPath = resolve(dirname(fileURLToPath(import.meta.url)), 'assert-workflow-output.mjs');
 const controlCharacters = /[\p{Cc}\u2028\u2029]/gu;
-const urlCredentials = /([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\s/@]+@/g;
+const urlCredentials = /([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\s/]+@/g;
 
 const runGuard = (text, stderr) => {
   const result = spawnSync(process.execPath, [guardPath], { input: text, stdio: ['pipe', 'ignore', 'pipe'] });
@@ -87,7 +87,12 @@ export const runGuardedWithRetry = async ({
         continue;
       }
       const tail = tailOf(output, tailLines);
-      if (tail.length > 0 && runGuard(tail.join('\n'), stderr) === 0) {
+      const tailGuardStatus = tail.length > 0 ? runGuard(tail.join('\n'), stderr) : 0;
+      if (tailGuardStatus !== 0) {
+        stderr(`Guarded command failed: exit=${status} guard=${tailGuardStatus} command=${description}\n`);
+        return tailGuardStatus;
+      }
+      if (tail.length > 0) {
         const token = randomUUID();
         stderr(
           `Last ${tail.length} lines of the output of attempt ${attempt} of ${attempts}:\n::stop-commands::${token}\n${
