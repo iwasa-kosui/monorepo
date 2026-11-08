@@ -5,6 +5,9 @@ import { admissionEnvironment, parseExpectedTarget, targetIdentity } from './mig
 import { assertReviewedMain } from './reviewed-main.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
 
+// The live Worker predates bindings this release introduces; the post-deploy readback still requires them.
+const BINDINGS_ADDED_BY_THIS_RELEASE = Object.freeze(['EVENT_ARCHIVE']);
+
 /** A normal code update preserves the immutable migration identity and all active routing/Queue configuration. */
 export const updateActiveWorker = async (
   {
@@ -41,6 +44,7 @@ export const updateActiveWorker = async (
     zoneId,
     expectedVersionId: previousVersion,
     routePresent: true,
+    missingAllowed: BINDINGS_ADDED_BY_THIS_RELEASE,
   });
   await checkMain(currentCodeSha, { signal });
   onStage('deploy-worker-deploy');
