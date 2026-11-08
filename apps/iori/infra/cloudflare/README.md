@@ -1,6 +1,6 @@
 # iori Cloudflare Terraform
 
-Terraform owns D1, the application and private transfer R2 buckets, Fedify KV, Queues, the Queue consumer, and the opt-in Worker route. Wrangler owns Worker versions, bindings, Assets, observability, secrets, and D1 migrations. Do not put Worker versions, deployments, bindings or secret values in Terraform state.
+Terraform owns D1, the application, private transfer and private event archive R2 buckets, Fedify KV, Queues, the Queue consumer, and the opt-in Worker route. Wrangler owns Worker versions, bindings, Assets, observability, secrets, and D1 migrations. Do not put Worker versions, deployments, bindings or secret values in Terraform state.
 
 This Terraform stays in place until the old environment is shut down. After that, the plan is to manage these resources with Wrangler alone.
 

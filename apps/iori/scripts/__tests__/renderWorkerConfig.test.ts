@@ -18,13 +18,14 @@ const values = {
   __D1_DATABASE_ID__: '00000000-0000-4000-8000-000000000002',
   __KV_NAMESPACE_ID__: '00000000-0000-4000-8000-000000000003',
   __R2_BUCKET_NAME__: 'iori-uploads-fixture',
+  __R2_EVENT_ARCHIVE_BUCKET_NAME__: 'iori-event-archive-fixture',
   __QUEUE_NAME__: 'iori-fedify-fixture',
   __ORIGIN__: 'https://iori.example.invalid',
   __VAPID_SUBJECT__: 'mailto:admin@example.invalid',
 };
 
 const template =
-  `// Keep this JSONC comment.\n{\n  "name": "__WORKER_NAME__",\n  "account_id": "__ACCOUNT_ID__",\n  "database_id": "__D1_DATABASE_ID__",\n  "namespace_id": "__KV_NAMESPACE_ID__",\n  "bucket_name": "__R2_BUCKET_NAME__",\n  "queue": "__QUEUE_NAME__",\n  "origin": "__ORIGIN__",\n  "mode": "__IORI_ADMISSION_MODE__",\n  "identity": "__IORI_ADMISSION_IDENTITY__",\n  "subject": "__VAPID_SUBJECT__",\n}\n`;
+  `// Keep this JSONC comment.\n{\n  "name": "__WORKER_NAME__",\n  "account_id": "__ACCOUNT_ID__",\n  "database_id": "__D1_DATABASE_ID__",\n  "namespace_id": "__KV_NAMESPACE_ID__",\n  "bucket_name": "__R2_BUCKET_NAME__",\n  "event_archive_bucket_name": "__R2_EVENT_ARCHIVE_BUCKET_NAME__",\n  "queue": "__QUEUE_NAME__",\n  "origin": "__ORIGIN__",\n  "mode": "__IORI_ADMISSION_MODE__",\n  "identity": "__IORI_ADMISSION_IDENTITY__",\n  "subject": "__VAPID_SUBJECT__",\n}\n`;
 
 describe('renderWorkerConfig', () => {
   it('replaces every fixture token while preserving JSONC content', () => {

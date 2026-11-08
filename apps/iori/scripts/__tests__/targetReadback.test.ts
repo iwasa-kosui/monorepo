@@ -12,6 +12,7 @@ const resourceResponses = () => ({
   '/d1/database/db-id': { uuid: ids.d1Id, name: identity.names.d1 },
   '/storage/kv/namespaces/kv-id': { id: ids.kvId, title: identity.names.kv },
   [`/r2/buckets/${identity.names.uploads}`]: { name: identity.names.uploads },
+  [`/r2/buckets/${identity.names.eventArchive}`]: { name: identity.names.eventArchive },
   [`/r2/buckets/${identity.names.transfer}`]: { name: identity.names.transfer },
   [`/r2/buckets/${identity.names.transfer}/domains/managed`]: { enabled: false },
   '/queues/queue-id': {
@@ -64,7 +65,7 @@ it('reads only through authenticated GET requests that refuse redirects', async 
   });
   const api = createTargetControlPlane({ identity, token: 'private-token', fetchRequest });
   await expect(api.readActiveResources(ids)).resolves.toMatchObject({ queuePaused: false });
-  expect(fetchRequest).toHaveBeenCalledTimes(7);
+  expect(fetchRequest).toHaveBeenCalledTimes(8);
 });
 const apiPaths = {
   workers: '/workers/scripts',
@@ -207,6 +208,7 @@ it('verifies deployed version, bindings, preview and route state without exposin
   const bindings = [
     { name: 'DB', type: 'd1', id: ids.d1Id },
     { name: 'UPLOADS', type: 'r2_bucket', bucket_name: identity.names.uploads },
+    { name: 'EVENT_ARCHIVE', type: 'r2_bucket', bucket_name: identity.names.eventArchive },
     { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: ids.kvId },
     { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: identity.names.queue },
     { name: 'ASSETS', type: 'assets' },
@@ -269,6 +271,7 @@ const workerFixture = async () => {
   const bindings: Record<string, unknown>[] = [
     { name: 'DB', type: 'd1', id: ids.d1Id },
     { name: 'UPLOADS', type: 'r2_bucket', bucket_name: identity.names.uploads },
+    { name: 'EVENT_ARCHIVE', type: 'r2_bucket', bucket_name: identity.names.eventArchive },
     { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: ids.kvId },
     { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: identity.names.queue },
     { name: 'ASSETS', type: 'assets' },
@@ -436,7 +439,7 @@ const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<
     'worker-binding-mismatch',
     'an ASSETS binding of another type',
     ({ bindings }) => {
-      bindings[4] = { name: 'ASSETS', type: 'plain_text', text: 'assets' };
+      bindings[5] = { name: 'ASSETS', type: 'plain_text', text: 'assets' };
     },
   ],
   [
@@ -461,7 +464,7 @@ const workerReadbackCases: [string, string, (fixture: WorkerFixture) => Partial<
 ];
 it('reads a complete worker fixture before the broken cases', async () => {
   const { api, input } = await workerFixture();
-  await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 12 });
+  await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
 });
 it.each(workerReadbackCases)('classifies %s for %s', async (reason, _label, break_) => {
   const fixture = await workerFixture();
@@ -508,10 +511,12 @@ describe('a state close to a production wrangler deployment', () => {
       { name: 'FEDIFY_KV', type: 'kv_namespace', namespace_id: terraformIds.kvId },
       { name: 'FEDIFY_QUEUE', type: 'queue', queue_name: wranglerIdentity.names.queue },
       { name: 'UPLOADS', type: 'r2_bucket', bucket_name: wranglerIdentity.names.uploads },
+      { name: 'EVENT_ARCHIVE', type: 'r2_bucket', bucket_name: wranglerIdentity.names.eventArchive },
       { name: 'IORI_ADMISSION_IDENTITY', type: 'plain_text', text: admissionEnvironment.IORI_ADMISSION_IDENTITY },
       { name: 'IORI_ADMISSION_MODE', type: 'plain_text', text: admissionEnvironment.IORI_ADMISSION_MODE },
       { name: 'ORIGIN', type: 'plain_text', text: admissionEnvironment.ORIGIN },
       { name: 'VAPID_SUBJECT', type: 'plain_text', text: 'mailto:operator@example.test' },
+      { name: 'EVENT_ARCHIVE_ENABLED', type: 'plain_text', text: 'false' },
       { name: 'SMOKE_QUEUE_TOKEN', type: 'secret_text' },
       { name: 'VAPID_PRIVATE_KEY', type: 'secret_text' },
       { name: 'VAPID_PUBLIC_KEY', type: 'secret_text' },
@@ -532,6 +537,7 @@ describe('a state close to a production wrangler deployment', () => {
       [`/d1/database/${terraformIds.d1Id}`]: { uuid: terraformIds.d1Id, name: wranglerIdentity.names.d1 },
       [`/storage/kv/namespaces/${terraformIds.kvId}`]: { id: terraformIds.kvId, title: wranglerIdentity.names.kv },
       [`/r2/buckets/${wranglerIdentity.names.uploads}`]: { name: wranglerIdentity.names.uploads },
+      [`/r2/buckets/${wranglerIdentity.names.eventArchive}`]: { name: wranglerIdentity.names.eventArchive },
       [`/r2/buckets/${wranglerIdentity.names.transfer}`]: { name: wranglerIdentity.names.transfer },
       [`/r2/buckets/${wranglerIdentity.names.transfer}/domains/managed`]: { enabled: false },
       ...Object.fromEntries(
@@ -603,7 +609,7 @@ describe('a state close to a production wrangler deployment', () => {
   const stagingAccessToken = { name: 'STAGING_ACCESS_TOKEN', type: 'secret_text' };
   it('reads twelve bindings of production', async () => {
     const { api, input } = await wranglerFixture('production');
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 12 });
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 14 });
   });
   it('rejects the thirteen bindings of production that include STAGING_ACCESS_TOKEN', async () => {
     const { api, input } = await wranglerFixture('production', [stagingAccessToken]);
@@ -611,13 +617,13 @@ describe('a state close to a production wrangler deployment', () => {
   });
   it('accepts an AI binding without worker-binding-extra', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'ai' }]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
   it('accepts an IORI_PRUNE_FEDERATED_POSTS plain_text binding without worker-binding-extra', async () => {
     const { api, input } = await wranglerFixture('production', [
       { name: 'IORI_PRUNE_FEDERATED_POSTS', type: 'plain_text', text: 'disabled' },
     ]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
   it('accepts the Bluesky crosspost bindings without worker-binding-extra', async () => {
     const { api, input } = await wranglerFixture('production', [
@@ -633,7 +639,7 @@ describe('a state close to a production wrangler deployment', () => {
   });
   it('reads the same thirteen bindings of staging', async () => {
     const { api, input } = await wranglerFixture('staging', [stagingAccessToken]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 13 });
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
 });
 
@@ -725,6 +731,9 @@ describe('the resource readback names the conditions that differ', () => {
     }],
     ['resource-r2', 'an uploads bucket name', (r) => {
       r[`/r2/buckets/${identity.names.uploads}`].name = 'old';
+    }],
+    ['resource-r2', 'an event archive bucket name', (r) => {
+      r[`/r2/buckets/${identity.names.eventArchive}`].name = 'old';
     }],
     ['resource-r2', 'a transfer bucket name', (r) => {
       r[`/r2/buckets/${identity.names.transfer}`].name = 'old';

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const bindingKeys = [
   'd1_database_id',
   'r2_bucket_name',
+  'event_archive_bucket_name',
   'kv_namespace_id',
   'queue_name',
   'worker_name',

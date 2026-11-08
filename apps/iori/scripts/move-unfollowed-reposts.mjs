@@ -13,7 +13,7 @@ const MODES = Object.freeze({
   'move-unfollowed-reposts': 'apply',
 });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const GENERATION = /^[a-z][a-z0-9]{7,19}$/;
+export const GENERATION = /^[a-z][a-z0-9]{7,19}$/;
 const UUID_V4_SQL = [
   'lower(hex(randomblob(4)))',
   'lower(hex(randomblob(2)))',
@@ -70,7 +70,7 @@ export const applyCountSql = (now) =>
   `SELECT (SELECT COUNT(*) FROM domain_events WHERE aggregateName = 'federatedTimelineItem' AND eventName = 'federatedTimelineItem.created' AND occurredAt = ${now}) AS created, (SELECT COUNT(*) FROM timeline_items WHERE type = 'repost' AND deletedAt = ${now}) AS deleted`;
 
 const defaultNotice = (line) => process.stderr.write(`${line}\n`);
-const fail = (stage, reason, message) => Object.assign(withReason(new Error(message), reason), { stage });
+export const fail = (stage, reason, message) => Object.assign(withReason(new Error(message), reason), { stage });
 const at = async (stage, operation) => {
   try {
     return await operation();
@@ -79,6 +79,35 @@ const at = async (stage, operation) => {
     throw error;
   }
 };
+export const openD1Query = async ({ env, signal, fetchRequest, prefix }) => {
+  const resolveStage = `${prefix}-resolve`;
+  const context = { accountId: env.CLOUDFLARE_ACCOUNT_ID, token: env.CLOUDFLARE_API_TOKEN, signal, fetchRequest };
+  const name = `iori-production-${env.IORI_GENERATION}`;
+  const databases = matchesOf(await at(resolveStage, () => listDatabases(context)), name);
+  if (databases.length === 0) throw fail(resolveStage, 'resource-missing', 'D1 is missing.');
+  if (databases.length > 1) throw fail(resolveStage, 'resource-ambiguous', 'D1 name is ambiguous.');
+  const uuid = databases[0].uuid;
+  if (typeof uuid !== 'string' || !UUID.test(uuid)) {
+    throw fail(resolveStage, 'result-invalid', 'D1 id is invalid.');
+  }
+  const path = `/accounts/${context.accountId}/d1/database/${uuid}`;
+  const detail = await at(resolveStage, () => request({ ...context, method: 'GET', path }));
+  if (detail.result === null || typeof detail.result !== 'object' || detail.result.name !== name) {
+    throw fail(resolveStage, 'identity-mismatch', 'D1 name does not match.');
+  }
+  const query = (stage, sql) =>
+    at(stage, async () => {
+      const body = await request({ ...context, method: 'POST', path: `${path}/query`, body: { sql } });
+      if (
+        !Array.isArray(body.result) || body.result.length === 0 || body.result.some((item) => item?.success === false)
+      ) {
+        throw fail(stage, 'result-invalid', 'D1 query result is invalid.');
+      }
+      return body.result;
+    });
+  return { query };
+};
+
 const count = (row, key) => {
   const value = row?.[key];
   if (!Number.isSafeInteger(value) || value < 0) {
@@ -107,30 +136,7 @@ export const moveUnfollowedReposts = async ({
     !/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID) || beforeMs === undefined
     || !GENERATION.test(env.IORI_GENERATION ?? '')
   ) throw fail('move-reposts', 'config-invalid', 'Moving reposts inputs are invalid.');
-  const context = { accountId: env.CLOUDFLARE_ACCOUNT_ID, token: env.CLOUDFLARE_API_TOKEN, signal, fetchRequest };
-  const name = `iori-production-${env.IORI_GENERATION}`;
-  const databases = matchesOf(await at('move-reposts-resolve', () => listDatabases(context)), name);
-  if (databases.length === 0) throw fail('move-reposts-resolve', 'resource-missing', 'D1 is missing.');
-  if (databases.length > 1) throw fail('move-reposts-resolve', 'resource-ambiguous', 'D1 name is ambiguous.');
-  const uuid = databases[0].uuid;
-  if (typeof uuid !== 'string' || !UUID.test(uuid)) {
-    throw fail('move-reposts-resolve', 'result-invalid', 'D1 id is invalid.');
-  }
-  const path = `/accounts/${context.accountId}/d1/database/${uuid}`;
-  const detail = await at('move-reposts-resolve', () => request({ ...context, method: 'GET', path }));
-  if (detail.result === null || typeof detail.result !== 'object' || detail.result.name !== name) {
-    throw fail('move-reposts-resolve', 'identity-mismatch', 'D1 name does not match.');
-  }
-  const query = (stage, sql) =>
-    at(stage, async () => {
-      const body = await request({ ...context, method: 'POST', path: `${path}/query`, body: { sql } });
-      if (
-        !Array.isArray(body.result) || body.result.length === 0 || body.result.some((item) => item?.success === false)
-      ) {
-        throw fail(stage, 'result-invalid', 'D1 query result is invalid.');
-      }
-      return body.result;
-    });
+  const { query } = await openD1Query({ env, signal, fetchRequest, prefix: 'move-reposts' });
   const [relayResult] = await query('move-reposts-resolve', relaySql());
   const relays = relayResult?.results;
   if (!Array.isArray(relays) || relays.length === 0) {

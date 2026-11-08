@@ -23,6 +23,8 @@ const readDeployedConfig = async () => {
       placement: unknown;
       ai: unknown;
       triggers: unknown;
+      r2_buckets: unknown;
+      vars: Record<string, string>;
     };
   } finally {
     await config.cleanup();
@@ -77,6 +79,7 @@ const fixtureEnvironment = {
   D1_DATABASE_ID: '00000000-0000-4000-8000-000000000002',
   KV_NAMESPACE_ID: '00000000000000000000000000000003',
   R2_BUCKET_NAME: 'iori-uploads-fixture',
+  R2_EVENT_ARCHIVE_BUCKET_NAME: 'iori-event-archive-fixture',
   QUEUE_NAME: 'iori-fedify-fixture',
   ORIGIN: 'https://iori.example.invalid',
   VAPID_SUBJECT: 'mailto:admin@example.invalid',
@@ -117,10 +120,22 @@ describe('ai', () => {
   });
 });
 
+describe('event archive', () => {
+  it('binds the event archive bucket and leaves the archive disabled in the deployment config built from the template', async () => {
+    const config = await readDeployedConfig();
+    expect(config.r2_buckets).toContainEqual({ binding: 'EVENT_ARCHIVE', bucket_name: 'iori-event-archive-fixture' });
+    expect(config.vars.EVENT_ARCHIVE_ENABLED).toBe('false');
+  });
+
+  it('binds a local event archive bucket in the local config', async () => {
+    expect(await readAppFile('workers/iori/wrangler.local.jsonc')).toContain('"binding": "EVENT_ARCHIVE"');
+  });
+});
+
 describe('triggers', () => {
   it('declares the cron expressions in the deployment config built from the template', async () => {
     expect((await readDeployedConfig()).triggers).toEqual({
-      crons: ['0 0,3,6,9,12,15,18,21 * * *', '15 20 * * 1', '30 21 * * *', '0 21 * * *'],
+      crons: ['0 0,3,6,9,12,15,18,21 * * *', '15 20 * * 1', '30 21 * * *', '0 21 * * *', '0 19 * * *'],
     });
   });
 
