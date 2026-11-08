@@ -58,7 +58,7 @@ const feedUrlZodType = z
 
 const X_HOSTS = new Set(['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com']);
 
-// x_user の登録の有無を、所有者以外が rss の POST の結果で探れないようにする
+// x_user のプロフィール URL を rss として登録すると、同じ url の x_user を追加できなくなる。
 const rssUrlZodType = feedUrlZodType.refine(
   (href) => !X_HOSTS.has(new URL(href).hostname.replace(/\.$/, '')),
   { message: 'x.com URLs are not allowed for rss' },
