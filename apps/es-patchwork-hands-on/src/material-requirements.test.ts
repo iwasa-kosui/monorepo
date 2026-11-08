@@ -4,11 +4,20 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { readChapterText } from './lib/chapter-files';
 import { schedule } from './schedule';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-const read = (path: string): string => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const chapterPagePath = /^src\/content\/chapters\/([^/]+)\/[^/]+\.mdx$/;
+const chapterPath = /^src\/content\/chapters\/([^/]+)\.mdx$/;
+
+const read = (path: string): string => {
+  const chapter = chapterPath.exec(path)?.[1];
+  return chapter === undefined
+    ? readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+    : readChapterText(chapter);
+};
 
 const listFiles = (dir: string): string[] =>
   readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -20,8 +29,10 @@ const listFiles = (dir: string): string[] =>
   });
 
 const participantFiles = [
-  ...['src/pages', 'src/content', 'src/components', 'src/layouts', 'exercises'].flatMap(listFiles),
-  'src/schedule.ts',
+  ...new Set([
+    ...['src/pages', 'src/content', 'src/components', 'src/layouts', 'exercises'].flatMap(listFiles),
+    'src/schedule.ts',
+  ].map((path) => path.replace(chapterPagePath, 'src/content/chapters/$1.mdx'))),
 ];
 
 const count = (text: string, word: string): number => text.split(word).length - 1;

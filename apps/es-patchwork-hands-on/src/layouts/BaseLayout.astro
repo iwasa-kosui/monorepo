@@ -4,9 +4,11 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   frontmatter?: { title?: string };
+  chapterPage?: boolean;
 }
 
 const title = Astro.props.frontmatter?.title ?? Astro.props.title;
+const chapterPage = Astro.props.chapterPage ?? false;
 ---
 
 <!DOCTYPE html>
@@ -16,8 +18,15 @@ const title = Astro.props.frontmatter?.title ?? Astro.props.title;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
   </head>
-  <body>
-    <main class="content mx-auto max-w-3xl px-4 py-12">
+  <body class:list={{ 'chapter-page': chapterPage }}>
+    <main
+      class:list={[
+        'content mx-auto px-4',
+        chapterPage
+          ? 'chapter-main w-full max-w-5xl py-3'
+          : 'max-w-4xl py-6',
+      ]}
+    >
       <slot />
     </main>
   </body>

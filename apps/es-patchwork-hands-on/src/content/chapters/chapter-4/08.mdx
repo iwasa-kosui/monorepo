@@ -1,0 +1,13 @@
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { cancelVisitOf } from '../../../lib/snapshots';
+
+## 既存の監査ログ
+
+この問いに答えます。
+
+> この変更の業務上の理由は何か。
+
+`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。このパターンでは、監査ログと業務イベントの役割を分けます。`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
+
+<CodeBlock code={cancelVisitOf('chapter-4-audit-log-done')} />
+
