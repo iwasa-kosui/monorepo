@@ -1,11 +1,21 @@
 ---
 import { Code } from 'astro:components';
 
+import { sliceLines } from '../lib/extract';
+
 interface Props {
   code: string;
+  from?: number;
+  to?: number;
 }
 
-const { code } = Astro.props;
+const { code, from, to } = Astro.props;
+if ((from === undefined) !== (to === undefined)) {
+  throw new Error('CodeBlock の from と to は両方を指定します');
+}
+const shown = from === undefined || to === undefined
+  ? code
+  : sliceLines(code, from, to);
 ---
 
 <div class="code-block relative">
@@ -16,7 +26,7 @@ const { code } = Astro.props;
   >
     コピー
   </button>
-  <Code code={code} lang="ts" />
+  <Code code={shown} lang="ts" />
 </div>
 
 <script>

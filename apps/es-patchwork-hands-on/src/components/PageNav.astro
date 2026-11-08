@@ -37,13 +37,29 @@ const isEditing = (element: Element | null): boolean =>
   && (element.isContentEditable
     || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName));
 
+const scrollsSideways = (element: Element): boolean =>
+  element.scrollWidth > element.clientWidth
+  && ['auto', 'scroll'].includes(getComputedStyle(element).overflowX);
+
+const isInSidewaysScroller = (element: Element | null): boolean => {
+  for (
+    let current = element;
+    current !== null;
+    current = current.parentElement
+  ) {
+    if (scrollsSideways(current)) return true;
+  }
+  return false;
+};
+
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
   if (
-    event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey
-    || event.shiftKey
+    event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey
+    || event.metaKey || event.shiftKey
   ) return;
   if (isEditing(document.activeElement)) return;
+  if (isInSidewaysScroller(document.activeElement)) return;
   const link = document.querySelector<HTMLAnchorElement>(
     event.key === 'ArrowLeft' ? 'a[rel="prev"]' : 'a[rel="next"]',
   );

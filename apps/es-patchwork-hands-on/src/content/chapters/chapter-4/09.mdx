@@ -1,29 +1,5 @@
 import CodeBlock from '../../../components/CodeBlock.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
+import { cancelVisitOf } from '../../../lib/snapshots';
 
-`chapter-4-audit-log-done` で `node why-changed.ts` を実行すると、次の表が出ます。時刻の値は実行のたびに変わります。
-
-```text
-┌─────────┬────────────┬────────────┬─────────────┬────────────────┬────────────────────────────┬──────────────────┬────────────────────────┐
-│ (index) │ auditLogId │ oldValue   │ newValue    │ operatedBy     │ operatedAt                 │ eventName        │ reason                 │
-├─────────┼────────────┼────────────┼─────────────┼────────────────┼────────────────────────────┼──────────────────┼────────────────────────┤
-│ 0       │ 1          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-06T10:14:12.901Z' │ 'VisitCancelled' │ '飼い主の都合'         │
-│ 1       │ 2          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-06T10:14:12.902Z' │ 'VisitCancelled' │ '来院前に回復したため' │
-│ 2       │ 3          │ 'reserved' │ 'completed' │ '獣医師'       │ '2026-11-06T10:14:12.902Z' │ null             │ null                   │
-└─────────┴────────────┴────────────┴─────────────┴────────────────┴────────────────────────────┴──────────────────┴────────────────────────┘
-┌─────────┬────────────┬───────────┬────────────┬─────────────┬────────────┬────────────────────────────┐
-│ (index) │ auditLogId │ rowId     │ oldValue   │ newValue    │ operatedBy │ operatedAt                 │
-├─────────┼────────────┼───────────┼────────────┼─────────────┼────────────┼────────────────────────────┤
-│ 0       │ 3          │ 'visit-3' │ 'reserved' │ 'completed' │ '獣医師'   │ '2026-11-06T10:14:12.902Z' │
-└─────────┴────────────┴───────────┴────────────┴─────────────┴────────────┴────────────────────────────┘
-```
-
-上の表の1行目と2行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。3行目の診察の完了は業務イベントを記録しないので、`reason` が `null` です。下の表は、このような理由の無い変更の一覧です。
-
-<details>
-<summary>読み取り関数を見る</summary>
-
-<CodeBlock code={readFunctionsOf('chapter-4-audit-log-done', 'explainChange')} />
-
-</details>
+<CodeBlock code={cancelVisitOf('chapter-4-external-sync-done')} from={16} to={30} />
 
