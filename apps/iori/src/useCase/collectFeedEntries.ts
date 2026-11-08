@@ -37,11 +37,12 @@ type ExpireRule = Readonly<{
   days: number;
   kinds?: ReadonlyArray<FeedSourceKind>;
   excludedKinds?: ReadonlyArray<FeedSourceKind>;
+  purgeEvents?: boolean;
 }>;
 
 const EXPIRE_RULES: ReadonlyArray<ExpireRule> = [
   { days: FEED_RETENTION_DAYS, excludedKinds: ['thoughtworks_radar', 'x_user'] },
-  { days: X_USER_RETENTION_DAYS, kinds: ['x_user'] },
+  { days: X_USER_RETENTION_DAYS, kinds: ['x_user'], purgeEvents: true },
 ];
 
 type Input = void;
@@ -194,7 +195,10 @@ const create = ({
         });
         const entries = resolved.val;
         if (entries.length === 0) break;
-        await feedEntryExpiredStore.store(...entries.map((entry) => FeedEntry.expire(entry, timestamp)));
+        const expiredEvents = entries.map((entry) => FeedEntry.expire(entry, timestamp));
+        await (rule.purgeEvents === true
+          ? feedEntryExpiredStore.storeWithEventPurge(...expiredEvents)
+          : feedEntryExpiredStore.store(...expiredEvents));
         expired += entries.length;
         if (entries.length < EXPIRE_BATCH_SIZE) break;
       }
@@ -203,6 +207,8 @@ const create = ({
   };
 
   const run = async (): RA<Ok, Err> => {
+    // x_user の取得は最悪 500 秒かかり、途中で打ち切られても 7 日の削除は走らせる
+    const expired = await expireOldEntries();
     const resolved = await feedSourcesResolverByEnabled.resolve({ enabled: true });
     const sources = resolved.val.filter((source) => fetcherOf(source.kind) !== undefined);
     let failed = 0;
@@ -223,7 +229,6 @@ const create = ({
       runWithConcurrency(sources.filter((source) => source.kind !== 'x_user'), FEED_FETCH_CONCURRENCY, collectOne),
       runWithConcurrency(sources.filter((source) => source.kind === 'x_user'), 1, collectOne),
     ]);
-    const expired = await expireOldEntries();
     return RA.ok({ sources: sources.length, failed, collected, expired });
   };
 

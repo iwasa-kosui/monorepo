@@ -1,4 +1,4 @@
-import { ok, type Result } from '@iwasa-kosui/result';
+import { ok, type RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -128,7 +128,11 @@ const expire = (feedEntry: FeedEntry, now: Instant): FeedEntryExpired =>
 export type FeedEntryCollectedStore = Agg.Store<FeedEntryCollected>;
 export type FeedEntryBookmarkCountUpdatedStore = Agg.Store<FeedEntryBookmarkCountUpdated>;
 export type FeedEntryEmbeddedStore = Agg.Store<FeedEntryEmbedded>;
-export type FeedEntryExpiredStore = Agg.Store<FeedEntryExpired>;
+export type FeedEntryExpiredStore =
+  & Agg.Store<FeedEntryExpired>
+  & Readonly<{
+    storeWithEventPurge: (...events: readonly FeedEntryExpired[]) => RA<void, never>;
+  }>;
 export type FeedEntryEmbeddingResolverByFeedEntryId = Agg.Resolver<string, Float32Array | undefined>;
 export type FeedEntryResolverByFeedEntryId = Agg.Resolver<string, FeedEntry | undefined>;
 export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<

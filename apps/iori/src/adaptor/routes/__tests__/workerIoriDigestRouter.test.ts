@@ -2212,6 +2212,23 @@ describe('iori のダイジェスト API', () => {
         expect(countOf(t)).toEqual({ n: 0 });
       });
 
+      it.each(['https://x.com/jack', 'https://www.twitter.com/jack', 'https://X.COM/jack'])(
+        '所有者でないユーザーの rss の %s は、x_user の登録の有無によらず同じ 400 にする',
+        async (url) => {
+          const t = setupReadApi();
+          const other = await signInAsOther(t, 'write:accounts');
+          const absent = await post(t, other.bearer, { url, title: 'ブログ' });
+          seedXSource(t);
+
+          const present = await post(t, other.bearer, { url, title: 'ブログ' });
+
+          expect(absent.status).toBe(400);
+          expect(present.status).toBe(400);
+          expect(await present.json()).toEqual(await absent.json());
+          expect(countOf(t)).toEqual({ n: 1 });
+        },
+      );
+
       it('kind を渡しても無視して rss で保存する', async () => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
