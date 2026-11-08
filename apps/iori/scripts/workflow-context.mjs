@@ -72,6 +72,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
       'deploy-worker',
       'put-worker-secrets',
       'put-bluesky-secrets',
+      'put-twitterapi-secret',
       'diagnose-source',
       'delete-rehearsal-d1',
       ...moveOperations,
@@ -85,6 +86,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
     || ([
       'delete-rehearsal-d1',
       'put-bluesky-secrets',
+      'put-twitterapi-secret',
       ...moveOperations,
       ...statsOperations,
       ...deleteBlockedDomainOperations,
@@ -107,7 +109,7 @@ export const parseWorkflowInvocation = (env, { deferIdentity = false, now = Date
     || (moveOperations.includes(operation)
       ? repostCreatedBefore(env.IORI_REPOST_CREATED_BEFORE_MS, now) === undefined
       : Boolean(env.IORI_REPOST_CREATED_BEFORE_MS))
-    || (!['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets'].includes(operation)
+    || (!['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'].includes(operation)
       && !recoveryOperation
       && codeSha !== migrationSha)
     || (operation === 'resume-source' && !recoveryValues.includes(env.IORI_RECOVERY))

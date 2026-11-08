@@ -56,6 +56,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['deploy-worker', 'deploy-active-worker.mjs'],
       ['put-worker-secrets', 'worker-bindings-put.mjs'],
       ['put-bluesky-secrets', 'worker-bindings-put.mjs'],
+      ['put-twitterapi-secret', 'worker-bindings-put.mjs'],
       ['resume-source', 'resume-source.mjs'],
       [
         'release-pending-freeze',

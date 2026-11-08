@@ -94,6 +94,7 @@ operation が使う参照名は、次のとおりです。
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`。任意の secret として `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` も受け取ります
 - `put-bluesky-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD`
+- `put-twitterapi-secret`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`TWITTERAPI_IO_API_KEY`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
@@ -471,6 +472,20 @@ job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と T
 - `secrets-bulk-failed`: API の呼び出しが失敗したか、成功の応答を確かめられませんでした。secret が反映されたかどうかは分かりません。作業者は、同じ値で `put-bluesky-secrets` を dispatch し直せます。
 - `secrets-bulk-not-deployed`: 書き込みの後の読み直しで、新しい version が100%の deployment になっていませんでした。secret は新しい version にあり、まだ配信されていない可能性があります。作業者は、Cloudflare のダッシュボードか deployment の一覧で状態を確かめます。その結果をもとに、作業者は、新しい version を deploy するか、`put-bluesky-secrets` を dispatch し直すかを決めます。`IORI_BLUESKY_CROSSPOST` と `IORI_BLUESKY_TIMELINE` が `disabled` の間は、配信中の Worker の動作に影響しません。
 - `workers-http-NNN`、`workers-request`、`workers-shape`、`aborted`（`stage` が `put-bluesky-secrets-put` のとき）: job は書き込みの後の確認で止まった場合があります。secret は新しい version にある可能性があります。作業者は、`secrets-bulk-not-deployed` と同じ手順で deployment の一覧を確かめます。
+
+#### put-twitterapi-secret で twitterapi.io の API キーを入れる
+
+`put-twitterapi-secret` は、稼働中の Worker に `TWITTERAPI_IO_API_KEY` の1つだけを入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` を読みません。作業者は、API キーだけを入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
+
+この operation は production だけを受け付けます。`environment` が `production` 以外の場合、job は最初の step で失敗します。
+
+作業者は、`deploy-iori-worker.yml` を `operation=put-twitterapi-secret`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。GitHub の secret `TWITTERAPI_IO_API_KEY` が未登録か空の場合、job は何も書き込まず、`reason=credentials-missing` で失敗します。この場合、Worker の secret は変わりません。
+
+job が受け取る secret は、`CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`（job 内では `CLOUDFLARE_API_TOKEN`）、`TWITTERAPI_IO_API_KEY` の4つです。
+
+`put-twitterapi-secret` は、`put-bluesky-secrets` と同じ仕組みで書き込みます。job は、Cloudflare の `PATCH .../workers/scripts/{worker}/secrets-bulk` API を直接呼び、`TWITTERAPI_IO_API_KEY` だけを1回のリクエストで送ります。リクエストに含めない secret は変わらないので、VAPID の鍵、`SMOKE_QUEUE_TOKEN`、Bluesky の secret はこの operation で変わりません。書き込みの後、job は deployment の一覧を読み直し、最新の deployment が100%で新しい version を指していることを確かめます。確かめられない場合、job は失敗します。job は、secret の値と API の応答本文をログに出しません。
+
+失敗した場合、job は `IORI_DIAG` の行に `stage=put-twitterapi`（入力の検査）、`put-twitterapi-read`（Worker の存在の確認）、`put-twitterapi-put`（書き込みと書き込み後の確認）のどれかを出します。`reason` の意味と対処は、`put-bluesky-secrets` の `secrets-bulk-forbidden`、`secrets-bulk-failed`、`secrets-bulk-not-deployed`、`workers-http-NNN`、`workers-request`、`workers-shape`、`aborted` と同じです。ただし、再実行する operation は `put-twitterapi-secret` です。
 
 #### delete-rehearsal-d1 で予行演習の空の D1 を削除する
 
