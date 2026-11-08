@@ -345,6 +345,8 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 
 分類の行の `reason` には固定の語が出ます。固定の語に当たらない失敗では `unclassified` が出ます。`deploy-worker-after` で止まった場合は、Worker の新しい version が既に deploy されています。作業者は、Worker の version を記録して、レビューに戻します。`deploy-worker-deploy` で止まった場合は、Worker の新しい version が既に deploy されている可能性があります。作業者は、Worker の現在の version を読み取って記録し、レビューに戻します。
 
+`deploy-worker` は、D1 のマイグレーションと `wrangler deploy` の前に、本番で動いている現行の Worker の binding を検査します。現行の Worker に期待する binding がないと、`worker-binding-missing` で止まり、本番は変わりません。binding を初めて足す PR は、同じ PR で、その名前を `apps/iori/scripts/update-active-worker.mjs` の `BINDINGS_ADDED_BY_THIS_RELEASE` に足します。この一覧に名前がある binding に限り、配備前の検査は binding が無いことを許します。名前があって内容が違う binding は、`worker-binding-mismatch` で止まります。配備後の検査は、全 binding を必須にします。本番への配備が成功したら、作業者は別の PR で、この一覧を `[]` に戻します。
+
 `deploy-worker-before` と `deploy-worker-after` の読み取りが `state-mismatch` で止まったときは、外れた条件ごとに次の語の行が最大8行出ます。
 
 | `reason`                     | 意味                                                                                   |
@@ -352,7 +354,7 @@ HTTP body や raw log を取得・公開せず、各 job の sanitized status �
 | `resource-input`             | 読み取りに渡したリソースの ID の形が不正か、Queue と DLQ の ID が同じです。            |
 | `resource-d1`                | D1 の uuid か名前が一致しません。                                                      |
 | `resource-kv`                | KV の ID か title が一致しません。                                                     |
-| `resource-r2`                | uploads か transfer の bucket の名前が一致しません。                                   |
+| `resource-r2`                | uploads、event-archive、transfer のどれかの bucket の名前が一致しません。              |
 | `resource-queue-identity`    | Queue か DLQ の ID か名前が一致しません。                                              |
 | `resource-queue-paused`      | Queue か DLQ の配送の一時停止の状態が期待と違います。                                  |
 | `resource-queue-shape`       | Queue の応答の consumers、producers、件数の形が不正です。                              |
