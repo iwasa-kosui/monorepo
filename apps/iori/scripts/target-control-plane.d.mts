@@ -41,6 +41,7 @@ export function createTargetControlPlane(
       zoneId: string;
       expectedVersionId: string;
       routePresent: true;
+      missingAllowed?: readonly string[];
     },
   ): Promise<{ versionId: string; routeConfiguration: unknown[] }>;
   readCurrentVersion(): Promise<string>;

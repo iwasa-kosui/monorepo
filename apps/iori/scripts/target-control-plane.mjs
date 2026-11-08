@@ -189,7 +189,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     };
   };
   const readWorkerState = async (
-    { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
+    { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false, missingAllowed = [] },
   ) => {
     if (typeof routePresent !== 'boolean') fail('worker-input');
     if (!same(resources?.identity, identity) || resources.queuePaused !== false) fail('worker-resources');
@@ -236,7 +236,9 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       })),
     ];
     for (const entry of expected) {
-      if (!bindings.some((binding) => binding.name === entry.name)) fail('worker-binding-missing');
+      const present = bindings.some((binding) => binding.name === entry.name);
+      if (!present && missingAllowed.includes(entry.name)) continue;
+      if (!present) fail('worker-binding-missing');
       if (!bindings.some((binding) => Object.entries(entry).every(([key, value]) => binding[key] === value))) {
         fail('worker-binding-mismatch');
       }
