@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../instant/instant.ts';
+import { assignTopics, TopicAssignmentPolicy } from './topicAssignment.ts';
 import {
   pickTopAndBottom,
   previewCandidates,
@@ -9,6 +10,7 @@ import {
   similarityHistogram,
 } from './topicPreview.ts';
 
+const policy = TopicAssignmentPolicy.default;
 const vector = (...embedding: number[]) => Float32Array.from(embedding);
 const topic = (topicKey: string, embedding: Float32Array | null) => ({ topicKey, embedding });
 const article = (feedEntryId: string, embedding: Float32Array) => ({
@@ -141,6 +143,7 @@ describe('previewCandidates', () => {
       ],
       topics,
       limit: 2,
+      policy,
     });
 
     expect(preview.total).toBe(4);
@@ -156,19 +159,86 @@ describe('previewCandidates', () => {
   });
 
   it('1 位になった記事が無いトピックも、件数 0 で返す', () => {
-    const preview = previewCandidates({ articles: [article('a1', vector(1, 0))], topics, limit: 5 });
+    const preview = previewCandidates({ articles: [article('a1', vector(1, 0))], topics, limit: 5, policy });
 
-    expect(preview.byTopic[1]).toEqual({ topicKey: 'b', count: 0, top: [], bottom: [] });
+    expect(preview.byTopic[1]).toEqual({ topicKey: 'b', count: 0, assignedCount: 0, top: [], bottom: [] });
   });
 
   it('記事が無いとき、トピックが無いときも落ちずに空の結果を返す', () => {
-    const noArticles = previewCandidates({ articles: [], topics, limit: 5 });
-    const noTopics = previewCandidates({ articles: [article('a1', vector(1, 0))], topics: [], limit: 5 });
+    const noArticles = previewCandidates({ articles: [], topics, limit: 5, policy });
+    const noTopics = previewCandidates({ articles: [article('a1', vector(1, 0))], topics: [], limit: 5, policy });
 
     expect(noArticles.total).toBe(0);
     expect(noArticles.byTopic).toHaveLength(2);
     expect(noTopics).toMatchObject({ total: 1, byTopic: [] });
     expect(noTopics.top1Histogram.every((bin) => bin.count === 0)).toBe(true);
+  });
+});
+
+describe('previewCandidates の assignment', () => {
+  const topics = [topic('a', vector(1, 0)), topic('b', vector(0, 1))];
+  const articles = [
+    article('a1', vector(1, 0)),
+    article('a2', vector(3, 1)),
+    article('a3', vector(1, 1)),
+    article('b1', vector(0, 1)),
+  ];
+  const outcomesOf = (p: TopicAssignmentPolicy) =>
+    previewCandidates({ articles, topics, limit: 10, policy: p }).byTopic.flatMap((entry) =>
+      entry.top.map((candidate) => [candidate.feedEntryId, candidate.assignment])
+    );
+
+  it('1 位になった記事ごとに assignment を付け、assigned の件数を assignedCount に入れる', () => {
+    const preview = previewCandidates({ articles, topics, limit: 10, policy: { minSimilarity: 0.4, minMargin: 0.5 } });
+
+    expect(preview.byTopic.map((entry) => [entry.topicKey, entry.count, entry.assignedCount])).toEqual([
+      ['a', 3, 2],
+      ['b', 1, 1],
+    ]);
+    expect(outcomesOf({ minSimilarity: 0.4, minMargin: 0.5 })).toEqual([
+      ['a1', 'assigned'],
+      ['a2', 'assigned'],
+      ['a3', 'belowMinMargin'],
+      ['b1', 'assigned'],
+    ]);
+    expect(outcomesOf({ minSimilarity: 0.8, minMargin: 0 })).toEqual([
+      ['a1', 'assigned'],
+      ['a2', 'assigned'],
+      ['a3', 'belowMinSimilarity'],
+      ['b1', 'assigned'],
+    ]);
+  });
+
+  it('方針を変えると assignment と assignedCount が変わる', () => {
+    const loose = previewCandidates({ articles, topics, limit: 10, policy: { minSimilarity: 0.4, minMargin: 0 } });
+    const strict = previewCandidates({ articles, topics, limit: 10, policy: { minSimilarity: 0.4, minMargin: 0.5 } });
+
+    expect(loose.byTopic.map((entry) => entry.assignedCount)).toEqual([3, 1]);
+    expect(strict.byTopic.map((entry) => entry.assignedCount)).toEqual([2, 1]);
+  });
+
+  it('assignment が assignTopics の結果と一致する', () => {
+    const policies = [
+      { minSimilarity: 0.4, minMargin: 0 },
+      { minSimilarity: 0.4, minMargin: 0.5 },
+      { minSimilarity: 0.9, minMargin: 0 },
+    ];
+    for (const p of policies) {
+      const assigned = assignTopics({ articles, topics, policy: p });
+      const assignedIds = new Set(
+        [...assigned.byTopic.values()].flat().map((entry) => entry.feedEntryId),
+      );
+      const otherIds = new Set(assigned.others.map((entry) => entry.feedEntryId));
+      const preview = previewCandidates({ articles, topics, limit: 10, policy: p });
+
+      for (const candidate of preview.byTopic.flatMap((entry) => entry.top)) {
+        expect(candidate.assignment === 'assigned').toBe(assignedIds.has(candidate.feedEntryId));
+        expect(candidate.assignment !== 'assigned').toBe(otherIds.has(candidate.feedEntryId));
+      }
+      for (const entry of preview.byTopic) {
+        expect(entry.assignedCount).toBe(assigned.byTopic.get(entry.topicKey)!.length);
+      }
+    }
   });
 });
 
@@ -190,6 +260,7 @@ describe('previewDigestItems', () => {
       items: [item('a', vector(1, 0)), item('b', vector(1, 0))],
       comparableTopics,
       embeddedTopics,
+      policy,
     });
 
     expect(match).toMatchObject({
@@ -203,14 +274,19 @@ describe('previewDigestItems', () => {
   });
 
   it('無効になったテーマが採用されていても、embedding があれば類似度を出す', () => {
-    const [result] = previewDigestItems({ items: [item('old', vector(1, 0))], comparableTopics, embeddedTopics });
+    const [result] = previewDigestItems({
+      items: [item('old', vector(1, 0))],
+      comparableTopics,
+      embeddedTopics,
+      policy,
+    });
 
     expect(result!.adoptedSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
     expect(result!.matchesFirst).toBe(false);
   });
 
   it('記事の embedding が無い項目は、類似度と一致を null にする', () => {
-    const [result] = previewDigestItems({ items: [item('a', null)], comparableTopics, embeddedTopics });
+    const [result] = previewDigestItems({ items: [item('a', null)], comparableTopics, embeddedTopics, policy });
 
     expect(result).toEqual({
       digestDate: '2026-11-05',
@@ -224,18 +300,73 @@ describe('previewDigestItems', () => {
       margin: null,
       adoptedSimilarity: null,
       matchesFirst: null,
+      assignment: 'noComparableTopic',
     });
   });
 
   it('採用されたテーマが消えているときは adoptedSimilarity を null にする', () => {
-    const [result] = previewDigestItems({ items: [item('gone', vector(1, 0))], comparableTopics, embeddedTopics });
+    const [result] = previewDigestItems({
+      items: [item('gone', vector(1, 0))],
+      comparableTopics,
+      embeddedTopics,
+      policy,
+    });
 
     expect(result).toMatchObject({ adoptedSimilarity: null, matchesFirst: false });
   });
 
   it('比べられるテーマが無いときは first と matchesFirst を null にする', () => {
-    const [result] = previewDigestItems({ items: [item('a', vector(1, 0))], comparableTopics: [], embeddedTopics });
+    const [result] = previewDigestItems({
+      items: [item('a', vector(1, 0))],
+      comparableTopics: [],
+      embeddedTopics,
+      policy,
+    });
 
-    expect(result).toMatchObject({ first: null, matchesFirst: null, adoptedSimilarity: 1 });
+    expect(result).toMatchObject({
+      first: null,
+      matchesFirst: null,
+      adoptedSimilarity: 1,
+      assignment: 'noComparableTopic',
+    });
+  });
+
+  it('方針に応じて assignment を assigned、belowMinSimilarity、belowMinMargin に分ける', () => {
+    const items = [item('a', vector(1, 0)), item('a', vector(1, 1))];
+    const run = (p: TopicAssignmentPolicy) =>
+      previewDigestItems({ items, comparableTopics, embeddedTopics, policy: p }).map((entry) => entry.assignment);
+
+    expect(run({ minSimilarity: 0.4, minMargin: 0 })).toEqual(['assigned', 'assigned']);
+    expect(run({ minSimilarity: 0.8, minMargin: 0 })).toEqual(['assigned', 'belowMinSimilarity']);
+    expect(run({ minSimilarity: 0.4, minMargin: 0.5 })).toEqual(['assigned', 'belowMinMargin']);
+  });
+
+  it('assignment が assignTopics の結果と一致する', () => {
+    const embeddings = [vector(1, 0), vector(3, 1), vector(1, 1), vector(0, 1), vector(-1, 0)];
+    const policies = [
+      { minSimilarity: 0.4, minMargin: 0 },
+      { minSimilarity: 0.4, minMargin: 0.5 },
+      { minSimilarity: 0.9, minMargin: 0 },
+    ];
+    for (const p of policies) {
+      const assigned = assignTopics({
+        articles: embeddings.map((embedding) => ({ embedding })),
+        topics: comparableTopics,
+        policy: p,
+      });
+      const previews = previewDigestItems({
+        items: embeddings.map((embedding) => item('a', embedding)),
+        comparableTopics,
+        embeddedTopics,
+        policy: p,
+      });
+
+      expect(previews.filter((entry) => entry.assignment === 'assigned')).toHaveLength(
+        [...assigned.byTopic.values()].flat().length,
+      );
+      for (const outcome of ['belowMinSimilarity', 'belowMinMargin', 'noComparableTopic'] as const) {
+        expect(previews.filter((entry) => entry.assignment === outcome)).toHaveLength(assigned.otherCounts[outcome]);
+      }
+    }
   });
 });

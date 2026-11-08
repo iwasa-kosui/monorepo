@@ -2,7 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../domain/digest/digest.ts';
 import type { DigestTopicsResolverByUserId, StoredDigestTopic } from '../domain/digestTopic/digestTopic.ts';
-import { TOPIC_MIN_SIMILARITY } from '../domain/digestTopic/topicAssignment.ts';
+import { TopicAssignmentPolicy } from '../domain/digestTopic/topicAssignment.ts';
 import {
   type CandidatePreview,
   type DigestItemPreview,
@@ -23,7 +23,7 @@ type Input = Readonly<{ userId: UserId; candidateHours: number; digestDays: numb
 
 type Ok = Readonly<{
   topics: ReadonlyArray<StoredDigestTopic>;
-  thresholds: Readonly<{ topicMinSimilarity: number }>;
+  thresholds: TopicAssignmentPolicy;
   candidates: CandidatePreview & Readonly<{ truncated: boolean }>;
   digestItems: ReadonlyArray<DigestItemPreview>;
   digestItemsTruncated: boolean;
@@ -37,6 +37,7 @@ type Deps = Readonly<{
   digestTopicItemsResolverByUserIdAndDigestDateFrom: DigestTopicItemsResolverByUserIdAndDigestDateFrom;
   maxCandidates?: number;
   maxDigestItems?: number;
+  topicAssignmentPolicy?: TopicAssignmentPolicy;
   now: () => Instant;
 }>;
 
@@ -46,6 +47,7 @@ const create = ({
   digestTopicItemsResolverByUserIdAndDigestDateFrom,
   maxCandidates = MAX_PREVIEW_CANDIDATES,
   maxDigestItems = MAX_PREVIEW_DIGEST_ITEMS,
+  topicAssignmentPolicy = TopicAssignmentPolicy.default,
   now,
 }: Deps): PreviewDigestTopicsUseCase => {
   const run = async ({ userId, candidateHours, digestDays, limit }: Input) => {
@@ -66,12 +68,25 @@ const create = ({
     const comparableTopics = embeddedTopics.filter((topic) => topic.enabled);
     return RA.ok({
       topics: topics.val,
-      thresholds: { topicMinSimilarity: TOPIC_MIN_SIMILARITY },
+      thresholds: {
+        minSimilarity: topicAssignmentPolicy.minSimilarity,
+        minMargin: topicAssignmentPolicy.minMargin,
+      },
       candidates: {
-        ...previewCandidates({ articles: articles.val.slice(0, maxCandidates), topics: comparableTopics, limit }),
+        ...previewCandidates({
+          articles: articles.val.slice(0, maxCandidates),
+          topics: comparableTopics,
+          limit,
+          policy: topicAssignmentPolicy,
+        }),
         truncated: articles.val.length > maxCandidates,
       },
-      digestItems: previewDigestItems({ items: items.val.slice(0, maxDigestItems), comparableTopics, embeddedTopics }),
+      digestItems: previewDigestItems({
+        items: items.val.slice(0, maxDigestItems),
+        comparableTopics,
+        embeddedTopics,
+        policy: topicAssignmentPolicy,
+      }),
       digestItemsTruncated: items.val.length > maxDigestItems,
     });
   };

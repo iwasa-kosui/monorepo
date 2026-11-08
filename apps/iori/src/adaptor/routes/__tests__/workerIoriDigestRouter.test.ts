@@ -886,6 +886,7 @@ describe('iori のダイジェスト API', () => {
         similarity,
         second,
         margin,
+        assignment: 'assigned',
       });
       expect(body.topics).toEqual([
         { topicKey: 'genai', name: 'genai の名前', description: 'genai の説明', enabled: true, embedded: true },
@@ -899,7 +900,7 @@ describe('iori のダイジェスト API', () => {
         { topicKey: 'draft', name: 'draft の名前', description: 'draft の説明', enabled: false, embedded: true },
         { topicKey: 'raw', name: 'raw の名前', description: 'raw の説明', enabled: true, embedded: false },
       ]);
-      expect(body.thresholds).toEqual({ topicMinSimilarity: 0.4 });
+      expect(body.thresholds).toEqual({ minSimilarity: 0.4, minMargin: 0 });
       expect(body.candidates.total).toBe(3);
       expect(body.candidates.top1Histogram).toHaveLength(40);
       expect(body.candidates.top1Histogram.filter((bin) => bin.count > 0)).toEqual([
@@ -910,6 +911,7 @@ describe('iori のダイジェスト API', () => {
         {
           topicKey: 'genai',
           count: 2,
+          assignedCount: 2,
           top: [
             candidate(4, 1, { topicKey: 'platform', similarity: 0 }, 1),
             candidate(1, 0.8, { topicKey: 'platform', similarity: 0.6 }, 0.2),
@@ -922,6 +924,7 @@ describe('iori のダイジェスト API', () => {
         {
           topicKey: 'platform',
           count: 1,
+          assignedCount: 1,
           top: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
           bottom: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
         },
@@ -942,6 +945,7 @@ describe('iori のダイジェスト API', () => {
           margin: 0.2,
           adoptedSimilarity: 0.8,
           matchesFirst: true,
+          assignment: 'assigned',
         }),
         adopted('genai', 2, 'B', 'https://example.com/b', {
           first: null,
@@ -949,6 +953,7 @@ describe('iori のダイジェスト API', () => {
           margin: null,
           adoptedSimilarity: null,
           matchesFirst: null,
+          assignment: 'noComparableTopic',
         }),
         adopted('platform', 1, 'A', 'https://example.com/a', {
           first: { topicKey: 'genai', similarity: 0.8 },
@@ -956,6 +961,7 @@ describe('iori のダイジェスト API', () => {
           margin: 0.2,
           adoptedSimilarity: 0.6,
           matchesFirst: false,
+          assignment: 'assigned',
         }),
       ]);
     });
@@ -1052,7 +1058,7 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         topics: [],
-        thresholds: { topicMinSimilarity: 0.4 },
+        thresholds: { minSimilarity: 0.4, minMargin: 0 },
         candidates: { total: 0, byTopic: [], truncated: false },
         digestItemsTruncated: false,
         digestItems: [],

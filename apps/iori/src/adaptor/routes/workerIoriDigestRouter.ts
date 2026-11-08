@@ -26,6 +26,7 @@ import type {
   DigestTopicsResolverByUserId,
   StoredDigestTopic,
 } from '../../domain/digestTopic/digestTopic.ts';
+import type { TopicAssignmentOutcome } from '../../domain/digestTopic/topicAssignment.ts';
 import type {
   DigestItemPreview,
   PreviewCandidate,
@@ -129,7 +130,7 @@ type TopicSimilarityBody = Readonly<{ topicKey: string; similarity: number }>;
 
 export type IoriDigestTopicPreviewResponse = Readonly<{
   topics: ReadonlyArray<Pick<IoriDigestTopicBody, 'topicKey' | 'name' | 'description' | 'enabled' | 'embedded'>>;
-  thresholds: Readonly<{ topicMinSimilarity: number }>;
+  thresholds: Readonly<{ minSimilarity: number; minMargin: number }>;
   candidates: Readonly<{
     truncated: boolean;
     total: number;
@@ -138,6 +139,7 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
       Readonly<{
         topicKey: string;
         count: number;
+        assignedCount: number;
         top: ReadonlyArray<IoriDigestPreviewCandidateBody>;
         bottom: ReadonlyArray<IoriDigestPreviewCandidateBody>;
       }>
@@ -157,6 +159,7 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
       margin: number | null;
       adoptedSimilarity: number | null;
       matchesFirst: boolean | null;
+      assignment: TopicAssignmentOutcome;
     }>
   >;
 }>;
@@ -169,6 +172,7 @@ type IoriDigestPreviewCandidateBody = Readonly<{
   similarity: number;
   second: TopicSimilarityBody | null;
   margin: number | null;
+  assignment: TopicAssignmentOutcome;
 }>;
 
 export type IoriDigestDeepDiveResponse = Readonly<{
@@ -271,11 +275,13 @@ const toPreviewCandidateBody = (candidate: PreviewCandidate): IoriDigestPreviewC
   similarity: roundSimilarity(candidate.similarity),
   second: toSimilarityBody(candidate.second),
   margin: roundNullable(candidate.margin),
+  assignment: candidate.assignment,
 });
 
 const toPreviewTopicCandidatesBody = (entry: PreviewTopicCandidates) => ({
   topicKey: entry.topicKey,
   count: entry.count,
+  assignedCount: entry.assignedCount,
   top: entry.top.map(toPreviewCandidateBody),
   bottom: entry.bottom.map(toPreviewCandidateBody),
 });
@@ -292,6 +298,7 @@ const toPreviewDigestItemBody = (item: DigestItemPreview) => ({
   margin: roundNullable(item.margin),
   adoptedSimilarity: roundNullable(item.adoptedSimilarity),
   matchesFirst: item.matchesFirst,
+  assignment: item.assignment,
 });
 
 const toSubscriptionBody = (subscription: Pick<DigestSubscription, 'enabled'> | undefined) =>
