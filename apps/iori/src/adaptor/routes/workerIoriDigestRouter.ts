@@ -50,6 +50,7 @@ import type { SaveDigestSubscriptionUseCase } from '../../useCase/saveDigestSubs
 import { toIsoString } from '../mastodon/time.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody, type RequestBody } from './helper/requestBody.ts';
+import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import {
   getMastodonPrincipal,
   isSameOriginRequest,
@@ -215,13 +216,6 @@ const readEnabled = (body: RequestBody): boolean | undefined => {
   if (enabled === 'true') return true;
   if (enabled === 'false') return false;
   return undefined;
-};
-
-const requireSameOriginForCookie = async (c: Context<MastodonAuthEnv>, next: () => Promise<void>) => {
-  if (c.req.header('Authorization') === undefined && !isSameOriginRequest(c.req.raw)) {
-    return c.json({ error: 'Forbidden' }, 403);
-  }
-  await next();
 };
 
 const feedSourceErrorResponse = (

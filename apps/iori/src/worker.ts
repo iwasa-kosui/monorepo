@@ -14,6 +14,7 @@ import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRoute
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
+import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
@@ -251,6 +252,7 @@ export default {
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
+        app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
         app.route(
           '/api',
           createWorkerIoriActionsRouter({

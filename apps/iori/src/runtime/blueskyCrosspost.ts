@@ -24,18 +24,23 @@ import type { IoriWorkerEnv } from '../workerEnv.ts';
 
 export const BLUESKY_CROSSPOST_ENABLED_VALUE = 'enabled';
 
-export type BlueskyCrosspostConfig = Readonly<{ identifier: string; appPassword: string }>;
+export type BlueskyCredentials = Readonly<{ identifier: string; appPassword: string }>;
+export type BlueskyCrosspostConfig = BlueskyCredentials;
 
-export const resolveBlueskyCrosspostConfig = (
-  env: Pick<IoriWorkerEnv, 'IORI_BLUESKY_CROSSPOST' | 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD'>,
-): BlueskyCrosspostConfig | undefined => {
-  if (env.IORI_BLUESKY_CROSSPOST !== BLUESKY_CROSSPOST_ENABLED_VALUE) return undefined;
+export const resolveBlueskyCredentials = (
+  env: Pick<IoriWorkerEnv, 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD'>,
+): BlueskyCredentials | undefined => {
   const identifier = env.BLUESKY_IDENTIFIER?.trim();
   const appPassword = env.BLUESKY_APP_PASSWORD?.trim();
   return identifier === undefined || identifier === '' || appPassword === undefined || appPassword === ''
     ? undefined
     : { identifier, appPassword };
 };
+
+export const resolveBlueskyCrosspostConfig = (
+  env: Pick<IoriWorkerEnv, 'IORI_BLUESKY_CROSSPOST' | 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD'>,
+): BlueskyCrosspostConfig | undefined =>
+  env.IORI_BLUESKY_CROSSPOST === BLUESKY_CROSSPOST_ENABLED_VALUE ? resolveBlueskyCredentials(env) : undefined;
 
 export type BlueskyCrosspostUseCases = Readonly<{
   schedule: ScheduleBlueskyCrosspostUseCase;

@@ -17,6 +17,7 @@ import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
+import type { CollectBlueskyTimelineUseCase } from '../../../../useCase/collectBlueskyTimeline.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
@@ -57,6 +58,7 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
@@ -147,6 +149,7 @@ import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts';
+import { createWorkerIoriBlueskyRouter } from '../../workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
@@ -171,6 +174,7 @@ export const setupReadApi = (
     textEmbedder?: TextEmbedder;
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
+    collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -488,6 +492,14 @@ export const setupReadApi = (
             markersResolverByUserId,
             markerSavedStore: createD1MarkerSavedStore(db),
           }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriBlueskyRouter({
+          authn,
+          blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
+          collectBlueskyTimelineUseCase: options.collectBlueskyTimeline,
         }),
       );
       root.route(

@@ -8,7 +8,12 @@ import type {
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyClientErrorKind } from '../../ports/blueskyClient.ts';
+import type {
+  BlueskyClient,
+  BlueskyClientError,
+  BlueskyClientErrorKind,
+  BlueskyQueryClient,
+} from '../../ports/blueskyClient.ts';
 
 export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
@@ -41,6 +46,7 @@ const blobSchema = z.object({
 const uploadBlobResponseSchema = z.object({ blob: blobSchema });
 const createRecordResponseSchema = z.object({ uri: z.string().min(1), cid: z.string().min(1) });
 const emptyResponseSchema = z.looseObject({});
+const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
 
@@ -64,7 +70,7 @@ export const resolveBlueskyPdsUrl = (didDoc: unknown): string | undefined => {
   }
 };
 
-export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient => {
+export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & BlueskyQueryClient => {
   const fetchRequest = deps.fetch ?? globalThis.fetch;
   const now = deps.now ?? Instant.now;
 
@@ -205,6 +211,16 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient => {
           emptyResponseSchema,
         );
         return deleted.ok ? RA.ok(undefined) : deleted;
+      }),
+    query: (nsid, params) =>
+      withSession((session) => {
+        const search = new URLSearchParams(params).toString();
+        return call(
+          nsid,
+          `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
+          { method: 'GET', headers: authorized(session) },
+          queryResponseSchema,
+        );
       }),
   };
 };

@@ -111,6 +111,7 @@ import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescri
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -194,6 +195,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   addFeedSourceUseCase: AddFeedSourceUseCase;
   changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
 }>;
+export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
 }>;
@@ -249,6 +251,7 @@ export type IoriRuntimePorts = Readonly<{
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
+  blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
