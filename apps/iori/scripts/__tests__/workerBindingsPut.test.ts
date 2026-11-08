@@ -112,6 +112,34 @@ describe('put-worker-secrets', () => {
     }
     expect(call.options.env.CLOUDFLARE_API_TOKEN).toBe(env.CLOUDFLARE_API_TOKEN);
   });
+  it('adds the optional X_API_BEARER_TOKEN to the bulk call only when it has a value', async () => {
+    const token = 'x-bearer-token-value-for-fixture';
+    const env = environment({ X_API_BEARER_TOKEN: token });
+    const { calls, error } = await run(env, { stdout: '\u2728 4 secrets successfully uploaded\n' });
+    expect(error).toBeUndefined();
+    const [call] = calls;
+    expect(Object.keys(JSON.parse(call.options.input!))).toEqual([
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'SMOKE_QUEUE_TOKEN',
+      'X_API_BEARER_TOKEN',
+    ]);
+    expect(call.args.join(' ')).not.toContain(token);
+    expect(Object.values(call.options.env)).not.toContain(token);
+  });
+  it.each([['empty', ''], ['unset', undefined]])(
+    'does not fail and does not put X_API_BEARER_TOKEN when it is %s',
+    async (_label, value) => {
+      const env = environment(value === undefined ? {} : { X_API_BEARER_TOKEN: value });
+      const { calls, error } = await run(env);
+      expect(error).toBeUndefined();
+      expect(Object.keys(JSON.parse(calls[0]!.options.input!))).toEqual([
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'SMOKE_QUEUE_TOKEN',
+      ]);
+    },
+  );
   it.each([
     ['environment', { environment: 'staging' }],
     ['generation', { generation: 'fixture2' }],

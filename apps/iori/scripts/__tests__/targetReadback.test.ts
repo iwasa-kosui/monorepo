@@ -625,6 +625,16 @@ describe('a state close to a production wrangler deployment', () => {
     ]);
     await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
+  it('accepts an optional X_API_BEARER_TOKEN secret_text binding without worker-binding-extra', async () => {
+    const { api, input } = await wranglerFixture('production', [{ name: 'X_API_BEARER_TOKEN', type: 'secret_text' }]);
+    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
+  });
+  it('rejects an X_API_BEARER_TOKEN binding that is not a secret_text', async () => {
+    const { api, input } = await wranglerFixture('production', [
+      { name: 'X_API_BEARER_TOKEN', type: 'plain_text', text: 'x' },
+    ]);
+    await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-secret-missing'));
+  });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-mismatch'));

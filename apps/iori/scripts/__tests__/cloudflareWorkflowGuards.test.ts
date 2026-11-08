@@ -124,7 +124,7 @@ it('exposes the recovery operations and inputs without a default recovery value'
   expect(workflow.env.IORI_MIGRATION_MAIN_SHA).toBe('${{ inputs.migration_main_sha }}');
   expect(workflow.env.IORI_MIGRATION_RUN_ID).toBe('${{ inputs.migration_run_id }}');
 });
-it('gives put-worker-secrets only the deploy token, the account and admission identity, and the three values to put', async () => {
+it('gives put-worker-secrets only the deploy token, the account and admission identity, and the values to put', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const job = workflow.jobs['put-worker-secrets'];
   const secret = (name: string) => `\${{ secrets.${name} }}`;
@@ -138,6 +138,7 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
     VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
     VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
     SMOKE_QUEUE_TOKEN: secret('SMOKE_QUEUE_TOKEN'),
+    X_API_BEARER_TOKEN: secret('X_API_BEARER_TOKEN'),
   });
   expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
   expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);

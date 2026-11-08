@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import { type ParsedFeedItem, parseFeed } from '../adaptor/feed/parseFeed.ts';
 import type { SafeFetcher } from '../adaptor/http/safeFetch.ts';
+import type { XApiClient } from '../adaptor/x/xApiClient.ts';
 import {
   type FeedEntriesResolverByFeedSourceIdAndGuids,
   type FeedEntriesResolverByFetchedBefore,
@@ -11,14 +12,19 @@ import {
   type FeedEntryCollected,
   type FeedEntryCollectedStore,
   type FeedEntryExpiredStore,
+  type FeedEntryMaxGuidResolverByFeedSourceId,
 } from '../domain/feedEntry/feedEntry.ts';
 import {
   FeedSource,
+  type FeedSourceExternalUserIdResolvedStore,
   type FeedSourceFetchedStore,
   type FeedSourceFetchFailedStore,
+  type FeedSourceKind,
   type FeedSourcesResolverByEnabled,
 } from '../domain/feedSource/feedSource.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { FeedItemFetcher } from './feedItemFetcher.ts';
+import { createXUserItemsFetcher, X_USER_RETENTION_DAYS } from './fetchXUserItems.ts';
 import type { UseCase } from './useCase.ts';
 
 export const FEED_FETCH_CONCURRENCY = 4;
@@ -27,6 +33,17 @@ const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 2 * 1024 * 1024, maxRedirec
 const EXPIRE_BATCH_SIZE = 100;
 const EXPIRE_MAX_BATCHES = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+type ExpireRule = Readonly<{
+  days: number;
+  kinds?: ReadonlyArray<FeedSourceKind>;
+  excludedKinds?: ReadonlyArray<FeedSourceKind>;
+}>;
+
+const EXPIRE_RULES: ReadonlyArray<ExpireRule> = [
+  { days: FEED_RETENTION_DAYS, excludedKinds: ['thoughtworks_radar', 'x_user'] },
+  { days: X_USER_RETENTION_DAYS, kinds: ['x_user'] },
+];
 
 type Input = void;
 
@@ -45,7 +62,10 @@ type Deps = Readonly<{
   feedEntryCollectedStore: FeedEntryCollectedStore;
   feedEntryBookmarkCountUpdatedStore: FeedEntryBookmarkCountUpdatedStore;
   feedEntryExpiredStore: FeedEntryExpiredStore;
+  feedEntryMaxGuidResolverByFeedSourceId: FeedEntryMaxGuidResolverByFeedSourceId;
+  feedSourceExternalUserIdResolvedStore: FeedSourceExternalUserIdResolvedStore;
   safeFetcher: SafeFetcher;
+  xApiClient?: XApiClient;
   now: () => Instant;
 }>;
 
@@ -85,10 +105,13 @@ const create = ({
   feedEntryCollectedStore,
   feedEntryBookmarkCountUpdatedStore,
   feedEntryExpiredStore,
+  feedEntryMaxGuidResolverByFeedSourceId,
+  feedSourceExternalUserIdResolvedStore,
   safeFetcher,
+  xApiClient,
   now,
 }: Deps): CollectFeedEntriesUseCase => {
-  const collectSource = async (source: FeedSource): Promise<number> => {
+  const fetchRss: FeedItemFetcher = async (source) => {
     const headers: Record<string, string> = {};
     if (source.etag !== null) headers['If-None-Match'] = source.etag;
     if (source.lastModified !== null) headers['If-Modified-Since'] = source.lastModified;
@@ -97,13 +120,29 @@ const create = ({
     const { status, body, etag, lastModified } = fetched.val;
     const validators = { etag: etag ?? source.etag, lastModified: lastModified ?? source.lastModified };
     if (status === 304 || body === undefined) {
-      await feedSourceFetchedStore.store(FeedSource.recordFetched(source, validators, now()));
-      return 0;
+      return { source, items: [], retentionDays: FEED_RETENTION_DAYS, validators };
     }
     const parsed = parseFeed(body);
     if (!parsed.ok) throw new Error(parsed.err.message);
-    const retentionStart = Instant.addDuration(now(), -FEED_RETENTION_DAYS * DAY_MS);
-    const items = uniqueByGuid(parsed.val).filter((item) =>
+    return { source, items: parsed.val, retentionDays: FEED_RETENTION_DAYS, validators };
+  };
+
+  const fetchXUser: FeedItemFetcher | undefined = xApiClient === undefined ? undefined : createXUserItemsFetcher({
+    xApiClient,
+    feedEntryMaxGuidResolverByFeedSourceId,
+    feedSourceExternalUserIdResolvedStore,
+    now,
+  });
+
+  const fetcherOf = (kind: FeedSourceKind): FeedItemFetcher | undefined => {
+    if (kind === 'thoughtworks_radar') return undefined;
+    return kind === 'x_user' ? fetchXUser : fetchRss;
+  };
+
+  const collectSource = async (original: FeedSource, fetchItems: FeedItemFetcher): Promise<number> => {
+    const { source, items: fetchedItems, retentionDays, validators } = await fetchItems(original);
+    const retentionStart = Instant.addDuration(now(), -retentionDays * DAY_MS);
+    const items = uniqueByGuid(fetchedItems).filter((item) =>
       item.publishedAt === null || item.publishedAt.getTime() >= retentionStart
     );
     const existing = await feedEntriesResolverByFeedSourceIdAndGuids.resolve({
@@ -147,29 +186,35 @@ const create = ({
 
   const expireOldEntries = async (): Promise<number> => {
     let expired = 0;
-    for (let batch = 0; batch < EXPIRE_MAX_BATCHES; batch += 1) {
-      const timestamp = now();
-      const resolved = await feedEntriesResolverByFetchedBefore.resolve({
-        fetchedBefore: Instant.addDuration(timestamp, -FEED_RETENTION_DAYS * DAY_MS),
-        limit: EXPIRE_BATCH_SIZE,
-      });
-      const entries = resolved.val;
-      if (entries.length === 0) break;
-      await feedEntryExpiredStore.store(...entries.map((entry) => FeedEntry.expire(entry, timestamp)));
-      expired += entries.length;
-      if (entries.length < EXPIRE_BATCH_SIZE) break;
+    for (const rule of EXPIRE_RULES) {
+      for (let batch = 0; batch < EXPIRE_MAX_BATCHES; batch += 1) {
+        const timestamp = now();
+        const resolved = await feedEntriesResolverByFetchedBefore.resolve({
+          fetchedBefore: Instant.addDuration(timestamp, -rule.days * DAY_MS),
+          limit: EXPIRE_BATCH_SIZE,
+          kinds: rule.kinds,
+          excludedKinds: rule.excludedKinds,
+        });
+        const entries = resolved.val;
+        if (entries.length === 0) break;
+        await feedEntryExpiredStore.store(...entries.map((entry) => FeedEntry.expire(entry, timestamp)));
+        expired += entries.length;
+        if (entries.length < EXPIRE_BATCH_SIZE) break;
+      }
     }
     return expired;
   };
 
   const run = async (): RA<Ok, Err> => {
     const resolved = await feedSourcesResolverByEnabled.resolve({ enabled: true });
-    const sources = resolved.val.filter((source) => source.kind !== 'thoughtworks_radar');
+    const sources = resolved.val.filter((source) => fetcherOf(source.kind) !== undefined);
     let failed = 0;
     let collected = 0;
     await runWithConcurrency(sources, FEED_FETCH_CONCURRENCY, async (source) => {
       try {
-        const count = await collectSource(source);
+        const fetchItems = fetcherOf(source.kind);
+        if (fetchItems === undefined) return;
+        const count = await collectSource(source, fetchItems);
         collected += count;
       } catch (error) {
         failed += 1;

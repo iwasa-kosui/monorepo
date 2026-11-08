@@ -12,6 +12,7 @@ import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.
 
 const appRoot = new URL('..', import.meta.url).pathname;
 const SECRET_NAMES = Object.freeze(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']);
+const OPTIONAL_SECRET_NAMES = Object.freeze(['X_API_BEARER_TOKEN']);
 
 const assertIdentity = (env, invocation) => {
   let identity;
@@ -96,9 +97,12 @@ export const putWorkerSecrets = async ({
     fetchRequest,
   });
   const childEnv = {
-    ...Object.fromEntries(Object.entries(env).filter(([name]) => !SECRET_NAMES.includes(name))),
+    ...Object.fromEntries(
+      Object.entries(env).filter(([name]) => ![...SECRET_NAMES, ...OPTIONAL_SECRET_NAMES].includes(name)),
+    ),
     WRANGLER_SEND_METRICS: 'false',
   };
+  const putNames = [...SECRET_NAMES, ...OPTIONAL_SECRET_NAMES.filter((name) => env[name])];
   onStage('put-worker-secrets-put');
   let result;
   try {
@@ -109,12 +113,12 @@ export const putWorkerSecrets = async ({
       timeout,
       maxBuffer: 1_000_000,
       killGraceMs: 15000,
-      input: JSON.stringify(Object.fromEntries(SECRET_NAMES.map((name) => [name, env[name]]))),
+      input: JSON.stringify(Object.fromEntries(putNames.map((name) => [name, env[name]]))),
     });
   } catch {
     throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
   }
-  if (!String(result?.stdout ?? '').includes(`${SECRET_NAMES.length} secrets successfully uploaded`)) {
+  if (!String(result?.stdout ?? '').includes(`${putNames.length} secrets successfully uploaded`)) {
     throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'command-failed');
   }
 };

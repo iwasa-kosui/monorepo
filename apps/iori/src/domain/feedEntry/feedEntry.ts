@@ -136,9 +136,15 @@ export type FeedEntriesResolverByFeedSourceIdAndGuids = Agg.Resolver<
   ReadonlyArray<FeedEntry>
 >;
 export type FeedEntriesResolverByFetchedBefore = Agg.Resolver<
-  { fetchedBefore: Instant; limit: number },
+  {
+    fetchedBefore: Instant;
+    limit: number;
+    kinds?: ReadonlyArray<FeedSourceKind>;
+    excludedKinds?: ReadonlyArray<FeedSourceKind>;
+  },
   ReadonlyArray<FeedEntry>
 >;
+export type FeedEntryMaxGuidResolverByFeedSourceId = Agg.Resolver<FeedSourceId, string | undefined>;
 export type FeedEntriesResolverByFetchedSincePendingEmbedding = Agg.Resolver<
   { fetchedSince: Instant; limit: number },
   ReadonlyArray<FeedEntry>

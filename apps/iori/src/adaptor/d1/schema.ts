@@ -443,6 +443,7 @@ export const feedSourcesTable = sqliteTable('feed_sources', {
   kind: text('kind').notNull(),
   url: text('url').notNull(),
   title: text('title').notNull(),
+  externalUserId: text('externalUserId'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull(),
   etag: text('etag'),
   lastModified: text('lastModified'),

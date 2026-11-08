@@ -1,0 +1,1 @@
+ALTER TABLE `feed_sources` ADD `externalUserId` text;

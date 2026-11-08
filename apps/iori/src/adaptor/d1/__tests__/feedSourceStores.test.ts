@@ -5,6 +5,7 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import { createD1AllFeedSourcesResolver } from '../feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceEnabledChangedStore } from '../feedSource/feedSourceEnabledChangedStore.ts';
+import { createD1FeedSourceExternalUserIdResolvedStore } from '../feedSource/feedSourceExternalUserIdResolvedStore.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../feedSource/feedSourcesResolverByEnabled.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -31,6 +32,8 @@ const setup = () => {
     eventNames,
     createdStore: createD1FeedSourceCreatedStore(db),
     enabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
+    externalUserIdResolvedStore: createD1FeedSourceExternalUserIdResolvedStore(db),
+    sqlite,
     allResolver: createD1AllFeedSourcesResolver(db),
     enabledResolver: createD1FeedSourcesResolverByEnabled(db),
   };
@@ -79,5 +82,46 @@ describe('createD1FeedSourceEnabledChangedStore', () => {
       'https://example.com/a.xml',
     ]);
     expect((await allResolver.resolve()).val).toHaveLength(2);
+  });
+});
+
+describe('createD1FeedSourceExternalUserIdResolvedStore', () => {
+  it('対象の情報源だけ externalUserId を書き、feedSource.externalUserIdResolved を domain_events に残す', async () => {
+    const { createdStore, externalUserIdResolvedStore, eventNames, sqlite } = setup();
+    const created = FeedSource.createFeedSource(
+      { kind: 'x_user', url: 'https://x.com/jack', title: '@jack' },
+      CREATED_AT,
+    );
+    const other = FeedSource.createFeedSource(
+      { kind: 'x_user', url: 'https://x.com/jill', title: '@jill' },
+      CREATED_AT,
+    );
+    if (!created.ok || !other.ok) throw new Error('unexpected');
+    await createdStore.store(created.val, other.val);
+
+    await externalUserIdResolvedStore.store(
+      FeedSource.resolveExternalUserId(created.val.aggregateState, '12', CHANGED_AT),
+    );
+
+    expect(sqlite.prepare('SELECT url, externalUserId FROM feed_sources ORDER BY url').all()).toEqual([
+      { url: 'https://x.com/jack', externalUserId: '12' },
+      { url: 'https://x.com/jill', externalUserId: null },
+    ]);
+    expect(eventNames()).toEqual(['feedSource.created', 'feedSource.created', 'feedSource.externalUserIdResolved']);
+  });
+
+  it('保存した externalUserId を resolver が feedSource に載せて返す', async () => {
+    const { createdStore, externalUserIdResolvedStore, allResolver } = setup();
+    const created = FeedSource.createFeedSource(
+      { kind: 'x_user', url: 'https://x.com/jack', title: '@jack' },
+      CREATED_AT,
+    );
+    if (!created.ok) throw new Error('unexpected');
+    await createdStore.store(created.val);
+    await externalUserIdResolvedStore.store(
+      FeedSource.resolveExternalUserId(created.val.aggregateState, '12', CHANGED_AT),
+    );
+
+    expect((await allResolver.resolve()).val).toMatchObject([{ kind: 'x_user', externalUserId: '12' }]);
   });
 });

@@ -85,6 +85,63 @@ describe('FeedSource.parseNew', () => {
   });
 });
 
+describe('FeedSource.parseNew の x_user', () => {
+  it('ユーザー名から https://x.com/<小文字のユーザー名> の URL と @<ユーザー名> の title を作る', () => {
+    expect(FeedSource.parseNew({ kind: 'x_user', username: 'Kosui_Iwasa' })).toMatchObject({
+      ok: true,
+      val: { kind: 'x_user', url: 'https://x.com/kosui_iwasa', title: '@Kosui_Iwasa' },
+    });
+  });
+
+  it('url と title を渡しても使わない', () => {
+    expect(
+      FeedSource.parseNew({ kind: 'x_user', username: 'jack', url: 'https://example.com/', title: '別名' }),
+    ).toMatchObject({ ok: true, val: { url: 'https://x.com/jack', title: '@jack' } });
+  });
+
+  it.each([undefined, '', '0123456789abcdef', 'a b', '@jack', 'ハンドル', 'a-b', 1])(
+    'ユーザー名が %s なら受け付けない',
+    (username) => {
+      expect(FeedSource.parseNew({ kind: 'x_user', username }).ok).toBe(false);
+    },
+  );
+});
+
+describe('FeedSource.createFeedSource の x_user', () => {
+  it('externalUserId が null の feedSource.created を返す', () => {
+    const parsed = FeedSource.parseNew({ kind: 'x_user', username: 'jack' });
+    if (!parsed.ok) throw new Error('parse failed');
+
+    const created = FeedSource.createFeedSource(parsed.val, now);
+
+    expect(created).toMatchObject({
+      ok: true,
+      val: {
+        eventName: 'feedSource.created',
+        aggregateState: { kind: 'x_user', url: 'https://x.com/jack', title: '@jack', externalUserId: null },
+      },
+    });
+  });
+});
+
+describe('FeedSource.resolveExternalUserId', () => {
+  it('externalUserId だけを変えた feedSource.externalUserIdResolved を返す', () => {
+    const created = FeedSource.createFeedSource({ kind: 'x_user', url: 'https://x.com/jack', title: '@jack' }, now);
+    if (!created.ok) throw new Error('create failed');
+    const source = created.val.aggregateState;
+
+    const resolved = FeedSource.resolveExternalUserId(source, '12', later);
+
+    expect(resolved).toMatchObject({
+      aggregateName: 'feedSource',
+      eventName: 'feedSource.externalUserIdResolved',
+      aggregateId: { feedSourceId: source.feedSourceId },
+      aggregateState: { ...source, externalUserId: '12' },
+      eventPayload: { feedSourceId: source.feedSourceId, externalUserId: '12', resolvedAt: later },
+    });
+  });
+});
+
 describe('FeedSource.setEnabled', () => {
   it('enabled だけを変えた feedSource.enabledChanged を返す', () => {
     const created = FeedSource.createFeedSource(

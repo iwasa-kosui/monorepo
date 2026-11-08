@@ -201,6 +201,18 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
     expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
   });
 
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveArticles } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss);
+    addEntry(xUser);
+
+    const resolved = await resolveArticles(0);
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
   it('次元が 1024 でないベクトルの記事は返さず、1 ページを超える件数は全件読む', async () => {
     const { addFeedSource, addEntry, resolveArticles } = setup();
     const rss = addFeedSource('rss');
@@ -277,6 +289,18 @@ describe('RelatedArticlesResolverByEmbedding', () => {
     const disabled = addFeedSource('rss', false);
     const kept = addEntry(enabled, { embedding: angled(0.2) });
     addEntry(disabled, { embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss, { embedding: angled(0.2) });
+    addEntry(xUser, { embedding: angled(0.1) });
 
     const resolved = await resolveRelated(angled(0));
 

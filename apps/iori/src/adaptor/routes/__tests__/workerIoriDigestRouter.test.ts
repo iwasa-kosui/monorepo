@@ -1818,6 +1818,90 @@ describe('iori のダイジェスト API', () => {
         expect(response.status).toBe(201);
         expect(t.sqlite.prepare('SELECT kind FROM feed_sources').all()).toEqual([{ kind: 'rss' }]);
       });
+
+      describe('kind が x_user', () => {
+        it('201 と追加した情報源を返し、https://x.com/<ユーザー名> と @<ユーザー名> で保存する', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, cookieOf(me), { kind: 'x_user', username: ' Kosui_Iwasa ' });
+
+          expect(response.status).toBe(201);
+          expect(await response.json()).toEqual({
+            source: {
+              feedSourceId: expect.any(String),
+              kind: 'x_user',
+              url: 'https://x.com/kosui_iwasa',
+              title: '@Kosui_Iwasa',
+              enabled: true,
+              lastFetchedAt: null,
+              lastError: null,
+            },
+          });
+          expect(
+            t.sqlite.prepare('SELECT kind, url, title, externalUserId, enabled FROM feed_sources').all(),
+          ).toEqual([
+            {
+              kind: 'x_user',
+              url: 'https://x.com/kosui_iwasa',
+              title: '@Kosui_Iwasa',
+              externalUserId: null,
+              enabled: 1,
+            },
+          ]);
+        });
+
+        it('url と title を渡しても使わない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, me.bearer, { ...body, kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(201);
+          expect(t.sqlite.prepare('SELECT url, title FROM feed_sources').all()).toEqual([
+            { url: 'https://x.com/jack', title: '@jack' },
+          ]);
+        });
+
+        it('大文字小文字だけが違う同じユーザーが既にあれば 409 にして、何も増やさない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+          await post(t, me.bearer, { kind: 'x_user', username: 'Jack' });
+
+          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jACK' });
+
+          expect(response.status).toBe(409);
+          expect(countOf(t)).toEqual({ n: 1 });
+        });
+
+        it.each([
+          ['username がない', { kind: 'x_user' }],
+          ['username が文字列でない', { kind: 'x_user', username: 1 }],
+          ['username が空白だけ', { kind: 'x_user', username: '  ' }],
+          ['username が 16 文字', { kind: 'x_user', username: 'a'.repeat(16) }],
+          ['username に使えない文字がある', { kind: 'x_user', username: 'jack-x' }],
+          ['username が @ つき', { kind: 'x_user', username: '@jack' }],
+          ['username が URL', { kind: 'x_user', username: 'https://x.com/jack' }],
+        ])('%s と 400 にして、何も作らない', async (_label, invalid) => {
+          const t = setupReadApi();
+          const me = await t.signIn('write:accounts');
+
+          const response = await post(t, me.bearer, invalid);
+
+          expect(response.status).toBe(400);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+
+        it('write:accounts を満たさない scope のトークンを 403 にし、何も作らない', async () => {
+          const t = setupReadApi();
+          const me = await t.signIn('read:statuses');
+
+          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jack' });
+
+          expect(response.status).toBe(403);
+          expect(countOf(t)).toEqual({ n: 0 });
+        });
+      });
     });
 
     describe('PATCH', () => {

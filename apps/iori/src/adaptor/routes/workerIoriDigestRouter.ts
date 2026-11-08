@@ -444,11 +444,19 @@ export const createWorkerIoriDigestRouter = ({
     })
     .post('/iori/v1/feed-sources', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
       const body = await readRequestBody(c);
+      if (bodyString(body, 'kind')?.trim() === 'x_user') {
+        const username = bodyString(body, 'username')?.trim();
+        if (username === undefined) return c.json({ error: 'Validation failed: username' }, 400);
+        const added = await addFeedSourceUseCase.run({ kind: 'x_user', username });
+        return added.ok
+          ? c.json({ source: toFeedSourceBody(added.val) }, 201)
+          : feedSourceErrorResponse(c, added.err);
+      }
       const url = bodyString(body, 'url')?.trim();
       if (url === undefined) return c.json({ error: 'Validation failed: url' }, 400);
       const title = bodyString(body, 'title')?.trim();
       if (title === undefined) return c.json({ error: 'Validation failed: title' }, 400);
-      const added = await addFeedSourceUseCase.run({ url, title });
+      const added = await addFeedSourceUseCase.run({ kind: 'rss', url, title });
       return added.ok ? c.json({ source: toFeedSourceBody(added.val) }, 201) : feedSourceErrorResponse(c, added.err);
     })
     .patch(

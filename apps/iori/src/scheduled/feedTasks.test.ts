@@ -156,6 +156,64 @@ describe('collectFeedsTask', () => {
     expect(t.embeddedTitles()).toEqual(['old']);
   });
 
+  describe('X_API_BEARER_TOKEN', () => {
+    const addXSource = (t: ReturnType<typeof setup>) =>
+      t.fixture.sqlite.prepare(
+        'INSERT INTO feed_sources(feedSourceId,kind,url,title,externalUserId,enabled,createdAt) VALUES (?,?,?,?,?,?,?)',
+      ).run('00000000-0000-4000-8000-0000000000f2', 'x_user', 'https://x.com/jack', '@jack', '12', 1, 1_000);
+    const contextWith = (t: ReturnType<typeof setup>, token: string | undefined) =>
+      ({
+        ...t.context(COLLECT_TIME),
+        env: { ...t.env, ...(token === undefined ? {} : { X_API_BEARER_TOKEN: token }) },
+      }) as unknown as ScheduledTaskContext;
+    const xCalls = () => mocks.fetchText.mock.calls.filter(([url]) => String(url).startsWith('https://api.x.com/'));
+
+    it.each([['未設定', undefined], ['空文字', '']])(
+      '%s のとき X の情報源を、API を呼ばず lastError も書かずに飛ばす',
+      async (_label, token) => {
+        vi.spyOn(console, 'info').mockImplementation(() => undefined);
+        const t = setup();
+        addXSource(t);
+
+        await collectFeedsTask.run(contextWith(t, token));
+
+        expect(xCalls()).toEqual([]);
+        expect(
+          t.fixture.sqlite.prepare('SELECT lastError, lastFetchedAt FROM feed_sources WHERE kind = \'x_user\'').get(),
+        )
+          .toEqual({ lastError: null, lastFetchedAt: null });
+      },
+    );
+
+    it('設定されているとき Bearer トークンつきで X の API を呼び、投稿を保存する', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const t = setup();
+      addXSource(t);
+      const feed = mocks.fetchText.getMockImplementation()!;
+      mocks.fetchText.mockImplementation(async (url: string, options: unknown) =>
+        url.startsWith('https://api.x.com/2/users/12/tweets')
+          ? RA.ok({
+            status: 200,
+            body: JSON.stringify({
+              data: [{ id: '77', text: 'hi', created_at: new Date(COLLECT_TIME - 3_600_000).toISOString() }],
+            }),
+            etag: null,
+            lastModified: null,
+            finalUrl: url,
+          })
+          : feed(url, options)
+      );
+
+      await collectFeedsTask.run(contextWith(t, 'secret-token'));
+
+      expect(xCalls()).toHaveLength(1);
+      expect(xCalls()[0]![1]).toMatchObject({ headers: { Authorization: 'Bearer secret-token' } });
+      expect(t.fixture.sqlite.prepare('SELECT guid, url FROM feed_entries WHERE guid = \'77\'').all()).toEqual([
+        { guid: '77', url: 'https://x.com/jack/status/77' },
+      ]);
+    });
+  });
+
   it('埋め込みが失敗したら error ログを出し、取得は成功として投げない', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);

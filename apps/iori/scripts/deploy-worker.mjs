@@ -68,6 +68,16 @@ const putRequiredSecret = (name, deployConfigPath) => {
   }
 };
 
+const putOptionalSecret = (name, deployConfigPath) => {
+  const value = process.env[name];
+  if (!isDryRun && value !== undefined && value.length > 0) {
+    run('pnpm', ['exec', 'wrangler', 'secret', 'put', name, '--config', deployConfigPath], {
+      input: value,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  }
+};
+
 const deployWorker = (deployConfigPath) => {
   run('pnpm', ['exec', 'wrangler', 'deploy', '--config', deployConfigPath, '--minify', ...deployArgs]);
 };
@@ -91,6 +101,7 @@ try {
   putRequiredSecret('VAPID_PUBLIC_KEY', config.path);
   putRequiredSecret('VAPID_PRIVATE_KEY', config.path);
   putRequiredSecret('SMOKE_QUEUE_TOKEN', config.path);
+  putOptionalSecret('X_API_BEARER_TOKEN', config.path);
   if (identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN) {
     putRequiredSecret('STAGING_ACCESS_TOKEN', config.path);
   }

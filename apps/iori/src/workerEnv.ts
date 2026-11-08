@@ -13,6 +13,7 @@ export type IoriWorkerEnv = Readonly<{
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT: string;
+  X_API_BEARER_TOKEN?: string;
   SMOKE_QUEUE_TOKEN?: string;
   STAGING_ACCESS_TOKEN?: string;
   IORI_ADMISSION_MODE?: string;

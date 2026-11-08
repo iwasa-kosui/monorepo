@@ -7,8 +7,9 @@ import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { FeedSourceId } from './feedSourceId.ts';
 import { blockedReason } from './feedSourceUrl.ts';
+import { XUsername } from './xUsername.ts';
 
-export const feedSourceKinds = ['rss', 'hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar'] as const;
+export const feedSourceKinds = ['rss', 'hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar', 'x_user'] as const;
 const kindZodType = z.enum(feedSourceKinds);
 export type FeedSourceKind = z.output<typeof kindZodType>;
 
@@ -18,6 +19,7 @@ const zodType = z
     kind: kindZodType,
     url: z.string().min(1),
     title: z.string().min(1),
+    externalUserId: z.string().min(1).nullable(),
     enabled: z.boolean(),
     etag: z.string().nullable(),
     lastModified: z.string().nullable(),
@@ -55,16 +57,27 @@ const feedUrlZodType = z
     return url.href;
   });
 
+const newRssFeedSourceZodType = z.object({
+  kind: z.literal('rss'),
+  url: feedUrlZodType,
+  title: z.string().min(1).max(100),
+});
+const newXUserFeedSourceZodType = z.object({
+  kind: z.literal('x_user'),
+  username: XUsername.zodType,
+});
 const newFeedSourceZodType = z
-  .object({
-    kind: z.literal('rss'),
-    url: feedUrlZodType,
-    title: z.string().min(1).max(100),
-  })
+  .discriminatedUnion('kind', [newRssFeedSourceZodType, newXUserFeedSourceZodType])
+  .transform((value) =>
+    value.kind === 'rss'
+      ? value
+      : { kind: value.kind, url: XUsername.toProfileUrl(value.username), title: `@${value.username}` }
+  )
   .describe('NewFeedSource');
 const newFeedSourceSchema = Schema.create<z.output<typeof newFeedSourceZodType>, z.input<typeof newFeedSourceZodType>>(
   newFeedSourceZodType,
 );
+export type NewFeedSourceInput = z.input<typeof newFeedSourceZodType>;
 export type NewFeedSource = z.output<typeof newFeedSourceZodType>;
 export type FeedSourceAggregateId = Readonly<{
   feedSourceId: FeedSourceId;
@@ -91,6 +104,11 @@ export type FeedSourceFetchFailed = FeedSourceEvent<
   FeedSource,
   'feedSource.fetchFailed',
   { feedSourceId: FeedSourceId; lastError: string; lastFetchedAt: Instant }
+>;
+export type FeedSourceExternalUserIdResolved = FeedSourceEvent<
+  FeedSource,
+  'feedSource.externalUserIdResolved',
+  { feedSourceId: FeedSourceId; externalUserId: string; resolvedAt: Instant }
 >;
 export type FeedSourceEnabledChanged = FeedSourceEvent<
   FeedSource,
@@ -133,6 +151,7 @@ const createFeedSource = (
   const parsed = schema.parse({
     ...payload,
     feedSourceId: FeedSourceId.generate(),
+    externalUserId: null,
     enabled: true,
     etag: null,
     lastModified: null,
@@ -191,6 +210,21 @@ const recordFetchFailed = (feedSource: FeedSource, lastError: string, now: Insta
   );
 };
 
+const resolveExternalUserId = (
+  feedSource: FeedSource,
+  externalUserId: string,
+  now: Instant,
+): FeedSourceExternalUserIdResolved => {
+  const updated: FeedSource = { ...feedSource, externalUserId };
+  return FeedSourceEvent.create(
+    toAggregateId(updated),
+    updated,
+    'feedSource.externalUserIdResolved',
+    { feedSourceId: updated.feedSourceId, externalUserId, resolvedAt: now },
+    now,
+  );
+};
+
 const setEnabled = (feedSource: FeedSource, enabled: boolean, now: Instant): FeedSourceEnabledChanged => {
   const updated: FeedSource = { ...feedSource, enabled };
   return FeedSourceEvent.create(
@@ -206,6 +240,7 @@ export type FeedSourceCreatedStore = Agg.Store<FeedSourceCreated>;
 export type FeedSourceFetchedStore = Agg.Store<FeedSourceFetched>;
 export type FeedSourceFetchFailedStore = Agg.Store<FeedSourceFetchFailed>;
 export type FeedSourceEnabledChangedStore = Agg.Store<FeedSourceEnabledChanged>;
+export type FeedSourceExternalUserIdResolvedStore = Agg.Store<FeedSourceExternalUserIdResolved>;
 export type AllFeedSourcesResolver = Agg.Resolver<void, ReadonlyArray<FeedSource>>;
 export type FeedSourcesResolverByEnabled = Agg.Resolver<{ enabled: boolean }, ReadonlyArray<FeedSource>>;
 
@@ -214,6 +249,7 @@ export const FeedSource = {
   parseNew: newFeedSourceSchema.parse,
   createFeedSource,
   setEnabled,
+  resolveExternalUserId,
   recordFetched,
   recordFetchFailed,
   toAggregateId,

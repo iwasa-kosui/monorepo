@@ -211,6 +211,7 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           SMOKE_QUEUE_TOKEN: ${{ secrets.SMOKE_QUEUE_TOKEN }}
+          X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
       - name: Remove this job's private directory
         if: always() && env.IORI_PRIVATE_DIRECTORY != ''
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
