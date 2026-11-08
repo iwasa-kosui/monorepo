@@ -12,9 +12,10 @@ import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeed
 import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceFetchedStore } from '../adaptor/d1/feedSource/feedSourceFetchedStore.ts';
 import { createD1FeedSourceFetchFailedStore } from '../adaptor/d1/feedSource/feedSourceFetchFailedStore.ts';
+import { createD1FeedSourceFetchReserver } from '../adaptor/d1/feedSource/feedSourceFetchReserver.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
-import { createTwitterApiIoClient } from '../adaptor/twitterApiIo/twitterApiIoClient.ts';
+import { createTwitterApiIoClient, type TwitterApiIoClient } from '../adaptor/twitterApiIo/twitterApiIoClient.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -23,15 +24,45 @@ import { DetectRadarVolumeUseCase } from '../useCase/detectRadarVolume.ts';
 import { EmbedFeedEntriesUseCase } from '../useCase/embedFeedEntries.ts';
 import { EnsureDefaultFeedSourcesUseCase } from '../useCase/ensureDefaultFeedSources.ts';
 import { RefreshHatenaBookmarkCountsUseCase } from '../useCase/refreshHatenaBookmarkCounts.ts';
+import { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask } from './scheduledTasks.ts';
+
+const createTwitterApiIoClientOf = (env: IoriWorkerEnv): TwitterApiIoClient | undefined => {
+  const apiKey = env.TWITTERAPI_IO_API_KEY;
+  return apiKey === undefined || apiKey === ''
+    ? undefined
+    : createTwitterApiIoClient({
+      safeFetcher: createSafeFetcher(),
+      apiKey,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      now: Instant.now,
+    });
+};
+
+export const createRefreshXPostsUseCase = (env: IoriWorkerEnv): RefreshXPostsUseCase | undefined => {
+  const twitterApiIoClient = createTwitterApiIoClientOf(env);
+  if (twitterApiIoClient === undefined) return undefined;
+  const db = createD1Db(env.DB);
+  return RefreshXPostsUseCase.create({
+    feedSourcesResolverByEnabled: createD1FeedSourcesResolverByEnabled(db),
+    feedSourceFetchReserver: createD1FeedSourceFetchReserver(db),
+    feedEntriesResolverByFeedSourceIdAndGuids: createD1FeedEntriesResolverByFeedSourceIdAndGuids(db),
+    feedSourceFetchedStore: createD1FeedSourceFetchedStore(db),
+    feedSourceFetchFailedStore: createD1FeedSourceFetchFailedStore(db),
+    feedEntryCollectedStore: createD1FeedEntryCollectedStore(db),
+    feedEntryBookmarkCountUpdatedStore: createD1FeedEntryBookmarkCountUpdatedStore(db),
+    feedEntryMaxGuidResolverByFeedSourceId: createD1FeedEntryMaxGuidResolverByFeedSourceId(db),
+    twitterApiIoClient,
+    now: Instant.now,
+  });
+};
 
 export const createFeedUseCases = (env: IoriWorkerEnv) => {
   const db = createD1Db(env.DB);
   const now = Instant.now;
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const textEmbedder = workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi);
-  const twitterApiIoApiKey = env.TWITTERAPI_IO_API_KEY;
   return {
     ensureDefaultFeedSources: EnsureDefaultFeedSourcesUseCase.create({
       allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
@@ -49,14 +80,7 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
       feedEntryExpiredStore: createD1FeedEntryExpiredStore(db),
       feedEntryMaxGuidResolverByFeedSourceId: createD1FeedEntryMaxGuidResolverByFeedSourceId(db),
       safeFetcher: createSafeFetcher(),
-      twitterApiIoClient: twitterApiIoApiKey === undefined || twitterApiIoApiKey === ''
-        ? undefined
-        : createTwitterApiIoClient({
-          safeFetcher: createSafeFetcher(),
-          apiKey: twitterApiIoApiKey,
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-          now,
-        }),
+      twitterApiIoClient: createTwitterApiIoClientOf(env),
       now,
     }),
     detectRadarVolume: DetectRadarVolumeUseCase.create({

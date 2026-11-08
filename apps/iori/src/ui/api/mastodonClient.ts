@@ -15,7 +15,7 @@ import type {
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
-import type { IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
+import type { IoriXPostsRefreshResponse, IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -352,6 +352,18 @@ export const searchStatuses = async (q: string, limit?: number): Promise<SearchS
 
 export const fetchXPosts = async (): Promise<IoriXPostsResponse> =>
   (await request<IoriXPostsResponse>('/api/iori/v1/x-posts')).body;
+
+export type XPostsRefreshResult = IoriXPostsRefreshResponse;
+
+export const refreshXPosts = async (): Promise<XPostsRefreshResult> => {
+  const res = await fetch('/api/iori/v1/x-posts/refresh', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as XPostsRefreshResult;
+};
 
 export type FeedSource = IoriFeedSourceBody;
 

@@ -30,6 +30,7 @@ import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
+import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
@@ -187,6 +188,7 @@ export const setupReadApi = (
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
     collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
+    refreshXPosts?: RefreshXPostsUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -598,6 +600,7 @@ export const setupReadApi = (
             xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
             now: Instant.now,
           }),
+          refreshXPostsUseCase: options.refreshXPosts,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

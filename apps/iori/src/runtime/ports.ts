@@ -89,6 +89,7 @@ import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
+import type { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
@@ -202,6 +203,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   addFeedSourceUseCase: AddFeedSourceUseCase;
   changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
   getXFeedEntriesUseCase: GetXFeedEntriesUseCase;
+  refreshXPostsUseCase: RefreshXPostsUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;

@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
 
+import { FeedSourceFetchCooldownError } from '../../../domain/feedSource/feedSource.ts';
+import type { RefreshXPostsUseCase } from '../../../useCase/refreshXPosts.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
+import { ORIGIN } from './helper/oauthHarness.ts';
 
 const PATH = '/api/iori/v1/x-posts';
 const USER_SOURCE_ID = '11111111-1111-4111-8111-111111111111';
@@ -32,6 +36,11 @@ const seed = (t: ReturnType<typeof setupReadApi>) => {
   addEntry('00000000-0000-4000-8000-000000000002', USER_SOURCE_ID, '新しい投稿', Date.UTC(2026, 10, 6, 1));
   addEntry('00000000-0000-4000-8000-000000000003', DISABLED_SOURCE_ID, '無効な情報源の投稿', Date.UTC(2026, 10, 7, 1));
   addEntry('00000000-0000-4000-8000-000000000004', RSS_SOURCE_ID, 'RSS の記事', Date.UTC(2026, 10, 7, 2));
+};
+
+const refresher = (result: ReturnType<RefreshXPostsUseCase['run']>) => {
+  const run = vi.fn(() => result);
+  return { run, useCase: { run } as RefreshXPostsUseCase };
 };
 
 describe('GET /api/iori/v1/x-posts', () => {
@@ -88,7 +97,18 @@ describe('GET /api/iori/v1/x-posts', () => {
           postedAt: '2026-11-05T01:00:00.000Z',
         },
       ],
+      fetchEnabled: false,
     });
+  });
+
+  it('API キーが設定されていれば fetchEnabled を true にする', async () => {
+    const t = setupReadApi({ refreshXPosts: refresher(RA.ok({ sources: 0, failed: 0, collected: 0 })).useCase });
+    const me = await t.signIn('read:statuses');
+    seed(t);
+
+    const response = await t.request(PATH, { headers: me.bearer });
+
+    expect(await response.json()).toMatchObject({ fetchEnabled: true });
   });
 
   it('所有者でないユーザーの Cookie は 403 にし、本文を一切返さない', async () => {
@@ -162,5 +182,101 @@ describe('GET /api/iori/v1/x-posts', () => {
 
     const { posts } = await response.json() as { posts: Array<{ text: string }> };
     expect(posts.map((post) => post.text)).toEqual(['新しい投稿']);
+  });
+});
+
+describe('POST /api/iori/v1/x-posts/refresh', () => {
+  const REFRESH_PATH = `${PATH}/refresh`;
+  const summary = { sources: 2, failed: 1, collected: 7 };
+  const refresh = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>) =>
+    t.request(REFRESH_PATH, { method: 'POST', headers });
+
+  it('認証なしだと 401 にし、取得しない', async () => {
+    const { run, useCase } = refresher(RA.ok(summary));
+    const t = setupReadApi({ refreshXPosts: useCase });
+
+    expect((await refresh(t, { Origin: ORIGIN })).status).toBe(401);
+    expect((await refresh(t, {})).status).toBe(403);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('write:accounts を満たさない scope のトークンを 403 にし、取得しない', async () => {
+    const { run, useCase } = refresher(RA.ok(summary));
+    const t = setupReadApi({ refreshXPosts: useCase });
+    const me = await t.signIn('read:statuses');
+
+    expect((await refresh(t, me.bearer)).status).toBe(403);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('Cookie のセッションで Origin が違うと 403 にし、取得しない', async () => {
+    const { run, useCase } = refresher(RA.ok(summary));
+    const t = setupReadApi({ refreshXPosts: useCase });
+    const me = await t.signIn('write:accounts');
+
+    const response = await refresh(t, { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' });
+
+    expect(response.status).toBe(403);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('所有者でないユーザーは 403 にし、取得しない', async () => {
+    const { run, useCase } = refresher(RA.ok(summary));
+    const t = setupReadApi({ refreshXPosts: useCase });
+    const other = await t.issueUserToken('write:accounts');
+    t.seed.addLocalActor('other', other.userId);
+
+    const response = await refresh(t, { Authorization: `Bearer ${other.token}` });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('API キーが未設定のときは 409 を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:accounts');
+
+    const response = await refresh(t, me.bearer);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'X fetch is disabled' });
+  });
+
+  it('クールダウン中は 429 と Retry-After を返す', async () => {
+    const { useCase } = refresher(RA.err(FeedSourceFetchCooldownError.create(123)));
+    const t = setupReadApi({ refreshXPosts: useCase });
+    const me = await t.signIn('write:accounts');
+
+    const response = await refresh(t, me.bearer);
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('123');
+    expect(await response.json()).toEqual({ error: 'The feed sources were fetched too recently.' });
+  });
+
+  it('成功したら取得を 1 回実行し、件数を返す', async () => {
+    const { run, useCase } = refresher(RA.ok(summary));
+    const t = setupReadApi({ refreshXPosts: useCase });
+    const me = await t.signIn('write:accounts');
+
+    const response = await refresh(t, { Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(summary);
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('成功も失敗もキャッシュを許さず、検索エンジンに載せない', async () => {
+    const t = setupReadApi({ refreshXPosts: refresher(RA.ok(summary)).useCase });
+    const me = await t.signIn('write:accounts');
+
+    const ok = await refresh(t, me.bearer);
+    const unauthorized = await refresh(t, { Origin: ORIGIN });
+
+    for (const response of [ok, unauthorized]) {
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+      expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
+    }
   });
 });
