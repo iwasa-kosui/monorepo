@@ -152,10 +152,10 @@ describe('PRD の受入条件', () => {
     expect(read('src/content/chapters/chapter-2.mdx')).toContain(changeSize());
   });
 
-  it('第4章の判断表に判断の問いと運用コストが書かれている', () => {
+  it('第4章の判断表に判断の問いと導入後の作業が書かれている', () => {
     const table = read('exercises/chapter-4-decision-table.md');
-    expect(table).toContain('何を部分的に活用し、何を記録しないか');
-    expect(table).toContain('運用コスト');
+    expect(table).toContain('業務イベントを何に使い、何を記録しないか');
+    expect(table).toContain('導入した後に担当者とシステムが続ける作業');
   });
 
   it('summary.mdx に足さなくて構いません、変更理由、組み立て直す設計が書かれている', () => {
